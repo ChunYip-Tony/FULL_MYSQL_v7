@@ -1,5 +1,9 @@
-FULL MYSQL v7.0.23 cumulative GitHub patch
+FULL MYSQL v7.0.25 cumulative GitHub patch
 
 Upload server/*.py into repo /server/ and root metadata to repo root.
-After deployment verify /healthz reports 7.0.23-single-service.
-DO NOT run maintenance for this release.
+Deploy and verify /healthz = 7.0.25-single-service.
+Then run exactly once in DigitalOcean Console:
+  python maintenance_v725.py
+
+The maintenance auto-selects the latest Phase-3-capable batch.
+Afterward return to Work PowerShell and re-run Family 291 diagnostics.

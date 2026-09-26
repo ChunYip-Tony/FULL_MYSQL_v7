@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.23 — Single-Service Edition
+# FULL MYSQL v7.0.25 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -741,3 +741,60 @@ This release:
 - requires no maintenance command;
 - adds official-cost-to-derived-cost RAW lineage output;
 - keeps routine diagnostics available from Work/Home PowerShell.
+
+
+## v7.0.24
+
+Two narrow changes:
+
+1. UPC 81223402610 / Article 3461050
+   - User-confirmed POS Selling UOM: PACK
+   - User-confirmed case configuration: 40/150G
+   - Receipt 107 evidence: 3 CV = 120 EA, $330
+   - 3 cases x 40 selling packs = 120 selling packs, exactly matching 120 EA
+   - Therefore Base UOM = EA, Base Qty per Selling Unit = 1
+   - Authoritative cost = $2.75/EA = $2.75/PACK
+
+2. Cost-lineage diagnostic endpoint
+   - Searches by family_id OR confirmed article_id.
+   - This can reveal receipt/company/cost rows that have stale or NULL family lineage.
+   - Adds non-mutating UPC short/12-digit checksum diagnostics.
+   - No automatic UPC alias merge is performed.
+
+Maintenance:
+    python maintenance_v724.py --batch 8
+
+Do not run v719, v720, or v722 again for this repair.
+
+
+## v7.0.25
+
+Family 291 authoritative identity/UOM lock:
+
+1. Article 3461050 / UPC 81223402610
+   - Selling UOM = PACK.
+   - User-confirmed pack configuration = 40 PACK/CASE, 150G/PACK.
+   - Store sells individual PACK only.
+   - Supported receipt conversion remains Base UOM = EA and 1 PACK = 1 EA, so the current per-selling-unit cost equals the current per-base-EA cost.
+
+2. UPC 26510500000
+   - User confirmed this UPC does not exist.
+   - It is now seeded into `manual_upc_retirement` with `USER_CONFIRMED_NONEXISTENT_UPC`.
+   - RAW/source provenance is preserved, but resolved/current identity links and UOM rows are superseded.
+   - It is excluded from Quick Check publishing even if an automatic repair later attempts to reactivate it.
+
+3. Regression prevention
+   - Manual UPC/UOM authority is applied both before processing and again after all automatic identity/UOM repairs.
+   - The post-repair application is the final authority immediately before Quick Check rebuild.
+   - `rebuild_quick_check()` also fail-closes against confirmed rows in `manual_upc_retirement`.
+   - Active-product repair refuses to reactivate a user-retired UPC.
+
+Maintenance (run once after deploy; latest Phase-3-capable batch is selected automatically):
+
+    python maintenance_v725.py
+
+Optional explicit batch:
+
+    python maintenance_v725.py --batch <batch_id>
+
+PASS requires Family/Main Article 3461050 to publish only UPC 81223402610 with Selling UOM PACK, Base UOM EA, factor 1; UPC 26510500000 must have zero active article links, zero active UOM rows, and zero Quick Check rows.

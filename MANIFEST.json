@@ -1,8 +1,15 @@
 {
-  "version": "7.0.23-single-service",
-  "purpose": "Fix schema-safe PowerShell cost-lineage diagnostic endpoint",
-  "business_logic_changes": false,
-  "maintenance_required": false,
+  "version": "7.0.25-single-service",
+  "purpose": "Lock Family 291 user-confirmed identity/UOM authority and retire nonexistent UPC 26510500000",
+  "maintenance_required": true,
+  "maintenance_command": "python maintenance_v725.py",
+  "business_logic_changes": [
+    "81223402610 is authoritative Selling UOM PACK with supported Base UOM EA and factor 1; user pack configuration 40 PACK/CASE and 150G/PACK is preserved",
+    "26510500000 is user-confirmed nonexistent and retired from resolved/current identity while RAW provenance remains immutable",
+    "manual UPC/UOM authority is reapplied after automatic repairs immediately before Quick Check publishing",
+    "Quick Check publishing fail-closes against confirmed manual UPC retirements",
+    "active product repair refuses to reactivate a user-retired UPC"
+  ],
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -10,14 +17,19 @@
       "bytes": 346
     },
     {
+      "path": "PATCH_INSTRUCTIONS.txt",
+      "sha256": "3349bc4d4c6df7f83e4cec998dfd4c3ea212f4343f060f06afbc0f1cac9329cb",
+      "bytes": 377
+    },
+    {
       "path": "README_START_HERE.md",
-      "sha256": "a3039df767f5e44188a2b52c30a07804e00aebcdd29eec166c23f5b5d8607f59",
-      "bytes": 25955
+      "sha256": "b9854492777ea1f7f3d2b6006e123da959a3d0e863afc457616b7554b4543dc7",
+      "bytes": 28322
     },
     {
       "path": "VERSION.txt",
-      "sha256": "a63a0db62830ffdff92d66ab8d607ca9676fdb45eea90aa0d40afd7870f6e982",
-      "bytes": 136
+      "sha256": "156ce8adabd7b69d291da45360d32089f8f13376416063509d1e19a1f4d5f9c9",
+      "bytes": 182
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -126,13 +138,13 @@
     },
     {
       "path": "server/active_product_repair.py",
-      "sha256": "50e1703e5905116c6d06518959ac911cdf278ccb5d803eff24cd1e011a87945b",
-      "bytes": 31304
+      "sha256": "6d96908200077431eb2856040fec6ae1230866aec073b87aa2db9ae1bf5f3506",
+      "bytes": 31949
     },
     {
       "path": "server/api.py",
-      "sha256": "a6f448433af2e68606f41409a64a3898c1b8eea96c6f282d0190eda0d22dffd5",
-      "bytes": 22878
+      "sha256": "6ff5db926871cc111ee982931c020f49dfead7d533d1b7249c68d22a385bf446",
+      "bytes": 27948
     },
     {
       "path": "server/app.yaml.template",
@@ -265,9 +277,19 @@
       "bytes": 7487
     },
     {
+      "path": "server/maintenance_v724.py",
+      "sha256": "b334e6c98710f8bcf71d5f543f945923519324b053c6e42e575ce2fc1b0c56a9",
+      "bytes": 6123
+    },
+    {
+      "path": "server/maintenance_v725.py",
+      "sha256": "6977435f02a6c1d95598437677a5fbdbec7f5d9643913a7e8b19ae4b449f0f8f",
+      "bytes": 10237
+    },
+    {
       "path": "server/manual_overrides.py",
-      "sha256": "3e3b3712f242cfe33734a6c6c38a8e2fabe0174182be944b612e2e9094224a9e",
-      "bytes": 11744
+      "sha256": "7e13bc77bdd2b8eaf10bb200e66c6d10f493c0a4bd263a5bd794cf1709ea9ca0",
+      "bytes": 17334
     },
     {
       "path": "server/normalize.py",
@@ -276,8 +298,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "1976f4b95a3de55bb236284083131df8acadb1bc4d211fb070c15c1acb8f449c",
-      "bytes": 70043
+      "sha256": "4403b61a3e2fe926d3792457f1abd2b68af3be044ebc26dce361fee8e014fbc0",
+      "bytes": 71301
     },
     {
       "path": "server/requirements.txt",
@@ -296,7 +318,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "9ea2ee5319857f10364f3f7d811fc1c9b9e8842d754168badd6e0f34ac21fae3",
+      "sha256": "681a6327ac80e0dd6d05a588a01a8322031989b2712bb6528cc4d1cbfb6b9ad3",
       "bytes": 16329
     },
     {
