@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.12-single-service'
+VERSION='7.0.14-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -136,9 +136,11 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                 reason_counts[str(reason)] = reason_counts.get(str(reason),0) + 1
             hold_upcs.append({'upc':str(row['entity_key']),'reasons':reasons})
 
-        # Remaining batch-specific sold-UPC identity blockers.
+        # Remaining active sold-UPC identity issues.
+        # HIGH/CRITICAL = real batch blockers.
+        # MEDIUM + temporary_qa_waiver = explicitly waived, still unresolved.
         cur.execute(
-            """SELECT entity_key,detail_json
+            """SELECT entity_key,severity,detail_json
                FROM qa_phase3_issue
                WHERE batch_id=%s AND issue_status='OPEN'
                  AND issue_code='SOLD_UPC_UNMAPPED'
@@ -146,12 +148,13 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             (bid,),
         )
         sold_unmapped=[]
+        temporarily_waived_sold_unmapped=[]
         for row in cur.fetchall():
             try:
                 detail=json.loads(row.get('detail_json') or '{}')
             except Exception:
                 detail={}
-            sold_unmapped.append({
+            item={
                 'upc':str(row['entity_key']),
                 'description':detail.get('description'),
                 'activity_scope':detail.get('activity_scope'),
@@ -159,7 +162,19 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                 'repair_candidates':detail.get('v711_repair_candidates'),
                 'multitab_repair':detail.get('v712_multitab_repair'),
                 'multitab_candidates':detail.get('v712_cross_tab_candidates'),
-            })
+                'cross_tab_signature_repair':detail.get('v713_cross_tab_signature_repair'),
+                'temporary_qa_waiver':detail.get('temporary_qa_waiver'),
+            }
+            waiver=detail.get('temporary_qa_waiver') or {}
+            is_waived=(
+                isinstance(waiver,dict)
+                and waiver.get('waiver_type')=='IDENTITY_PENDING'
+                and waiver.get('non_blocking_current_readiness') is True
+            )
+            if is_waived:
+                temporarily_waived_sold_unmapped.append(item)
+            elif str(row.get('severity') or '').upper() in {'HIGH','CRITICAL'}:
+                sold_unmapped.append(item)
 
         cur.execute(
             """SELECT entity_key,detail_json
@@ -189,7 +204,7 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'phase3_issue_counts':grouped('qa_phase3_issue'),
             'batch_blocking_issue_counts':grouped(
                 'qa_phase3_issue',
-                "AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'"
+                "AND UPPER(severity) IN ('HIGH','CRITICAL') AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'"
             ),
             'serving_issue_counts':grouped(
                 'qa_phase3_issue',
@@ -197,6 +212,7 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             ),
             'quick_check_reason_counts':reason_counts,
             'sold_upc_unmapped':sold_unmapped,
+            'temporarily_waived_sold_upc_unmapped':temporarily_waived_sold_unmapped,
             'historical_sold_upc_unmapped':historical_unmapped,
             'historical_nonblocking_issue_counts':grouped(
                 'qa_phase3_issue',
@@ -213,6 +229,37 @@ def quick_check(upc:str,authorization: Annotated[str|None,Header()]=None):
     device_from_auth(authorization); q=''.join(ch for ch in upc if ch.isdigit()).lstrip('0') or '0'
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
-        cur.execute("SELECT * FROM quick_check_current WHERE ean_upc=%s OR TRIM(LEADING '0' FROM ean_upc)=%s LIMIT 1",(upc,q)); row=cur.fetchone(); cur.close()
-    if not row: raise HTTPException(404,'Quick Check UPC not found')
+        cur.execute("SELECT * FROM quick_check_current WHERE ean_upc=%s OR TRIM(LEADING '0' FROM ean_upc)=%s LIMIT 1",(upc,q))
+        row=cur.fetchone()
+        if not row:
+            cur.execute(
+                """SELECT entity_key,severity,detail_json
+                   FROM qa_phase3_issue
+                   WHERE issue_status='OPEN'
+                     AND issue_code='SOLD_UPC_UNMAPPED'
+                     AND (entity_key=%s OR TRIM(LEADING '0' FROM entity_key)=%s)
+                   ORDER BY batch_id DESC,issue_id DESC
+                   LIMIT 1""",
+                (upc,q),
+            )
+            unresolved=cur.fetchone()
+            cur.close()
+            if unresolved:
+                try:
+                    detail=json.loads(unresolved.get('detail_json') or '{}')
+                except Exception:
+                    detail={}
+                waiver=detail.get('temporary_qa_waiver') or {}
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'IDENTITY_PENDING_TEMP_WAIVER' if waiver else 'SOLD_UPC_UNMAPPED',
+                        'upc':str(unresolved['entity_key']),
+                        'description':detail.get('description'),
+                        'temporary_qa_waiver':waiver or None,
+                    },
+                )
+            raise HTTPException(404,'Quick Check UPC not found')
+        cur.close()
     return json.loads(json.dumps(row,default=j))

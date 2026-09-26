@@ -14,6 +14,8 @@ from data_coverage import source_data_days, coverage_summary
 from manual_overrides import apply_manual_upc_overrides
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
+from cross_tab_signature_repair import repair_cross_tab_signature
+from temporary_qa_waivers import apply_temporary_identity_waivers
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -1181,6 +1183,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             #  - consumes explicit UM on roster tabs such as Frozen pack
             #  - never accepts one-digit substitutions as automatic identity
             multitab_manual_repair = repair_article_manual_multitab(cur, batch_id)
+            cross_tab_signature_repair = repair_cross_tab_signature(cur, batch_id)
 
             # Evidence-only product-master repair:
             #  - active sold UPC identity from exact authoritative evidence
@@ -1191,6 +1194,12 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             relink_history(cur)
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
+
+            # Explicit temporary waivers are applied only after active/historical
+            # classification so a rerun cannot silently restore them to HIGH.
+            # Identity remains unresolved and Quick Check remains unavailable.
+            temporary_qa_waivers = apply_temporary_identity_waivers(cur, batch_id)
+
             qc = rebuild_quick_check(cur, batch_id)
 
             # Batch blockers and serving-row QA are different scopes.
@@ -1226,7 +1235,9 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
                  qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                   'active_product_master_repair': active_master_repair,
-                  'article_manual_multitab_repair': multitab_manual_repair}, default=str)),
+                  'article_manual_multitab_repair': multitab_manual_repair,
+                  'cross_tab_signature_repair': cross_tab_signature_repair,
+                  'temporary_qa_waivers': temporary_qa_waivers}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1240,6 +1251,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                     'active_product_master_repair': active_master_repair,
                     'article_manual_multitab_repair': multitab_manual_repair,
+                    'cross_tab_signature_repair': cross_tab_signature_repair,
+                    'temporary_qa_waivers': temporary_qa_waivers,
                     'blocking_issues': blocking}
         except Exception:
             conn.rollback()
