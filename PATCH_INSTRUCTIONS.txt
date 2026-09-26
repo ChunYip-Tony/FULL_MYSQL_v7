@@ -1,18 +1,16 @@
-FULL MYSQL v7.0.14 GitHub Patch
+FULL MYSQL v7.0.14 FIXED cumulative GitHub patch
 
-This patch is cumulative from v7.0.13.
-If v7.0.13 was not deployed, you can deploy v7.0.14 directly.
+IMPORTANT: use this FIXED patch instead of the earlier v7.0.14 GitHub patch.
+The earlier patch omitted server/cross_tab_signature_repair.py.
 
-Upload server/*.py into GitHub server/.
+This fixed patch is safe to deploy directly over production v7.0.12.
+
+Upload ALL files under server/ into GitHub server/.
 Upload README_START_HERE.md, VERSION.txt, MANIFEST.json to repo root.
 
-Suggested commit:
-v7.0.14 temporary non-blocking identity QA waivers
-
-After deploy:
-1) Verify /healthz = 7.0.14-single-service
-2) DigitalOcean Console: python maintenance_v714.py --batch 8
+After DigitalOcean redeploy:
+1) Verify /healthz returns 7.0.14-single-service
+2) In DigitalOcean Console run:
+   python maintenance_v714.py --batch 8
 3) Do NOT rebuild Batch 7.
 4) Do NOT re-upload Batch 8.
-5) No MySQL setting changes are required.
-6) Do not upgrade the Windows Seafood Client yet.
