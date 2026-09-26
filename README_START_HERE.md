@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.22 — Single-Service Edition
+# FULL MYSQL v7.0.23 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -720,3 +720,24 @@ After deployment run only:
 
 This is a narrow repair: no RAW re-ingest, no Phase2C rerun, no full Phase3 history rerun.
 After the repair, normal QA/result checks can be done from PowerShell.
+
+
+## v7.0.23
+
+Fixes the read-only `/v1/diagnostics/cost-lineage` endpoint introduced in
+v7.0.21 and carried into v7.0.22.
+
+Root cause:
+- the diagnostic query used non-existent aliases/column names from an earlier
+  draft (`current_cost_per_base`, `current_cost_date`, `selling_uom_code`,
+  `cost_per_selling_unit`, etc.);
+- production `quick_check_current` uses
+  `current_cost_per_base_uom`, `cost_date`, `selling_uom`,
+  `current_cost_per_selling_unit`, and related current schema names.
+
+This release:
+- is diagnostics-only;
+- does not mutate RAW or derived business data;
+- requires no maintenance command;
+- adds official-cost-to-derived-cost RAW lineage output;
+- keeps routine diagnostics available from Work/Home PowerShell.

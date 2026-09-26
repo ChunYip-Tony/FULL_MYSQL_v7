@@ -1,21 +1,8 @@
 {
-  "version": "7.0.22-single-service",
-  "purpose": "Resolve two prior temporary identity waivers using authoritative user confirmations; preserve pack specs as evidence only; retain PowerShell cost diagnostics.",
-  "confirmed_overrides": [
-    {
-      "ean_upc": "75539372208",
-      "article_number": "3480452",
-      "selling_uom": "PACK",
-      "source_pack_spec": "24/12OZ"
-    },
-    {
-      "ean_upc": "81223402610",
-      "article_number": "3461050",
-      "selling_uom": "PACK",
-      "source_pack_spec": "40/150G"
-    }
-  ],
-  "maintenance": "python maintenance_v722.py --batch 8",
+  "version": "7.0.23-single-service",
+  "purpose": "Fix schema-safe PowerShell cost-lineage diagnostic endpoint",
+  "business_logic_changes": false,
+  "maintenance_required": false,
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -24,13 +11,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "5eda0c7e77fb726af1fa6f3148ce77490a403d7c3c65c3812c23824fa5e154cf",
-      "bytes": 25222
+      "sha256": "a3039df767f5e44188a2b52c30a07804e00aebcdd29eec166c23f5b5d8607f59",
+      "bytes": 25955
     },
     {
       "path": "VERSION.txt",
-      "sha256": "0141a1c86efe267250c9cb36c1a52527881c0442ddc61743b5e72e7e145a327d",
-      "bytes": 138
+      "sha256": "a63a0db62830ffdff92d66ab8d607ca9676fdb45eea90aa0d40afd7870f6e982",
+      "bytes": 136
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -144,8 +131,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "d702238671effb5b49323049030d0f4fee5d6fcb58925b0a42c5b5ff3a31ddd8",
-      "bytes": 20374
+      "sha256": "a6f448433af2e68606f41409a64a3898c1b8eea96c6f282d0190eda0d22dffd5",
+      "bytes": 22878
     },
     {
       "path": "server/app.yaml.template",
@@ -309,7 +296,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "c1de47a73a5536244b6b77baec962ee5813727b2174bd50fe6216f525153da9f",
+      "sha256": "9ea2ee5319857f10364f3f7d811fc1c9b9e8842d754168badd6e0f34ac21fae3",
       "bytes": 16329
     },
     {
