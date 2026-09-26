@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.17-single-service'
+VERSION='7.0.18-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -115,26 +115,23 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
         )
         p3=cur.fetchone()
 
-        # Reason-level serving QA counts.
+        # Reason-level CURRENT serving QA counts.
+        # Source of truth is the serving snapshot itself so the returned
+        # reason counts and UPC list always reconcile to current_hold_rows.
         cur.execute(
-            """SELECT entity_key,detail_json
-               FROM qa_phase3_issue
-               WHERE batch_id=%s AND issue_status='OPEN'
-                 AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'
-               ORDER BY issue_id""",
-            (bid,),
+            """SELECT ean_upc,blocking_reason
+               FROM quick_check_current
+               WHERE quick_check_status='QA_HOLD'
+               ORDER BY ean_upc"""
         )
         reason_counts={}
         hold_upcs=[]
         for row in cur.fetchall():
-            try:
-                detail=json.loads(row.get('detail_json') or '{}')
-            except Exception:
-                detail={}
-            reasons=detail.get('reasons') or []
+            raw_reason=str(row.get('blocking_reason') or '')
+            reasons=[x.strip() for x in raw_reason.split(',') if x and x.strip()]
             for reason in reasons:
-                reason_counts[str(reason)] = reason_counts.get(str(reason),0) + 1
-            hold_upcs.append({'upc':str(row['entity_key']),'reasons':reasons})
+                reason_counts[reason] = reason_counts.get(reason,0) + 1
+            hold_upcs.append({'upc':str(row['ean_upc']),'reasons':reasons})
 
         # Remaining active sold-UPC identity issues.
         # HIGH/CRITICAL = real batch blockers.
@@ -207,6 +204,10 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                FROM quick_check_current"""
         )
         qc_scope=cur.fetchone() or {}
+        qc_scope['hold_upc_list_count']=len(hold_upcs)
+        qc_scope['hold_reason_row_parity']=(
+            int(qc_scope.get('current_hold_rows') or 0) == len(hold_upcs)
+        )
 
         result={
             'batch_id':bid,
