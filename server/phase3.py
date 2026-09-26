@@ -552,6 +552,7 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
 RECOMPUTED_PHASE3_ISSUE_CODES = (
     'SALES_PERIOD_UNRESOLVED',
     'SOLD_UPC_UNMAPPED',
+    'HISTORICAL_SOLD_UPC_UNMAPPED',
     'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED',
     'QUICK_CHECK_CORE_FIELD_MISSING',
 )
@@ -606,14 +607,14 @@ def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
     cur.execute(
         """SELECT issue_id,issue_code,entity_key FROM qa_phase3_issue
            WHERE batch_id=%s AND issue_status='OPEN'
-             AND issue_code IN ('SOLD_UPC_UNMAPPED','SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED')""",
+             AND issue_code IN ('SOLD_UPC_UNMAPPED','HISTORICAL_SOLD_UPC_UNMAPPED','SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED')""",
         (batch_id,),
     )
     for issue in cur.fetchall():
         code = issue['issue_code']
         key = str(issue['entity_key'])
         repaired = False
-        if code == 'SOLD_UPC_UNMAPPED':
+        if code in {'SOLD_UPC_UNMAPPED','HISTORICAL_SOLD_UPC_UNMAPPED'}:
             repaired = _upc_identity_ready(cur, key)
         elif code == 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED':
             _, family_id = _find_article(cur, key)
@@ -626,11 +627,165 @@ def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
                    WHERE issue_id=%s""",
                 (issue['issue_id'],),
             )
-            if code == 'SOLD_UPC_UNMAPPED':
+            if code in {'SOLD_UPC_UNMAPPED','HISTORICAL_SOLD_UPC_UNMAPPED'}:
                 resolved_sales += 1
             else:
                 resolved_movement += 1
     return {'sold_upc_unmapped_resolved': resolved_sales, 'movement_article_unmapped_resolved': resolved_movement}
+
+
+
+def _latest_price_snapshot(cur) -> datetime | None:
+    cur.execute(
+        """SELECT MAX(snapshot_at) AS ts
+           FROM price_list_observation
+           WHERE configured_price>0"""
+    )
+    row = cur.fetchone()
+    return row['ts'] if row else None
+
+
+def _upc_match_sql(column: str, ean: str) -> tuple[str, tuple[Any, ...]]:
+    """Return SQL predicate + params for exact or leading-zero-equivalent numeric UPC."""
+    key = _numeric_key(ean)
+    if key is None:
+        return f"{column}=%s", (ean,)
+    return (
+        f"({column}=%s OR "
+        f"({column} REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM {column})=%s))",
+        (ean, key),
+    )
+
+
+def _active_selling_evidence_for_unmapped(cur, ean: str, batch_id: int) -> dict[str, Any]:
+    """Current activity scope for an unmapped historical UPC.
+
+    v7.0.10 rule:
+      - Positive sales on the latest up-to-28 VALID POS data days => ACTIVE_SELLING.
+      - Everything else => HISTORICAL_ONLY for CURRENT production readiness.
+
+    A configured Price List price by itself is NOT active-selling evidence.
+    Historical sales and lineage are preserved.
+    """
+    completed_through = date.today() - timedelta(days=1)
+    pos_days = source_data_days(
+        cur, 'sales_by_price_type', limit=28,
+        include_batch_id=batch_id, up_to=completed_through
+    )
+    file_ids = [int(x['file_id']) for x in pos_days]
+
+    recent_qty = Decimal('0')
+    recent_latest = None
+    if file_ids:
+        placeholders = ','.join(['%s'] * len(file_ids))
+        pred, pred_params = _upc_match_sql('ean_upc', ean)
+        cur.execute(
+            f"""SELECT COALESCE(SUM(sold_quantity),0) AS q,
+                       MAX(period_end_date) AS latest_date
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND file_id IN ({placeholders})
+                  AND {pred}""",
+            (*file_ids, *pred_params),
+        )
+        row = cur.fetchone()
+        if row:
+            recent_qty = Decimal(str(row['q'] or 0))
+            recent_latest = row['latest_date']
+
+    if recent_qty > 0:
+        scope = 'ACTIVE_SELLING'
+        basis = 'POS_LATEST_28_VALID_DATA_DAYS'
+    else:
+        scope = 'HISTORICAL_ONLY'
+        basis = 'NO_POS_SALES_LATEST_28_VALID_DATA_DAYS'
+
+    return {
+        'activity_scope': scope,
+        'activity_basis': basis,
+        'recent_pos_qty_28_valid_days': str(recent_qty),
+        'recent_pos_valid_day_count': len(pos_days),
+        'recent_pos_latest_valid_date': recent_latest,
+    }
+
+
+def classify_unmapped_sales_activity_scope(cur, batch_id: int) -> dict[str, int]:
+    """Reclassify historical sold-but-unmapped UPCs for CURRENT readiness only.
+
+    Historical evidence is never deleted. A UPC with no positive sales in the
+    latest up-to-28 VALID POS data days becomes non-blocking MEDIUM historical QA.
+    Only ACTIVE_SELLING UPCs remain HIGH and blocking until identity is resolved.
+    """
+    cur.execute(
+        """SELECT issue_id,entity_key,detail_json
+           FROM qa_phase3_issue
+           WHERE batch_id=%s
+             AND issue_status='OPEN'
+             AND issue_code='SOLD_UPC_UNMAPPED'
+           ORDER BY issue_id""",
+        (batch_id,),
+    )
+    issues = cur.fetchall()
+    counts = {
+        'examined': 0,
+        'active_blocking': 0,
+        'historical_nonblocking': 0,
+    }
+
+    for issue in issues:
+        ean = str(issue['entity_key'])
+        evidence = _active_selling_evidence_for_unmapped(cur, ean, batch_id)
+        counts['examined'] += 1
+
+        try:
+            detail = json.loads(issue.get('detail_json') or '{}')
+        except Exception:
+            detail = {}
+        detail.update(evidence)
+
+        if evidence['activity_scope'] == 'HISTORICAL_ONLY':
+            cur.execute(
+                """UPDATE qa_phase3_issue
+                   SET issue_code='HISTORICAL_SOLD_UPC_UNMAPPED',
+                       severity='MEDIUM',
+                       issue_summary=%s,
+                       detail_json=%s
+                   WHERE issue_id=%s""",
+                (
+                    f"Historical POS sold quantity exists for UPC {ean}, but no confirmed identity mapping exists. "
+                    "No current active-selling evidence was found; retained as non-blocking historical QA.",
+                    json.dumps(detail, ensure_ascii=False, default=str),
+                    issue['issue_id'],
+                ),
+            )
+            counts['historical_nonblocking'] += 1
+        else:
+            cur.execute(
+                """UPDATE qa_phase3_issue
+                   SET severity='HIGH',detail_json=%s
+                   WHERE issue_id=%s""",
+                (json.dumps(detail, ensure_ascii=False, default=str), issue['issue_id']),
+            )
+            counts['active_blocking'] += 1
+
+    return counts
+
+
+def _mapped_current_activity_scope(
+    m28: dict[str, Any],
+) -> tuple[str, str]:
+    """Activity scope for mapped serving rows.
+
+    v7.0.10 rule:
+      Positive sales on the latest up-to-28 VALID POS data days => ACTIVE_SELLING.
+      Everything else => HISTORICAL_ONLY.
+
+    Price List presence alone does not make a UPC current-active.
+    """
+    if Decimal(str(m28['qty'] or 0)) > 0:
+        return 'ACTIVE_SELLING', 'POS_LATEST_28_VALID_DATA_DAYS'
+
+    return 'HISTORICAL_ONLY', 'NO_POS_SALES_LATEST_28_VALID_DATA_DAYS'
 
 
 def _product_class(article_desc: str | None, family_desc: str | None, category: str | None) -> str | None:
@@ -836,6 +991,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     # because its history rows are inserted immediately before this rebuild. Today's date is
     # excluded to prevent a partial intraday file from entering daily velocity/GP metrics.
     pos_days_7 = source_data_days(cur, 'sales_by_price_type', limit=7, include_batch_id=batch_id, up_to=completed_through)
+    pos_days_28 = source_data_days(cur, 'sales_by_price_type', limit=28, include_batch_id=batch_id, up_to=completed_through)
     pos_days_30 = source_data_days(cur, 'sales_by_price_type', limit=30, include_batch_id=batch_id, up_to=completed_through)
     mvt_days_7 = source_data_days(cur, 'movement', limit=7, include_batch_id=batch_id, up_to=completed_through)
     pos_cov = coverage_summary(cur, 'sales_by_price_type', include_batch_id=batch_id)
@@ -863,6 +1019,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     for p in products:
         upc_id = int(p['upc_id']); family_id = int(p['family_id'])
         m7 = _sales_metrics(cur, upc_id, pos_days_7)
+        m28 = _sales_metrics(cur, upc_id, pos_days_28)
         m30 = _sales_metrics(cur, upc_id, pos_days_30)
         price = _current_price(cur, upc_id)
         cost = _latest_cost(cur, family_id)
@@ -905,9 +1062,11 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             wgpm = (cost_sell / (Decimal('1') - target)).quantize(Decimal('0.01'))
         sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30) if cost else None
         reasons = []
-        # Active recent sellers require complete identity/UOM/cost/price to be READY.
-        active_recent = Decimal(m7['qty']) != 0
-        if active_recent:
+        activity_scope, activity_basis = _mapped_current_activity_scope(m28)
+        # Only positive sales in the latest up-to-28 VALID POS data days make
+        # a UPC current-active. Everything else remains historical/non-blocking.
+        active_current = activity_scope == 'ACTIVE_SELLING'
+        if active_current:
             if not selling_uom: reasons.append('SELLING_UOM_MISSING')
             if cost is None: reasons.append('CURRENT_COST_MISSING')
             if price is None: reasons.append('CURRENT_PRICE_MISSING')
@@ -918,7 +1077,13 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             hold += 1
             _issue(cur, batch_id, 'QUICK_CHECK_CORE_FIELD_MISSING', 'UPC', p['ean_upc'],
                    f"Quick Check core fields are unresolved for UPC {p['ean_upc']}: {', '.join(reasons)}",
-                   'HIGH', detail={'reasons': reasons})
+                   'HIGH', detail={
+                       'reasons': reasons,
+                       'activity_scope': activity_scope,
+                       'activity_basis': activity_basis,
+                       'recent_pos_qty_28_valid_days': str(m28['qty']),
+                       'recent_pos_valid_day_count': m28['days'],
+                   })
         cur.execute(
             """INSERT INTO quick_check_current
                (upc_id,ean_upc,selling_description,article_id,article_number,family_id,main_article_number,family_description,
@@ -984,7 +1149,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             b = cur.fetchone()
             if not b:
                 raise KeyError(f'Batch {batch_id} not found')
-            if b['processing_status'] not in {'PHASE2C_READY', 'PHASE3_QA_HOLD', 'QUICK_CHECK_READY'}:
+            if b['processing_status'] not in {'PHASE2C_READY', 'PHASE3_QA_HOLD', 'QUICK_CHECK_READY', 'QUICK_CHECK_READY_WITH_HOLDS'}:
                 raise RuntimeError(f'Batch {batch_id} is not Phase 2C ready; current status={b["processing_status"]}')
 
             override_result = apply_manual_upc_overrides(cur)
@@ -1010,6 +1175,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 elif st == 'live_fresh_suggestion': counts['company'] += _process_company(cur, batch_id, f, 'raw_live_fresh_suggestion')
             relink_history(cur)
             late_identity = resolve_late_identity_issues(cur, batch_id)
+            unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
             qc = rebuild_quick_check(cur, batch_id)
 
             # Batch blockers and serving-row QA are different scopes.
@@ -1043,7 +1209,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues}, default=str)),
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1054,7 +1220,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                  json.dumps({'counts': counts, 'quick_check': qc}, default=str), run_id),
             )
             conn.commit()
-            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'blocking_issues': blocking}
+            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity, 'blocking_issues': blocking}
         except Exception:
             conn.rollback()
             raise
