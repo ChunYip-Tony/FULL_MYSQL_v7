@@ -1,0 +1,3 @@
+FULL MYSQL Secure API Architecture
+Version: 7.0.0
+Base business logic: v6.6.0

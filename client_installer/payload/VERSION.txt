@@ -1,0 +1,3 @@
+FULL MYSQL Seafood Client
+Version: 7.0.0
+Transport: HTTPS Secure API

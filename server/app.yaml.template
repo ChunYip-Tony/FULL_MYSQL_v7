@@ -1,0 +1,32 @@
+name: full-mysql-secure-api
+region: sfo
+services:
+- name: api
+  source_dir: /server
+  github:
+    repo: REPLACE_GITHUB_OWNER/REPLACE_REPO
+    branch: main
+    deploy_on_push: true
+  build_command: pip install -r requirements.txt
+  run_command: uvicorn api:app --host 0.0.0.0 --port 8080
+  environment_slug: python
+  http_port: 8080
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  health_check:
+    http_path: /healthz
+    period_seconds: 10
+    timeout_seconds: 5
+- name: worker
+  source_dir: /server
+  github:
+    repo: REPLACE_GITHUB_OWNER/REPLACE_REPO
+    branch: main
+    deploy_on_push: true
+  build_command: pip install -r requirements.txt
+  run_command: python worker.py
+  environment_slug: python
+  instance_count: 1
+  instance_size_slug: basic-xxs
+# Attach your existing Managed MySQL through the DigitalOcean UI, then set the
+# runtime environment variables listed in ENVIRONMENT_VARIABLES.txt.

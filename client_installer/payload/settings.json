@@ -1,0 +1,11 @@
+{
+  "api_url": "",
+  "device_id": "WORK-PC",
+  "incoming_dir": "incoming",
+  "archive_dir": "archive",
+  "failed_dir": "failed",
+  "scan_seconds": 3,
+  "stable_seconds": 10,
+  "batch_quiet_seconds": 20,
+  "poll_seconds": 8
+}
