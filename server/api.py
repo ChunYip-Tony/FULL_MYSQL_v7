@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.18-single-service'
+VERSION='7.0.19-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -109,11 +109,18 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
 
         cur.execute(
             """SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,
-                      quick_check_hold_rows,updated_at
+                      quick_check_hold_rows,detail_json,updated_at
                FROM phase3_batch_result WHERE batch_id=%s""",
             (bid,),
         )
         p3=cur.fetchone()
+        p3_detail={}
+        if p3:
+            try:
+                p3_detail=json.loads(p3.get('detail_json') or '{}')
+            except Exception:
+                p3_detail={}
+            p3.pop('detail_json',None)
 
         # Reason-level CURRENT serving QA counts.
         # Source of truth is the serving snapshot itself so the returned
@@ -224,6 +231,7 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             ),
             'quick_check_reason_counts':reason_counts,
             'quick_check_scope':qc_scope,
+            'current_active_cost_repair':p3_detail.get('current_active_cost_repair'),
             'sold_upc_unmapped':sold_unmapped,
             'temporarily_waived_sold_upc_unmapped':temporarily_waived_sold_unmapped,
             'historical_sold_upc_unmapped':historical_unmapped,

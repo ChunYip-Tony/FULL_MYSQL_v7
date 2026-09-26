@@ -17,6 +17,7 @@ from article_manual_multitab_repair import repair_article_manual_multitab
 from cross_tab_signature_repair import repair_cross_tab_signature
 from temporary_qa_waivers import apply_temporary_identity_waivers
 from active_28d_uom_repair import repair_active_28d_uom
+from current_active_cost_repair import repair_current_active_cost
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -835,6 +836,25 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     r = cur.fetchone()
     if r:
         return {'cost_per_base': r['cost_amount'], 'date': r['business_date'], 'source': r['source_type'], 'base_uom': r['cost_uom']}
+
+    # Third authority: explicit cost observed in an On-Hand source.
+    # This is used only when the raw OH row contains both a positive explicit
+    # cost and an explicit supported cost-UOM. Generic inventory UOM is never
+    # silently treated as cost UOM.
+    cur.execute(
+        """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
+           FROM article_cost_observation co
+           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+           WHERE co.family_id=%s
+             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
+             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND co.cost_amount>0
+           ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
+        (family_id,),
+    )
+    r = cur.fetchone()
+    if r:
+        return {'cost_per_base': r['cost_amount'], 'date': r['business_date'], 'source': r['source_type'], 'base_uom': r['cost_uom']}
     return None
 
 
@@ -1213,6 +1233,15 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             active_28d_uom_repair = repair_active_28d_uom(cur, batch_id)
 
             relink_history(cur)
+
+            # v7.0.19: cost repair/audit is CURRENT-ACTIVE ONLY.
+            # Authority:
+            #   1) valid 101/107/109 receipt valuation
+            #   2) explicit official Live/Fresh/Frozen report cost
+            #   3) explicit OH cost + explicit supported cost UOM
+            # Historical-only UPCs are not targeted.
+            current_active_cost_repair = repair_current_active_cost(cur, batch_id)
+
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
 
@@ -1259,7 +1288,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
                   'temporary_qa_waivers': temporary_qa_waivers,
-                  'active_28d_uom_repair': active_28d_uom_repair}, default=str)),
+                  'active_28d_uom_repair': active_28d_uom_repair,
+                  'current_active_cost_repair': current_active_cost_repair}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1276,6 +1306,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     'cross_tab_signature_repair': cross_tab_signature_repair,
                     'temporary_qa_waivers': temporary_qa_waivers,
                     'active_28d_uom_repair': active_28d_uom_repair,
+                    'current_active_cost_repair': current_active_cost_repair,
                     'blocking_issues': blocking}
         except Exception:
             conn.rollback()
