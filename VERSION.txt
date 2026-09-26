@@ -1,5 +1,4 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.4 Single-Service Edition
-Base business logic: v6.6.0 + v6.5.4 identity authority repair
-Deployment: one App Platform service runs API + background worker
-Fixes: batch polling date serialization + prior worker named-lock result handling
+Version: 7.0.6 Single-Service Edition
+Hotfix: self-contained central identity maintenance runner
+Removes legacy APP_DIR dependency from v7.0.5 maintenance execution

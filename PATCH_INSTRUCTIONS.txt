@@ -1,9 +1,1 @@
-FULL MYSQL v7.0.4 GitHub Patch
-
-Replace the matching files in the root of private GitHub repo FULL_MYSQL_v7.
-Suggested commit message:
-  v7.0.4 fix batch polling date serialization
-
-DigitalOcean Auto-deploy should redeploy automatically.
-No environment variable changes are required.
-No database migration is required.
+FULL MYSQL v7.0.6 GitHub Patch\n\nIMPORTANT: upload server/*.py into the GitHub server/ folder.\nSuggested commit: v7.0.6 self-contained maintenance runner\n\nAfter DigitalOcean auto-deploy:\n1) Verify /healthz = 7.0.6-single-service\n2) App Platform Console (prompt already shows /app, so cd is optional)\n3) Run: python maintenance_v706.py\n4) Do NOT re-upload Batch 8 files.\n\nThe prior v7.0.5 ImportError happened before DB mutation.\n

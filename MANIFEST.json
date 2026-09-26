@@ -1,11 +1,6 @@
 {
-  "version": "7.0.4-single-service",
-  "deployment": "one App Platform service: API + background worker",
-  "fixes": [
-    "session_status serializes Python date without sep keyword",
-    "recent_batches serializes Python date without sep keyword",
-    "retains v7.0.3 worker unread-result fix"
-  ],
+  "version": "7.0.6-single-service",
+  "fix": "self-contained maintenance runner; removes legacy APP_DIR import dependency",
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -14,13 +9,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "1b4732ca272c6caeb40111f2a83b9cec6eff16f2aeb3f2dc796cde8c804bb141",
-      "bytes": 3975
+      "sha256": "759ae0a67eaba7592a5b876afced80b711af3d52c3b125396df938a2b34bb9d3",
+      "bytes": 5345
     },
     {
       "path": "VERSION.txt",
-      "sha256": "2addc12a800f751fac6727ca0cae969a6fd8115968d993c825f4e71651079785",
-      "bytes": 284
+      "sha256": "e9b86b1bbfe590d3cf8639a40e0ef4dc7644f9bc3521a2263d344e36481ba79f",
+      "bytes": 200
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -124,8 +119,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "a580ba1fcec81c63811b32fbd178c4a61cbda494d7eb5ca74152b743d0d16913",
-      "bytes": 4567
+      "sha256": "be7f02e94bcb6d97d73caaccb1aeb69885ecab047024ee7b60e66df074afd516",
+      "bytes": 6174
     },
     {
       "path": "server/app.yaml.template",
@@ -158,14 +153,29 @@
       "bytes": 18428
     },
     {
+      "path": "server/maintenance_v705.py",
+      "sha256": "7e149264954287111b277b0ec903a1ff8e6f5d74af44128e298835dd12428ccb",
+      "bytes": 91
+    },
+    {
+      "path": "server/maintenance_v706.py",
+      "sha256": "f76dc7b30e5fbc6099d83ab955aa64c99221087e93a03cb9a2286d5585e01705",
+      "bytes": 13182
+    },
+    {
+      "path": "server/manual_overrides.py",
+      "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
+      "bytes": 10405
+    },
+    {
       "path": "server/normalize.py",
       "sha256": "df4c13bcec13937d9acf0ddc0a4d8bc3c2f22ae4502987e29af7a7becaa25828",
       "bytes": 50500
     },
     {
       "path": "server/phase3.py",
-      "sha256": "3b9303a25a0cebcfb14a86b880cc800d6a87272e783e8f547eb6706fb5ca89f5",
-      "bytes": 56758
+      "sha256": "bd0dd6bf8875b850a29181be2fecc8473f1c75782c59ddd7834e32e6f21e1a79",
+      "bytes": 57983
     },
     {
       "path": "server/requirements.txt",
@@ -179,7 +189,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "2b26206fdf3a1da35c493692236facefa159dbe9dac2dc14d225ccf295b75cbd",
+      "sha256": "21f7227fc1092d3e73fad3227d7457fc96feefc10511f3cd8c61d380a3c31510",
       "bytes": 16328
     },
     {

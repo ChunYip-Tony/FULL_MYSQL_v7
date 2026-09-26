@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.4 — Single-Service Edition
+# FULL MYSQL v7.0.5 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -76,3 +76,49 @@ The same latent date/datetime conversion issue in `ingest.py::recent_batches()`
 is fixed at the same time.
 
 No environment-variable changes and no database migration are required.
+
+
+## v7.0.5 central identity backfill
+
+This release repairs the central identity/UOM foundation before re-evaluating
+daily POS/MVT Phase 3 QA.
+
+Key changes:
+- Re-evaluate Batch 7 with current Article Manual authority logic.
+- Re-link already-ingested sales/movement history to repaired identity.
+- Retire stale derivation QA before a Phase 3 rerun; only current blockers are recreated.
+- Add a persistent manual_upc_override registry.
+- Seed the explicitly confirmed FULL MYSQL rule: UPC 4918 -> Article 3401602 -> LB.
+- Add /v1/batches/{session_id}/qa-summary.
+
+One-time repair after deploying v7.0.5:
+
+    cd /app
+    python maintenance_v705.py
+
+Defaults: identity Batch 7, history Batch 8.
+
+Later, to include the much larger Batch 6:
+
+    python maintenance_v705.py --history-batches 8,6
+
+On the $5 / 512 MB plan, repair Batch 8 first. Consider 1 GB before rerunning Batch 6.
+
+
+## v7.0.6 maintenance hotfix
+
+The v7.0.5 one-time maintenance runner imported a legacy v6.5.4 helper that
+expected `config.APP_DIR`, which does not exist in the cloud v7 config.  The
+failed import occurred before any database repair mutation.
+
+v7.0.6 makes the maintenance runner self-contained.  It no longer imports the
+legacy module.
+
+After deploy:
+
+    cd /app
+    python maintenance_v706.py
+
+The old command also works through a compatibility wrapper:
+
+    python maintenance_v705.py
