@@ -1,11 +1,18 @@
 {
-  "version": "7.0.18-single-service",
-  "purpose": "Make QA-summary current hold reason counts reconcile exactly to quick_check_current",
+  "version": "7.0.19-single-service",
+  "purpose": "Repair/audit missing current cost for current-active Seafood UPCs only",
+  "activity_scope": "positive POS sold qty in latest up-to-28 valid completed POS data days",
+  "cost_authority": [
+    "valid movement 101/107/109 receipt valuation",
+    "explicit official Frozen/TX ABC/Live-Fresh report cost",
+    "explicit On-Hand cost fallback with explicit supported cost UOM"
+  ],
   "safety": [
-    "No business logic changes",
-    "No Quick Check row mutation",
-    "No Phase 3 rebuild required",
-    "Reason counts are current-active serving snapshot only"
+    "Historical-only UPCs are not targeted",
+    "No generic inventory UOM is assumed to be cost UOM",
+    "No description-derived cost or conversion",
+    "RAW remains immutable",
+    "Unresolved evidence remains QA HOLD"
   ],
   "files": [
     {
@@ -15,13 +22,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "22a98c09886f7db524d4148f323c3147b528cc4f6a07407961b0c5950681635b",
-      "bytes": 20164
+      "sha256": "97ea966a94cd1b83ed10cbf88c33f7436f2ed5d20bfceb89899c4c67be256eac",
+      "bytes": 21935
     },
     {
       "path": "VERSION.txt",
-      "sha256": "9275a26cf00e7167fb3559d3b37ef11e1fa3b90e3cf19eb00ea93656baf532bd",
-      "bytes": 170
+      "sha256": "b31e8ba18d783220fc36ba0e7aad1a49f211e842ee392f1d5e33cbe87a9d0510",
+      "bytes": 159
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -135,8 +142,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "317c25c10779b6d72f973c3987f7845a96421d95edd07afa925a5fd05593e4b8",
-      "bytes": 12757
+      "sha256": "e04bbc783186cb4e739b2be659c538695ad029341b8cefb34ce12208c941dfc9",
+      "bytes": 13074
     },
     {
       "path": "server/app.yaml.template",
@@ -157,6 +164,11 @@
       "path": "server/cross_tab_signature_repair.py",
       "sha256": "bdd71e581b17291c77456d6100e73674fab3b478afc96b7e8ae07cf70a8e1083",
       "bytes": 4779
+    },
+    {
+      "path": "server/current_active_cost_repair.py",
+      "sha256": "d8959fbcedbf2fba0853999c2254bd6cbfaa1943d5d658072dbae21848146b5c",
+      "bytes": 29908
     },
     {
       "path": "server/data_coverage.py",
@@ -249,6 +261,11 @@
       "bytes": 2957
     },
     {
+      "path": "server/maintenance_v719.py",
+      "sha256": "7144226ed341f7e20aca0dba7e7cef84d6f2f2f3507d923dc000726029cf515d",
+      "bytes": 3920
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -260,8 +277,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "e438ef465d57e92ed1b21158bb0d0fc63a533ee4aae37bbd437f2554e3496828",
-      "bytes": 68462
+      "sha256": "1976f4b95a3de55bb236284083131df8acadb1bc4d211fb070c15c1acb8f449c",
+      "bytes": 70043
     },
     {
       "path": "server/requirements.txt",
@@ -280,7 +297,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "50872d861d6a7246bc3e463038a877c133ab206556e45c2845aabbe1942eaffe",
+      "sha256": "eb73097dc7c5b3fec62623398a070934aca9f4a523d4838382c39b7ac063230b",
       "bytes": 16329
     },
     {

@@ -1,12 +1,15 @@
-FULL MYSQL v7.0.18 cumulative GitHub patch
+FULL MYSQL v7.0.19 cumulative GitHub patch
 
-Purpose: fix qa-summary reason/hold list parity with current Quick Check serving snapshot.
+Purpose: current-active cost repair/audit.
+Scope: positive POS sales in latest up-to-28 valid completed POS data days only.
+Authority: 101/107/109 receipt -> official report cost -> explicit OH cost fallback.
 
 Upload ALL server/*.py files from this patch into GitHub server/.
 Upload README_START_HERE.md, VERSION.txt, MANIFEST.json to repo root.
 
 After DigitalOcean deploy:
-1) Verify /healthz = 7.0.18-single-service
-2) No Phase 3 maintenance rerun is required.
-3) Re-query /qa-summary from PowerShell.
-4) Optional console check: python maintenance_v718.py --batch 8
+1) Verify /healthz = 7.0.19-single-service
+2) DigitalOcean Console: python maintenance_v719.py --batch 8
+3) No Batch 7 rebuild
+4) No Batch 8 re-upload
+5) No MySQL settings changes

@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.18 — Single-Service Edition
+# FULL MYSQL v7.0.19 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -560,3 +560,63 @@ Optionally run:
 No MySQL settings change.
 No Batch 7 rebuild.
 No Batch 8 re-upload.
+
+
+## v7.0.19 Current-Active Cost Repair / Audit
+
+This release targets only UPCs with positive POS sold quantity in the latest
+up-to-28 VALID completed POS data days.
+
+Historical-only UPCs are not targeted.
+
+Current cost authority remains:
+
+1. Valid receipt valuation from movement 101 / 107 / 109.
+2. Explicit official cost from Frozen Inventory / TX Seafood ABC /
+   Live-Fresh Suggestion reports.
+3. Explicit On-Hand cost fallback.
+
+### Safety rules
+
+Receipt cost:
+- requires non-zero amount;
+- requires non-zero base quantity;
+- requires a recognized base UOM;
+- derived as absolute amount / base quantity.
+
+Official report cost:
+- requires positive explicit cost;
+- requires explicit recognized cost UOM;
+- may be anchored to the confirmed Family Main Article when the source report
+  identifies the family but does not carry a separate receiving Article.
+
+On-Hand fallback:
+- requires a positive explicit cost field;
+- requires a cost-specific UOM field such as Cost UOM / Price UOM;
+- generic inventory UOM is NOT silently assumed to be cost UOM;
+- RAW remains immutable.
+
+The repair first relinks target-family company rows from confirmed Article/UPC
+identity, then backfills missing derived cost observations.
+
+If no authoritative evidence can be safely resolved, the UPC stays QA HOLD and
+the repair report classifies the family as one of:
+
+- `RECEIPT_ROWS_WITHOUT_VALID_VALUATION`
+- `OFFICIAL_COST_WITHOUT_EXPLICIT_UOM`
+- `OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM`
+- `NO_AUTHORITATIVE_COST_EVIDENCE`
+
+The API `/qa-summary` exposes:
+
+    current_active_cost_repair
+
+including initial gaps, repaired UPCs, remaining gaps, and diagnostics.
+
+After deploy:
+
+    python maintenance_v719.py --batch 8
+
+No Batch 7 rebuild.
+No Batch 8 re-upload.
+No MySQL setting changes.

@@ -1,3 +1,3 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.18 Single-Service Edition
-QA summary parity: reason counts and hold UPCs derive from current Quick Check serving snapshot
+Version: 7.0.19 Single-Service Edition
+Current-active cost repair/audit: receipt -> official report -> explicit OH fallback
