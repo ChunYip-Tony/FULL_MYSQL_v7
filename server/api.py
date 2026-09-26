@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.7-single-service'
+VERSION='7.0.8-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -91,13 +91,14 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             cur.close()
             raise HTTPException(404,'Batch session not found')
         bid=int(b['batch_id'])
-        def grouped(table):
+
+        def grouped(table, extra_where=''):
             cur.execute(
                 f"""SELECT g.issue_code,g.severity,g.issue_count
                     FROM (
                         SELECT issue_code,UPPER(severity) AS severity,COUNT(*) AS issue_count
                         FROM {table}
-                        WHERE batch_id=%s AND issue_status='OPEN'
+                        WHERE batch_id=%s AND issue_status='OPEN' {extra_where}
                         GROUP BY issue_code,UPPER(severity)
                     ) AS g
                     ORDER BY FIELD(g.severity,'CRITICAL','HIGH','MEDIUM','LOW'),
@@ -105,15 +106,72 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                 (bid,),
             )
             return cur.fetchall()
-        cur.execute("""SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,
-                              quick_check_hold_rows,updated_at
-                       FROM phase3_batch_result WHERE batch_id=%s""",(bid,))
+
+        cur.execute(
+            """SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,
+                      quick_check_hold_rows,updated_at
+               FROM phase3_batch_result WHERE batch_id=%s""",
+            (bid,),
+        )
         p3=cur.fetchone()
+
+        # Reason-level serving QA counts.
+        cur.execute(
+            """SELECT entity_key,detail_json
+               FROM qa_phase3_issue
+               WHERE batch_id=%s AND issue_status='OPEN'
+                 AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'
+               ORDER BY issue_id""",
+            (bid,),
+        )
+        reason_counts={}
+        hold_upcs=[]
+        for row in cur.fetchall():
+            try:
+                detail=json.loads(row.get('detail_json') or '{}')
+            except Exception:
+                detail={}
+            reasons=detail.get('reasons') or []
+            for reason in reasons:
+                reason_counts[str(reason)] = reason_counts.get(str(reason),0) + 1
+            hold_upcs.append({'upc':str(row['entity_key']),'reasons':reasons})
+
+        # Remaining batch-specific sold-UPC identity blockers.
+        cur.execute(
+            """SELECT entity_key,detail_json
+               FROM qa_phase3_issue
+               WHERE batch_id=%s AND issue_status='OPEN'
+                 AND issue_code='SOLD_UPC_UNMAPPED'
+               ORDER BY issue_id""",
+            (bid,),
+        )
+        sold_unmapped=[]
+        for row in cur.fetchall():
+            try:
+                detail=json.loads(row.get('detail_json') or '{}')
+            except Exception:
+                detail={}
+            sold_unmapped.append({
+                'upc':str(row['entity_key']),
+                'description':detail.get('description'),
+            })
+
         result={
             'batch_id':bid,
             'processing_status':b['processing_status'],
             'phase2c_issue_counts':grouped('qa_identity_uom_issue'),
             'phase3_issue_counts':grouped('qa_phase3_issue'),
+            'batch_blocking_issue_counts':grouped(
+                'qa_phase3_issue',
+                "AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'"
+            ),
+            'serving_issue_counts':grouped(
+                'qa_phase3_issue',
+                "AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'"
+            ),
+            'quick_check_reason_counts':reason_counts,
+            'sold_upc_unmapped':sold_unmapped,
+            'quick_check_hold_upcs':hold_upcs,
             'phase3':p3,
         }
         cur.close()

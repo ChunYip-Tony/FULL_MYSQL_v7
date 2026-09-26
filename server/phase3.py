@@ -1011,9 +1011,27 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             relink_history(cur)
             late_identity = resolve_late_identity_issues(cur, batch_id)
             qc = rebuild_quick_check(cur, batch_id)
-            cur.execute("SELECT COUNT(*) AS c FROM qa_phase3_issue WHERE batch_id=%s AND issue_status='OPEN' AND UPPER(severity) IN ('HIGH','CRITICAL')", (batch_id,))
+
+            # Batch blockers and serving-row QA are different scopes.
+            # QUICK_CHECK_CORE_FIELD_MISSING affects only the individual serving UPC:
+            # it must not make an otherwise valid POS/MVT ingest batch fail.
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND UPPER(severity) IN ('HIGH','CRITICAL')
+                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (batch_id,),
+            )
             blocking = int(cur.fetchone()['c'])
-            status = 'QUICK_CHECK_READY' if blocking == 0 and qc['rows'] > 0 else 'PHASE3_QA_HOLD'
+
+            if blocking > 0 or qc['rows'] == 0:
+                status = 'PHASE3_QA_HOLD'
+            elif qc['hold'] > 0:
+                status = 'QUICK_CHECK_READY_WITH_HOLDS'
+            else:
+                status = 'QUICK_CHECK_READY'
             cur.execute(
                 """INSERT INTO phase3_batch_result
                    (batch_id,sales_rows,price_rows,movement_rows,inventory_rows,company_price_rows,
@@ -1031,7 +1049,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             cur.execute(
                 """UPDATE pipeline_run SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6),rows_inserted=%s,error_count=%s,detail_json=%s
                    WHERE pipeline_run_id=%s""",
-                ('COMPLETED' if status == 'QUICK_CHECK_READY' else 'FAILED_QA', sum(counts.values()) + qc['rows'], blocking,
+                ('COMPLETED' if status in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'} else 'FAILED_QA',
+                 sum(counts.values()) + qc['rows'], blocking,
                  json.dumps({'counts': counts, 'quick_check': qc}, default=str), run_id),
             )
             conn.commit()
@@ -1055,6 +1074,17 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
                FROM qa_phase3_issue WHERE batch_id=%s AND issue_status='OPEN'
                ORDER BY FIELD(UPPER(severity),'CRITICAL','HIGH','MEDIUM','LOW'),issue_id""", (batch_id,))
         issues = cur.fetchall(); cur.close()
-    blocking = [x for x in issues if str(x['severity']).upper() in {'HIGH', 'CRITICAL'}]
-    return {'batch_id': batch_id, 'pass': result['result_status'] == 'QUICK_CHECK_READY' and not blocking,
-            'result': result, 'blocking_issues': blocking, 'all_open_issues': issues}
+    blocking = [
+        x for x in issues
+        if str(x['severity']).upper() in {'HIGH', 'CRITICAL'}
+        and x['issue_code'] != 'QUICK_CHECK_CORE_FIELD_MISSING'
+    ]
+    serving_issues = [x for x in issues if x['issue_code'] == 'QUICK_CHECK_CORE_FIELD_MISSING']
+    return {
+        'batch_id': batch_id,
+        'pass': result['result_status'] in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'} and not blocking,
+        'result': result,
+        'blocking_issues': blocking,
+        'serving_issues': serving_issues,
+        'all_open_issues': issues,
+    }
