@@ -636,8 +636,10 @@ def recent_batches(limit: int = 20) -> list[dict[str, Any]]:
         cur.close()
     for row in rows:
         for k, v in list(row.items()):
-            if isinstance(v, (date, datetime)):
+            if isinstance(v, datetime):
                 row[k] = v.isoformat(sep=' ')
+            elif isinstance(v, date):
+                row[k] = v.isoformat()
     return rows
 
 

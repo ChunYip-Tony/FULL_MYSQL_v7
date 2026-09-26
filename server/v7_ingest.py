@@ -7,12 +7,21 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='v7.0.3-single-service'
+API_VERSION='v7.0.4-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 
 def _json_dump(v):
     return json.dumps(v, ensure_ascii=False, default=str)
+
+def _wire_value(v):
+    # datetime.isoformat accepts sep=; date.isoformat does not.
+    # Keep SQL-style spacing for datetimes and ISO YYYY-MM-DD for dates.
+    if isinstance(v, datetime):
+        return v.isoformat(sep=' ')
+    if isinstance(v, date):
+        return v.isoformat()
+    return v
 
 def _notes(device_id: str, state: str, **extra):
     return _json_dump({'v7':True,'device_id':device_id,'state':state,**extra})
@@ -40,7 +49,7 @@ def find_active_batch() -> dict[str,Any]|None:
     if row:
         row['device_id']=_device_from_notes(row.get('notes'))
         for k,v in list(row.items()):
-            if isinstance(v,(date,datetime)): row[k]=v.isoformat(sep=' ')
+            if isinstance(v,(date,datetime)): row[k]=_wire_value(v)
     return row
 
 def begin_batch(device_id: str, label: str|None=None) -> dict[str,Any]:
@@ -195,7 +204,8 @@ def session_status(session_id: str) -> dict[str,Any]:
     def conv(o):
         if not o: return o
         for k,v in list(o.items()):
-            if isinstance(v,(date,datetime)): o[k]=v.isoformat(sep=' ')
+            if isinstance(v,(date,datetime)):
+                o[k]=_wire_value(v)
         return o
     return {'batch':conv(b),'files':[conv(x) for x in files],'api_runs':[conv(x) for x in runs],'phase2c':conv(p2),'phase3':conv(p3)}
 
