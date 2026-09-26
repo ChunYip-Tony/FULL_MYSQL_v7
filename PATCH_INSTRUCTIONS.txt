@@ -1,14 +1,18 @@
-FULL MYSQL v7.0.12 GitHub Patch
+FULL MYSQL v7.0.14 GitHub Patch
 
-Purpose: use ALL Article Manual tabs for safe UPC alias + explicit UM repair.
+This patch is cumulative from v7.0.13.
+If v7.0.13 was not deployed, you can deploy v7.0.14 directly.
 
 Upload server/*.py into GitHub server/.
-Suggested commit: v7.0.12 multi-tab Article Manual QA repair
+Upload README_START_HERE.md, VERSION.txt, MANIFEST.json to repo root.
+
+Suggested commit:
+v7.0.14 temporary non-blocking identity QA waivers
 
 After deploy:
-1) Verify /healthz = 7.0.12-single-service
-2) DigitalOcean Console: python maintenance_v712.py --batch 8
+1) Verify /healthz = 7.0.14-single-service
+2) DigitalOcean Console: python maintenance_v714.py --batch 8
 3) Do NOT rebuild Batch 7.
 4) Do NOT re-upload Batch 8.
-5) Re-run Work-PC qa-summary and compare blockers/UOM reasons.
-6) Seafood Client upgrade remains deferred.
+5) No MySQL setting changes are required.
+6) Do not upgrade the Windows Seafood Client yet.

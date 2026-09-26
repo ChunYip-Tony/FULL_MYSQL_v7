@@ -1,12 +1,17 @@
 {
-  "version": "7.0.12-single-service",
-  "purpose": "Use all Article Manual tabs to repair conservative UPC aliases and explicit UM",
+  "version": "7.0.14-single-service",
+  "purpose": "Preserve two unresolved active identity QA issues as explicit temporary non-blocking waivers",
+  "waived_upcs": [
+    "75539372208",
+    "81223402610"
+  ],
   "safety": [
-    "No generic fuzzy UPC mapping",
-    "No one-digit substitution auto-map",
-    "Description agreement required",
-    "One canonical family required",
-    "Explicit UM only; no pack-text conversion inference"
+    "No identity mapping created by waiver",
+    "No UOM/cost/conversion inference",
+    "Original QA remains open",
+    "Waiver is current-readiness-only",
+    "Quick Check remains explicitly BLOCKED for waived UPCs",
+    "All other active SOLD_UPC_UNMAPPED issues remain blocking"
   ],
   "files": [
     {
@@ -16,13 +21,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "45f6a96fb9f9ddd05d40f6b2f09ebdf8841fba11d98c91615012e5261b7c3eae",
-      "bytes": 12183
+      "sha256": "72fbeb1dc8f5537f223be917178c672c6404385b3a96701e171877d24f4cf8c5",
+      "bytes": 14310
     },
     {
       "path": "VERSION.txt",
-      "sha256": "0eb68006f475a5fb59f79f2f65a0f958884db0797eef73d0320e1521352fe493",
-      "bytes": 152
+      "sha256": "f189b8035591620c958c0b60e8ed8ddf6c17002346aceee667f0694916a78c91",
+      "bytes": 166
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -131,8 +136,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "996571e4dfee8570187535c50bc096ac235b7e0c1af427ca06be6a27086d173d",
-      "bytes": 9733
+      "sha256": "38b1d6ef5ee936684b0d6a58d7626fa992f9ff325a71c9e476fd3173fe5a995f",
+      "bytes": 11903
     },
     {
       "path": "server/app.yaml.template",
@@ -148,6 +153,11 @@
       "path": "server/config.py",
       "sha256": "0fb358fa5866553d32bd22e68894eef16c5d2340c06f646aaeeeb22b7f79f123",
       "bytes": 3933
+    },
+    {
+      "path": "server/cross_tab_signature_repair.py",
+      "sha256": "bdd71e581b17291c77456d6100e73674fab3b478afc96b7e8ae07cf70a8e1083",
+      "bytes": 4779
     },
     {
       "path": "server/data_coverage.py",
@@ -210,6 +220,16 @@
       "bytes": 4858
     },
     {
+      "path": "server/maintenance_v713.py",
+      "sha256": "8c4e944dcf053390c5f16164a6eb1b04741ca9b3824d61896946d8c6729af9d6",
+      "bytes": 3666
+    },
+    {
+      "path": "server/maintenance_v714.py",
+      "sha256": "00849c869955aa208e9dacfee766e949565f9a32b423303c6884180f4ea1aaaa",
+      "bytes": 4683
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -221,8 +241,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "af33f514dc7f89263ab6bc3fc05437925ed623b04f15342ad21d1ae51c405faa",
-      "bytes": 66455
+      "sha256": "c3f6c071dbad899c894fb5340ace027b1c590b340da46921f16f600175b7f3cc",
+      "bytes": 67278
     },
     {
       "path": "server/requirements.txt",
@@ -235,8 +255,13 @@
       "bytes": 2521
     },
     {
+      "path": "server/temporary_qa_waivers.py",
+      "sha256": "1adad63f547a830ec91c466f928967cce2613fdfa76643369f952df577e9a9f5",
+      "bytes": 3703
+    },
+    {
       "path": "server/v7_ingest.py",
-      "sha256": "7a1343871ebc9cdd22df52d00ab1826d220fd9856033930723dde4dd13038608",
+      "sha256": "dbdef3f2ab9506e654e1ed2b0e567be921b299806a6e6d787ffbd477e14be97b",
       "bytes": 16329
     },
     {

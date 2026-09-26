@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.12 — Single-Service Edition
+# FULL MYSQL v7.0.14 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -326,3 +326,54 @@ After deploy:
 No Batch 7 rebuild.
 No Batch 8 re-upload.
 Windows Seafood Client upgrade remains deferred.
+
+## v7.0.13 Cross-tab exact signature repair
+
+All Seafood Article Manual tabs were reviewed. This release adds one conservative
+rule for remaining active unmapped POS UPCs: the Article Manual product description
+must agree AND its Size/dimensions must match the POS description suffix exactly.
+All candidates must resolve to one canonical Main Article/Family.
+
+This safely targets OYSTER IN SHELL 60EA, 26/30 H/L SHRIMP 10/4LB, and FROZEN
+KUNG FU SNAKEHEAD FISH FILLETS 40/8.8OZ.
+
+It intentionally leaves mismatched signatures in QA, including BAY SCALLOP
+24/12OZ vs 14/12OZ and HOT POT SHRIMP PASTE 20PACK/300G vs 40/150G.
+
+No package conversion is inferred. Cross-tab signature repair is identity-only; the matched row's UM is recorded as evidence but is not automatically applied to a different POS UPC.
+
+
+## v7.0.14 Temporary QA Waiver
+
+Two active sold UPCs remain unresolved after all safe Article Manual evidence is exhausted:
+
+- `75539372208` — 40/60 ALL NATURAL PREMIUM BAY SCALLOP 24/12OZ
+- `81223402610` — HOT POT SHRIMP PASTE MEAT 20PACK/300G
+
+The user approved temporarily ignoring these two for CURRENT BATCH readiness until
+authoritative Article/Family identity can be confirmed later.
+
+v7.0.14 does **not** map them and does **not** delete their QA/history.
+
+Instead it:
+
+1. Keeps `SOLD_UPC_UNMAPPED` open.
+2. Adds `temporary_qa_waiver` audit metadata.
+3. Downgrades these exact issue rows to `MEDIUM` so they are non-blocking for current batch readiness.
+4. Keeps them out of `sold_upc_unmapped` blocker list in `/qa-summary`.
+5. Exposes them separately as `temporarily_waived_sold_upc_unmapped`.
+6. `/v1/quick-check/{upc}` returns HTTP 409 `BLOCKED` with
+   `IDENTITY_PENDING_TEMP_WAIVER` for these unresolved UPCs instead of pretending they are READY.
+7. No Article/Family, Selling UOM, cost, conversion, or price is inferred.
+
+This is deliberately scoped to the two exact UPCs above. A new unmapped active UPC
+will still be HIGH/blocking.
+
+After deploy:
+
+    python maintenance_v714.py --batch 8
+
+No Batch 7 rebuild.
+No Batch 8 re-upload.
+No MySQL settings change.
+No Windows Seafood Client upgrade yet.
