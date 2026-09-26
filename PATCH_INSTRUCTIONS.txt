@@ -1,14 +1,14 @@
-FULL MYSQL v7.0.11 GitHub Patch
+FULL MYSQL v7.0.12 GitHub Patch
 
-Purpose: evidence-only Active Product Master repair.
+Purpose: use ALL Article Manual tabs for safe UPC alias + explicit UM repair.
 
-IMPORTANT: upload server/*.py into GitHub server/.
-Suggested commit: v7.0.11 active product master evidence repair
+Upload server/*.py into GitHub server/.
+Suggested commit: v7.0.12 multi-tab Article Manual QA repair
 
-After DigitalOcean auto-deploy:
-1) Verify /healthz = 7.0.11-single-service
-2) DigitalOcean Console: python maintenance_v711.py --batch 8
+After deploy:
+1) Verify /healthz = 7.0.12-single-service
+2) DigitalOcean Console: python maintenance_v712.py --batch 8
 3) Do NOT rebuild Batch 7.
 4) Do NOT re-upload Batch 8.
-5) Then use the existing /qa-summary API from Work PC to compare remaining blockers/UOM/cost gaps.
-6) Seafood Windows Client upgrade remains deferred until server rules are stable.
+5) Re-run Work-PC qa-summary and compare blockers/UOM reasons.
+6) Seafood Client upgrade remains deferred.

@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.11 — Single-Service Edition
+# FULL MYSQL v7.0.12 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -277,3 +277,52 @@ After deploy:
 No Batch 7 rebuild.
 No Batch 8 re-upload.
 Seafood Windows Client can still be upgraded later after server rules stabilize.
+
+
+## v7.0.12 Multi-tab Article Manual repair
+
+The Seafood Article Manual contains useful identity/UOM evidence across all tabs,
+not only the Link hierarchy.
+
+The current workbook tabs include:
+- Fresh fish
+- Live fish
+- Shrimp
+- Fish ball
+- Frozen fish
+- Frozen pack
+- Hot Pot
+- Fish inventory form
+- Link
+- Note
+
+Root cause found:
+- Product roster tabs contain EAN/UPC and Main/Article mappings.
+- Frozen pack also contains explicit `UM`.
+- Some source barcodes are formatted with spaces, e.g. `0 6139190220 5`.
+- Many POS identifiers are the Article Manual barcode with the final check digit
+  omitted, and sometimes the leading zero omitted.
+- v7.0.11 required exact UPC equality, so this evidence was missed.
+
+v7.0.12 automatically accepts ONLY conservative barcode aliases:
+1. exact/numeric-equivalent
+2. Article Manual source = POS UPC + one trailing digit
+3. Article Manual source = 0 + POS UPC + one trailing digit
+
+The candidate description must also agree and all accepted candidates must
+resolve to one canonical Main/Family Article.
+
+It intentionally DOES NOT auto-map one-digit substitutions. Those stay review
+candidates.
+
+Explicit `UM` from the matched Article Manual roster row may populate
+Selling UOM when no current confirmed UOM exists. Pack/size text is retained as
+evidence but is NOT used to infer a weight conversion.
+
+After deploy:
+
+    python maintenance_v712.py --batch 8
+
+No Batch 7 rebuild.
+No Batch 8 re-upload.
+Windows Seafood Client upgrade remains deferred.

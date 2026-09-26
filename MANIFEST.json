@@ -1,12 +1,12 @@
 {
-  "version": "7.0.11-single-service",
-  "purpose": "Evidence-only Active Product Master Repair",
-  "rules": [
-    "Do not infer Selling UOM from description, pack text, UPC prefix, or family neighbor",
-    "Auto-repair active UPC identity only on unique authoritative exact evidence",
-    "Backfill late 101/107/109 receipt cost mirrors from immutable ingested movement history",
-    "Keep ambiguous identity/UOM as QA HOLD",
-    "POS-28 Active-Selling scope from v7.0.10 remains unchanged"
+  "version": "7.0.12-single-service",
+  "purpose": "Use all Article Manual tabs to repair conservative UPC aliases and explicit UM",
+  "safety": [
+    "No generic fuzzy UPC mapping",
+    "No one-digit substitution auto-map",
+    "Description agreement required",
+    "One canonical family required",
+    "Explicit UM only; no pack-text conversion inference"
   ],
   "files": [
     {
@@ -16,13 +16,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "c4f5e23926fdcd0aa38972d0f6f15492ffb476fdab84adace9ecb5a9d96e0806",
-      "bytes": 10692
+      "sha256": "45f6a96fb9f9ddd05d40f6b2f09ebdf8841fba11d98c91615012e5261b7c3eae",
+      "bytes": 12183
     },
     {
       "path": "VERSION.txt",
-      "sha256": "a6f14adaadc14ff00012829abacdfea5dc02d91df4d8e9d8cf6bcf990f290bbd",
-      "bytes": 169
+      "sha256": "0eb68006f475a5fb59f79f2f65a0f958884db0797eef73d0320e1521352fe493",
+      "bytes": 152
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -131,13 +131,18 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "d6a3a4d863af9453cc32ca981d71fa2102f009b80e7defecb54b545b4277b09f",
-      "bytes": 9584
+      "sha256": "996571e4dfee8570187535c50bc096ac235b7e0c1af427ca06be6a27086d173d",
+      "bytes": 9733
     },
     {
       "path": "server/app.yaml.template",
       "sha256": "e5685eb83fa4de1752f6f534a8c99a1f9a4a32a982d49b0d8f02a6ca71e3a3d3",
       "bytes": 741
+    },
+    {
+      "path": "server/article_manual_multitab_repair.py",
+      "sha256": "688bc3b85fa53a058de3e488594c1f18aa6e21d65ebd3d0cbf035417b815d686",
+      "bytes": 23093
     },
     {
       "path": "server/config.py",
@@ -200,6 +205,11 @@
       "bytes": 4918
     },
     {
+      "path": "server/maintenance_v712.py",
+      "sha256": "a63fd9cfc75cc4dd8e6ac4155c8b888b7cddc01b3002df728aa744a25385cf91",
+      "bytes": 4858
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -211,8 +221,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "c0c0b59c6f528f77a7b32e01fc50da3a58608debbfbff79ee4462f4ccd3f5eb7",
-      "bytes": 65808
+      "sha256": "af33f514dc7f89263ab6bc3fc05437925ed623b04f15342ad21d1ae51c405faa",
+      "bytes": 66455
     },
     {
       "path": "server/requirements.txt",
@@ -226,7 +236,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "100894a99d3599ed11e38f577e21c6aa1a1b54748480b39b3a240be71c7edd61",
+      "sha256": "7a1343871ebc9cdd22df52d00ab1826d220fd9856033930723dde4dd13038608",
       "bytes": 16329
     },
     {

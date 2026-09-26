@@ -1,3 +1,3 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.11 Single-Service Edition
-Active Product Master Repair: evidence-only identity + UPC-specific UOM + cost mirror backfill
+Version: 7.0.12 Single-Service Edition
+Multi-tab Article Manual repair: formatted UPC aliases + explicit UM evidence
