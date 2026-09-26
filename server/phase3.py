@@ -11,6 +11,7 @@ from typing import Any, Iterable
 
 from db import db_conn
 from data_coverage import source_data_days, coverage_summary
+from manual_overrides import apply_manual_upc_overrides
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -547,6 +548,31 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
     return inserted
 
 
+
+RECOMPUTED_PHASE3_ISSUE_CODES = (
+    'SALES_PERIOD_UNRESOLVED',
+    'SOLD_UPC_UNMAPPED',
+    'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED',
+    'QUICK_CHECK_CORE_FIELD_MISSING',
+)
+
+def retire_recomputed_phase3_issues(cur, batch_id: int) -> int:
+    placeholders = ','.join(['%s'] * len(RECOMPUTED_PHASE3_ISSUE_CODES))
+    cur.execute(
+        f"""UPDATE qa_phase3_issue
+            SET issue_status='RESOLVED',
+                detail_json=JSON_SET(
+                    COALESCE(detail_json,JSON_OBJECT()),
+                    '$.resolution',
+                    'Superseded by Phase 3 re-evaluation under v7.0.5'
+                )
+            WHERE batch_id=%s
+              AND issue_status='OPEN'
+              AND issue_code IN ({placeholders})""",
+        (batch_id, *RECOMPUTED_PHASE3_ISSUE_CODES),
+    )
+    return int(cur.rowcount)
+
 def relink_history(cur) -> None:
     # Late-arriving identity evidence must repair prior history links without rewriting RAW.
     cur.execute("""UPDATE sales_period_observation s JOIN selling_upc u ON u.ean_upc=s.ean_upc
@@ -960,6 +986,10 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 raise KeyError(f'Batch {batch_id} not found')
             if b['processing_status'] not in {'PHASE2C_READY', 'PHASE3_QA_HOLD', 'QUICK_CHECK_READY'}:
                 raise RuntimeError(f'Batch {batch_id} is not Phase 2C ready; current status={b["processing_status"]}')
+
+            override_result = apply_manual_upc_overrides(cur)
+            retired_recomputed_issues = retire_recomputed_phase3_issues(cur, batch_id)
+
             cur.execute(
                 """INSERT INTO pipeline_run (batch_id,pipeline_name,stage_name,run_number,processing_status,code_version)
                    VALUES (%s,'FULL_MYSQL_SEAFOOD','PHASE3_HISTORY_PRECOMPUTE',1,'STARTED','local-agent-v6.6.0')""", (batch_id,))
@@ -995,7 +1025,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity}, default=str)),
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1005,7 +1035,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                  json.dumps({'counts': counts, 'quick_check': qc}, default=str), run_id),
             )
             conn.commit()
-            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'blocking_issues': blocking}
+            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'blocking_issues': blocking}
         except Exception:
             conn.rollback()
             raise

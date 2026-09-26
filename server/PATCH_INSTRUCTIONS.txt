@@ -1,0 +1,12 @@
+FULL MYSQL v7.0.5 GitHub Patch
+
+IMPORTANT: preserve folder structure. Upload server/*.py into GitHub server/.
+Commit: v7.0.5 central identity backfill and Phase3 re-evaluation
+
+After DigitalOcean deploy, verify /healthz = 7.0.5-single-service.
+Then App Platform Console:
+  cd /app
+  python maintenance_v705.py
+
+Do NOT re-upload Batch 8 files.
+No environment-variable change is required.

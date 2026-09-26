@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.4-single-service'
+VERSION='7.0.5-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -78,6 +78,42 @@ def batch(session_id:str,authorization: Annotated[str|None,Header()]=None):
     device_from_auth(authorization)
     try: return json.loads(json.dumps(session_status(session_id),default=j))
     except KeyError as exc: raise HTTPException(404,str(exc))
+
+
+@app.get('/v1/batches/{session_id}/qa-summary')
+def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=None):
+    device_from_auth(authorization)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute("SELECT batch_id,processing_status FROM ingest_batch WHERE batch_key=%s LIMIT 1",(session_id,))
+        b=cur.fetchone()
+        if not b:
+            cur.close()
+            raise HTTPException(404,'Batch session not found')
+        bid=int(b['batch_id'])
+        def grouped(table):
+            cur.execute(
+                f"""SELECT issue_code,UPPER(severity) severity,COUNT(*) issue_count
+                    FROM {table}
+                    WHERE batch_id=%s AND issue_status='OPEN'
+                    GROUP BY issue_code,UPPER(severity)
+                    ORDER BY FIELD(UPPER(severity),'CRITICAL','HIGH','MEDIUM','LOW'),issue_count DESC,issue_code""",
+                (bid,),
+            )
+            return cur.fetchall()
+        cur.execute("""SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,
+                              quick_check_hold_rows,updated_at
+                       FROM phase3_batch_result WHERE batch_id=%s""",(bid,))
+        p3=cur.fetchone()
+        result={
+            'batch_id':bid,
+            'processing_status':b['processing_status'],
+            'phase2c_issue_counts':grouped('qa_identity_uom_issue'),
+            'phase3_issue_counts':grouped('qa_phase3_issue'),
+            'phase3':p3,
+        }
+        cur.close()
+    return json.loads(json.dumps(result,default=j))
 
 @app.get('/v1/quick-check/{upc}')
 def quick_check(upc:str,authorization: Annotated[str|None,Header()]=None):

@@ -1,0 +1,203 @@
+{
+  "version": "7.0.5-single-service",
+  "purpose": "central identity/UOM backfill and true-QA re-evaluation",
+  "seeded_user_confirmed_rules": [
+    {
+      "ean_upc": "4918",
+      "article_number": "3401602",
+      "selling_uom": "LB"
+    }
+  ],
+  "files": [
+    {
+      "path": "GENERATE_API_TOKENS.py",
+      "sha256": "3ac35a37088be6de84baa80c270ad3efb59973691e13b7c221be7d8aae349c8f",
+      "bytes": 346
+    },
+    {
+      "path": "README_START_HERE.md",
+      "sha256": "0bf42689d850b6ecc6bcc5e860b15eb843fcbb86c92432edf46935fae17ae0d5",
+      "bytes": 4854
+    },
+    {
+      "path": "VERSION.txt",
+      "sha256": "66982b58e483d624c22371bc333a10567887f0c1e4cdfb6a5fc2ce5742e86e6b",
+      "bytes": 193
+    },
+    {
+      "path": "client_installer/INSTALL_V7_CLIENT.bat",
+      "sha256": "c66294c684377f610d622298f5adeb34d6847959087c7fe9be13d40b868933bb",
+      "bytes": 1361
+    },
+    {
+      "path": "client_installer/payload/CONFIGURE_API.bat",
+      "sha256": "35e879fabeaf892eff768b6814cdd67d87148046abf85f2d6ca680927365063a",
+      "bytes": 66
+    },
+    {
+      "path": "client_installer/payload/OPEN_INCOMING.bat",
+      "sha256": "64f435ca096d0c8c18623837723119d70194f68b2d97235ada0f8e376f98729d",
+      "bytes": 35
+    },
+    {
+      "path": "client_installer/payload/START_AGENT.bat",
+      "sha256": "ce189c83f8bf2c61876cd756258ae125629bb5c4c1b9c016c66f532a7a30ad6d",
+      "bytes": 71
+    },
+    {
+      "path": "client_installer/payload/START_CLIENT.bat",
+      "sha256": "0eb1fe8e6e14af4d17a683394cc2cc1cb9971e72da9e79126d7cd00bbf505cd5",
+      "bytes": 85
+    },
+    {
+      "path": "client_installer/payload/STOP_AGENT.bat",
+      "sha256": "4f0fb993885e0be916a5b2ef0c3eb07e9fd1cc3e8ad346d9c38882adb05621d6",
+      "bytes": 135
+    },
+    {
+      "path": "client_installer/payload/TEST_API.bat",
+      "sha256": "e053d99a8a3bdb3265e5968d0af404695b0511fc66fee47bc74399e77dce0e28",
+      "bytes": 157
+    },
+    {
+      "path": "client_installer/payload/VERSION.txt",
+      "sha256": "8079293eadc942936b57b7b7c0e2aa77c1e5ad623ef5ae77271ff73c59bbc2c1",
+      "bytes": 104
+    },
+    {
+      "path": "client_installer/payload/agent.py",
+      "sha256": "bae66ecce6c71dbfbc6dc1553c2c959984d1d32269cc98fe449e73f76229c68f",
+      "bytes": 4558
+    },
+    {
+      "path": "client_installer/payload/api_client.py",
+      "sha256": "bd745e876f535850589808852faa1ba2ee4b782c9fce167e7db4a4391b348585",
+      "bytes": 998
+    },
+    {
+      "path": "client_installer/payload/config.py",
+      "sha256": "a6b9fdb39df91edf72c5767d48c7cde78df636621e449cd000301691f3bb54c0",
+      "bytes": 1334
+    },
+    {
+      "path": "client_installer/payload/configure_api.py",
+      "sha256": "9490089924eea08216e56c909a67b4395e966bb60549dc6732db27e256e4da21",
+      "bytes": 2025
+    },
+    {
+      "path": "client_installer/payload/dashboard.py",
+      "sha256": "4af4581cb07a265bc366f1cfea512763399a89a544404270c07e9069950ffac5",
+      "bytes": 3545
+    },
+    {
+      "path": "client_installer/payload/requirements.txt",
+      "sha256": "0c8e840a529a8d307761b2615d40bdcbd6c7c7be088a3985d4dc4e2b84617c52",
+      "bytes": 34
+    },
+    {
+      "path": "client_installer/payload/settings.json",
+      "sha256": "9bea8997fd189fb3aa2ac84a360c454c0122999a23754296c9785511b6a99c49",
+      "bytes": 224
+    },
+    {
+      "path": "docs/CUTOVER_CHECKLIST.md",
+      "sha256": "d0d2ad6d2b2516cb1d105057dc957664559ab365025fce498fb653af2d633cc0",
+      "bytes": 900
+    },
+    {
+      "path": "docs/DEPLOY_DIGITALOCEAN_APP_PLATFORM.md",
+      "sha256": "9598f6d5f8c68d4ba77393c309341fd45c4cbb95b7697d5a022f3c4520324eee",
+      "bytes": 2774
+    },
+    {
+      "path": "docs/V7_BEHAVIOR_RULES.md",
+      "sha256": "d402fcc741620684a6e417b6785c64a0d05b7f8087f7f7f3d0d48340291961d4",
+      "bytes": 1556
+    },
+    {
+      "path": "server/Dockerfile",
+      "sha256": "d533077496712558ffe6355985b2961c9e1a900da22cf8cb878d7a32ab2558c2",
+      "bytes": 203
+    },
+    {
+      "path": "server/ENVIRONMENT_VARIABLES.txt",
+      "sha256": "406eb619e773ddcbe1a912593b0b13bd986919f48be24a11c235d8d00b21f349",
+      "bytes": 820
+    },
+    {
+      "path": "server/api.py",
+      "sha256": "84de936f596d05ec3ef79b8894922ac46d7d515cbb85d0a8f9e0c4dd732b745f",
+      "bytes": 6174
+    },
+    {
+      "path": "server/app.yaml.template",
+      "sha256": "e5685eb83fa4de1752f6f534a8c99a1f9a4a32a982d49b0d8f02a6ca71e3a3d3",
+      "bytes": 741
+    },
+    {
+      "path": "server/config.py",
+      "sha256": "0fb358fa5866553d32bd22e68894eef16c5d2340c06f646aaeeeb22b7f79f123",
+      "bytes": 3933
+    },
+    {
+      "path": "server/data_coverage.py",
+      "sha256": "d8d672c6bf2026634280f3badaf96d35c17d04d3683a5a166b30a2d6f65966fe",
+      "bytes": 5810
+    },
+    {
+      "path": "server/db.py",
+      "sha256": "84d65b5d59a400e63a5448359db937466a924d6bf97a6088429fcffdf6b418f4",
+      "bytes": 2581
+    },
+    {
+      "path": "server/ingest.py",
+      "sha256": "0ccc7e96dd6f206c3611950297a955d3f7077d782362551b67d41f729719ffc4",
+      "bytes": 29038
+    },
+    {
+      "path": "server/maintenance_repair_phase2c_v654.py",
+      "sha256": "d372768c6b55bef41bb0210c6d909d89f8cd99f0c948fe631408edd0adec753f",
+      "bytes": 18428
+    },
+    {
+      "path": "server/maintenance_v705.py",
+      "sha256": "98e0e67a87e521076719742038794706228311a0aab60189e58dfc0b185beab0",
+      "bytes": 4938
+    },
+    {
+      "path": "server/manual_overrides.py",
+      "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
+      "bytes": 10405
+    },
+    {
+      "path": "server/normalize.py",
+      "sha256": "df4c13bcec13937d9acf0ddc0a4d8bc3c2f22ae4502987e29af7a7becaa25828",
+      "bytes": 50500
+    },
+    {
+      "path": "server/phase3.py",
+      "sha256": "bd0dd6bf8875b850a29181be2fecc8473f1c75782c59ddd7834e32e6f21e1a79",
+      "bytes": 57983
+    },
+    {
+      "path": "server/requirements.txt",
+      "sha256": "14567fec46fb4276b8dedde4126a60f97b3abf51cb7a3fffeed0e44ad7164d30",
+      "bytes": 135
+    },
+    {
+      "path": "server/single_service.py",
+      "sha256": "590586fe2b91c3a81cebadb08799379b843fa9687ffd36f163e3ae22040eba6c",
+      "bytes": 2521
+    },
+    {
+      "path": "server/v7_ingest.py",
+      "sha256": "27f5db30cb5542e008357d64e6123a1ba9b2652b8bc90cc0c8a8f10f37a8624d",
+      "bytes": 16328
+    },
+    {
+      "path": "server/worker.py",
+      "sha256": "93e793b0f0b06f15f8d9494ed523e2eccaa9a463d8cc475ea757354c5b9ea872",
+      "bytes": 4678
+    }
+  ]
+}
