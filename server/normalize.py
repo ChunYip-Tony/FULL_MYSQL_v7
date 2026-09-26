@@ -43,6 +43,7 @@ HEADER_ALIASES = {
     },
     'pack': {
         'pack', 'packing size', 'pack size', 'packing', 'case pack',
+        'size/dimensions', 'size dimensions', 'size/dimension', 'size dimension',
     },
     'category': {
         'cat', 'category', 'merchandise category', 'merch category',
