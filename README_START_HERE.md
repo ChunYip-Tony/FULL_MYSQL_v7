@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.14 — Single-Service Edition
+# FULL MYSQL v7.0.15 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -377,3 +377,35 @@ No Batch 7 rebuild.
 No Batch 8 re-upload.
 No MySQL settings change.
 No Windows Seafood Client upgrade yet.
+
+
+## v7.0.15 Article Manual `Size/dimensions` header fix
+
+Root cause of the remaining three v7.0.14 blocking identity QA rows was found.
+
+The `Frozen pack` tab uses the header:
+
+    Size/dimensions
+
+The normalization header aliases recognized `pack`, `packing size`, `pack size`,
+etc., but did not recognize `Size/dimensions`. Therefore the v7.0.13
+description + exact-size identity rule always received `manual_size = NULL`
+for those roster rows and could not fire.
+
+v7.0.15 adds `Size/dimensions` as structured pack/size evidence.
+
+Expected safe repairs on the current Article Manual:
+- `4029551780` OYSTER IN SHELL 60EA -> Main Article 1366580
+- `8231817551` 26/30 H/L SHRIMP 10/4LB -> Main Article 1351625
+- `70286869729` FROZEN KUNG FU SNAKEHEAD FISH FILLETS 40/8.8OZ -> Main Article 3480411
+
+The two explicit temporary waivers remain unchanged:
+- `75539372208`
+- `81223402610`
+
+No UOM is inferred from the description/size signature repair.
+No MySQL setting changes and no re-upload are required.
+
+After deploy:
+
+    python maintenance_v715.py --batch 8

@@ -1,17 +1,20 @@
 {
-  "version": "7.0.14-single-service",
-  "purpose": "Preserve two unresolved active identity QA issues as explicit temporary non-blocking waivers",
-  "waived_upcs": [
+  "version": "7.0.15-single-service",
+  "purpose": "Recognize Article Manual Size/dimensions header so exact description+size identity repair can resolve three remaining active blockers",
+  "expected_repairs": {
+    "4029551780": "1366580",
+    "8231817551": "1351625",
+    "70286869729": "3480411"
+  },
+  "temporary_waivers_preserved": [
     "75539372208",
     "81223402610"
   ],
   "safety": [
-    "No identity mapping created by waiver",
-    "No UOM/cost/conversion inference",
-    "Original QA remains open",
-    "Waiver is current-readiness-only",
-    "Quick Check remains explicitly BLOCKED for waived UPCs",
-    "All other active SOLD_UPC_UNMAPPED issues remain blocking"
+    "Structured header fix only",
+    "Exact description + exact Size/dimensions rule remains required",
+    "No description-derived UOM conversion",
+    "Two temporary waivers remain unresolved and Quick Check BLOCKED"
   ],
   "files": [
     {
@@ -21,13 +24,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "72fbeb1dc8f5537f223be917178c672c6404385b3a96701e171877d24f4cf8c5",
-      "bytes": 14310
+      "sha256": "31db3df05d577fc177eaf4ad02fdaf59eaf393d5eec4457684fb17bb1bc7ddd6",
+      "bytes": 15370
     },
     {
       "path": "VERSION.txt",
-      "sha256": "f189b8035591620c958c0b60e8ed8ddf6c17002346aceee667f0694916a78c91",
-      "bytes": 166
+      "sha256": "5d6603ad313d856235cfb7cebd6df3ee48717eacc536e29e85af21e01368b96c",
+      "bytes": 159
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -136,7 +139,7 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "38b1d6ef5ee936684b0d6a58d7626fa992f9ff325a71c9e476fd3173fe5a995f",
+      "sha256": "4a68b837d7a87488c128b52738173da8e57859a914529fb013ac4813a2ac01fe",
       "bytes": 11903
     },
     {
@@ -230,14 +233,19 @@
       "bytes": 4683
     },
     {
+      "path": "server/maintenance_v715.py",
+      "sha256": "06e00065d169f8e2c0e9093384d2d4c08519847219488440b77eb9de7af44a9d",
+      "bytes": 4793
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
     },
     {
       "path": "server/normalize.py",
-      "sha256": "df4c13bcec13937d9acf0ddc0a4d8bc3c2f22ae4502987e29af7a7becaa25828",
-      "bytes": 50500
+      "sha256": "498527dd4c14d3684e557423a06ca28f121dfaedbe001da1dba65ab3bbd49c70",
+      "bytes": 50582
     },
     {
       "path": "server/phase3.py",
@@ -261,7 +269,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "dbdef3f2ab9506e654e1ed2b0e567be921b299806a6e6d787ffbd477e14be97b",
+      "sha256": "b3ea66a4025229ddcbbdb87d146af4a1a1f5cbc20f75f983c3596e0fb25f7d09",
       "bytes": 16329
     },
     {
