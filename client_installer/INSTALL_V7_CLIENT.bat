@@ -3,7 +3,7 @@ setlocal EnableExtensions
 set "TARGET=C:\FULL_MYSQL\FULL_MYSQL_Seafood_Client_v7"
 set "PAYLOAD=%~dp0payload"
 echo ============================================================
-echo   FULL MYSQL Seafood Client v7.0 - HTTPS Installer
+echo   FULL MYSQL Seafood Client v7.0.1 - HTTPS Installer
 echo ============================================================
 echo.
 if not exist "%TARGET%" mkdir "%TARGET%"

@@ -1,3 +1,4 @@
 FULL MYSQL Seafood Client
-Version: 7.0.0
+Version: 7.0.1
 Transport: HTTPS Secure API
+Deployment: Single-Service backend

@@ -21,9 +21,9 @@ def stop_agent():
     PID.unlink(missing_ok=True)
 class App(tk.Tk):
     def __init__(self):
-        super().__init__(); self.title('FULL MYSQL Seafood Client v7.0 — HTTPS'); self.geometry('1050x760'); self.build(); self.after(300,self.refresh); self.after(5000,self.loop)
+        super().__init__(); self.title('FULL MYSQL Seafood Client v7.0.1 — HTTPS'); self.geometry('1050x760'); self.build(); self.after(300,self.refresh); self.after(5000,self.loop)
     def build(self):
-        tk.Label(self,text='🐟 FULL MYSQL Seafood Client v7.0',font=('Segoe UI',18,'bold')).pack(anchor='w',padx=14,pady=(12,2)); tk.Label(self,text='HTTPS 443 → FULL MYSQL Secure API → Managed MySQL',fg='#555').pack(anchor='w',padx=14)
+        tk.Label(self,text='🐟 FULL MYSQL Seafood Client v7.0.1',font=('Segoe UI',18,'bold')).pack(anchor='w',padx=14,pady=(12,2)); tk.Label(self,text='HTTPS 443 → FULL MYSQL Secure API → Managed MySQL',fg='#555').pack(anchor='w',padx=14)
         b=tk.Frame(self); b.pack(fill='x',padx=14,pady=10)
         for lab,cmd in [('Configure API',self.cfg),('Test API',self.test),('Open Incoming',self.open_in),('Start Client',self.start),('Stop Client',self.stop),('Refresh',self.refresh)]: tk.Button(b,text=lab,command=cmd,padx=8).pack(side='left',padx=(0,6))
         self.state=tk.StringVar(value='Starting…'); tk.Label(self,textvariable=self.state,font=('Segoe UI',14,'bold'),anchor='w').pack(fill='x',padx=14,pady=4)

@@ -1,11 +1,7 @@
 {
-  "version": "7.0.0",
+  "version": "7.0.1-single-service",
+  "deployment": "one App Platform service: API + background worker",
   "files": [
-    {
-      "path": "VERSION.txt",
-      "sha256": "b4baa98daeb63600e846a428944eb9657a6cbbf27f93b600db0ad24b43930b79",
-      "bytes": 78
-    },
     {
       "path": "GENERATE_API_TOKENS.py",
       "sha256": "11e11f1e5c0d52e8d8f14e1d6c78acf8ad44f326e07b611de15f889d38f394e8",
@@ -13,158 +9,18 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "4fe46f084efbe096d8efdc5dbe0085155559d12e5b546ef05050c10d4f011666",
-      "bytes": 1002
+      "sha256": "5532b49b927ee8d21f4fd8e35dba923df5da5c0f88e443557a0876d678a86fe4",
+      "bytes": 2357
     },
     {
-      "path": "server/ingest.py",
-      "sha256": "93dda507e425cbe2364077c9e91c7bdd373d51016363f18d50caefddc602566a",
-      "bytes": 28969
-    },
-    {
-      "path": "server/normalize.py",
-      "sha256": "df4c13bcec13937d9acf0ddc0a4d8bc3c2f22ae4502987e29af7a7becaa25828",
-      "bytes": 50500
-    },
-    {
-      "path": "server/data_coverage.py",
-      "sha256": "d8d672c6bf2026634280f3badaf96d35c17d04d3683a5a166b30a2d6f65966fe",
-      "bytes": 5810
-    },
-    {
-      "path": "server/config.py",
-      "sha256": "f5004bfce9520d4603af9b5b7a43f580e1e88cfc17b0fb1b674f09606d945d30",
-      "bytes": 2838
-    },
-    {
-      "path": "server/worker.py",
-      "sha256": "0231db01568ce1fc63d2ba9a8a6710aaf69218086bdac9bcf79ada60d795bf52",
-      "bytes": 3726
-    },
-    {
-      "path": "server/app.yaml.template",
-      "sha256": "4ff5e38048150fd4873ae07e6718401985a11ba5891c83a36d0f7208b71ba08d",
-      "bytes": 911
-    },
-    {
-      "path": "server/phase3.py",
-      "sha256": "3b9303a25a0cebcfb14a86b880cc800d6a87272e783e8f547eb6706fb5ca89f5",
-      "bytes": 56758
-    },
-    {
-      "path": "server/db.py",
-      "sha256": "84d65b5d59a400e63a5448359db937466a924d6bf97a6088429fcffdf6b418f4",
-      "bytes": 2581
-    },
-    {
-      "path": "server/maintenance_repair_phase2c_v654.py",
-      "sha256": "d372768c6b55bef41bb0210c6d909d89f8cd99f0c948fe631408edd0adec753f",
-      "bytes": 18428
-    },
-    {
-      "path": "server/ENVIRONMENT_VARIABLES.txt",
-      "sha256": "038ca7e871c6dd576acea8d9745383c40979596cd6711834d57fb6f3b3b16982",
-      "bytes": 524
-    },
-    {
-      "path": "server/Dockerfile",
-      "sha256": "50bd1b6a5602fa602a4883fa80fd4c7ad3b711c5383662d2e64770b1f44c1806",
-      "bytes": 229
-    },
-    {
-      "path": "server/requirements.txt",
-      "sha256": "14567fec46fb4276b8dedde4126a60f97b3abf51cb7a3fffeed0e44ad7164d30",
-      "bytes": 135
-    },
-    {
-      "path": "server/api.py",
-      "sha256": "806617db334dfbf5a5ec62bddbe9b6f20099e0b8cccd3375e1eb079b40e22369",
-      "bytes": 4574
-    },
-    {
-      "path": "server/v7_ingest.py",
-      "sha256": "372c59bd7d740a198872b73db301bea00c1076917d31f27daee7b1ae84ba4fb3",
-      "bytes": 16013
+      "path": "VERSION.txt",
+      "sha256": "e9f1d4355e53afae7b1bfd1c83625605cb3c4e62c6e48d765d229d1aeb6e413d",
+      "bytes": 202
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
-      "sha256": "0ff9da1028ca2ce19a6b2ef48e2d3ff2fc3d41cb905b7fabf5e2bbf432d4044b",
-      "bytes": 1359
-    },
-    {
-      "path": "docs/V7_BEHAVIOR_RULES.md",
-      "sha256": "ec9696a77745e762d5a420a02b105ee2731c0c5de005540abe414260054e4619",
-      "bytes": 1201
-    },
-    {
-      "path": "docs/CUTOVER_CHECKLIST.md",
-      "sha256": "ffa5cb1ad6a580801147dbdcd4271aabeca080260f7d5f6bc8e41b7a08cf9f52",
-      "bytes": 672
-    },
-    {
-      "path": "docs/DEPLOY_DIGITALOCEAN_APP_PLATFORM.md",
-      "sha256": "15fd1d2d73a0c7e9ed70b2ec61ad75d898aecd98b85b7b8c4b27f9ee3ba24064",
-      "bytes": 2538
-    },
-    {
-      "path": "client_installer/payload/START_AGENT.bat",
-      "sha256": "ce189c83f8bf2c61876cd756258ae125629bb5c4c1b9c016c66f532a7a30ad6d",
-      "bytes": 71
-    },
-    {
-      "path": "client_installer/payload/OPEN_INCOMING.bat",
-      "sha256": "64f435ca096d0c8c18623837723119d70194f68b2d97235ada0f8e376f98729d",
-      "bytes": 35
-    },
-    {
-      "path": "client_installer/payload/START_CLIENT.bat",
-      "sha256": "0eb1fe8e6e14af4d17a683394cc2cc1cb9971e72da9e79126d7cd00bbf505cd5",
-      "bytes": 85
-    },
-    {
-      "path": "client_installer/payload/VERSION.txt",
-      "sha256": "30592be568851754d5dcb802a88ff3217195f94f3aa06d9cb1267693ed7e7c73",
-      "bytes": 69
-    },
-    {
-      "path": "client_installer/payload/dashboard.py",
-      "sha256": "f65144dd28845c12274f66cea50ca9e55a05fa7b5f73e0d22407e0cc1ee56ca7",
-      "bytes": 3541
-    },
-    {
-      "path": "client_installer/payload/config.py",
-      "sha256": "a6b9fdb39df91edf72c5767d48c7cde78df636621e449cd000301691f3bb54c0",
-      "bytes": 1334
-    },
-    {
-      "path": "client_installer/payload/api_client.py",
-      "sha256": "bd745e876f535850589808852faa1ba2ee4b782c9fce167e7db4a4391b348585",
-      "bytes": 998
-    },
-    {
-      "path": "client_installer/payload/TEST_API.bat",
-      "sha256": "e053d99a8a3bdb3265e5968d0af404695b0511fc66fee47bc74399e77dce0e28",
-      "bytes": 157
-    },
-    {
-      "path": "client_installer/payload/agent.py",
-      "sha256": "bae66ecce6c71dbfbc6dc1553c2c959984d1d32269cc98fe449e73f76229c68f",
-      "bytes": 4558
-    },
-    {
-      "path": "client_installer/payload/STOP_AGENT.bat",
-      "sha256": "4f0fb993885e0be916a5b2ef0c3eb07e9fd1cc3e8ad346d9c38882adb05621d6",
-      "bytes": 135
-    },
-    {
-      "path": "client_installer/payload/requirements.txt",
-      "sha256": "0c8e840a529a8d307761b2615d40bdcbd6c7c7be088a3985d4dc4e2b84617c52",
-      "bytes": 34
-    },
-    {
-      "path": "client_installer/payload/configure_api.py",
-      "sha256": "9490089924eea08216e56c909a67b4395e966bb60549dc6732db27e256e4da21",
-      "bytes": 2025
+      "sha256": "c66294c684377f610d622298f5adeb34d6847959087c7fe9be13d40b868933bb",
+      "bytes": 1361
     },
     {
       "path": "client_installer/payload/CONFIGURE_API.bat",
@@ -172,9 +28,159 @@
       "bytes": 66
     },
     {
+      "path": "client_installer/payload/OPEN_INCOMING.bat",
+      "sha256": "64f435ca096d0c8c18623837723119d70194f68b2d97235ada0f8e376f98729d",
+      "bytes": 35
+    },
+    {
+      "path": "client_installer/payload/START_AGENT.bat",
+      "sha256": "ce189c83f8bf2c61876cd756258ae125629bb5c4c1b9c016c66f532a7a30ad6d",
+      "bytes": 71
+    },
+    {
+      "path": "client_installer/payload/START_CLIENT.bat",
+      "sha256": "0eb1fe8e6e14af4d17a683394cc2cc1cb9971e72da9e79126d7cd00bbf505cd5",
+      "bytes": 85
+    },
+    {
+      "path": "client_installer/payload/STOP_AGENT.bat",
+      "sha256": "4f0fb993885e0be916a5b2ef0c3eb07e9fd1cc3e8ad346d9c38882adb05621d6",
+      "bytes": 135
+    },
+    {
+      "path": "client_installer/payload/TEST_API.bat",
+      "sha256": "e053d99a8a3bdb3265e5968d0af404695b0511fc66fee47bc74399e77dce0e28",
+      "bytes": 157
+    },
+    {
+      "path": "client_installer/payload/VERSION.txt",
+      "sha256": "8079293eadc942936b57b7b7c0e2aa77c1e5ad623ef5ae77271ff73c59bbc2c1",
+      "bytes": 104
+    },
+    {
+      "path": "client_installer/payload/agent.py",
+      "sha256": "bae66ecce6c71dbfbc6dc1553c2c959984d1d32269cc98fe449e73f76229c68f",
+      "bytes": 4558
+    },
+    {
+      "path": "client_installer/payload/api_client.py",
+      "sha256": "bd745e876f535850589808852faa1ba2ee4b782c9fce167e7db4a4391b348585",
+      "bytes": 998
+    },
+    {
+      "path": "client_installer/payload/config.py",
+      "sha256": "a6b9fdb39df91edf72c5767d48c7cde78df636621e449cd000301691f3bb54c0",
+      "bytes": 1334
+    },
+    {
+      "path": "client_installer/payload/configure_api.py",
+      "sha256": "9490089924eea08216e56c909a67b4395e966bb60549dc6732db27e256e4da21",
+      "bytes": 2025
+    },
+    {
+      "path": "client_installer/payload/dashboard.py",
+      "sha256": "4af4581cb07a265bc366f1cfea512763399a89a544404270c07e9069950ffac5",
+      "bytes": 3545
+    },
+    {
+      "path": "client_installer/payload/requirements.txt",
+      "sha256": "0c8e840a529a8d307761b2615d40bdcbd6c7c7be088a3985d4dc4e2b84617c52",
+      "bytes": 34
+    },
+    {
       "path": "client_installer/payload/settings.json",
       "sha256": "9bea8997fd189fb3aa2ac84a360c454c0122999a23754296c9785511b6a99c49",
       "bytes": 224
+    },
+    {
+      "path": "docs/CUTOVER_CHECKLIST.md",
+      "sha256": "d0d2ad6d2b2516cb1d105057dc957664559ab365025fce498fb653af2d633cc0",
+      "bytes": 900
+    },
+    {
+      "path": "docs/DEPLOY_DIGITALOCEAN_APP_PLATFORM.md",
+      "sha256": "9598f6d5f8c68d4ba77393c309341fd45c4cbb95b7697d5a022f3c4520324eee",
+      "bytes": 2774
+    },
+    {
+      "path": "docs/V7_BEHAVIOR_RULES.md",
+      "sha256": "d402fcc741620684a6e417b6785c64a0d05b7f8087f7f7f3d0d48340291961d4",
+      "bytes": 1556
+    },
+    {
+      "path": "server/Dockerfile",
+      "sha256": "d533077496712558ffe6355985b2961c9e1a900da22cf8cb878d7a32ab2558c2",
+      "bytes": 203
+    },
+    {
+      "path": "server/ENVIRONMENT_VARIABLES.txt",
+      "sha256": "3e9bf21cce88d7be3e961d3d9a3eb9f245606a1048272c60a0d965378ff06870",
+      "bytes": 638
+    },
+    {
+      "path": "server/api.py",
+      "sha256": "36ccd1e5c45bd3ed654a355cbe8a3729e020d2221b5d75f679d9c713ce55ee65",
+      "bytes": 4567
+    },
+    {
+      "path": "server/app.yaml.template",
+      "sha256": "e5685eb83fa4de1752f6f534a8c99a1f9a4a32a982d49b0d8f02a6ca71e3a3d3",
+      "bytes": 741
+    },
+    {
+      "path": "server/config.py",
+      "sha256": "f5004bfce9520d4603af9b5b7a43f580e1e88cfc17b0fb1b674f09606d945d30",
+      "bytes": 2838
+    },
+    {
+      "path": "server/data_coverage.py",
+      "sha256": "d8d672c6bf2026634280f3badaf96d35c17d04d3683a5a166b30a2d6f65966fe",
+      "bytes": 5810
+    },
+    {
+      "path": "server/db.py",
+      "sha256": "84d65b5d59a400e63a5448359db937466a924d6bf97a6088429fcffdf6b418f4",
+      "bytes": 2581
+    },
+    {
+      "path": "server/ingest.py",
+      "sha256": "93dda507e425cbe2364077c9e91c7bdd373d51016363f18d50caefddc602566a",
+      "bytes": 28969
+    },
+    {
+      "path": "server/maintenance_repair_phase2c_v654.py",
+      "sha256": "d372768c6b55bef41bb0210c6d909d89f8cd99f0c948fe631408edd0adec753f",
+      "bytes": 18428
+    },
+    {
+      "path": "server/normalize.py",
+      "sha256": "df4c13bcec13937d9acf0ddc0a4d8bc3c2f22ae4502987e29af7a7becaa25828",
+      "bytes": 50500
+    },
+    {
+      "path": "server/phase3.py",
+      "sha256": "3b9303a25a0cebcfb14a86b880cc800d6a87272e783e8f547eb6706fb5ca89f5",
+      "bytes": 56758
+    },
+    {
+      "path": "server/requirements.txt",
+      "sha256": "14567fec46fb4276b8dedde4126a60f97b3abf51cb7a3fffeed0e44ad7164d30",
+      "bytes": 135
+    },
+    {
+      "path": "server/single_service.py",
+      "sha256": "590586fe2b91c3a81cebadb08799379b843fa9687ffd36f163e3ae22040eba6c",
+      "bytes": 2521
+    },
+    {
+      "path": "server/v7_ingest.py",
+      "sha256": "afbea8caeeae61549cc66a1218fcaa75062137f4a450a857b1dde607130d2c0e",
+      "bytes": 16028
+    },
+    {
+      "path": "server/worker.py",
+      "sha256": "0231db01568ce1fc63d2ba9a8a6710aaf69218086bdac9bcf79ada60d795bf52",
+      "bytes": 3726
     }
   ]
 }

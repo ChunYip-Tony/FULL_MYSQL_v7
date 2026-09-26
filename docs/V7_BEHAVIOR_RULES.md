@@ -13,3 +13,9 @@
 - POS-vs-MVT reconciliation uses overlapping valid coverage only.
 - Backfilled daily sources automatically change affected rolling windows when Phase3 is rebuilt.
 - Work/Home v7 clients upload through HTTPS only; MySQL credentials remain server-side.
+
+## Single-Service deployment rule
+
+- v7.0.1 Single-Service Edition runs the HTTPS API and background worker in one App Platform service/container.
+- Production App Platform instance count stays at 1 during the initial rollout.
+- Do not create a separate always-on Worker component unless future workload measurements justify splitting the service again.

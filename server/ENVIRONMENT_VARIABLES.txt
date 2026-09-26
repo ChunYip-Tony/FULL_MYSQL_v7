@@ -1,4 +1,4 @@
-Required runtime environment variables for BOTH api and worker:
+Required runtime environment variables for the ONE fullmysql service:
 
 FULLMYSQL_DATABASE_URL=${fullmysql-db.DATABASE_PRIVATE_URL}
 FULLMYSQL_DB_CA_CERT=${fullmysql-db.CA_CERT}
@@ -6,6 +6,8 @@ FULLMYSQL_API_TOKENS_JSON={"WORK-PC":"<random token>","HOME-PC":"<different rand
 FULLMYSQL_ADMIN_DEVICES=HOME-PC
 FULLMYSQL_UPLOAD_LIMIT_MB=96
 FULLMYSQL_WORKER_POLL_SECONDS=5
+FULLMYSQL_WORKER_RESTART_SECONDS=5
 
 Set FULLMYSQL_API_TOKENS_JSON as an ENCRYPTED/SECRET variable.
 If private VPC is not enabled yet, DATABASE_URL may be used temporarily instead of DATABASE_PRIVATE_URL.
+Do not create a separate App Platform Worker component for this edition.

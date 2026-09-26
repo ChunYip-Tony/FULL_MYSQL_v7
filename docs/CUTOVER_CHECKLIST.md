@@ -1,12 +1,13 @@
-# Work/Home cutover checklist
+# Work/Home cutover checklist — Single-Service Edition
 
-1. Keep v6 production uploader running until v7 server health check passes.
-2. Deploy v7 API + worker.
-3. Install v7 client beside v6 on Work PC.
-4. Configure Work token; do not store MySQL credentials in v7 client.
-5. Test API status.
-6. Use one small known spreadsheet to validate the end-to-end path.
-7. Confirm MySQL batch, Phase2C, Phase3, Quick Check and AppSheet output.
-8. Stop v6 uploader before the first real v7 production batch.
-9. Install/configure v7 client on Home PC with a separate token.
-10. Keep only one active production ingest path. The API rejects a new batch while another API batch is actively uploading/processing.
+1. Keep the current v6 production path available until v7 health/API tests pass.
+2. Update GitHub to v7.0.1 Single-Service Edition.
+3. Create **one** App Platform Web Service (`fullmysql`); do not add a separate Worker.
+4. Attach existing Managed MySQL and configure private/VPC database access when available.
+5. Confirm `/healthz` returns `7.0.1-single-service`.
+6. Confirm authenticated `/v1/status` can read the production database.
+7. Install v7 client beside v6 on Work PC; configure Work token only (no MySQL credentials).
+8. Upload one small known spreadsheet and verify RAW → Phase2C → Phase3 → Quick Check.
+9. Stop v6 production uploader before the first real v7 production batch.
+10. Configure Home PC with its separate API token.
+11. Keep one canonical ingest path. API batch locking/deduplication remains active centrally.
