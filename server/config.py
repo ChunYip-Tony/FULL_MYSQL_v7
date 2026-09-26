@@ -25,14 +25,40 @@ class Settings:
                 from urllib.parse import quote
                 url = f"mysql://{quote(user,safe='')}:{quote(password,safe='')}@{host}:{port}/{db}"
         cert = os.environ.get('FULLMYSQL_DB_CA_CERT','')
-        raw_tokens = os.environ.get('FULLMYSQL_API_TOKENS_JSON','{}')
-        try:
-            tokens = json.loads(raw_tokens)
-        except Exception as exc:
-            raise RuntimeError('FULLMYSQL_API_TOKENS_JSON must be valid JSON.') from exc
-        if not isinstance(tokens, dict) or not tokens:
-            raise RuntimeError('FULLMYSQL_API_TOKENS_JSON must contain at least one device token.')
-        tokens = {str(k): str(v) for k,v in tokens.items() if str(v)}
+
+        # v7.0.2: prefer separate encrypted secrets because App Platform's
+        # environment-variable editor can reject raw JSON object values.
+        work_token = os.environ.get('FULLMYSQL_WORK_TOKEN','').strip()
+        home_token = os.environ.get('FULLMYSQL_HOME_TOKEN','').strip()
+        tokens: dict[str, str] = {}
+        if work_token:
+            tokens['WORK-PC'] = work_token
+        if home_token:
+            tokens['HOME-PC'] = home_token
+
+        # Backward-compatible fallback for existing deployments that already
+        # use FULLMYSQL_API_TOKENS_JSON successfully.
+        if not tokens:
+            raw_tokens = os.environ.get('FULLMYSQL_API_TOKENS_JSON','').strip()
+            if raw_tokens:
+                try:
+                    parsed = json.loads(raw_tokens)
+                except Exception as exc:
+                    raise RuntimeError(
+                        'Token configuration is invalid. Prefer encrypted '
+                        'FULLMYSQL_WORK_TOKEN / FULLMYSQL_HOME_TOKEN secrets, '
+                        'or provide valid FULLMYSQL_API_TOKENS_JSON.'
+                    ) from exc
+                if not isinstance(parsed, dict):
+                    raise RuntimeError('FULLMYSQL_API_TOKENS_JSON must be a JSON object.')
+                tokens = {str(k): str(v) for k,v in parsed.items() if str(v)}
+
+        if not tokens:
+            raise RuntimeError(
+                'No API token is configured. Set FULLMYSQL_WORK_TOKEN and/or '
+                'FULLMYSQL_HOME_TOKEN as encrypted runtime secrets.'
+            )
+
         admins = {x.strip() for x in os.environ.get('FULLMYSQL_ADMIN_DEVICES','HOME-PC').split(',') if x.strip()}
         limit = int(os.environ.get('FULLMYSQL_UPLOAD_LIMIT_MB','96'))
         return cls(url, cert, tokens, admins, limit)

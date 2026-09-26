@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.1 — Single-Service Edition
+# FULL MYSQL v7.0.2 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -27,6 +27,15 @@ Use **one `basic-xs` instance (1 shared vCPU / 1 GiB RAM)** for the initial roll
 - A valid POS data day with no sale for an UPC is a true zero; a missing/invalid POS day is NULL/MISSING and excluded.
 - Work/Home Windows clients use HTTPS 443 only and do not store MySQL credentials.
 
+## v7.0.2 token configuration change
+
+DigitalOcean App Platform may parse raw `{...}` values in its environment-variable editor, so this release no longer requires JSON for the normal token setup. Configure two encrypted runtime secrets instead:
+
+- `FULLMYSQL_WORK_TOKEN` — the existing Work-PC token you already generated
+- `FULLMYSQL_HOME_TOKEN` — the existing Home-PC token you already generated
+
+Keep `FULLMYSQL_ADMIN_DEVICES=HOME-PC`. `FULLMYSQL_API_TOKENS_JSON` is retained only as a backward-compatible fallback. Do not regenerate your existing tokens.
+
 ## Safe migration
 
 1. Update the private GitHub repository with this edition.
@@ -34,7 +43,7 @@ Use **one `basic-xs` instance (1 shared vCPU / 1 GiB RAM)** for the initial roll
 3. Run command: `python single_service.py`.
 4. Select `basic-xs`, one instance, HTTP port 8080, health check `/healthz`.
 5. Attach the existing Managed MySQL and configure runtime secrets/variables.
-6. Confirm `/healthz` returns version `7.0.1-single-service`.
+6. Confirm `/healthz` returns version `7.0.2-single-service`.
 7. Install/configure the v7 client beside v6 and test one known spreadsheet.
 8. Stop v6 production upload only after the v7 end-to-end path is verified.
 

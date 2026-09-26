@@ -1,0 +1,18 @@
+FULL MYSQL v7.0.2 GitHub Patch
+
+Replace these files in your existing private GitHub repository:
+- server/config.py
+- server/api.py
+- server/v7_ingest.py
+- server/ENVIRONMENT_VARIABLES.txt
+- README_START_HERE.md
+- VERSION.txt
+
+Commit message suggestion:
+  v7.0.2 separate encrypted API token secrets
+
+After GitHub deploys, remove FULLMYSQL_API_TOKENS_JSON from DigitalOcean and add:
+- FULLMYSQL_WORK_TOKEN = your existing Work token (Encrypt = Yes, Run Time)
+- FULLMYSQL_HOME_TOKEN = your existing Home token (Encrypt = Yes, Run Time)
+
+Do NOT regenerate your tokens.

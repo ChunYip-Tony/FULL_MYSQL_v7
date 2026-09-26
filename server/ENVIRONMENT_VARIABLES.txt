@@ -1,13 +1,16 @@
 Required runtime environment variables for the ONE fullmysql service:
 
-FULLMYSQL_DATABASE_URL=${fullmysql-db.DATABASE_PRIVATE_URL}
-FULLMYSQL_DB_CA_CERT=${fullmysql-db.CA_CERT}
-FULLMYSQL_API_TOKENS_JSON={"WORK-PC":"<random token>","HOME-PC":"<different random token>"}
+FULLMYSQL_DATABASE_URL=${db-mysql-sfo3-62654.DATABASE_PRIVATE_URL}
+FULLMYSQL_DB_CA_CERT=${db-mysql-sfo3-62654.CA_CERT}
+FULLMYSQL_WORK_TOKEN=<existing Work token>
+FULLMYSQL_HOME_TOKEN=<existing Home token>
 FULLMYSQL_ADMIN_DEVICES=HOME-PC
 FULLMYSQL_UPLOAD_LIMIT_MB=96
 FULLMYSQL_WORKER_POLL_SECONDS=5
 FULLMYSQL_WORKER_RESTART_SECONDS=5
 
-Set FULLMYSQL_API_TOKENS_JSON as an ENCRYPTED/SECRET variable.
+Set FULLMYSQL_WORK_TOKEN and FULLMYSQL_HOME_TOKEN as ENCRYPTED runtime secrets.
+Do not wrap the token values in JSON, quotes, braces, or angle brackets.
+FULLMYSQL_API_TOKENS_JSON remains supported only as a backward-compatible fallback.
 If private VPC is not enabled yet, DATABASE_URL may be used temporarily instead of DATABASE_PRIVATE_URL.
 Do not create a separate App Platform Worker component for this edition.
