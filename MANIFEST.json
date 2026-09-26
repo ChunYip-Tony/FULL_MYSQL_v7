@@ -1,7 +1,11 @@
 {
-  "version": "7.0.3-single-service",
+  "version": "7.0.4-single-service",
   "deployment": "one App Platform service: API + background worker",
-  "fix": "consume MySQL named-lock SELECT results to prevent Unread result found",
+  "fixes": [
+    "session_status serializes Python date without sep keyword",
+    "recent_batches serializes Python date without sep keyword",
+    "retains v7.0.3 worker unread-result fix"
+  ],
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -10,13 +14,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "8a5d0d8a0bba8c86c361a0975fa779d98dcd540f2f2f33808edd790709661afa",
-      "bytes": 3407
+      "sha256": "1b4732ca272c6caeb40111f2a83b9cec6eff16f2aeb3f2dc796cde8c804bb141",
+      "bytes": 3975
     },
     {
       "path": "VERSION.txt",
-      "sha256": "df109045415cebf9e848524f49ab0c032e9257d16e94b7de266a7fd36f85e867",
-      "bytes": 272
+      "sha256": "2addc12a800f751fac6727ca0cae969a6fd8115968d993c825f4e71651079785",
+      "bytes": 284
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -120,7 +124,7 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "efa8aaec40cb0a971ee615a5a7964c3c04dfd60103565906bdc9267ec940d1de",
+      "sha256": "a580ba1fcec81c63811b32fbd178c4a61cbda494d7eb5ca74152b743d0d16913",
       "bytes": 4567
     },
     {
@@ -145,8 +149,8 @@
     },
     {
       "path": "server/ingest.py",
-      "sha256": "93dda507e425cbe2364077c9e91c7bdd373d51016363f18d50caefddc602566a",
-      "bytes": 28969
+      "sha256": "0ccc7e96dd6f206c3611950297a955d3f7077d782362551b67d41f729719ffc4",
+      "bytes": 29038
     },
     {
       "path": "server/maintenance_repair_phase2c_v654.py",
@@ -175,8 +179,8 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "f1c4e40243e9046d57bd02e692a081036c8679db768902099bb7fef2a9de6c30",
-      "bytes": 16028
+      "sha256": "2b26206fdf3a1da35c493692236facefa159dbe9dac2dc14d225ccf295b75cbd",
+      "bytes": 16328
     },
     {
       "path": "server/worker.py",

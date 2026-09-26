@@ -1,9 +1,9 @@
-FULL MYSQL v7.0.3 GitHub Patch
+FULL MYSQL v7.0.4 GitHub Patch
 
-Replace the matching files in the root of your private GitHub repo FULL_MYSQL_v7.
-Commit message suggestion:
-  v7.0.3 fix worker unread MySQL result
+Replace the matching files in the root of private GitHub repo FULL_MYSQL_v7.
+Suggested commit message:
+  v7.0.4 fix batch polling date serialization
 
 DigitalOcean Auto-deploy should redeploy automatically.
 No environment variable changes are required.
-Keep FULLMYSQL_DATABASE_URL on the working DATABASE_URL setting for now.
+No database migration is required.

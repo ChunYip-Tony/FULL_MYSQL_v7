@@ -1,5 +1,5 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.3 Single-Service Edition
+Version: 7.0.4 Single-Service Edition
 Base business logic: v6.6.0 + v6.5.4 identity authority repair
 Deployment: one App Platform service runs API + background worker
-Fix: worker MySQL named-lock result consumption / Unread result found
+Fixes: batch polling date serialization + prior worker named-lock result handling

@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.3 — Single-Service Edition
+# FULL MYSQL v7.0.4 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -60,3 +60,19 @@ releases the MySQL named lock in one place, and consumes the
 This error occurring after startup is also evidence that the App Platform
 service has successfully reached the MySQL server; it is no longer the earlier
 network/TLS connection problem.
+
+
+## v7.0.4 batch polling fix
+
+v7.0.4 fixes `TypeError: date.isoformat() takes no keyword arguments` in
+`v7_ingest.py::session_status()`.
+
+MySQL returns DATE columns such as `coverage_start_date` and
+`coverage_end_date` as Python `date` objects, while timestamp columns are
+`datetime` objects.  Only `datetime.isoformat()` accepts `sep=`.
+The server now serializes both types correctly.
+
+The same latent date/datetime conversion issue in `ingest.py::recent_batches()`
+is fixed at the same time.
+
+No environment-variable changes and no database migration are required.
