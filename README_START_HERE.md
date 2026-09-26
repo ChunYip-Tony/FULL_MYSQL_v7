@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.20 — Single-Service Edition
+# FULL MYSQL v7.0.22 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -666,3 +666,57 @@ This is intentionally narrower than v7.0.19:
 - only current-active cost repair + Quick Check serving refresh.
 
 The console output is compact: counts only, not a 100+ UPC JSON dump.
+
+
+## v7.0.21 PowerShell Cost-Lineage Diagnostics
+
+This release adds a read-only authenticated diagnostic endpoint so routine
+cost troubleshooting can be done from Work/Home PowerShell instead of the
+DigitalOcean interactive console.
+
+Endpoint:
+
+    GET /v1/diagnostics/cost-lineage?family_id=<family_id>
+
+Returned sections:
+- Family / Main Article
+- Quick Check UPCs and current cost fields
+- Official company/report cost evidence
+- Derived article_cost_observation rows
+- Receipt movement 101 / 107 / 109 evidence
+- Compact evidence counts
+
+Example PowerShell:
+
+    $d = Invoke-RestMethod `
+      -Uri "$api/v1/diagnostics/cost-lineage?family_id=221" `
+      -Headers @{ Authorization = "Bearer $token" }
+
+    $d.summary | ConvertTo-Json -Depth 10
+    $d.company_price_cost_evidence | Format-Table -AutoSize
+    $d.article_cost_observations | Format-Table -AutoSize
+    $d.receipt_101_107_109_evidence | Format-Table -AutoSize
+
+This release is diagnostics-only:
+- no Phase 3 rerun;
+- no maintenance command;
+- no RAW mutation;
+- no cost mutation;
+- no MySQL setting change.
+
+
+## v7.0.22 User-confirmed identity resolution
+
+Authoritative confirmations added:
+- UPC 75539372208 -> Main/Family Article 3480452; POS Selling UOM PACK; source pack specification 24/12OZ.
+- UPC 81223402610 -> Main/Family Article 3461050; POS Selling UOM PACK; source pack specification 40/150G.
+
+Important: the pack specifications are preserved as evidence only. They do not infer Base UOM, Cost UOM, or a cost conversion.
+The two prior temporary IDENTITY_PENDING waivers are retired.
+
+After deployment run only:
+
+    python maintenance_v722.py --batch 8
+
+This is a narrow repair: no RAW re-ingest, no Phase2C rerun, no full Phase3 history rerun.
+After the repair, normal QA/result checks can be done from PowerShell.

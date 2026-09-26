@@ -1,12 +1,15 @@
-FULL MYSQL v7.0.20 cumulative GitHub patch
+FULL MYSQL v7.0.22 cumulative GitHub patch
 
-Upload ALL server/*.py files from this patch into GitHub server/.
-Upload README_START_HERE.md, VERSION.txt, MANIFEST.json to repo root.
+Purpose:
+- Retire the two prior temporary identity waivers using authoritative user confirmation.
+- UPC 75539372208 -> Article 3480452, Selling UOM PACK, evidence spec 24/12OZ.
+- UPC 81223402610 -> Article 3461050, Selling UOM PACK, evidence spec 40/150G.
+- Do NOT infer Base UOM / Cost UOM / conversion from pack specification.
+- Retains v7.0.21 PowerShell cost-lineage diagnostic endpoint.
 
-After DigitalOcean deploy:
-1) Verify /healthz = 7.0.20-single-service
-2) Run ONLY: python maintenance_v720.py --batch 8
-3) Do NOT rerun maintenance_v719.py
-4) No Batch 7 rebuild
-5) No Batch 8 re-upload
-6) No MySQL settings changes
+Deploy ALL server/*.py files into GitHub server/ and root docs to repo root.
+After DigitalOcean deployment:
+  1) Verify /healthz = 7.0.22-single-service
+  2) Run ONLY: python maintenance_v722.py --batch 8
+  3) Do not run v719 or v720 for this identity change.
+  4) Check QA/Quick Check from PowerShell.

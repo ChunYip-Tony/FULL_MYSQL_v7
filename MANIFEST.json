@@ -1,14 +1,21 @@
 {
-  "version": "7.0.20-single-service",
-  "purpose": "Repair stale/null Family linkage on existing derived cost observations and provide fast narrow maintenance",
-  "root_cause": "Existing raw-linked cost observation blocked duplicate insert but remained invisible because family_id was null/stale",
-  "safety": [
-    "RAW remains immutable",
-    "Only derived cost lineage is relinked",
-    "Current-active POS-28 scope preserved",
-    "Cost authority unchanged",
-    "Fast maintenance does not rerun Phase2C or full Phase3 history processing"
+  "version": "7.0.22-single-service",
+  "purpose": "Resolve two prior temporary identity waivers using authoritative user confirmations; preserve pack specs as evidence only; retain PowerShell cost diagnostics.",
+  "confirmed_overrides": [
+    {
+      "ean_upc": "75539372208",
+      "article_number": "3480452",
+      "selling_uom": "PACK",
+      "source_pack_spec": "24/12OZ"
+    },
+    {
+      "ean_upc": "81223402610",
+      "article_number": "3461050",
+      "selling_uom": "PACK",
+      "source_pack_spec": "40/150G"
+    }
   ],
+  "maintenance": "python maintenance_v722.py --batch 8",
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -17,13 +24,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "09712af7e93ec7cc860ba9f078baf1a92c91db22d2a538bc4cb6195d0cc0c2f0",
-      "bytes": 23426
+      "sha256": "5eda0c7e77fb726af1fa6f3148ce77490a403d7c3c65c3812c23824fa5e154cf",
+      "bytes": 25222
     },
     {
       "path": "VERSION.txt",
-      "sha256": "559c1f29835153ba2c4bc03be100c9b5ee90750261a90b260b01c906d085fa54",
-      "bytes": 170
+      "sha256": "0141a1c86efe267250c9cb36c1a52527881c0442ddc61743b5e72e7e145a327d",
+      "bytes": 138
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -137,8 +144,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "ed3f8590139b4f968dbf201472e90a75ad7178073bb2779e13bdb374328794d0",
-      "bytes": 13074
+      "sha256": "d702238671effb5b49323049030d0f4fee5d6fcb58925b0a42c5b5ff3a31ddd8",
+      "bytes": 20374
     },
     {
       "path": "server/app.yaml.template",
@@ -266,9 +273,14 @@
       "bytes": 6824
     },
     {
+      "path": "server/maintenance_v722.py",
+      "sha256": "795543ef5b51d6ad3ea64f1ad354c7a8ad567ac21b9a59b8e49169db729f2c94",
+      "bytes": 7487
+    },
+    {
       "path": "server/manual_overrides.py",
-      "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
-      "bytes": 10405
+      "sha256": "3e3b3712f242cfe33734a6c6c38a8e2fabe0174182be944b612e2e9094224a9e",
+      "bytes": 11744
     },
     {
       "path": "server/normalize.py",
@@ -292,12 +304,12 @@
     },
     {
       "path": "server/temporary_qa_waivers.py",
-      "sha256": "1adad63f547a830ec91c466f928967cce2613fdfa76643369f952df577e9a9f5",
-      "bytes": 3703
+      "sha256": "576dae6c19b9117139aa9a7d104fda3fca054b31a4289e31b1c8a1b09e317b58",
+      "bytes": 3586
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "bdcd4399df9e1f0cae554cced41217e408457a5b9e4a03f8f7200c9036926b4d",
+      "sha256": "c1de47a73a5536244b6b77baec962ee5813727b2174bd50fe6216f525153da9f",
       "bytes": 16329
     },
     {
