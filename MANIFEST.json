@@ -1,21 +1,18 @@
 {
-  "version": "7.0.16-single-service",
-  "purpose": "Repair Selling UOM only for current-active UPCs using authoritative source evidence or user-confirmed related-prefix family corroboration",
-  "activity_scope": "positive POS sold qty in latest up-to-28 valid completed POS data days",
-  "eligible_related_lb_prefixes": [
-    "240",
-    "242",
-    "245",
-    "247",
-    "249"
-  ],
+  "version": "7.0.17-single-service",
+  "purpose": "Make Quick Check readiness/reporting current-active only while preserving historical searchability",
+  "activity_rule": "positive POS sold qty in latest up-to-28 valid completed POS data days",
+  "status_model": {
+    "READY": "current-active and core fields resolved",
+    "QA_HOLD": "current-active with current core-field QA",
+    "HISTORICAL_ONLY": "no POS sales in current 28-valid-data-day activity window"
+  },
   "safety": [
-    "Prefix alone never assigns LB",
-    "Target UPC must be current-active by POS-28 valid-data-day rule",
-    "Related UPC must share confirmed Family and have a different eligible prefix",
-    "Historical-only targets are not touched",
-    "PAC is not treated as PACK",
-    "Prior conflicting UOM history remains QA"
+    "Historical rows are preserved",
+    "Historical rows are not counted as current READY",
+    "Core-field QA remains current-active only",
+    "No MySQL schema change",
+    "No sales/cost/UOM business authority changes"
   ],
   "files": [
     {
@@ -25,13 +22,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "3f65e156e4176c9d457ced12ce45376ed37c9d32656e4f06759a9694d153def5",
-      "bytes": 17253
+      "sha256": "ea1ba1e2f1152eec52be0aa4eecde49c8bc4e91146b71ce53005acea0b78057c",
+      "bytes": 18906
     },
     {
       "path": "VERSION.txt",
-      "sha256": "3acb68d43385ef40d0acc7316a882c7a2231e5d74b18206e9c99ca751b8b9bec",
-      "bytes": 161
+      "sha256": "d4e7c07ad063bb36711a041a58f4d49812d48442e370f83fc415e87ae6b17511",
+      "bytes": 177
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -145,8 +142,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "67a066b3fe2cf643941cc949a246fe1255b858cd6103f0e9b61bed4df9ec3729",
-      "bytes": 11903
+      "sha256": "162ab4a0cb3b444127e0fc7f6f677dd12d480c21b288b2a6cb83642d457de5c7",
+      "bytes": 12562
     },
     {
       "path": "server/app.yaml.template",
@@ -249,6 +246,11 @@
       "bytes": 3820
     },
     {
+      "path": "server/maintenance_v717.py",
+      "sha256": "7440d0e2db54c3ce2cb635f76c5a44fc84e4115954a7e28451272104ec64925e",
+      "bytes": 3862
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -260,8 +262,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "aeb3757e52d72982b2f9c83f8573b5765736213197132eaf310b984abfd2f942",
-      "bytes": 67760
+      "sha256": "e438ef465d57e92ed1b21158bb0d0fc63a533ee4aae37bbd437f2554e3496828",
+      "bytes": 68462
     },
     {
       "path": "server/requirements.txt",
@@ -280,7 +282,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "4df24afd58165367b345dee136333f1716eef509188fce6cf3f35d5fb64b6d56",
+      "sha256": "5b1ae796f3756c2204ae9f7c79f5ff9ed5ce2721ee964f692a7bc547756921a4",
       "bytes": 16329
     },
     {

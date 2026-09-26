@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.16 — Single-Service Edition
+# FULL MYSQL v7.0.17 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -464,6 +464,52 @@ A prior conflicting UOM history prevents automatic repair and remains QA.
 After deploy:
 
     python maintenance_v716.py --batch 8
+
+No Batch 7 rebuild.
+No Batch 8 re-upload.
+No MySQL setting changes.
+
+
+## v7.0.17 Active-28D Quick Check Scope
+
+The user confirmed that current operational QA should care only about UPCs that
+have positive POS sold quantity in the latest up-to-28 VALID completed POS data
+days.
+
+v7.0.16 already limited UOM repair and core-field QA reasons to that population.
+v7.0.17 completes the model by separating serving history from operational
+readiness:
+
+- `READY` = current-active UPC with no current core-field QA.
+- `QA_HOLD` = current-active UPC with current core-field QA.
+- `HISTORICAL_ONLY` = no positive POS sales in the latest up-to-28 valid completed
+  POS data days.
+
+Historical rows remain in `quick_check_current` so they can still be searched and
+reviewed. They are no longer counted as operational READY rows.
+
+`phase3_batch_result` Quick Check counters now mean:
+- `quick_check_rows` = current-active rows only
+- `quick_check_ready_rows` = current-active READY rows
+- `quick_check_hold_rows` = current-active QA_HOLD rows
+
+The API `/qa-summary` also exposes:
+- `quick_check_scope.serving_rows_total`
+- `quick_check_scope.historical_rows`
+- `quick_check_scope.current_active_rows`
+- `quick_check_scope.current_ready_rows`
+- `quick_check_scope.current_hold_rows`
+
+No historical rows are deleted.
+
+Important: the existing `CURRENT_COST_MISSING` list was already generated only
+for current-active UPCs because Phase 3 creates core-field reasons only when the
+POS-28 activity rule is satisfied. Therefore those remaining cost gaps are
+genuinely current operational gaps, not historical noise.
+
+After deploy:
+
+    python maintenance_v717.py --batch 8
 
 No Batch 7 rebuild.
 No Batch 8 re-upload.
