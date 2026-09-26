@@ -1,15 +1,17 @@
-FULL MYSQL v7.0.15 cumulative GitHub patch
-
-Use this patch over the current v7.0.14 deployment.
+FULL MYSQL v7.0.16 cumulative GitHub patch
 
 Upload ALL server/*.py files from this patch into GitHub server/.
 Upload README_START_HERE.md, VERSION.txt, MANIFEST.json to repo root.
 
+Rule scope:
+- target must have positive POS sales in latest up-to-28 valid completed POS data days
+- eligible LB prefixes: 240/242/245/247/249
+- prefix alone is insufficient; same confirmed Family must contain a different eligible prefix
+- historical-only UPCs are not touched
+
 After DigitalOcean deploy:
-1) Home PowerShell: Invoke-RestMethod -Uri "$api/healthz"
-   Expect: 7.0.15-single-service
-2) DigitalOcean Console:
-   python maintenance_v715.py --batch 8
-3) No Batch 7 rebuild.
-4) No Batch 8 re-upload.
-5) No MySQL setting change.
+1) Verify /healthz = 7.0.16-single-service
+2) DigitalOcean Console: python maintenance_v716.py --batch 8
+3) No Batch 7 rebuild
+4) No Batch 8 re-upload
+5) No MySQL settings changes

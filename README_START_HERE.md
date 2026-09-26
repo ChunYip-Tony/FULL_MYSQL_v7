@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.15 — Single-Service Edition
+# FULL MYSQL v7.0.16 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -409,3 +409,62 @@ No MySQL setting changes and no re-upload are required.
 After deploy:
 
     python maintenance_v715.py --batch 8
+
+
+## v7.0.16 Active-28D UOM Repair
+
+This release deliberately cares only about CURRENT selling UPCs.
+
+Current means:
+
+- positive POS sold quantity; and
+- within the latest up-to-28 VALID completed POS data days.
+
+This is the same FULL MYSQL current-activity rule already used by Phase 3.
+Historical-only UPCs are not repaired and do not become current Quick Check HOLD
+simply because UOM/cost fields are incomplete.
+
+### Repair path 1 — source-supported Article Manual unit
+
+For an active UOM-missing UPC, the system may confirm Selling UOM when:
+
+1. the UPC is an exact/numeric-equivalent Article Manual UPC;
+2. that Article belongs to the UPC's already-confirmed Family;
+3. the same exact Article has one unique pure structured `Size/dimensions`
+   declaration: `LB`, `EA`, or `PACK`.
+
+`PAC` is NOT automatically treated as `PACK`.
+
+### Repair path 2 — user-confirmed related-prefix LB rule
+
+Eligible internal Seafood prefixes:
+
+    240 / 242 / 245 / 247 / 249
+
+Prefix alone is NOT sufficient.
+
+An active target UPC is confirmed as `Selling UOM = LB` only when:
+
+1. target prefix is in the eligible set;
+2. the same confirmed Main/Family contains another ACTIVE identity-mapped UPC;
+3. that related UPC has a DIFFERENT eligible prefix.
+
+Examples:
+- 249 + related 240 in same Family -> target 249 can be LB
+- 240 + related 245 in same Family -> target 240 can be LB
+- two 240 UPCs alone do NOT satisfy the rule
+
+The related corroborating UPC does NOT itself need POS sales in the latest 28 data
+days; only the target being repaired must be current-active. This lets a related
+service/fried/packaging UPC corroborate family structure without making historical
+products current.
+
+A prior conflicting UOM history prevents automatic repair and remains QA.
+
+After deploy:
+
+    python maintenance_v716.py --batch 8
+
+No Batch 7 rebuild.
+No Batch 8 re-upload.
+No MySQL setting changes.
