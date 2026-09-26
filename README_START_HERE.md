@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.19 — Single-Service Edition
+# FULL MYSQL v7.0.20 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -620,3 +620,49 @@ After deploy:
 No Batch 7 rebuild.
 No Batch 8 re-upload.
 No MySQL setting changes.
+
+
+## v7.0.20 Cost Lineage Repair
+
+v7.0.19 correctly found 124 current-active UPCs missing cost, but repaired zero.
+
+The audit proved this was not simply absence of source evidence. Many affected
+families already had positive official cost rows with explicit cost UOM, while
+the derived Family cost lookup still returned missing.
+
+Root cause:
+
+- an `article_cost_observation` could already exist for a RAW official-report
+  or movement row;
+- that derived observation was created before later identity/family repair, so
+  its `family_id` could remain NULL/stale;
+- v7.0.19 correctly avoided creating a duplicate observation for the same RAW
+  row;
+- therefore the cost existed but was invisible to Family-authoritative lookup.
+
+v7.0.20 repairs the existing DERIVED lineage in place. RAW remains immutable.
+
+Repair paths:
+1. Article -> confirmed Family.
+2. Official report RAW lineage -> linked company_price_observation -> Family.
+3. raw_movement lineage -> relinked movement_history -> Family.
+
+Then the normal cost authority applies:
+1. 101/107/109 receipt valuation.
+2. Official Live/Fresh/Frozen report cost.
+3. Explicit OH fallback.
+
+### Fast maintenance
+
+Use:
+
+    python maintenance_v720.py --batch 8
+
+This is intentionally narrower than v7.0.19:
+- no RAW re-ingest;
+- no Phase2C rerun;
+- no full Phase3 history rebuild;
+- no identity repair rerun;
+- only current-active cost repair + Quick Check serving refresh.
+
+The console output is compact: counts only, not a 100+ UPC JSON dump.

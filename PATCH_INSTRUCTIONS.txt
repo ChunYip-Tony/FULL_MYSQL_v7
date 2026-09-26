@@ -1,15 +1,12 @@
-FULL MYSQL v7.0.19 cumulative GitHub patch
-
-Purpose: current-active cost repair/audit.
-Scope: positive POS sales in latest up-to-28 valid completed POS data days only.
-Authority: 101/107/109 receipt -> official report cost -> explicit OH cost fallback.
+FULL MYSQL v7.0.20 cumulative GitHub patch
 
 Upload ALL server/*.py files from this patch into GitHub server/.
 Upload README_START_HERE.md, VERSION.txt, MANIFEST.json to repo root.
 
 After DigitalOcean deploy:
-1) Verify /healthz = 7.0.19-single-service
-2) DigitalOcean Console: python maintenance_v719.py --batch 8
-3) No Batch 7 rebuild
-4) No Batch 8 re-upload
-5) No MySQL settings changes
+1) Verify /healthz = 7.0.20-single-service
+2) Run ONLY: python maintenance_v720.py --batch 8
+3) Do NOT rerun maintenance_v719.py
+4) No Batch 7 rebuild
+5) No Batch 8 re-upload
+6) No MySQL settings changes
