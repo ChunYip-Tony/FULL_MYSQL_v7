@@ -3,25 +3,21 @@ from __future__ import annotations
 import json
 from typing import Any
 
-VERSION = "7.0.14-temporary-qa-waiver"
+VERSION = "7.0.22-temporary-qa-waiver-registry"
 
 # Explicit user-approved temporary identity waivers.
 #
 # These do NOT resolve identity, do NOT create Article/Family mappings,
 # do NOT infer UOM/cost/conversions, and do NOT delete QA/history.
 # They only remove these exact unresolved UPCs from CURRENT BATCH readiness blockers.
-TEMPORARY_SOLD_UPC_IDENTITY_WAIVERS: dict[str, dict[str, str]] = {
-    "75539372208": {
-        "reason": "Identity pending authoritative confirmation; Bay Scallop source UPC/pack evidence conflicts.",
-        "requested_by": "USER",
-        "waiver_scope": "CURRENT_READINESS_ONLY",
-    },
-    "81223402610": {
-        "reason": "Identity pending authoritative confirmation; Hot Pot Shrimp Paste source UPC/pack evidence conflicts.",
-        "requested_by": "USER",
-        "waiver_scope": "CURRENT_READINESS_ONLY",
-    },
-}
+TEMPORARY_SOLD_UPC_IDENTITY_WAIVERS: dict[str, dict[str, str]] = {}
+
+# The two prior identity waivers were retired after authoritative user confirmation
+# on 2026-09-26:
+#   75539372208 -> Article 3480452, Selling UOM PACK, source spec 24/12OZ
+#   81223402610 -> Article 3461050, Selling UOM PACK, source spec 40/150G
+# They now live in manual_upc_override and should resolve as confirmed identity.
+
 
 
 def apply_temporary_identity_waivers(cur, batch_id: int) -> dict[str, Any]:

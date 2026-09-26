@@ -12,6 +12,22 @@ SEED_OVERRIDES = (
         "base_qty_per_selling_unit": 1,
         "source_note": "User confirmed: UPC 4918 belongs to Article 3401602 and is sold by LB.",
     },
+    {
+        "ean_upc": "75539372208",
+        "article_number": "3480452",
+        "selling_uom_code": "PACK",
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "User confirmed 2026-09-26: UPC 75539372208 belongs to Main/Family Article 3480452; POS Selling UOM=PACK; source pack specification=24/12OZ. Pack specification is preserved as evidence only and is not used to infer base/cost conversion.",
+    },
+    {
+        "ean_upc": "81223402610",
+        "article_number": "3461050",
+        "selling_uom_code": "PACK",
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "User confirmed 2026-09-26: UPC 81223402610 belongs to Main/Family Article 3461050; POS Selling UOM=PACK; source pack specification=40/150G. Pack specification is preserved as evidence only and is not used to infer base/cost conversion.",
+    },
 )
 
 
@@ -188,7 +204,11 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
         result["identity_applied"] += 1
 
         sell_id = _uom_id(cur, ov["selling_uom_code"])
-        base_id = _uom_id(cur, ov["base_uom_code"]) if ov["base_uom_code"] else sell_id
+        # Never infer Base/Inventory UOM from Selling UOM. A user confirmation of
+        # PACK means the POS selling unit is PACK only. Base/cost conversion stays
+        # unresolved unless separately confirmed by authoritative evidence.
+        base_id = _uom_id(cur, ov["base_uom_code"]) if ov["base_uom_code"] else None
+        factor = ov["base_qty_per_selling_unit"]
         if sell_id is None:
             result["held"].append({"ean_upc": ean, "reason": "SELLING_UOM_CODE_NOT_IN_DIM_UOM"})
             continue
@@ -203,11 +223,12 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
               AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP(6))
               AND NOT (
                   selling_uom_id=%s
-                  AND COALESCE(base_uom_id,%s)=COALESCE(%s,%s)
-                  AND COALESCE(base_qty_per_selling_unit,1)=COALESCE(%s,1)
+                  AND ((base_uom_id IS NULL AND %s IS NULL) OR base_uom_id=%s)
+                  AND ((base_qty_per_selling_unit IS NULL AND %s IS NULL)
+                       OR base_qty_per_selling_unit=%s)
               )
             """,
-            (upc_id, sell_id, sell_id, base_id, sell_id, ov["base_qty_per_selling_unit"]),
+            (upc_id, sell_id, base_id, base_id, factor, factor),
         )
 
         cur.execute(
@@ -216,10 +237,12 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
             FROM selling_upc_uom_history
             WHERE upc_id=%s
               AND selling_uom_id=%s
-              AND COALESCE(base_uom_id,%s)=COALESCE(%s,%s)
+              AND ((base_uom_id IS NULL AND %s IS NULL) OR base_uom_id=%s)
+              AND ((base_qty_per_selling_unit IS NULL AND %s IS NULL)
+                   OR base_qty_per_selling_unit=%s)
             ORDER BY upc_uom_id DESC LIMIT 1
             """,
-            (upc_id, sell_id, sell_id, base_id, sell_id),
+            (upc_id, sell_id, base_id, base_id, factor, factor),
         )
         urow = cur.fetchone()
         if urow:
@@ -234,7 +257,7 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
                     effective_to=NULL
                 WHERE upc_uom_id=%s
                 """,
-                (base_id, ov["base_qty_per_selling_unit"], urow["upc_uom_id"]),
+                (base_id, factor, urow["upc_uom_id"]),
             )
         else:
             cur.execute(
@@ -244,7 +267,7 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
                    mapping_status,confidence,resolution_method)
                 VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,'USER_CONFIRMED_OVERRIDE')
                 """,
-                (upc_id, sell_id, base_id, ov["base_qty_per_selling_unit"]),
+                (upc_id, sell_id, base_id, factor),
             )
         result["uom_applied"] += 1
 
