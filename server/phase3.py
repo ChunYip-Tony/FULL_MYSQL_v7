@@ -1020,7 +1020,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
            ORDER BY su.upc_id"""
     )
     products = cur.fetchall()
-    ready = hold = 0
+    active_rows = active_ready = active_hold = historical_rows = 0
     for p in products:
         upc_id = int(p['upc_id']); family_id = int(p['family_id'])
         m7 = _sales_metrics(cur, upc_id, pos_days_7)
@@ -1076,19 +1076,25 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             if cost is None: reasons.append('CURRENT_COST_MISSING')
             if price is None: reasons.append('CURRENT_PRICE_MISSING')
             if cost is not None and cost_sell is None: reasons.append('COST_TO_SELLING_UOM_UNRESOLVED')
-        qc_status = 'QA_HOLD' if reasons else 'READY'
-        if qc_status == 'READY': ready += 1
+        if active_current:
+            active_rows += 1
+            qc_status = 'QA_HOLD' if reasons else 'READY'
+            if qc_status == 'READY':
+                active_ready += 1
+            else:
+                active_hold += 1
+                _issue(cur, batch_id, 'QUICK_CHECK_CORE_FIELD_MISSING', 'UPC', p['ean_upc'],
+                       f"Quick Check core fields are unresolved for UPC {p['ean_upc']}: {', '.join(reasons)}",
+                       'HIGH', detail={
+                           'reasons': reasons,
+                           'activity_scope': activity_scope,
+                           'activity_basis': activity_basis,
+                           'recent_pos_qty_28_valid_days': str(m28['qty']),
+                           'recent_pos_valid_day_count': m28['days'],
+                       })
         else:
-            hold += 1
-            _issue(cur, batch_id, 'QUICK_CHECK_CORE_FIELD_MISSING', 'UPC', p['ean_upc'],
-                   f"Quick Check core fields are unresolved for UPC {p['ean_upc']}: {', '.join(reasons)}",
-                   'HIGH', detail={
-                       'reasons': reasons,
-                       'activity_scope': activity_scope,
-                       'activity_basis': activity_basis,
-                       'recent_pos_qty_28_valid_days': str(m28['qty']),
-                       'recent_pos_valid_day_count': m28['days'],
-                   })
+            historical_rows += 1
+            qc_status = 'HISTORICAL_ONLY'
         cur.execute(
             """INSERT INTO quick_check_current
                (upc_id,ean_upc,selling_description,article_id,article_number,family_id,main_article_number,family_description,
@@ -1123,16 +1129,25 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
              m7['sales'], m7['qty'], velocity7, m7['days'], m30['sales'], m30['qty'], velocity30, m30['days'], fm7, fm_uom,
              inv['on_hand_quantity'] if inv else None, inv['uom_code'] if inv else None, inv['observation_date'] if inv else None, dos, doh,
              gp_pct, gp7, gpday, sweet, wgpm, cp['price_a'] if cp else None, cp['price_b'] if cp else None, cp['price_c'] if cp else None,
-             qc_status, ','.join(reasons) if reasons else None, batch_id),
+             qc_status,
+             (','.join(reasons) if reasons else
+              ('NO_POS_SALES_LATEST_28_VALID_DATA_DAYS' if not active_current else None)),
+             batch_id),
         )
 
     def _dates(xs: list[dict[str, Any]]) -> list[str]:
         return [x['date'].isoformat() for x in sorted(xs, key=lambda z: z['date'])]
 
     return {
-        'rows': len(products),
-        'ready': ready,
-        'hold': hold,
+        # Operational Quick Check scope = current-active only.
+        'rows': active_rows,
+        'ready': active_ready,
+        'hold': active_hold,
+
+        # All confirmed product rows are still published/searchable.
+        'serving_rows_total': len(products),
+        'historical_rows': historical_rows,
+        'activity_rule': 'POS_POSITIVE_LATEST_UP_TO_28_VALID_COMPLETED_DATA_DAYS',
         'data_coverage': {
             'pos_7d_data_days': _dates(pos_days_7),
             'pos_30d_data_days': _dates(pos_days_30),

@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.16-single-service'
+VERSION='7.0.17-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -197,6 +197,17 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                 'activity_basis':detail.get('activity_basis'),
             })
 
+        cur.execute(
+            """SELECT
+                   COUNT(*) AS serving_rows_total,
+                   SUM(CASE WHEN quick_check_status='HISTORICAL_ONLY' THEN 1 ELSE 0 END) AS historical_rows,
+                   SUM(CASE WHEN quick_check_status IN ('READY','QA_HOLD') THEN 1 ELSE 0 END) AS current_active_rows,
+                   SUM(CASE WHEN quick_check_status='READY' THEN 1 ELSE 0 END) AS current_ready_rows,
+                   SUM(CASE WHEN quick_check_status='QA_HOLD' THEN 1 ELSE 0 END) AS current_hold_rows
+               FROM quick_check_current"""
+        )
+        qc_scope=cur.fetchone() or {}
+
         result={
             'batch_id':bid,
             'processing_status':b['processing_status'],
@@ -211,6 +222,7 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                 "AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'"
             ),
             'quick_check_reason_counts':reason_counts,
+            'quick_check_scope':qc_scope,
             'sold_upc_unmapped':sold_unmapped,
             'temporarily_waived_sold_upc_unmapped':temporarily_waived_sold_unmapped,
             'historical_sold_upc_unmapped':historical_unmapped,
