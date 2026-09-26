@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.10-single-service'
+VERSION='7.0.11-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -156,6 +156,7 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
                 'description':detail.get('description'),
                 'activity_scope':detail.get('activity_scope'),
                 'activity_basis':detail.get('activity_basis'),
+                'repair_candidates':detail.get('v711_repair_candidates'),
             })
 
         cur.execute(

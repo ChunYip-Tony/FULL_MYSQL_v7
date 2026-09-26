@@ -12,6 +12,7 @@ from typing import Any, Iterable
 from db import db_conn
 from data_coverage import source_data_days, coverage_summary
 from manual_overrides import apply_manual_upc_overrides
+from active_product_repair import repair_active_product_master
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -1173,6 +1174,12 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 elif st == 'frozen_inventory': counts['company'] += _process_company(cur, batch_id, f, 'raw_frozen_inventory')
                 elif st == 'tx_seafood_abc_price': counts['company'] += _process_company(cur, batch_id, f, 'raw_tx_seafood_abc_price')
                 elif st == 'live_fresh_suggestion': counts['company'] += _process_company(cur, batch_id, f, 'raw_live_fresh_suggestion')
+            # Evidence-only product-master repair:
+            #  - active sold UPC identity from authoritative exact evidence
+            #  - exact UPC-specific Selling UOM evidence only
+            #  - late family/cost mirror backfill
+            active_master_repair = repair_active_product_master(cur, batch_id)
+
             relink_history(cur)
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
@@ -1209,7 +1216,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity}, default=str)),
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                  'active_product_master_repair': active_master_repair}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1220,7 +1228,9 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                  json.dumps({'counts': counts, 'quick_check': qc}, default=str), run_id),
             )
             conn.commit()
-            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity, 'blocking_issues': blocking}
+            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                    'active_product_master_repair': active_master_repair,
+                    'blocking_issues': blocking}
         except Exception:
             conn.rollback()
             raise
