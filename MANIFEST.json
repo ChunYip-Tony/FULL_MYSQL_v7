@@ -1,11 +1,6 @@
 {
-  "version": "7.0.7-single-service",
-  "fixes": [
-    "ONLY_FULL_GROUP_BY-safe maintenance QA aggregation",
-    "ONLY_FULL_GROUP_BY-safe qa-summary endpoint",
-    "read-only maintenance --report-only mode",
-    "maintenance progress output"
-  ],
+  "version": "7.0.8-single-service",
+  "purpose": "separate batch QA from per-UPC serving QA",
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -14,13 +9,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "6989269d560db4a9997b04adaab0c4d73e9d663baf95c187265552483f2502d1",
-      "bytes": 6193
+      "sha256": "912486409cb27df45344e1ec80b34b7781006111a517cd90bdd1d2b697aab306",
+      "bytes": 7246
     },
     {
       "path": "VERSION.txt",
-      "sha256": "73509611f6949cac0171e39487e4e193515776ad8fe799684bb4e35de4373caa",
-      "bytes": 160
+      "sha256": "a1f8005994fd5c5233679d1640b8ae92b2312fcfbfe7bb120d30b22a63867f36",
+      "bytes": 155
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -124,8 +119,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "8b52b18f0288c53ac8d53b35e55b5647cb9ca86c8364fb1b7467aaa9c07be4ad",
-      "bytes": 6344
+      "sha256": "a109976659381e7c499e2207230be07bac4f3761349991999aa3df3e3c386918",
+      "bytes": 8366
     },
     {
       "path": "server/app.yaml.template",
@@ -173,6 +168,11 @@
       "bytes": 15868
     },
     {
+      "path": "server/maintenance_v708.py",
+      "sha256": "e7304e7d80c7990574d919525aa3f4566ee21eb2b2ba5cdb24bdae4544155406",
+      "bytes": 3077
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -184,8 +184,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "bd0dd6bf8875b850a29181be2fecc8473f1c75782c59ddd7834e32e6f21e1a79",
-      "bytes": 57983
+      "sha256": "0f065a6116a5302e1ea7c145d4b8cd046331a9a10d92f080c6163e5d5b865418",
+      "bytes": 58904
     },
     {
       "path": "server/requirements.txt",
@@ -199,7 +199,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "28a7a09c3546d32ba2fcf0f5b3b0fcb13387287370d14f1aa51e2e0480f35af8",
+      "sha256": "c3ce633f7491d615d5426c0955c814336d0ff28543debd0a06d738f69d2be787",
       "bytes": 16328
     },
     {

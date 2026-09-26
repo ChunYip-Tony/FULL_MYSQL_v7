@@ -1,3 +1,3 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.7 Single-Service Edition
-Hotfix: MySQL ONLY_FULL_GROUP_BY-safe QA reporting + resumable report-only maintenance
+Version: 7.0.8 Single-Service Edition
+QA scope separation: batch-specific blockers vs per-UPC Quick Check serving holds

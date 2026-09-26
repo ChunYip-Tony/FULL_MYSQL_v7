@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.7 — Single-Service Edition
+# FULL MYSQL v7.0.8 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -145,3 +145,33 @@ If a full rerun is still needed:
     python maintenance_v707.py
 
 The full runner now prints [1/6] ... [6/6] progress markers.
+
+
+## v7.0.8 QA-scope separation
+
+A daily/backfill POS/MVT batch and the global Quick Check serving snapshot are
+different QA scopes.
+
+Before v7.0.8, a `QUICK_CHECK_CORE_FIELD_MISSING` row anywhere in the serving
+snapshot was counted as a blocker for the batch that happened to trigger the
+rebuild.  This made a valid backfill batch look worse when central identity
+coverage expanded.
+
+v7.0.8 changes the semantics:
+
+- `SOLD_UPC_UNMAPPED` and other batch-specific HIGH/CRITICAL issues can keep the
+  batch in `PHASE3_QA_HOLD`.
+- `QUICK_CHECK_CORE_FIELD_MISSING` holds only the affected UPC serving row.
+- If a batch has no batch-specific blockers but some UPCs are on serving hold,
+  final status is `QUICK_CHECK_READY_WITH_HOLDS`.
+- `/v1/batches/{session_id}/qa-summary` now returns:
+  - batch blocker counts
+  - serving hold counts
+  - reason-level Quick Check counts
+  - remaining SOLD_UPC_UNMAPPED UPC/description rows
+
+After deploy, re-evaluate Batch 8 only:
+
+    python maintenance_v708.py --batch 8
+
+No Batch 7 rebuild is required for this patch.

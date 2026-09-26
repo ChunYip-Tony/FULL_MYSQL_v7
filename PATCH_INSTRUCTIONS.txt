@@ -1,12 +1,11 @@
-FULL MYSQL v7.0.7 GitHub Patch
+FULL MYSQL v7.0.8 GitHub Patch
 
-IMPORTANT: server/*.py files go inside GitHub server/.
-Suggested commit: v7.0.7 fix ONLY_FULL_GROUP_BY QA reporting
+IMPORTANT: upload server/*.py into GitHub server/.
+Suggested commit: v7.0.8 separate batch QA from Quick Check serving QA
 
 After deploy:
-1) Verify /healthz = 7.0.7-single-service
-2) DigitalOcean Console (already /app):
-   python maintenance_v707.py --report-only
-3) Send the JSON output for review.
-4) Do NOT rerun the full repair yet unless report-only shows it is needed.
-5) Do NOT re-upload Batch 8.
+1) Verify /healthz = 7.0.8-single-service
+2) DigitalOcean Console (already /app): python maintenance_v708.py --batch 8
+3) Do NOT rebuild Batch 7.
+4) Do NOT re-upload Batch 8 files.
+5) Use /v1/batches/<session>/qa-summary to review remaining 31-ish identity blockers and serving reason counts.
