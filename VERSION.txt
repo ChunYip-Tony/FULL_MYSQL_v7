@@ -1,3 +1,3 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.10 Single-Service Edition
-Active scope: positive POS sales in latest up-to-28 valid POS data days only
+Version: 7.0.11 Single-Service Edition
+Active Product Master Repair: evidence-only identity + UPC-specific UOM + cost mirror backfill

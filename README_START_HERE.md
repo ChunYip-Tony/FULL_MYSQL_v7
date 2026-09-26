@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.10 — Single-Service Edition
+# FULL MYSQL v7.0.11 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -237,3 +237,43 @@ After deploy:
 No Batch 7 rebuild is required.
 Do not re-upload Batch 8.
 Windows Seafood Client can be upgraded later.
+
+
+## v7.0.11 Active Product Master Repair
+
+This release targets the remaining CURRENT-active product-master gaps without
+guessing.
+
+Identity repair order:
+1. Existing confirmed/user override evidence.
+2. Exact or leading-zero-equivalent UPC evidence in uploaded Article Manual
+   worksheets. Auto-confirm only when the canonical family is unique.
+3. Exact UPC observations in official Frozen / TX Seafood ABC / Live-Fresh
+   company reports. Auto-confirm only when all confirmed observations resolve
+   to one family.
+4. Ambiguous or unsupported UPCs stay QA HOLD.
+
+Selling UOM repair:
+- User-confirmed overrides remain authoritative.
+- A unique historical trusted UPC-specific UOM can be reactivated.
+- A unique exact UPC-specific `SELLING_UOM_OBSERVED` source value can be
+  restored.
+- NO UOM inference from item descriptions, pack text, UPC prefixes, or nearby
+  family items.
+
+Cost repair:
+- Relinks late article/family mappings into movement, receiving, cost, and
+  company-price derived history.
+- Backfills missing 101/107/109 receipt valuation mirrors from already-ingested
+  `movement_history`.
+- Backfills missing official company-report cost mirrors when explicit cost UOM
+  is present.
+- RAW remains immutable.
+
+After deploy:
+
+    python maintenance_v711.py --batch 8
+
+No Batch 7 rebuild.
+No Batch 8 re-upload.
+Seafood Windows Client can still be upgraded later after server rules stabilize.
