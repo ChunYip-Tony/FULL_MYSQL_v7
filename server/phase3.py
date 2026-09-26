@@ -16,6 +16,7 @@ from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
 from cross_tab_signature_repair import repair_cross_tab_signature
 from temporary_qa_waivers import apply_temporary_identity_waivers
+from active_28d_uom_repair import repair_active_28d_uom
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -1191,6 +1192,11 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             #  - late family/cost mirror backfill
             active_master_repair = repair_active_product_master(cur, batch_id)
 
+            # v7.0.16: UOM repair is CURRENT-ACTIVE ONLY.
+            # A target UPC must have positive POS sales in the latest up-to-28
+            # valid completed POS data days. Historical-only UPCs are untouched.
+            active_28d_uom_repair = repair_active_28d_uom(cur, batch_id)
+
             relink_history(cur)
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
@@ -1237,7 +1243,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
-                  'temporary_qa_waivers': temporary_qa_waivers}, default=str)),
+                  'temporary_qa_waivers': temporary_qa_waivers,
+                  'active_28d_uom_repair': active_28d_uom_repair}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1253,6 +1260,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     'article_manual_multitab_repair': multitab_manual_repair,
                     'cross_tab_signature_repair': cross_tab_signature_repair,
                     'temporary_qa_waivers': temporary_qa_waivers,
+                    'active_28d_uom_repair': active_28d_uom_repair,
                     'blocking_issues': blocking}
         except Exception:
             conn.rollback()
