@@ -9,7 +9,7 @@ from typing import Any
 
 from data_coverage import source_data_days
 
-VERSION = "7.0.19-current-active-cost-repair"
+VERSION = "7.0.20-current-active-cost-lineage-repair"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -387,6 +387,90 @@ def _relink_target_company_rows(cur, target_family_ids: list[int]) -> dict[str, 
     return {"from_upc": from_upc, "from_article": from_article}
 
 
+
+def _relink_existing_cost_observations(cur, target_family_ids: list[int]) -> dict[str, int]:
+    """Repair DERIVED cost lineage after identity/family links became authoritative.
+
+    RAW is never changed.
+
+    This fixes the v7.0.19 failure mode where an article_cost_observation already
+    existed for the same raw row with family_id NULL/stale. Because the raw row
+    already existed, the later INSERT ... NOT EXISTS correctly refused to
+    duplicate it, but _best_cost could not see it by Family.
+    """
+    if not target_family_ids:
+        return {
+            "from_article_identity": 0,
+            "from_official_raw_lineage": 0,
+            "from_movement_raw_lineage": 0,
+        }
+
+    ph = ",".join(["%s"] * len(target_family_ids))
+
+    # A) Existing cost observation already has Article identity.
+    cur.execute(
+        f"""UPDATE article_cost_observation co
+            JOIN bridge_article_family baf
+              ON baf.article_id=co.article_id
+             AND baf.mapping_status='CONFIRMED'
+             AND baf.is_primary=TRUE
+             AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+            SET co.family_id=baf.family_id
+            WHERE baf.family_id IN ({ph})
+              AND (co.family_id IS NULL OR co.family_id<>baf.family_id)""",
+        tuple(target_family_ids),
+    )
+    from_article = int(cur.rowcount)
+
+    # B) Existing official-report cost observation can be repaired from its
+    # exact RAW lineage + the now-linked company_price_observation row.
+    cur.execute(
+        f"""UPDATE article_cost_observation co
+            JOIN company_price_observation c
+              ON c.raw_id=co.raw_id
+             AND co.raw_table_name=
+                 CASE c.source_type
+                   WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
+                   WHEN 'tx_seafood_abc_price' THEN 'raw_tx_seafood_abc_price'
+                   WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
+                   ELSE '__NO_MATCH__'
+                 END
+            JOIN product_family pf ON pf.family_id=c.family_id
+            LEFT JOIN article ma ON ma.article_number=pf.main_article_number
+            SET co.family_id=c.family_id,
+                co.article_id=COALESCE(co.article_id,c.article_id,ma.article_id)
+            WHERE c.family_id IN ({ph})
+              AND c.source_type IN ('frozen_inventory','tx_seafood_abc_price','live_fresh_suggestion')
+              AND COALESCE(co.article_id,c.article_id,ma.article_id) IS NOT NULL
+              AND (co.family_id IS NULL OR co.family_id<>c.family_id OR co.article_id IS NULL)""",
+        tuple(target_family_ids),
+    )
+    from_official = int(cur.rowcount)
+
+    # C) Existing receipt-derived cost observation can be repaired from the
+    # exact raw_movement lineage after movement_history was relinked.
+    cur.execute(
+        f"""UPDATE article_cost_observation co
+            JOIN movement_history m
+              ON co.raw_table_name='raw_movement'
+             AND co.raw_id=m.raw_id
+            SET co.family_id=m.family_id,
+                co.article_id=COALESCE(co.article_id,m.article_id)
+            WHERE m.family_id IN ({ph})
+              AND m.article_id IS NOT NULL
+              AND m.movement_type IN ('101','107','109')
+              AND (co.family_id IS NULL OR co.family_id<>m.family_id OR co.article_id IS NULL)""",
+        tuple(target_family_ids),
+    )
+    from_movement = int(cur.rowcount)
+
+    return {
+        "from_article_identity": from_article,
+        "from_official_raw_lineage": from_official,
+        "from_movement_raw_lineage": from_movement,
+    }
+
+
 def _backfill_receipt_cost(cur, target_family_ids: list[int]) -> int:
     if not target_family_ids:
         return 0
@@ -729,6 +813,7 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
         "initial_missing_cost_upcs": len(initial_missing),
         "initial_missing_cost_families": len(target_family_ids),
         "company_rows_relinked": {},
+        "existing_cost_observations_relinked": {},
         "receipt_cost_rows_backfilled": 0,
         "official_cost_rows_backfilled": 0,
         "oh_fallback": {},
@@ -743,6 +828,14 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
         return result
 
     result["company_rows_relinked"] = _relink_target_company_rows(cur, target_family_ids)
+
+    # Critical v7.0.20 repair: fix already-existing derived cost rows BEFORE
+    # attempting new inserts. This preserves one-row-per-RAW lineage and makes
+    # existing official/receipt costs visible to Family-authoritative lookup.
+    result["existing_cost_observations_relinked"] = _relink_existing_cost_observations(
+        cur, target_family_ids
+    )
+
     result["receipt_cost_rows_backfilled"] = _backfill_receipt_cost(cur, target_family_ids)
     result["official_cost_rows_backfilled"] = _backfill_official_cost(cur, target_family_ids)
     result["oh_fallback"] = _scan_and_backfill_oh_cost(cur, target_family_ids)
