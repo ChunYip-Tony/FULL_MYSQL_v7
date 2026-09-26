@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='v7.0.6-single-service'
+API_VERSION='v7.0.7-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 

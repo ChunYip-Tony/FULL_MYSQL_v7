@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.6-single-service'
+VERSION='7.0.7-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -93,11 +93,15 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
         bid=int(b['batch_id'])
         def grouped(table):
             cur.execute(
-                f"""SELECT issue_code,UPPER(severity) severity,COUNT(*) issue_count
-                    FROM {table}
-                    WHERE batch_id=%s AND issue_status='OPEN'
-                    GROUP BY issue_code,UPPER(severity)
-                    ORDER BY FIELD(UPPER(severity),'CRITICAL','HIGH','MEDIUM','LOW'),issue_count DESC,issue_code""",
+                f"""SELECT g.issue_code,g.severity,g.issue_count
+                    FROM (
+                        SELECT issue_code,UPPER(severity) AS severity,COUNT(*) AS issue_count
+                        FROM {table}
+                        WHERE batch_id=%s AND issue_status='OPEN'
+                        GROUP BY issue_code,UPPER(severity)
+                    ) AS g
+                    ORDER BY FIELD(g.severity,'CRITICAL','HIGH','MEDIUM','LOW'),
+                             g.issue_count DESC,g.issue_code""",
                 (bid,),
             )
             return cur.fetchall()
