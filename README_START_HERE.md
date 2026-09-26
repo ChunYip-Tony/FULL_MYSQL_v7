@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.5 — Single-Service Edition
+# FULL MYSQL v7.0.7 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -122,3 +122,26 @@ After deploy:
 The old command also works through a compatibility wrapper:
 
     python maintenance_v705.py
+
+
+## v7.0.7 ONLY_FULL_GROUP_BY / resume hotfix
+
+v7.0.6 completed the repair stages far enough to enter final QA reporting, but
+the final grouped QA query was rejected by MySQL 8.4 `ONLY_FULL_GROUP_BY`.
+The repair runner now groups in a derived table and orders only by grouped
+aliases.  The `/qa-summary` API uses the same corrected query.
+
+Because the v7.0.6 traceback occurred during final reporting, database repair
+mutations may already have completed.  Therefore v7.0.7 adds a safe read-only
+inspection mode:
+
+    python maintenance_v707.py --report-only
+
+Run report-only first.  It does not mutate the database.  If Batch 7 identity
+and Batch 8 Phase 3 already reflect the repaired state, no full rerun is needed.
+
+If a full rerun is still needed:
+
+    python maintenance_v707.py
+
+The full runner now prints [1/6] ... [6/6] progress markers.

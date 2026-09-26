@@ -1,4 +1,3 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.6 Single-Service Edition
-Hotfix: self-contained central identity maintenance runner
-Removes legacy APP_DIR dependency from v7.0.5 maintenance execution
+Version: 7.0.7 Single-Service Edition
+Hotfix: MySQL ONLY_FULL_GROUP_BY-safe QA reporting + resumable report-only maintenance

@@ -1,6 +1,11 @@
 {
-  "version": "7.0.6-single-service",
-  "fix": "self-contained maintenance runner; removes legacy APP_DIR import dependency",
+  "version": "7.0.7-single-service",
+  "fixes": [
+    "ONLY_FULL_GROUP_BY-safe maintenance QA aggregation",
+    "ONLY_FULL_GROUP_BY-safe qa-summary endpoint",
+    "read-only maintenance --report-only mode",
+    "maintenance progress output"
+  ],
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -9,13 +14,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "759ae0a67eaba7592a5b876afced80b711af3d52c3b125396df938a2b34bb9d3",
-      "bytes": 5345
+      "sha256": "6989269d560db4a9997b04adaab0c4d73e9d663baf95c187265552483f2502d1",
+      "bytes": 6193
     },
     {
       "path": "VERSION.txt",
-      "sha256": "e9b86b1bbfe590d3cf8639a40e0ef4dc7644f9bc3521a2263d344e36481ba79f",
-      "bytes": 200
+      "sha256": "73509611f6949cac0171e39487e4e193515776ad8fe799684bb4e35de4373caa",
+      "bytes": 160
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -119,8 +124,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "be7f02e94bcb6d97d73caaccb1aeb69885ecab047024ee7b60e66df074afd516",
-      "bytes": 6174
+      "sha256": "8b52b18f0288c53ac8d53b35e55b5647cb9ca86c8364fb1b7467aaa9c07be4ad",
+      "bytes": 6344
     },
     {
       "path": "server/app.yaml.template",
@@ -154,13 +159,18 @@
     },
     {
       "path": "server/maintenance_v705.py",
-      "sha256": "7e149264954287111b277b0ec903a1ff8e6f5d74af44128e298835dd12428ccb",
+      "sha256": "6c398bb9cd8bfb782096efe93b6633646f4c158ae036993d2f82d49a5ae8a33e",
       "bytes": 91
     },
     {
       "path": "server/maintenance_v706.py",
-      "sha256": "f76dc7b30e5fbc6099d83ab955aa64c99221087e93a03cb9a2286d5585e01705",
-      "bytes": 13182
+      "sha256": "6c398bb9cd8bfb782096efe93b6633646f4c158ae036993d2f82d49a5ae8a33e",
+      "bytes": 91
+    },
+    {
+      "path": "server/maintenance_v707.py",
+      "sha256": "9a896bb4d7e1b65883a9d1157e4fb1c8c36de3773ae420dee204abb7674d3456",
+      "bytes": 15868
     },
     {
       "path": "server/manual_overrides.py",
@@ -189,7 +199,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "21f7227fc1092d3e73fad3227d7457fc96feefc10511f3cd8c61d380a3c31510",
+      "sha256": "28a7a09c3546d32ba2fcf0f5b3b0fcb13387287370d14f1aa51e2e0480f35af8",
       "bytes": 16328
     },
     {
