@@ -24,9 +24,18 @@ SEED_OVERRIDES = (
         "ean_upc": "81223402610",
         "article_number": "3461050",
         "selling_uom_code": "PACK",
-        "base_uom_code": None,
-        "base_qty_per_selling_unit": None,
-        "source_note": "User confirmed 2026-09-26: UPC 81223402610 belongs to Main/Family Article 3461050; POS Selling UOM=PACK; source pack specification=40/150G. Pack specification is preserved as evidence only and is not used to infer base/cost conversion.",
+        "base_uom_code": "EA",
+        "base_qty_per_selling_unit": 1,
+        "source_note": "Resolved 2026-09-26 from combined authoritative evidence: user confirmed POS Selling UOM=PACK and case configuration=40/150G; receipt 107 for Article 3461050 shows 3 CV = 120 EA with $330 valuation, exactly matching 3 cases x 40 selling packs = 120. Therefore 1 selling PACK = 1 base EA and authoritative receipt cost is $2.75 per PACK.",
+    },
+ )
+
+
+SEED_RETIREMENTS = (
+    {
+        "ean_upc": "26510500000",
+        "retirement_reason": "USER_CONFIRMED_NONEXISTENT_UPC",
+        "source_note": "User confirmed 2026-09-26: UPC 26510500000 does not exist. Preserve raw-source provenance, but exclude it from resolved/current product identity, active mappings, UOM resolution, Quick Check, related UPCs, and future publishing.",
     },
 )
 
@@ -110,6 +119,142 @@ def _canonical_article(cur, article_number: str) -> dict[str, Any] | None:
     )
     return cur.fetchone()
 
+
+
+def ensure_retirement_table(cur) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS manual_upc_retirement (
+            retirement_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            ean_upc VARCHAR(32) NOT NULL,
+            retirement_reason VARCHAR(64) NOT NULL,
+            retirement_status VARCHAR(24) NOT NULL DEFAULT 'CONFIRMED',
+            source_note VARCHAR(512) NULL,
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                       ON UPDATE CURRENT_TIMESTAMP(6),
+            PRIMARY KEY (retirement_id),
+            UNIQUE KEY uq_manual_upc_retirement (ean_upc),
+            KEY ix_manual_upc_retirement_status (retirement_status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        """
+    )
+
+
+def seed_confirmed_retirements(cur) -> int:
+    ensure_retirement_table(cur)
+    changed = 0
+    for row in SEED_RETIREMENTS:
+        cur.execute(
+            """
+            INSERT INTO manual_upc_retirement
+              (ean_upc,retirement_reason,retirement_status,source_note)
+            VALUES (%s,%s,'CONFIRMED',%s)
+            ON DUPLICATE KEY UPDATE
+              retirement_reason=VALUES(retirement_reason),
+              retirement_status='CONFIRMED',
+              source_note=VALUES(source_note)
+            """,
+            (row['ean_upc'], row['retirement_reason'], row['source_note']),
+        )
+        changed += 1
+    return changed
+
+
+def apply_manual_upc_retirements(cur) -> dict[str, Any]:
+    """Final authority for UPCs that the user has confirmed do not exist.
+
+    RAW/source evidence is intentionally preserved. Only the resolved/current layer
+    is retired so automatic repair cannot publish the identifier again.
+    """
+    seeded = seed_confirmed_retirements(cur)
+    cur.execute(
+        """
+        SELECT ean_upc,retirement_reason,source_note
+        FROM manual_upc_retirement
+        WHERE retirement_status='CONFIRMED'
+        ORDER BY retirement_id
+        """
+    )
+    rows = cur.fetchall()
+    result = {
+        'seeded_or_refreshed': seeded,
+        'retirements_examined': len(rows),
+        'upcs_retired': 0,
+        'article_links_superseded': 0,
+        'uom_rows_superseded': 0,
+        'quick_check_rows_removed': 0,
+    }
+    for row in rows:
+        ean = str(row['ean_upc']).strip()
+        cur.execute("SELECT upc_id FROM selling_upc WHERE ean_upc=%s LIMIT 1", (ean,))
+        hit = cur.fetchone()
+        if not hit:
+            # Keep the retirement seed even if a bad source identifier is not present
+            # in this database yet. This makes future publishing fail closed.
+            continue
+        upc_id = int(hit['upc_id'])
+        cur.execute("UPDATE selling_upc SET record_status='RETIRED' WHERE upc_id=%s", (upc_id,))
+        result['upcs_retired'] += int(cur.rowcount or 0)
+
+        cur.execute(
+            """
+            UPDATE bridge_article_upc
+            SET mapping_status='SUPERSEDED',is_primary=FALSE,
+                valid_to=COALESCE(valid_to,CURRENT_TIMESTAMP(6))
+            WHERE upc_id=%s
+              AND mapping_status='CONFIRMED'
+              AND (valid_to IS NULL OR valid_to>CURRENT_TIMESTAMP(6))
+            """,
+            (upc_id,),
+        )
+        result['article_links_superseded'] += int(cur.rowcount or 0)
+
+        cur.execute(
+            """
+            UPDATE selling_upc_uom_history
+            SET mapping_status='SUPERSEDED',
+                effective_to=COALESCE(effective_to,CURRENT_TIMESTAMP(6))
+            WHERE upc_id=%s
+              AND mapping_status='CONFIRMED'
+              AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP(6))
+            """,
+            (upc_id,),
+        )
+        result['uom_rows_superseded'] += int(cur.rowcount or 0)
+
+        cur.execute("DELETE FROM quick_check_current WHERE upc_id=%s OR ean_upc=%s", (upc_id, ean))
+        result['quick_check_rows_removed'] += int(cur.rowcount or 0)
+
+        cur.execute(
+            """
+            SELECT evidence_id
+            FROM normalized_source_evidence
+            WHERE object_type='SELLING_UPC'
+              AND object_id=%s
+              AND evidence_role='USER_CONFIRMED_NONEXISTENT_UPC_V725'
+            LIMIT 1
+            """,
+            (upc_id,),
+        )
+        if not cur.fetchone():
+            cur.execute(
+                """
+                INSERT INTO normalized_source_evidence
+                  (object_type,object_id,evidence_role,source_field_name,source_value_text,evidence_json)
+                VALUES ('SELLING_UPC',%s,'USER_CONFIRMED_NONEXISTENT_UPC_V725','ean_upc',%s,%s)
+                """,
+                (
+                    upc_id,
+                    ean,
+                    json.dumps({
+                        'retirement_reason': row['retirement_reason'],
+                        'source_note': row['source_note'],
+                        'raw_provenance_preserved': True,
+                    }, ensure_ascii=False, default=str),
+                ),
+            )
+    return result
 
 def apply_manual_upc_overrides(cur) -> dict[str, Any]:
     seeded = seed_confirmed_overrides(cur)

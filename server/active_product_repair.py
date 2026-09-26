@@ -66,6 +66,21 @@ def _find_upc(cur, ean: str) -> dict[str, Any] | None:
     return cur.fetchone()
 
 
+def _is_manual_retired_upc(cur, ean: str) -> bool:
+    # The table is seeded by Phase 3 before automatic repair in v7.0.25.
+    # Fail open only for legacy maintenance paths where the table does not exist yet;
+    # the final publish guard still excludes confirmed retirements.
+    try:
+        cur.execute(
+            """SELECT 1 FROM manual_upc_retirement
+               WHERE ean_upc=%s AND retirement_status='CONFIRMED' LIMIT 1""",
+            (ean,),
+        )
+        return bool(cur.fetchone())
+    except Exception:
+        return False
+
+
 def _family_main(cur, family_id: int) -> dict[str, Any] | None:
     cur.execute(
         """SELECT pf.family_id,pf.main_article_number,a.article_id AS main_article_id
@@ -110,6 +125,9 @@ def _confirm_unique_family_link(
     fam = _family_main(cur, family_id)
     if not fam:
         return False, 'FAMILY_MAIN_ARTICLE_NOT_READY'
+
+    if _is_manual_retired_upc(cur, ean):
+        return False, 'USER_CONFIRMED_NONEXISTENT_UPC'
 
     upc = _find_upc(cur, ean)
     if upc:

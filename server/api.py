@@ -10,7 +10,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 
-VERSION='7.0.23-single-service'
+VERSION='7.0.25-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -253,9 +253,9 @@ def cost_lineage_diagnostic(
 ):
     """Read-only diagnostic endpoint for current cost lineage.
 
-    Schema-safe version: uses the actual Phase 3 / Quick Check column names.
-    Intended for PowerShell/API diagnostics so routine troubleshooting does not
-    require an interactive MySQL/DigitalOcean console session.
+    v7.0.24 expands searches by confirmed family ARTICLE identity as well as
+    family_id. This surfaces receipt/company/cost evidence whose derived family
+    linkage is NULL or stale, without mutating any source or derived rows.
     """
     device_from_auth(authorization)
 
@@ -274,7 +274,22 @@ def cost_lineage_diagnostic(
             cur.close()
             raise HTTPException(404,'Family not found')
 
-        # Actual quick_check_current schema from rebuild_quick_check().
+        cur.execute(
+            """SELECT a.article_id,a.article_number
+               FROM article a
+               JOIN bridge_article_family baf
+                 ON baf.article_id=a.article_id
+                AND baf.mapping_status='CONFIRMED'
+                AND baf.is_primary=TRUE
+                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+               WHERE baf.family_id=%s
+               ORDER BY a.article_id""",
+            (family_id,),
+        )
+        family_articles=cur.fetchall()
+        article_ids=[int(x['article_id']) for x in family_articles]
+        article_numbers=[str(x['article_number']) for x in family_articles]
+
         cur.execute(
             """SELECT q.ean_upc,q.selling_description,q.article_number,
                       q.main_article_number,q.family_id,
@@ -282,6 +297,8 @@ def cost_lineage_diagnostic(
                       q.current_cost_per_base_uom,
                       q.current_cost_per_selling_unit,
                       q.cost_source,q.cost_date,
+                      q.current_price,q.current_price_type,
+                      q.pos_qty_7d,q.pos_qty_30d,
                       q.quick_check_status,q.blocking_reason,
                       CASE
                         WHEN q.quick_check_status='HISTORICAL_ONLY'
@@ -302,40 +319,24 @@ def cost_lineage_diagnostic(
         )
         quick_check=cur.fetchall()
 
-        # Official report / company-price cost evidence.
-        cur.execute(
-            """SELECT company_price_observation_id,source_type,observation_date,
-                      article_number,article_id,ean_upc,upc_id,family_id,
-                      official_cost,cost_uom_code,
-                      price_a,price_b,price_c,
-                      batch_id,file_id,sheet_id,raw_id,source_row_number
-               FROM company_price_observation
-               WHERE family_id=%s
-               ORDER BY observation_date DESC,company_price_observation_id DESC
-               LIMIT 50""",
-            (family_id,),
-        )
-        company_cost=cur.fetchall()
-
-        # Family article IDs are used to surface cost rows whose family_id may
-        # still be NULL/stale but whose article identity is already confirmed.
-        cur.execute(
-            """SELECT a.article_id,a.article_number
-               FROM article a
-               JOIN bridge_article_family baf
-                 ON baf.article_id=a.article_id
-                AND baf.mapping_status='CONFIRMED'
-                AND baf.is_primary=TRUE
-                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
-               WHERE baf.family_id=%s
-               ORDER BY a.article_id""",
-            (family_id,),
-        )
-        family_articles=cur.fetchall()
-        article_ids=[int(x['article_id']) for x in family_articles]
-
         if article_ids:
             ph=','.join(['%s']*len(article_ids))
+            params=tuple([family_id]+article_ids)
+
+            cur.execute(
+                f"""SELECT company_price_observation_id,source_type,observation_date,
+                           article_number,article_id,ean_upc,upc_id,family_id,
+                           official_cost,cost_uom_code,
+                           price_a,price_b,price_c,
+                           batch_id,file_id,sheet_id,raw_id,source_row_number
+                    FROM company_price_observation
+                    WHERE family_id=%s OR article_id IN ({ph})
+                    ORDER BY observation_date DESC,company_price_observation_id DESC
+                    LIMIT 100""",
+                params,
+            )
+            company_cost=cur.fetchall()
+
             cur.execute(
                 f"""SELECT co.cost_observation_id,co.article_id,a.article_number,
                            co.family_id,co.cost_amount,co.cost_per_base_uom,
@@ -352,10 +353,98 @@ def cost_lineage_diagnostic(
                     LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
                     WHERE co.family_id=%s OR co.article_id IN ({ph})
                     ORDER BY co.business_date DESC,co.cost_observation_id DESC
-                    LIMIT 100""",
-                tuple([family_id] + article_ids),
+                    LIMIT 150""",
+                params,
             )
+            cost_observations=cur.fetchall()
+
+            cur.execute(
+                f"""SELECT article_number,article_id,family_id,description,
+                           movement_type,posting_date,
+                           entry_quantity,entry_uom_code,
+                           base_quantity,base_uom_code,
+                           amount_local_currency,
+                           CASE
+                             WHEN amount_local_currency IS NOT NULL
+                              AND amount_local_currency<>0
+                              AND base_quantity IS NOT NULL
+                              AND base_quantity<>0
+                             THEN ABS(amount_local_currency/base_quantity)
+                             ELSE NULL
+                           END AS derived_unit_cost,
+                           article_document,purchase_order,vendor_code,
+                           batch_id,file_id,sheet_id,raw_id,source_row_number
+                    FROM movement_history
+                    WHERE (family_id=%s OR article_id IN ({ph}))
+                      AND movement_type IN ('101','107','109')
+                    ORDER BY posting_date DESC,raw_id DESC
+                    LIMIT 150""",
+                params,
+            )
+            receipts=cur.fetchall()
+
+            cur.execute(
+                f"""SELECT
+                      c.company_price_observation_id,
+                      c.observation_date,
+                      c.article_number AS company_article_number,
+                      c.article_id AS company_article_id,
+                      c.family_id AS company_family_id,
+                      c.ean_upc,
+                      c.official_cost,
+                      c.cost_uom_code,
+                      c.source_type AS company_source_type,
+                      c.raw_id,
+                      aco.cost_observation_id,
+                      aco.article_id AS cost_article_id,
+                      aco.family_id AS cost_family_id,
+                      aco.cost_amount,
+                      aco.cost_per_base_uom,
+                      aco.source_type AS cost_source_type,
+                      aco.raw_table_name
+                    FROM company_price_observation c
+                    LEFT JOIN article_cost_observation aco
+                      ON aco.raw_id=c.raw_id
+                     AND aco.file_id=c.file_id
+                     AND aco.sheet_id=c.sheet_id
+                    WHERE (c.family_id=%s OR c.article_id IN ({ph}))
+                      AND c.official_cost IS NOT NULL
+                      AND c.official_cost>0
+                    ORDER BY c.observation_date DESC,c.company_price_observation_id DESC
+                    LIMIT 150""",
+                params,
+            )
+            official_raw_lineage=cur.fetchall()
+
+            cur.execute(
+                f"""SELECT
+                      SUM(CASE WHEN official_cost IS NOT NULL AND official_cost>0 THEN 1 ELSE 0 END)
+                        AS positive_official_cost_rows,
+                      SUM(CASE WHEN official_cost IS NOT NULL AND official_cost>0
+                                    AND cost_uom_code IS NOT NULL
+                               THEN 1 ELSE 0 END)
+                        AS positive_official_with_uom_rows,
+                      COUNT(*) AS company_rows
+                    FROM company_price_observation
+                    WHERE family_id=%s OR article_id IN ({ph})""",
+                params,
+            )
+            company_summary=cur.fetchone() or {}
         else:
+            cur.execute(
+                """SELECT company_price_observation_id,source_type,observation_date,
+                          article_number,article_id,ean_upc,upc_id,family_id,
+                          official_cost,cost_uom_code,
+                          price_a,price_b,price_c,
+                          batch_id,file_id,sheet_id,raw_id,source_row_number
+                   FROM company_price_observation
+                   WHERE family_id=%s
+                   ORDER BY observation_date DESC,company_price_observation_id DESC
+                   LIMIT 100""",
+                (family_id,),
+            )
+            company_cost=cur.fetchall()
+
             cur.execute(
                 """SELECT co.cost_observation_id,co.article_id,a.article_number,
                           co.family_id,co.cost_amount,co.cost_per_base_uom,
@@ -372,91 +461,101 @@ def cost_lineage_diagnostic(
                    LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
                    WHERE co.family_id=%s
                    ORDER BY co.business_date DESC,co.cost_observation_id DESC
-                   LIMIT 100""",
+                   LIMIT 150""",
                 (family_id,),
             )
-        cost_observations=cur.fetchall()
+            cost_observations=cur.fetchall()
 
-        # Receipt valuation evidence.
-        cur.execute(
-            """SELECT article_number,article_id,family_id,description,
-                      movement_type,posting_date,
-                      entry_quantity,entry_uom_code,
-                      base_quantity,base_uom_code,
-                      amount_local_currency,
-                      CASE
-                        WHEN amount_local_currency IS NOT NULL
-                         AND amount_local_currency<>0
-                         AND base_quantity IS NOT NULL
-                         AND base_quantity<>0
-                        THEN ABS(amount_local_currency/base_quantity)
-                        ELSE NULL
-                      END AS derived_unit_cost,
-                      article_document,purchase_order,vendor_code,
-                      batch_id,file_id,sheet_id,raw_id,source_row_number
-               FROM movement_history
-               WHERE family_id=%s
-                 AND movement_type IN ('101','107','109')
-               ORDER BY posting_date DESC,raw_id DESC
-               LIMIT 100""",
-            (family_id,),
-        )
-        receipts=cur.fetchall()
+            cur.execute(
+                """SELECT article_number,article_id,family_id,description,
+                          movement_type,posting_date,
+                          entry_quantity,entry_uom_code,
+                          base_quantity,base_uom_code,
+                          amount_local_currency,
+                          CASE
+                            WHEN amount_local_currency IS NOT NULL
+                             AND amount_local_currency<>0
+                             AND base_quantity IS NOT NULL
+                             AND base_quantity<>0
+                            THEN ABS(amount_local_currency/base_quantity)
+                            ELSE NULL
+                          END AS derived_unit_cost,
+                          article_document,purchase_order,vendor_code,
+                          batch_id,file_id,sheet_id,raw_id,source_row_number
+                   FROM movement_history
+                   WHERE family_id=%s
+                     AND movement_type IN ('101','107','109')
+                   ORDER BY posting_date DESC,raw_id DESC
+                   LIMIT 150""",
+                (family_id,),
+            )
+            receipts=cur.fetchall()
 
-        # Show official cost rows whose exact raw lineage already has a derived
-        # cost observation, including cases where that derived row has stale
-        # or NULL family identity.
-        cur.execute(
-            """SELECT
-                 c.company_price_observation_id,
-                 c.observation_date,
-                 c.article_number AS company_article_number,
-                 c.article_id AS company_article_id,
-                 c.family_id AS company_family_id,
-                 c.ean_upc,
-                 c.official_cost,
-                 c.cost_uom_code,
-                 c.source_type AS company_source_type,
-                 c.raw_id,
-                 aco.cost_observation_id,
-                 aco.article_id AS cost_article_id,
-                 aco.family_id AS cost_family_id,
-                 aco.cost_amount,
-                 aco.cost_per_base_uom,
-                 aco.source_type AS cost_source_type,
-                 aco.raw_table_name
-               FROM company_price_observation c
-               LEFT JOIN article_cost_observation aco
-                 ON aco.raw_id=c.raw_id
-                AND aco.file_id=c.file_id
-                AND aco.sheet_id=c.sheet_id
-               WHERE c.family_id=%s
-                 AND c.official_cost IS NOT NULL
-                 AND c.official_cost>0
-               ORDER BY c.observation_date DESC,c.company_price_observation_id DESC
-               LIMIT 100""",
-            (family_id,),
-        )
-        official_raw_lineage=cur.fetchall()
+            cur.execute(
+                """SELECT
+                     c.company_price_observation_id,c.observation_date,
+                     c.article_number AS company_article_number,
+                     c.article_id AS company_article_id,
+                     c.family_id AS company_family_id,c.ean_upc,
+                     c.official_cost,c.cost_uom_code,
+                     c.source_type AS company_source_type,c.raw_id,
+                     aco.cost_observation_id,aco.article_id AS cost_article_id,
+                     aco.family_id AS cost_family_id,aco.cost_amount,
+                     aco.cost_per_base_uom,aco.source_type AS cost_source_type,
+                     aco.raw_table_name
+                   FROM company_price_observation c
+                   LEFT JOIN article_cost_observation aco
+                     ON aco.raw_id=c.raw_id
+                    AND aco.file_id=c.file_id
+                    AND aco.sheet_id=c.sheet_id
+                   WHERE c.family_id=%s
+                     AND c.official_cost IS NOT NULL
+                     AND c.official_cost>0
+                   ORDER BY c.observation_date DESC,c.company_price_observation_id DESC
+                   LIMIT 150""",
+                (family_id,),
+            )
+            official_raw_lineage=cur.fetchall()
 
-        cur.execute(
-            """SELECT
-                 SUM(CASE WHEN official_cost IS NOT NULL AND official_cost>0 THEN 1 ELSE 0 END)
-                   AS positive_official_cost_rows,
-                 SUM(CASE WHEN official_cost IS NOT NULL AND official_cost>0
-                               AND cost_uom_code IS NOT NULL
-                          THEN 1 ELSE 0 END)
-                   AS positive_official_with_uom_rows,
-                 COUNT(*) AS company_rows
-               FROM company_price_observation
-               WHERE family_id=%s""",
-            (family_id,),
-        )
-        company_summary=cur.fetchone() or {}
+            cur.execute(
+                """SELECT
+                     SUM(CASE WHEN official_cost IS NOT NULL AND official_cost>0 THEN 1 ELSE 0 END)
+                       AS positive_official_cost_rows,
+                     SUM(CASE WHEN official_cost IS NOT NULL AND official_cost>0
+                                   AND cost_uom_code IS NOT NULL
+                              THEN 1 ELSE 0 END)
+                       AS positive_official_with_uom_rows,
+                     COUNT(*) AS company_rows
+                   FROM company_price_observation
+                   WHERE family_id=%s""",
+                (family_id,),
+            )
+            company_summary=cur.fetchone() or {}
 
         cur.close()
 
-    result={
+    # Pure display diagnostic for suspicious short/long numeric UPC variants.
+    def _upca_check_digit(first11:str) -> str | None:
+        if len(first11)!=11 or not first11.isdigit():
+            return None
+        ds=[int(x) for x in first11]
+        total=sum(ds[0::2])*3+sum(ds[1::2])
+        return str((10-(total%10))%10)
+
+    upcs=[str(x.get('ean_upc') or '') for x in quick_check]
+    alias_checks=[]
+    for u in upcs:
+        if len(u)==11 and u.isdigit():
+            expected=u+(_upca_check_digit(u) or '')
+            longer=[x for x in upcs if len(x)==12 and x.startswith(u)]
+            alias_checks.append({
+                'short_upc':u,
+                'expected_valid_upca':expected,
+                'same_prefix_12_digit_rows':longer,
+                'safe_append_check_digit_match': expected in longer,
+            })
+
+    return json.loads(json.dumps({
         'family':family,
         'family_articles':family_articles,
         'summary':{
@@ -465,14 +564,16 @@ def cost_lineage_diagnostic(
             'article_cost_observation_rows':len(cost_observations),
             'receipt_101_107_109_rows':len(receipts),
             'official_raw_lineage_rows':len(official_raw_lineage),
+            'search_scope':'FAMILY_ID_OR_CONFIRMED_ARTICLE_ID',
         },
         'quick_check':quick_check,
         'company_price_cost_evidence':company_cost,
         'article_cost_observations':cost_observations,
         'receipt_101_107_109_evidence':receipts,
         'official_cost_raw_lineage':official_raw_lineage,
-    }
-    return json.loads(json.dumps(result,default=j))
+        'upc_alias_checks':alias_checks,
+        'family_article_numbers':article_numbers,
+    },default=j))
 
 
 @app.get('/v1/quick-check/{upc}')

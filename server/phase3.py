@@ -11,7 +11,7 @@ from typing import Any, Iterable
 
 from db import db_conn
 from data_coverage import source_data_days, coverage_summary
-from manual_overrides import apply_manual_upc_overrides
+from manual_overrides import apply_manual_upc_overrides, apply_manual_upc_retirements
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
 from cross_tab_signature_repair import repair_cross_tab_signature
@@ -1036,7 +1036,11 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
                 AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
            JOIN product_family pf ON pf.family_id=baf.family_id
            LEFT JOIN v_current_upc_uom qu ON qu.ean_upc=su.ean_upc
+           LEFT JOIN manual_upc_retirement mur
+             ON mur.ean_upc=su.ean_upc
+            AND mur.retirement_status='CONFIRMED'
            WHERE su.record_status='ACTIVE'
+             AND mur.retirement_id IS NULL
            ORDER BY su.upc_id"""
     )
     products = cur.fetchall()
@@ -1192,7 +1196,11 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             if b['processing_status'] not in {'PHASE2C_READY', 'PHASE3_QA_HOLD', 'QUICK_CHECK_READY', 'QUICK_CHECK_READY_WITH_HOLDS'}:
                 raise RuntimeError(f'Batch {batch_id} is not Phase 2C ready; current status={b["processing_status"]}')
 
-            override_result = apply_manual_upc_overrides(cur)
+            # Seed/apply user authority before automatic repair so confirmed identities are available
+            # to history processing. Reapply the same authority again immediately before publish;
+            # automatic repair is never allowed to be the last writer.
+            override_result_pre = apply_manual_upc_overrides(cur)
+            retirement_result_pre = apply_manual_upc_retirements(cur)
             retired_recomputed_issues = retire_recomputed_phase3_issues(cur, batch_id)
 
             cur.execute(
@@ -1250,6 +1258,12 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # Identity remains unresolved and Quick Check remains unavailable.
             temporary_qa_waivers = apply_temporary_identity_waivers(cur, batch_id)
 
+            # FINAL USER-AUTHORITY LOCK (v7.0.25): automatic identity/UOM repair runs above.
+            # Reapply confirmed overrides and retirements after every automatic repair so a
+            # rebuild cannot resurrect a nonexistent UPC or overwrite a user-confirmed UOM.
+            override_result = apply_manual_upc_overrides(cur)
+            retirement_result = apply_manual_upc_retirements(cur)
+
             qc = rebuild_quick_check(cur, batch_id)
 
             # Batch blockers and serving-row QA are different scopes.
@@ -1283,7 +1297,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
@@ -1300,7 +1314,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                  json.dumps({'counts': counts, 'quick_check': qc}, default=str), run_id),
             )
             conn.commit()
-            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides': override_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                     'active_product_master_repair': active_master_repair,
                     'article_manual_multitab_repair': multitab_manual_repair,
                     'cross_tab_signature_repair': cross_tab_signature_repair,
