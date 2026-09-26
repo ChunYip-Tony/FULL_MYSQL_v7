@@ -1,21 +1,22 @@
 {
-  "version": "7.0.1-single-service",
+  "version": "7.0.3-single-service",
   "deployment": "one App Platform service: API + background worker",
+  "fix": "consume MySQL named-lock SELECT results to prevent Unread result found",
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
-      "sha256": "11e11f1e5c0d52e8d8f14e1d6c78acf8ad44f326e07b611de15f889d38f394e8",
-      "bytes": 122
+      "sha256": "3ac35a37088be6de84baa80c270ad3efb59973691e13b7c221be7d8aae349c8f",
+      "bytes": 346
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "5532b49b927ee8d21f4fd8e35dba923df5da5c0f88e443557a0876d678a86fe4",
-      "bytes": 2357
+      "sha256": "8a5d0d8a0bba8c86c361a0975fa779d98dcd540f2f2f33808edd790709661afa",
+      "bytes": 3407
     },
     {
       "path": "VERSION.txt",
-      "sha256": "e9f1d4355e53afae7b1bfd1c83625605cb3c4e62c6e48d765d229d1aeb6e413d",
-      "bytes": 202
+      "sha256": "df109045415cebf9e848524f49ab0c032e9257d16e94b7de266a7fd36f85e867",
+      "bytes": 272
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -114,12 +115,12 @@
     },
     {
       "path": "server/ENVIRONMENT_VARIABLES.txt",
-      "sha256": "3e9bf21cce88d7be3e961d3d9a3eb9f245606a1048272c60a0d965378ff06870",
-      "bytes": 638
+      "sha256": "406eb619e773ddcbe1a912593b0b13bd986919f48be24a11c235d8d00b21f349",
+      "bytes": 820
     },
     {
       "path": "server/api.py",
-      "sha256": "36ccd1e5c45bd3ed654a355cbe8a3729e020d2221b5d75f679d9c713ce55ee65",
+      "sha256": "efa8aaec40cb0a971ee615a5a7964c3c04dfd60103565906bdc9267ec940d1de",
       "bytes": 4567
     },
     {
@@ -129,8 +130,8 @@
     },
     {
       "path": "server/config.py",
-      "sha256": "f5004bfce9520d4603af9b5b7a43f580e1e88cfc17b0fb1b674f09606d945d30",
-      "bytes": 2838
+      "sha256": "0fb358fa5866553d32bd22e68894eef16c5d2340c06f646aaeeeb22b7f79f123",
+      "bytes": 3933
     },
     {
       "path": "server/data_coverage.py",
@@ -174,13 +175,13 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "afbea8caeeae61549cc66a1218fcaa75062137f4a450a857b1dde607130d2c0e",
+      "sha256": "f1c4e40243e9046d57bd02e692a081036c8679db768902099bb7fef2a9de6c30",
       "bytes": 16028
     },
     {
       "path": "server/worker.py",
-      "sha256": "0231db01568ce1fc63d2ba9a8a6710aaf69218086bdac9bcf79ada60d795bf52",
-      "bytes": 3726
+      "sha256": "93e793b0f0b06f15f8d9494ed523e2eccaa9a463d8cc475ea757354c5b9ea872",
+      "bytes": 4678
     }
   ]
 }

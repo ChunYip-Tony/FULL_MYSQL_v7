@@ -11,28 +11,70 @@ POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
 
 def claim_job():
+    # The MySQL named lock is connection-scoped.  Keep acquisition, job claim,
+    # and release on the same connection, and ALWAYS consume SELECT results.
+    # Connector/Python raises InternalError("Unread result found") if a SELECT
+    # result (including RELEASE_LOCK()) is left unread when the cursor closes
+    # or another statement is executed.
     with db_conn() as conn:
-        cur=conn.cursor(dictionary=True)
+        cur=conn.cursor(dictionary=True, buffered=True)
+        lock_acquired=False
         try:
             cur.execute("SELECT GET_LOCK('fullmysql_v7_worker',0) ok")
-            if int(cur.fetchone()['ok'] or 0)!=1: return None
-            cur.execute("SELECT COUNT(*) c FROM pipeline_run WHERE pipeline_name=%s AND stage_name='POST_RAW_PIPELINE' AND processing_status='STARTED'",(API_PIPELINE,))
-            if int(cur.fetchone()['c'] or 0)>0:
-                cur.execute("SELECT RELEASE_LOCK('fullmysql_v7_worker')"); conn.commit(); return None
-            cur.execute("""SELECT pipeline_run_id,batch_id FROM pipeline_run
-                WHERE pipeline_name=%s AND stage_name='POST_RAW_PIPELINE' AND processing_status='QUEUED'
-                ORDER BY pipeline_run_id LIMIT 1 FOR UPDATE""",(API_PIPELINE,)); row=cur.fetchone()
+            lock_row=cur.fetchone() or {}
+            lock_acquired = int(lock_row.get('ok') or 0) == 1
+            if not lock_acquired:
+                return None
+
+            cur.execute(
+                "SELECT COUNT(*) c FROM pipeline_run "
+                "WHERE pipeline_name=%s AND stage_name='POST_RAW_PIPELINE' "
+                "AND processing_status='STARTED'",
+                (API_PIPELINE,),
+            )
+            if int((cur.fetchone() or {}).get('c') or 0) > 0:
+                return None
+
+            cur.execute(
+                """SELECT pipeline_run_id,batch_id FROM pipeline_run
+                   WHERE pipeline_name=%s
+                     AND stage_name='POST_RAW_PIPELINE'
+                     AND processing_status='QUEUED'
+                   ORDER BY pipeline_run_id
+                   LIMIT 1
+                   FOR UPDATE""",
+                (API_PIPELINE,),
+            )
+            row=cur.fetchone()
             if not row:
-                cur.execute("SELECT RELEASE_LOCK('fullmysql_v7_worker')"); conn.commit(); return None
-            cur.execute("UPDATE pipeline_run SET processing_status='STARTED',started_at=CURRENT_TIMESTAMP(6),detail_json=%s WHERE pipeline_run_id=%s",
-                        (json.dumps({'worker':WORKER}),row['pipeline_run_id']))
-            conn.commit(); return int(row['pipeline_run_id']),int(row['batch_id'])
+                return None
+
+            cur.execute(
+                "UPDATE pipeline_run "
+                "SET processing_status='STARTED',"
+                "started_at=CURRENT_TIMESTAMP(6),"
+                "detail_json=%s "
+                "WHERE pipeline_run_id=%s",
+                (json.dumps({'worker':WORKER}), row['pipeline_run_id']),
+            )
+            conn.commit()
+            return int(row['pipeline_run_id']), int(row['batch_id'])
+
         except Exception:
-            conn.rollback(); raise
+            conn.rollback()
+            raise
+
         finally:
-            try: cur.execute("SELECT RELEASE_LOCK('fullmysql_v7_worker')"); conn.commit()
-            except Exception: pass
-            cur.close()
+            if lock_acquired:
+                try:
+                    cur.execute("SELECT RELEASE_LOCK('fullmysql_v7_worker') released")
+                    cur.fetchone()  # consume result; required by Connector/Python
+                except Exception:
+                    pass
+            try:
+                cur.close()
+            except Exception:
+                pass
 
 def finish(run_id:int,status:str,detail:dict,error_count:int=0):
     with db_conn() as conn:

@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.2 — Single-Service Edition
+# FULL MYSQL v7.0.3 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -48,3 +48,15 @@ Keep `FULLMYSQL_ADMIN_DEVICES=HOME-PC`. `FULLMYSQL_API_TOKENS_JSON` is retained 
 8. Stop v6 production upload only after the v7 end-to-end path is verified.
 
 Do not run v6 and v7 production uploaders on the same new files during cutover.
+
+
+## v7.0.3 worker fix
+
+v7.0.3 fixes `mysql.connector.errors.InternalError: Unread result found` in
+`worker.py::claim_job()`.  The worker now uses a buffered dictionary cursor,
+releases the MySQL named lock in one place, and consumes the
+`SELECT RELEASE_LOCK(...)` result before closing the cursor.
+
+This error occurring after startup is also evidence that the App Platform
+service has successfully reached the MySQL server; it is no longer the earlier
+network/TLS connection problem.

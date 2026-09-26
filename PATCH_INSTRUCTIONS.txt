@@ -1,0 +1,9 @@
+FULL MYSQL v7.0.3 GitHub Patch
+
+Replace the matching files in the root of your private GitHub repo FULL_MYSQL_v7.
+Commit message suggestion:
+  v7.0.3 fix worker unread MySQL result
+
+DigitalOcean Auto-deploy should redeploy automatically.
+No environment variable changes are required.
+Keep FULLMYSQL_DATABASE_URL on the working DATABASE_URL setting for now.
