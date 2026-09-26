@@ -1,11 +1,15 @@
-FULL MYSQL v7.0.8 GitHub Patch
+FULL MYSQL v7.0.10 GitHub Patch
 
-IMPORTANT: upload server/*.py into GitHub server/.
-Suggested commit: v7.0.8 separate batch QA from Quick Check serving QA
+Rule: ONLY positive sales in latest up-to-28 VALID POS data days = ACTIVE_SELLING.
+All others = HISTORICAL_ONLY / non-blocking current readiness.
+Price List does NOT make a UPC active.
+
+Upload server/*.py into GitHub server/.
+Suggested commit: v7.0.10 use 28 valid POS data days for active-selling scope
 
 After deploy:
-1) Verify /healthz = 7.0.8-single-service
-2) DigitalOcean Console (already /app): python maintenance_v708.py --batch 8
+1) Verify /healthz = 7.0.10-single-service
+2) DigitalOcean Console: python maintenance_v710.py --batch 8
 3) Do NOT rebuild Batch 7.
-4) Do NOT re-upload Batch 8 files.
-5) Use /v1/batches/<session>/qa-summary to review remaining 31-ish identity blockers and serving reason counts.
+4) Do NOT re-upload Batch 8.
+5) Seafood Windows Client can be upgraded later.

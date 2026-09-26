@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.8 — Single-Service Edition
+# FULL MYSQL v7.0.10 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -175,3 +175,65 @@ After deploy, re-evaluate Batch 8 only:
     python maintenance_v708.py --batch 8
 
 No Batch 7 rebuild is required for this patch.
+
+
+## v7.0.9 Active-Selling Scope
+
+Current production readiness now distinguishes CURRENT selling activity from
+historical-only evidence.
+
+For an unmapped sold UPC:
+
+- Positive sales on the latest 7 VALID POS data days => ACTIVE_SELLING => blocking.
+- Present with a positive configured price on the latest available Price List
+  snapshot => ACTIVE_ZERO_SALES => blocking even if recent sales are zero.
+- Neither current evidence source exists => HISTORICAL_ONLY => preserved as
+  `HISTORICAL_SOLD_UPC_UNMAPPED`, MEDIUM, non-blocking.
+
+Historical sales are never deleted or converted to zero.
+
+For mapped Quick Check rows, core-field QA applies to:
+- ACTIVE_SELLING
+- ACTIVE_ZERO_SALES
+
+Rows without current active evidence remain available in the serving snapshot
+but do not block current readiness.
+
+After deploy:
+
+    python maintenance_v709.py --batch 8
+
+No Batch 7 rebuild is required.
+Do not re-upload Batch 8 files.
+
+The Seafood Windows client can be upgraded later; this server patch is
+backward-compatible with the current HTTPS client while Batch 8 remains in
+PHASE3_QA_HOLD or standard READY states.
+
+
+## v7.0.10 POS-28 Active-Selling Scope
+
+Current production readiness uses one rule only:
+
+- Positive POS sold quantity in the latest up-to-28 VALID POS data days
+  => `ACTIVE_SELLING` => unresolved core QA can block CURRENT readiness.
+- All other UPCs
+  => `HISTORICAL_ONLY` => history and QA are retained, but they do not block
+  CURRENT production readiness.
+
+A current Price List entry by itself no longer makes a UPC active.
+
+"28 days" means the 28 most recent valid uploaded POS data days, completed-day
+only. It is not 28 calendar days. If fewer than 28 valid POS data days exist,
+all currently available valid POS data days up to 28 are used.
+
+Existing 7D and 30D metrics remain unchanged. The 28-day window is used only
+for CURRENT active/inactive QA scope.
+
+After deploy:
+
+    python maintenance_v710.py --batch 8
+
+No Batch 7 rebuild is required.
+Do not re-upload Batch 8.
+Windows Seafood Client can be upgraded later.

@@ -1,6 +1,13 @@
 {
-  "version": "7.0.8-single-service",
-  "purpose": "separate batch QA from per-UPC serving QA",
+  "version": "7.0.10-single-service",
+  "purpose": "POS-28-only Active-Selling Scope",
+  "rules": [
+    "Positive quantity in latest up-to-28 valid POS data days => ACTIVE_SELLING",
+    "All others => HISTORICAL_ONLY, non-blocking current readiness",
+    "Price List does not define active status",
+    "7D/30D business metrics unchanged",
+    "28 means valid uploaded POS data days, not calendar days"
+  ],
   "files": [
     {
       "path": "GENERATE_API_TOKENS.py",
@@ -9,13 +16,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "912486409cb27df45344e1ec80b34b7781006111a517cd90bdd1d2b697aab306",
-      "bytes": 7246
+      "sha256": "0e28a312bf532732dd7fc7b456c14afd29e9ff54b57c696fa926e56004ca8f75",
+      "bytes": 9287
     },
     {
       "path": "VERSION.txt",
-      "sha256": "a1f8005994fd5c5233679d1640b8ae92b2312fcfbfe7bb120d30b22a63867f36",
-      "bytes": 155
+      "sha256": "04c2818ad07a8ee5cc52999e05a9b2e290e66fc230f5180f9a18812e9cc6789a",
+      "bytes": 151
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -119,8 +126,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "a109976659381e7c499e2207230be07bac4f3761349991999aa3df3e3c386918",
-      "bytes": 8366
+      "sha256": "c6851dabe9855c5a1fb9d1d4c15939757aff8efae838007d03225d074955f67d",
+      "bytes": 9510
     },
     {
       "path": "server/app.yaml.template",
@@ -173,6 +180,16 @@
       "bytes": 3077
     },
     {
+      "path": "server/maintenance_v709.py",
+      "sha256": "dcb9883d849674547a9ffd9f538e62de7e10df39eadd5a91f50be81ac630587c",
+      "bytes": 4100
+    },
+    {
+      "path": "server/maintenance_v710.py",
+      "sha256": "f575cbac54168958e64267faa78a08c74635a583afe0e090ed00b39351d60bee",
+      "bytes": 4333
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -184,8 +201,8 @@
     },
     {
       "path": "server/phase3.py",
-      "sha256": "0f065a6116a5302e1ea7c145d4b8cd046331a9a10d92f080c6163e5d5b865418",
-      "bytes": 58904
+      "sha256": "2fe925d2f33aa02eee4d84faf6b06778230905fddaca73b0255e0b4a4c89b772",
+      "bytes": 65260
     },
     {
       "path": "server/requirements.txt",
@@ -199,8 +216,8 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "c3ce633f7491d615d5426c0955c814336d0ff28543debd0a06d738f69d2be787",
-      "bytes": 16328
+      "sha256": "4072c6ae14b25e54c32e10b9e19a9f8f940af4a8a98a90fb150d41a8e9131cb0",
+      "bytes": 16329
     },
     {
       "path": "server/worker.py",
