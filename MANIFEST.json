@@ -1,18 +1,11 @@
 {
-  "version": "7.0.17-single-service",
-  "purpose": "Make Quick Check readiness/reporting current-active only while preserving historical searchability",
-  "activity_rule": "positive POS sold qty in latest up-to-28 valid completed POS data days",
-  "status_model": {
-    "READY": "current-active and core fields resolved",
-    "QA_HOLD": "current-active with current core-field QA",
-    "HISTORICAL_ONLY": "no POS sales in current 28-valid-data-day activity window"
-  },
+  "version": "7.0.18-single-service",
+  "purpose": "Make QA-summary current hold reason counts reconcile exactly to quick_check_current",
   "safety": [
-    "Historical rows are preserved",
-    "Historical rows are not counted as current READY",
-    "Core-field QA remains current-active only",
-    "No MySQL schema change",
-    "No sales/cost/UOM business authority changes"
+    "No business logic changes",
+    "No Quick Check row mutation",
+    "No Phase 3 rebuild required",
+    "Reason counts are current-active serving snapshot only"
   ],
   "files": [
     {
@@ -22,13 +15,13 @@
     },
     {
       "path": "README_START_HERE.md",
-      "sha256": "ea1ba1e2f1152eec52be0aa4eecde49c8bc4e91146b71ce53005acea0b78057c",
-      "bytes": 18906
+      "sha256": "22a98c09886f7db524d4148f323c3147b528cc4f6a07407961b0c5950681635b",
+      "bytes": 20164
     },
     {
       "path": "VERSION.txt",
-      "sha256": "d4e7c07ad063bb36711a041a58f4d49812d48442e370f83fc415e87ae6b17511",
-      "bytes": 177
+      "sha256": "9275a26cf00e7167fb3559d3b37ef11e1fa3b90e3cf19eb00ea93656baf532bd",
+      "bytes": 170
     },
     {
       "path": "client_installer/INSTALL_V7_CLIENT.bat",
@@ -142,8 +135,8 @@
     },
     {
       "path": "server/api.py",
-      "sha256": "162ab4a0cb3b444127e0fc7f6f677dd12d480c21b288b2a6cb83642d457de5c7",
-      "bytes": 12562
+      "sha256": "317c25c10779b6d72f973c3987f7845a96421d95edd07afa925a5fd05593e4b8",
+      "bytes": 12757
     },
     {
       "path": "server/app.yaml.template",
@@ -251,6 +244,11 @@
       "bytes": 3862
     },
     {
+      "path": "server/maintenance_v718.py",
+      "sha256": "dbb52bdbf92f5d07eea5bb1f9e4b63a052242255610559dc70f081f85d90de02",
+      "bytes": 2957
+    },
+    {
       "path": "server/manual_overrides.py",
       "sha256": "b9724ce0642c77c77a2d72d04950586de561a6e18899064d9498c79ee9471edb",
       "bytes": 10405
@@ -282,7 +280,7 @@
     },
     {
       "path": "server/v7_ingest.py",
-      "sha256": "5b1ae796f3756c2204ae9f7c79f5ff9ed5ce2721ee964f692a7bc547756921a4",
+      "sha256": "50872d861d6a7246bc3e463038a877c133ab206556e45c2845aabbe1942eaffe",
       "bytes": 16329
     },
     {

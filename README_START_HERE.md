@@ -1,4 +1,4 @@
-# FULL MYSQL v7.0.17 — Single-Service Edition
+# FULL MYSQL v7.0.18 — Single-Service Edition
 
 This edition keeps the v7 HTTPS architecture but runs the **API and background processing worker inside one DigitalOcean App Platform service/container**. It is designed for the current single-store Seafood workload and avoids paying for a second always-on Worker component.
 
@@ -514,3 +514,49 @@ After deploy:
 No Batch 7 rebuild.
 No Batch 8 re-upload.
 No MySQL setting changes.
+
+
+## v7.0.18 Quick Check QA Summary Parity
+
+v7.0.17 correctly separated current-active from historical Quick Check rows:
+
+- current-active = 200
+- historical = 4,813
+- current READY = 51
+- current HOLD = 149
+
+A reporting inconsistency was observed: `/qa-summary` could show
+`current_hold_rows = 149` while `quick_check_reason_counts` rendered empty.
+
+v7.0.18 fixes only the QA-summary serving report path.
+
+The authoritative source for:
+- `quick_check_reason_counts`
+- `quick_check_hold_upcs`
+
+is now `quick_check_current WHERE quick_check_status='QA_HOLD'`.
+
+This guarantees the reason list is aligned with the current serving snapshot,
+rather than depending on the Phase 3 issue ledger.
+
+The API also exposes:
+- `quick_check_scope.hold_upc_list_count`
+- `quick_check_scope.hold_reason_row_parity`
+
+Expected after deploy on the present Batch 8 snapshot:
+
+    current_hold_rows = 149
+    hold_upc_list_count = 149
+    hold_reason_row_parity = true
+
+No Phase 3 rebuild is required for this release because it does not alter
+business logic or stored Quick Check rows.
+
+After deploy, simply verify `/healthz` and query `/qa-summary`.
+Optionally run:
+
+    python maintenance_v718.py --batch 8
+
+No MySQL settings change.
+No Batch 7 rebuild.
+No Batch 8 re-upload.
