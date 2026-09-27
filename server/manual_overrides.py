@@ -187,31 +187,31 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
 
 
 USER_CONFIRMED_FAMILY_COSTS_20260926 = (
-    {"main_article_number":"1341156","cost_amount":Decimal("3.82"),"cost_uom_code":"LB",
+    {"main_article_number":"1341156","cost_amount":Decimal("3.82"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Pony Fish = $3.82/LB."},
-    {"main_article_number":"1341521","cost_amount":Decimal("2.19"),"cost_uom_code":"LB",
+    {"main_article_number":"1341521","cost_amount":Decimal("2.19"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Sierra 2-4 = $2.19/LB."},
-    {"main_article_number":"1342316","cost_amount":Decimal("4.26"),"cost_uom_code":"LB",
+    {"main_article_number":"1342316","cost_amount":Decimal("4.26"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fish Tofu = $4.26/LB."},
-    {"main_article_number":"1351700","cost_amount":Decimal("4.36"),"cost_uom_code":"LB",
+    {"main_article_number":"1351700","cost_amount":Decimal("4.36"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: 41/50 H/L Shrimp = $4.36/LB."},
-    {"main_article_number":"1354803","cost_amount":Decimal("5.09"),"cost_uom_code":"LB",
+    {"main_article_number":"1354803","cost_amount":Decimal("5.09"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: 41/50 PUD White Shrimp = $5.09/LB."},
-    {"main_article_number":"1361120","cost_amount":Decimal("9.00"),"cost_uom_code":"LB",
+    {"main_article_number":"1361120","cost_amount":Decimal("9.00"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fresh/Live Maine Lobster family = $9.00/LB."},
-    {"main_article_number":"1361660","cost_amount":Decimal("5.09"),"cost_uom_code":"LB",
+    {"main_article_number":"1361660","cost_amount":Decimal("5.09"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Live Manila Clam = $5.09/LB."},
-    {"main_article_number":"1361689","cost_amount":Decimal("1.79"),"cost_uom_code":"LB",
+    {"main_article_number":"1361689","cost_amount":Decimal("1.79"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Big Head Carp = $1.79/LB."},
-    {"main_article_number":"1361697","cost_amount":Decimal("1.99"),"cost_uom_code":"LB",
+    {"main_article_number":"1361697","cost_amount":Decimal("1.99"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fresh Ocean Perch = $1.99/LB."},
-    {"main_article_number":"1361760","cost_amount":Decimal("2.69"),"cost_uom_code":"LB",
+    {"main_article_number":"1361760","cost_amount":Decimal("2.69"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fresh Catfish family = $2.69/LB."},
-    {"main_article_number":"1361999","cost_amount":Decimal("2.09"),"cost_uom_code":"LB",
+    {"main_article_number":"1361999","cost_amount":Decimal("2.09"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Mullet = $2.09/LB."},
-    {"main_article_number":"1363514","cost_amount":Decimal("6.59"),"cost_uom_code":"LB",
+    {"main_article_number":"1363514","cost_amount":Decimal("6.59"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Sea Bream - New Zealand = $6.59/LB."},
-    {"main_article_number":"1366580","cost_amount":Decimal("0.82"),"cost_uom_code":"EA",
+    {"main_article_number":"1366580","cost_amount":Decimal("0.82"),"cost_uom_code":"EA","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Oyster in Shell family = $0.82/EA."},
 )
 
@@ -339,6 +339,7 @@ def ensure_family_cost_table(cur) -> None:
             main_article_number VARCHAR(64) NOT NULL,
             cost_amount DECIMAL(24,8) NOT NULL,
             cost_uom_code VARCHAR(32) NOT NULL,
+            confirmed_date DATE NOT NULL,
             authority_status VARCHAR(24) NOT NULL DEFAULT 'CONFIRMED',
             source_note VARCHAR(512) NULL,
             created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -358,11 +359,12 @@ def seed_confirmed_family_costs(cur) -> int:
         cur.execute(
             """
             INSERT INTO manual_family_cost_authority
-              (main_article_number,cost_amount,cost_uom_code,authority_status,source_note)
-            VALUES (%s,%s,%s,'CONFIRMED',%s)
+              (main_article_number,cost_amount,cost_uom_code,confirmed_date,authority_status,source_note)
+            VALUES (%s,%s,%s,%s,'CONFIRMED',%s)
             ON DUPLICATE KEY UPDATE
               cost_amount=VALUES(cost_amount),
               cost_uom_code=VALUES(cost_uom_code),
+              confirmed_date=VALUES(confirmed_date),
               authority_status='CONFIRMED',
               source_note=VALUES(source_note)
             """,
@@ -370,6 +372,7 @@ def seed_confirmed_family_costs(cur) -> int:
                 row["main_article_number"],
                 row["cost_amount"],
                 row["cost_uom_code"],
+                row["confirmed_date"],
                 row["source_note"],
             ),
         )
@@ -381,7 +384,7 @@ def apply_manual_family_costs(cur) -> dict[str, Any]:
     seeded = seed_confirmed_family_costs(cur)
     cur.execute(
         """
-        SELECT m.main_article_number,m.cost_amount,m.cost_uom_code,
+        SELECT m.main_article_number,m.cost_amount,m.cost_uom_code,m.confirmed_date,
                pf.family_id,a.article_id
         FROM manual_family_cost_authority m
         LEFT JOIN product_family pf
@@ -426,7 +429,7 @@ def apply_manual_family_costs(cur) -> dict[str, Any]:
 def confirmed_family_cost(cur, family_id: int) -> dict[str, Any] | None:
     cur.execute(
         """
-        SELECT m.main_article_number,m.cost_amount,m.cost_uom_code,m.source_note
+        SELECT m.main_article_number,m.cost_amount,m.cost_uom_code,m.confirmed_date,m.source_note
         FROM product_family pf
         JOIN manual_family_cost_authority m
           ON m.main_article_number=pf.main_article_number
