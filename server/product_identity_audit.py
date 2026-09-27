@@ -176,8 +176,8 @@ def audit_product_identity(cur) -> dict[str, Any]:
         SELECT su.upc_id,su.ean_upc,
                COUNT(
                  DISTINCT CONCAT(
-                   h.selling_uom_id,'|',
-                   COALESCE(CAST(h.base_uom_id AS CHAR),'NULL'),'|',
+                   CASE WHEN UPPER(du.uom_code) IN ('PAC','PACK') THEN 'PACK' ELSE UPPER(du.uom_code) END,'|',
+                   COALESCE(CASE WHEN UPPER(bu.uom_code) IN ('PAC','PACK') THEN 'PACK' ELSE UPPER(bu.uom_code) END,'NULL'),'|',
                    COALESCE(CAST(h.base_qty_per_selling_unit AS CHAR),'NULL')
                  )
                ) AS variant_count,
@@ -209,8 +209,8 @@ def audit_product_identity(cur) -> dict[str, Any]:
         GROUP BY su.upc_id,su.ean_upc
         HAVING COUNT(
           DISTINCT CONCAT(
-            h.selling_uom_id,'|',
-            COALESCE(CAST(h.base_uom_id AS CHAR),'NULL'),'|',
+            CASE WHEN UPPER(du.uom_code) IN ('PAC','PACK') THEN 'PACK' ELSE UPPER(du.uom_code) END,'|',
+            COALESCE(CASE WHEN UPPER(bu.uom_code) IN ('PAC','PACK') THEN 'PACK' ELSE UPPER(bu.uom_code) END,'NULL'),'|',
             COALESCE(CAST(h.base_qty_per_selling_unit AS CHAR),'NULL')
           )
         )>1
@@ -365,9 +365,27 @@ def audit_product_identity(cur) -> dict[str, Any]:
 
     cur.execute(
         """
-        SELECT q.ean_upc,q.family_id,q.article_number,q.selling_uom
-        FROM quick_check_current q
-        ORDER BY q.family_id,q.ean_upc
+        SELECT su.ean_upc,baf.family_id,a.article_number,du.uom_code AS selling_uom
+        FROM selling_upc su
+        JOIN bridge_article_upc bau
+          ON bau.upc_id=su.upc_id
+         AND bau.mapping_status='CONFIRMED'
+         AND bau.is_primary=TRUE
+         AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+        JOIN article a ON a.article_id=bau.article_id
+        JOIN bridge_article_family baf
+          ON baf.article_id=a.article_id
+         AND baf.mapping_status='CONFIRMED'
+         AND baf.is_primary=TRUE
+         AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+        LEFT JOIN v_current_upc_uom qu ON qu.ean_upc=su.ean_upc
+        LEFT JOIN dim_uom du ON du.uom_code=qu.selling_uom
+        LEFT JOIN manual_upc_retirement mur
+          ON mur.ean_upc=su.ean_upc
+         AND mur.retirement_status='CONFIRMED'
+        WHERE su.record_status='ACTIVE'
+          AND mur.retirement_id IS NULL
+        ORDER BY baf.family_id,su.ean_upc
         """
     )
     serving = cur.fetchall()
@@ -384,7 +402,10 @@ def audit_product_identity(cur) -> dict[str, Any]:
         if not other:
             continue
         same_family = row.get("family_id") == other.get("family_id")
-        same_uom = (row.get("selling_uom") or "").upper() == (other.get("selling_uom") or "").upper()
+        def _norm_uom(v):
+            x = (v or "").upper()
+            return "PACK" if x in {"PAC", "PACK"} else x
+        same_uom = _norm_uom(row.get("selling_uom")) == _norm_uom(other.get("selling_uom"))
         item = {
             "short_upc": short,
             "valid_upca": long_upc,
@@ -425,8 +446,8 @@ def audit_product_identity(cur) -> dict[str, Any]:
             row.get("selling_uom_code") is None
             or (
                 row.get("qc_selling_uom") is not None
-                and str(row.get("qc_selling_uom")).upper()
-                == str(row.get("selling_uom_code")).upper()
+                and ("PACK" if str(row.get("qc_selling_uom")).upper() in {"PAC","PACK"} else str(row.get("qc_selling_uom")).upper())
+                == ("PACK" if str(row.get("selling_uom_code")).upper() in {"PAC","PACK"} else str(row.get("selling_uom_code")).upper())
             )
         )
         pass_base_uom = (
