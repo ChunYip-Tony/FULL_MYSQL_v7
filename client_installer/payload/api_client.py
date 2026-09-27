@@ -18,3 +18,11 @@ def upload(session_id:str,p:Path):
         r=requests.post(u+f'/v1/batches/{session_id}/files',headers=h,files={'file':(p.name,f,'application/octet-stream')},timeout=600)
     r.raise_for_status(); return r.json()
 def test_api(): return get('/v1/status',timeout=30)
+
+
+def manual_authority_refresh():
+    return post_json(
+        '/v1/maintenance/manual-authority-refresh',
+        {'confirm':'APPLY_CONFIRMED_USER_AUTHORITY'},
+        timeout=120,
+    )
