@@ -363,16 +363,46 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
 
 def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
     inserted = 0
-    cur.execute('SELECT sheet_id FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
+    cur.execute(
+        'SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index',
+        (f['file_id'],),
+    )
     for sh in cur.fetchall():
-        cur.execute("SELECT raw_id,source_row_number,raw_payload FROM raw_movement WHERE sheet_id=%s ORDER BY source_row_number", (sh['sheet_id'],))
+        hmap = _sheet_header_map(cur, 'raw_movement', sh['sheet_id'], sh.get('header_row_number'))
+
+        # SAP Dynamic List exports are not position-stable across report variants.
+        # Resolve semantically dangerous movement fields from exact headers first,
+        # then retain the legacy column positions only as a compatibility fallback.
+        article_col = _pick_exact(hmap, ['Article', 'Article Number', 'Article No', 'Article #']) or 'C'
+        desc_col = _pick_exact(hmap, ['Article Description', 'Description']) or 'D'
+        mvt_col = _pick_exact(hmap, ['MvT', 'Movement Type', 'Movement']) or 'G'
+        posting_col = _pick_exact(hmap, ['Pstng Date', 'Posting Date', 'Post Date', 'Business Date']) or 'H'
+        entry_qty_col = _pick_exact(hmap, ['Qty in UnE', 'Quantity in UnE', 'Entry Quantity']) or 'I'
+        entry_uom_col = _pick_exact(hmap, ['EUn', 'Entry UOM', 'Entry Unit']) or 'J'
+        base_qty_col = _pick_exact(
+            hmap,
+            ['Quantity i', 'Quantity in BUn', 'Quantity in Base Unit', 'Base Quantity'],
+        ) or 'K'
+        base_uom_col = _pick_exact(hmap, ['BUn', 'Base UOM', 'Base Unit']) or 'L'
+        amount_col = _pick_exact(hmap, ['Amount LC', 'Amount in LC', 'Local Currency Amount']) or 'M'
+        sales_value_col = _pick_exact(hmap, ['Sales Val.', 'Sales Value']) or 'N'
+        vendor_col = _pick_exact(hmap, ['Vendor', 'Vendor Code']) or 'S'
+        reference_col = _pick_exact(hmap, ['Reference']) or 'Q'
+        article_doc_col = _pick_exact(hmap, ['Article Document', 'Material Document', 'Mat. Doc.'])
+        po_col = _pick_exact(hmap, ['Purchase Order', 'PO', 'Purchase Order Number']) or 'R'
+        cost_center_col = _pick_exact(hmap, ['Cost Center', 'Cost Ctr', 'CostCenter']) or 'V'
+
+        cur.execute(
+            "SELECT raw_id,source_row_number,raw_payload FROM raw_movement WHERE sheet_id=%s ORDER BY source_row_number",
+            (sh['sheet_id'],),
+        )
         for rr in cur.fetchall():
             p = _j(rr['raw_payload'])
-            article_num = _id(p.get('C'))
-            mvt = _id(p.get('G'))
-            posting = _date(p.get('H'))
-            desc = _text(p.get('D'))
-            cost_center = _text(p.get('V'))
+            article_num = _id(p.get(article_col))
+            mvt = _id(p.get(mvt_col))
+            posting = _date(p.get(posting_col))
+            desc = _text(p.get(desc_col))
+            cost_center = _text(p.get(cost_center_col))
             if not article_num or not mvt or not posting:
                 continue
             article_id, family_id = _find_article(cur, article_num)
@@ -386,15 +416,18 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                 _issue(cur, batch_id, 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED', 'ARTICLE', article_num,
                        f'Seafood movement exists for Article {article_num}, but it has no confirmed Family mapping.',
                        'HIGH', f['file_id'], sh['sheet_id'], 'raw_movement', rr['raw_id'], {'movement_type': mvt, 'description': desc})
-            entry_qty = _num(p.get('I'))
-            entry_uom = (_text(p.get('J')) or '').upper() or None
-            base_qty = _num(p.get('K'))
-            base_uom = (_text(p.get('L')) or '').upper() or None
-            amount = _num(p.get('M'))
-            sales_value = _num(p.get('N'))
-            art_doc = _text(p.get('Q'))
-            po = _text(p.get('R'))
-            vendor = _text(p.get('S'))
+            entry_qty = _num(p.get(entry_qty_col))
+            entry_uom = (_text(p.get(entry_uom_col)) or '').upper() or None
+            base_qty = _num(p.get(base_qty_col))
+            base_uom = (_text(p.get(base_uom_col)) or '').upper() or None
+            amount = _num(p.get(amount_col))
+            sales_value = _num(p.get(sales_value_col))
+            art_doc = (
+                _text(p.get(article_doc_col))
+                if article_doc_col else _text(p.get(reference_col))
+            )
+            po = _text(p.get(po_col))
+            vendor = _text(p.get(vendor_col))
             cur.execute(
                 """INSERT INTO movement_history
                    (batch_id,file_id,sheet_id,raw_id,source_row_number,article_number,article_id,family_id,description,
@@ -445,6 +478,32 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                         net_sold_quantity=VALUES(net_sold_quantity),base_uom_code=VALUES(base_uom_code)""",
                     (batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], family_id, article_id, mvt, posting, base_qty, net_sold, base_uom),
                 )
+    cur.execute(
+        """SELECT COUNT(*) AS c
+           FROM raw_movement
+           WHERE file_id=%s
+             AND observed_business_date IS NOT NULL""",
+        (f['file_id'],),
+    )
+    dated_raw_rows = int((cur.fetchone() or {}).get('c') or 0)
+    if dated_raw_rows > 0 and inserted == 0:
+        _issue(
+            cur,
+            batch_id,
+            'MOVEMENT_HISTORY_FILE_EMPTY',
+            'FILE',
+            str(f['file_id']),
+            (
+                f"Movement source file {f.get('original_filename') or f['file_id']} "
+                "contains dated RAW rows but produced zero normalized movement rows."
+            ),
+            'CRITICAL',
+            f['file_id'],
+            detail={
+                'dated_raw_rows': dated_raw_rows,
+                'parser': 'HEADER_DRIVEN_WITH_LEGACY_POSITION_FALLBACK_V763',
+            },
+        )
     return inserted
 
 
