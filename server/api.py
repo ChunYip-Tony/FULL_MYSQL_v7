@@ -11,8 +11,9 @@ from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh
+from uom_evidence_diagnostic import diagnose_uom_lineage
 
-VERSION='7.0.30-single-service'
+VERSION='7.0.31-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -269,6 +270,23 @@ def manual_authority_refresh(
         raise HTTPException(409,str(exc))
     except Exception as exc:
         raise HTTPException(500,f'Manual authority refresh failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/diagnostics/uom-lineage')
+def uom_lineage_diagnostic(
+    upc: str|None=None,
+    only_holds: bool=True,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    """Read-only Selling-UOM evidence and safe-resolution diagnostic."""
+    device_from_auth(authorization)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            result=diagnose_uom_lineage(cur,upc=upc,only_holds=only_holds)
+        finally:
+            cur.close()
     return json.loads(json.dumps(result,default=j))
 
 

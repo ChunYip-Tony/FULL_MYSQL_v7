@@ -1,32 +1,38 @@
-FULL MYSQL v7.0.30 GitHub Patch
+FULL MYSQL v7.0.31 GitHub Patch
 
 Purpose:
-- Promote the validated product-identity audit into the Phase 3 publish path.
-- Fail closed before accepting a candidate Quick Check snapshot.
+- Diagnose current Selling-UOM QA holds through HTTPS 443.
+- Do not guess UOM and do not require Work-PC direct MySQL access.
 
-Guard flow:
-1) Run normal Phase 3 history, repair, and final user-authority lock.
-2) Create SAVEPOINT before_quick_check_publish.
-3) Rebuild candidate quick_check_current.
-4) Run audit_product_identity against that candidate.
-5) If audit has zero GLOBAL blockers:
-   - release SAVEPOINT
-   - publish normally (READY or READY_WITH_HOLDS).
-6) If audit has any GLOBAL blocker:
-   - rollback to SAVEPOINT
-   - preserve prior Quick Check serving snapshot
-   - persist CRITICAL identity guard issues in qa_phase3_issue
-   - set batch PHASE3_QA_HOLD.
+Endpoint:
+GET /v1/diagnostics/uom-lineage
+Optional query:
+- upc=<specific UPC>
+- only_holds=true|false (default true)
 
-Non-global conditions:
-- CURRENT_ACTIVE_SELLING_UOM_MISSING stays per-UPC QA_HOLD.
-- current/historical UPC-A pairs stay warnings.
-- historical/historical UPC-A pairs stay warnings.
+Evidence inspected:
+- newest Article Manual roster rows for exact/numeric-equivalent UPC
+- explicit Article Manual Selling UOM
+- pure structured Article Manual unit declarations already allowed by current repair logic
+- confirmed manual UPC overrides
+- historical UOM rows
+- same-family Quick Check peers
+- current FULL MYSQL related-prefix LB rule (240/242/245/247/249 only)
 
+Classification:
+- CONFIRMED_MANUAL_OVERRIDE
+- ARTICLE_MANUAL_EXACT_UPC_EXPLICIT_UM
+- ARTICLE_MANUAL_EXACT_UPC_PURE_UNIT
+- CONFIRMED_FAMILY_RELATED_PREFIX_LB
+- HISTORICAL_UOM_CONFLICT
+- NEEDS_USER_CONFIRMATION
+
+This endpoint is read-only.
 No schema migration.
+No Quick Check rebuild.
 No direct Work-PC MySQL TCP dependency.
 
 After deploy:
-- Verify /healthz = 7.0.30-single-service.
-- Re-run the read-only identity audit; current production baseline should remain blocking_count=0.
-- Do not force a production Phase 3 rerun merely to test the guard. Let the next normal upload exercise it.
+1) Verify /healthz = 7.0.31-single-service.
+2) Call /v1/diagnostics/uom-lineage.
+3) Review summary and safe_to_auto_apply candidates before adding any mutation endpoint.
