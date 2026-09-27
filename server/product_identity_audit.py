@@ -409,10 +409,10 @@ def audit_product_identity(cur) -> dict[str, Any]:
         same_uom = _norm_uom(row.get("selling_uom")) == _norm_uom(other.get("selling_uom"))
         short_status = row.get("quick_check_status")
         long_status = other.get("quick_check_status")
-        current_scope = (
-            short_status in {"READY", "QA_HOLD"}
-            or long_status in {"READY", "QA_HOLD"}
-        )
+        short_current = short_status in {"READY", "QA_HOLD"}
+        long_current = long_status in {"READY", "QA_HOLD"}
+        both_current = short_current and long_current
+        one_current_one_historical = (short_current != long_current)
         item = {
             "short_upc": short,
             "valid_upca": long_upc,
@@ -424,14 +424,19 @@ def audit_product_identity(cur) -> dict[str, Any]:
             "long_selling_uom": other.get("selling_uom"),
             "short_quick_check_status": short_status,
             "long_quick_check_status": long_status,
-            "current_scope": current_scope,
+            "short_current": short_current,
+            "long_current": long_current,
+            "both_current": both_current,
+            "one_current_one_historical": one_current_one_historical,
         }
         safe_alias_candidates.append(item)
-        if current_scope:
+        if both_current:
             if item["merge_candidate"]:
                 blockers.append({"code": "DUPLICATE_UPCA_SHORT_LONG_CURRENT", **item})
             else:
                 blockers.append({"code": "UPCA_SHORT_LONG_CURRENT_IDENTITY_CONFLICT", **item})
+        elif one_current_one_historical:
+            warnings.append({"code": "UPCA_CURRENT_HISTORICAL_ALIAS_CANDIDATE", **item})
         else:
             warnings.append({"code": "HISTORICAL_UPCA_SHORT_LONG_PAIR", **item})
 
@@ -526,6 +531,12 @@ def audit_product_identity(cur) -> dict[str, Any]:
             "serving_identity_regression_count": len(serving_identity_regressions),
             "current_active_missing_uom_count": len(current_active_missing_uom),
             "upca_short_long_pair_count": len(safe_alias_candidates),
+            "upca_current_current_pair_count": sum(1 for x in safe_alias_candidates if x.get("both_current")),
+            "upca_current_historical_pair_count": sum(1 for x in safe_alias_candidates if x.get("one_current_one_historical")),
+            "upca_historical_historical_pair_count": sum(
+                1 for x in safe_alias_candidates
+                if not x.get("short_current") and not x.get("long_current")
+            ),
             "manual_override_count": len(override_checks),
             "pos_28_valid_data_day_count": len(pos_days_28),
         },
