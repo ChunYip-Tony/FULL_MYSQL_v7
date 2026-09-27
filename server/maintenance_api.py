@@ -460,8 +460,8 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
 
             batch_id = _latest_serving_batch_id(cur)
 
-            # v7.0.40: repair historical derived Cost-UOM parsing before deciding
-            # what is actually safe. Older substring matching could let "Unit"
+            # v7.0.42: apply authoritative company-source Cost-UOM semantics before deciding
+            # what is actually safe. Frozen uses BUN, Live/Fresh uses source-rule LB, while old substring matching could let "Unit"
             # match "Unit Cost", storing a numeric cost value as cost_uom_code.
             company_cost_uom_repair = repair_company_cost_uom_observations(cur)
 
@@ -503,7 +503,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
                        detail_json=JSON_SET(
                          COALESCE(detail_json,JSON_OBJECT()),
                          '$.resolution',
-                         'Superseded by v7.0.40 safe cost serving refresh'
+                         'Superseded by v7.0.42 source-aware safe cost serving refresh'
                        )
                    WHERE batch_id=%s
                      AND issue_status='OPEN'
@@ -586,7 +586,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             return {
                 "status": "COMMITTED",
                 "device": device,
-                "mode": "SERVER_SIDE_SAFE_COST_REPAIR_AND_QC_REBUILD_V7040",
+                "mode": "SERVER_SIDE_SOURCE_AWARE_SAFE_COST_REPAIR_AND_QC_REBUILD_V7042",
                 "publish_batch_id": batch_id,
                 "before_safe_candidate_count": before_safe_count,
                 "company_cost_uom_repair": company_cost_uom_repair,
