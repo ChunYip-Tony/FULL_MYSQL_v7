@@ -179,13 +179,13 @@ def _known_sales_by_key(
 
 def _period_sales_rows(cur, file_id: int) -> list[dict[str, Any]]:
     cur.execute(
-        """SELECT ean_upc,upc_id,description,price_type,
+        """SELECT ean_upc,MAX(upc_id) AS upc_id,MAX(description) AS description,price_type,
                   COALESCE(SUM(sales_amount),0) AS sales_amount,
                   COALESCE(SUM(sold_quantity),0) AS sold_quantity
            FROM sales_period_observation
            WHERE file_id=%s
              AND temporal_grain='DATE_RANGE'
-           GROUP BY ean_upc,upc_id,description,price_type
+           GROUP BY ean_upc,price_type
            ORDER BY ean_upc,price_type""",
         (file_id,),
     )
