@@ -114,6 +114,15 @@ def _candidate_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _date_span(start: date, end: date) -> list[date]:
+    out: list[date] = []
+    d = start
+    while d <= end:
+        out.append(d)
+        d += timedelta(days=1)
+    return out
+
+
 def source_data_days(cur, source_type: str, *, limit: int | None = None,
                      include_batch_id: int | None = None, up_to: date | None = None) -> list[dict[str, Any]]:
     """Return canonical valid data days, newest first.
@@ -184,49 +193,72 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
             '_authority_rank': 30,
         })
 
-    # Movement files can safely provide exact daily slices because each normalized
-    # row has posting_date. This works for multi-date exports without assigning a
-    # period aggregate to individual days.
+    # Movement multi-date authority:
+    # 1) If the source explicitly declares a header period, every date in that
+    #    period is covered; a date with no rows is a verified zero-movement day.
+    # 2) Without explicit period evidence, only dates actually present in
+    #    movement_history.posting_date are eligible. This remains fail-closed.
     if source_type == 'movement' and eligible_files:
-        file_ids = sorted(by_file)
-        placeholders = ','.join(['%s'] * len(file_ids))
-        cur.execute(
-            f"""SELECT DISTINCT file_id,posting_date
-                FROM movement_history
-                WHERE file_id IN ({placeholders})
-                  AND posting_date IS NOT NULL
-                ORDER BY posting_date,file_id""",
-            tuple(file_ids),
-        )
-        for x in cur.fetchall():
-            fid = int(x['file_id'])
-            d = _as_date(x.get('posting_date'))
+        candidate_dates_by_file: dict[int, set[date]] = {}
+
+        fallback_file_ids: list[int] = []
+        for r in eligible_files:
+            fid = int(r['file_id'])
+            hs = _as_date(r.get('header_period_start_date'))
+            he = _as_date(r.get('header_period_end_date'))
+            if hs is not None and he is not None and hs <= he:
+                candidate_dates_by_file[fid] = set(_date_span(hs, he))
+            else:
+                fallback_file_ids.append(fid)
+
+        if fallback_file_ids:
+            placeholders = ','.join(['%s'] * len(fallback_file_ids))
+            cur.execute(
+                f"""SELECT DISTINCT file_id,posting_date
+                    FROM movement_history
+                    WHERE file_id IN ({placeholders})
+                      AND posting_date IS NOT NULL
+                    ORDER BY posting_date,file_id""",
+                tuple(fallback_file_ids),
+            )
+            for x in cur.fetchall():
+                fid = int(x['file_id'])
+                d = _as_date(x.get('posting_date'))
+                if d is not None:
+                    candidate_dates_by_file.setdefault(fid, set()).add(d)
+
+        for fid, candidate_dates in candidate_dates_by_file.items():
             r = by_file.get(fid)
-            if r is None or d is None:
+            if r is None:
                 continue
-            if up_to is not None and d > up_to:
-                continue
-            if not _movement_daily_snapshot_complete(r, d):
-                continue
-            candidates.append({
-                'date': d,
-                'file_id': fid,
-                'batch_id': int(r['batch_id']),
-                'report_generated_at': r.get('report_generated_at'),
-                'filename_date_candidate': r.get('filename_date_candidate'),
-                'filename_time_candidate': r.get('filename_time_candidate'),
-                'upload_timestamp': r.get('upload_timestamp'),
-                'source_snapshot_date': _source_snapshot_date(r),
-                'snapshot_completeness': 'COMPLETE_AFTER_BUSINESS_DATE',
-                'coverage_kind': (
-                    'DIRECT_SINGLE_DATE'
-                    if _file_business_date(r, source_type) == d
-                    else 'MULTI_DATE_ROW_EXACT'
-                ),
-                '_authority_rank': (
-                    30 if _file_business_date(r, source_type) == d else 25
-                ),
-            })
+            direct_day = _file_business_date(r, source_type)
+            for d in sorted(candidate_dates):
+                if up_to is not None and d > up_to:
+                    continue
+                if not _movement_daily_snapshot_complete(r, d):
+                    continue
+                candidates.append({
+                    'date': d,
+                    'file_id': fid,
+                    'batch_id': int(r['batch_id']),
+                    'report_generated_at': r.get('report_generated_at'),
+                    'filename_date_candidate': r.get('filename_date_candidate'),
+                    'filename_time_candidate': r.get('filename_time_candidate'),
+                    'upload_timestamp': r.get('upload_timestamp'),
+                    'source_snapshot_date': _source_snapshot_date(r),
+                    'snapshot_completeness': 'COMPLETE_AFTER_BUSINESS_DATE',
+                    'coverage_kind': (
+                        'DIRECT_SINGLE_DATE'
+                        if direct_day == d
+                        else (
+                            'MULTI_DATE_PERIOD_EXACT'
+                            if r.get('header_period_start_date') is not None
+                               and r.get('header_period_end_date') is not None
+                            else 'MULTI_DATE_ROW_EXACT'
+                        )
+                    ),
+                    '_authority_rank': 30 if direct_day == d else 25,
+                })
 
     # POS range reports are aggregates and cannot normally become daily coverage.
     # The only exception is an explicitly materialized one-missing-day residual.
