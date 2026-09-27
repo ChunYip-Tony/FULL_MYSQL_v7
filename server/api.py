@@ -14,9 +14,9 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage
 
-VERSION='7.0.49-single-service'
+VERSION='7.0.50-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -764,6 +764,15 @@ def cost_lineage_diagnostic(
         'upc_alias_checks':alias_checks,
         'family_article_numbers':article_numbers,
     },default=j))
+
+
+@app.get('/v1/diagnostics/on-hand-lineage')
+def diagnostics_on_hand_lineage(
+    limit:int=50,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    return json.loads(json.dumps(diagnose_on_hand_lineage(limit),default=j))
 
 
 @app.get('/v1/diagnostics/quick-check-lineage')
