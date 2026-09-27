@@ -17,7 +17,7 @@ from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
 from movement_repair import repair_movement_history
 
-VERSION='7.0.63-single-service'
+VERSION='7.0.64-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
