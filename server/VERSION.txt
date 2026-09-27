@@ -1,22 +1,24 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.35 Single-Service Edition
-Transaction-safety repair for confirmed UOM maintenance and Phase 3 publishing.
+Version: 7.0.36 Single-Service Edition
+Read-only global current-cost hold diagnostic.
 
-Root cause fixed:
-- manual authority helpers executed CREATE TABLE IF NOT EXISTS inside active transactions
-- MySQL DDL performs an implicit COMMIT
-- that invalidated SAVEPOINT confirmed_uom_refresh and could also invalidate
-  the Phase 3 Quick Check publish SAVEPOINT
+Adds GET /v1/diagnostics/cost-holds:
+- scans current Quick Check QA_HOLD rows globally
+- isolates CURRENT_COST_MISSING and COST_TO_SELLING_UOM_UNRESOLVED
+- groups evidence by authoritative Family/Article identity
+- inspects receipt 101/107/109 valuation evidence
+- inspects official Live/Fresh/Frozen report cost + explicit cost UOM
+- inspects raw On-Hand explicit cost + cost-UOM evidence without mutating data
+- includes exact Article Manual UPC rows for pack/conversion review
+- classifies safe repair candidates vs evidence-required holds
 
-Changes:
-- manual authority table ensure-functions first inspect information_schema and do
-  no DDL when the tables already exist
-- maintenance endpoints bootstrap schema before the business transaction
-- confirmed UOM refresh now uses one explicit transaction and no nested SAVEPOINT
-- Phase 3 bootstraps manual authority tables before starting its business transaction
-- all 22 user-confirmed Selling UOM overrides from v7.0.34 remain authoritative
-- no prefix-wide UOM rule
-- no Base/Inventory UOM or conversion-factor inference
+Conversion policy:
+- if authoritative cost UOM exactly equals Selling UOM, the diagnostic may classify
+  direct factor-1 cost-to-selling calculation as safe
+- this does NOT assert or mutate Base/Inventory UOM
+- PACK-to-LB/EA and other cross-UOM conversions remain held without explicit evidence
 
 No schema migration.
-Work-PC remains HTTPS 443 only.
+No product-data mutation.
+No Quick Check rebuild.
+Phase 3 fail-closed product-identity guard remains active.

@@ -12,8 +12,9 @@ from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_
 from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
+from global_cost_hold_diagnostic import diagnose_global_cost_holds
 
-VERSION='7.0.35-single-service'
+VERSION='7.0.36-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -339,6 +340,52 @@ def product_identity_audit(authorization: Annotated[str|None,Header()]=None):
         cur=conn.cursor(dictionary=True)
         try:
             result=audit_product_identity(cur)
+        finally:
+            cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/diagnostics/cost-holds')
+def global_cost_hold_diagnostic(
+    upc: str|None=None,
+    family_id: int|None=None,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    """Read-only global diagnostic for current Quick Check cost-related QA holds."""
+    device_from_auth(authorization)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            try:
+                result=diagnose_global_cost_holds(
+                    cur,
+                    upc=upc,
+                    family_id=family_id,
+                )
+            except Exception as exc:
+                result={
+                    'status':'FATAL_DIAGNOSTIC_ERROR',
+                    'scope':{'upc':upc,'family_id':family_id},
+                    'summary':{
+                        'all_current_hold_rows':0,
+                        'cost_related_hold_rows':0,
+                        'other_hold_rows':0,
+                        'unique_cost_hold_families':0,
+                        'current_cost_missing_count':0,
+                        'cost_to_selling_uom_unresolved_count':0,
+                        'safe_to_auto_resolve_cost_hold_count':0,
+                        'needs_review_cost_hold_count':0,
+                        'classification_counts':{},
+                        'all_hold_reason_counts':{},
+                        'diagnostic_error_count':1,
+                    },
+                    'diagnostic_errors':[{
+                        'stage':'top_level',
+                        'error_type':type(exc).__name__,
+                        'error':str(exc),
+                    }],
+                    'items':[],
+                }
         finally:
             cur.close()
     return json.loads(json.dumps(result,default=j))
