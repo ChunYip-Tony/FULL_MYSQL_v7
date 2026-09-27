@@ -3,6 +3,60 @@ from __future__ import annotations
 import json
 from typing import Any
 
+USER_CONFIRMED_UOM_REVIEW_20260926 = (
+    # Group A: user confirmed these exact UPCs are sold by LB.
+    {"ean_upc":"24596200000","article_number":"1345962","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: SEASONED BABY OCTOPUS; POS Selling UOM=LB."},
+    {"ean_upc":"24595700000","article_number":"1345957","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: CHUKA IKA SANSAI; POS Selling UOM=LB."},
+    {"ean_upc":"24599600000","article_number":"1345996","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: ESCOLAR LOIN SPR WHT TUNA; POS Selling UOM=LB."},
+    {"ean_upc":"24513600000","article_number":"1400136","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: GREEN MUSSEL HALF SHELL; POS Selling UOM=LB."},
+
+    # Group B: user confirmed POS Selling UOM=PACK only.
+    # Base/cost conversion remains intentionally unresolved unless separately evidenced.
+    {"ean_upc":"8231817551","article_number":"1351625","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: 26/30 H/L SHRIMP 10/4LB; POS Selling UOM=PACK only; no base conversion inferred."},
+    {"ean_upc":"4029551780","article_number":"1366580","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: OYSTER IN SHELL 60EA; POS Selling UOM=PACK only; no base conversion inferred."},
+    {"ean_upc":"70286869729","article_number":"3480411","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: FROZEN KUNG FU SNAKEHEAD FISH FILLETS 40/8.8OZ; POS Selling UOM=PACK only; no base conversion inferred."},
+    {"ean_upc":"81223402832","article_number":"3468360","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: 26-30 IQF WHT P&D T-OFF CF SEACHEF SA/CN 20/1LB; POS Selling UOM=PACK only; no base conversion inferred."},
+
+    # Group C: user confirmed the remaining 14 reviewed UPCs are sold by LB.
+    # These are exact per-UPC confirmations, not a new prefix-wide rule.
+    {"ean_upc":"4841","article_number":"3400841","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: 30/40 H/O BLUE DIAMOND WHITE SHRIMP; POS Selling UOM=LB."},
+    {"ean_upc":"26570500000","article_number":"3467050","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: FUZHOU FISH BALL; POS Selling UOM=LB."},
+    {"ean_upc":"26210000000","article_number":"3461000","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: SOUTHERN BLUEFIN TUNA O-TORO CUT (BELLY); POS Selling UOM=LB."},
+    {"ean_upc":"26082100000","article_number":"3468210","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: 20/30 H/O SHRIMP; POS Selling UOM=LB."},
+    {"ean_upc":"26517800000","article_number":"3461780","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: DRIED BABY SHRIMP; POS Selling UOM=LB."},
+    {"ean_upc":"26571300000","article_number":"3467130","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: CHEESE FISH SAUSAGE; POS Selling UOM=LB."},
+    {"ean_upc":"26572100000","article_number":"3467210","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: FLOWER CHEESE TOFU; POS Selling UOM=LB."},
+    {"ean_upc":"26572200000","article_number":"3467220","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: SILVER CARP FISH BALL; POS Selling UOM=LB."},
+    {"ean_upc":"26018000000","article_number":"3461800","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: THREAD FIN; POS Selling UOM=LB."},
+    {"ean_upc":"26217000000","article_number":"3461700","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: POLLOCK ROE; POS Selling UOM=LB."},
+    {"ean_upc":"26513000000","article_number":"3461300","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: CALAMARI OCTOPUS SALES; POS Selling UOM=LB."},
+    {"ean_upc":"4883","article_number":"3400883","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: COLD WATER SHRIMP (COOKED); POS Selling UOM=LB."},
+    {"ean_upc":"26083500000","article_number":"3468350","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: BLUE RIVER 21/25 IQF EZP SHRIMP; POS Selling UOM=LB."},
+    {"ean_upc":"26022200000","article_number":"3462220","selling_uom_code":"LB","base_uom_code":"LB","base_qty_per_selling_unit":1,
+     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: BASS HYBD STRP; POS Selling UOM=LB."},
+)
+
 SEED_OVERRIDES = (
     {
         "ean_upc": "4918",
@@ -28,7 +82,7 @@ SEED_OVERRIDES = (
         "base_qty_per_selling_unit": 1,
         "source_note": "Resolved 2026-09-26 from combined authoritative evidence: user confirmed POS Selling UOM=PACK and case configuration=40/150G; receipt 107 for Article 3461050 shows 3 CV = 120 EA with $330 valuation, exactly matching 3 cases x 40 selling packs = 120. Therefore 1 selling PACK = 1 base EA and authoritative receipt cost is $2.75 per PACK.",
     },
- )
+ ) + USER_CONFIRMED_UOM_REVIEW_20260926
 
 
 SEED_RETIREMENTS = (
