@@ -31,14 +31,13 @@ def _known_uom(cur, code: str | None) -> bool:
 
 def _historical_uom_rows(cur, upc_id: int) -> list[dict[str, Any]]:
     cur.execute(
-        """SELECT h.uom_history_id,
+        """SELECT h.upc_uom_id,
                   su.uom_code AS selling_uom,
                   bu.uom_code AS base_uom,
                   h.base_qty_per_selling_unit,
                   h.mapping_status,
                   h.confidence,
                   h.resolution_method,
-                  h.effective_from,
                   h.effective_to
            FROM selling_upc_uom_history h
            LEFT JOIN dim_uom su ON su.uom_id=h.selling_uom_id
