@@ -440,7 +440,7 @@ def confirmed_family_cost(cur, family_id: int) -> dict[str, Any] | None:
 
 
 def apply_manual_family_subarticles(cur) -> dict[str, Any]:
-    result = {"examined":0,"family_links":0,"upc_links":0,"upcs_created":0,"held":[]}
+    result = {"examined":0,"family_links":0,"upc_links":0,"upc_not_present":[],"held":[]}
     for row in USER_CONFIRMED_FAMILY_SUBARTICLES_20260926:
         result["examined"] += 1
         cur.execute(
@@ -518,19 +518,19 @@ def apply_manual_family_subarticles(cur) -> dict[str, Any]:
 
         cur.execute("SELECT upc_id FROM selling_upc WHERE ean_upc=%s LIMIT 1",(row["ean_upc"],))
         upc=cur.fetchone()
-        if upc:
-            upc_id=int(upc["upc_id"])
-            cur.execute(
-                "UPDATE selling_upc SET selling_description=COALESCE(selling_description,%s),record_status='ACTIVE' WHERE upc_id=%s",
-                (row["description"],upc_id),
-            )
-        else:
-            cur.execute(
-                "INSERT INTO selling_upc (ean_upc,selling_description,record_status) VALUES (%s,%s,'ACTIVE')",
-                (row["ean_upc"],row["description"]),
-            )
-            upc_id=int(cur.lastrowid)
-            result["upcs_created"] += 1
+        if not upc:
+            # Do not manufacture a current selling identity from a mapping-only
+            # confirmation. The SUB Article->Family authority is persisted now;
+            # the UPC->SUB evidence will be attached automatically if/when the
+            # UPC appears from a real source.
+            result["upc_not_present"].append(row["ean_upc"])
+            continue
+
+        upc_id=int(upc["upc_id"])
+        cur.execute(
+            "UPDATE selling_upc SET selling_description=COALESCE(selling_description,%s) WHERE upc_id=%s",
+            (row["description"],upc_id),
+        )
 
         cur.execute(
             """SELECT article_upc_id FROM bridge_article_upc
