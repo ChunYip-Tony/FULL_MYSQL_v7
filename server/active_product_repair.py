@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from data_coverage import source_data_days
+from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import apply_manual_upc_overrides
 from normalize import (
     RowContext,
@@ -495,22 +496,12 @@ def _active_selling_upc_ids(cur, batch_id: int) -> tuple[list[int], int]:
         include_batch_id=batch_id,
         up_to=completed_through,
     )
-    file_ids = [int(x['file_id']) for x in pos_days]
-    if not file_ids:
-        return [], 0
-
-    placeholders = ','.join(['%s'] * len(file_ids))
-    cur.execute(
-        f"""SELECT upc_id
-            FROM sales_period_observation
-            WHERE temporal_grain='SINGLE_DATE'
-              AND file_id IN ({placeholders})
-              AND upc_id IS NOT NULL
-            GROUP BY upc_id
-            HAVING COALESCE(SUM(sold_quantity),0)>0""",
-        tuple(file_ids),
+    qty_by_upc = canonical_pos_qty_by_upc(cur, pos_days)
+    active_ids = sorted(
+        upc_id for upc_id, qty in qty_by_upc.items()
+        if Decimal(str(qty or 0)) > 0
     )
-    return [int(x['upc_id']) for x in cur.fetchall()], len(file_ids)
+    return active_ids, len(pos_days)
 
 
 def _has_current_uom(cur, upc_id: int) -> bool:
