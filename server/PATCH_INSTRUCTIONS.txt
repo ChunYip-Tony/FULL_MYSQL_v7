@@ -1,38 +1,22 @@
-FULL MYSQL v7.0.31 GitHub Patch
+FULL MYSQL v7.0.32 GitHub Patch
 
 Purpose:
-- Diagnose current Selling-UOM QA holds through HTTPS 443.
-- Do not guess UOM and do not require Work-PC direct MySQL access.
+- Fix HTTP 500 from GET /v1/diagnostics/uom-lineage.
 
-Endpoint:
-GET /v1/diagnostics/uom-lineage
-Optional query:
-- upc=<specific UPC>
-- only_holds=true|false (default true)
+Root cause:
+- v7.0.31 diagnostic queried selling_upc_uom_history.uom_history_id
+  and selling_upc_uom_history.effective_from.
+- Existing production code proves the table uses upc_uom_id and effective_to.
 
-Evidence inspected:
-- newest Article Manual roster rows for exact/numeric-equivalent UPC
-- explicit Article Manual Selling UOM
-- pure structured Article Manual unit declarations already allowed by current repair logic
-- confirmed manual UPC overrides
-- historical UOM rows
-- same-family Quick Check peers
-- current FULL MYSQL related-prefix LB rule (240/242/245/247/249 only)
-
-Classification:
-- CONFIRMED_MANUAL_OVERRIDE
-- ARTICLE_MANUAL_EXACT_UPC_EXPLICIT_UM
-- ARTICLE_MANUAL_EXACT_UPC_PURE_UNIT
-- CONFIRMED_FAMILY_RELATED_PREFIX_LB
-- HISTORICAL_UOM_CONFLICT
-- NEEDS_USER_CONFIRMATION
-
-This endpoint is read-only.
-No schema migration.
-No Quick Check rebuild.
-No direct Work-PC MySQL TCP dependency.
+Fix:
+- query upc_uom_id
+- remove effective_from from diagnostic output
+- keep effective_to
+- no data mutation
+- no schema migration
+- no Quick Check rebuild
 
 After deploy:
-1) Verify /healthz = 7.0.31-single-service.
-2) Call /v1/diagnostics/uom-lineage.
-3) Review summary and safe_to_auto_apply candidates before adding any mutation endpoint.
+1) Verify /healthz = 7.0.32-single-service.
+2) Call GET /v1/diagnostics/uom-lineage.
+3) Review summary and safe-to-auto-apply candidates.
