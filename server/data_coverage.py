@@ -73,27 +73,68 @@ def _movement_daily_snapshot_complete(row: dict[str, Any], business_date: date) 
     return snapshot_date is not None and snapshot_date > business_date
 
 
+def _table_exists(cur, table_name: str) -> bool:
+    cur.execute(
+        """SELECT 1
+           FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA=DATABASE()
+             AND TABLE_NAME=%s
+           LIMIT 1""",
+        (table_name,),
+    )
+    return bool(cur.fetchone())
+
+
+def _as_datetime(v: Any) -> datetime | None:
+    if isinstance(v, datetime):
+        return v
+    if isinstance(v, date):
+        return datetime.combine(v, datetime.min.time())
+    if v is None:
+        return None
+    try:
+        return datetime.fromisoformat(str(v))
+    except Exception:
+        return None
+
+
+def _candidate_sort_key(row: dict[str, Any]) -> tuple[Any, ...]:
+    """Authority first, then latest source chronology."""
+    generated = _as_datetime(row.get('report_generated_at')) or datetime.min
+    filename_date = _as_date(row.get('filename_date_candidate')) or date.min
+    filename_time = str(row.get('filename_time_candidate') or '')
+    uploaded = _as_datetime(row.get('upload_timestamp')) or datetime.min
+    return (
+        int(row.get('_authority_rank') or 0),
+        generated,
+        filename_date,
+        filename_time,
+        uploaded,
+        int(row.get('file_id') or 0),
+    )
+
+
 def source_data_days(cur, source_type: str, *, limit: int | None = None,
                      include_batch_id: int | None = None, up_to: date | None = None) -> list[dict[str, Any]]:
     """Return canonical valid data days, newest first.
 
-    Rules:
-    - Only successfully ingested, error-free, non-duplicate source files qualify.
-    - Only single-day coverage qualifies as a daily data day.
-    - A historical batch must have reached Phase 3 at least once; the currently
-      processing batch may be explicitly included.
-    - Movement daily coverage is fail-closed: a same-business-date export is
-      provisional/intraday evidence only. The source snapshot date must be later
-      than the posting business date before the file can become canonical.
-    - If multiple valid COMPLETE exports exist for one business date, choose the
-      latest SOURCE snapshot chronology (report_generated_at, then filename date/time),
-      using upload/file order only as a final tie-break. RAW/history are never deleted.
+    Daily authority can come from:
+    - DIRECT_SINGLE_DATE: explicit one-day source file.
+    - DERIVED_PERIOD_RESIDUAL (POS only): exactly one missing day solved by
+      period totals minus all already-canonical daily days at price-type grain.
+    - MULTI_DATE_ROW_EXACT (movement only): a multi-date MVT file whose rows
+      carry exact posting_date; each completed posting date can be canonical.
+
+    Direct one-day evidence outranks a derived POS residual for the same date.
+    Movement candidates must be produced after the posting business date.
+    RAW/history are never deleted.
     """
     params: list[Any] = [source_type]
     current_clause = ''
     if include_batch_id is not None:
         current_clause = ' OR f.batch_id=%s'
         params.append(include_batch_id)
+
     cur.execute(
         f"""SELECT f.file_id,f.batch_id,f.source_type,f.processing_status,f.error_count,
                    f.duplicate_of_file_id,f.source_row_count,f.date_semantics_status,
@@ -109,20 +150,15 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
               AND f.duplicate_of_file_id IS NULL
               AND f.source_row_count>0
               AND f.date_semantics_status='RESOLVED'
-              AND (p.batch_id IS NOT NULL{current_clause})
-            ORDER BY
-              CASE WHEN f.report_generated_at IS NULL THEN 1 ELSE 0 END,
-              f.report_generated_at DESC,
-              CASE WHEN f.filename_date_candidate IS NULL THEN 1 ELSE 0 END,
-              f.filename_date_candidate DESC,
-              CASE WHEN f.filename_time_candidate IS NULL THEN 1 ELSE 0 END,
-              f.filename_time_candidate DESC,
-              f.upload_timestamp DESC,
-              f.file_id DESC""",
+              AND (p.batch_id IS NOT NULL{current_clause})""",
         tuple(params),
     )
-    by_date: dict[date, dict[str, Any]] = {}
-    for r in cur.fetchall():
+    eligible_files = cur.fetchall()
+    by_file = {int(r['file_id']): r for r in eligible_files}
+    candidates: list[dict[str, Any]] = []
+
+    # Explicit single-day files.
+    for r in eligible_files:
         d = _file_business_date(r, source_type)
         if d is None:
             continue
@@ -130,8 +166,97 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
             continue
         if source_type == 'movement' and not _movement_daily_snapshot_complete(r, d):
             continue
-        if d not in by_date:
-            by_date[d] = {
+        candidates.append({
+            'date': d,
+            'file_id': int(r['file_id']),
+            'batch_id': int(r['batch_id']),
+            'report_generated_at': r.get('report_generated_at'),
+            'filename_date_candidate': r.get('filename_date_candidate'),
+            'filename_time_candidate': r.get('filename_time_candidate'),
+            'upload_timestamp': r.get('upload_timestamp'),
+            'source_snapshot_date': _source_snapshot_date(r),
+            'snapshot_completeness': (
+                'COMPLETE_AFTER_BUSINESS_DATE'
+                if source_type == 'movement'
+                else 'NOT_APPLICABLE'
+            ),
+            'coverage_kind': 'DIRECT_SINGLE_DATE',
+            '_authority_rank': 30,
+        })
+
+    # Movement files can safely provide exact daily slices because each normalized
+    # row has posting_date. This works for multi-date exports without assigning a
+    # period aggregate to individual days.
+    if source_type == 'movement' and eligible_files:
+        file_ids = sorted(by_file)
+        placeholders = ','.join(['%s'] * len(file_ids))
+        cur.execute(
+            f"""SELECT DISTINCT file_id,posting_date
+                FROM movement_history
+                WHERE file_id IN ({placeholders})
+                  AND posting_date IS NOT NULL
+                ORDER BY posting_date,file_id""",
+            tuple(file_ids),
+        )
+        for x in cur.fetchall():
+            fid = int(x['file_id'])
+            d = _as_date(x.get('posting_date'))
+            r = by_file.get(fid)
+            if r is None or d is None:
+                continue
+            if up_to is not None and d > up_to:
+                continue
+            if not _movement_daily_snapshot_complete(r, d):
+                continue
+            candidates.append({
+                'date': d,
+                'file_id': fid,
+                'batch_id': int(r['batch_id']),
+                'report_generated_at': r.get('report_generated_at'),
+                'filename_date_candidate': r.get('filename_date_candidate'),
+                'filename_time_candidate': r.get('filename_time_candidate'),
+                'upload_timestamp': r.get('upload_timestamp'),
+                'source_snapshot_date': _source_snapshot_date(r),
+                'snapshot_completeness': 'COMPLETE_AFTER_BUSINESS_DATE',
+                'coverage_kind': (
+                    'DIRECT_SINGLE_DATE'
+                    if _file_business_date(r, source_type) == d
+                    else 'MULTI_DATE_ROW_EXACT'
+                ),
+                '_authority_rank': (
+                    30 if _file_business_date(r, source_type) == d else 25
+                ),
+            })
+
+    # POS range reports are aggregates and cannot normally become daily coverage.
+    # The only exception is an explicitly materialized one-missing-day residual.
+    if source_type == 'sales_by_price_type' and _table_exists(cur, 'pos_daily_backfill_coverage'):
+        args: list[Any] = []
+        batch_clause = ''
+        if include_batch_id is not None:
+            batch_clause = ' OR b.source_batch_id=%s'
+            args.append(include_batch_id)
+        cur.execute(
+            f"""SELECT b.business_date,b.source_file_id AS file_id,
+                       b.source_batch_id AS batch_id,b.derivation_method,
+                       f.report_generated_at,f.filename_date_candidate,
+                       f.filename_time_candidate,f.upload_timestamp,
+                       p.batch_id AS phase3_batch_id
+                FROM pos_daily_backfill_coverage b
+                JOIN ingest_file f ON f.file_id=b.source_file_id
+                LEFT JOIN phase3_batch_result p ON p.batch_id=b.source_batch_id
+                WHERE b.backfill_status='READY'
+                  AND (p.batch_id IS NOT NULL{batch_clause})
+                ORDER BY b.business_date,b.source_file_id""",
+            tuple(args),
+        )
+        for r in cur.fetchall():
+            d = _as_date(r.get('business_date'))
+            if d is None:
+                continue
+            if up_to is not None and d > up_to:
+                continue
+            candidates.append({
                 'date': d,
                 'file_id': int(r['file_id']),
                 'batch_id': int(r['batch_id']),
@@ -140,12 +265,26 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
                 'filename_time_candidate': r.get('filename_time_candidate'),
                 'upload_timestamp': r.get('upload_timestamp'),
                 'source_snapshot_date': _source_snapshot_date(r),
-                'snapshot_completeness': (
-                    'COMPLETE_AFTER_BUSINESS_DATE' if source_type == 'movement'
-                    else 'NOT_APPLICABLE'
-                ),
-            }
-    out = [by_date[d] for d in sorted(by_date, reverse=True)]
+                'snapshot_completeness': 'DERIVED_FROM_COMPLETE_PERIOD',
+                'coverage_kind': 'DERIVED_PERIOD_RESIDUAL',
+                'derivation_method': r.get('derivation_method'),
+                '_authority_rank': 20,
+            })
+
+    # Canonicalize one source per business date. Higher authority wins first;
+    # ties use the existing latest-source chronology rule.
+    by_date: dict[date, dict[str, Any]] = {}
+    for r in candidates:
+        d = r['date']
+        prev = by_date.get(d)
+        if prev is None or _candidate_sort_key(r) > _candidate_sort_key(prev):
+            by_date[d] = r
+
+    out = []
+    for d in sorted(by_date, reverse=True):
+        row = dict(by_date[d])
+        row.pop('_authority_rank', None)
+        out.append(row)
     return out[:limit] if limit is not None else out
 
 
