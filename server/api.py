@@ -143,13 +143,23 @@ def phase3_rerun(
                     'status':existing['processing_status'],
                 }
             cur.execute(
+                """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='PHASE3_RERUN'""",
+                (bid,API_PIPELINE),
+            )
+            next_run=int((cur.fetchone() or {}).get('next_run') or 1)
+            cur.execute(
                 """INSERT INTO pipeline_run
                    (batch_id,pipeline_name,stage_name,run_number,
                     processing_status,code_version,detail_json)
-                   VALUES (%s,%s,'PHASE3_RERUN',1,'QUEUED',%s,%s)""",
+                   VALUES (%s,%s,'PHASE3_RERUN',%s,'QUEUED',%s,%s)""",
                 (
                     bid,
                     API_PIPELINE,
+                    next_run,
                     VERSION,
                     json.dumps(
                         {
