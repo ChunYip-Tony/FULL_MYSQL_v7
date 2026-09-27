@@ -33,6 +33,11 @@ from current_active_cost_repair import repair_current_active_cost
 from product_identity_audit import audit_product_identity
 from quick_check_app import expire_true_stock_for_new_oh
 from inventory_position import rollforward_position
+from coverage_backfill import (
+    ensure_coverage_backfill_tables,
+    resolve_pos_period_backfill,
+    relink_pos_backfill,
+)
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -1864,6 +1869,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
             ensure_family_cost_table(cur)
+            ensure_coverage_backfill_tables(cur)
             conn.commit()
             conn.start_transaction()
 
@@ -1917,6 +1923,15 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 elif st == 'frozen_inventory': counts['company'] += _process_company(cur, batch_id, f, 'raw_frozen_inventory')
                 elif st == 'tx_seafood_abc_price': counts['company'] += _process_company(cur, batch_id, f, 'raw_tx_seafood_abc_price')
                 elif st == 'live_fresh_suggestion': counts['company'] += _process_company(cur, batch_id, f, 'raw_live_fresh_suggestion')
+
+            # Coverage-aware multi-date resolver:
+            # - POS range file with exactly one missing daily date -> solve by
+            #   period minus known canonical days at EAN + price-type grain.
+            # - POS range with 2+ missing dates -> keep period/price-type only.
+            # - Multi-date MVT daily slices are resolved dynamically from exact
+            #   movement_history.posting_date in source_data_days().
+            pos_period_backfill = resolve_pos_period_backfill(cur, batch_id)
+
             # Multi-tab Article Manual repair:
             #  - recognizes formatted barcodes such as `0 6139190220 5`
             #  - recognizes conservative POS-shortened barcode aliases
@@ -1937,6 +1952,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             active_28d_uom_repair = repair_active_28d_uom(cur, batch_id)
 
             relink_history(cur)
+            pos_backfill_relinked = relink_pos_backfill(cur)
 
             # v7.0.42: normalize historical/current company cost UOM semantics
             # before current-active cost repair. Frozen uses item BUN; Live/Fresh
@@ -2057,6 +2073,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                   'active_28d_uom_repair': active_28d_uom_repair,
                   'company_cost_uom_repair': company_cost_uom_repair,
                   'current_active_cost_repair': current_active_cost_repair,
+                  'coverage_backfill': pos_period_backfill,
+                  'pos_backfill_relinked': pos_backfill_relinked,
                   'product_identity_guard': product_identity_guard}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
@@ -2080,6 +2098,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     'active_28d_uom_repair': active_28d_uom_repair,
                     'company_cost_uom_repair': company_cost_uom_repair,
                     'current_active_cost_repair': current_active_cost_repair,
+                    'coverage_backfill': pos_period_backfill,
+                    'pos_backfill_relinked': pos_backfill_relinked,
                     'product_identity_guard': product_identity_guard,
                     'quick_check_attempt': qc_attempt,
                     'blocking_issues': blocking}
