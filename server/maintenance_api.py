@@ -21,7 +21,7 @@ from manual_overrides import (
 from product_identity_audit import audit_product_identity
 from current_active_cost_repair import repair_current_active_cost
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from phase3 import rebuild_quick_check, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom
+from phase3 import rebuild_quick_check, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history
 
 
 def _retirement_ok(row: dict[str, Any]) -> bool:
@@ -385,6 +385,184 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             raise
         finally:
             cur.close()
+
+
+def run_on_hand_repair(device: str) -> dict[str, Any]:
+    """Reparse authoritative ON_HAND RAW with corrected SAP header semantics.
+
+    The repair is deterministic and source-backed:
+    - quantity = exact Unrestr./Unrestricted/On Hand field
+    - quantity UOM = exact BUn/Base UOM/UOM field
+    - article/family links are resolved from current confirmed identity
+    - RAW rows are never rewritten
+    - Quick Check is rebuilt atomically
+    """
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE stage_name='POST_RAW_PIPELINE'
+                     AND processing_status='STARTED'"""
+            )
+            if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
+                raise RuntimeError(
+                    "Server pipeline is currently processing; retry the ON_HAND repair later."
+                )
+
+            conn.commit()
+            conn.start_transaction()
+
+            batch_id = _latest_serving_batch_id(cur)
+
+            cur.execute(
+                """SELECT COUNT(*) AS total,
+                          SUM(CASE WHEN family_id IS NOT NULL THEN 1 ELSE 0 END) AS family_mapped,
+                          SUM(CASE WHEN uom_code IS NOT NULL AND TRIM(uom_code)<>'' THEN 1 ELSE 0 END) AS uom_present,
+                          SUM(CASE WHEN on_hand_quantity IS NOT NULL THEN 1 ELSE 0 END) AS qty_present
+                   FROM inventory_observation"""
+            )
+            before_inventory = cur.fetchone() or {}
+
+            cur.execute(
+                """SELECT file_id,original_filename,source_type,coverage_start_date,coverage_end_date,
+                          header_period_start_date,header_period_end_date,report_generated_at,
+                          upload_timestamp,filename_date_candidate
+                   FROM ingest_file
+                   WHERE source_type='on_hand'
+                   ORDER BY file_id"""
+            )
+            files = cur.fetchall()
+            if not files:
+                raise RuntimeError("No ON_HAND source file is available to repair.")
+
+            reparsed_rows = 0
+            file_results = []
+            for f in files:
+                n = int(_process_on_hand(cur, int(f.get("batch_id") or batch_id), f) or 0)
+                reparsed_rows += n
+                file_results.append(
+                    {
+                        "file_id": int(f["file_id"]),
+                        "filename": f.get("original_filename"),
+                        "rows_reparsed": n,
+                    }
+                )
+
+            relink_history(cur)
+
+            qc = rebuild_quick_check(cur, batch_id)
+
+            cur.execute(
+                """SELECT COUNT(*) AS total,
+                          SUM(CASE WHEN family_id IS NOT NULL THEN 1 ELSE 0 END) AS family_mapped,
+                          SUM(CASE WHEN article_id IS NOT NULL THEN 1 ELSE 0 END) AS article_mapped,
+                          SUM(CASE WHEN uom_code IS NOT NULL AND TRIM(uom_code)<>'' THEN 1 ELSE 0 END) AS uom_present,
+                          SUM(CASE WHEN on_hand_quantity IS NOT NULL THEN 1 ELSE 0 END) AS qty_present,
+                          MAX(observation_date) AS latest_observation_date
+                   FROM inventory_observation"""
+            )
+            after_inventory = cur.fetchone() or {}
+
+            cur.execute(
+                """SELECT COUNT(*) AS total,
+                          SUM(CASE WHEN current_oh IS NOT NULL THEN 1 ELSE 0 END) AS with_oh,
+                          SUM(CASE WHEN current_oh IS NOT NULL
+                                        AND current_oh_uom IS NOT NULL
+                                        AND TRIM(current_oh_uom)<>''
+                                   THEN 1 ELSE 0 END) AS with_oh_and_uom,
+                          SUM(CASE WHEN quick_check_status='READY'
+                                        AND current_oh IS NOT NULL
+                                        AND current_oh_uom IS NOT NULL
+                                        AND TRIM(current_oh_uom)<>''
+                                   THEN 1 ELSE 0 END) AS ready_with_oh
+                   FROM quick_check_current"""
+            )
+            serving = cur.fetchone() or {}
+
+            identity = audit_product_identity(cur)
+            if not bool(identity.get("pass")):
+                raise RuntimeError(
+                    "Product identity audit blocked the ON_HAND repair; "
+                    f"blockers={identity.get('blockers')}"
+                )
+
+            family_mapped = int(after_inventory.get("family_mapped") or 0)
+            uom_present = int(after_inventory.get("uom_present") or 0)
+            with_oh_and_uom = int(serving.get("with_oh_and_uom") or 0)
+            if reparsed_rows <= 0 or family_mapped <= 0 or uom_present <= 0 or with_oh_and_uom <= 0:
+                raise RuntimeError(
+                    "ON_HAND repair verification failed; transaction rolled back. "
+                    f"reparsed_rows={reparsed_rows}, family_mapped={family_mapped}, "
+                    f"uom_present={uom_present}, with_oh_and_uom={with_oh_and_uom}"
+                )
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND UPPER(severity) IN ('HIGH','CRITICAL')
+                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (batch_id,),
+            )
+            blocking = int((cur.fetchone() or {}).get("c") or 0)
+            if blocking > 0 or int(qc.get("rows") or 0) == 0:
+                phase3_status = "PHASE3_QA_HOLD"
+            elif int(qc.get("hold") or 0) > 0:
+                phase3_status = "QUICK_CHECK_READY_WITH_HOLDS"
+            else:
+                phase3_status = "QUICK_CHECK_READY"
+
+            cur.execute(
+                """UPDATE phase3_batch_result
+                   SET quick_check_rows=%s,
+                       quick_check_ready_rows=%s,
+                       quick_check_hold_rows=%s,
+                       blocking_issue_count=%s,
+                       result_status=%s,
+                       updated_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (
+                    int(qc.get("rows") or 0),
+                    int(qc.get("ready") or 0),
+                    int(qc.get("hold") or 0),
+                    blocking,
+                    phase3_status,
+                    batch_id,
+                ),
+            )
+            cur.execute(
+                """UPDATE ingest_batch
+                   SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (phase3_status, batch_id),
+            )
+
+            conn.commit()
+            return {
+                "status": "COMMITTED",
+                "device": device,
+                "mode": "SERVER_SIDE_ON_HAND_RAW_REPARSE_RELINK_QC_REBUILD",
+                "publish_batch_id": batch_id,
+                "files": file_results,
+                "rows_reparsed": reparsed_rows,
+                "before_inventory": before_inventory,
+                "after_inventory": after_inventory,
+                "quick_check": qc,
+                "quick_check_oh": serving,
+                "phase3_status": phase3_status,
+                "identity_summary": identity.get("summary"),
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
 
 def _safe_cost_target_checks(
     cur,
