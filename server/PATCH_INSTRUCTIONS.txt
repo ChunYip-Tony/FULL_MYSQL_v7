@@ -1,50 +1,35 @@
-FULL MYSQL v7.0.37 GitHub Patch
+FULL MYSQL v7.0.38 GitHub Patch
 
 Purpose:
-- Apply the safe subset identified by GET /v1/diagnostics/cost-holds.
-- Restore authoritative derived cost where receipt/report/OH evidence already supports it.
-- Resolve direct cost-to-selling conversion only when Cost UOM equals Selling UOM.
+- Fix v7.0.37 safe-cost verification failure for SAFE_OFFICIAL_COST_REPAIR_CANDIDATE rows.
 
-New endpoint:
-POST /v1/maintenance/safe-cost-refresh
-Body:
-{"confirm":"APPLY_SAFE_COST_REPAIR_AND_REBUILD"}
+Observed failure:
+- 53 official-cost candidates remained CURRENT_COST_MISSING after the attempted
+  repair, so the transaction rolled back exactly as designed.
+- The post-failure v7.0.36 diagnostic stayed unchanged, confirming no partial
+  serving mutation escaped the rollback.
 
-Transaction:
-1) refuse while POST_RAW_PIPELINE is STARTED
-2) identify current serving batch
-3) run pre-refresh cost-hold diagnostic
-4) require pre-refresh product-identity audit PASS
-5) reapply confirmed product/UOM authority
-6) run existing current-active cost repair
-7) resolve stale QUICK_CHECK_CORE_FIELD_MISSING issues for serving batch
-8) rebuild Quick Check using v7.0.37 same-UOM direct-cost rule
-9) rerun product-identity audit
-10) verify every pre-refresh safe target repaired its exact issue
-11) rerun cost-hold diagnostic
-12) refuse commit if cost-related hold count increases
-13) update Phase 3 serving counts/status
-14) commit
+Root cause:
+- diagnostic evidence scope: company family_id OR confirmed article_id.
+- repair relink scope: exact UPC or source Article Number only.
+- A company-price row with correct article_id but NULL/stale family_id was visible
+  to the diagnostic but invisible to the repair/backfill path.
 
-Verification semantics:
-- SAFE_*_COST_REPAIR_CANDIDATE:
-  CURRENT_COST_MISSING must disappear and a current authoritative cost must publish.
-  A new conversion hold is allowed if the newly restored cost uses a different UOM.
-  That is not a failed cost repair; it correctly exposes the next unresolved layer.
-- DIRECT_COST_UOM_EQUALS_SELLING_UOM or SERVING_CONVERSION_REBUILD_CANDIDATE:
-  COST_TO_SELLING_UOM_UNRESOLVED must disappear and current_cost_per_selling_unit must publish.
-
-Safety:
-- no Base/Inventory UOM inference
-- no cross-UOM factor inference
-- no description-based PACK weight conversion
-- no schema migration
-- rollback on identity blocker, target verification failure, or hold-count regression
+Fix:
+1) Before UPC / source-Article relink, repair company_price_observation.family_id
+   from its existing confirmed article_id -> bridge_article_family mapping.
+2) Continue existing derived cost-observation relink/backfill.
+3) Rebuild Quick Check using v7.0.37 direct same-UOM conversion rule.
+4) Keep all existing atomic target verification and rollback guards.
 
 After deploy:
-1) Verify /healthz = 7.0.37-single-service.
-2) POST /v1/maintenance/safe-cost-refresh.
-3) Review before_cost_summary vs after_cost_summary.
-4) Review quick_check ready/hold counts.
-5) Review target_checks; all pass must be True.
-6) Re-run GET /v1/diagnostics/cost-holds for the residual evidence-required set.
+1) Verify /healthz = 7.0.38-single-service.
+2) Re-run POST /v1/maintenance/safe-cost-refresh with:
+   {"confirm":"APPLY_SAFE_COST_REPAIR_AND_REBUILD"}
+3) Expect status=COMMITTED only if every pre-refresh safe target verifies.
+4) Compare before_cost_summary and after_cost_summary.
+5) Re-run GET /v1/diagnostics/cost-holds for the remaining evidence-required set.
+
+No schema migration.
+No manual cost values.
+No cross-UOM inference.
