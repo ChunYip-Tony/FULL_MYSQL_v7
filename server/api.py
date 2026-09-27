@@ -10,8 +10,9 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
+from maintenance_api import run_manual_authority_refresh
 
-VERSION='7.0.28-single-service'
+VERSION='7.0.29-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -27,6 +28,9 @@ def device_from_auth(authorization: str|None):
 
 class BatchCreate(BaseModel):
     label: str|None=None
+
+class ManualAuthorityRefreshRequest(BaseModel):
+    confirm: str
 
 @app.get('/healthz')
 def healthz(): return {'ok':True,'version':VERSION}
@@ -244,6 +248,26 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'phase3':p3,
         }
         cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/maintenance/manual-authority-refresh')
+def manual_authority_refresh(
+    body: ManualAuthorityRefreshRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    if body.confirm!='APPLY_CONFIRMED_USER_AUTHORITY':
+        raise HTTPException(
+            400,
+            "confirm must be APPLY_CONFIRMED_USER_AUTHORITY",
+        )
+    try:
+        result=run_manual_authority_refresh(device)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Manual authority refresh failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
