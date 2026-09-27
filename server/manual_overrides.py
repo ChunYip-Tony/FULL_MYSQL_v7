@@ -15,12 +15,14 @@ USER_CONFIRMED_UOM_REVIEW_20260926 = (
     {"ean_upc":"24513600000","article_number":"1400136","selling_uom_code":"LB","base_uom_code":None,"base_qty_per_selling_unit":None,
      "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: GREEN MUSSEL HALF SHELL; POS Selling UOM=LB only; no Base/Inventory UOM or conversion factor inferred."},
 
-    # Group B: user confirmed POS Selling UOM=PACK only.
-    # Base/cost conversion remains intentionally unresolved unless separately evidenced.
+    # Group B: exact packaged selling units. Base conversion is populated only
+    # where the user explicitly confirmed the package/case-to-EA relationship.
     {"ean_upc":"8231817551","article_number":"1351625","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
      "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: 26/30 H/L SHRIMP 10/4LB; POS Selling UOM=PACK only; no base conversion inferred."},
-    {"ean_upc":"4029551780","article_number":"1366580","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
-     "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: OYSTER IN SHELL 60EA; POS Selling UOM=PACK only; no base conversion inferred."},
+    {"ean_upc":"24043900000","article_number":"1366580","selling_uom_code":"PACK","base_uom_code":"EA","base_qty_per_selling_unit":Decimal("12"),
+     "source_note":"USER_CONFIRMED_OYSTER_UOM_20260927: OYSTER IN SHELL; POS Selling UOM=PACK; 1 PACK=12 EA. Family receiving is recorded by CASE and converted to EA; 1 receiving CASE=60 EA."},
+    {"ean_upc":"4029551780","article_number":"1366580","selling_uom_code":"CASE","base_uom_code":"EA","base_qty_per_selling_unit":Decimal("60"),
+     "source_note":"USER_CONFIRMED_OYSTER_UOM_20260927: OYSTER IN SHELL 60EA; POS Selling UOM=CASE; 1 CASE=60 EA. Family receiving is also recorded by CASE then converted to EA."},
     {"ean_upc":"70286869729","article_number":"3480411","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
      "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: FROZEN KUNG FU SNAKEHEAD FISH FILLETS 40/8.8OZ; POS Selling UOM=PACK only; no base conversion inferred."},
     {"ean_upc":"81223402832","article_number":"3468360","selling_uom_code":"PACK","base_uom_code":None,"base_qty_per_selling_unit":None,
@@ -183,6 +185,22 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
         "cost_uom_code": "LB",
         "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 1 LB.",
     },
+    {
+        "ean_upc": "24043900000",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("12"),
+        "cost_uom_code": "EA",
+        "source_note": "USER_CONFIRMED_OYSTER_UOM_20260927: 1 selling PACK = 12 EA; family cost authority is per EA.",
+    },
+    {
+        "ean_upc": "4029551780",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "CASE",
+        "cost_qty": Decimal("60"),
+        "cost_uom_code": "EA",
+        "source_note": "USER_CONFIRMED_OYSTER_UOM_20260927: 1 selling CASE = 60 EA; family cost authority is per EA.",
+    },
 )
 
 
@@ -212,7 +230,7 @@ USER_CONFIRMED_FAMILY_COSTS_20260926 = (
     {"main_article_number":"1363514","cost_amount":Decimal("6.59"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Sea Bream - New Zealand = $6.59/LB."},
     {"main_article_number":"1366580","cost_amount":Decimal("0.82"),"cost_uom_code":"EA","confirmed_date":"2026-09-26",
-     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Oyster in Shell family = $0.82/EA."},
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926 + UOM_CONFIRMATION_20260927: Oyster in Shell family = $0.82/EA. Receiving is recorded by CASE and converted to EA; 1 CASE=60 EA. Selling variants: UPC 24043900000 = 1 PACK/12 EA; UPC 4029551780 = 1 CASE/60 EA."},
 )
 
 USER_CONFIRMED_FAMILY_SUBARTICLES_20260926 = (
