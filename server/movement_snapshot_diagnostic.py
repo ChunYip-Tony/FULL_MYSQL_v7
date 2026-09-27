@@ -214,9 +214,10 @@ def movement_same_day_compare(movement_date: str) -> dict[str, Any]:
 
             cur.execute(
                 """SELECT COUNT(*) AS c
-                   FROM raw_movement
-                   WHERE file_id=%s
-                     AND observed_business_date=%s""",
+                   FROM raw_movement r
+                   JOIN ingest_sheet s ON s.sheet_id=r.sheet_id
+                   WHERE s.file_id=%s
+                     AND r.observed_business_date=%s""",
                 (file_id, requested),
             )
             dated_raw = int((cur.fetchone() or {}).get("c") or 0)
