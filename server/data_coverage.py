@@ -43,6 +43,31 @@ def _file_business_date(row: dict[str, Any], source_type: str) -> date | None:
     return None
 
 
+def _source_snapshot_date(row: dict[str, Any]) -> date | None:
+    """Return the source snapshot date, never upload time.
+
+    For movement completeness we need evidence that the export was produced after
+    the business day closed. report_generated_at is preferred; the filename date
+    is the fallback source chronology already preserved by ingest.
+    """
+    generated = _as_date(row.get('report_generated_at'))
+    if generated is not None:
+        return generated
+    return _as_date(row.get('filename_date_candidate'))
+
+
+def _movement_daily_snapshot_complete(row: dict[str, Any], business_date: date) -> bool:
+    """True only when a movement export proves the business day was already closed.
+
+    FULL MYSQL movement exports observed in production include same-day intraday
+    snapshots (for example 12:30) and next-morning completed snapshots for the
+    prior posting date. Same-day snapshots remain preserved in RAW/history but
+    must not become canonical daily movement coverage.
+    """
+    snapshot_date = _source_snapshot_date(row)
+    return snapshot_date is not None and snapshot_date > business_date
+
+
 def source_data_days(cur, source_type: str, *, limit: int | None = None,
                      include_batch_id: int | None = None, up_to: date | None = None) -> list[dict[str, Any]]:
     """Return canonical valid data days, newest first.
@@ -52,8 +77,11 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
     - Only single-day coverage qualifies as a daily data day.
     - A historical batch must have reached Phase 3 at least once; the currently
       processing batch may be explicitly included.
-    - If multiple valid exports exist for one business date, choose the latest
-      SOURCE snapshot chronology (report_generated_at, then filename date/time),
+    - Movement daily coverage is fail-closed: a same-business-date export is
+      provisional/intraday evidence only. The source snapshot date must be later
+      than the posting business date before the file can become canonical.
+    - If multiple valid COMPLETE exports exist for one business date, choose the
+      latest SOURCE snapshot chronology (report_generated_at, then filename date/time),
       using upload/file order only as a final tie-break. RAW/history are never deleted.
     """
     params: list[Any] = [source_type]
@@ -95,6 +123,8 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
             continue
         if up_to is not None and d > up_to:
             continue
+        if source_type == 'movement' and not _movement_daily_snapshot_complete(r, d):
+            continue
         if d not in by_date:
             by_date[d] = {
                 'date': d,
@@ -104,6 +134,11 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
                 'filename_date_candidate': r.get('filename_date_candidate'),
                 'filename_time_candidate': r.get('filename_time_candidate'),
                 'upload_timestamp': r.get('upload_timestamp'),
+                'source_snapshot_date': _source_snapshot_date(r),
+                'snapshot_completeness': (
+                    'COMPLETE_AFTER_BUSINESS_DATE' if source_type == 'movement'
+                    else 'NOT_APPLICABLE'
+                ),
             }
     out = [by_date[d] for d in sorted(by_date, reverse=True)]
     return out[:limit] if limit is not None else out
