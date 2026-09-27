@@ -1,36 +1,50 @@
-FULL MYSQL v7.0.35 GitHub Patch
+FULL MYSQL v7.0.36 GitHub Patch
 
 Purpose:
-- Fix MySQL error 1305: SAVEPOINT confirmed_uom_refresh does not exist.
-- Preserve atomic rollback semantics for maintenance and Phase 3 publishing.
+- Diagnose all current Quick Check cost-related QA holds in one HTTPS call.
+- Separate safe cost-lineage repairs from cases that truly need new UOM/conversion evidence.
 
-Root cause:
-- apply_manual_upc_overrides/apply_manual_upc_retirements called table-ensure helpers.
-- Those helpers always issued CREATE TABLE IF NOT EXISTS.
-- MySQL DDL implicitly commits the active transaction, which destroys SAVEPOINTs.
-- A failed v7.0.34 run may therefore have committed some manual override/UOM rows
-  before the later Quick Check rebuild rolled back.
+Endpoint:
+GET /v1/diagnostics/cost-holds
 
-Recovery design:
-1) Keep the 22 exact user-confirmed Selling UOM overrides.
-2) Table ensure-functions first check information_schema and skip DDL when present.
-3) confirmed-uom-refresh ensures bootstrap tables before transaction start.
-4) Close the bootstrap/read transaction.
-5) Start one explicit transaction.
-6) Reapply all manual authority idempotently.
-7) Resolve prior per-UPC core-hold rows for the serving batch.
-8) Rebuild Quick Check.
-9) Run product-identity audit.
-10) Verify all 22 target Selling UOMs.
-11) Commit only if all checks pass; otherwise rollback the entire business transaction.
+Optional filters:
+- ?upc=<EAN/UPC>
+- ?family_id=<family_id>
 
-Phase 3:
-- manual authority tables are ensured before its explicit transaction begins
-- v7.0.30 fail-closed Quick Check SAVEPOINT is preserved from implicit DDL commits
+Read-only evidence sources:
+1) Current quick_check_current QA_HOLD rows.
+2) Confirmed Family -> Article identity.
+3) Receipt movement 101/107/109 valuation rows.
+4) Official Frozen / TX Seafood ABC / Live-Fresh cost rows.
+5) Raw On-Hand explicit Cost + explicit cost-specific UOM.
+6) Existing authoritative derived cost.
+7) Exact Article Manual UPC row / pack text.
+
+Classifications for CURRENT_COST_MISSING include:
+- SAFE_RECEIPT_VALUATION_REPAIR_CANDIDATE
+- SAFE_OFFICIAL_COST_REPAIR_CANDIDATE
+- SAFE_OH_COST_FALLBACK_REPAIR_CANDIDATE
+- RECEIPT_ROWS_WITHOUT_VALID_VALUATION
+- OFFICIAL_COST_WITHOUT_EXPLICIT_UOM
+- OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM
+- NO_AUTHORITATIVE_COST_EVIDENCE
+
+Classifications for COST_TO_SELLING_UOM_UNRESOLVED include:
+- DIRECT_COST_UOM_EQUALS_SELLING_UOM
+- SERVING_CONVERSION_REBUILD_CANDIDATE
+- PACK_CONVERSION_EVIDENCE_NEEDED
+- AUTHORITATIVE_COST_UOM_MISSING
+- COST_UOM_SELLING_UOM_MISMATCH
+
+Important:
+- DIRECT_COST_UOM_EQUALS_SELLING_UOM means cost-per-selling can use factor 1
+  directly for calculation. It does NOT set Base/Inventory UOM.
+- No cross-UOM conversion is inferred from description or package text alone.
+- This release performs no mutations.
 
 After deploy:
-1) Verify /healthz = 7.0.35-single-service.
-2) Re-run POST /v1/maintenance/confirmed-uom-refresh with the same confirmation body.
-3) Confirm status=COMMITTED.
-4) Confirm target_count=22 and remaining_missing_selling_uom=0.
-5) Re-run product-identity audit.
+1) Verify /healthz = 7.0.36-single-service.
+2) Call GET /v1/diagnostics/cost-holds.
+3) Review summary.classification_counts.
+4) Review the safe candidates separately from needs-review rows before building
+   any cost repair endpoint.
