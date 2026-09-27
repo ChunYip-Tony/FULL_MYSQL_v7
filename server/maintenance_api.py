@@ -427,7 +427,7 @@ def run_on_hand_repair(device: str) -> dict[str, Any]:
             before_inventory = cur.fetchone() or {}
 
             cur.execute(
-                """SELECT file_id,original_filename,source_type,coverage_start_date,coverage_end_date,
+                """SELECT batch_id,file_id,original_filename,source_type,coverage_start_date,coverage_end_date,
                           header_period_start_date,header_period_end_date,report_generated_at,
                           upload_timestamp,filename_date_candidate
                    FROM ingest_file
@@ -441,7 +441,7 @@ def run_on_hand_repair(device: str) -> dict[str, Any]:
             reparsed_rows = 0
             file_results = []
             for f in files:
-                n = int(_process_on_hand(cur, int(f.get("batch_id") or batch_id), f) or 0)
+                n = int(_process_on_hand(cur, int(f["batch_id"]), f) or 0)
                 reparsed_rows += n
                 file_results.append(
                     {
