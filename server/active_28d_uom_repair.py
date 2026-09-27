@@ -14,6 +14,7 @@ from article_manual_multitab_repair import (
     _latest_article_manual_files,
 )
 from data_coverage import source_data_days
+from coverage_backfill import canonical_pos_qty_by_upc
 from normalize import (
     RowContext,
     _build_column_map,
@@ -50,17 +51,19 @@ def _active_selling_upcs(cur, batch_id: int) -> tuple[list[dict[str, Any]], int,
         include_batch_id=batch_id,
         up_to=completed_through,
     )
-    file_ids = [int(x["file_id"]) for x in days]
-    if not file_ids:
-        return [], 0, None
+    qty_by_upc = canonical_pos_qty_by_upc(cur, days)
+    active_ids = sorted(
+        upc_id for upc_id, qty in qty_by_upc.items()
+        if Decimal(str(qty or 0)) > 0
+    )
+    if not active_ids:
+        return [], len(days), (max((x["date"] for x in days), default=None).isoformat() if days else None)
 
-    placeholders = ",".join(["%s"] * len(file_ids))
+    placeholders = ",".join(["%s"] * len(active_ids))
     cur.execute(
         f"""SELECT su.upc_id,su.ean_upc,su.selling_description,
-                   pf.family_id,pf.main_article_number,
-                   COALESCE(SUM(s.sold_quantity),0) AS recent_qty
-            FROM sales_period_observation s
-            JOIN selling_upc su ON su.upc_id=s.upc_id
+                   pf.family_id,pf.main_article_number
+            FROM selling_upc su
             JOIN bridge_article_upc bau
               ON bau.upc_id=su.upc_id
              AND bau.mapping_status='CONFIRMED'
@@ -72,16 +75,15 @@ def _active_selling_upcs(cur, batch_id: int) -> tuple[list[dict[str, Any]], int,
              AND baf.is_primary=TRUE
              AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
             JOIN product_family pf ON pf.family_id=baf.family_id
-            WHERE s.temporal_grain='SINGLE_DATE'
-              AND s.file_id IN ({placeholders})
-            GROUP BY su.upc_id,su.ean_upc,su.selling_description,
-                     pf.family_id,pf.main_article_number
-            HAVING COALESCE(SUM(s.sold_quantity),0)>0
+            WHERE su.upc_id IN ({placeholders})
             ORDER BY su.upc_id""",
-        tuple(file_ids),
+        tuple(active_ids),
     )
-    latest = max((x.get("data_date") for x in days if x.get("data_date")), default=None)
-    return cur.fetchall(), len(days), latest.isoformat() if latest else None
+    rows = cur.fetchall()
+    for row in rows:
+        row["recent_qty"] = qty_by_upc.get(int(row["upc_id"]), Decimal("0"))
+    latest = max((x["date"] for x in days), default=None)
+    return rows, len(days), latest.isoformat() if latest else None
 
 
 def _uom_by_code(cur, code: str) -> dict[str, Any] | None:

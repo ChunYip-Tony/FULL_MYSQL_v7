@@ -227,8 +227,8 @@ def movement_rollforward(
         result["blockers"].append("INVENTORY_SCOPE_UNRESOLVED")
         return result
 
-    canonical_by_file = {int(d["file_id"]): d["date"] for d in post_days}
-    file_ids = sorted(canonical_by_file)
+    canonical_by_date = {d["date"]: int(d["file_id"]) for d in post_days}
+    file_ids = sorted(set(canonical_by_date.values()))
     placeholders = ",".join(["%s"] * len(file_ids))
 
     cur.execute(
@@ -252,25 +252,19 @@ def movement_rollforward(
     by_type: dict[str, Decimal] = {}
     ignored_by_type: dict[str, Decimal] = {}
     unresolved_types: dict[str, Decimal] = {}
-    bad_dates: list[dict[str, Any]] = []
     bad_uoms: list[dict[str, Any]] = []
 
     for row in rows:
         fid = int(row["file_id"])
         posting_day = _as_date(row.get("posting_date"))
-        canonical_day = canonical_by_file.get(fid)
         qty = Decimal(str(row.get("movement_quantity") or 0))
         if qty == 0:
             continue
 
-        if posting_day != canonical_day:
-            bad_dates.append({
-                "file_id": fid,
-                "canonical_date": canonical_day,
-                "posting_date": posting_day,
-                "movement_type": row.get("movement_type"),
-                "quantity": qty,
-            })
+        # One multi-date MVT file may be canonical for several exact posting
+        # dates. Accept only the canonical file/date pair and ignore other rows
+        # from the same source file rather than treating them as a mismatch.
+        if posting_day is None or canonical_by_date.get(posting_day) != fid:
             continue
 
         row_uom = str(row.get("base_uom_code") or "").strip().upper() or None
@@ -297,9 +291,6 @@ def movement_rollforward(
         movement_row_count += int(row.get("row_count") or 0)
         by_type[mt] = by_type.get(mt, Decimal("0")) + qty
 
-    if bad_dates:
-        result["blockers"].append("CANONICAL_FILE_POSTING_DATE_MISMATCH")
-        result["posting_date_mismatches"] = bad_dates
     if bad_uoms:
         result["blockers"].append("MOVEMENT_UOM_MISMATCH")
         result["uom_mismatches"] = bad_uoms
@@ -383,8 +374,6 @@ def rollforward_position(
         "rollforward_status": movement["status"],
         "analysis_usable": movement["analysis_usable"],
         "blockers": movement["blockers"],
-        **({"posting_date_mismatches": movement["posting_date_mismatches"]}
-           if "posting_date_mismatches" in movement else {}),
         **({"uom_mismatches": movement["uom_mismatches"]}
            if "uom_mismatches" in movement else {}),
     }
