@@ -536,6 +536,155 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
 
 
 
+
+def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:
+    """Read-only diagnostic for OH ingest -> inventory_observation -> Quick Check propagation."""
+    limit = max(1, min(int(limit or 50), 200))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+
+        cur.execute(
+            """SELECT COUNT(*) AS c
+               FROM ingest_file
+               WHERE source_type='on_hand'"""
+        )
+        on_hand_file_count = int((cur.fetchone() or {}).get("c") or 0)
+
+        cur.execute(
+            """SELECT file_id,batch_id,original_filename,source_type,
+                      source_type_confidence,processing_status,source_row_count,
+                      error_count,duplicate_of_file_id,coverage_type,
+                      coverage_start_date,coverage_end_date,
+                      report_generated_at,upload_timestamp,filename_date_candidate
+               FROM ingest_file
+               WHERE source_type='on_hand'
+               ORDER BY file_id DESC
+               LIMIT %s""",
+            (limit,),
+        )
+        on_hand_files = cur.fetchall()
+
+        # Surface filename candidates that contain common OH tokens but were not
+        # classified as on_hand. This is diagnostic evidence only and does not
+        # reclassify or ingest them.
+        cur.execute(
+            """SELECT file_id,batch_id,original_filename,source_type,
+                      source_type_confidence,processing_status,source_row_count,
+                      error_count,upload_timestamp
+               FROM ingest_file
+               WHERE source_type<>'on_hand'
+                 AND (
+                      UPPER(original_filename) LIKE 'OH%%'
+                   OR UPPER(original_filename) LIKE '%% OH%%'
+                   OR UPPER(original_filename) LIKE '%%-OH%%'
+                   OR UPPER(original_filename) LIKE '%%_OH%%'
+                   OR UPPER(original_filename) LIKE '%%ON HAND%%'
+                 )
+               ORDER BY file_id DESC
+               LIMIT %s""",
+            (limit,),
+        )
+        filename_candidates = cur.fetchall()
+
+        cur.execute("SELECT COUNT(*) AS c FROM raw_on_hand")
+        raw_count = int((cur.fetchone() or {}).get("c") or 0)
+
+        cur.execute(
+            """SELECT COUNT(*) AS total,
+                      SUM(CASE WHEN family_id IS NOT NULL THEN 1 ELSE 0 END) AS family_mapped,
+                      SUM(CASE WHEN upc_id IS NOT NULL THEN 1 ELSE 0 END) AS upc_mapped,
+                      SUM(CASE WHEN uom_code IS NOT NULL AND TRIM(uom_code)<>'' THEN 1 ELSE 0 END) AS uom_present,
+                      SUM(CASE WHEN on_hand_quantity IS NOT NULL THEN 1 ELSE 0 END) AS qty_present,
+                      MAX(observation_date) AS latest_observation_date
+               FROM inventory_observation"""
+        )
+        obs = cur.fetchone() or {}
+        inventory_summary = {
+            "total": int(obs.get("total") or 0),
+            "family_mapped": int(obs.get("family_mapped") or 0),
+            "upc_mapped": int(obs.get("upc_mapped") or 0),
+            "uom_present": int(obs.get("uom_present") or 0),
+            "qty_present": int(obs.get("qty_present") or 0),
+            "latest_observation_date": obs.get("latest_observation_date"),
+        }
+
+        cur.execute(
+            """SELECT COUNT(*) AS total,
+                      SUM(CASE WHEN quick_check_status='READY' THEN 1 ELSE 0 END) AS ready_rows,
+                      SUM(CASE WHEN quick_check_status='QA_HOLD' THEN 1 ELSE 0 END) AS hold_rows,
+                      SUM(CASE WHEN current_oh IS NOT NULL THEN 1 ELSE 0 END) AS with_oh,
+                      SUM(CASE WHEN current_oh IS NOT NULL
+                                    AND current_oh_uom IS NOT NULL
+                                    AND TRIM(current_oh_uom)<>''
+                               THEN 1 ELSE 0 END) AS with_oh_and_uom,
+                      SUM(CASE WHEN quick_check_status='READY'
+                                    AND current_oh IS NOT NULL
+                                    AND current_oh_uom IS NOT NULL
+                                    AND TRIM(current_oh_uom)<>''
+                               THEN 1 ELSE 0 END) AS ready_with_oh
+               FROM quick_check_current"""
+        )
+        qc = cur.fetchone() or {}
+        quick_check_summary = {
+            "total": int(qc.get("total") or 0),
+            "ready_rows": int(qc.get("ready_rows") or 0),
+            "hold_rows": int(qc.get("hold_rows") or 0),
+            "with_oh": int(qc.get("with_oh") or 0),
+            "with_oh_and_uom": int(qc.get("with_oh_and_uom") or 0),
+            "ready_with_oh": int(qc.get("ready_with_oh") or 0),
+        }
+
+        cur.execute(
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      observation_date,article_number,article_id,family_id,
+                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+               FROM inventory_observation
+               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
+               LIMIT %s""",
+            (limit,),
+        )
+        observation_sample = cur.fetchall()
+
+        cur.execute(
+            """SELECT ean_upc,article_number,family_id,main_article_number,
+                      selling_description,selling_uom,current_oh,current_oh_uom,
+                      oh_date,quick_check_status,blocking_reason
+               FROM quick_check_current
+               WHERE current_oh IS NOT NULL
+               ORDER BY oh_date DESC,ean_upc
+               LIMIT %s""",
+            (limit,),
+        )
+        qc_oh_sample = cur.fetchall()
+        cur.close()
+
+    if on_hand_file_count == 0 and raw_count == 0 and inventory_summary["total"] == 0:
+        stage = "NO_ON_HAND_SOURCE_INGESTED"
+    elif raw_count == 0:
+        stage = "ON_HAND_FILE_PRESENT_BUT_NO_RAW_ROWS"
+    elif inventory_summary["total"] == 0:
+        stage = "RAW_ON_HAND_PRESENT_BUT_NO_INVENTORY_OBSERVATIONS"
+    elif quick_check_summary["with_oh"] == 0:
+        stage = "INVENTORY_OBSERVATIONS_PRESENT_BUT_NOT_PROPAGATED_TO_QUICK_CHECK"
+    elif quick_check_summary["ready_with_oh"] == 0:
+        stage = "OH_PROPAGATED_BUT_NO_READY_ROWS_WITH_USABLE_UOM"
+    else:
+        stage = "OH_PIPELINE_HAS_USABLE_ROWS"
+
+    return {
+        "stage": stage,
+        "on_hand_file_count": on_hand_file_count,
+        "raw_on_hand_row_count": raw_count,
+        "inventory_summary": inventory_summary,
+        "quick_check_summary": quick_check_summary,
+        "on_hand_files": on_hand_files,
+        "possible_misclassified_oh_filenames": filename_candidates,
+        "inventory_observation_sample": observation_sample,
+        "quick_check_oh_sample": qc_oh_sample,
+    }
+
+
+
 def quick_check_lineage(upc: str) -> dict[str, Any] | None:
     """Read-only lineage for one Quick Check UPC.
 
