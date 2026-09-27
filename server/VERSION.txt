@@ -1,14 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.31 Single-Service Edition
-Read-only Selling-UOM evidence diagnostic for current Quick Check holds.
+Version: 7.0.32 Single-Service Edition
+Fixes the read-only Selling-UOM evidence diagnostic introduced in v7.0.31.
 
-Adds GET /v1/diagnostics/uom-lineage:
-- defaults to current QA_HOLD rows with SELLING_UOM_MISSING
-- inspects newest Article Manual evidence
-- inspects historical UOM rows and confirmed manual overrides
-- inspects same-family peer UPCs
-- applies the current FULL MYSQL safe related-prefix LB evidence rule
-- classifies each hold as safe-to-auto-apply vs needs review
-- performs no database mutation and no Quick Check rebuild
+Root cause:
+- the diagnostic referenced non-existent selling_upc_uom_history column names
+  (uom_history_id / effective_from)
+- the production schema uses upc_uom_id and effective_to
 
-Phase 3 fail-closed product-identity guard from v7.0.30 remains unchanged.
+Behavior is otherwise unchanged:
+- read-only UOM diagnosis
+- no schema migration
+- no product-data mutation
+- no Quick Check rebuild
+- Phase 3 fail-closed identity guard remains active
