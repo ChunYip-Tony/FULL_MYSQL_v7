@@ -367,7 +367,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
     cur.execute(
         """
         SELECT su.ean_upc,baf.family_id,a.article_number,
-               qu.selling_uom,q.quick_check_status
+               q.selling_uom,q.quick_check_status
         FROM selling_upc su
         JOIN bridge_article_upc bau
           ON bau.upc_id=su.upc_id
@@ -380,7 +380,6 @@ def audit_product_identity(cur) -> dict[str, Any]:
          AND baf.mapping_status='CONFIRMED'
          AND baf.is_primary=TRUE
          AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
-        LEFT JOIN v_current_upc_uom qu ON qu.ean_upc=su.ean_upc
         LEFT JOIN quick_check_current q ON q.upc_id=su.upc_id
         LEFT JOIN manual_upc_retirement mur
           ON mur.ean_upc=su.ean_upc
