@@ -435,6 +435,7 @@ def _movement_header_map(cur, sheet_id: int, declared_header_row: int | None) ->
 
 def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
     inserted = 0
+    unmapped_articles: dict[str, dict[str, Any]] = {}
     cur.execute(
         'SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index',
         (f['file_id'],),
@@ -485,9 +486,20 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
             # Downstream Seafood analysis still filters through confirmed Family/
             # Article identity; preserving an unmapped row does not publish it.
             if seafood_tag and family_id is None:
-                _issue(cur, batch_id, 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED', 'ARTICLE', article_num,
-                       f'Seafood movement exists for Article {article_num}, but it has no confirmed Family mapping.',
-                       'HIGH', f['file_id'], sh['sheet_id'], 'raw_movement', rr['raw_id'], {'movement_type': mvt, 'description': desc})
+                u = unmapped_articles.setdefault(
+                    article_num,
+                    {
+                        'row_count': 0,
+                        'movement_types': set(),
+                        'descriptions': set(),
+                        'posting_dates': set(),
+                    },
+                )
+                u['row_count'] += 1
+                u['movement_types'].add(str(mvt))
+                if desc:
+                    u['descriptions'].add(str(desc))
+                u['posting_dates'].add(posting.isoformat())
             entry_qty = _num(p.get(entry_qty_col))
             entry_uom = (_text(p.get(entry_uom_col)) or '').upper() or None
             base_qty = _num(p.get(base_qty_col))
@@ -550,6 +562,33 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                         net_sold_quantity=VALUES(net_sold_quantity),base_uom_code=VALUES(base_uom_code)""",
                     (batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], family_id, article_id, mvt, posting, base_qty, net_sold, base_uom),
                 )
+    # Unmapped Seafood movement is isolated to the unresolved Article because
+    # family_id remains NULL and therefore cannot enter family movement or
+    # mapped inventory roll-forward. Record one Article-level review issue
+    # instead of one HIGH batch blocker per raw movement row.
+    for article_num, u in sorted(unmapped_articles.items()):
+        _issue(
+            cur,
+            batch_id,
+            'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED',
+            'ARTICLE',
+            article_num,
+            (
+                f'Seafood movement exists for Article {article_num}, but it has no '
+                'confirmed Family mapping. The movement is preserved in history '
+                'and excluded from mapped-family calculations until resolved.'
+            ),
+            'MEDIUM',
+            f['file_id'],
+            detail={
+                'scope': 'ARTICLE_LOCAL_FAIL_CLOSED',
+                'row_count': u['row_count'],
+                'movement_types': sorted(u['movement_types']),
+                'descriptions': sorted(u['descriptions'])[:10],
+                'posting_dates': sorted(u['posting_dates']),
+            },
+        )
+
     cur.execute(
         """SELECT COUNT(*) AS c
            FROM raw_movement

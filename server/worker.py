@@ -28,7 +28,8 @@ def claim_job():
 
             cur.execute(
                 "SELECT COUNT(*) c FROM pipeline_run "
-                "WHERE pipeline_name=%s AND stage_name='POST_RAW_PIPELINE' "
+                "WHERE pipeline_name=%s "
+                "AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN') "
                 "AND processing_status='STARTED'",
                 (API_PIPELINE,),
             )
@@ -36,9 +37,9 @@ def claim_job():
                 return None
 
             cur.execute(
-                """SELECT pipeline_run_id,batch_id FROM pipeline_run
+                """SELECT pipeline_run_id,batch_id,stage_name FROM pipeline_run
                    WHERE pipeline_name=%s
-                     AND stage_name='POST_RAW_PIPELINE'
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
                      AND processing_status='QUEUED'
                    ORDER BY pipeline_run_id
                    LIMIT 1
@@ -58,7 +59,7 @@ def claim_job():
                 (json.dumps({'worker':WORKER}), row['pipeline_run_id']),
             )
             conn.commit()
-            return int(row['pipeline_run_id']), int(row['batch_id'])
+            return int(row['pipeline_run_id']), int(row['batch_id']), str(row['stage_name'])
 
         except Exception:
             conn.rollback()
@@ -81,9 +82,20 @@ def finish(run_id:int,status:str,detail:dict,error_count:int=0):
         cur=conn.cursor(); cur.execute("UPDATE pipeline_run SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6),error_count=%s,detail_json=%s WHERE pipeline_run_id=%s",
             (status,error_count,json.dumps(detail,ensure_ascii=False,default=str),run_id)); conn.commit(); cur.close()
 
-def process(run_id:int,batch_id:int):
-    detail={'worker':WORKER,'batch_id':batch_id,'started_at':datetime.utcnow().isoformat()+'Z'}
+def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
+    detail={'worker':WORKER,'batch_id':batch_id,'stage_name':stage_name,'started_at':datetime.utcnow().isoformat()+'Z'}
     try:
+        if stage_name == 'PHASE3_RERUN':
+            p3=process_phase3(batch_id)
+            a3=audit_phase3(batch_id)
+            detail['phase3']=p3
+            detail['phase3_audit']=a3
+            if not a3['pass']:
+                finish(run_id,'QA_HOLD',detail,len(a3.get('blocking_issues',[])))
+                return
+            finish(run_id,'COMPLETED',detail,0)
+            return
+
         a=audit_batch(batch_id); detail['raw_audit']=a
         if not a['pass']:
             finish(run_id,'QA_HOLD',detail,len(a.get('blocking_issues',[]))); return

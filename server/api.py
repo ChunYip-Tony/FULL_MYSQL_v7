@@ -19,7 +19,7 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.70-single-service'
+VERSION='7.0.71-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -83,6 +83,109 @@ def commit(session_id:str,authorization: Annotated[str|None,Header()]=None):
     except KeyError as exc: raise HTTPException(404,str(exc))
     except PermissionError as exc: raise HTTPException(403,str(exc))
     except Exception as exc: raise HTTPException(400,str(exc))
+
+
+@app.post('/v1/batches/{session_id}/phase3-rerun')
+def phase3_rerun(
+    session_id:str,
+    body:ManualAuthorityRefreshRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    if body.confirm!='RERUN_PHASE3_FOR_EXISTING_BATCH':
+        raise HTTPException(
+            400,
+            "confirm must be RERUN_PHASE3_FOR_EXISTING_BATCH",
+        )
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,processing_status
+                   FROM ingest_batch
+                   WHERE batch_key=%s
+                   LIMIT 1""",
+                (session_id,),
+            )
+            b=cur.fetchone()
+            if not b:
+                raise HTTPException(404,'Batch session not found')
+            if b['processing_status'] not in {
+                'PHASE2C_READY',
+                'PHASE3_QA_HOLD',
+                'QUICK_CHECK_READY',
+                'QUICK_CHECK_READY_WITH_HOLDS',
+            }:
+                raise HTTPException(
+                    409,
+                    f"Batch status {b['processing_status']} is not eligible for Phase 3 rerun",
+                )
+            bid=int(b['batch_id'])
+            cur.execute(
+                """SELECT pipeline_run_id,processing_status
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='PHASE3_RERUN'
+                     AND processing_status IN ('QUEUED','STARTED')
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1""",
+                (bid,API_PIPELINE),
+            )
+            existing=cur.fetchone()
+            if existing:
+                return {
+                    'batch_id':bid,
+                    'session_id':session_id,
+                    'queued':existing['processing_status']=='QUEUED',
+                    'already_active':True,
+                    'pipeline_run_id':int(existing['pipeline_run_id']),
+                    'status':existing['processing_status'],
+                }
+            cur.execute(
+                """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='PHASE3_RERUN'""",
+                (bid,API_PIPELINE),
+            )
+            next_run=int((cur.fetchone() or {}).get('next_run') or 1)
+            cur.execute(
+                """INSERT INTO pipeline_run
+                   (batch_id,pipeline_name,stage_name,run_number,
+                    processing_status,code_version,detail_json)
+                   VALUES (%s,%s,'PHASE3_RERUN',%s,'QUEUED',%s,%s)""",
+                (
+                    bid,
+                    API_PIPELINE,
+                    next_run,
+                    VERSION,
+                    json.dumps(
+                        {
+                            'requested_by':device,
+                            'reason':'RERUN_EXISTING_PHASE3_AFTER_QA_POLICY_UPDATE',
+                        }
+                    ),
+                ),
+            )
+            run_id=int(cur.lastrowid)
+            conn.commit()
+            return {
+                'batch_id':bid,
+                'session_id':session_id,
+                'queued':True,
+                'pipeline_run_id':run_id,
+                'status':'QUEUED',
+            }
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(500,f'Phase 3 rerun enqueue failed: {exc}')
+        finally:
+            cur.close()
 
 
 @app.post('/v1/batches/{session_id}/abort')
