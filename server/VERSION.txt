@@ -1,33 +1,24 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.37 Single-Service Edition
-Evidence-backed safe current-cost repair + direct same-UOM cost conversion.
+Version: 7.0.38 Single-Service Edition
+Official-cost Family-lineage repair alignment.
 
-Based on the v7.0.36 diagnostic baseline:
-- 150 current Quick Check QA_HOLD rows were cost-related
-- 125 CURRENT_COST_MISSING
-- 25 COST_TO_SELLING_UOM_UNRESOLVED
-- 70 rows classified safe for the current issue
-- 80 rows require additional evidence/review
+Root cause fixed:
+- v7.0.36 diagnostic searched official cost evidence by
+  Family OR confirmed Article identity.
+- v7.0.37 repair relinked company rows only by UPC or source Article Number.
+- Company rows that already had the correct article_id but NULL/stale family_id
+  were therefore classified SAFE by the diagnostic but could not be repaired.
+- The safe-cost transaction correctly failed verification and rolled back.
 
 Changes:
-1) Quick Check cost calculation:
-   - if authoritative Cost UOM exactly equals POS Selling UOM,
-     cost-per-selling-unit is calculated directly with factor 1
-   - PAC/PACK are normalized as equivalent for this comparison
-   - this does NOT infer or write Base/Inventory UOM
-2) POST /v1/maintenance/safe-cost-refresh:
-   - applies only existing evidence-authority repair rules
-   - receipt 101/107/109 valuation remains highest priority
-   - official Live/Fresh/Frozen cost remains second
-   - explicit OH cost + explicit supported cost-UOM remains fallback
-   - rebuilds Quick Check in one explicit transaction
-   - reruns global product-identity audit
-   - verifies each pre-refresh safe target repaired its exact issue
-   - rolls back on verification failure or regression
-3) Cross-UOM conversions remain blocked:
-   - no PACK-to-LB/EA inference
-   - no EA/BX/PC/PACK conversion from description text alone
+- current-active cost repair now relinks company_price_observation.family_id
+  directly from an existing confirmed article_id -> Family bridge before UPC/
+  source-Article relink and official-cost backfill.
+- diagnostic and repair now use the same authoritative Article/Family semantics.
+- existing v7.0.37 direct same-UOM cost-to-selling calculation remains unchanged.
+- safe-cost-refresh remains atomic and rollback-on-verification-failure.
 
 No schema migration.
-No arbitrary cost/UOM payload.
-Work-PC remains HTTPS 443 only.
+No new cost authority.
+No Base/Inventory UOM inference.
+No cross-UOM conversion inference.
