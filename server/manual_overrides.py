@@ -186,6 +186,45 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
 )
 
 
+USER_CONFIRMED_FAMILY_COSTS_20260926 = (
+    {"main_article_number":"1341156","cost_amount":Decimal("3.82"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Pony Fish = $3.82/LB."},
+    {"main_article_number":"1341521","cost_amount":Decimal("2.19"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Sierra 2-4 = $2.19/LB."},
+    {"main_article_number":"1342316","cost_amount":Decimal("4.26"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fish Tofu = $4.26/LB."},
+    {"main_article_number":"1351700","cost_amount":Decimal("4.36"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: 41/50 H/L Shrimp = $4.36/LB."},
+    {"main_article_number":"1354803","cost_amount":Decimal("5.09"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: 41/50 PUD White Shrimp = $5.09/LB."},
+    {"main_article_number":"1361120","cost_amount":Decimal("9.00"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fresh/Live Maine Lobster family = $9.00/LB."},
+    {"main_article_number":"1361660","cost_amount":Decimal("5.09"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Live Manila Clam = $5.09/LB."},
+    {"main_article_number":"1361689","cost_amount":Decimal("1.79"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Big Head Carp = $1.79/LB."},
+    {"main_article_number":"1361697","cost_amount":Decimal("1.99"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fresh Ocean Perch = $1.99/LB."},
+    {"main_article_number":"1361760","cost_amount":Decimal("2.69"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Fresh Catfish family = $2.69/LB."},
+    {"main_article_number":"1361999","cost_amount":Decimal("2.09"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Mullet = $2.09/LB."},
+    {"main_article_number":"1363514","cost_amount":Decimal("6.59"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Sea Bream - New Zealand = $6.59/LB."},
+    {"main_article_number":"1366580","cost_amount":Decimal("0.82"),"cost_uom_code":"EA","confirmed_date":"2026-09-26",
+     "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Oyster in Shell family = $0.82/EA."},
+)
+
+USER_CONFIRMED_FAMILY_SUBARTICLES_20260926 = (
+    {"main_article_number":"1361120","sub_article_number":"2011726","ean_upc":"24063300000",
+     "description":"LIVE MAINE LOBSTER-S",
+     "source_note":"USER_CONFIRMED_FAMILY_SUBARTICLE_20260926: UPC 24063300000 / Article 2011726 is a sub-article under Main/Family 1361120."},
+    {"main_article_number":"1361120","sub_article_number":"2011727","ean_upc":"24063400000",
+     "description":"LIVE MAINE LOBSTER-M",
+     "source_note":"USER_CONFIRMED_FAMILY_SUBARTICLE_20260926: UPC 24063400000 / Article 2011727 is a sub-article under Main/Family 1361120."},
+)
+
+
 SEED_RETIREMENTS = (
     {
         "ean_upc": "26510500000",
@@ -287,6 +326,266 @@ def _canonical_article(cur, article_number: str) -> dict[str, Any] | None:
         (article_number,),
     )
     return cur.fetchone()
+
+
+
+def ensure_family_cost_table(cur) -> None:
+    if _table_exists(cur, 'manual_family_cost_authority'):
+        return
+    cur.execute(
+        """
+        CREATE TABLE manual_family_cost_authority (
+            authority_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            main_article_number VARCHAR(64) NOT NULL,
+            cost_amount DECIMAL(24,8) NOT NULL,
+            cost_uom_code VARCHAR(32) NOT NULL,
+            confirmed_date DATE NOT NULL,
+            authority_status VARCHAR(24) NOT NULL DEFAULT 'CONFIRMED',
+            source_note VARCHAR(512) NULL,
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                       ON UPDATE CURRENT_TIMESTAMP(6),
+            PRIMARY KEY (authority_id),
+            UNIQUE KEY uq_manual_family_cost_authority (main_article_number),
+            KEY ix_manual_family_cost_status (authority_status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        """
+    )
+
+
+def seed_confirmed_family_costs(cur) -> int:
+    changed = 0
+    for row in USER_CONFIRMED_FAMILY_COSTS_20260926:
+        cur.execute(
+            """
+            INSERT INTO manual_family_cost_authority
+              (main_article_number,cost_amount,cost_uom_code,confirmed_date,authority_status,source_note)
+            VALUES (%s,%s,%s,%s,'CONFIRMED',%s)
+            ON DUPLICATE KEY UPDATE
+              cost_amount=VALUES(cost_amount),
+              cost_uom_code=VALUES(cost_uom_code),
+              confirmed_date=VALUES(confirmed_date),
+              authority_status='CONFIRMED',
+              source_note=VALUES(source_note)
+            """,
+            (
+                row["main_article_number"],
+                row["cost_amount"],
+                row["cost_uom_code"],
+                row["confirmed_date"],
+                row["source_note"],
+            ),
+        )
+        changed += 1
+    return changed
+
+
+def apply_manual_family_costs(cur) -> dict[str, Any]:
+    seeded = seed_confirmed_family_costs(cur)
+    cur.execute(
+        """
+        SELECT m.main_article_number,m.cost_amount,m.cost_uom_code,m.confirmed_date,
+               pf.family_id,a.article_id
+        FROM manual_family_cost_authority m
+        LEFT JOIN product_family pf
+          ON pf.main_article_number=m.main_article_number
+        LEFT JOIN article a
+          ON a.article_number=m.main_article_number
+        WHERE m.authority_status='CONFIRMED'
+        ORDER BY m.authority_id
+        """
+    )
+    rows = cur.fetchall()
+    held = []
+    verified = 0
+    for row in rows:
+        if row.get("family_id") is None or row.get("article_id") is None:
+            held.append({
+                "main_article_number": row["main_article_number"],
+                "reason": "MAIN_FAMILY_IDENTITY_NOT_READY",
+            })
+            continue
+        if _uom_id(cur, row["cost_uom_code"]) is None:
+            held.append({
+                "main_article_number": row["main_article_number"],
+                "reason": "COST_UOM_CODE_NOT_IN_DIM_UOM",
+            })
+            continue
+        if row.get("cost_amount") is None or Decimal(str(row["cost_amount"])) <= 0:
+            held.append({
+                "main_article_number": row["main_article_number"],
+                "reason": "NONPOSITIVE_COST",
+            })
+            continue
+        verified += 1
+    return {
+        "seeded_or_refreshed": seeded,
+        "authorities_examined": len(rows),
+        "verified": verified,
+        "held": held,
+    }
+
+
+def confirmed_family_cost(cur, family_id: int) -> dict[str, Any] | None:
+    cur.execute(
+        """
+        SELECT m.main_article_number,m.cost_amount,m.cost_uom_code,m.confirmed_date,m.source_note
+        FROM product_family pf
+        JOIN manual_family_cost_authority m
+          ON m.main_article_number=pf.main_article_number
+         AND m.authority_status='CONFIRMED'
+        WHERE pf.family_id=%s
+        LIMIT 1
+        """,
+        (family_id,),
+    )
+    return cur.fetchone()
+
+
+def apply_manual_family_subarticles(cur) -> dict[str, Any]:
+    result = {"examined":0,"family_links":0,"upc_links":0,"upc_not_present":[],"held":[]}
+    for row in USER_CONFIRMED_FAMILY_SUBARTICLES_20260926:
+        result["examined"] += 1
+        cur.execute(
+            """SELECT pf.family_id,ma.article_id AS main_article_id
+               FROM product_family pf
+               JOIN article ma ON ma.article_number=pf.main_article_number
+               WHERE pf.main_article_number=%s
+               LIMIT 1""",
+            (row["main_article_number"],),
+        )
+        fam = cur.fetchone()
+        if not fam:
+            result["held"].append({"sub_article_number":row["sub_article_number"],"reason":"MAIN_FAMILY_NOT_READY"})
+            continue
+        family_id = int(fam["family_id"])
+
+        cur.execute("SELECT article_id FROM article WHERE article_number=%s LIMIT 1",(row["sub_article_number"],))
+        ar = cur.fetchone()
+        if ar:
+            sub_article_id = int(ar["article_id"])
+            cur.execute(
+                "UPDATE article SET article_description=COALESCE(article_description,%s),record_status='ACTIVE' WHERE article_id=%s",
+                (row["description"],sub_article_id),
+            )
+        else:
+            cur.execute(
+                "INSERT INTO article (article_number,article_description,record_status) VALUES (%s,%s,'ACTIVE')",
+                (row["sub_article_number"],row["description"]),
+            )
+            sub_article_id = int(cur.lastrowid)
+
+        cur.execute(
+            """SELECT baf.article_family_id,baf.family_id
+               FROM bridge_article_family baf
+               WHERE baf.article_id=%s
+                 AND baf.mapping_status='CONFIRMED'
+                 AND baf.is_primary=TRUE
+                 AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))""",
+            (sub_article_id,),
+        )
+        active = cur.fetchall()
+        conflicts = [x for x in active if int(x["family_id"]) != family_id]
+        if conflicts:
+            result["held"].append({
+                "sub_article_number":row["sub_article_number"],
+                "reason":"EXISTING_CONFIRMED_CROSS_FAMILY_LINK",
+                "existing_family_ids":[int(x["family_id"]) for x in conflicts],
+            })
+            continue
+
+        cur.execute(
+            """SELECT article_family_id FROM bridge_article_family
+               WHERE article_id=%s AND family_id=%s AND relationship_type='SUB'
+               ORDER BY article_family_id DESC LIMIT 1""",
+            (sub_article_id,family_id),
+        )
+        link=cur.fetchone()
+        if link:
+            article_family_id=int(link["article_family_id"])
+            cur.execute(
+                """UPDATE bridge_article_family
+                   SET mapping_status='CONFIRMED',is_primary=TRUE,confidence=1.0,valid_to=NULL
+                   WHERE article_family_id=%s""",
+                (article_family_id,),
+            )
+        else:
+            cur.execute(
+                """INSERT INTO bridge_article_family
+                   (article_id,family_id,relationship_type,is_primary,mapping_status,confidence)
+                   VALUES (%s,%s,'SUB',TRUE,'CONFIRMED',1.0)""",
+                (sub_article_id,family_id),
+            )
+            article_family_id=int(cur.lastrowid)
+        result["family_links"] += 1
+
+        cur.execute("SELECT upc_id FROM selling_upc WHERE ean_upc=%s LIMIT 1",(row["ean_upc"],))
+        upc=cur.fetchone()
+        if not upc:
+            # Do not manufacture a current selling identity from a mapping-only
+            # confirmation. The SUB Article->Family authority is persisted now;
+            # the UPC->SUB evidence will be attached automatically if/when the
+            # UPC appears from a real source.
+            result["upc_not_present"].append(row["ean_upc"])
+            continue
+
+        upc_id=int(upc["upc_id"])
+        cur.execute(
+            "UPDATE selling_upc SET selling_description=COALESCE(selling_description,%s) WHERE upc_id=%s",
+            (row["description"],upc_id),
+        )
+
+        cur.execute(
+            """SELECT article_upc_id FROM bridge_article_upc
+               WHERE article_id=%s AND upc_id=%s AND relationship_type='SELLING'
+               ORDER BY article_upc_id DESC LIMIT 1""",
+            (sub_article_id,upc_id),
+        )
+        ul=cur.fetchone()
+        if ul:
+            cur.execute(
+                """UPDATE bridge_article_upc
+                   SET mapping_status='CONFIRMED',is_primary=FALSE,confidence=1.0,valid_to=NULL
+                   WHERE article_upc_id=%s""",
+                (ul["article_upc_id"],),
+            )
+            article_upc_id=int(ul["article_upc_id"])
+        else:
+            cur.execute(
+                """INSERT INTO bridge_article_upc
+                   (article_id,upc_id,relationship_type,is_primary,mapping_status,confidence)
+                   VALUES (%s,%s,'SELLING',FALSE,'CONFIRMED',1.0)""",
+                (sub_article_id,upc_id),
+            )
+            article_upc_id=int(cur.lastrowid)
+        result["upc_links"] += 1
+
+        for object_type, object_id, role in (
+            ("ARTICLE_FAMILY",article_family_id,"USER_CONFIRMED_FAMILY_SUBARTICLE_20260926"),
+            ("ARTICLE_UPC",article_upc_id,"USER_CONFIRMED_FAMILY_SUBARTICLE_20260926"),
+        ):
+            cur.execute(
+                """SELECT evidence_id FROM normalized_source_evidence
+                   WHERE object_type=%s AND object_id=%s AND evidence_role=%s LIMIT 1""",
+                (object_type,object_id,role),
+            )
+            if not cur.fetchone():
+                cur.execute(
+                    """INSERT INTO normalized_source_evidence
+                       (object_type,object_id,evidence_role,source_field_name,source_value_text,evidence_json)
+                       VALUES (%s,%s,%s,'user_confirmation',%s,%s)""",
+                    (
+                        object_type,object_id,role,row["ean_upc"],
+                        json.dumps({
+                            "main_article_number":row["main_article_number"],
+                            "sub_article_number":row["sub_article_number"],
+                            "ean_upc":row["ean_upc"],
+                            "description":row["description"],
+                            "source_note":row["source_note"],
+                        },ensure_ascii=False,default=str),
+                    ),
+                )
+    return result
 
 
 

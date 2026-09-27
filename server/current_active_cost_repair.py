@@ -8,8 +8,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from data_coverage import source_data_days
+from manual_overrides import confirmed_family_cost
 
-VERSION = "7.0.42-current-active-cost-lineage-repair"
+VERSION = "7.0.44-current-active-cost-lineage-repair"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -270,6 +271,16 @@ def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
             "date": row["business_date"],
             "uom": row["cost_uom"],
             "amount": row["cost_amount"],
+        }
+
+    # 4) Explicit user-confirmed Family/Main-Article fallback.
+    manual = confirmed_family_cost(cur, family_id)
+    if manual:
+        return {
+            "source": "USER_CONFIRMED_FAMILY_COST",
+            "date": manual.get("confirmed_date"),
+            "uom": manual["cost_uom_code"],
+            "amount": manual["cost_amount"],
         }
 
     return None

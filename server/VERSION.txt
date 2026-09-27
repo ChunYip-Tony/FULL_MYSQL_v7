@@ -1,30 +1,36 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.43 Single-Service Edition
-Adds four exact user-confirmed Cost-UOM -> POS-Selling-UOM conversions.
+Version: 7.0.44 Single-Service Edition
 
-New confirmations:
-- 4843: 1 EA = 2 LB
-- 82995307020: 1 EA = 4.4 LB
-- 81223402832: 1 PACK = 1 LB
-- 4029550743: 1 EA = 1 LB
+Adds user-confirmed Family/Main-Article cost fallback authority for 13 families:
+1341156 3.82/LB
+1341521 2.19/LB
+1342316 4.26/LB
+1351700 4.36/LB
+1354803 5.09/LB
+1361120 9.00/LB
+1361660 5.09/LB
+1361689 1.79/LB
+1361697 1.99/LB
+1361760 2.69/LB
+1361999 2.09/LB
+1363514 6.59/LB
+1366580 0.82/EA
 
-These are added to the existing exact per-UPC conversion authority.
-Total confirmed conversion registry seeds: 12 UPCs.
+Cost priority remains:
+1) valid 101/107/109 receipt valuation
+2) authoritative Frozen / Live-Fresh report cost
+3) explicit OH fallback
+4) explicit user-confirmed Family cost fallback
 
-Expected current cost-per-selling calculations from the v7.0.42 authoritative
-Frozen report costs:
-- 4843: 9.25/LB * 2 LB/EA = 18.50/EA
-- 82995307020: 2.556818/LB * 4.4 LB/EA = 11.2499992/EA
-- 81223402832: 7.00/LB * 1 LB/PACK = 7.00/PACK
-- 4029550743: 5.666667/LB * 1 LB/EA = 5.666667/EA
+Also records confirmed Lobster sub-articles:
+- Main 1361120 -> SUB 2011726 -> UPC 24063300000 (LIVE MAINE LOBSTER-S)
+- Main 1361120 -> SUB 2011727 -> UPC 24063400000 (LIVE MAINE LOBSTER-M)
 
-Safety:
-- no Base/Inventory UOM mutation
-- no base_qty_per_selling_unit mutation
-- no description-derived conversion
-- exact UPC only
-- existing atomic confirmed-cost-conversion refresh verifies all 12 targets
-- rollback on any target mismatch
+The canonical serving UPC identity remains anchored to the Main/Family Article.
+SUB relationships are non-primary supporting identity and do not replace the
+canonical Main anchor. A missing UPC is not manufactured as an active product;
+the SUB->Family authority remains and the UPC link can attach once a real source
+creates that UPC.
 
 No RAW mutation.
-No schema change.
+No description-derived cost or conversion.

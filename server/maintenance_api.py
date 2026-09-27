@@ -7,12 +7,16 @@ from db import db_conn
 from manual_overrides import (
     USER_CONFIRMED_UOM_REVIEW_20260926,
     USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926,
+    USER_CONFIRMED_FAMILY_COSTS_20260926,
     ensure_override_table,
     ensure_retirement_table,
     ensure_cost_conversion_table,
+    ensure_family_cost_table,
     apply_manual_upc_overrides,
     apply_manual_upc_retirements,
     apply_manual_cost_conversions,
+    apply_manual_family_costs,
+    apply_manual_family_subarticles,
 )
 from product_identity_audit import audit_product_identity
 from current_active_cost_repair import repair_current_active_cost
@@ -40,6 +44,7 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             ensure_override_table(cur)
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
+            ensure_family_cost_table(cur)
             conn.commit()
 
             cur.execute(
@@ -63,6 +68,8 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
             conversions = apply_manual_cost_conversions(cur)
+            family_costs = apply_manual_family_costs(cur)
+            family_subarticles = apply_manual_family_subarticles(cur)
 
             if overrides.get("held"):
                 raise RuntimeError(
@@ -73,6 +80,16 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                 raise RuntimeError(
                     "One or more confirmed cost conversions could not be applied: "
                     + str(conversions.get("held"))
+                )
+            if family_costs.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family costs could not be applied: "
+                    + str(family_costs.get("held"))
+                )
+            if family_subarticles.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family subarticles could not be applied: "
+                    + str(family_subarticles.get("held"))
                 )
 
             after = audit_product_identity(cur)
@@ -100,6 +117,8 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
                 "manual_cost_conversions": conversions,
+                "manual_family_costs": family_costs,
+                "manual_family_subarticles": family_subarticles,
                 "after_summary": after.get("summary"),
                 "manual_override_checks": after.get("manual_override_checks"),
                 "retirement_checks": after.get("retirement_checks"),
@@ -204,6 +223,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             ensure_override_table(cur)
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
+            ensure_family_cost_table(cur)
             conn.commit()
 
             cur.execute(
@@ -229,6 +249,8 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
             conversions = apply_manual_cost_conversions(cur)
+            family_costs = apply_manual_family_costs(cur)
+            family_subarticles = apply_manual_family_subarticles(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
@@ -239,6 +261,21 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
                     "One or more confirmed cost conversions could not be applied: "
                     + str(conversions.get("held"))
                 )
+            if family_costs.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family costs could not be applied: "
+                    + str(family_costs.get("held"))
+                )
+            if family_subarticles.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family subarticles could not be applied: "
+                    + str(family_subarticles.get("held"))
+                )
+
+            if family_costs.get("held"):
+                raise RuntimeError("One or more confirmed family costs could not be applied: " + str(family_costs.get("held")))
+            if family_subarticles.get("held"):
+                raise RuntimeError("One or more confirmed family subarticles could not be applied: " + str(family_subarticles.get("held")))
 
             # Re-evaluate per-UPC core holds from scratch for the currently published batch.
             cur.execute(
@@ -334,6 +371,8 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
                 "manual_cost_conversions": conversions,
+                "manual_family_costs": family_costs,
+                "manual_family_subarticles": family_subarticles,
                 "quick_check": qc,
                 "phase3_status": status,
                 "remaining_missing_selling_uom": remaining_missing_selling_uom,
@@ -441,6 +480,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             ensure_override_table(cur)
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
+            ensure_family_cost_table(cur)
             conn.commit()
 
             cur.execute(
@@ -483,6 +523,8 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
             conversions = apply_manual_cost_conversions(cur)
+            family_costs = apply_manual_family_costs(cur)
+            family_subarticles = apply_manual_family_subarticles(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
@@ -493,6 +535,21 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
                     "One or more confirmed cost conversions could not be applied: "
                     + str(conversions.get("held"))
                 )
+            if family_costs.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family costs could not be applied: "
+                    + str(family_costs.get("held"))
+                )
+            if family_subarticles.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family subarticles could not be applied: "
+                    + str(family_subarticles.get("held"))
+                )
+
+            if family_costs.get("held"):
+                raise RuntimeError("One or more confirmed family costs could not be applied: " + str(family_costs.get("held")))
+            if family_subarticles.get("held"):
+                raise RuntimeError("One or more confirmed family subarticles could not be applied: " + str(family_subarticles.get("held")))
 
             cost_repair = repair_current_active_cost(cur, batch_id)
 
@@ -594,6 +651,8 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
                 "prior_core_holds_resolved": prior_core_holds_resolved,
                 "cost_repair": cost_repair,
                 "manual_cost_conversions": conversions,
+                "manual_family_costs": family_costs,
+                "manual_family_subarticles": family_subarticles,
                 "quick_check": qc,
                 "phase3_status": status,
                 "before_cost_summary": before_summary,
@@ -725,6 +784,7 @@ def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
             ensure_override_table(cur)
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
+            ensure_family_cost_table(cur)
             conn.commit()
 
             cur.execute(
@@ -768,6 +828,8 @@ def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
             conversions = apply_manual_cost_conversions(cur)
+            family_costs = apply_manual_family_costs(cur)
+            family_subarticles = apply_manual_family_subarticles(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual UPC overrides could not be applied: "
@@ -777,6 +839,16 @@ def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
                 raise RuntimeError(
                     "One or more confirmed cost conversions could not be applied: "
                     + str(conversions.get("held"))
+                )
+            if family_costs.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family costs could not be applied: "
+                    + str(family_costs.get("held"))
+                )
+            if family_subarticles.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed family subarticles could not be applied: "
+                    + str(family_subarticles.get("held"))
                 )
 
             cur.execute(
@@ -879,6 +951,8 @@ def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
                 "target_count": len(USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926),
                 "verified_target_count": len(target_checks),
                 "manual_conversions": conversions,
+                "manual_family_costs": family_costs,
+                "manual_family_subarticles": family_subarticles,
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
                 "prior_core_holds_resolved": prior_core_holds_resolved,
