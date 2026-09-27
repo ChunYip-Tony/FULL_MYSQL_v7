@@ -124,13 +124,62 @@ def _official_evidence(
     family_id: int,
     article_ids: list[int],
 ) -> dict[str, Any]:
-    if article_ids:
-        ph = ",".join(["%s"] * len(article_ids))
-        where = f"(c.family_id=%s OR c.article_id IN ({ph}))"
-        params: tuple[Any, ...] = tuple([family_id] + article_ids)
-    else:
-        where = "c.family_id=%s"
-        params = (family_id,)
+    """Read-only official-cost evidence using the same identity/UOM gates as repair.
+
+    v7.0.39 closes a false-SAFE gap: a non-null source cost UOM is not enough.
+    For auto-repair eligibility the UOM must resolve to dim_uom and the source
+    row must be linkable to the target Family through one of the repair routes.
+    """
+
+    # Mirror all authoritative relink routes used by current_active_cost_repair:
+    #   1) existing family_id
+    #   2) existing article_id -> confirmed Family
+    #   3) source article_number -> confirmed Family
+    #   4) existing upc_id -> confirmed Article -> Family
+    match_sql = """(
+        c.family_id=%s
+        OR baf_ai.family_id=%s
+        OR baf_an.family_id=%s
+        OR baf_upc.family_id=%s
+    )"""
+    match_params: tuple[Any, ...] = (
+        family_id,
+        family_id,
+        family_id,
+        family_id,
+    )
+
+    joins = """
+        LEFT JOIN bridge_article_family baf_ai
+          ON baf_ai.article_id=c.article_id
+         AND baf_ai.mapping_status='CONFIRMED'
+         AND baf_ai.is_primary=TRUE
+         AND (baf_ai.valid_to IS NULL OR baf_ai.valid_to>CURRENT_TIMESTAMP(6))
+        LEFT JOIN article srca
+          ON srca.article_number=c.article_number
+        LEFT JOIN bridge_article_family baf_an
+          ON baf_an.article_id=srca.article_id
+         AND baf_an.mapping_status='CONFIRMED'
+         AND baf_an.is_primary=TRUE
+         AND (baf_an.valid_to IS NULL OR baf_an.valid_to>CURRENT_TIMESTAMP(6))
+        LEFT JOIN bridge_article_upc bau_upc
+          ON bau_upc.upc_id=c.upc_id
+         AND bau_upc.mapping_status='CONFIRMED'
+         AND bau_upc.is_primary=TRUE
+         AND (bau_upc.valid_to IS NULL OR bau_upc.valid_to>CURRENT_TIMESTAMP(6))
+        LEFT JOIN bridge_article_family baf_upc
+          ON baf_upc.article_id=bau_upc.article_id
+         AND baf_upc.mapping_status='CONFIRMED'
+         AND baf_upc.is_primary=TRUE
+         AND (baf_upc.valid_to IS NULL OR baf_upc.valid_to>CURRENT_TIMESTAMP(6))
+        LEFT JOIN dim_uom du
+          ON UPPER(du.uom_code)=UPPER(TRIM(c.cost_uom_code))
+        LEFT JOIN product_family pf_target
+          ON pf_target.family_id=%s
+        LEFT JOIN article ma
+          ON ma.article_number=pf_target.main_article_number
+    """
+    params = (family_id, *match_params)
 
     cur.execute(
         f"""SELECT
@@ -138,11 +187,27 @@ def _official_evidence(
                SUM(CASE WHEN c.official_cost IS NOT NULL AND c.official_cost>0
                         THEN 1 ELSE 0 END) AS positive_cost_rows,
                SUM(CASE WHEN c.official_cost IS NOT NULL AND c.official_cost>0
-                              AND c.cost_uom_code IS NOT NULL
+                              AND NULLIF(TRIM(c.cost_uom_code),'') IS NOT NULL
                         THEN 1 ELSE 0 END) AS positive_with_uom_rows,
+               SUM(CASE WHEN c.official_cost IS NOT NULL AND c.official_cost>0
+                              AND du.uom_id IS NOT NULL
+                        THEN 1 ELSE 0 END) AS positive_with_supported_uom_rows,
+               SUM(CASE WHEN c.official_cost IS NOT NULL AND c.official_cost>0
+                              AND NULLIF(TRIM(c.cost_uom_code),'') IS NOT NULL
+                              AND du.uom_id IS NULL
+                        THEN 1 ELSE 0 END) AS positive_with_unsupported_uom_rows,
+               SUM(CASE WHEN c.official_cost IS NOT NULL AND c.official_cost>0
+                              AND NULLIF(TRIM(c.cost_uom_code),'') IS NULL
+                        THEN 1 ELSE 0 END) AS positive_missing_uom_rows,
+               SUM(CASE WHEN c.official_cost IS NOT NULL AND c.official_cost>0
+                              AND du.uom_id IS NOT NULL
+                              AND COALESCE(c.article_id,srca.article_id,bau_upc.article_id,ma.article_id)
+                                  IS NOT NULL
+                        THEN 1 ELSE 0 END) AS repairable_official_rows,
                MAX(c.observation_date) AS latest_official_date
             FROM company_price_observation c
-            WHERE {where}
+            {joins}
+            WHERE {match_sql}
               AND c.source_type IN (
                 'frozen_inventory',
                 'tx_seafood_abc_price',
@@ -157,10 +222,30 @@ def _official_evidence(
                    c.observation_date,c.article_number,c.article_id,
                    c.ean_upc,c.upc_id,c.family_id,
                    c.official_cost,c.cost_uom_code,
+                   du.uom_code AS canonical_cost_uom,
+                   CASE WHEN du.uom_id IS NOT NULL THEN TRUE ELSE FALSE END
+                     AS cost_uom_supported,
+                   CASE
+                     WHEN c.family_id=%s THEN 'EXISTING_FAMILY'
+                     WHEN baf_ai.family_id=%s THEN 'EXISTING_ARTICLE_ID'
+                     WHEN baf_an.family_id=%s THEN 'SOURCE_ARTICLE_NUMBER'
+                     WHEN baf_upc.family_id=%s THEN 'EXISTING_UPC_ID'
+                     ELSE 'UNRESOLVED'
+                   END AS family_match_route,
+                   COALESCE(c.article_id,srca.article_id,bau_upc.article_id,ma.article_id)
+                     AS projected_anchor_article_id,
+                   CASE
+                     WHEN c.official_cost IS NOT NULL AND c.official_cost>0
+                      AND du.uom_id IS NOT NULL
+                      AND COALESCE(c.article_id,srca.article_id,bau_upc.article_id,ma.article_id)
+                          IS NOT NULL
+                     THEN TRUE ELSE FALSE
+                   END AS repairable_by_current_rule,
                    c.price_a,c.price_b,c.price_c,
                    c.file_id,c.sheet_id,c.raw_id,c.source_row_number
             FROM company_price_observation c
-            WHERE {where}
+            {joins}
+            WHERE {match_sql}
               AND c.source_type IN (
                 'frozen_inventory',
                 'tx_seafood_abc_price',
@@ -168,15 +253,44 @@ def _official_evidence(
               )
             ORDER BY c.observation_date DESC,c.company_price_observation_id DESC
             LIMIT 12""",
-        params,
+        (*params[:1], family_id, family_id, family_id, family_id, *params[1:]),
     )
     rows = cur.fetchall()
+
+    cur.execute(
+        f"""SELECT COALESCE(NULLIF(TRIM(c.cost_uom_code),''),'__MISSING__') AS source_cost_uom,
+                   COUNT(*) AS row_count,
+                   SUM(CASE WHEN du.uom_id IS NOT NULL THEN 1 ELSE 0 END) AS supported_rows
+            FROM company_price_observation c
+            {joins}
+            WHERE {match_sql}
+              AND c.source_type IN (
+                'frozen_inventory',
+                'tx_seafood_abc_price',
+                'live_fresh_suggestion'
+              )
+              AND c.official_cost IS NOT NULL
+              AND c.official_cost>0
+            GROUP BY COALESCE(NULLIF(TRIM(c.cost_uom_code),''),'__MISSING__')
+            ORDER BY row_count DESC,source_cost_uom""",
+        params,
+    )
+    uom_tokens = cur.fetchall()
 
     return {
         "official_rows": int(summary.get("official_rows") or 0),
         "positive_cost_rows": int(summary.get("positive_cost_rows") or 0),
         "positive_with_uom_rows": int(summary.get("positive_with_uom_rows") or 0),
+        "positive_with_supported_uom_rows": int(
+            summary.get("positive_with_supported_uom_rows") or 0
+        ),
+        "positive_with_unsupported_uom_rows": int(
+            summary.get("positive_with_unsupported_uom_rows") or 0
+        ),
+        "positive_missing_uom_rows": int(summary.get("positive_missing_uom_rows") or 0),
+        "repairable_official_rows": int(summary.get("repairable_official_rows") or 0),
         "latest_official_date": summary.get("latest_official_date"),
+        "source_cost_uom_tokens": uom_tokens,
         "recent_rows": rows,
     }
 
@@ -378,7 +492,7 @@ def _classify_missing_cost(
             "proposed_action": "RELINK_OR_BACKFILL_RECEIPT_VALUATION",
         }
 
-    if int(official.get("positive_with_uom_rows") or 0) > 0:
+    if int(official.get("repairable_official_rows") or 0) > 0:
         return {
             "classification": "SAFE_OFFICIAL_COST_REPAIR_CANDIDATE",
             "safe_to_auto_resolve": True,
@@ -400,10 +514,22 @@ def _classify_missing_cost(
         }
 
     if int(official.get("positive_cost_rows") or 0) > 0:
+        if int(official.get("positive_with_uom_rows") or 0) == 0:
+            return {
+                "classification": "OFFICIAL_COST_WITHOUT_EXPLICIT_UOM",
+                "safe_to_auto_resolve": False,
+                "proposed_action": "REVIEW_OFFICIAL_COST_UOM",
+            }
+        if int(official.get("positive_with_supported_uom_rows") or 0) == 0:
+            return {
+                "classification": "OFFICIAL_COST_UOM_UNSUPPORTED",
+                "safe_to_auto_resolve": False,
+                "proposed_action": "REVIEW_AND_MAP_OFFICIAL_COST_UOM_TOKEN",
+            }
         return {
-            "classification": "OFFICIAL_COST_WITHOUT_EXPLICIT_UOM",
+            "classification": "OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED",
             "safe_to_auto_resolve": False,
-            "proposed_action": "REVIEW_OFFICIAL_COST_UOM",
+            "proposed_action": "REVIEW_OFFICIAL_COST_IDENTITY_ANCHOR",
         }
 
     if int(oh.get("positive_cost_candidates") or 0) > 0:
