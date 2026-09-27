@@ -14,9 +14,9 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage
 
-VERSION='7.0.55-single-service'
+VERSION='7.0.56-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -39,6 +39,10 @@ class ManualAuthorityRefreshRequest(BaseModel):
 class TrueStockSubmit(BaseModel):
     true_stock: Decimal
     uom: str
+
+class TrueStockCancelRequest(BaseModel):
+    confirm: str
+    reason: str|None=None
 
 @app.get('/healthz')
 def healthz(): return {'ok':True,'version':VERSION}
@@ -890,6 +894,36 @@ def app_submit_true_stock(
         raise HTTPException(400,str(exc))
     except Exception as exc:
         raise HTTPException(500,f'True Stock submit failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/app/quick-check/{upc}/true-stock/cancel')
+def app_cancel_true_stock(
+    upc:str,
+    body:TrueStockCancelRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    if body.confirm!='CANCEL_ACTIVE_TRUE_STOCK':
+        raise HTTPException(400,'confirm must be CANCEL_ACTIVE_TRUE_STOCK')
+    try:
+        result=cancel_true_stock(upc,device,body.reason)
+    except KeyError:
+        raise HTTPException(404,'Quick Check UPC not found')
+    except ValueError as exc:
+        code=str(exc)
+        if code in {
+            'SYSTEM_OH_NOT_AVAILABLE',
+            'SYSTEM_OH_LINEAGE_NOT_AVAILABLE',
+            'FAMILY_ID_NOT_AVAILABLE',
+            'NO_ACTIVE_TRUE_STOCK',
+        }:
+            raise HTTPException(409,detail={'status':'BLOCKED','reason':code,'upc':upc})
+        raise HTTPException(400,str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc),'upc':upc})
+    except Exception as exc:
+        raise HTTPException(500,f'True Stock cancel failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
