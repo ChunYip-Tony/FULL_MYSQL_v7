@@ -1,42 +1,25 @@
-FULL MYSQL v7.0.43 GitHub Patch
+FULL MYSQL v7.0.44
 
-Purpose:
-Resolve the remaining four current cost-to-selling conversion holds using
-Tony's exact confirmations.
+Deploy and verify:
+1) GET /healthz -> 7.0.44-single-service
+2) Run POST /v1/maintenance/safe-cost-refresh
+   body {"confirm":"APPLY_SAFE_COST_REPAIR_AND_REBUILD"}
 
-New exact equations:
-4843        : 1 EA   = 2 LB
-82995307020 : 1 EA   = 4.4 LB
-81223402832 : 1 PACK = 1 LB
-4029550743  : 1 EA   = 1 LB
+This maintenance flow now:
+- preserves the 12 exact confirmed cost-to-selling conversions
+- seeds the 13 confirmed Family cost fallbacks
+- records the two confirmed Maine Lobster SUB-article relationships
+- rebuilds Quick Check atomically
+- keeps receipt/report/OH authority ahead of manual Family fallback
 
-The existing 8 confirmed conversions remain unchanged.
-The registry now contains 12 exact UPC conversions.
+Expected current behavior for the 13 confirmed families:
+- if no higher-priority receipt/report/OH cost exists, Quick Check cost_source
+  becomes USER_CONFIRMED_FAMILY_COST and cost_date is 2026-09-26.
+- LB-selling UPCs with LB family cost become directly usable.
+- Family 1366580 has manual cost 0.82/EA; UPCs whose selling UOM is not EA may
+  still require an explicit EA-to-selling-unit conversion and should remain HOLD
+  rather than being guessed.
 
-Calculation:
-cost_per_selling_unit =
-    authoritative_cost_per_cost_uom * cost_qty / selling_qty
-
-Expected using current authoritative Frozen report costs:
-- 4843: 9.25/LB -> 18.50/EA
-- 82995307020: 2.556818/LB -> 11.2499992/EA
-- 81223402832: 7.00/LB -> 7.00/PACK
-- 4029550743: 5.666667/LB -> 5.666667/EA
-
-Deploy and run:
-1) Verify /healthz = 7.0.43-single-service.
-2) POST /v1/maintenance/confirmed-cost-conversion-refresh with:
-   {"confirm":"APPLY_CONFIRMED_COST_CONVERSIONS_AND_REBUILD"}
-3) Expected:
-   status=COMMITTED
-   target_count=12
-   verified_target_count=12
-   all target_checks.pass=True
-   Base/Inventory UOM unchanged
-4) Re-run GET /v1/diagnostics/cost-holds.
-   If no unrelated source state changed, the four v7.0.42 conversion holds
-   should be cleared, leaving only current-cost-missing review cases.
-
-No RAW mutation.
-No schema change.
-No generic inference.
+After refresh:
+GET /v1/diagnostics/cost-holds
+Review remaining classifications. Do not infer missing conversions.
