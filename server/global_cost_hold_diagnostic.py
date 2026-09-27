@@ -210,7 +210,6 @@ def _official_evidence(
             WHERE {match_sql}
               AND c.source_type IN (
                 'frozen_inventory',
-                'tx_seafood_abc_price',
                 'live_fresh_suggestion'
               )""",
         params,
@@ -248,7 +247,6 @@ def _official_evidence(
             WHERE {match_sql}
               AND c.source_type IN (
                 'frozen_inventory',
-                'tx_seafood_abc_price',
                 'live_fresh_suggestion'
               )
             ORDER BY c.observation_date DESC,c.company_price_observation_id DESC
@@ -266,7 +264,6 @@ def _official_evidence(
             WHERE {match_sql}
               AND c.source_type IN (
                 'frozen_inventory',
-                'tx_seafood_abc_price',
                 'live_fresh_suggestion'
               )
               AND c.official_cost IS NOT NULL
@@ -537,6 +534,17 @@ def _classify_missing_cost(
             "classification": "OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM",
             "safe_to_auto_resolve": False,
             "proposed_action": "REVIEW_OH_COST_UOM",
+        }
+
+    if (
+        int(receipt.get("receipt_rows") or 0) == 0
+        and int(official.get("positive_cost_rows") or 0) == 0
+        and int(oh.get("positive_cost_candidates") or 0) == 0
+    ):
+        return {
+            "classification": "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST",
+            "safe_to_auto_resolve": False,
+            "proposed_action": "ASK_USER_FOR_COST_IF_NO_RECEIVING_HISTORY",
         }
 
     return {
