@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from db import db_conn
+from inventory_position import latest_canonical_movement_day, rollforward_position
 
 
 def _table_exists(cur, table_name: str) -> bool:
@@ -50,6 +51,8 @@ def ensure_true_stock_tables(cur) -> None:
                 system_oh_uom_code VARCHAR(32) NULL,
                 discrepancy_quantity DECIMAL(24,8) NULL,
                 anchor_on_hand_file_id BIGINT UNSIGNED NULL,
+                anchor_movement_date DATE NULL,
+                anchor_movement_file_id BIGINT UNSIGNED NULL,
                 override_status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
                 submitted_by VARCHAR(128) NULL,
                 submitted_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -95,6 +98,20 @@ def ensure_true_stock_tables(cur) -> None:
     # v7.0.56: preserve cancellation audit without deleting historical counts.
     # DDL is intentionally performed by ensure_true_stock_tables before the
     # business transaction begins.
+    # v7.0.57: capture movement lineage at the physical-count anchor.
+    if not _column_exists(cur, "manual_true_stock", "anchor_movement_date"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN anchor_movement_date DATE NULL
+               AFTER anchor_on_hand_file_id"""
+        )
+    if not _column_exists(cur, "manual_true_stock", "anchor_movement_file_id"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN anchor_movement_file_id BIGINT UNSIGNED NULL
+               AFTER anchor_movement_date"""
+        )
+
     if not _column_exists(cur, "manual_true_stock", "cancelled_at"):
         cur.execute(
             """ALTER TABLE manual_true_stock
@@ -320,9 +337,19 @@ def ready_quick_checks_with_system_oh(limit: int = 50) -> dict[str, Any]:
         rows = cur.fetchall()
         for row in rows:
             ctx = _system_oh_context(cur, row)
+            pos = _system_position(cur, ctx)
             row["system_oh_scope_type"] = ctx.get("scope_type") if ctx else None
             row["system_oh_article_number"] = ctx.get("article_number") if ctx else None
-            row["true_stock_required_uom"] = row.get("current_oh_uom")
+            row["system_oh_anchor_quantity"] = ctx.get("on_hand_quantity") if ctx else None
+            row["system_oh_anchor_date"] = ctx.get("observation_date") if ctx else None
+            row["system_oh_movement_delta"] = pos.get("movement_delta") if pos else None
+            row["system_oh_rollforward_status"] = pos.get("rollforward_status") if pos else None
+            row["system_oh_analysis_usable"] = pos.get("analysis_usable") if pos else False
+            if pos and pos.get("analysis_usable"):
+                row["current_oh"] = pos.get("quantity")
+                row["current_oh_uom"] = pos.get("uom")
+                row["oh_date"] = pos.get("movement_through_date")
+            row["true_stock_required_uom"] = ctx.get("uom_code") if ctx else row.get("current_oh_uom")
         cur.close()
     return {"count": len(rows), "results": rows}
 
@@ -416,6 +443,36 @@ def _system_oh_context(cur, row: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def _system_position(cur, system_oh: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not system_oh:
+        return None
+    return rollforward_position(
+        cur,
+        anchor_quantity=system_oh.get("on_hand_quantity"),
+        anchor_uom=system_oh.get("uom_code"),
+        anchor_date=system_oh.get("observation_date"),
+        scope_type=system_oh.get("scope_type"),
+        article_id=system_oh.get("article_id"),
+        family_id=system_oh.get("family_id"),
+        upc_id=system_oh.get("upc_id"),
+    )
+
+
+def _actual_position(cur, true_stock: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not true_stock:
+        return None
+    return rollforward_position(
+        cur,
+        anchor_quantity=true_stock.get("true_stock_quantity"),
+        anchor_uom=true_stock.get("uom_code"),
+        anchor_date=true_stock.get("submitted_at"),
+        scope_type=true_stock.get("scope_type"),
+        article_id=true_stock.get("article_id"),
+        family_id=true_stock.get("family_id"),
+        upc_id=true_stock.get("upc_id"),
+    )
+
+
 def _active_true_stock(cur, system_oh: dict[str, Any] | None) -> dict[str, Any] | None:
     if not system_oh or not _table_exists(cur, "manual_true_stock"):
         return None
@@ -488,7 +545,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         latest_oh_file_id = _refresh_expired_true_stock(cur)
         family_id = int(row["family_id"])
         system_oh = _system_oh_context(cur, row)
+        system_position = _system_position(cur, system_oh)
         true_stock = _active_true_stock(cur, system_oh)
+        actual_position = _actual_position(cur, true_stock)
         true_stock_history = _true_stock_history(cur, system_oh)
 
         cur.execute(
@@ -509,41 +568,60 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         )
         related = cur.fetchall()
 
+        effective_source = "TRUE_STOCK" if true_stock else "SYSTEM_OH"
+        effective_position = actual_position if true_stock else system_position
         effective_oh = {
-            "quantity": row.get("current_oh"),
-            "uom": row.get("current_oh_uom"),
-            "source": "SYSTEM_OH",
-            "date": row.get("oh_date"),
-            "scope_type": system_oh.get("scope_type") if system_oh else None,
-            "article_id": system_oh.get("article_id") if system_oh else None,
-            "article_number": system_oh.get("article_number") if system_oh else None,
+            "quantity": effective_position.get("quantity") if effective_position else None,
+            "uom": effective_position.get("uom") if effective_position else None,
+            "source": effective_source,
+            "date": effective_position.get("movement_through_date") if effective_position else None,
+            "anchor_date": effective_position.get("anchor_date") if effective_position else None,
+            "anchor_quantity": effective_position.get("anchor_quantity") if effective_position else None,
+            "movement_delta": effective_position.get("movement_delta") if effective_position else None,
+            "movement_through_date": effective_position.get("movement_through_date") if effective_position else None,
+            "rollforward_status": effective_position.get("rollforward_status") if effective_position else "BLOCKED",
+            "analysis_usable": effective_position.get("analysis_usable") if effective_position else False,
+            "blockers": effective_position.get("blockers") if effective_position else ["OH_POSITION_NOT_AVAILABLE"],
+            "same_day_policy": effective_position.get("same_day_policy") if effective_position else None,
+            "submitted_by": true_stock.get("submitted_by") if true_stock else None,
+            "scope_type": (true_stock.get("scope_type") if true_stock else system_oh.get("scope_type")) if (true_stock or system_oh) else None,
+            "article_id": (true_stock.get("article_id") if true_stock else system_oh.get("article_id")) if (true_stock or system_oh) else None,
+            "article_number": (true_stock.get("article_number") if true_stock else system_oh.get("article_number")) if (true_stock or system_oh) else None,
         }
-        if true_stock:
-            effective_oh = {
-                "quantity": true_stock.get("true_stock_quantity"),
-                "uom": true_stock.get("uom_code"),
-                "source": "TRUE_STOCK",
-                "date": true_stock.get("submitted_at"),
-                "submitted_by": true_stock.get("submitted_by"),
-                "scope_type": true_stock.get("scope_type"),
-                "article_id": true_stock.get("article_id"),
-                "article_number": true_stock.get("article_number"),
-            }
 
         detail = {
             "item": row,
             "system_oh": {
-                "quantity": row.get("current_oh"),
-                "uom": row.get("current_oh_uom"),
-                "date": row.get("oh_date"),
+                "quantity": system_position.get("quantity") if system_position else None,
+                "uom": system_position.get("uom") if system_position else (system_oh.get("uom_code") if system_oh else None),
+                "date": system_position.get("movement_through_date") if system_position else (system_oh.get("observation_date") if system_oh else None),
+                "anchor_quantity": system_position.get("anchor_quantity") if system_position else (system_oh.get("on_hand_quantity") if system_oh else None),
+                "anchor_date": system_position.get("anchor_date") if system_position else (system_oh.get("observation_date") if system_oh else None),
+                "movement_delta": system_position.get("movement_delta") if system_position else None,
+                "movement_through_date": system_position.get("movement_through_date") if system_position else None,
+                "movement_days": system_position.get("movement_days") if system_position else [],
+                "by_movement_type": system_position.get("by_movement_type") if system_position else [],
+                "rollforward_status": system_position.get("rollforward_status") if system_position else "BLOCKED",
+                "analysis_usable": system_position.get("analysis_usable") if system_position else False,
+                "blockers": system_position.get("blockers") if system_position else ["SYSTEM_OH_NOT_AVAILABLE"],
+                "same_day_policy": system_position.get("same_day_policy") if system_position else None,
                 "scope_type": system_oh.get("scope_type") if system_oh else None,
                 "article_id": system_oh.get("article_id") if system_oh else None,
                 "article_number": system_oh.get("article_number") if system_oh else None,
                 "source_file_id": system_oh.get("file_id") if system_oh else None,
                 "source_raw_id": system_oh.get("raw_id") if system_oh else None,
             },
+            "actual_oh": ({
+                **actual_position,
+                "source": "TRUE_STOCK",
+                "submitted_by": true_stock.get("submitted_by"),
+                "true_stock_id": true_stock.get("true_stock_id"),
+                "scope_type": true_stock.get("scope_type"),
+                "article_id": true_stock.get("article_id"),
+                "article_number": true_stock.get("article_number"),
+            } if true_stock and actual_position else None),
             "true_stock_input": {
-                "required_uom": row.get("current_oh_uom"),
+                "required_uom": system_position.get("uom") if system_position else (system_oh.get("uom_code") if system_oh else None),
                 "scope_type": system_oh.get("scope_type") if system_oh else None,
                 "article_number": system_oh.get("article_number") if system_oh else None,
                 "cross_uom_submission_allowed": False,
@@ -582,24 +660,28 @@ def submit_true_stock(
                 raise KeyError("QUICK_CHECK_UPC_NOT_FOUND")
             if row.get("family_id") is None:
                 raise ValueError("FAMILY_ID_NOT_AVAILABLE")
-            if row.get("current_oh") is None or not row.get("current_oh_uom"):
-                raise ValueError("SYSTEM_OH_NOT_AVAILABLE")
 
             family_id = int(row["family_id"])
-            system_qty = Decimal(str(row["current_oh"]))
-            system_uom = str(row["current_oh_uom"]).strip().upper()
+            latest_oh_file_id = _refresh_expired_true_stock(cur)
+            system_oh = _system_oh_context(cur, row)
+            if not system_oh:
+                raise ValueError("SYSTEM_OH_LINEAGE_NOT_AVAILABLE")
+            system_position = _system_position(cur, system_oh)
+            if not system_position or not system_position.get("analysis_usable"):
+                raise ValueError("SYSTEM_OH_ROLLFORWARD_BLOCKED")
+            if system_position.get("quantity") is None or not system_position.get("uom"):
+                raise ValueError("SYSTEM_OH_NOT_AVAILABLE")
+
+            system_qty = Decimal(str(system_position["quantity"]))
+            system_uom = str(system_position["uom"]).strip().upper()
             if not submitted_uom:
                 raise ValueError("TRUE_STOCK_UOM_REQUIRED")
             if submitted_uom != system_uom:
                 raise ValueError(f"TRUE_STOCK_UOM_MISMATCH:{system_uom}")
 
-            system_oh = _system_oh_context(cur, row)
-            if not system_oh:
-                raise ValueError("SYSTEM_OH_LINEAGE_NOT_AVAILABLE")
             scope_type = str(system_oh["scope_type"]).upper()
             article_id = int(system_oh["article_id"]) if system_oh.get("article_id") is not None else None
             article_number = system_oh.get("article_number")
-            latest_oh_file_id = _refresh_expired_true_stock(cur)
 
             if scope_type == "UPC":
                 scope_where = "scope_type='UPC' AND upc_id=%s"
@@ -622,6 +704,7 @@ def submit_true_stock(
                 scope_args,
             )
 
+            movement_anchor = latest_canonical_movement_day(cur)
             discrepancy = system_qty - qty
             cur.execute(
                 """INSERT INTO manual_true_stock
@@ -629,8 +712,9 @@ def submit_true_stock(
                     upc_id,ean_upc,true_stock_quantity,uom_code,
                     system_oh_quantity,system_oh_uom_code,
                     discrepancy_quantity,anchor_on_hand_file_id,
+                    anchor_movement_date,anchor_movement_file_id,
                     override_status,submitted_by)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s)""",
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s)""",
                 (
                     family_id,
                     row.get("main_article_number"),
@@ -644,7 +728,9 @@ def submit_true_stock(
                     system_qty,
                     system_uom,
                     discrepancy,
-                    latest_oh_file_id,
+                    system_oh.get("file_id"),
+                    movement_anchor.get("date") if movement_anchor else None,
+                    movement_anchor.get("file_id") if movement_anchor else None,
                     device,
                 ),
             )
@@ -765,7 +851,12 @@ def submit_true_stock(
                 "uom": system_uom,
                 "discrepancy": discrepancy,
                 "true_stock_id": true_stock_id,
-                "anchor_on_hand_file_id": latest_oh_file_id,
+                "anchor_on_hand_file_id": system_oh.get("file_id"),
+                "anchor_movement_date": movement_anchor.get("date") if movement_anchor else None,
+                "anchor_movement_file_id": movement_anchor.get("file_id") if movement_anchor else None,
+                "system_oh_anchor_quantity": system_position.get("anchor_quantity"),
+                "system_oh_movement_delta": system_position.get("movement_delta"),
+                "system_oh_movement_through_date": system_position.get("movement_through_date"),
                 "dumping_queue_action": queue_action,
                 "effective_oh_source": "TRUE_STOCK",
             }
@@ -843,6 +934,7 @@ def cancel_true_stock(
                 )
                 dumping_cancelled = int(cur.rowcount or 0)
 
+            system_position = _system_position(cur, system_oh)
             conn.commit()
             return {
                 "status": "COMMITTED",
@@ -858,8 +950,12 @@ def cancel_true_stock(
                 "cancel_reason": cancel_reason,
                 "dumping_rows_cancelled": dumping_cancelled,
                 "effective_oh_source": "SYSTEM_OH",
-                "system_oh": row.get("current_oh"),
-                "system_oh_uom": row.get("current_oh_uom"),
+                "system_oh": system_position.get("quantity") if system_position else None,
+                "system_oh_uom": system_position.get("uom") if system_position else (system_oh.get("uom_code") if system_oh else None),
+                "system_oh_anchor_quantity": system_position.get("anchor_quantity") if system_position else None,
+                "system_oh_movement_delta": system_position.get("movement_delta") if system_position else None,
+                "system_oh_movement_through_date": system_position.get("movement_through_date") if system_position else None,
+                "system_oh_rollforward_status": system_position.get("rollforward_status") if system_position else "BLOCKED",
                 "latest_on_hand_file_id": latest_oh_file_id,
             }
         except Exception:
@@ -869,6 +965,39 @@ def cancel_true_stock(
             cur.close()
 
 
+
+
+def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
+    """Read-only OH anchor -> movement roll-forward diagnostic for one UPC."""
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        row = _lookup_qc_row(cur, upc)
+        if not row:
+            cur.close()
+            raise KeyError("QUICK_CHECK_UPC_NOT_FOUND")
+
+        _refresh_expired_true_stock(cur)
+        system_oh = _system_oh_context(cur, row)
+        system_position = _system_position(cur, system_oh)
+        true_stock = _active_true_stock(cur, system_oh)
+        actual_position = _actual_position(cur, true_stock)
+        effective_position = actual_position if true_stock else system_position
+        effective_source = "TRUE_STOCK" if true_stock else "SYSTEM_OH"
+        conn.commit()
+        cur.close()
+        return {
+            "ean_upc": row.get("ean_upc"),
+            "family_id": row.get("family_id"),
+            "main_article_number": row.get("main_article_number"),
+            "article_id": row.get("article_id"),
+            "article_number": row.get("article_number"),
+            "system_anchor": system_oh,
+            "system_position": system_position,
+            "active_true_stock": true_stock,
+            "actual_position": actual_position,
+            "effective_position": effective_position,
+            "effective_source": effective_source,
+        }
 
 
 def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:
