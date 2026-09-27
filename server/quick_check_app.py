@@ -822,6 +822,18 @@ def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:
         observation_sample = cur.fetchall()
 
         cur.execute(
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      observation_date,article_number,article_id,family_id,
+                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+               FROM inventory_observation
+               WHERE family_id IS NULL OR article_id IS NULL
+               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
+               LIMIT %s""",
+            (limit,),
+        )
+        unmapped_inventory_rows = cur.fetchall()
+
+        cur.execute(
             """SELECT ean_upc,article_number,family_id,main_article_number,
                       selling_description,selling_uom,current_oh,current_oh_uom,
                       oh_date,quick_check_status,blocking_reason
