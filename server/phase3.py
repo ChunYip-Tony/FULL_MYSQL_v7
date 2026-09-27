@@ -377,8 +377,11 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                 continue
             article_id, family_id = _find_article(cur, article_num)
             seafood_tag = bool(cost_center and 'SEAFOOD' in cost_center.upper())
-            if not seafood_tag and family_id is None:
-                continue
+            # Preserve every structurally valid movement row in normalized history,
+            # even when product identity is not yet resolved. Late Article/Family
+            # authority must be able to relink prior movement without replaying RAW.
+            # Downstream Seafood analysis still filters through confirmed Family/
+            # Article identity; preserving an unmapped row does not publish it.
             if seafood_tag and family_id is None:
                 _issue(cur, batch_id, 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED', 'ARTICLE', article_num,
                        f'Seafood movement exists for Article {article_num}, but it has no confirmed Family mapping.',

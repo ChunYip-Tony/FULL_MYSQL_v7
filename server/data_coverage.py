@@ -52,8 +52,9 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
     - Only single-day coverage qualifies as a daily data day.
     - A historical batch must have reached Phase 3 at least once; the currently
       processing batch may be explicitly included.
-    - If multiple valid exports exist for one business date, the latest upload/file
-      is the canonical snapshot for rolling metrics. RAW/history are never deleted.
+    - If multiple valid exports exist for one business date, choose the latest
+      SOURCE snapshot chronology (report_generated_at, then filename date/time),
+      using upload/file order only as a final tie-break. RAW/history are never deleted.
     """
     params: list[Any] = [source_type]
     current_clause = ''
@@ -64,8 +65,9 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
         f"""SELECT f.file_id,f.batch_id,f.source_type,f.processing_status,f.error_count,
                    f.duplicate_of_file_id,f.source_row_count,f.date_semantics_status,
                    f.coverage_type,f.coverage_start_date,f.coverage_end_date,
-                   f.header_period_start_date,f.header_period_end_date,f.upload_timestamp,
-                   p.batch_id AS phase3_batch_id
+                   f.header_period_start_date,f.header_period_end_date,
+                   f.report_generated_at,f.filename_date_candidate,f.filename_time_candidate,
+                   f.upload_timestamp,p.batch_id AS phase3_batch_id
             FROM ingest_file f
             LEFT JOIN phase3_batch_result p ON p.batch_id=f.batch_id
             WHERE f.source_type=%s
@@ -75,7 +77,15 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
               AND f.source_row_count>0
               AND f.date_semantics_status='RESOLVED'
               AND (p.batch_id IS NOT NULL{current_clause})
-            ORDER BY f.upload_timestamp DESC,f.file_id DESC""",
+            ORDER BY
+              CASE WHEN f.report_generated_at IS NULL THEN 1 ELSE 0 END,
+              f.report_generated_at DESC,
+              CASE WHEN f.filename_date_candidate IS NULL THEN 1 ELSE 0 END,
+              f.filename_date_candidate DESC,
+              CASE WHEN f.filename_time_candidate IS NULL THEN 1 ELSE 0 END,
+              f.filename_time_candidate DESC,
+              f.upload_timestamp DESC,
+              f.file_id DESC""",
         tuple(params),
     )
     by_date: dict[date, dict[str, Any]] = {}
@@ -90,6 +100,9 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
                 'date': d,
                 'file_id': int(r['file_id']),
                 'batch_id': int(r['batch_id']),
+                'report_generated_at': r.get('report_generated_at'),
+                'filename_date_candidate': r.get('filename_date_candidate'),
+                'filename_time_candidate': r.get('filename_time_candidate'),
                 'upload_timestamp': r.get('upload_timestamp'),
             }
     out = [by_date[d] for d in sorted(by_date, reverse=True)]
