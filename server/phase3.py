@@ -746,8 +746,8 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
              AND c.official_cost IS NOT NULL
              AND c.official_cost>0
              AND (
-                 aco.cost_uom_id<>du.uom_id
-                 OR aco.cost_amount<>c.official_cost
+                 NOT (aco.cost_uom_id <=> du.uom_id)
+                 OR NOT (aco.cost_amount <=> c.official_cost)
                  OR aco.cost_status<>'OBSERVED'
              )"""
     )
