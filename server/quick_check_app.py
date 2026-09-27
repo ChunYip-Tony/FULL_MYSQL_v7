@@ -585,6 +585,11 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             "analysis_usable": effective_position.get("analysis_usable") if effective_position else False,
             "blockers": effective_position.get("blockers") if effective_position else ["OH_POSITION_NOT_AVAILABLE"],
             "same_day_policy": effective_position.get("same_day_policy") if effective_position else None,
+            "movement_coverage_expected_through": effective_position.get("movement_coverage_expected_through") if effective_position else None,
+            "movement_coverage_complete": effective_position.get("movement_coverage_complete") if effective_position else False,
+            "missing_movement_day_count": effective_position.get("missing_movement_day_count") if effective_position else None,
+            "missing_movement_days": effective_position.get("missing_movement_days") if effective_position else [],
+            "latest_complete_movement_date": effective_position.get("latest_complete_movement_date") if effective_position else None,
             "submitted_by": true_stock.get("submitted_by") if true_stock else None,
             "scope_type": (true_stock.get("scope_type") if true_stock else system_oh.get("scope_type")) if (true_stock or system_oh) else None,
             "article_id": (true_stock.get("article_id") if true_stock else system_oh.get("article_id")) if (true_stock or system_oh) else None,
@@ -607,6 +612,11 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
                 "analysis_usable": system_position.get("analysis_usable") if system_position else False,
                 "blockers": system_position.get("blockers") if system_position else ["SYSTEM_OH_NOT_AVAILABLE"],
                 "same_day_policy": system_position.get("same_day_policy") if system_position else None,
+                "movement_coverage_expected_through": system_position.get("movement_coverage_expected_through") if system_position else None,
+                "movement_coverage_complete": system_position.get("movement_coverage_complete") if system_position else False,
+                "missing_movement_day_count": system_position.get("missing_movement_day_count") if system_position else None,
+                "missing_movement_days": system_position.get("missing_movement_days") if system_position else [],
+                "latest_complete_movement_date": system_position.get("latest_complete_movement_date") if system_position else None,
                 "scope_type": system_oh.get("scope_type") if system_oh else None,
                 "article_id": system_oh.get("article_id") if system_oh else None,
                 "article_number": system_oh.get("article_number") if system_oh else None,
@@ -1125,8 +1135,19 @@ def inventory_rollforward_candidates(
             return {
                 "requested_date": requested_date,
                 "canonical_movement_day": None,
+                "lineage_status": (
+                    "REQUESTED_DAY_NOT_CANONICAL_COMPLETE"
+                    if requested_date is not None
+                    else "NO_CANONICAL_COMPLETE_MOVEMENT_DAY"
+                ),
                 "count": 0,
                 "results": [],
+                "diagnostic_note": (
+                    "The requested movement business date has no canonical COMPLETE snapshot. "
+                    "Same-day provisional MVT exports are intentionally excluded from daily authority."
+                    if requested_date is not None
+                    else "No canonical COMPLETE movement day is currently available."
+                ),
             }
 
         file_id = int(day["file_id"])
