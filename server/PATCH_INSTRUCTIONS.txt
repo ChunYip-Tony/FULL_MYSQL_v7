@@ -1,20 +1,41 @@
-FULL MYSQL v7.0.33 GitHub Patch
+FULL MYSQL v7.0.34 GitHub Patch
 
 Purpose:
-- Stop GET /v1/diagnostics/uom-lineage from failing as a generic HTTP 500.
-- Make the read-only diagnostic resilient to production-schema/evidence variation.
+- Apply Tony's explicit Selling-UOM confirmations for the 22 current UOM QA holds.
+- Rebuild Quick Check immediately through HTTPS 443 without Work-PC direct MySQL access.
 
-Behavior:
-- uses SHOW COLUMNS for selling_upc_uom_history optional fields
-- isolates Article Manual/history/family-peer evidence failures
-- returns status=PARTIAL_WITH_DIAGNOSTIC_ERRORS when partial evidence is unavailable
-- returns status=FATAL_DIAGNOSTIC_ERROR with the real DB/Python error if top-level diagnosis cannot run
-- no database mutation
-- no schema migration
-- no Quick Check rebuild
+Authority encoded:
+- Group A exact UPCs: LB
+- Group B exact UPCs: PACK
+- Group C remaining 14 reviewed exact UPCs: LB
+- These are per-UPC confirmations only.
+- Base/Inventory UOM and conversion factors remain NULL unless separately confirmed/evidenced.
+
+Endpoint:
+POST /v1/maintenance/confirmed-uom-refresh
+Body:
+{"confirm":"APPLY_CONFIRMED_UOM_AND_REBUILD"}
+
+Atomic workflow:
+1) Refuse while POST_RAW_PIPELINE is STARTED.
+2) Locate currently published Phase 3 batch.
+3) Savepoint.
+4) Apply all code-reviewed manual overrides/retirements.
+5) Resolve stale QUICK_CHECK_CORE_FIELD_MISSING rows for that serving batch.
+6) Rebuild Quick Check.
+7) Run global product-identity audit.
+8) Verify all 22 target Quick Check rows publish the exact confirmed Selling UOM
+   and the intentionally-unresolved Base/Inventory UOM tuple.
+9) On any failure, rollback the transaction and preserve the prior serving snapshot.
+10) On success, update Phase 3 serving counts/status and commit.
+
+No schema migration.
+No prefix-wide UOM rule.
+No inferred pack weight/base conversion.
 
 After deploy:
-1) Verify /healthz = 7.0.33-single-service.
-2) Call GET /v1/diagnostics/uom-lineage.
-3) If status is OK/PARTIAL, review summary + items.
-4) If status is FATAL_DIAGNOSTIC_ERROR, inspect diagnostic_errors; no DigitalOcean console copy is required.
+1) Verify /healthz = 7.0.34-single-service.
+2) POST /v1/maintenance/confirmed-uom-refresh.
+3) Confirm status=COMMITTED and remaining_missing_selling_uom=0.
+4) Review target_checks and the remaining Quick Check QA holds, which may still
+   contain CURRENT_COST_MISSING or COST_TO_SELLING_UOM_UNRESOLVED.

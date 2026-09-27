@@ -26,3 +26,11 @@ def manual_authority_refresh():
         {'confirm':'APPLY_CONFIRMED_USER_AUTHORITY'},
         timeout=120,
     )
+
+
+def confirmed_uom_refresh():
+    return post_json(
+        '/v1/maintenance/confirmed-uom-refresh',
+        {'confirm':'APPLY_CONFIRMED_UOM_AND_REBUILD'},
+        timeout=180,
+    )
