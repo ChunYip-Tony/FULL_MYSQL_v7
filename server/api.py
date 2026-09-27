@@ -14,7 +14,7 @@ from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refr
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 
-VERSION='7.0.44-single-service'
+VERSION='7.0.45-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
