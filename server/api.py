@@ -14,9 +14,9 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage
 
-VERSION='7.0.46-single-service'
+VERSION='7.0.47-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -764,6 +764,18 @@ def cost_lineage_diagnostic(
         'upc_alias_checks':alias_checks,
         'family_article_numbers':article_numbers,
     },default=j))
+
+
+@app.get('/v1/diagnostics/quick-check-lineage')
+def diagnostics_quick_check_lineage(
+    upc:str,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    result=quick_check_lineage(upc)
+    if not result:
+        raise HTTPException(404,'Quick Check UPC not found')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/app/quick-check/search')
