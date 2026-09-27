@@ -1999,6 +1999,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # - Multi-date MVT daily slices are resolved dynamically from exact
             #   movement_history.posting_date in source_data_days().
             pos_period_backfill = resolve_pos_period_backfill(cur, batch_id)
+            pos_backfill_relinked_pre = relink_pos_backfill(cur)
 
             # Multi-tab Article Manual repair:
             #  - recognizes formatted barcodes such as `0 6139190220 5`
@@ -2142,6 +2143,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                   'company_cost_uom_repair': company_cost_uom_repair,
                   'current_active_cost_repair': current_active_cost_repair,
                   'coverage_backfill': pos_period_backfill,
+                  'pos_backfill_relinked_pre_repair': pos_backfill_relinked_pre,
                   'pos_backfill_relinked': pos_backfill_relinked,
                   'product_identity_guard': product_identity_guard}, default=str)),
             )
@@ -2167,6 +2169,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     'company_cost_uom_repair': company_cost_uom_repair,
                     'current_active_cost_repair': current_active_cost_repair,
                     'coverage_backfill': pos_period_backfill,
+                    'pos_backfill_relinked_pre_repair': pos_backfill_relinked_pre,
                     'pos_backfill_relinked': pos_backfill_relinked,
                     'product_identity_guard': product_identity_guard,
                     'quick_check_attempt': qc_attempt,
