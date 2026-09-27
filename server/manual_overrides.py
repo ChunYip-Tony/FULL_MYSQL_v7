@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any
 
 USER_CONFIRMED_UOM_REVIEW_20260926 = (
@@ -83,6 +84,74 @@ SEED_OVERRIDES = (
         "source_note": "Resolved 2026-09-26 from combined authoritative evidence: user confirmed POS Selling UOM=PACK and case configuration=40/150G; receipt 107 for Article 3461050 shows 3 CV = 120 EA with $330 valuation, exactly matching 3 cases x 40 selling packs = 120. Therefore 1 selling PACK = 1 base EA and authoritative receipt cost is $2.75 per PACK.",
     },
  ) + USER_CONFIRMED_UOM_REVIEW_20260926
+
+
+USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
+    {
+        "ean_upc": "402954957",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "BX",
+        "cost_qty": Decimal("3"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 BX = 3 LB.",
+    },
+    {
+        "ean_upc": "75339379281",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 2 LB.",
+    },
+    {
+        "ean_upc": "4816",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("4"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 4 LB.",
+    },
+    {
+        "ean_upc": "8231817551",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 PACK = 2 LB.",
+    },
+    {
+        "ean_upc": "4029551288",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PAC",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 PAC = 2 LB.",
+    },
+    {
+        "ean_upc": "7441092018",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("1.2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 1.2 LB.",
+    },
+    {
+        "ean_upc": "4883",
+        "selling_qty": Decimal("2.2"),
+        "selling_uom_code": "LB",
+        "cost_qty": Decimal("1"),
+        "cost_uom_code": "PAC",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 PAC = 2.2 LB; equivalently 2.2 selling LB = 1 cost PAC.",
+    },
+    {
+        "ean_upc": "81223402632",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("1"),
+        "cost_uom_code": "BAG",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 PACK = 1 BAG.",
+    },
+)
 
 
 SEED_RETIREMENTS = (
@@ -184,6 +253,118 @@ def _canonical_article(cur, article_number: str) -> dict[str, Any] | None:
         LIMIT 1
         """,
         (article_number,),
+    )
+    return cur.fetchone()
+
+
+
+def ensure_cost_conversion_table(cur) -> None:
+    if _table_exists(cur, 'manual_cost_selling_conversion'):
+        return
+    cur.execute(
+        """
+        CREATE TABLE manual_cost_selling_conversion (
+            conversion_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            ean_upc VARCHAR(32) NOT NULL,
+            selling_qty DECIMAL(24,12) NOT NULL,
+            selling_uom_code VARCHAR(32) NOT NULL,
+            cost_qty DECIMAL(24,12) NOT NULL,
+            cost_uom_code VARCHAR(32) NOT NULL,
+            conversion_status VARCHAR(24) NOT NULL DEFAULT 'CONFIRMED',
+            source_note VARCHAR(512) NULL,
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                       ON UPDATE CURRENT_TIMESTAMP(6),
+            PRIMARY KEY (conversion_id),
+            UNIQUE KEY uq_manual_cost_selling_conversion (ean_upc),
+            KEY ix_manual_cost_selling_conversion_status (conversion_status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        """
+    )
+
+
+def seed_confirmed_cost_conversions(cur) -> int:
+    changed = 0
+    for row in USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926:
+        cur.execute(
+            """
+            INSERT INTO manual_cost_selling_conversion
+              (ean_upc,selling_qty,selling_uom_code,cost_qty,cost_uom_code,
+               conversion_status,source_note)
+            VALUES (%s,%s,%s,%s,%s,'CONFIRMED',%s)
+            ON DUPLICATE KEY UPDATE
+              selling_qty=VALUES(selling_qty),
+              selling_uom_code=VALUES(selling_uom_code),
+              cost_qty=VALUES(cost_qty),
+              cost_uom_code=VALUES(cost_uom_code),
+              conversion_status='CONFIRMED',
+              source_note=VALUES(source_note)
+            """,
+            (
+                row["ean_upc"],
+                row["selling_qty"],
+                row["selling_uom_code"],
+                row["cost_qty"],
+                row["cost_uom_code"],
+                row["source_note"],
+            ),
+        )
+        changed += 1
+    return changed
+
+
+def apply_manual_cost_conversions(cur) -> dict[str, Any]:
+    """Seed/refresh explicit cost-to-selling conversions without touching Base UOM."""
+    seeded = seed_confirmed_cost_conversions(cur)
+    cur.execute(
+        """
+        SELECT conversion_id,ean_upc,selling_qty,selling_uom_code,
+               cost_qty,cost_uom_code,source_note
+        FROM manual_cost_selling_conversion
+        WHERE conversion_status='CONFIRMED'
+        ORDER BY conversion_id
+        """
+    )
+    rows = cur.fetchall()
+    held = []
+    verified = 0
+    for row in rows:
+        if (
+            row.get("selling_qty") is None
+            or Decimal(str(row["selling_qty"])) <= 0
+            or row.get("cost_qty") is None
+            or Decimal(str(row["cost_qty"])) <= 0
+        ):
+            held.append({"ean_upc": row["ean_upc"], "reason": "NONPOSITIVE_CONVERSION_QUANTITY"})
+            continue
+        if _uom_id(cur, row["selling_uom_code"]) is None:
+            held.append({"ean_upc": row["ean_upc"], "reason": "SELLING_UOM_CODE_NOT_IN_DIM_UOM"})
+            continue
+        if _uom_id(cur, row["cost_uom_code"]) is None:
+            held.append({"ean_upc": row["ean_upc"], "reason": "COST_UOM_CODE_NOT_IN_DIM_UOM"})
+            continue
+        verified += 1
+    return {
+        "seeded_or_refreshed": seeded,
+        "conversions_examined": len(rows),
+        "verified": verified,
+        "held": held,
+    }
+
+
+def confirmed_cost_conversion(cur, ean_upc: str) -> dict[str, Any] | None:
+    if not _table_exists(cur, 'manual_cost_selling_conversion'):
+        return None
+    cur.execute(
+        """
+        SELECT ean_upc,selling_qty,selling_uom_code,cost_qty,cost_uom_code,
+               source_note
+        FROM manual_cost_selling_conversion
+        WHERE ean_upc=%s
+          AND conversion_status='CONFIRMED'
+        LIMIT 1
+        """,
+        (str(ean_upc),),
     )
     return cur.fetchone()
 
