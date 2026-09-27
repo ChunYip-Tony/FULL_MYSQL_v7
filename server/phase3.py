@@ -547,11 +547,18 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
     cur.execute('SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
         hmap = _sheet_header_map(cur, 'raw_on_hand', sh['sheet_id'], sh['header_row_number'])
-        c_article = _pick(hmap, ['Article', 'Article Number'])
-        c_upc = _pick(hmap, ['UPC', 'EAN', 'Barcode', 'Sales Set'])
-        c_oh = _pick(hmap, ['On Hand', 'OH', 'Stock', 'Quantity'])
-        c_uom = _pick(hmap, ['UOM', 'Unit'])
-        c_date = _pick(hmap, ['Date', 'Inventory Date', 'Count Date'])
+        c_article = _pick_exact(hmap, ['Article', 'Article Number'])
+        c_upc = _pick_exact(hmap, ['UPC', 'EAN', 'Barcode', 'Sales Set'])
+        # SAP stock/OH extracts use Unrestr. as the actual unrestricted stock.
+        # Do NOT substring-match generic "Stock": that can select "Stock in Transit",
+        # which is a different quantity and was the root cause of v7.0.50 zero-OH rows.
+        c_oh = _pick_exact(
+            hmap,
+            ['Unrestr.', 'Unrestr', 'Unrestricted', 'Unrestricted Stock', 'On Hand', 'OH'],
+        )
+        # SAP BUn is the Base Unit attached to the unrestricted quantity.
+        c_uom = _pick_exact(hmap, ['BUn', 'Base UOM', 'Base Unit', 'UOM', 'Unit'])
+        c_date = _pick_exact(hmap, ['Date', 'Inventory Date', 'Count Date'])
         if not c_oh or (not c_article and not c_upc):
             continue
         cur.execute('SELECT raw_id,source_row_number,raw_payload FROM raw_on_hand WHERE sheet_id=%s AND source_row_number>%s ORDER BY source_row_number',
@@ -999,6 +1006,21 @@ def relink_history(cur) -> None:
                      AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
                    SET m.article_id=a.article_id, m.family_id=COALESCE(m.family_id,baf.family_id)
                    WHERE m.article_id IS NULL OR m.family_id IS NULL""")
+    # Article-based OH rows can be ingested before late product-family repair.
+    # Relink them from their exact article number without changing RAW source values.
+    cur.execute(
+        """UPDATE inventory_observation i
+           JOIN article a ON a.article_number=i.article_number
+           LEFT JOIN bridge_article_family baf
+             ON baf.article_id=a.article_id
+            AND baf.mapping_status='CONFIRMED'
+            AND baf.is_primary=TRUE
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           SET i.article_id=a.article_id,
+               i.family_id=COALESCE(i.family_id,baf.family_id)
+           WHERE i.article_number IS NOT NULL
+             AND (i.article_id IS NULL OR i.family_id IS NULL)"""
+    )
     cur.execute("""UPDATE inventory_observation i JOIN selling_upc u ON u.ean_upc=i.ean_upc
                    SET i.upc_id=u.upc_id WHERE i.upc_id IS NULL AND i.ean_upc IS NOT NULL""")
     cur.execute("""UPDATE company_price_observation c JOIN selling_upc u ON u.ean_upc=c.ean_upc
@@ -1374,19 +1396,51 @@ def _family_movement_metrics(cur, family_id: int, data_days: list[dict[str, Any]
     return None, None, len(data_days)
 
 
-def _latest_inventory(cur, upc_id: int, family_id: int | None) -> dict[str, Any] | None:
+def _latest_inventory(
+    cur,
+    upc_id: int,
+    article_id: int | None,
+    family_id: int | None,
+) -> dict[str, Any] | None:
+    # Prefer the most specific inventory owner. An article-level SAP OH row must
+    # not be borrowed from a sibling/sub-article merely because both share a family.
     cur.execute(
-        """SELECT on_hand_quantity,uom_code,observation_date FROM inventory_observation
+        """SELECT on_hand_quantity,uom_code,observation_date
+           FROM inventory_observation
            WHERE upc_id=%s AND on_hand_quantity IS NOT NULL
-           ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""", (upc_id,))
+           ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
+        (upc_id,),
+    )
     r = cur.fetchone()
     if r:
         return r
+
+    if article_id is not None:
+        cur.execute(
+            """SELECT on_hand_quantity,uom_code,observation_date
+               FROM inventory_observation
+               WHERE article_id=%s
+                 AND upc_id IS NULL
+                 AND on_hand_quantity IS NOT NULL
+               ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
+            (article_id,),
+        )
+        r = cur.fetchone()
+        if r:
+            return r
+
+    # Family-only fallback is reserved for rows that truly have no article owner.
     if family_id is not None:
         cur.execute(
-            """SELECT on_hand_quantity,uom_code,observation_date FROM inventory_observation
-               WHERE family_id=%s AND upc_id IS NULL AND on_hand_quantity IS NOT NULL
-               ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""", (family_id,))
+            """SELECT on_hand_quantity,uom_code,observation_date
+               FROM inventory_observation
+               WHERE family_id=%s
+                 AND article_id IS NULL
+                 AND upc_id IS NULL
+                 AND on_hand_quantity IS NOT NULL
+               ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
+            (family_id,),
+        )
         return cur.fetchone()
     return None
 
@@ -1519,7 +1573,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
                         / sell_qty
                     )
         fm7, fm_uom, _fm_days = _family_movement_metrics(cur, family_id, mvt_days_7)
-        inv = _latest_inventory(cur, upc_id, family_id)
+        inv = _latest_inventory(cur, upc_id, int(p['article_id']) if p.get('article_id') is not None else None, family_id)
         cp = _company_prices(cur, upc_id, family_id)
         pclass = _product_class(p['article_description'], p['family_description'], p['category_code'])
 
