@@ -264,7 +264,7 @@ def ready_quick_checks_with_system_oh(limit: int = 50) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            """SELECT ean_upc,article_number,family_id,main_article_number,
+            """SELECT upc_id,ean_upc,article_id,article_number,family_id,main_article_number,
                       selling_description,family_description,selling_uom,
                       current_oh,current_oh_uom,oh_date,current_price,current_price_type,
                       current_cost_per_selling_unit,pos_qty_7d,pos_qty_30d,
