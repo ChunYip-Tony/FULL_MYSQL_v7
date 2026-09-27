@@ -457,6 +457,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
                 "source": "TRUE_STOCK",
                 "date": true_stock.get("submitted_at"),
                 "submitted_by": true_stock.get("submitted_by"),
+                "scope_type": true_stock.get("scope_type"),
+                "article_id": true_stock.get("article_id"),
+                "article_number": true_stock.get("article_number"),
             }
 
         detail = {
