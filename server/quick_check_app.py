@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
 from db import db_conn
+from data_coverage import source_data_days
 from inventory_position import latest_canonical_movement_day, rollforward_position
 
 
@@ -1088,6 +1090,166 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
                 ),
             },
         }
+
+
+def inventory_rollforward_candidates(
+    movement_date: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """Read-only candidate list for validating OH + signed movement roll-forward.
+
+    Selects one canonical valid MVT file for the requested business date (or the
+    latest valid MVT data day when omitted), aggregates source-signed base
+    quantities by Article/UOM, and attaches a representative Quick Check UPC.
+    No inventory data or authority is modified.
+    """
+    limit = max(1, min(int(limit or 20), 100))
+
+    requested_date = None
+    if movement_date:
+        try:
+            requested_date = datetime.fromisoformat(str(movement_date)).date()
+        except Exception as exc:
+            raise ValueError("INVALID_MOVEMENT_DATE") from exc
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        days = source_data_days(cur, "movement")
+        if requested_date is not None:
+            day = next((x for x in days if x["date"] == requested_date), None)
+        else:
+            day = days[0] if days else None
+
+        if not day:
+            cur.close()
+            return {
+                "requested_date": requested_date,
+                "canonical_movement_day": None,
+                "count": 0,
+                "results": [],
+            }
+
+        file_id = int(day["file_id"])
+        business_date = day["date"]
+
+        cur.execute(
+            """SELECT article_id,article_number,family_id,base_uom_code,
+                      COUNT(*) AS movement_row_count,
+                      COALESCE(SUM(base_quantity),0) AS movement_delta,
+                      GROUP_CONCAT(DISTINCT movement_type
+                                   ORDER BY movement_type SEPARATOR ',') AS movement_types
+               FROM movement_history
+               WHERE file_id=%s
+                 AND posting_date=%s
+                 AND base_quantity IS NOT NULL
+               GROUP BY article_id,article_number,family_id,base_uom_code
+               HAVING COALESCE(SUM(base_quantity),0)<>0
+               ORDER BY ABS(COALESCE(SUM(base_quantity),0)) DESC,
+                        article_number
+               LIMIT %s""",
+            (file_id, business_date, limit * 4),
+        )
+        movement_groups = cur.fetchall()
+
+        results = []
+        seen = set()
+        for g in movement_groups:
+            article_id = g.get("article_id")
+            family_id = g.get("family_id")
+            if article_id is None and family_id is None:
+                continue
+
+            if article_id is not None:
+                cur.execute(
+                    """SELECT upc_id,ean_upc,article_id,article_number,family_id,
+                              main_article_number,selling_description,selling_uom,
+                              base_uom,current_oh,current_oh_uom,oh_date,
+                              quick_check_status,blocking_reason
+                       FROM quick_check_current
+                       WHERE article_id=%s
+                       ORDER BY CASE quick_check_status
+                                  WHEN 'READY' THEN 1
+                                  WHEN 'QA_HOLD' THEN 2
+                                  ELSE 3
+                                END,
+                                CASE WHEN current_oh IS NOT NULL THEN 0 ELSE 1 END,
+                                ean_upc
+                       LIMIT 1""",
+                    (article_id,),
+                )
+            else:
+                cur.execute(
+                    """SELECT upc_id,ean_upc,article_id,article_number,family_id,
+                              main_article_number,selling_description,selling_uom,
+                              base_uom,current_oh,current_oh_uom,oh_date,
+                              quick_check_status,blocking_reason
+                       FROM quick_check_current
+                       WHERE family_id=%s
+                       ORDER BY CASE quick_check_status
+                                  WHEN 'READY' THEN 1
+                                  WHEN 'QA_HOLD' THEN 2
+                                  ELSE 3
+                                END,
+                                CASE WHEN current_oh IS NOT NULL THEN 0 ELSE 1 END,
+                                ean_upc
+                       LIMIT 1""",
+                    (family_id,),
+                )
+            qc = cur.fetchone()
+            if not qc:
+                continue
+
+            key = (qc.get("ean_upc"), g.get("article_number"), g.get("base_uom_code"))
+            if key in seen:
+                continue
+            seen.add(key)
+
+            system_oh = _system_oh_context(cur, qc)
+            system_position = _system_position(cur, system_oh)
+            results.append(
+                {
+                    "movement_business_date": business_date,
+                    "movement_file_id": file_id,
+                    "movement_article_id": article_id,
+                    "movement_article_number": g.get("article_number"),
+                    "movement_family_id": family_id,
+                    "movement_delta": g.get("movement_delta"),
+                    "movement_uom": g.get("base_uom_code"),
+                    "movement_row_count": int(g.get("movement_row_count") or 0),
+                    "movement_types": (
+                        str(g.get("movement_types") or "").split(",")
+                        if g.get("movement_types")
+                        else []
+                    ),
+                    "sample_upc": qc.get("ean_upc"),
+                    "sample_description": qc.get("selling_description"),
+                    "sample_article_number": qc.get("article_number"),
+                    "sample_main_article_number": qc.get("main_article_number"),
+                    "quick_check_status": qc.get("quick_check_status"),
+                    "system_anchor": system_oh,
+                    "system_position": system_position,
+                }
+            )
+            if len(results) >= limit:
+                break
+
+        cur.close()
+        return {
+            "requested_date": requested_date,
+            "canonical_movement_day": {
+                "date": business_date,
+                "file_id": file_id,
+                "batch_id": day.get("batch_id"),
+                "upload_timestamp": day.get("upload_timestamp"),
+            },
+            "count": len(results),
+            "results": results,
+            "diagnostic_note": (
+                "Use candidates where System OH anchor date is earlier than the "
+                "movement business date and movement UOM matches the anchor UOM."
+            ),
+        }
+
 
 
 def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:

@@ -14,9 +14,9 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
 
-VERSION='7.0.59-single-service'
+VERSION='7.0.60-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -836,6 +836,24 @@ def diagnostics_quick_check_lineage(
 def app_quick_check_search(q:str,limit:int=20,authorization: Annotated[str|None,Header()]=None):
     device_from_auth(authorization)
     return json.loads(json.dumps(search_quick_check(q,limit),default=j))
+
+
+@app.get('/v1/diagnostics/inventory-rollforward-candidates')
+def diagnostic_inventory_rollforward_candidates(
+    date:str|None=None,
+    limit:int=20,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    try:
+        result=inventory_rollforward_candidates(date,limit)
+    except ValueError as exc:
+        if str(exc)=='INVALID_MOVEMENT_DATE':
+            raise HTTPException(422,detail={'status':'INVALID','reason':'INVALID_MOVEMENT_DATE','date':date})
+        raise HTTPException(400,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Inventory roll-forward candidate diagnostic failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/diagnostics/inventory-position')
