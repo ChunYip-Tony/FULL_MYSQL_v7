@@ -351,7 +351,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
     )
     current_active_missing_uom = cur.fetchall()
     for row in current_active_missing_uom:
-        warnings.append(
+        blockers.append(
             {
                 "code": "CURRENT_ACTIVE_SELLING_UOM_MISSING",
                 "ean_upc": str(row["ean_upc"]),
@@ -385,17 +385,20 @@ def audit_product_identity(cur) -> dict[str, Any]:
             continue
         same_family = row.get("family_id") == other.get("family_id")
         same_uom = (row.get("selling_uom") or "").upper() == (other.get("selling_uom") or "").upper()
-        safe_alias_candidates.append(
-            {
-                "short_upc": short,
-                "valid_upca": long_upc,
-                "same_family": same_family,
-                "same_selling_uom": same_uom,
-                "merge_candidate": bool(same_family and same_uom),
-                "family_id": int(row["family_id"]) if row.get("family_id") is not None else None,
-                "selling_uom": row.get("selling_uom"),
-            }
-        )
+        item = {
+            "short_upc": short,
+            "valid_upca": long_upc,
+            "same_family": same_family,
+            "same_selling_uom": same_uom,
+            "merge_candidate": bool(same_family and same_uom),
+            "family_id": int(row["family_id"]) if row.get("family_id") is not None else None,
+            "selling_uom": row.get("selling_uom"),
+        }
+        safe_alias_candidates.append(item)
+        if item["merge_candidate"]:
+            blockers.append({"code": "DUPLICATE_UPCA_SHORT_LONG_ACTIVE", **item})
+        else:
+            blockers.append({"code": "UPCA_SHORT_LONG_IDENTITY_CONFLICT", **item})
 
     cur.execute(
         """
@@ -473,7 +476,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
             "source_or_historical_without_identity_count": len(source_or_historical_without_identity),
             "serving_identity_regression_count": len(serving_identity_regressions),
             "current_active_missing_uom_count": len(current_active_missing_uom),
-            "safe_upca_alias_candidate_count": len(safe_alias_candidates),
+            "upca_short_long_pair_count": len(safe_alias_candidates),
             "manual_override_count": len(override_checks),
             "pos_28_valid_data_day_count": len(pos_days_28),
         },
