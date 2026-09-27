@@ -1,42 +1,48 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.40 Single-Service Edition
-Fix company-report Cost UOM parser and repair poisoned derived Cost-UOM observations.
+Version: 7.0.41 Single-Service Edition
+User-confirmed Cost-UOM -> POS-Selling-UOM conversion authority.
 
-Production evidence from v7.0.39:
-- 53 rows were OFFICIAL_COST_UOM_UNSUPPORTED
-- 66 affected Families had unsupported official Cost-UOM evidence
-- source_cost_uom_token_counts contained numeric values such as 5.952380952...,
-  3.375, 23.5, 41.666666..., etc.
-- those values are monetary cost values, not UOM tokens
-- official_repairable_family_count=0
+Confirmed exact conversions:
+- 402954957: 1 BX = 3 LB
+- 75339379281: 1 EA = 2 LB
+- 4816: 1 EA = 4 LB
+- 8231817551: 1 PACK = 2 LB
+- 4029551288: 1 PAC = 2 LB
+- 7441092018: 1 EA = 1.2 LB
+- 4883: 1 PAC = 2.2 LB
+  (stored directionally as 2.2 selling LB = 1 cost PAC)
+- 81223402632: 1 PACK = 1 BAG
 
-Root cause:
-- _process_company used substring header matching for Cost UOM aliases
-- generic alias "Unit" could match header "Unit Cost"
-- the numeric Unit Cost value was therefore stored as cost_uom_code
+Architecture:
+- adds manual_cost_selling_conversion as a separate audit registry
+- does NOT modify Base/Inventory UOM
+- does NOT modify base_qty_per_selling_unit
+- Quick Check cost-per-selling calculation uses:
+    cost_per_cost_uom * cost_qty / selling_qty
+  only when current Selling UOM and authoritative Cost UOM match the
+  confirmed conversion tuple
+- PAC/PACK are normalized as equivalent only for comparison
 
-Changes:
-1) Future company-report ingestion:
-   - Cost UOM uses strict exact header matching only
-   - supported exact header names include Cost UOM, Cost Unit,
-     Cost Unit of Measure, Cost Base UOM, UOM, UM, Unit of Measure
-   - generic substring matching is disabled for Cost UOM
-   - exact header "Unit" is intentionally not accepted because it is ambiguous
-2) Historical derived repair:
-   - re-reads immutable RAW company-report headers/rows
-   - recalculates company_price_observation.cost_uom_code from strict explicit headers
-   - if no explicit Cost-UOM header exists, derived cost_uom_code becomes NULL
-   - reconciles existing official article_cost_observation rows:
-     unsupported/missing UOM -> SUPERSEDED
-     supported explicit UOM -> synchronize/reactivate
-3) safe-cost-refresh:
-   - performs this deterministic derived Cost-UOM cleanup inside the same transaction
-   - then re-runs the read-only cost-hold diagnostic
-   - only the post-cleanup truly-safe subset is targeted
-   - all existing identity/target/regression rollback guards remain active
+New endpoint:
+POST /v1/maintenance/confirmed-cost-conversion-refresh
+Body:
+{"confirm":"APPLY_CONFIRMED_COST_CONVERSIONS_AND_REBUILD"}
 
-No RAW mutation.
-No schema migration.
-No inferred Cost UOM.
-No Base/Inventory UOM inference.
-No cross-UOM conversion inference.
+Safety:
+- table DDL/bootstrap occurs before the business transaction
+- rebuild is atomic
+- all 8 exact targets are verified after rebuild
+- expected cost-per-selling values are checked numerically
+- Base/Inventory UOM and base factor must remain unchanged
+- product-identity audit must remain PASS
+- conversion-hold count must not increase
+- rollback on any mismatch
+
+Phase 3:
+- seeds/refreshes the confirmed conversion registry on every run
+- future Quick Check rebuilds retain these exact confirmations
+- no prefix rule and no description-derived conversion is introduced
+
+Schema change:
+- adds one small InnoDB registry table: manual_cost_selling_conversion
+- RAW tables and source provenance are unchanged.

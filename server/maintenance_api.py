@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 from db import db_conn
 from manual_overrides import (
     USER_CONFIRMED_UOM_REVIEW_20260926,
+    USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926,
     ensure_override_table,
     ensure_retirement_table,
+    ensure_cost_conversion_table,
     apply_manual_upc_overrides,
     apply_manual_upc_retirements,
+    apply_manual_cost_conversions,
 )
 from product_identity_audit import audit_product_identity
 from current_active_cost_repair import repair_current_active_cost
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from phase3 import rebuild_quick_check, repair_company_cost_uom_observations
+from phase3 import rebuild_quick_check, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom
 
 
 def _retirement_ok(row: dict[str, Any]) -> bool:
@@ -35,6 +39,7 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             # business transaction because MySQL DDL implicitly commits.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
 
             cur.execute(
@@ -57,11 +62,17 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             before = audit_product_identity(cur)
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
 
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
                     + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
                 )
 
             after = audit_product_identity(cur)
@@ -88,6 +99,7 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                 "before_summary": before.get("summary"),
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
+                "manual_cost_conversions": conversions,
                 "after_summary": after.get("summary"),
                 "manual_override_checks": after.get("manual_override_checks"),
                 "retirement_checks": after.get("retirement_checks"),
@@ -191,6 +203,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             # defensively. Perform schema bootstrap before the atomic transaction.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
 
             cur.execute(
@@ -215,10 +228,16 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
 
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
                     + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
                 )
 
             # Re-evaluate per-UPC core holds from scratch for the currently published batch.
@@ -314,6 +333,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
                 "prior_core_holds_resolved": prior_core_holds_resolved,
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
+                "manual_cost_conversions": conversions,
                 "quick_check": qc,
                 "phase3_status": status,
                 "remaining_missing_selling_uom": remaining_missing_selling_uom,
@@ -420,6 +440,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             # implicit-commit reason fixed in v7.0.35.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
 
             cur.execute(
@@ -461,10 +482,16 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             # against the authoritative product/UOM identity.
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
                     + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
                 )
 
             cost_repair = repair_current_active_cost(cur, batch_id)
@@ -566,10 +593,299 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
                 "verified_target_count": len(target_checks),
                 "prior_core_holds_resolved": prior_core_holds_resolved,
                 "cost_repair": cost_repair,
+                "manual_cost_conversions": conversions,
                 "quick_check": qc,
                 "phase3_status": status,
                 "before_cost_summary": before_summary,
                 "after_cost_summary": after_summary,
+                "target_checks": target_checks,
+                "identity_before_summary": identity_before.get("summary"),
+                "identity_after_summary": identity_after.get("summary"),
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+def _confirmed_cost_conversion_target_checks(
+    cur,
+    before_base_state: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    checks: list[dict[str, Any]] = []
+    for expected in USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926:
+        ean = str(expected["ean_upc"])
+        cur.execute(
+            """SELECT ean_upc,family_id,selling_uom,base_uom,
+                      base_qty_per_selling_unit,current_cost_per_base_uom,
+                      current_cost_per_selling_unit,quick_check_status,
+                      blocking_reason,cost_source,cost_date
+               FROM quick_check_current
+               WHERE ean_upc=%s
+               LIMIT 1""",
+            (ean,),
+        )
+        row = cur.fetchone()
+        before = before_base_state.get(ean) or {}
+        latest_cost = _latest_cost(cur, int(row["family_id"])) if row else None
+
+        actual_sell = _norm_cost_serving_uom(row.get("selling_uom")) if row else None
+        expected_sell = _norm_cost_serving_uom(expected["selling_uom_code"])
+        actual_cost_uom = _norm_cost_serving_uom(latest_cost.get("base_uom")) if latest_cost else None
+        expected_cost_uom = _norm_cost_serving_uom(expected["cost_uom_code"])
+
+        expected_cost_per_selling = None
+        if row and row.get("current_cost_per_base_uom") is not None:
+            expected_cost_per_selling = (
+                Decimal(str(row["current_cost_per_base_uom"]))
+                * Decimal(str(expected["cost_qty"]))
+                / Decimal(str(expected["selling_qty"]))
+            )
+        actual_cost_per_selling = (
+            Decimal(str(row["current_cost_per_selling_unit"]))
+            if row and row.get("current_cost_per_selling_unit") is not None
+            else None
+        )
+        cost_value_ok = bool(
+            expected_cost_per_selling is not None
+            and actual_cost_per_selling is not None
+            and abs(actual_cost_per_selling - expected_cost_per_selling) <= Decimal("0.000001")
+        )
+
+        before_factor = before.get("base_qty_per_selling_unit")
+        after_factor = row.get("base_qty_per_selling_unit") if row else None
+        factor_unchanged = (
+            (before_factor is None and after_factor is None)
+            or (
+                before_factor is not None
+                and after_factor is not None
+                and Decimal(str(before_factor)) == Decimal(str(after_factor))
+            )
+        )
+        base_unchanged = bool(
+            row
+            and (before.get("base_uom") or None) == (row.get("base_uom") or None)
+            and factor_unchanged
+        )
+        reasons = {
+            x.strip()
+            for x in str((row or {}).get("blocking_reason") or "").split(",")
+            if x and x.strip()
+        }
+        conversion_hold_cleared = bool(
+            row
+            and "COST_TO_SELLING_UOM_UNRESOLVED" not in reasons
+            and row.get("current_cost_per_selling_unit") is not None
+        )
+
+        passed = bool(
+            row
+            and actual_sell == expected_sell
+            and actual_cost_uom == expected_cost_uom
+            and cost_value_ok
+            and base_unchanged
+            and conversion_hold_cleared
+        )
+        checks.append(
+            {
+                "ean_upc": ean,
+                "expected_equation": (
+                    f'{expected["selling_qty"]} {expected["selling_uom_code"]} = '
+                    f'{expected["cost_qty"]} {expected["cost_uom_code"]}'
+                ),
+                "expected_selling_uom": expected_sell,
+                "actual_selling_uom": actual_sell,
+                "expected_cost_uom": expected_cost_uom,
+                "actual_cost_uom": actual_cost_uom,
+                "cost_per_cost_uom": row.get("current_cost_per_base_uom") if row else None,
+                "expected_cost_per_selling_unit": expected_cost_per_selling,
+                "actual_cost_per_selling_unit": actual_cost_per_selling,
+                "base_uom_before": before.get("base_uom"),
+                "base_uom_after": row.get("base_uom") if row else None,
+                "base_factor_before": before_factor,
+                "base_factor_after": after_factor,
+                "base_inventory_uom_unchanged": base_unchanged,
+                "quick_check_status": row.get("quick_check_status") if row else None,
+                "blocking_reason": row.get("blocking_reason") if row else None,
+                "conversion_hold_cleared": conversion_hold_cleared,
+                "pass": passed,
+            }
+        )
+    return checks
+
+
+def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
+    """Apply the exact 8 user-confirmed cost-to-selling conversions atomically."""
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            # Bootstrap schema before the business transaction because MySQL DDL
+            # implicitly commits.
+            ensure_override_table(cur)
+            ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
+            conn.commit()
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE stage_name='POST_RAW_PIPELINE'
+                     AND processing_status='STARTED'"""
+            )
+            if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
+                raise RuntimeError(
+                    "Server pipeline is currently processing; retry the confirmed cost conversion refresh later."
+                )
+
+            conn.commit()
+            conn.start_transaction()
+
+            batch_id = _latest_serving_batch_id(cur)
+            identity_before = audit_product_identity(cur)
+            if not bool(identity_before.get("pass")):
+                raise RuntimeError(
+                    "Pre-refresh product identity audit is blocked; conversion refresh refused. "
+                    f"blockers={identity_before.get('blockers')}"
+                )
+
+            before_diag = diagnose_global_cost_holds(cur)
+            before_cost_summary = before_diag.get("summary") or {}
+
+            before_base_state: dict[str, dict[str, Any]] = {}
+            for expected in USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926:
+                ean = str(expected["ean_upc"])
+                cur.execute(
+                    """SELECT base_uom,base_qty_per_selling_unit
+                       FROM quick_check_current
+                       WHERE ean_upc=%s
+                       LIMIT 1""",
+                    (ean,),
+                )
+                before_base_state[ean] = cur.fetchone() or {}
+
+            overrides = apply_manual_upc_overrides(cur)
+            retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
+            if overrides.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed manual UPC overrides could not be applied: "
+                    + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
+                )
+
+            cur.execute(
+                """UPDATE qa_phase3_issue
+                   SET issue_status='RESOLVED',
+                       detail_json=JSON_SET(
+                         COALESCE(detail_json,JSON_OBJECT()),
+                         '$.resolution',
+                         'Superseded by v7.0.41 confirmed cost conversion refresh'
+                       )
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (batch_id,),
+            )
+            prior_core_holds_resolved = int(cur.rowcount or 0)
+
+            qc = rebuild_quick_check(cur, batch_id)
+            identity_after = audit_product_identity(cur)
+            if not bool(identity_after.get("pass")):
+                raise RuntimeError(
+                    "Product identity audit blocked the refreshed serving snapshot; "
+                    f"blockers={identity_after.get('blockers')}"
+                )
+
+            target_checks = _confirmed_cost_conversion_target_checks(
+                cur,
+                before_base_state,
+            )
+            failed_targets = [x for x in target_checks if not x.get("pass")]
+            if failed_targets:
+                raise RuntimeError(
+                    "Confirmed cost conversion verification failed; transaction rolled back. "
+                    f"failed_targets={failed_targets}"
+                )
+
+            after_diag = diagnose_global_cost_holds(cur)
+            after_cost_summary = after_diag.get("summary") or {}
+            before_conversion_holds = int(
+                before_cost_summary.get("cost_to_selling_uom_unresolved_count") or 0
+            )
+            after_conversion_holds = int(
+                after_cost_summary.get("cost_to_selling_uom_unresolved_count") or 0
+            )
+            if after_conversion_holds > before_conversion_holds:
+                raise RuntimeError(
+                    "Cost-to-selling hold count increased; transaction rolled back. "
+                    f"before={before_conversion_holds}; after={after_conversion_holds}"
+                )
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND UPPER(severity) IN ('HIGH','CRITICAL')
+                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (batch_id,),
+            )
+            blocking = int((cur.fetchone() or {}).get("c") or 0)
+
+            if blocking > 0 or int(qc.get("rows") or 0) == 0:
+                status = "PHASE3_QA_HOLD"
+            elif int(qc.get("hold") or 0) > 0:
+                status = "QUICK_CHECK_READY_WITH_HOLDS"
+            else:
+                status = "QUICK_CHECK_READY"
+
+            cur.execute(
+                """UPDATE phase3_batch_result
+                   SET quick_check_rows=%s,
+                       quick_check_ready_rows=%s,
+                       quick_check_hold_rows=%s,
+                       blocking_issue_count=%s,
+                       result_status=%s,
+                       updated_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (
+                    int(qc.get("rows") or 0),
+                    int(qc.get("ready") or 0),
+                    int(qc.get("hold") or 0),
+                    blocking,
+                    status,
+                    batch_id,
+                ),
+            )
+            cur.execute(
+                """UPDATE ingest_batch
+                   SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (status, batch_id),
+            )
+
+            conn.commit()
+            return {
+                "status": "COMMITTED",
+                "device": device,
+                "mode": "SERVER_SIDE_CONFIRMED_COST_TO_SELLING_CONVERSION_V7041",
+                "publish_batch_id": batch_id,
+                "target_count": len(USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926),
+                "verified_target_count": len(target_checks),
+                "manual_conversions": conversions,
+                "manual_overrides": overrides,
+                "manual_retirements": retirements,
+                "prior_core_holds_resolved": prior_core_holds_resolved,
+                "quick_check": qc,
+                "phase3_status": status,
+                "before_cost_summary": before_cost_summary,
+                "after_cost_summary": after_cost_summary,
                 "target_checks": target_checks,
                 "identity_before_summary": identity_before.get("summary"),
                 "identity_after_summary": identity_after.get("summary"),
