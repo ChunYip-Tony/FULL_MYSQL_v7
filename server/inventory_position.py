@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -50,6 +50,57 @@ def latest_canonical_movement_day(
     return days[0] if days else None
 
 
+def _movement_coverage_after_anchor(
+    cur,
+    *,
+    anchor_day: date,
+    include_batch_id: int | None = None,
+) -> dict[str, Any]:
+    """Return fail-closed completed-day MVT coverage after an inventory anchor.
+
+    Current inventory may use only completed business days. Today is intentionally
+    excluded because a same-day MVT export is provisional by policy. Every calendar
+    business date from anchor+1 through yesterday must have one canonical COMPLETE
+    movement snapshot; otherwise the roll-forward is not analysis-usable.
+    """
+    expected_through = date.today() - timedelta(days=1)
+    if anchor_day >= expected_through:
+        return {
+            "expected_through_date": expected_through,
+            "complete": True,
+            "required_day_count": 0,
+            "complete_day_count": 0,
+            "missing_day_count": 0,
+            "missing_days": [],
+            "latest_complete_date": anchor_day,
+        }
+
+    days = source_data_days(
+        cur,
+        "movement",
+        include_batch_id=include_batch_id,
+        up_to=expected_through,
+    )
+    complete_dates = {d["date"] for d in days if d["date"] > anchor_day}
+
+    required_days: list[date] = []
+    d = anchor_day + timedelta(days=1)
+    while d <= expected_through:
+        required_days.append(d)
+        d += timedelta(days=1)
+
+    missing_days = [d for d in required_days if d not in complete_dates]
+    return {
+        "expected_through_date": expected_through,
+        "complete": not missing_days,
+        "required_day_count": len(required_days),
+        "complete_day_count": len(required_days) - len(missing_days),
+        "missing_day_count": len(missing_days),
+        "missing_days": missing_days,
+        "latest_complete_date": max(complete_dates) if complete_dates else anchor_day,
+    }
+
+
 def movement_rollforward(
     cur,
     *,
@@ -95,6 +146,13 @@ def movement_rollforward(
         "unresolved_movement_types": [],
         "stock_basis": "SAP_UNRESTRICTED",
         "same_day_policy": "ANCHOR_OWNS_ENTIRE_BUSINESS_DATE",
+        "movement_coverage_expected_through": None,
+        "movement_coverage_complete": False,
+        "movement_coverage_required_day_count": 0,
+        "movement_coverage_complete_day_count": 0,
+        "missing_movement_day_count": 0,
+        "missing_movement_days": [],
+        "latest_complete_movement_date": anchor_day,
         "blockers": [],
     }
 
@@ -109,12 +167,32 @@ def movement_rollforward(
         result["blockers"].append("ANCHOR_UOM_MISSING")
         return result
 
+    coverage = _movement_coverage_after_anchor(
+        cur,
+        anchor_day=anchor_day,
+        include_batch_id=include_batch_id,
+    )
+    result["movement_coverage_expected_through"] = coverage["expected_through_date"]
+    result["movement_coverage_complete"] = coverage["complete"]
+    result["movement_coverage_required_day_count"] = coverage["required_day_count"]
+    result["movement_coverage_complete_day_count"] = coverage["complete_day_count"]
+    result["missing_movement_day_count"] = coverage["missing_day_count"]
+    result["missing_movement_days"] = coverage["missing_days"]
+    result["latest_complete_movement_date"] = coverage["latest_complete_date"]
+
     days = source_data_days(
         cur,
         "movement",
         include_batch_id=include_batch_id,
+        up_to=coverage["expected_through_date"],
     )
     post_days = [d for d in days if d["date"] > anchor_day]
+
+    if not coverage["complete"]:
+        result["blockers"].append("MOVEMENT_DAILY_COVERAGE_GAP")
+        result["status"] = "BLOCKED"
+        result["analysis_usable"] = False
+
     if not post_days:
         return result
 
@@ -295,6 +373,13 @@ def rollforward_position(
         "unresolved_movement_types": movement["unresolved_movement_types"],
         "stock_basis": movement["stock_basis"],
         "same_day_policy": movement["same_day_policy"],
+        "movement_coverage_expected_through": movement["movement_coverage_expected_through"],
+        "movement_coverage_complete": movement["movement_coverage_complete"],
+        "movement_coverage_required_day_count": movement["movement_coverage_required_day_count"],
+        "movement_coverage_complete_day_count": movement["movement_coverage_complete_day_count"],
+        "missing_movement_day_count": movement["missing_movement_day_count"],
+        "missing_movement_days": movement["missing_movement_days"],
+        "latest_complete_movement_date": movement["latest_complete_movement_date"],
         "rollforward_status": movement["status"],
         "analysis_usable": movement["analysis_usable"],
         "blockers": movement["blockers"],
