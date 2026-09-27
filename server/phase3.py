@@ -32,6 +32,7 @@ from active_28d_uom_repair import repair_active_28d_uom
 from current_active_cost_repair import repair_current_active_cost
 from product_identity_audit import audit_product_identity
 from quick_check_app import expire_true_stock_for_new_oh
+from inventory_position import rollforward_position
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -1405,7 +1406,8 @@ def _latest_inventory(
     # Prefer the most specific inventory owner. An article-level SAP OH row must
     # not be borrowed from a sibling/sub-article merely because both share a family.
     cur.execute(
-        """SELECT on_hand_quantity,uom_code,observation_date
+        """SELECT file_id,on_hand_quantity,uom_code,observation_date,
+                  article_id,article_number,family_id,upc_id,ean_upc
            FROM inventory_observation
            WHERE upc_id=%s AND on_hand_quantity IS NOT NULL
            ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
@@ -1413,11 +1415,13 @@ def _latest_inventory(
     )
     r = cur.fetchone()
     if r:
+        r['scope_type'] = 'UPC'
         return r
 
     if article_id is not None:
         cur.execute(
-            """SELECT on_hand_quantity,uom_code,observation_date
+            """SELECT file_id,on_hand_quantity,uom_code,observation_date,
+                      article_id,article_number,family_id,upc_id,ean_upc
                FROM inventory_observation
                WHERE article_id=%s
                  AND upc_id IS NULL
@@ -1427,12 +1431,14 @@ def _latest_inventory(
         )
         r = cur.fetchone()
         if r:
+            r['scope_type'] = 'ARTICLE'
             return r
 
     # Family-only fallback is reserved for rows that truly have no article owner.
     if family_id is not None:
         cur.execute(
-            """SELECT on_hand_quantity,uom_code,observation_date
+            """SELECT file_id,on_hand_quantity,uom_code,observation_date,
+                      article_id,article_number,family_id,upc_id,ean_upc
                FROM inventory_observation
                WHERE family_id=%s
                  AND article_id IS NULL
@@ -1441,7 +1447,10 @@ def _latest_inventory(
                ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
             (family_id,),
         )
-        return cur.fetchone()
+        r = cur.fetchone()
+        if r:
+            r['scope_type'] = 'FAMILY'
+            return r
     return None
 
 
@@ -1574,6 +1583,19 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
                     )
         fm7, fm_uom, _fm_days = _family_movement_metrics(cur, family_id, mvt_days_7)
         inv = _latest_inventory(cur, upc_id, int(p['article_id']) if p.get('article_id') is not None else None, family_id)
+        inv_position = None
+        if inv:
+            inv_position = rollforward_position(
+                cur,
+                anchor_quantity=inv.get('on_hand_quantity'),
+                anchor_uom=inv.get('uom_code'),
+                anchor_date=inv.get('observation_date'),
+                scope_type=inv.get('scope_type'),
+                article_id=inv.get('article_id'),
+                family_id=inv.get('family_id') if inv.get('family_id') is not None else family_id,
+                upc_id=inv.get('upc_id') if inv.get('upc_id') is not None else upc_id,
+                include_batch_id=batch_id,
+            )
         cp = _company_prices(cur, upc_id, family_id)
         pclass = _product_class(p['article_description'], p['family_description'], p['category_code'])
 
@@ -1586,9 +1608,9 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             gp7 = Decimal(m7['sales']) - Decimal(m7['qty']) * cost_sell
             gpday = (gp7 / Decimal(m7['days'])) if m7['days'] > 0 else None
         dos = None
-        if inv and velocity7 > 0:
-            iq = Decimal(str(inv['on_hand_quantity']))
-            iu = (inv['uom_code'] or '').upper()
+        if inv and inv_position and inv_position.get('analysis_usable') and velocity7 > 0:
+            iq = Decimal(str(inv_position['quantity']))
+            iu = (inv_position.get('uom') or '').upper()
             if iu and selling_uom and iu == str(selling_uom).upper():
                 dos = iq / velocity7
             elif iu and base_uom and iu == str(base_uom).upper() and factor and factor > 0:
@@ -1611,6 +1633,8 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             if cost is None: reasons.append('CURRENT_COST_MISSING')
             if price is None: reasons.append('CURRENT_PRICE_MISSING')
             if cost is not None and cost_sell is None: reasons.append('COST_TO_SELLING_UOM_UNRESOLVED')
+            if inv and inv_position and not inv_position.get('analysis_usable'):
+                reasons.append('OH_MOVEMENT_ROLLFORWARD_BLOCKED')
         if active_current:
             active_rows += 1
             qc_status = 'QA_HOLD' if reasons else 'READY'
@@ -1662,7 +1686,10 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
              cost['source'] if cost else None, cost['date'] if cost else None, last_receipt,
              price['price'] if price else None, price['type'] if price else None, price['source'] if price else None, price['date'] if price else None,
              m7['sales'], m7['qty'], velocity7, m7['days'], m30['sales'], m30['qty'], velocity30, m30['days'], fm7, fm_uom,
-             inv['on_hand_quantity'] if inv else None, inv['uom_code'] if inv else None, inv['observation_date'] if inv else None, dos, doh,
+             (inv_position['quantity'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['on_hand_quantity'] if inv else None)),
+             inv['uom_code'] if inv else None,
+             (inv_position['movement_through_date'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['observation_date'] if inv else None)),
+             dos, doh,
              gp_pct, gp7, gpday, sweet, wgpm, cp['price_a'] if cp else None, cp['price_b'] if cp else None, cp['price_c'] if cp else None,
              qc_status,
              (','.join(reasons) if reasons else
