@@ -182,7 +182,8 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             cur.execute(
                 """SELECT COUNT(*) AS c
                    FROM pipeline_run
-                   WHERE processing_status='STARTED'"""
+                   WHERE stage_name='POST_RAW_PIPELINE'
+                     AND processing_status='STARTED'"""
             )
             if int((cur.fetchone() or {}).get("c") or 0) > 0:
                 raise RuntimeError(
