@@ -1132,6 +1132,79 @@ def inventory_rollforward_candidates(
         file_id = int(day["file_id"])
         business_date = day["date"]
 
+        # v7.0.61: expose the canonical MVT file's raw -> normalized lineage so a
+        # zero candidate count is diagnosable instead of being mistaken for
+        # proof that there were no posted movements.
+        cur.execute(
+            """SELECT file_id,batch_id,original_filename,source_type,
+                      processing_status,source_row_count,error_count,
+                      date_semantics_status,coverage_type,
+                      coverage_start_date,coverage_end_date,
+                      header_period_start_date,header_period_end_date,
+                      upload_timestamp
+               FROM ingest_file
+               WHERE file_id=%s
+               LIMIT 1""",
+            (file_id,),
+        )
+        canonical_file = cur.fetchone()
+
+        cur.execute(
+            """SELECT COUNT(*) AS c
+               FROM raw_movement r
+               JOIN ingest_sheet s ON s.sheet_id=r.sheet_id
+               WHERE s.file_id=%s""",
+            (file_id,),
+        )
+        raw_movement_row_count = int((cur.fetchone() or {}).get("c") or 0)
+
+        cur.execute(
+            """SELECT COUNT(*) AS total_rows,
+                      SUM(CASE WHEN posting_date=%s THEN 1 ELSE 0 END) AS canonical_date_rows,
+                      SUM(CASE WHEN base_quantity IS NOT NULL THEN 1 ELSE 0 END) AS base_qty_present_rows,
+                      SUM(CASE WHEN base_quantity IS NOT NULL
+                                    AND base_quantity<>0 THEN 1 ELSE 0 END) AS nonzero_base_qty_rows,
+                      SUM(CASE WHEN article_id IS NOT NULL THEN 1 ELSE 0 END) AS article_mapped_rows,
+                      SUM(CASE WHEN family_id IS NOT NULL THEN 1 ELSE 0 END) AS family_mapped_rows,
+                      COUNT(DISTINCT article_number) AS distinct_articles,
+                      COUNT(DISTINCT family_id) AS distinct_families,
+                      GROUP_CONCAT(DISTINCT DATE_FORMAT(posting_date,'%%Y-%%m-%%d')
+                                   ORDER BY posting_date SEPARATOR ',') AS posting_dates,
+                      GROUP_CONCAT(DISTINCT base_uom_code
+                                   ORDER BY base_uom_code SEPARATOR ',') AS base_uoms,
+                      GROUP_CONCAT(DISTINCT movement_type
+                                   ORDER BY movement_type SEPARATOR ',') AS movement_types
+               FROM movement_history
+               WHERE file_id=%s""",
+            (business_date, file_id),
+        )
+        mh = cur.fetchone() or {}
+        movement_history_summary = {
+            "total_rows": int(mh.get("total_rows") or 0),
+            "canonical_date_rows": int(mh.get("canonical_date_rows") or 0),
+            "base_qty_present_rows": int(mh.get("base_qty_present_rows") or 0),
+            "nonzero_base_qty_rows": int(mh.get("nonzero_base_qty_rows") or 0),
+            "article_mapped_rows": int(mh.get("article_mapped_rows") or 0),
+            "family_mapped_rows": int(mh.get("family_mapped_rows") or 0),
+            "distinct_articles": int(mh.get("distinct_articles") or 0),
+            "distinct_families": int(mh.get("distinct_families") or 0),
+            "posting_dates": (
+                str(mh.get("posting_dates") or "").split(",")
+                if mh.get("posting_dates")
+                else []
+            ),
+            "base_uoms": (
+                str(mh.get("base_uoms") or "").split(",")
+                if mh.get("base_uoms")
+                else []
+            ),
+            "movement_types": (
+                str(mh.get("movement_types") or "").split(",")
+                if mh.get("movement_types")
+                else []
+            ),
+        }
+
         cur.execute(
             """SELECT article_id,article_number,family_id,base_uom_code,
                       COUNT(*) AS movement_row_count,
@@ -1233,6 +1306,23 @@ def inventory_rollforward_candidates(
             if len(results) >= limit:
                 break
 
+        if raw_movement_row_count == 0:
+            lineage_status = "RAW_MOVEMENT_ROWS_MISSING"
+        elif movement_history_summary["total_rows"] == 0:
+            lineage_status = "RAW_PRESENT_BUT_MOVEMENT_HISTORY_MISSING"
+        elif movement_history_summary["canonical_date_rows"] == 0:
+            lineage_status = "MOVEMENT_HISTORY_PRESENT_BUT_CANONICAL_DATE_MISSING"
+        elif movement_history_summary["base_qty_present_rows"] == 0:
+            lineage_status = "CANONICAL_MOVEMENT_BASE_QTY_MISSING"
+        elif movement_history_summary["nonzero_base_qty_rows"] == 0:
+            lineage_status = "CANONICAL_MOVEMENT_ALL_ZERO_BASE_QTY"
+        elif not movement_groups:
+            lineage_status = "NONZERO_ROWS_PRESENT_BUT_NET_GROUPS_ZERO"
+        elif not results:
+            lineage_status = "MOVEMENT_GROUPS_PRESENT_BUT_NO_QUICK_CHECK_MATCH"
+        else:
+            lineage_status = "MOVEMENT_CANDIDATES_AVAILABLE"
+
         cur.close()
         return {
             "requested_date": requested_date,
@@ -1241,6 +1331,13 @@ def inventory_rollforward_candidates(
                 "file_id": file_id,
                 "batch_id": day.get("batch_id"),
                 "upload_timestamp": day.get("upload_timestamp"),
+            },
+            "lineage_status": lineage_status,
+            "movement_file_lineage": {
+                "canonical_file": canonical_file,
+                "raw_movement_row_count": raw_movement_row_count,
+                "movement_history": movement_history_summary,
+                "nonzero_net_group_count": len(movement_groups),
             },
             "count": len(results),
             "results": results,
