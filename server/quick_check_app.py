@@ -1002,14 +1002,23 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
         effective_source = "TRUE_STOCK" if true_stock else "SYSTEM_OH"
 
         movement_file_ids = list((system_position or {}).get("movement_file_ids") or [])
+        movement_days = list((system_position or {}).get("movement_days") or [])
+        canonical_movement_pairs = [
+            {"file_id": int(fid), "posting_date": day}
+            for fid, day in zip(movement_file_ids, movement_days)
+        ]
         family_id = int(row["family_id"]) if row.get("family_id") is not None else None
         article_id = int(system_oh["article_id"]) if system_oh and system_oh.get("article_id") is not None else None
 
         family_movement_history = []
         exact_article_movement_history = []
         movement_summary_by_article = []
-        if movement_file_ids and family_id is not None:
-            placeholders = ",".join(["%s"] * len(movement_file_ids))
+        if canonical_movement_pairs and family_id is not None:
+            clauses = []
+            pair_args = []
+            for pair in canonical_movement_pairs:
+                clauses.append("(file_id=%s AND posting_date=%s)")
+                pair_args.extend([pair["file_id"], pair["posting_date"]])
             cur.execute(
                 f"""SELECT file_id,raw_id,source_row_number,
                            article_number,article_id,family_id,description,
@@ -1020,10 +1029,10 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
                            article_document,purchase_order,vendor_code
                     FROM movement_history
                     WHERE family_id=%s
-                      AND file_id IN ({placeholders})
+                      AND ({' OR '.join(clauses)})
                     ORDER BY posting_date,file_id,article_number,movement_type,
                              raw_id,source_row_number""",
-                (family_id, *movement_file_ids),
+                (family_id, *pair_args),
             )
             family_movement_history = cur.fetchall()
             exact_article_movement_history = [
@@ -1089,6 +1098,7 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
             "effective_source": effective_source,
             "movement_evidence": {
                 "canonical_post_anchor_file_ids": movement_file_ids,
+                "canonical_post_anchor_file_date_pairs": canonical_movement_pairs,
                 "exact_article_row_count": len(exact_article_movement_history),
                 "family_row_count": len(family_movement_history),
                 "exact_article_rows": exact_article_movement_history,
