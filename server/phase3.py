@@ -1573,21 +1573,28 @@ def _sales_metrics(cur, upc_id: int, data_days: list[dict[str, Any]]) -> dict[st
 
 
 def _family_movement_metrics(cur, family_id: int, data_days: list[dict[str, Any]]) -> tuple[Decimal | None, str | None, int]:
-    """Family movement over valid MVT data days.
+    """Family movement over canonical MVT date/file pairs.
 
-    No family rows on a valid MVT day means verified zero movement. No MVT file means
-    the day is missing and therefore not part of the rolling window.
+    A multi-date MVT source may be canonical for several posting dates, so file_id
+    alone is not a sufficient filter. Restrict every contribution to its exact
+    canonical (file_id, posting_date) pair.
     """
     if not data_days:
         return None, None, 0
-    file_ids = [int(x['file_id']) for x in data_days]
-    placeholders = ','.join(['%s'] * len(file_ids))
+
+    clauses: list[str] = []
+    args: list[Any] = [family_id]
+    for d in data_days:
+        clauses.append('(file_id=%s AND posting_date=%s)')
+        args.extend([int(d['file_id']), d['date']])
+
     cur.execute(
         f"""SELECT base_uom_code,SUM(net_sold_quantity) AS q
             FROM family_movement_observation
-            WHERE family_id=%s AND file_id IN ({placeholders})
+            WHERE family_id=%s
+              AND ({' OR '.join(clauses)})
             GROUP BY base_uom_code""",
-        tuple([family_id] + file_ids),
+        tuple(args),
     )
     rows = [r for r in cur.fetchall() if r['q'] is not None]
     if not rows:
