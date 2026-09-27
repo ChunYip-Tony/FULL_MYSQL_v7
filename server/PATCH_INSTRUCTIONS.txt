@@ -1,50 +1,50 @@
-FULL MYSQL v7.0.36 GitHub Patch
+FULL MYSQL v7.0.37 GitHub Patch
 
 Purpose:
-- Diagnose all current Quick Check cost-related QA holds in one HTTPS call.
-- Separate safe cost-lineage repairs from cases that truly need new UOM/conversion evidence.
+- Apply the safe subset identified by GET /v1/diagnostics/cost-holds.
+- Restore authoritative derived cost where receipt/report/OH evidence already supports it.
+- Resolve direct cost-to-selling conversion only when Cost UOM equals Selling UOM.
 
-Endpoint:
-GET /v1/diagnostics/cost-holds
+New endpoint:
+POST /v1/maintenance/safe-cost-refresh
+Body:
+{"confirm":"APPLY_SAFE_COST_REPAIR_AND_REBUILD"}
 
-Optional filters:
-- ?upc=<EAN/UPC>
-- ?family_id=<family_id>
+Transaction:
+1) refuse while POST_RAW_PIPELINE is STARTED
+2) identify current serving batch
+3) run pre-refresh cost-hold diagnostic
+4) require pre-refresh product-identity audit PASS
+5) reapply confirmed product/UOM authority
+6) run existing current-active cost repair
+7) resolve stale QUICK_CHECK_CORE_FIELD_MISSING issues for serving batch
+8) rebuild Quick Check using v7.0.37 same-UOM direct-cost rule
+9) rerun product-identity audit
+10) verify every pre-refresh safe target repaired its exact issue
+11) rerun cost-hold diagnostic
+12) refuse commit if cost-related hold count increases
+13) update Phase 3 serving counts/status
+14) commit
 
-Read-only evidence sources:
-1) Current quick_check_current QA_HOLD rows.
-2) Confirmed Family -> Article identity.
-3) Receipt movement 101/107/109 valuation rows.
-4) Official Frozen / TX Seafood ABC / Live-Fresh cost rows.
-5) Raw On-Hand explicit Cost + explicit cost-specific UOM.
-6) Existing authoritative derived cost.
-7) Exact Article Manual UPC row / pack text.
+Verification semantics:
+- SAFE_*_COST_REPAIR_CANDIDATE:
+  CURRENT_COST_MISSING must disappear and a current authoritative cost must publish.
+  A new conversion hold is allowed if the newly restored cost uses a different UOM.
+  That is not a failed cost repair; it correctly exposes the next unresolved layer.
+- DIRECT_COST_UOM_EQUALS_SELLING_UOM or SERVING_CONVERSION_REBUILD_CANDIDATE:
+  COST_TO_SELLING_UOM_UNRESOLVED must disappear and current_cost_per_selling_unit must publish.
 
-Classifications for CURRENT_COST_MISSING include:
-- SAFE_RECEIPT_VALUATION_REPAIR_CANDIDATE
-- SAFE_OFFICIAL_COST_REPAIR_CANDIDATE
-- SAFE_OH_COST_FALLBACK_REPAIR_CANDIDATE
-- RECEIPT_ROWS_WITHOUT_VALID_VALUATION
-- OFFICIAL_COST_WITHOUT_EXPLICIT_UOM
-- OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM
-- NO_AUTHORITATIVE_COST_EVIDENCE
-
-Classifications for COST_TO_SELLING_UOM_UNRESOLVED include:
-- DIRECT_COST_UOM_EQUALS_SELLING_UOM
-- SERVING_CONVERSION_REBUILD_CANDIDATE
-- PACK_CONVERSION_EVIDENCE_NEEDED
-- AUTHORITATIVE_COST_UOM_MISSING
-- COST_UOM_SELLING_UOM_MISMATCH
-
-Important:
-- DIRECT_COST_UOM_EQUALS_SELLING_UOM means cost-per-selling can use factor 1
-  directly for calculation. It does NOT set Base/Inventory UOM.
-- No cross-UOM conversion is inferred from description or package text alone.
-- This release performs no mutations.
+Safety:
+- no Base/Inventory UOM inference
+- no cross-UOM factor inference
+- no description-based PACK weight conversion
+- no schema migration
+- rollback on identity blocker, target verification failure, or hold-count regression
 
 After deploy:
-1) Verify /healthz = 7.0.36-single-service.
-2) Call GET /v1/diagnostics/cost-holds.
-3) Review summary.classification_counts.
-4) Review the safe candidates separately from needs-review rows before building
-   any cost repair endpoint.
+1) Verify /healthz = 7.0.37-single-service.
+2) POST /v1/maintenance/safe-cost-refresh.
+3) Review before_cost_summary vs after_cost_summary.
+4) Review quick_check ready/hold counts.
+5) Review target_checks; all pass must be True.
+6) Re-run GET /v1/diagnostics/cost-holds for the residual evidence-required set.

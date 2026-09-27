@@ -10,11 +10,11 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
-from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh
+from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 
-VERSION='7.0.36-single-service'
+VERSION='7.0.37-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -251,6 +251,26 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'phase3':p3,
         }
         cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/maintenance/safe-cost-refresh')
+def safe_cost_refresh(
+    body: ManualAuthorityRefreshRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    if body.confirm!='APPLY_SAFE_COST_REPAIR_AND_REBUILD':
+        raise HTTPException(
+            400,
+            "confirm must be APPLY_SAFE_COST_REPAIR_AND_REBUILD",
+        )
+    try:
+        result=run_safe_cost_refresh(device)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Safe cost refresh failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
