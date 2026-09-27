@@ -431,6 +431,57 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
     }
 
 
+
+def canonical_pos_qty_by_upc(
+    cur,
+    data_days: list[dict[str, Any]],
+) -> dict[int, Decimal]:
+    """Aggregate sold quantity by mapped UPC across canonical daily POS sources."""
+    out: dict[int, Decimal] = {}
+    if not data_days:
+        return out
+
+    direct = [d for d in data_days if d.get("coverage_kind") != "DERIVED_PERIOD_RESIDUAL"]
+    if direct:
+        clauses: list[str] = []
+        args: list[Any] = []
+        for d in direct:
+            clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
+            args.extend([int(d["file_id"]), d["date"], d["date"]])
+        cur.execute(
+            f"""SELECT upc_id,COALESCE(SUM(sold_quantity),0) AS qty
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND upc_id IS NOT NULL
+                  AND ({' OR '.join(clauses)})
+                GROUP BY upc_id""",
+            tuple(args),
+        )
+        for r in cur.fetchall():
+            out[int(r["upc_id"])] = _decimal(r["qty"])
+
+    derived = [d for d in data_days if d.get("coverage_kind") == "DERIVED_PERIOD_RESIDUAL"]
+    if derived:
+        clauses = []
+        args = []
+        for d in derived:
+            clauses.append("(source_file_id=%s AND business_date=%s)")
+            args.extend([int(d["file_id"]), d["date"]])
+        cur.execute(
+            f"""SELECT upc_id,COALESCE(SUM(sold_quantity),0) AS qty
+                FROM pos_daily_backfill_observation
+                WHERE upc_id IS NOT NULL
+                  AND ({' OR '.join(clauses)})
+                GROUP BY upc_id""",
+            tuple(args),
+        )
+        for r in cur.fetchall():
+            upc_id = int(r["upc_id"])
+            out[upc_id] = out.get(upc_id, Decimal("0")) + _decimal(r["qty"])
+
+    return out
+
+
 def relink_pos_backfill(cur) -> int:
     cur.execute(
         """UPDATE pos_daily_backfill_observation b
