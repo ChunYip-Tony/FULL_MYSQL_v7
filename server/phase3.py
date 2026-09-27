@@ -1275,7 +1275,7 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     if manual:
         return {
             'cost_per_base': manual['cost_amount'],
-            'date': None,
+            'date': manual.get('confirmed_date'),
             'source': 'USER_CONFIRMED_FAMILY_COST',
             'base_uom': manual['cost_uom_code'],
         }
