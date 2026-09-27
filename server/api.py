@@ -13,7 +13,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 
-VERSION='7.0.31-single-service'
+VERSION='7.0.32-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
