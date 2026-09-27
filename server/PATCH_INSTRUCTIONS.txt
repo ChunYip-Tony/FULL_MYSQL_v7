@@ -1,61 +1,56 @@
-FULL MYSQL v7.0.40 GitHub Patch
+FULL MYSQL v7.0.41 GitHub Patch
 
 Purpose:
-- Correct the company-report Cost-UOM parser bug proven by v7.0.39 diagnostics.
-- Clean historical derived Cost-UOM observations without touching RAW data.
-- Then safely resolve only the truly executable cost subset.
+- Resolve the final 8 current cost-to-selling conversion holds using Tony's
+  explicit per-UPC confirmations.
+- Keep Cost conversion independent from Base/Inventory UOM.
 
-Confirmed production evidence:
-- OFFICIAL_COST_UOM_UNSUPPORTED = 53 current holds
-- official_unsupported_uom_family_count = 66
-- official_repairable_family_count = 0
-- "UOM tokens" were numeric monetary values, proving "Unit" had matched
-  the "Unit Cost" header rather than a true UOM field.
+Confirmed equations:
+402954957   : 1 BX   = 3 LB
+75339379281 : 1 EA   = 2 LB
+4816        : 1 EA   = 4 LB
+8231817551  : 1 PACK = 2 LB
+4029551288  : 1 PAC  = 2 LB
+7441092018  : 1 EA   = 1.2 LB
+4883        : 1 PAC  = 2.2 LB
+81223402632 : 1 PACK = 1 BAG
 
-Parser fix:
-- Cost UOM now uses exact header matching only.
-- Accepted exact aliases:
-  Cost UOM
-  Cost Unit
-  Cost Unit of Measure
-  Cost Base UOM
-  UOM
-  UM
-  Unit of Measure
-- Exact "Unit" is not accepted because it is ambiguous.
-- Substring matching is never used for company Cost UOM.
+Calculation:
+cost_per_selling_unit =
+    authoritative_cost_per_cost_uom * cost_qty / selling_qty
 
-Historical derived cleanup:
-POST /v1/maintenance/safe-cost-refresh now, inside one transaction:
-1) re-read RAW headers/rows for all company cost-report sources
-2) re-derive company_price_observation.cost_uom_code strictly
-3) set cost_uom_code NULL when the RAW sheet has no explicit Cost-UOM column
-4) supersede existing official derived costs whose corrected UOM is missing/unsupported
-5) synchronize/reactivate official derived costs when strict explicit UOM is supported
-6) rerun GET-equivalent cost-hold classification inside the transaction
-7) apply existing evidence-backed current cost repair
-8) rebuild Quick Check
-9) verify only the post-cleanup safe targets
-10) rerun product-identity and hold-regression guards
-11) commit only if all checks pass
+Examples with the current authoritative receipt costs:
+- 402954957: 2.44444444/LB * 3 LB/BX = 7.33333332/BX
+- 75339379281: 3.00/LB * 2 LB/EA = 6.00/EA
+- 4816: 3.16666667/LB * 4 LB/EA = 12.66666668/EA
+- 8231817551: 4.20/LB * 2 LB/PACK = 8.40/PACK
+- 4029551288: 3.60/LB * 2 LB/PAC = 7.20/PAC
+- 7441092018: 3.54545455/LB * 1.2 LB/EA = 4.25454546/EA
+- 4883: 11.08333333/PAC / 2.2 LB/PAC = 5.03787879/LB
+- 81223402632: 7.90/BAG * 1 BAG/PACK = 7.90/PACK
 
-Expected behavior:
-- the false 53 SAFE official candidates should no longer be targeted simply because
-  a numeric Unit Cost value was stored as cost_uom_code
-- if those source reports truly have no explicit Cost-UOM field, they should become
-  OFFICIAL_COST_WITHOUT_EXPLICIT_UOM
-- the 17 DIRECT_COST_UOM_EQUALS_SELLING_UOM candidates remain eligible if their
-  existing authoritative cost evidence is valid
+Persistence:
+- new table manual_cost_selling_conversion
+- one confirmed row per exact UPC
+- source-controlled seeds refresh the values on Phase 3 / maintenance flows
+- no Base UOM or base factor is inferred or overwritten
 
-After deploy:
-1) Verify /healthz = 7.0.40-single-service.
-2) Re-run POST /v1/maintenance/safe-cost-refresh.
-3) Inspect company_cost_uom_repair.
-4) Confirm target verification has no failures.
-5) Compare before_cost_summary vs after_cost_summary.
-6) Re-run GET /v1/diagnostics/cost-holds.
+Deploy and run:
+1) Confirm /healthz = 7.0.41-single-service.
+2) POST /v1/maintenance/confirmed-cost-conversion-refresh
+   with:
+   {"confirm":"APPLY_CONFIRMED_COST_CONVERSIONS_AND_REBUILD"}
+3) PASS requires:
+   - status=COMMITTED
+   - target_count=8
+   - verified_target_count=8
+   - all target_checks.pass=True
+   - every target has COST_TO_SELLING_UOM_UNRESOLVED cleared
+   - Base UOM and base_qty_per_selling_unit unchanged
+   - product identity remains PASS
+4) Re-run GET /v1/diagnostics/cost-holds.
+   Expected conversion hold count: 8 -> 0, assuming no unrelated data changed.
+   Current-cost-missing rows remain separate and are not modified by this patch.
 
 No RAW mutation.
-No manual cost value.
-No inferred Cost UOM.
-No cross-UOM conversion inference.
+No generic prefix/description inference.
