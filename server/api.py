@@ -11,12 +11,12 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
-from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair
+from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage
 
-VERSION='7.0.53-single-service'
+VERSION='7.0.54-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -257,6 +257,26 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'phase3':p3,
         }
         cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/maintenance/article-manual-roster-repair')
+def article_manual_roster_repair(
+    body: ManualAuthorityRefreshRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    if body.confirm!='REPAIR_ARTICLE_MANUAL_FORMATTED_UPCS_AND_REBUILD':
+        raise HTTPException(
+            400,
+            "confirm must be REPAIR_ARTICLE_MANUAL_FORMATTED_UPCS_AND_REBUILD",
+        )
+    try:
+        result=run_article_manual_roster_repair(device)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Article Manual roster repair failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 

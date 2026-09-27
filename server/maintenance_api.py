@@ -21,7 +21,8 @@ from manual_overrides import (
 from product_identity_audit import audit_product_identity
 from current_active_cost_repair import repair_current_active_cost
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from phase3 import rebuild_quick_check, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history
+from normalize import _preload_article_manual_authority
+from phase3 import rebuild_quick_check, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history, resolve_late_identity_issues
 
 
 def _retirement_ok(row: dict[str, Any]) -> bool:
@@ -553,6 +554,163 @@ def run_on_hand_repair(device: str) -> dict[str, Any]:
                 "after_inventory": after_inventory,
                 "quick_check": qc,
                 "quick_check_oh": serving,
+                "phase3_status": phase3_status,
+                "identity_summary": identity.get("summary"),
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
+
+
+def run_article_manual_roster_repair(device: str) -> dict[str, Any]:
+    """Re-run authoritative Article Manual roster preload with formatted UPC support.
+
+    This repairs identities skipped when Article Manual UPC cells were visually
+    formatted with spaces/hyphens (for example 4 71106163078 0). It does not
+    invent digits or infer fuzzy barcode substitutions.
+    """
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE stage_name='POST_RAW_PIPELINE'
+                     AND processing_status='STARTED'"""
+            )
+            if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
+                raise RuntimeError(
+                    "Server pipeline is currently processing; retry the Article Manual repair later."
+                )
+
+            cur.execute(
+                """SELECT batch_id
+                   FROM ingest_file
+                   WHERE source_type='article_manual'
+                   ORDER BY file_id DESC
+                   LIMIT 1"""
+            )
+            identity_row = cur.fetchone()
+            if not identity_row:
+                conn.rollback()
+                raise RuntimeError("No Article Manual source is available.")
+
+            identity_batch_id = int(identity_row["batch_id"])
+            serving_batch_id = _latest_serving_batch_id(cur)
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM inventory_observation
+                   WHERE article_id IS NULL OR family_id IS NULL"""
+            )
+            before_unmapped = int((cur.fetchone() or {}).get("c") or 0)
+
+            cur.execute(
+                """SELECT article_number,on_hand_quantity,uom_code,observation_date,file_id
+                   FROM inventory_observation
+                   WHERE article_id IS NULL OR family_id IS NULL
+                   ORDER BY observation_date DESC,file_id DESC,raw_id DESC"""
+            )
+            before_rows = cur.fetchall()
+
+            conn.commit()
+            conn.start_transaction()
+
+            preload = _preload_article_manual_authority(cur, identity_batch_id)
+            relink_history(cur)
+            late_identity = resolve_late_identity_issues(cur, serving_batch_id)
+            qc = rebuild_quick_check(cur, serving_batch_id)
+
+            identity = audit_product_identity(cur)
+            if not bool(identity.get("pass")):
+                raise RuntimeError(
+                    "Product identity audit blocked the Article Manual roster repair; "
+                    f"blockers={identity.get('blockers')}"
+                )
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM inventory_observation
+                   WHERE article_id IS NULL OR family_id IS NULL"""
+            )
+            after_unmapped = int((cur.fetchone() or {}).get("c") or 0)
+
+            cur.execute(
+                """SELECT article_number,on_hand_quantity,uom_code,observation_date,file_id
+                   FROM inventory_observation
+                   WHERE article_id IS NULL OR family_id IS NULL
+                   ORDER BY observation_date DESC,file_id DESC,raw_id DESC"""
+            )
+            after_rows = cur.fetchall()
+
+            if before_unmapped > 0 and after_unmapped >= before_unmapped:
+                raise RuntimeError(
+                    "Article Manual roster repair did not improve unresolved OH identity; "
+                    f"before={before_unmapped}, after={after_unmapped}"
+                )
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND UPPER(severity) IN ('HIGH','CRITICAL')
+                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (serving_batch_id,),
+            )
+            blocking = int((cur.fetchone() or {}).get("c") or 0)
+            if blocking > 0 or int(qc.get("rows") or 0) == 0:
+                phase3_status = "PHASE3_QA_HOLD"
+            elif int(qc.get("hold") or 0) > 0:
+                phase3_status = "QUICK_CHECK_READY_WITH_HOLDS"
+            else:
+                phase3_status = "QUICK_CHECK_READY"
+
+            cur.execute(
+                """UPDATE phase3_batch_result
+                   SET quick_check_rows=%s,
+                       quick_check_ready_rows=%s,
+                       quick_check_hold_rows=%s,
+                       blocking_issue_count=%s,
+                       result_status=%s,
+                       updated_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (
+                    int(qc.get("rows") or 0),
+                    int(qc.get("ready") or 0),
+                    int(qc.get("hold") or 0),
+                    blocking,
+                    phase3_status,
+                    serving_batch_id,
+                ),
+            )
+            cur.execute(
+                """UPDATE ingest_batch
+                   SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (phase3_status, serving_batch_id),
+            )
+
+            conn.commit()
+            return {
+                "status": "COMMITTED",
+                "device": device,
+                "mode": "ARTICLE_MANUAL_FORMATTED_UPC_ROSTER_REPAIR",
+                "identity_batch_id": identity_batch_id,
+                "publish_batch_id": serving_batch_id,
+                "before_unmapped_inventory_count": before_unmapped,
+                "after_unmapped_inventory_count": after_unmapped,
+                "inventory_rows_relinked": before_unmapped - after_unmapped,
+                "before_unmapped_inventory": before_rows,
+                "after_unmapped_inventory": after_rows,
+                "article_manual_preload": preload,
+                "late_identity": late_identity,
+                "quick_check": qc,
                 "phase3_status": phase3_status,
                 "identity_summary": identity.get("summary"),
             }
