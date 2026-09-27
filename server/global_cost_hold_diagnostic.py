@@ -684,6 +684,23 @@ def diagnose_global_cost_holds(
     oh_cache = _scan_oh_evidence(cur, target_families)
     manual_index, manual_stats = _article_manual_index(cur)
 
+    official_uom_token_counts: dict[str, dict[str, int]] = {}
+    official_repairable_family_count = 0
+    official_unsupported_uom_family_count = 0
+    for fid, evidence in official_cache.items():
+        if int(evidence.get("repairable_official_rows") or 0) > 0:
+            official_repairable_family_count += 1
+        elif int(evidence.get("positive_with_unsupported_uom_rows") or 0) > 0:
+            official_unsupported_uom_family_count += 1
+        for token_row in evidence.get("source_cost_uom_tokens") or []:
+            token = str(token_row.get("source_cost_uom") or "__MISSING__")
+            slot = official_uom_token_counts.setdefault(
+                token,
+                {"row_count": 0, "supported_rows": 0},
+            )
+            slot["row_count"] += int(token_row.get("row_count") or 0)
+            slot["supported_rows"] += int(token_row.get("supported_rows") or 0)
+
     items: list[dict[str, Any]] = []
     classification_counts: dict[str, int] = {}
     safe_count = 0
@@ -777,6 +794,9 @@ def diagnose_global_cost_holds(
             "needs_review_cost_hold_count": len(cost_rows) - safe_count,
             "classification_counts": classification_counts,
             "all_hold_reason_counts": reason_counts,
+            "official_repairable_family_count": official_repairable_family_count,
+            "official_unsupported_uom_family_count": official_unsupported_uom_family_count,
+            "official_cost_uom_token_counts": official_uom_token_counts,
         },
         "article_manual": manual_stats,
         "items": items,
