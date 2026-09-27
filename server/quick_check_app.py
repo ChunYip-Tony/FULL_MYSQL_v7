@@ -504,6 +504,111 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
             cur.close()
 
 
+
+def quick_check_lineage(upc: str) -> dict[str, Any] | None:
+    """Read-only lineage for one Quick Check UPC.
+
+    This intentionally exposes source observations instead of guessing whether a
+    configured price, POS quantity, or inventory quantity is expressed in the
+    same unit as the currently resolved Selling UOM.
+    """
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        row = _lookup_qc_row(cur, upc)
+        if not row:
+            cur.close()
+            return None
+
+        upc_id = int(row["upc_id"])
+        family_id = int(row["family_id"])
+
+        cur.execute(
+            """SELECT h.upc_uom_id,
+                      su.uom_code AS selling_uom,
+                      bu.uom_code AS base_uom,
+                      h.base_qty_per_selling_unit,
+                      h.mapping_status,h.confidence,h.resolution_method,
+                      h.effective_from,h.effective_to
+               FROM selling_upc_uom_history h
+               JOIN dim_uom su ON su.uom_id=h.selling_uom_id
+               LEFT JOIN dim_uom bu ON bu.uom_id=h.base_uom_id
+               WHERE h.upc_id=%s
+               ORDER BY
+                 CASE WHEN h.mapping_status='CONFIRMED'
+                           AND (h.effective_to IS NULL OR h.effective_to>CURRENT_TIMESTAMP(6))
+                      THEN 0 ELSE 1 END,
+                 h.upc_uom_id DESC
+               LIMIT 25""",
+            (upc_id,),
+        )
+        uom_history = cur.fetchall()
+
+        cur.execute(
+            """SELECT price_observation_id,batch_id,file_id,sheet_id,raw_id,
+                      source_row_number,ean_upc,description,
+                      configured_price,price_quantity,price_type,
+                      source_since_date,snapshot_at
+               FROM price_list_observation
+               WHERE upc_id=%s
+               ORDER BY snapshot_at DESC,price_observation_id DESC
+               LIMIT 50""",
+            (upc_id,),
+        )
+        price_rows = cur.fetchall()
+
+        cur.execute(
+            """SELECT sales_observation_id,batch_id,file_id,sheet_id,raw_id,
+                      source_row_number,ean_upc,description,
+                      period_start_date,period_end_date,temporal_grain,
+                      price_type,sales_amount,sold_quantity,avg_sold_price
+               FROM sales_period_observation
+               WHERE upc_id=%s
+               ORDER BY period_end_date DESC,period_start_date DESC,
+                        sales_observation_id DESC
+               LIMIT 100""",
+            (upc_id,),
+        )
+        sales_rows = cur.fetchall()
+
+        cur.execute(
+            """SELECT movement_observation_id,batch_id,file_id,sheet_id,raw_id,
+                      article_id,movement_type,posting_date,
+                      base_quantity_signed,net_sold_quantity,base_uom_code
+               FROM family_movement_observation
+               WHERE family_id=%s
+               ORDER BY posting_date DESC,movement_observation_id DESC
+               LIMIT 100""",
+            (family_id,),
+        )
+        movement_rows = cur.fetchall()
+
+        cur.execute(
+            """SELECT inventory_observation_id,batch_id,file_id,sheet_id,raw_id,
+                      source_row_number,observation_date,article_number,
+                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+               FROM inventory_observation
+               WHERE upc_id=%s OR family_id=%s
+               ORDER BY observation_date DESC,inventory_observation_id DESC
+               LIMIT 50""",
+            (upc_id,family_id),
+        )
+        inventory_rows = cur.fetchall()
+
+        return {
+            "quick_check": row,
+            "uom_history": uom_history,
+            "price_list_observations": price_rows,
+            "sales_period_observations": sales_rows,
+            "family_movement_observations": movement_rows,
+            "inventory_observations": inventory_rows,
+            "diagnostic_note": (
+                "price_quantity and source quantities are returned verbatim; "
+                "no cross-UOM interpretation is inferred by this diagnostic"
+            ),
+        }
+
+
+
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
