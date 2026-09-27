@@ -7,6 +7,21 @@ from typing import Any
 from data_coverage import source_data_days
 
 
+# FULL MYSQL System OH is based on SAP Unrestricted stock. Only movement types
+# whose stock effect on Unrestricted is explicit are allowed to roll the anchor.
+# Quantities are already source-signed in movement_history.
+UNRESTRICTED_APPLY_AS_SIGNED = {
+    "101", "102",  # direct GR / reversal
+    "105", "106",  # release from GR blocked stock / reversal
+    "109", "110",  # release from valuated GR blocked stock / reversal
+    "251", "252",  # store-confirmed sale / return movement
+}
+UNRESTRICTED_NO_EFFECT = {
+    "103", "104",  # GR blocked stock / reversal
+    "107", "108",  # valuated GR blocked stock / reversal
+}
+
+
 def _as_date(value: Any) -> date | None:
     if isinstance(value, datetime):
         return value.date()
@@ -76,6 +91,9 @@ def movement_rollforward(
         "movement_file_ids": [],
         "movement_row_count": 0,
         "by_movement_type": [],
+        "ignored_by_movement_type": [],
+        "unresolved_movement_types": [],
+        "stock_basis": "SAP_UNRESTRICTED",
         "same_day_policy": "ANCHOR_OWNS_ENTIRE_BUSINESS_DATE",
         "blockers": [],
     }
@@ -154,6 +172,8 @@ def movement_rollforward(
     delta = Decimal("0")
     movement_row_count = 0
     by_type: dict[str, Decimal] = {}
+    ignored_by_type: dict[str, Decimal] = {}
+    unresolved_types: dict[str, Decimal] = {}
     bad_dates: list[dict[str, Any]] = []
     bad_uoms: list[dict[str, Any]] = []
 
@@ -187,9 +207,16 @@ def movement_rollforward(
             })
             continue
 
+        mt = str(row.get("movement_type") or "UNKNOWN").strip().upper()
+        if mt in UNRESTRICTED_NO_EFFECT:
+            ignored_by_type[mt] = ignored_by_type.get(mt, Decimal("0")) + qty
+            continue
+        if mt not in UNRESTRICTED_APPLY_AS_SIGNED:
+            unresolved_types[mt] = unresolved_types.get(mt, Decimal("0")) + qty
+            continue
+
         delta += qty
         movement_row_count += int(row.get("row_count") or 0)
-        mt = str(row.get("movement_type") or "UNKNOWN")
         by_type[mt] = by_type.get(mt, Decimal("0")) + qty
 
     if bad_dates:
@@ -198,6 +225,12 @@ def movement_rollforward(
     if bad_uoms:
         result["blockers"].append("MOVEMENT_UOM_MISMATCH")
         result["uom_mismatches"] = bad_uoms
+    if unresolved_types:
+        result["blockers"].append("MOVEMENT_TYPE_UNRESTRICTED_EFFECT_UNRESOLVED")
+        result["unresolved_movement_types"] = [
+            {"movement_type": mt, "quantity": qty, "uom": uom}
+            for mt, qty in sorted(unresolved_types.items())
+        ]
 
     result["movement_delta"] = delta
     result["movement_row_count"] = movement_row_count
@@ -205,8 +238,12 @@ def movement_rollforward(
     result["movement_file_ids"] = [int(d["file_id"]) for d in sorted(post_days, key=lambda x: x["date"])]
     result["movement_through_date"] = max(d["date"] for d in post_days)
     result["by_movement_type"] = [
-        {"movement_type": mt, "quantity": qty, "uom": uom}
+        {"movement_type": mt, "quantity": qty, "uom": uom, "inventory_effect": "APPLY_SIGNED"}
         for mt, qty in sorted(by_type.items())
+    ]
+    result["ignored_by_movement_type"] = [
+        {"movement_type": mt, "quantity": qty, "uom": uom, "inventory_effect": "NO_UNRESTRICTED_EFFECT"}
+        for mt, qty in sorted(ignored_by_type.items())
     ]
 
     if result["blockers"]:
@@ -254,6 +291,9 @@ def rollforward_position(
         "movement_file_ids": movement["movement_file_ids"],
         "movement_row_count": movement["movement_row_count"],
         "by_movement_type": movement["by_movement_type"],
+        "ignored_by_movement_type": movement["ignored_by_movement_type"],
+        "unresolved_movement_types": movement["unresolved_movement_types"],
+        "stock_basis": movement["stock_basis"],
         "same_day_policy": movement["same_day_policy"],
         "rollforward_status": movement["status"],
         "analysis_usable": movement["analysis_usable"],
