@@ -1,6 +1,7 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.27 Single-Service Edition
-Identity-audit scope refinement + authoritative UOM NULL-safe cleanup.
-Current-active missing UOM remains a per-UPC serving QA hold, not a global identity blocker.
-UPC-A short/long pairs are classified by current Quick Check scope.
-Manual override parity validates canonical Main/Family identity.
+Version: 7.0.28 Single-Service Edition
+UPC-A audit scope refinement:
+- block only when both short and check-digit-complete rows are current serving rows
+- classify current/historical pairs as alias candidates (warning)
+- classify historical/historical pairs as historical warnings
+- retain current per-UPC QA_HOLD and global identity blockers as separate concepts
