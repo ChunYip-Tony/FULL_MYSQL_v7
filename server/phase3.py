@@ -1749,6 +1749,18 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # rebuild cannot resurrect a nonexistent UPC or overwrite a user-confirmed UOM.
             override_result = apply_manual_upc_overrides(cur)
             retirement_result = apply_manual_upc_retirements(cur)
+            family_cost_result_final = apply_manual_family_costs(cur)
+            family_subarticle_result_final = apply_manual_family_subarticles(cur)
+            if family_cost_result_final.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed family costs failed final authority lock: '
+                    + str(family_cost_result_final.get('held'))
+                )
+            if family_subarticle_result_final.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed family subarticles failed final authority lock: '
+                    + str(family_subarticle_result_final.get('held'))
+                )
 
             # v7.0.30 fail-closed product-identity publish guard.
             # Candidate serving rows are built under a SAVEPOINT. A GLOBAL
@@ -1822,7 +1834,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_family_costs_final': family_cost_result_final, 'manual_family_subarticles_final': family_subarticle_result_final, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
