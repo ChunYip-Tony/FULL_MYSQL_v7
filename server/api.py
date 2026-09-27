@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hmac, json
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated
 from fastapi import FastAPI, UploadFile, File, Header, HTTPException
 from pydantic import BaseModel
@@ -13,8 +14,9 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies
 
-VERSION='7.0.45-single-service'
+VERSION='7.0.46-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -33,6 +35,9 @@ class BatchCreate(BaseModel):
 
 class ManualAuthorityRefreshRequest(BaseModel):
     confirm: str
+
+class TrueStockSubmit(BaseModel):
+    true_stock: Decimal
 
 @app.get('/healthz')
 def healthz(): return {'ok':True,'version':VERSION}
@@ -759,6 +764,50 @@ def cost_lineage_diagnostic(
         'upc_alias_checks':alias_checks,
         'family_article_numbers':article_numbers,
     },default=j))
+
+
+@app.get('/v1/app/quick-check/search')
+def app_quick_check_search(q:str,limit:int=20,authorization: Annotated[str|None,Header()]=None):
+    device_from_auth(authorization)
+    return json.loads(json.dumps(search_quick_check(q,limit),default=j))
+
+
+@app.get('/v1/app/quick-check/{upc}')
+def app_quick_check_detail(upc:str,authorization: Annotated[str|None,Header()]=None):
+    device_from_auth(authorization)
+    detail=get_quick_check_detail(upc)
+    if not detail:
+        raise HTTPException(404,'Quick Check UPC not found')
+    return json.loads(json.dumps(detail,default=j))
+
+
+@app.post('/v1/app/quick-check/{upc}/true-stock')
+def app_submit_true_stock(
+    upc:str,
+    body:TrueStockSubmit,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    try:
+        result=submit_true_stock(upc,body.true_stock,device)
+    except KeyError:
+        raise HTTPException(404,'Quick Check UPC not found')
+    except ValueError as exc:
+        code=str(exc)
+        if code in {'SYSTEM_OH_NOT_AVAILABLE','FAMILY_ID_NOT_AVAILABLE'}:
+            raise HTTPException(409,detail={'status':'BLOCKED','reason':code,'upc':upc})
+        if code=='TRUE_STOCK_NEGATIVE':
+            raise HTTPException(422,detail={'status':'INVALID','reason':code,'upc':upc})
+        raise HTTPException(400,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'True Stock submit failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/dumping/pending')
+def app_pending_dumping(authorization: Annotated[str|None,Header()]=None):
+    device_from_auth(authorization)
+    return json.loads(json.dumps({'rows':pending_dumping_discrepancies()},default=j))
 
 
 @app.get('/v1/quick-check/{upc}')
