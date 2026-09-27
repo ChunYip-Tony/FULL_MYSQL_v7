@@ -11,7 +11,7 @@ from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
 
-VERSION='7.0.27-single-service'
+VERSION='7.0.28-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
