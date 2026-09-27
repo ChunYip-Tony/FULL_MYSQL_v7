@@ -968,7 +968,12 @@ def cancel_true_stock(
 
 
 def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
-    """Read-only OH anchor -> movement roll-forward diagnostic for one UPC."""
+    """Read-only OH anchor -> movement roll-forward diagnostic for one UPC.
+
+    v7.0.58 also exposes the raw normalized movement_history evidence for every
+    canonical post-anchor MVT file so an ARTICLE-vs-FAMILY pooling decision can
+    be made from source evidence rather than from family sales-only rows.
+    """
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         row = _lookup_qc_row(cur, upc)
@@ -983,6 +988,79 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
         actual_position = _actual_position(cur, true_stock)
         effective_position = actual_position if true_stock else system_position
         effective_source = "TRUE_STOCK" if true_stock else "SYSTEM_OH"
+
+        movement_file_ids = list((system_position or {}).get("movement_file_ids") or [])
+        family_id = int(row["family_id"]) if row.get("family_id") is not None else None
+        article_id = int(system_oh["article_id"]) if system_oh and system_oh.get("article_id") is not None else None
+
+        family_movement_history = []
+        exact_article_movement_history = []
+        movement_summary_by_article = []
+        if movement_file_ids and family_id is not None:
+            placeholders = ",".join(["%s"] * len(movement_file_ids))
+            cur.execute(
+                f"""SELECT movement_history_id,file_id,raw_id,source_row_number,
+                           article_number,article_id,family_id,description,
+                           movement_type,posting_date,
+                           entry_quantity,entry_uom_code,
+                           base_quantity,base_uom_code,
+                           amount_local_currency,sales_value,
+                           article_document,purchase_order,vendor_code
+                    FROM movement_history
+                    WHERE family_id=%s
+                      AND file_id IN ({placeholders})
+                    ORDER BY posting_date,file_id,article_number,movement_type,
+                             movement_history_id""",
+                (family_id, *movement_file_ids),
+            )
+            family_movement_history = cur.fetchall()
+            exact_article_movement_history = [
+                x for x in family_movement_history
+                if article_id is not None and x.get("article_id") == article_id
+            ]
+
+            grouped = {}
+            for x in family_movement_history:
+                key = (
+                    x.get("article_id"),
+                    x.get("article_number"),
+                    x.get("base_uom_code"),
+                )
+                g = grouped.setdefault(
+                    key,
+                    {
+                        "article_id": x.get("article_id"),
+                        "article_number": x.get("article_number"),
+                        "base_uom_code": x.get("base_uom_code"),
+                        "row_count": 0,
+                        "net_base_quantity": Decimal("0"),
+                        "movement_types": set(),
+                    },
+                )
+                g["row_count"] += 1
+                if x.get("base_quantity") is not None:
+                    g["net_base_quantity"] += Decimal(str(x["base_quantity"]))
+                if x.get("movement_type") is not None:
+                    g["movement_types"].add(str(x["movement_type"]))
+
+            movement_summary_by_article = [
+                {
+                    "article_id": g["article_id"],
+                    "article_number": g["article_number"],
+                    "base_uom_code": g["base_uom_code"],
+                    "row_count": g["row_count"],
+                    "net_base_quantity": g["net_base_quantity"],
+                    "movement_types": sorted(g["movement_types"]),
+                }
+                for g in grouped.values()
+            ]
+            movement_summary_by_article.sort(
+                key=lambda x: (
+                    str(x.get("article_number") or ""),
+                    str(x.get("base_uom_code") or ""),
+                )
+            )
+
         conn.commit()
         cur.close()
         return {
@@ -997,6 +1075,18 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
             "actual_position": actual_position,
             "effective_position": effective_position,
             "effective_source": effective_source,
+            "movement_evidence": {
+                "canonical_post_anchor_file_ids": movement_file_ids,
+                "exact_article_row_count": len(exact_article_movement_history),
+                "family_row_count": len(family_movement_history),
+                "exact_article_rows": exact_article_movement_history,
+                "family_rows": family_movement_history,
+                "summary_by_article": movement_summary_by_article,
+                "diagnostic_note": (
+                    "This evidence comes from movement_history and therefore includes "
+                    "all normalized movement types, not only 251/252 family sale movement."
+                ),
+            },
         }
 
 
