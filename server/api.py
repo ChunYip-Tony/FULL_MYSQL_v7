@@ -16,7 +16,7 @@ from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage
 
-VERSION='7.0.47-single-service'
+VERSION='7.0.48-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
