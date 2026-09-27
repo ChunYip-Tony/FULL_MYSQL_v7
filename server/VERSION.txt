@@ -1,20 +1,22 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.34 Single-Service Edition
-User-confirmed Selling-UOM authority for the 22 reviewed current Quick Check holds.
+Version: 7.0.35 Single-Service Edition
+Transaction-safety repair for confirmed UOM maintenance and Phase 3 publishing.
 
-Confirmed scope:
-- 18 exact UPCs: POS Selling UOM=LB
-- 4 exact UPCs: POS Selling UOM=PACK
-- confirmations are per-UPC; no new prefix-wide rule is created
-- Selling UOM confirmation does NOT infer Base/Inventory UOM or conversion factor
+Root cause fixed:
+- manual authority helpers executed CREATE TABLE IF NOT EXISTS inside active transactions
+- MySQL DDL performs an implicit COMMIT
+- that invalidated SAVEPOINT confirmed_uom_refresh and could also invalidate
+  the Phase 3 Quick Check publish SAVEPOINT
 
-Adds POST /v1/maintenance/confirmed-uom-refresh:
-- accepts no arbitrary product/UOM values
-- applies only code-reviewed user-confirmed overrides
-- rebuilds current Quick Check server-side
-- reruns product-identity audit before commit
-- rolls back the transaction if a target UOM does not publish exactly as confirmed
-- refreshes per-UPC Quick Check core-field holds for the serving batch
+Changes:
+- manual authority table ensure-functions first inspect information_schema and do
+  no DDL when the tables already exist
+- maintenance endpoints bootstrap schema before the business transaction
+- confirmed UOM refresh now uses one explicit transaction and no nested SAVEPOINT
+- Phase 3 bootstraps manual authority tables before starting its business transaction
+- all 22 user-confirmed Selling UOM overrides from v7.0.34 remain authoritative
+- no prefix-wide UOM rule
+- no Base/Inventory UOM or conversion-factor inference
 
 No schema migration.
-No direct Work-PC MySQL TCP dependency.
+Work-PC remains HTTPS 443 only.

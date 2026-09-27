@@ -1,41 +1,36 @@
-FULL MYSQL v7.0.34 GitHub Patch
+FULL MYSQL v7.0.35 GitHub Patch
 
 Purpose:
-- Apply Tony's explicit Selling-UOM confirmations for the 22 current UOM QA holds.
-- Rebuild Quick Check immediately through HTTPS 443 without Work-PC direct MySQL access.
+- Fix MySQL error 1305: SAVEPOINT confirmed_uom_refresh does not exist.
+- Preserve atomic rollback semantics for maintenance and Phase 3 publishing.
 
-Authority encoded:
-- Group A exact UPCs: LB
-- Group B exact UPCs: PACK
-- Group C remaining 14 reviewed exact UPCs: LB
-- These are per-UPC confirmations only.
-- Base/Inventory UOM and conversion factors remain NULL unless separately confirmed/evidenced.
+Root cause:
+- apply_manual_upc_overrides/apply_manual_upc_retirements called table-ensure helpers.
+- Those helpers always issued CREATE TABLE IF NOT EXISTS.
+- MySQL DDL implicitly commits the active transaction, which destroys SAVEPOINTs.
+- A failed v7.0.34 run may therefore have committed some manual override/UOM rows
+  before the later Quick Check rebuild rolled back.
 
-Endpoint:
-POST /v1/maintenance/confirmed-uom-refresh
-Body:
-{"confirm":"APPLY_CONFIRMED_UOM_AND_REBUILD"}
+Recovery design:
+1) Keep the 22 exact user-confirmed Selling UOM overrides.
+2) Table ensure-functions first check information_schema and skip DDL when present.
+3) confirmed-uom-refresh ensures bootstrap tables before transaction start.
+4) Close the bootstrap/read transaction.
+5) Start one explicit transaction.
+6) Reapply all manual authority idempotently.
+7) Resolve prior per-UPC core-hold rows for the serving batch.
+8) Rebuild Quick Check.
+9) Run product-identity audit.
+10) Verify all 22 target Selling UOMs.
+11) Commit only if all checks pass; otherwise rollback the entire business transaction.
 
-Atomic workflow:
-1) Refuse while POST_RAW_PIPELINE is STARTED.
-2) Locate currently published Phase 3 batch.
-3) Savepoint.
-4) Apply all code-reviewed manual overrides/retirements.
-5) Resolve stale QUICK_CHECK_CORE_FIELD_MISSING rows for that serving batch.
-6) Rebuild Quick Check.
-7) Run global product-identity audit.
-8) Verify all 22 target Quick Check rows publish the exact confirmed Selling UOM
-   and the intentionally-unresolved Base/Inventory UOM tuple.
-9) On any failure, rollback the transaction and preserve the prior serving snapshot.
-10) On success, update Phase 3 serving counts/status and commit.
-
-No schema migration.
-No prefix-wide UOM rule.
-No inferred pack weight/base conversion.
+Phase 3:
+- manual authority tables are ensured before its explicit transaction begins
+- v7.0.30 fail-closed Quick Check SAVEPOINT is preserved from implicit DDL commits
 
 After deploy:
-1) Verify /healthz = 7.0.34-single-service.
-2) POST /v1/maintenance/confirmed-uom-refresh.
-3) Confirm status=COMMITTED and remaining_missing_selling_uom=0.
-4) Review target_checks and the remaining Quick Check QA holds, which may still
-   contain CURRENT_COST_MISSING or COST_TO_SELLING_UOM_UNRESOLVED.
+1) Verify /healthz = 7.0.35-single-service.
+2) Re-run POST /v1/maintenance/confirmed-uom-refresh with the same confirmation body.
+3) Confirm status=COMMITTED.
+4) Confirm target_count=22 and remaining_missing_selling_uom=0.
+5) Re-run product-identity audit.

@@ -94,10 +94,24 @@ SEED_RETIREMENTS = (
 )
 
 
+def _table_exists(cur, table_name: str) -> bool:
+    cur.execute(
+        """SELECT 1
+           FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA=DATABASE()
+             AND TABLE_NAME=%s
+           LIMIT 1""",
+        (table_name,),
+    )
+    return bool(cur.fetchone())
+
+
 def ensure_override_table(cur) -> None:
+    if _table_exists(cur, 'manual_upc_override'):
+        return
     cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS manual_upc_override (
+        CREATE TABLE manual_upc_override (
             override_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             ean_upc VARCHAR(32) NOT NULL,
             article_number VARCHAR(64) NULL,
@@ -176,9 +190,11 @@ def _canonical_article(cur, article_number: str) -> dict[str, Any] | None:
 
 
 def ensure_retirement_table(cur) -> None:
+    if _table_exists(cur, 'manual_upc_retirement'):
+        return
     cur.execute(
         """
-        CREATE TABLE IF NOT EXISTS manual_upc_retirement (
+        CREATE TABLE manual_upc_retirement (
             retirement_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
             ean_upc VARCHAR(32) NOT NULL,
             retirement_reason VARCHAR(64) NOT NULL,
