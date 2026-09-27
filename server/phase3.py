@@ -1651,7 +1651,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
@@ -1673,7 +1673,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                  }, default=str), run_id),
             )
             conn.commit()
-            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                     'active_product_master_repair': active_master_repair,
                     'article_manual_multitab_repair': multitab_manual_repair,
                     'cross_tab_signature_repair': cross_tab_signature_repair,
