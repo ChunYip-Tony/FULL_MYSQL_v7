@@ -1,13 +1,20 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.33 Single-Service Edition
-Schema-resilient Selling-UOM evidence diagnostic.
+Version: 7.0.34 Single-Service Edition
+User-confirmed Selling-UOM authority for the 22 reviewed current Quick Check holds.
 
-Changes:
-- introspect selling_upc_uom_history columns instead of assuming optional field names
-- isolate Article Manual, history, family-peer, and related-prefix evidence failures per item
-- return partial results with diagnostic_errors when a non-critical evidence source fails
-- return structured FATAL_DIAGNOSTIC_ERROR instead of generic HTTP 500 for top-level diagnostic failures
-- no product-data mutation
-- no schema migration
-- no Quick Check rebuild
-- Phase 3 fail-closed product-identity guard remains active
+Confirmed scope:
+- 18 exact UPCs: POS Selling UOM=LB
+- 4 exact UPCs: POS Selling UOM=PACK
+- confirmations are per-UPC; no new prefix-wide rule is created
+- Selling UOM confirmation does NOT infer Base/Inventory UOM or conversion factor
+
+Adds POST /v1/maintenance/confirmed-uom-refresh:
+- accepts no arbitrary product/UOM values
+- applies only code-reviewed user-confirmed overrides
+- rebuilds current Quick Check server-side
+- reruns product-identity audit before commit
+- rolls back the transaction if a target UOM does not publish exactly as confirmed
+- refreshes per-UPC Quick Check core-field holds for the serving batch
+
+No schema migration.
+No direct Work-PC MySQL TCP dependency.
