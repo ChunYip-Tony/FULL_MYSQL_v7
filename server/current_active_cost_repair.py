@@ -10,7 +10,7 @@ from typing import Any
 from data_coverage import source_data_days
 from manual_overrides import confirmed_family_cost
 
-VERSION = "7.0.44-current-active-cost-lineage-repair"
+VERSION = "7.0.45-current-active-cost-lineage-repair"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
