@@ -1695,6 +1695,11 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
 
             relink_history(cur)
 
+            # v7.0.42: normalize historical/current company cost UOM semantics
+            # before current-active cost repair. Frozen uses item BUN; Live/Fresh
+            # uses the source-level LB rule; TX Seafood ABC is retired.
+            company_cost_uom_repair = repair_company_cost_uom_observations(cur)
+
             # v7.0.19: cost repair/audit is CURRENT-ACTIVE ONLY.
             # Authority:
             #   1) valid 101/107/109 receipt valuation
@@ -1795,6 +1800,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                   'cross_tab_signature_repair': cross_tab_signature_repair,
                   'temporary_qa_waivers': temporary_qa_waivers,
                   'active_28d_uom_repair': active_28d_uom_repair,
+                  'company_cost_uom_repair': company_cost_uom_repair,
                   'current_active_cost_repair': current_active_cost_repair,
                   'product_identity_guard': product_identity_guard}, default=str)),
             )
@@ -1817,6 +1823,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     'cross_tab_signature_repair': cross_tab_signature_repair,
                     'temporary_qa_waivers': temporary_qa_waivers,
                     'active_28d_uom_repair': active_28d_uom_repair,
+                    'company_cost_uom_repair': company_cost_uom_repair,
                     'current_active_cost_repair': current_active_cost_repair,
                     'product_identity_guard': product_identity_guard,
                     'quick_check_attempt': qc_attempt,
