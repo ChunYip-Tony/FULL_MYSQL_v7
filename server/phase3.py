@@ -474,6 +474,66 @@ def _pick(hmap: dict[str, str], aliases: Iterable[str]) -> str | None:
     return None
 
 
+def _company_cost_uom_policy(
+    source_type: str,
+    hmap: dict[str, str],
+    payload: dict[str, Any],
+    has_cost: bool,
+) -> tuple[str | None, str, str | None]:
+    """Resolve company-report cost UOM from explicit source semantics only.
+
+    Frozen Inventory: Unit Cost is per BUN, and BUN is the item-specific unit
+    shown in the BUN column (column I in the current report layout).
+
+    Live/Fresh Suggestion: user-confirmed source-wide rule: Unit Cost is per LB.
+
+    TX Seafood ABC Price: retired from current authority. Preserve source rows,
+    but do not provide current cost UOM/authority.
+    """
+    st = str(source_type or '').strip().lower()
+    if st == 'frozen_inventory':
+        bun_col = _pick_exact(hmap, ['BUN'])
+        bun = (_text(payload.get(bun_col)) or '').upper() or None if bun_col else None
+        return bun, 'FROZEN_BUN_COLUMN', bun_col
+    if st == 'live_fresh_suggestion':
+        return ('LB' if has_cost else None), 'LIVE_FRESH_SOURCE_RULE_LB', None
+    if st == 'tx_seafood_abc_price':
+        return None, 'TX_SEAFOOD_ABC_RETIRED', None
+
+    explicit_col = _pick_exact(
+        hmap,
+        [
+            'Cost UOM',
+            'Cost Unit',
+            'Cost Unit of Measure',
+            'Cost Base UOM',
+            'UOM',
+            'UM',
+            'Unit of Measure',
+        ],
+    )
+    explicit = (
+        (_text(payload.get(explicit_col)) or '').upper() or None
+        if explicit_col else None
+    )
+    return explicit, 'EXPLICIT_COST_UOM_COLUMN', explicit_col
+
+
+def _family_main_article_id(cur, family_id: int | None) -> int | None:
+    if family_id is None:
+        return None
+    cur.execute(
+        """SELECT a.article_id
+           FROM product_family pf
+           JOIN article a ON a.article_number=pf.main_article_number
+           WHERE pf.family_id=%s
+           LIMIT 1""",
+        (family_id,),
+    )
+    row = cur.fetchone()
+    return int(row['article_id']) if row else None
+
+
 def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
     inserted = 0
     cur.execute('SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
@@ -525,18 +585,6 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
         c_b = _pick(hmap, ['Price B', 'Suggested Price B', 'B Price'])
         c_c = _pick(hmap, ['Price C', 'Suggested Price C', 'C Price'])
         c_cost = _pick(hmap, ['Cost', 'Official Cost', 'Unit Cost'])
-        c_uom = _pick_exact(
-            hmap,
-            [
-                'Cost UOM',
-                'Cost Unit',
-                'Cost Unit of Measure',
-                'Cost Base UOM',
-                'UOM',
-                'UM',
-                'Unit of Measure',
-            ],
-        )
         if not any([c_a, c_b, c_c, c_cost]):
             continue
         cur.execute(f'SELECT raw_id,source_row_number,raw_payload FROM {raw_table} WHERE sheet_id=%s AND source_row_number>%s ORDER BY source_row_number',
@@ -558,7 +606,12 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
             if all(v is None for v in (pa, pb, pc, cost)):
                 continue
             obs_date = f.get('coverage_end_date') or f.get('filename_date_candidate') or (f.get('upload_timestamp').date() if f.get('upload_timestamp') else None)
-            cost_uom = (_text(p.get(c_uom)) or '').upper() or None if c_uom else None
+            cost_uom, cost_uom_policy, _cost_uom_source_col = _company_cost_uom_policy(
+                f['source_type'],
+                hmap,
+                p,
+                cost is not None and cost > 0,
+            )
             cur.execute(
                 """INSERT INTO company_price_observation
                    (batch_id,file_id,sheet_id,raw_id,source_row_number,article_number,article_id,family_id,ean_upc,upc_id,
@@ -571,18 +624,54 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
                  ean, upc_id, obs_date, f['source_type'], pa, pb, pc, cost, cost_uom),
             )
             inserted += 1
-            if cost is not None and article_id is not None and cost_uom:
+            if (
+                cost is not None
+                and cost > 0
+                and family_id is not None
+                and cost_uom
+                and f['source_type'] in {'frozen_inventory', 'live_fresh_suggestion'}
+            ):
                 uid = _uom_id(cur, cost_uom)
-                if uid:
+                main_article_id = _family_main_article_id(cur, family_id)
+                if uid and main_article_id is not None:
                     cur.execute("SELECT cost_observation_id FROM article_cost_observation WHERE raw_table_name=%s AND raw_id=%s LIMIT 1", (raw_table, rr['raw_id']))
-                    if not cur.fetchone():
+                    existing = cur.fetchone()
+                    if existing:
+                        cur.execute(
+                            """UPDATE article_cost_observation
+                               SET article_id=%s,family_id=%s,cost_amount=%s,cost_uom_id=%s,
+                                   source_type=%s,business_date=%s,cost_status='OBSERVED',confidence=1.0
+                               WHERE cost_observation_id=%s""",
+                            (
+                                main_article_id,
+                                family_id,
+                                cost,
+                                uid,
+                                f['source_type'].upper() + '_OFFICIAL_COST',
+                                obs_date,
+                                existing['cost_observation_id'],
+                            ),
+                        )
+                    else:
                         cur.execute(
                             """INSERT INTO article_cost_observation
                                (article_id,family_id,cost_amount,currency_code,cost_uom_id,source_type,business_date,
                                 cost_status,confidence,batch_id,file_id,sheet_id,raw_table_name,raw_id,source_row_number)
                                VALUES (%s,%s,%s,'USD',%s,%s,%s,'OBSERVED',1.0,%s,%s,%s,%s,%s,%s)""",
-                            (article_id, family_id, cost, uid, f['source_type'].upper() + '_OFFICIAL_COST', obs_date,
-                             batch_id, f['file_id'], sh['sheet_id'], raw_table, rr['raw_id'], rr['source_row_number']),
+                            (
+                                main_article_id,
+                                family_id,
+                                cost,
+                                uid,
+                                f['source_type'].upper() + '_OFFICIAL_COST',
+                                obs_date,
+                                batch_id,
+                                f['file_id'],
+                                sh['sheet_id'],
+                                raw_table,
+                                rr['raw_id'],
+                                rr['source_row_number'],
+                            ),
                         )
     return inserted
 
@@ -1099,7 +1188,7 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
         """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
-           WHERE co.family_id=%s AND co.source_type IN ('FROZEN_INVENTORY_OFFICIAL_COST','TX_SEAFOOD_ABC_PRICE_OFFICIAL_COST','LIVE_FRESH_SUGGESTION_OFFICIAL_COST')
+           WHERE co.family_id=%s AND co.source_type IN ('FROZEN_INVENTORY_OFFICIAL_COST','LIVE_FRESH_SUGGESTION_OFFICIAL_COST')
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED') AND co.cost_amount>0
            ORDER BY co.business_date DESC, co.cost_observation_id DESC LIMIT 1""",
         (family_id,),
@@ -1236,9 +1325,9 @@ def _latest_inventory(cur, upc_id: int, family_id: int | None) -> dict[str, Any]
 
 def _company_prices(cur, upc_id: int, family_id: int | None) -> dict[str, Any] | None:
     if family_id is None:
-        cur.execute("SELECT * FROM company_price_observation WHERE upc_id=%s ORDER BY observation_date DESC,company_price_observation_id DESC LIMIT 1", (upc_id,))
+        cur.execute("SELECT * FROM company_price_observation WHERE upc_id=%s AND source_type<>'tx_seafood_abc_price' ORDER BY observation_date DESC,company_price_observation_id DESC LIMIT 1", (upc_id,))
     else:
-        cur.execute("SELECT * FROM company_price_observation WHERE (upc_id=%s OR family_id=%s) ORDER BY observation_date DESC,company_price_observation_id DESC LIMIT 1", (upc_id, family_id))
+        cur.execute("SELECT * FROM company_price_observation WHERE (upc_id=%s OR family_id=%s) AND source_type<>'tx_seafood_abc_price' ORDER BY observation_date DESC,company_price_observation_id DESC LIMIT 1", (upc_id, family_id))
     return cur.fetchone()
 
 
