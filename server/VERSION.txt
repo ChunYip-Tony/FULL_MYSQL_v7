@@ -1,14 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.30 Single-Service Edition
-Phase 3 fail-closed product-identity publish guard.
+Version: 7.0.31 Single-Service Edition
+Read-only Selling-UOM evidence diagnostic for current Quick Check holds.
 
-Behavior:
-- Build candidate Quick Check snapshot under a MySQL SAVEPOINT.
-- Run the production product-identity audit before publish is accepted.
-- GLOBAL identity blockers force PHASE3_QA_HOLD.
-- On a global identity blocker, roll back the candidate Quick Check rebuild and preserve
-  the previously published serving snapshot.
-- Persist guard blockers into qa_phase3_issue as CRITICAL issues for normal QA visibility.
-- Per-UPC Quick Check QA_HOLD rows and audit warnings remain non-global and do not block
-  otherwise valid publication.
-- Work-PC remains HTTPS 443 only; direct MySQL TCP is not required.
+Adds GET /v1/diagnostics/uom-lineage:
+- defaults to current QA_HOLD rows with SELLING_UOM_MISSING
+- inspects newest Article Manual evidence
+- inspects historical UOM rows and confirmed manual overrides
+- inspects same-family peer UPCs
+- applies the current FULL MYSQL safe related-prefix LB evidence rule
+- classifies each hold as safe-to-auto-apply vs needs review
+- performs no database mutation and no Quick Check rebuild
+
+Phase 3 fail-closed product-identity guard from v7.0.30 remains unchanged.
