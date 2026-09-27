@@ -1,48 +1,44 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.41 Single-Service Edition
-User-confirmed Cost-UOM -> POS-Selling-UOM conversion authority.
+Version: 7.0.42 Single-Service Edition
+Authoritative source-level company cost semantics.
 
-Confirmed exact conversions:
-- 402954957: 1 BX = 3 LB
-- 75339379281: 1 EA = 2 LB
-- 4816: 1 EA = 4 LB
-- 8231817551: 1 PACK = 2 LB
-- 4029551288: 1 PAC = 2 LB
-- 7441092018: 1 EA = 1.2 LB
-- 4883: 1 PAC = 2.2 LB
-  (stored directionally as 2.2 selling LB = 1 cost PAC)
-- 81223402632: 1 PACK = 1 BAG
+User-confirmed source rules:
+1) Frozen Inventory report
+   - Unit Cost varies by item.
+   - Cost UOM is the row's BUN value from the BUN column (column I in the current layout).
+   - BUN is authoritative for the Unit Cost UOM.
+2) Live/Fresh Suggestion report
+   - Unit Cost is always per LB.
+   - LB is a source-level authoritative rule.
+3) TX SEAFOOD ABC PRICE
+   - retired from CURRENT authority.
+   - no future upload is expected.
+   - historical RAW/provenance is preserved.
+   - its historical cost and suggested-price rows do not drive current serving.
+4) Official report cost belongs to the receiving Main/Family Article.
+   - related selling UPCs / sub-articles in the Family share that Family cost.
+   - derived official cost observations are anchored to the Family Main Article.
+5) Pack text such as 20/1LB, 10/2LB, 12/3LB remains reference-only.
+   - it is not automatic conversion authority.
+6) Cost priority remains:
+   101/107/109 receipt valuation
+   > authoritative official report cost
+   > explicit OH fallback.
+7) If no receipt history and no authoritative report cost exist, the system
+   classifies the item as NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST so
+   it can be surfaced for user cost confirmation rather than guessed.
 
-Architecture:
-- adds manual_cost_selling_conversion as a separate audit registry
-- does NOT modify Base/Inventory UOM
-- does NOT modify base_qty_per_selling_unit
-- Quick Check cost-per-selling calculation uses:
-    cost_per_cost_uom * cost_qty / selling_qty
-  only when current Selling UOM and authoritative Cost UOM match the
-  confirmed conversion tuple
-- PAC/PACK are normalized as equivalent only for comparison
+Implementation:
+- future Frozen ingest reads Cost UOM from exact BUN header only
+- future Live/Fresh ingest assigns Cost UOM=LB by source rule
+- historical company_price_observation rows are repaired from immutable RAW
+- TX-derived official cost rows are superseded for current authority
+- Frozen/Live-Fresh official costs are re-anchored to the Family Main Article
+- current company-price serving excludes TX Seafood ABC rows
+- Phase 3 re-applies these semantics on every rebuild
+- safe-cost-refresh performs the same repair before classifying safe targets
 
-New endpoint:
-POST /v1/maintenance/confirmed-cost-conversion-refresh
-Body:
-{"confirm":"APPLY_CONFIRMED_COST_CONVERSIONS_AND_REBUILD"}
-
-Safety:
-- table DDL/bootstrap occurs before the business transaction
-- rebuild is atomic
-- all 8 exact targets are verified after rebuild
-- expected cost-per-selling values are checked numerically
-- Base/Inventory UOM and base factor must remain unchanged
-- product-identity audit must remain PASS
-- conversion-hold count must not increase
-- rollback on any mismatch
-
-Phase 3:
-- seeds/refreshes the confirmed conversion registry on every run
-- future Quick Check rebuilds retain these exact confirmations
-- no prefix rule and no description-derived conversion is introduced
-
-Schema change:
-- adds one small InnoDB registry table: manual_cost_selling_conversion
-- RAW tables and source provenance are unchanged.
+No RAW mutation.
+No description/pack-text conversion inference.
+No change to receipt authority.
+No change to explicit OH fallback authority.
