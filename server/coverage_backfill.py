@@ -287,30 +287,38 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
         missing_day = missing[0]
         period_rows = _period_sales_rows(cur, file_id)
         known_totals = _known_sales_by_key(cur, canonical_days=known)
+        period_map = {
+            (str(p["ean_upc"]), str(p["price_type"])): p
+            for p in period_rows
+        }
 
         negative_residuals: list[dict[str, Any]] = []
         residual_rows: list[dict[str, Any]] = []
         tolerance = Decimal("0.0001")
 
-        for p in period_rows:
-            key = (str(p["ean_upc"]), str(p["price_type"]))
+        all_keys = sorted(set(period_map) | set(known_totals))
+        for key in all_keys:
+            p = period_map.get(key)
+            period_sales = _decimal(p["sales_amount"]) if p else Decimal("0")
+            period_qty = _decimal(p["sold_quantity"]) if p else Decimal("0")
             known_sales, known_qty = known_totals.get(
                 key, (Decimal("0"), Decimal("0"))
             )
-            residual_sales = _decimal(p["sales_amount"]) - known_sales
-            residual_qty = _decimal(p["sold_quantity"]) - known_qty
+            residual_sales = period_sales - known_sales
+            residual_qty = period_qty - known_qty
 
             if residual_sales < -tolerance or residual_qty < -tolerance:
                 negative_residuals.append(
                     {
                         "ean_upc": key[0],
                         "price_type": key[1],
-                        "period_sales": _decimal(p["sales_amount"]),
-                        "period_qty": _decimal(p["sold_quantity"]),
+                        "period_sales": period_sales,
+                        "period_qty": period_qty,
                         "known_sales": known_sales,
                         "known_qty": known_qty,
                         "residual_sales": residual_sales,
                         "residual_qty": residual_qty,
+                        "period_key_present": p is not None,
                     }
                 )
                 continue
@@ -322,7 +330,10 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
             avg = residual_sales / residual_qty if residual_qty != 0 else None
             residual_rows.append(
                 {
-                    **p,
+                    "ean_upc": key[0],
+                    "upc_id": p.get("upc_id") if p else None,
+                    "description": p.get("description") if p else None,
+                    "price_type": key[1],
                     "sales_amount": residual_sales,
                     "sold_quantity": residual_qty,
                     "avg_sold_price": avg,
