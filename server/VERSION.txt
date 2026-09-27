@@ -1,15 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.32 Single-Service Edition
-Fixes the read-only Selling-UOM evidence diagnostic introduced in v7.0.31.
+Version: 7.0.33 Single-Service Edition
+Schema-resilient Selling-UOM evidence diagnostic.
 
-Root cause:
-- the diagnostic referenced non-existent selling_upc_uom_history column names
-  (uom_history_id / effective_from)
-- the production schema uses upc_uom_id and effective_to
-
-Behavior is otherwise unchanged:
-- read-only UOM diagnosis
-- no schema migration
+Changes:
+- introspect selling_upc_uom_history columns instead of assuming optional field names
+- isolate Article Manual, history, family-peer, and related-prefix evidence failures per item
+- return partial results with diagnostic_errors when a non-critical evidence source fails
+- return structured FATAL_DIAGNOSTIC_ERROR instead of generic HTTP 500 for top-level diagnostic failures
 - no product-data mutation
+- no schema migration
 - no Quick Check rebuild
-- Phase 3 fail-closed identity guard remains active
+- Phase 3 fail-closed product-identity guard remains active
