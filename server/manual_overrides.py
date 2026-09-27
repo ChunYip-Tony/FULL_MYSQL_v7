@@ -358,6 +358,11 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
             result["held"].append({"ean_upc": ean, "reason": "SELLING_UOM_CODE_NOT_IN_DIM_UOM"})
             continue
 
+        # A user-confirmed override is the final authority. Retire every
+        # currently-confirmed UOM row first, then reactivate exactly one row
+        # matching the authoritative tuple below. This is deliberately simpler
+        # than SQL NOT/NULL comparisons, which can leave stale NULL variants
+        # active because NOT UNKNOWN is still UNKNOWN in MySQL.
         cur.execute(
             """
             UPDATE selling_upc_uom_history
@@ -366,14 +371,8 @@ def apply_manual_upc_overrides(cur) -> dict[str, Any]:
             WHERE upc_id=%s
               AND mapping_status='CONFIRMED'
               AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP(6))
-              AND NOT (
-                  selling_uom_id=%s
-                  AND ((base_uom_id IS NULL AND %s IS NULL) OR base_uom_id=%s)
-                  AND ((base_qty_per_selling_unit IS NULL AND %s IS NULL)
-                       OR base_qty_per_selling_unit=%s)
-              )
             """,
-            (upc_id, sell_id, base_id, base_id, factor, factor),
+            (upc_id,),
         )
 
         cur.execute(
