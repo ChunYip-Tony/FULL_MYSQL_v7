@@ -1,24 +1,33 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.36 Single-Service Edition
-Read-only global current-cost hold diagnostic.
+Version: 7.0.37 Single-Service Edition
+Evidence-backed safe current-cost repair + direct same-UOM cost conversion.
 
-Adds GET /v1/diagnostics/cost-holds:
-- scans current Quick Check QA_HOLD rows globally
-- isolates CURRENT_COST_MISSING and COST_TO_SELLING_UOM_UNRESOLVED
-- groups evidence by authoritative Family/Article identity
-- inspects receipt 101/107/109 valuation evidence
-- inspects official Live/Fresh/Frozen report cost + explicit cost UOM
-- inspects raw On-Hand explicit cost + cost-UOM evidence without mutating data
-- includes exact Article Manual UPC rows for pack/conversion review
-- classifies safe repair candidates vs evidence-required holds
+Based on the v7.0.36 diagnostic baseline:
+- 150 current Quick Check QA_HOLD rows were cost-related
+- 125 CURRENT_COST_MISSING
+- 25 COST_TO_SELLING_UOM_UNRESOLVED
+- 70 rows classified safe for the current issue
+- 80 rows require additional evidence/review
 
-Conversion policy:
-- if authoritative cost UOM exactly equals Selling UOM, the diagnostic may classify
-  direct factor-1 cost-to-selling calculation as safe
-- this does NOT assert or mutate Base/Inventory UOM
-- PACK-to-LB/EA and other cross-UOM conversions remain held without explicit evidence
+Changes:
+1) Quick Check cost calculation:
+   - if authoritative Cost UOM exactly equals POS Selling UOM,
+     cost-per-selling-unit is calculated directly with factor 1
+   - PAC/PACK are normalized as equivalent for this comparison
+   - this does NOT infer or write Base/Inventory UOM
+2) POST /v1/maintenance/safe-cost-refresh:
+   - applies only existing evidence-authority repair rules
+   - receipt 101/107/109 valuation remains highest priority
+   - official Live/Fresh/Frozen cost remains second
+   - explicit OH cost + explicit supported cost-UOM remains fallback
+   - rebuilds Quick Check in one explicit transaction
+   - reruns global product-identity audit
+   - verifies each pre-refresh safe target repaired its exact issue
+   - rolls back on verification failure or regression
+3) Cross-UOM conversions remain blocked:
+   - no PACK-to-LB/EA inference
+   - no EA/BX/PC/PACK conversion from description text alone
 
 No schema migration.
-No product-data mutation.
-No Quick Check rebuild.
-Phase 3 fail-closed product-identity guard remains active.
+No arbitrary cost/UOM payload.
+Work-PC remains HTTPS 443 only.
