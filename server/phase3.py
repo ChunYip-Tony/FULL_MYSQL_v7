@@ -858,6 +858,15 @@ def _mapped_current_activity_scope(
     return 'HISTORICAL_ONLY', 'NO_POS_SALES_LATEST_28_VALID_DATA_DAYS'
 
 
+def _norm_cost_serving_uom(v: Any) -> str | None:
+    if v is None:
+        return None
+    s = str(v).strip().upper()
+    if not s:
+        return None
+    return 'PACK' if s in {'PAC','PACK'} else s
+
+
 def _product_class(article_desc: str | None, family_desc: str | None, category: str | None) -> str | None:
     # Classification is intentionally conservative: only explicit category/name markers are used.
     text = ' '.join(x for x in [article_desc, family_desc, category] if x).upper()
@@ -1120,10 +1129,19 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
         factor = Decimal(str(p['base_qty_per_selling_unit'])) if p['base_qty_per_selling_unit'] is not None else None
         selling_uom = p['selling_uom']; base_uom = p['base_uom']
-        if factor is None and selling_uom and base_uom and selling_uom == base_uom:
+        norm_selling_uom = _norm_cost_serving_uom(selling_uom)
+        norm_base_uom = _norm_cost_serving_uom(base_uom)
+        cost_uom = _norm_cost_serving_uom(cost.get('base_uom')) if cost else None
+        if factor is None and norm_selling_uom and norm_base_uom and norm_selling_uom == norm_base_uom:
             factor = Decimal('1')
+
         cost_sell = None
-        if cost and factor is not None and cost.get('base_uom') and base_uom and str(cost['base_uom']).upper() == str(base_uom).upper():
+        # v7.0.37: a cost stated in the exact POS Selling UOM can be used
+        # directly as cost-per-selling-unit with factor 1. This is a calculation
+        # rule only; it does NOT infer or write Base/Inventory UOM.
+        if cost and norm_selling_uom and cost_uom and norm_selling_uom == cost_uom:
+            cost_sell = Decimal(str(cost['cost_per_base']))
+        elif cost and factor is not None and cost_uom and norm_base_uom and cost_uom == norm_base_uom:
             cost_sell = Decimal(str(cost['cost_per_base'])) * factor
         fm7, fm_uom, _fm_days = _family_movement_metrics(cur, family_id, mvt_days_7)
         inv = _latest_inventory(cur, upc_id, family_id)
