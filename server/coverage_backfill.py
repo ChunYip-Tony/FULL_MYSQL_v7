@@ -77,6 +77,41 @@ def ensure_coverage_backfill_tables(cur) -> None:
     )
 
 
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pos_period_residual_observation (
+            period_residual_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            source_file_id BIGINT UNSIGNED NOT NULL,
+            source_batch_id BIGINT UNSIGNED NOT NULL,
+            period_start_date DATE NOT NULL,
+            period_end_date DATE NOT NULL,
+            missing_start_date DATE NOT NULL,
+            missing_end_date DATE NOT NULL,
+            missing_day_count INT NOT NULL,
+            missing_dates_json JSON NOT NULL,
+            ean_upc VARCHAR(32) NOT NULL,
+            upc_id BIGINT UNSIGNED NULL,
+            description VARCHAR(512) NULL,
+            price_type VARCHAR(32) NOT NULL,
+            sales_amount DECIMAL(24,8) NOT NULL,
+            sold_quantity DECIMAL(24,8) NOT NULL,
+            avg_sold_price DECIMAL(24,8) NULL,
+            derivation_method VARCHAR(64) NOT NULL,
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                ON UPDATE CURRENT_TIMESTAMP(6),
+            PRIMARY KEY (period_residual_id),
+            UNIQUE KEY uq_pos_period_residual
+                (source_file_id,ean_upc,price_type),
+            KEY ix_pos_period_residual_batch
+                (source_batch_id,missing_start_date,missing_end_date),
+            KEY ix_pos_period_residual_upc
+                (upc_id,missing_end_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        """
+    )
+
+
 def _date_span(start: date, end: date) -> list[date]:
     out: list[date] = []
     d = start
@@ -243,6 +278,10 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
             "DELETE FROM pos_daily_backfill_coverage WHERE source_file_id=%s",
             (file_id,),
         )
+        cur.execute(
+            "DELETE FROM pos_period_residual_observation WHERE source_file_id=%s",
+            (file_id,),
+        )
 
         period_dates = _date_span(start, end)
         known = _canonical_sales_days_in_period(
@@ -275,13 +314,6 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
             result["mode"] = "RECONCILIATION_ONLY"
             result["reason"] = "NO_DAILY_GAP"
             reconciliation_only_files += 1
-            files_out.append(result)
-            continue
-
-        if len(missing) > 1:
-            result["mode"] = "PERIOD_PRICE_TYPE_ONLY"
-            result["reason"] = "MULTIPLE_DAILY_GAPS_CANNOT_BE_UNIQUELY_ALLOCATED"
-            period_only_files += 1
             files_out.append(result)
             continue
 
@@ -347,6 +379,65 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
             result["negative_residual_count"] = len(negative_residuals)
             result["negative_residual_examples"] = negative_residuals[:10]
             blocked_files += 1
+            files_out.append(result)
+            continue
+
+        if len(missing) > 1:
+            import json
+            missing_json = json.dumps(
+                [d.isoformat() for d in missing],
+                ensure_ascii=False,
+            )
+            for r in residual_rows:
+                cur.execute(
+                    """INSERT INTO pos_period_residual_observation
+                       (source_file_id,source_batch_id,
+                        period_start_date,period_end_date,
+                        missing_start_date,missing_end_date,
+                        missing_day_count,missing_dates_json,
+                        ean_upc,upc_id,description,price_type,
+                        sales_amount,sold_quantity,avg_sold_price,
+                        derivation_method)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,
+                               %s,%s,%s,%s,%s,%s,%s,
+                               'PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE')
+                       ON DUPLICATE KEY UPDATE
+                         source_batch_id=VALUES(source_batch_id),
+                         period_start_date=VALUES(period_start_date),
+                         period_end_date=VALUES(period_end_date),
+                         missing_start_date=VALUES(missing_start_date),
+                         missing_end_date=VALUES(missing_end_date),
+                         missing_day_count=VALUES(missing_day_count),
+                         missing_dates_json=VALUES(missing_dates_json),
+                         upc_id=VALUES(upc_id),
+                         description=VALUES(description),
+                         sales_amount=VALUES(sales_amount),
+                         sold_quantity=VALUES(sold_quantity),
+                         avg_sold_price=VALUES(avg_sold_price),
+                         derivation_method=VALUES(derivation_method)""",
+                    (
+                        file_id,
+                        batch_id,
+                        start,
+                        end,
+                        min(missing),
+                        max(missing),
+                        len(missing),
+                        missing_json,
+                        r["ean_upc"],
+                        r.get("upc_id"),
+                        r.get("description"),
+                        r["price_type"],
+                        r["sales_amount"],
+                        r["sold_quantity"],
+                        r["avg_sold_price"],
+                    ),
+                )
+            result["mode"] = "PERIOD_PRICE_TYPE_RESIDUAL"
+            result["reason"] = "MULTIPLE_DAILY_GAPS_RETAINED_AT_PRICE_TYPE_GRAIN"
+            result["residual_row_count"] = len(residual_rows)
+            result["derivation_method"] = "PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE"
+            period_only_files += 1
             files_out.append(result)
             continue
 
@@ -490,7 +581,14 @@ def relink_pos_backfill(cur) -> int:
            SET b.upc_id=u.upc_id
            WHERE b.upc_id IS NULL"""
     )
-    return int(cur.rowcount)
+    updated = int(cur.rowcount)
+    cur.execute(
+        """UPDATE pos_period_residual_observation b
+           JOIN selling_upc u ON u.ean_upc=b.ean_upc
+           SET b.upc_id=u.upc_id
+           WHERE b.upc_id IS NULL"""
+    )
+    return updated + int(cur.rowcount)
 
 
 def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
@@ -562,6 +660,23 @@ def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
                 )
                 pos_backfill_totals = cur.fetchall()
 
+            pos_period_residuals = []
+            if backfill_initialized:
+                cur.execute(
+                    """SELECT source_file_id,source_batch_id,
+                              period_start_date,period_end_date,
+                              missing_start_date,missing_end_date,
+                              missing_day_count,missing_dates_json,
+                              ean_upc,upc_id,description,price_type,
+                              sales_amount,sold_quantity,avg_sold_price,
+                              derivation_method
+                       FROM pos_period_residual_observation
+                       WHERE source_batch_id=%s
+                       ORDER BY source_file_id,ean_upc,price_type""",
+                    (batch_id,),
+                )
+                pos_period_residuals = cur.fetchall()
+
             return {
                 "batch_id": batch_id,
                 "initialized": backfill_initialized,
@@ -570,9 +685,10 @@ def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
                 "canonical_movement_days_from_batch": mvt_days,
                 "pos_derived_daily_coverage": pos_backfill,
                 "pos_derived_daily_totals": pos_backfill_totals,
+                "pos_period_price_type_residuals": pos_period_residuals,
                 "rules": {
                     "pos_one_missing_day": "PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE",
-                    "pos_multiple_missing_days": "PERIOD_PRICE_TYPE_ONLY",
+                    "pos_multiple_missing_days": "PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE_AS_MULTI_DAY_RESIDUAL",
                     "movement_multi_date": "EXACT_POSTING_DATE_SLICE",
                 },
             }
