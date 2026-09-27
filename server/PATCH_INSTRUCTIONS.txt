@@ -1,35 +1,58 @@
-FULL MYSQL v7.0.38 GitHub Patch
+FULL MYSQL v7.0.39 GitHub Patch
 
 Purpose:
-- Fix v7.0.37 safe-cost verification failure for SAFE_OFFICIAL_COST_REPAIR_CANDIDATE rows.
+- Stop treating merely non-null official Cost UOM text as automatically repairable.
+- Make GET /v1/diagnostics/cost-holds use the same gates as official-cost repair.
 
-Observed failure:
-- 53 official-cost candidates remained CURRENT_COST_MISSING after the attempted
-  repair, so the transaction rolled back exactly as designed.
-- The post-failure v7.0.36 diagnostic stayed unchanged, confirming no partial
-  serving mutation escaped the rollback.
+Why:
+- v7.0.38 safe-cost-refresh rolled back because the same 53 official-cost targets
+  remained CURRENT_COST_MISSING.
+- This proves the diagnostic SAFE classification was still broader than the
+  actual executable repair path.
+- The rollback guard worked and preserved the original serving snapshot.
 
-Root cause:
-- diagnostic evidence scope: company family_id OR confirmed article_id.
-- repair relink scope: exact UPC or source Article Number only.
-- A company-price row with correct article_id but NULL/stale family_id was visible
-  to the diagnostic but invisible to the repair/backfill path.
+Read-only diagnostic changes:
+For official report cost evidence, a row is SAFE only when:
+1) positive official_cost exists
+2) source row can resolve to the target Family through:
+   - existing family_id
+   - confirmed article_id -> Family
+   - source article_number -> Family
+   - existing upc_id -> confirmed Article -> Family
+3) cost_uom_code resolves to dim_uom
+4) an Article anchor is available for article_cost_observation
 
-Fix:
-1) Before UPC / source-Article relink, repair company_price_observation.family_id
-   from its existing confirmed article_id -> bridge_article_family mapping.
-2) Continue existing derived cost-observation relink/backfill.
-3) Rebuild Quick Check using v7.0.37 direct same-UOM conversion rule.
-4) Keep all existing atomic target verification and rollback guards.
+New classifications:
+- OFFICIAL_COST_UOM_UNSUPPORTED
+- OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED
+
+New evidence fields:
+- positive_with_supported_uom_rows
+- positive_with_unsupported_uom_rows
+- positive_missing_uom_rows
+- repairable_official_rows
+- source_cost_uom_tokens
+- recent_rows[].canonical_cost_uom
+- recent_rows[].cost_uom_supported
+- recent_rows[].family_match_route
+- recent_rows[].projected_anchor_article_id
+- recent_rows[].repairable_by_current_rule
+
+Summary additions:
+- official_repairable_family_count
+- official_unsupported_uom_family_count
+- official_cost_uom_token_counts
 
 After deploy:
-1) Verify /healthz = 7.0.38-single-service.
-2) Re-run POST /v1/maintenance/safe-cost-refresh with:
-   {"confirm":"APPLY_SAFE_COST_REPAIR_AND_REBUILD"}
-3) Expect status=COMMITTED only if every pre-refresh safe target verifies.
-4) Compare before_cost_summary and after_cost_summary.
-5) Re-run GET /v1/diagnostics/cost-holds for the remaining evidence-required set.
+1) Verify /healthz = 7.0.39-single-service.
+2) Run GET /v1/diagnostics/cost-holds.
+3) Review summary.classification_counts.
+4) Review summary.official_cost_uom_token_counts.
+5) Do NOT run POST /v1/maintenance/safe-cost-refresh yet.
+6) Use the new evidence to decide whether source UOM aliases need explicit mapping
+   or whether identity-anchor repair remains.
 
 No schema migration.
-No manual cost values.
-No cross-UOM inference.
+No data mutation.
+No Base/Inventory UOM inference.
+No cross-UOM conversion inference.

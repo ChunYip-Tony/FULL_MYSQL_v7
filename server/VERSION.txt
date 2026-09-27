@@ -1,24 +1,33 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.38 Single-Service Edition
-Official-cost Family-lineage repair alignment.
+Version: 7.0.39 Single-Service Edition
+Align official-cost diagnostic SAFE classification with the actual repair gates.
 
-Root cause fixed:
-- v7.0.36 diagnostic searched official cost evidence by
-  Family OR confirmed Article identity.
-- v7.0.37 repair relinked company rows only by UPC or source Article Number.
-- Company rows that already had the correct article_id but NULL/stale family_id
-  were therefore classified SAFE by the diagnostic but could not be repaired.
-- The safe-cost transaction correctly failed verification and rolled back.
+Observed in v7.0.38:
+- all 53 SAFE_OFFICIAL_COST_REPAIR_CANDIDATE targets still failed verification
+- the transaction rolled back
+- the post-failure diagnostic returned the exact original 150/70/80 baseline
+
+Root cause addressed in this release:
+- v7.0.36 considered any positive official cost with a non-null cost_uom_code safe
+- actual repair additionally requires:
+  1) authoritative Family linkage through existing Family, confirmed Article,
+     source Article Number, or confirmed UPC identity
+  2) cost_uom_code that resolves exactly to dim_uom
+  3) an Article anchor for the derived cost observation
+- therefore "non-null UOM" was too weak a SAFE criterion
 
 Changes:
-- current-active cost repair now relinks company_price_observation.family_id
-  directly from an existing confirmed article_id -> Family bridge before UPC/
-  source-Article relink and official-cost backfill.
-- diagnostic and repair now use the same authoritative Article/Family semantics.
-- existing v7.0.37 direct same-UOM cost-to-selling calculation remains unchanged.
-- safe-cost-refresh remains atomic and rollback-on-verification-failure.
+- official-cost diagnostic now mirrors all current repair identity routes
+- verifies source cost UOM against dim_uom
+- verifies projected Article anchor
+- SAFE_OFFICIAL_COST_REPAIR_CANDIDATE now requires repairable_official_rows > 0
+- adds OFFICIAL_COST_UOM_UNSUPPORTED
+- adds OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED
+- exposes source cost-UOM tokens, supported status, family match route,
+  projected anchor, and repairable_by_current_rule
+- adds global official cost-UOM token summary and repairable-family counts
 
 No schema migration.
-No new cost authority.
-No Base/Inventory UOM inference.
-No cross-UOM conversion inference.
+No data mutation.
+No Quick Check rebuild.
+Do NOT run safe-cost-refresh until the v7.0.39 read-only diagnostic is reviewed.
