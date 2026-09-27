@@ -622,9 +622,21 @@ def run_article_manual_roster_repair(device: str) -> dict[str, Any]:
             conn.start_transaction()
 
             preload = _preload_article_manual_authority(cur, identity_batch_id)
+
+            # Article Manual is source authority, but explicit user-confirmed
+            # overrides/retirements outrank automated/source replay. Reapply the
+            # same final authority lock used by normal Phase 3 before and after
+            # rebuilding serving data so a repair can never resurrect a retired
+            # UPC such as 26510500000.
+            override_lock_pre = apply_manual_upc_overrides(cur)
+            retirement_lock_pre = apply_manual_upc_retirements(cur)
+
             relink_history(cur)
             late_identity = resolve_late_identity_issues(cur, serving_batch_id)
             qc = rebuild_quick_check(cur, serving_batch_id)
+
+            override_lock_final = apply_manual_upc_overrides(cur)
+            retirement_lock_final = apply_manual_upc_retirements(cur)
 
             identity = audit_product_identity(cur)
             if not bool(identity.get("pass")):
@@ -709,6 +721,14 @@ def run_article_manual_roster_repair(device: str) -> dict[str, Any]:
                 "before_unmapped_inventory": before_rows,
                 "after_unmapped_inventory": after_rows,
                 "article_manual_preload": preload,
+                "user_authority_lock_pre": {
+                    "overrides": override_lock_pre,
+                    "retirements": retirement_lock_pre,
+                },
+                "user_authority_lock_final": {
+                    "overrides": override_lock_final,
+                    "retirements": retirement_lock_final,
+                },
                 "late_identity": late_identity,
                 "quick_check": qc,
                 "phase3_status": phase3_status,
