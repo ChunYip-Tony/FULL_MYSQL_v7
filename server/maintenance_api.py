@@ -39,6 +39,7 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             # business transaction because MySQL DDL implicitly commits.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
 
             cur.execute(
@@ -61,11 +62,17 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             before = audit_product_identity(cur)
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
 
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
                     + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
                 )
 
             after = audit_product_identity(cur)
@@ -92,6 +99,7 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                 "before_summary": before.get("summary"),
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
+                "manual_cost_conversions": conversions,
                 "after_summary": after.get("summary"),
                 "manual_override_checks": after.get("manual_override_checks"),
                 "retirement_checks": after.get("retirement_checks"),
@@ -195,6 +203,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             # defensively. Perform schema bootstrap before the atomic transaction.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
 
             cur.execute(
@@ -219,10 +228,16 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
 
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
                     + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
                 )
 
             # Re-evaluate per-UPC core holds from scratch for the currently published batch.
@@ -318,6 +333,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
                 "prior_core_holds_resolved": prior_core_holds_resolved,
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
+                "manual_cost_conversions": conversions,
                 "quick_check": qc,
                 "phase3_status": status,
                 "remaining_missing_selling_uom": remaining_missing_selling_uom,
@@ -424,6 +440,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             # implicit-commit reason fixed in v7.0.35.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
 
             cur.execute(
@@ -465,10 +482,16 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             # against the authoritative product/UOM identity.
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
+            conversions = apply_manual_cost_conversions(cur)
             if overrides.get("held"):
                 raise RuntimeError(
                     "One or more confirmed manual overrides could not be applied: "
                     + str(overrides.get("held"))
+                )
+            if conversions.get("held"):
+                raise RuntimeError(
+                    "One or more confirmed cost conversions could not be applied: "
+                    + str(conversions.get("held"))
                 )
 
             cost_repair = repair_current_active_cost(cur, batch_id)
@@ -570,6 +593,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
                 "verified_target_count": len(target_checks),
                 "prior_core_holds_resolved": prior_core_holds_resolved,
                 "cost_repair": cost_repair,
+                "manual_cost_conversions": conversions,
                 "quick_check": qc,
                 "phase3_status": status,
                 "before_cost_summary": before_summary,
