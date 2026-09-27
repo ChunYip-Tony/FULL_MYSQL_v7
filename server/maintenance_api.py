@@ -209,7 +209,7 @@ def _target_uom_verification(cur) -> list[dict[str, Any]]:
 
 
 def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
-    """Apply the exact 22 user-confirmed Selling UOMs and rebuild Quick Check atomically.
+    """Apply the exact user-confirmed Selling UOM set and rebuild Quick Check atomically.
 
     No arbitrary caller-supplied product values are accepted. The authoritative tuples
     are code-reviewed constants in manual_overrides.py.
@@ -774,7 +774,7 @@ def _confirmed_cost_conversion_target_checks(
 
 
 def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
-    """Apply the exact 8 user-confirmed cost-to-selling conversions atomically."""
+    """Apply the exact user-confirmed cost-to-selling conversions atomically."""
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
