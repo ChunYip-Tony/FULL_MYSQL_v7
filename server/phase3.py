@@ -31,6 +31,7 @@ from temporary_qa_waivers import apply_temporary_identity_waivers
 from active_28d_uom_repair import repair_active_28d_uom
 from current_active_cost_repair import repair_current_active_cost
 from product_identity_audit import audit_product_identity
+from quick_check_app import expire_true_stock_for_new_oh
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -539,6 +540,9 @@ def _family_main_article_id(cur, family_id: int | None) -> int | None:
 
 
 def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
+    # Any newer ON_HAND file ends the prior manual True Stock authority window.
+    # This only updates the manual layer when that feature has already been initialized.
+    expire_true_stock_for_new_oh(cur, int(f['file_id']))
     inserted = 0
     cur.execute('SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
