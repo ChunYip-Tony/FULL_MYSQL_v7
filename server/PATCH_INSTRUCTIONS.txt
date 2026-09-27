@@ -1,12 +1,16 @@
-FULL MYSQL v7.0.5 GitHub Patch
+FULL MYSQL v7.0.26 GitHub Patch
 
-IMPORTANT: preserve folder structure. Upload server/*.py into GitHub server/.
-Commit: v7.0.5 central identity backfill and Phase3 re-evaluation
+Scope:
+- Add read-only GET /v1/diagnostics/product-identity-audit
+- No schema migration
+- No automatic identity mutation
+- No Quick Check rebuild triggered by this endpoint
+- Preserve existing v7.0.25 Family 291 manual override + retirement authority lock
 
-After DigitalOcean deploy, verify /healthz = 7.0.5-single-service.
-Then App Platform Console:
-  cd /app
-  python maintenance_v705.py
+Deployment:
+- Merge branch v7.0.26-product-identity-audit into main
+- DigitalOcean App Platform autodeploy will deploy server/
+- Verify /healthz returns 7.0.26-single-service
+- Then call /v1/diagnostics/product-identity-audit with an existing Bearer token
 
-Do NOT re-upload Batch 8 files.
-No environment-variable change is required.
+Do not run a maintenance script for this patch.
