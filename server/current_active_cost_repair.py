@@ -278,7 +278,7 @@ def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
     if manual:
         return {
             "source": "USER_CONFIRMED_FAMILY_COST",
-            "date": None,
+            "date": manual.get("confirmed_date"),
             "uom": manual["cost_uom_code"],
             "amount": manual["cost_amount"],
         }
