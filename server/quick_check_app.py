@@ -544,51 +544,50 @@ def quick_check_lineage(upc: str) -> dict[str, Any] | None:
         uom_history = cur.fetchall()
 
         cur.execute(
-            """SELECT price_observation_id,batch_id,file_id,sheet_id,raw_id,
-                      source_row_number,ean_upc,description,
-                      configured_price,price_quantity,price_type,
-                      source_since_date,snapshot_at
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      ean_upc,description,configured_price,price_quantity,
+                      price_type,source_since_date,snapshot_at
                FROM price_list_observation
                WHERE upc_id=%s
-               ORDER BY snapshot_at DESC,price_observation_id DESC
+               ORDER BY snapshot_at DESC,file_id DESC,raw_id DESC
                LIMIT 50""",
             (upc_id,),
         )
         price_rows = cur.fetchall()
 
         cur.execute(
-            """SELECT sales_observation_id,batch_id,file_id,sheet_id,raw_id,
-                      source_row_number,ean_upc,description,
-                      period_start_date,period_end_date,temporal_grain,
-                      price_type,sales_amount,sold_quantity,avg_sold_price
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      ean_upc,description,period_start_date,period_end_date,
+                      temporal_grain,price_type,sales_amount,sold_quantity,
+                      avg_sold_price
                FROM sales_period_observation
                WHERE upc_id=%s
                ORDER BY period_end_date DESC,period_start_date DESC,
-                        sales_observation_id DESC
+                        file_id DESC,raw_id DESC
                LIMIT 100""",
             (upc_id,),
         )
         sales_rows = cur.fetchall()
 
         cur.execute(
-            """SELECT movement_observation_id,batch_id,file_id,sheet_id,raw_id,
-                      article_id,movement_type,posting_date,
-                      base_quantity_signed,net_sold_quantity,base_uom_code
+            """SELECT batch_id,file_id,sheet_id,raw_id,article_id,movement_type,
+                      posting_date,base_quantity_signed,net_sold_quantity,
+                      base_uom_code
                FROM family_movement_observation
                WHERE family_id=%s
-               ORDER BY posting_date DESC,movement_observation_id DESC
+               ORDER BY posting_date DESC,file_id DESC,raw_id DESC
                LIMIT 100""",
             (family_id,),
         )
         movement_rows = cur.fetchall()
 
         cur.execute(
-            """SELECT inventory_observation_id,batch_id,file_id,sheet_id,raw_id,
-                      source_row_number,observation_date,article_number,
-                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      observation_date,article_number,ean_upc,upc_id,
+                      on_hand_quantity,uom_code,source_type
                FROM inventory_observation
                WHERE upc_id=%s OR family_id=%s
-               ORDER BY observation_date DESC,inventory_observation_id DESC
+               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
                LIMIT 50""",
             (upc_id,family_id),
         )
