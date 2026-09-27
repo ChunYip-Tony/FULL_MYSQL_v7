@@ -9,12 +9,11 @@ from typing import Any
 
 from data_coverage import source_data_days
 
-VERSION = "7.0.38-current-active-cost-lineage-repair"
+VERSION = "7.0.42-current-active-cost-lineage-repair"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
     "FROZEN_INVENTORY_OFFICIAL_COST",
-    "TX_SEAFOOD_ABC_PRICE_OFFICIAL_COST",
     "LIVE_FRESH_SUGGESTION_OFFICIAL_COST",
 }
 OH_FALLBACK_SOURCE_TYPE = "ON_HAND_EXPLICIT_COST_FALLBACK"
@@ -459,18 +458,20 @@ def _relink_existing_cost_observations(cur, target_family_ids: list[int]) -> dic
              AND co.raw_table_name=
                  CASE c.source_type
                    WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
-                   WHEN 'tx_seafood_abc_price' THEN 'raw_tx_seafood_abc_price'
                    WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
                    ELSE '__NO_MATCH__'
                  END
             JOIN product_family pf ON pf.family_id=c.family_id
-            LEFT JOIN article ma ON ma.article_number=pf.main_article_number
+            JOIN article ma ON ma.article_number=pf.main_article_number
             SET co.family_id=c.family_id,
-                co.article_id=COALESCE(co.article_id,c.article_id,ma.article_id)
+                co.article_id=ma.article_id
             WHERE c.family_id IN ({ph})
-              AND c.source_type IN ('frozen_inventory','tx_seafood_abc_price','live_fresh_suggestion')
-              AND COALESCE(co.article_id,c.article_id,ma.article_id) IS NOT NULL
-              AND (co.family_id IS NULL OR co.family_id<>c.family_id OR co.article_id IS NULL)""",
+              AND c.source_type IN ('frozen_inventory','live_fresh_suggestion')
+              AND (
+                  co.family_id IS NULL
+                  OR co.family_id<>c.family_id
+                  OR co.article_id<>ma.article_id
+              )""",
         tuple(target_family_ids),
     )
     from_official = int(cur.rowcount)
@@ -545,7 +546,7 @@ def _backfill_official_cost(cur, target_family_ids: list[int]) -> int:
         f"""INSERT INTO article_cost_observation
             (article_id,family_id,cost_amount,currency_code,cost_uom_id,source_type,business_date,
              cost_status,confidence,batch_id,file_id,sheet_id,raw_table_name,raw_id,source_row_number)
-            SELECT COALESCE(c.article_id,ma.article_id),c.family_id,c.official_cost,'USD',du.uom_id,
+            SELECT ma.article_id,c.family_id,c.official_cost,'USD',du.uom_id,
                    CONCAT(UPPER(c.source_type),'_OFFICIAL_COST'),c.observation_date,
                    'OBSERVED',1.0,c.batch_id,c.file_id,c.sheet_id,
                    CASE c.source_type
@@ -557,14 +558,14 @@ def _backfill_official_cost(cur, target_family_ids: list[int]) -> int:
                    c.raw_id,c.source_row_number
             FROM company_price_observation c
             JOIN product_family pf ON pf.family_id=c.family_id
-            LEFT JOIN article ma ON ma.article_number=pf.main_article_number
+            JOIN article ma ON ma.article_number=pf.main_article_number
             JOIN dim_uom du ON UPPER(du.uom_code)=UPPER(c.cost_uom_code)
             WHERE c.family_id IN ({ph})
-              AND c.source_type IN ('frozen_inventory','tx_seafood_abc_price','live_fresh_suggestion')
+              AND c.source_type IN ('frozen_inventory','live_fresh_suggestion')
               AND c.official_cost IS NOT NULL
               AND c.official_cost>0
               AND c.cost_uom_code IS NOT NULL
-              AND COALESCE(c.article_id,ma.article_id) IS NOT NULL
+              AND ma.article_id IS NOT NULL
               AND NOT EXISTS (
                 SELECT 1 FROM article_cost_observation aco
                 WHERE aco.raw_id=c.raw_id
@@ -780,7 +781,7 @@ def _family_diagnostics(
                   MAX(observation_date) AS latest_official_date
            FROM company_price_observation
            WHERE family_id=%s
-             AND source_type IN ('frozen_inventory','tx_seafood_abc_price','live_fresh_suggestion')""",
+             AND source_type IN ('frozen_inventory','live_fresh_suggestion')""",
         (family_id,),
     )
     official = cur.fetchone() or {}
@@ -799,6 +800,8 @@ def _family_diagnostics(
         reason = "OFFICIAL_COST_WITHOUT_EXPLICIT_UOM"
     elif oh_positive > 0 and oh_supported == 0:
         reason = "OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM"
+    elif receipt_rows == 0 and positive_official == 0 and oh_positive == 0:
+        reason = "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST"
     else:
         reason = "NO_AUTHORITATIVE_COST_EVIDENCE"
 
