@@ -151,6 +151,38 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
         "cost_uom_code": "BAG",
         "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 PACK = 1 BAG.",
     },
+    {
+        "ean_upc": "4843",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 2 LB.",
+    },
+    {
+        "ean_upc": "82995307020",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("4.4"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 4.4 LB.",
+    },
+    {
+        "ean_upc": "81223402832",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("1"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 PACK = 1 LB.",
+    },
+    {
+        "ean_upc": "4029550743",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("1"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 1 LB.",
+    },
 )
 
 
