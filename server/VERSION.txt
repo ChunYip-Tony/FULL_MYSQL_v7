@@ -1,33 +1,42 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.39 Single-Service Edition
-Align official-cost diagnostic SAFE classification with the actual repair gates.
+Version: 7.0.40 Single-Service Edition
+Fix company-report Cost UOM parser and repair poisoned derived Cost-UOM observations.
 
-Observed in v7.0.38:
-- all 53 SAFE_OFFICIAL_COST_REPAIR_CANDIDATE targets still failed verification
-- the transaction rolled back
-- the post-failure diagnostic returned the exact original 150/70/80 baseline
+Production evidence from v7.0.39:
+- 53 rows were OFFICIAL_COST_UOM_UNSUPPORTED
+- 66 affected Families had unsupported official Cost-UOM evidence
+- source_cost_uom_token_counts contained numeric values such as 5.952380952...,
+  3.375, 23.5, 41.666666..., etc.
+- those values are monetary cost values, not UOM tokens
+- official_repairable_family_count=0
 
-Root cause addressed in this release:
-- v7.0.36 considered any positive official cost with a non-null cost_uom_code safe
-- actual repair additionally requires:
-  1) authoritative Family linkage through existing Family, confirmed Article,
-     source Article Number, or confirmed UPC identity
-  2) cost_uom_code that resolves exactly to dim_uom
-  3) an Article anchor for the derived cost observation
-- therefore "non-null UOM" was too weak a SAFE criterion
+Root cause:
+- _process_company used substring header matching for Cost UOM aliases
+- generic alias "Unit" could match header "Unit Cost"
+- the numeric Unit Cost value was therefore stored as cost_uom_code
 
 Changes:
-- official-cost diagnostic now mirrors all current repair identity routes
-- verifies source cost UOM against dim_uom
-- verifies projected Article anchor
-- SAFE_OFFICIAL_COST_REPAIR_CANDIDATE now requires repairable_official_rows > 0
-- adds OFFICIAL_COST_UOM_UNSUPPORTED
-- adds OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED
-- exposes source cost-UOM tokens, supported status, family match route,
-  projected anchor, and repairable_by_current_rule
-- adds global official cost-UOM token summary and repairable-family counts
+1) Future company-report ingestion:
+   - Cost UOM uses strict exact header matching only
+   - supported exact header names include Cost UOM, Cost Unit,
+     Cost Unit of Measure, Cost Base UOM, UOM, UM, Unit of Measure
+   - generic substring matching is disabled for Cost UOM
+   - exact header "Unit" is intentionally not accepted because it is ambiguous
+2) Historical derived repair:
+   - re-reads immutable RAW company-report headers/rows
+   - recalculates company_price_observation.cost_uom_code from strict explicit headers
+   - if no explicit Cost-UOM header exists, derived cost_uom_code becomes NULL
+   - reconciles existing official article_cost_observation rows:
+     unsupported/missing UOM -> SUPERSEDED
+     supported explicit UOM -> synchronize/reactivate
+3) safe-cost-refresh:
+   - performs this deterministic derived Cost-UOM cleanup inside the same transaction
+   - then re-runs the read-only cost-hold diagnostic
+   - only the post-cleanup truly-safe subset is targeted
+   - all existing identity/target/regression rollback guards remain active
 
+No RAW mutation.
 No schema migration.
-No data mutation.
-No Quick Check rebuild.
-Do NOT run safe-cost-refresh until the v7.0.39 read-only diagnostic is reviewed.
+No inferred Cost UOM.
+No Base/Inventory UOM inference.
+No cross-UOM conversion inference.
