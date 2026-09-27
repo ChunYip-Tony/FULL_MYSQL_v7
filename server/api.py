@@ -9,8 +9,9 @@ from db import db_conn, test_database
 from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
+from product_identity_audit import audit_product_identity
 
-VERSION='7.0.25-single-service'
+VERSION='7.0.26-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -243,6 +244,19 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'phase3':p3,
         }
         cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/diagnostics/product-identity-audit')
+def product_identity_audit(authorization: Annotated[str|None,Header()]=None):
+    """Read-only audit of current authoritative product identity and Quick Check publishing state."""
+    device_from_auth(authorization)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            result=audit_product_identity(cur)
+        finally:
+            cur.close()
     return json.loads(json.dumps(result,default=j))
 
 
