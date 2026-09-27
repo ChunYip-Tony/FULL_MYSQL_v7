@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from data_coverage import source_data_days
+from db import db_conn
 
 
 def ensure_coverage_backfill_tables(cur) -> None:
@@ -490,3 +491,77 @@ def relink_pos_backfill(cur) -> int:
            WHERE b.upc_id IS NULL"""
     )
     return int(cur.rowcount)
+
+
+def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
+    """Read-only view of multi-date POS/MVT backfill behavior for one batch."""
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT file_id,batch_id,original_filename,source_type,
+                          coverage_type,coverage_start_date,coverage_end_date,
+                          header_period_start_date,header_period_end_date,
+                          report_generated_at,filename_date_candidate,
+                          filename_time_candidate,processing_status,error_count
+                   FROM ingest_file
+                   WHERE batch_id=%s
+                     AND source_type IN ('sales_by_price_type','movement')
+                   ORDER BY file_id""",
+                (batch_id,),
+            )
+            files = cur.fetchall()
+            file_ids = {int(x["file_id"]) for x in files}
+
+            pos_days = [
+                x for x in source_data_days(
+                    cur, "sales_by_price_type", include_batch_id=batch_id
+                )
+                if int(x["file_id"]) in file_ids
+            ]
+            mvt_days = [
+                x for x in source_data_days(
+                    cur, "movement", include_batch_id=batch_id
+                )
+                if int(x["file_id"]) in file_ids
+            ]
+
+            cur.execute(
+                """SELECT business_date,source_file_id,source_batch_id,
+                          period_start_date,period_end_date,derivation_method,
+                          backfill_status,known_day_count,missing_day_count,
+                          detail_json
+                   FROM pos_daily_backfill_coverage
+                   WHERE source_batch_id=%s
+                   ORDER BY business_date,source_file_id""",
+                (batch_id,),
+            )
+            pos_backfill = cur.fetchall()
+
+            cur.execute(
+                """SELECT source_file_id,business_date,COUNT(*) AS row_count,
+                          COALESCE(SUM(sales_amount),0) AS sales_amount,
+                          COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                   FROM pos_daily_backfill_observation
+                   WHERE source_batch_id=%s
+                   GROUP BY source_file_id,business_date
+                   ORDER BY business_date,source_file_id""",
+                (batch_id,),
+            )
+            pos_backfill_totals = cur.fetchall()
+
+            return {
+                "batch_id": batch_id,
+                "files": files,
+                "canonical_pos_days_from_batch": pos_days,
+                "canonical_movement_days_from_batch": mvt_days,
+                "pos_derived_daily_coverage": pos_backfill,
+                "pos_derived_daily_totals": pos_backfill_totals,
+                "rules": {
+                    "pos_one_missing_day": "PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE",
+                    "pos_multiple_missing_days": "PERIOD_PRICE_TYPE_ONLY",
+                    "movement_multi_date": "EXACT_POSTING_DATE_SLICE",
+                },
+            }
+        finally:
+            cur.close()
