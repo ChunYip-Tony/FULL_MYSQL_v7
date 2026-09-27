@@ -16,8 +16,9 @@ from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
 from movement_repair import repair_movement_history
+from movement_snapshot_diagnostic import movement_same_day_compare
 
-VERSION='7.0.65-single-service'
+VERSION='7.0.66-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -857,6 +858,23 @@ def diagnostics_quick_check_lineage(
 def app_quick_check_search(q:str,limit:int=20,authorization: Annotated[str|None,Header()]=None):
     device_from_auth(authorization)
     return json.loads(json.dumps(search_quick_check(q,limit),default=j))
+
+
+@app.get('/v1/diagnostics/movement-same-day-compare')
+def diagnostic_movement_same_day_compare(
+    date:str,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    try:
+        result=movement_same_day_compare(date)
+    except ValueError as exc:
+        if str(exc)=='INVALID_MOVEMENT_DATE':
+            raise HTTPException(422,detail={'status':'INVALID','reason':'INVALID_MOVEMENT_DATE','date':date})
+        raise HTTPException(400,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Movement same-day comparison failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/diagnostics/inventory-rollforward-candidates')
