@@ -42,3 +42,11 @@ def safe_cost_refresh():
         {'confirm':'APPLY_SAFE_COST_REPAIR_AND_REBUILD'},
         timeout=240,
     )
+
+
+def confirmed_cost_conversion_refresh():
+    return post_json(
+        '/v1/maintenance/confirmed-cost-conversion-refresh',
+        {'confirm':'APPLY_CONFIRMED_COST_CONVERSIONS_AND_REBUILD'},
+        timeout=180,
+    )
