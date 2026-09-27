@@ -353,8 +353,6 @@ def apply_manual_cost_conversions(cur) -> dict[str, Any]:
 
 
 def confirmed_cost_conversion(cur, ean_upc: str) -> dict[str, Any] | None:
-    if not _table_exists(cur, 'manual_cost_selling_conversion'):
-        return None
     cur.execute(
         """
         SELECT ean_upc,selling_qty,selling_uom_code,cost_qty,cost_uom_code,
