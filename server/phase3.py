@@ -15,10 +15,14 @@ from manual_overrides import (
     ensure_override_table,
     ensure_retirement_table,
     ensure_cost_conversion_table,
+    ensure_family_cost_table,
     apply_manual_upc_overrides,
     apply_manual_upc_retirements,
     apply_manual_cost_conversions,
+    apply_manual_family_costs,
+    apply_manual_family_subarticles,
     confirmed_cost_conversion,
+    confirmed_family_cost,
 )
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
@@ -1264,6 +1268,17 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     r = cur.fetchone()
     if r:
         return {'cost_per_base': r['cost_amount'], 'date': r['business_date'], 'source': r['source_type'], 'base_uom': r['cost_uom']}
+
+    # Fourth authority: explicit user-confirmed Family/Main-Article fallback.
+    # This is used only when no valid receipt/report/OH authority exists.
+    manual = confirmed_family_cost(cur, family_id)
+    if manual:
+        return {
+            'cost_per_base': manual['cost_amount'],
+            'date': None,
+            'source': 'USER_CONFIRMED_FAMILY_COST',
+            'base_uom': manual['cost_uom_code'],
+        }
     return None
 
 
@@ -1633,6 +1648,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             ensure_override_table(cur)
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
+            ensure_family_cost_table(cur)
             conn.commit()
             conn.start_transaction()
 
@@ -1649,10 +1665,22 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             override_result_pre = apply_manual_upc_overrides(cur)
             retirement_result_pre = apply_manual_upc_retirements(cur)
             cost_conversion_result = apply_manual_cost_conversions(cur)
+            family_cost_result = apply_manual_family_costs(cur)
+            family_subarticle_result = apply_manual_family_subarticles(cur)
             if cost_conversion_result.get('held'):
                 raise RuntimeError(
                     'One or more confirmed cost conversions could not be applied: '
                     + str(cost_conversion_result.get('held'))
+                )
+            if family_cost_result.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed family costs could not be applied: '
+                    + str(family_cost_result.get('held'))
+                )
+            if family_subarticle_result.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed family subarticles could not be applied: '
+                    + str(family_subarticle_result.get('held'))
                 )
             retired_recomputed_issues = retire_recomputed_phase3_issues(cur, batch_id)
 
@@ -1794,7 +1822,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
@@ -1817,7 +1845,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                  }, default=str), run_id),
             )
             conn.commit()
-            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+            return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                     'active_product_master_repair': active_master_repair,
                     'article_manual_multitab_repair': multitab_manual_repair,
                     'cross_tab_signature_repair': cross_tab_signature_repair,
