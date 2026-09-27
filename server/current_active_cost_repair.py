@@ -9,7 +9,7 @@ from typing import Any
 
 from data_coverage import source_data_days
 
-VERSION = "7.0.20-current-active-cost-lineage-repair"
+VERSION = "7.0.38-current-active-cost-lineage-repair"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -341,8 +341,32 @@ def _upc_family(cur, ean: str | None) -> tuple[int | None, int | None, int | Non
 
 def _relink_target_company_rows(cur, target_family_ids: list[int]) -> dict[str, int]:
     if not target_family_ids:
-        return {"from_upc": 0, "from_article": 0}
+        return {
+            "from_existing_article_id": 0,
+            "from_upc": 0,
+            "from_article": 0,
+        }
     ph = ",".join(["%s"] * len(target_family_ids))
+
+    # v7.0.38: the v7.0.36 global diagnostic deliberately treats an existing
+    # confirmed Article identity as Family-authoritative evidence even when the
+    # company row's family_id is NULL/stale. The repair path must use that same
+    # identity. Otherwise a row can be classified SAFE by article_id but remain
+    # invisible to _backfill_official_cost(), which filters by family_id.
+    cur.execute(
+        f"""UPDATE company_price_observation c
+            JOIN bridge_article_family baf
+              ON baf.article_id=c.article_id
+             AND baf.mapping_status='CONFIRMED'
+             AND baf.is_primary=TRUE
+             AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+            SET c.family_id=baf.family_id
+            WHERE c.article_id IS NOT NULL
+              AND baf.family_id IN ({ph})
+              AND (c.family_id IS NULL OR c.family_id<>baf.family_id)""",
+        tuple(target_family_ids),
+    )
+    from_existing_article_id = int(cur.rowcount)
 
     # Exact current UPC identity can restore family/article on company rows.
     cur.execute(
@@ -384,7 +408,11 @@ def _relink_target_company_rows(cur, target_family_ids: list[int]) -> dict[str, 
     )
     from_article = int(cur.rowcount)
 
-    return {"from_upc": from_upc, "from_article": from_article}
+    return {
+        "from_existing_article_id": from_existing_article_id,
+        "from_upc": from_upc,
+        "from_article": from_article,
+    }
 
 
 
