@@ -13,7 +13,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 
-VERSION='7.0.32-single-service'
+VERSION='7.0.33-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -284,7 +284,28 @@ def uom_lineage_diagnostic(
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         try:
-            result=diagnose_uom_lineage(cur,upc=upc,only_holds=only_holds)
+            try:
+                result=diagnose_uom_lineage(cur,upc=upc,only_holds=only_holds)
+            except Exception as exc:
+                # This endpoint is itself a diagnostic. Return a structured
+                # failure payload instead of hiding the failing stage behind
+                # a generic HTTP 500.
+                result={
+                    'status':'FATAL_DIAGNOSTIC_ERROR',
+                    'summary':{
+                        'row_count':0,
+                        'safe_to_auto_apply_count':0,
+                        'needs_review_count':0,
+                        'classification_counts':{},
+                        'diagnostic_error_count':1,
+                    },
+                    'diagnostic_errors':[{
+                        'stage':'top_level',
+                        'error_type':type(exc).__name__,
+                        'error':str(exc),
+                    }],
+                    'items':[],
+                }
         finally:
             cur.close()
     return json.loads(json.dumps(result,default=j))

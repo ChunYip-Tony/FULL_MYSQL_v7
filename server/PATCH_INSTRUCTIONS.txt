@@ -1,22 +1,20 @@
-FULL MYSQL v7.0.32 GitHub Patch
+FULL MYSQL v7.0.33 GitHub Patch
 
 Purpose:
-- Fix HTTP 500 from GET /v1/diagnostics/uom-lineage.
+- Stop GET /v1/diagnostics/uom-lineage from failing as a generic HTTP 500.
+- Make the read-only diagnostic resilient to production-schema/evidence variation.
 
-Root cause:
-- v7.0.31 diagnostic queried selling_upc_uom_history.uom_history_id
-  and selling_upc_uom_history.effective_from.
-- Existing production code proves the table uses upc_uom_id and effective_to.
-
-Fix:
-- query upc_uom_id
-- remove effective_from from diagnostic output
-- keep effective_to
-- no data mutation
+Behavior:
+- uses SHOW COLUMNS for selling_upc_uom_history optional fields
+- isolates Article Manual/history/family-peer evidence failures
+- returns status=PARTIAL_WITH_DIAGNOSTIC_ERRORS when partial evidence is unavailable
+- returns status=FATAL_DIAGNOSTIC_ERROR with the real DB/Python error if top-level diagnosis cannot run
+- no database mutation
 - no schema migration
 - no Quick Check rebuild
 
 After deploy:
-1) Verify /healthz = 7.0.32-single-service.
+1) Verify /healthz = 7.0.33-single-service.
 2) Call GET /v1/diagnostics/uom-lineage.
-3) Review summary and safe-to-auto-apply candidates.
+3) If status is OK/PARTIAL, review summary + items.
+4) If status is FATAL_DIAGNOSTIC_ERROR, inspect diagnostic_errors; no DigitalOcean console copy is required.
