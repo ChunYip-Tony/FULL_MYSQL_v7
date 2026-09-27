@@ -513,6 +513,15 @@ def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
             files = cur.fetchall()
             file_ids = {int(x["file_id"]) for x in files}
 
+            cur.execute(
+                """SELECT 1
+                   FROM information_schema.TABLES
+                   WHERE TABLE_SCHEMA=DATABASE()
+                     AND TABLE_NAME='pos_daily_backfill_coverage'
+                   LIMIT 1"""
+            )
+            backfill_initialized = bool(cur.fetchone())
+
             pos_days = [
                 x for x in source_data_days(
                     cur, "sales_by_price_type", include_batch_id=batch_id
@@ -526,32 +535,36 @@ def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
                 if int(x["file_id"]) in file_ids
             ]
 
-            cur.execute(
-                """SELECT business_date,source_file_id,source_batch_id,
-                          period_start_date,period_end_date,derivation_method,
-                          backfill_status,known_day_count,missing_day_count,
-                          detail_json
-                   FROM pos_daily_backfill_coverage
-                   WHERE source_batch_id=%s
-                   ORDER BY business_date,source_file_id""",
-                (batch_id,),
-            )
-            pos_backfill = cur.fetchall()
+            pos_backfill = []
+            pos_backfill_totals = []
+            if backfill_initialized:
+                cur.execute(
+                    """SELECT business_date,source_file_id,source_batch_id,
+                              period_start_date,period_end_date,derivation_method,
+                              backfill_status,known_day_count,missing_day_count,
+                              detail_json
+                       FROM pos_daily_backfill_coverage
+                       WHERE source_batch_id=%s
+                       ORDER BY business_date,source_file_id""",
+                    (batch_id,),
+                )
+                pos_backfill = cur.fetchall()
 
-            cur.execute(
-                """SELECT source_file_id,business_date,COUNT(*) AS row_count,
-                          COALESCE(SUM(sales_amount),0) AS sales_amount,
-                          COALESCE(SUM(sold_quantity),0) AS sold_quantity
-                   FROM pos_daily_backfill_observation
-                   WHERE source_batch_id=%s
-                   GROUP BY source_file_id,business_date
-                   ORDER BY business_date,source_file_id""",
-                (batch_id,),
-            )
-            pos_backfill_totals = cur.fetchall()
+                cur.execute(
+                    """SELECT source_file_id,business_date,COUNT(*) AS row_count,
+                              COALESCE(SUM(sales_amount),0) AS sales_amount,
+                              COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                       FROM pos_daily_backfill_observation
+                       WHERE source_batch_id=%s
+                       GROUP BY source_file_id,business_date
+                       ORDER BY business_date,source_file_id""",
+                    (batch_id,),
+                )
+                pos_backfill_totals = cur.fetchall()
 
             return {
                 "batch_id": batch_id,
+                "initialized": backfill_initialized,
                 "files": files,
                 "canonical_pos_days_from_batch": pos_days,
                 "canonical_movement_days_from_batch": mvt_days,
