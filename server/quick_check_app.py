@@ -818,12 +818,34 @@ def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:
         observation_sample = cur.fetchall()
 
         cur.execute(
-            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
-                      observation_date,article_number,article_id,family_id,
-                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
-               FROM inventory_observation
-               WHERE family_id IS NULL OR article_id IS NULL
-               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
+            """SELECT i.batch_id,i.file_id,i.sheet_id,i.raw_id,i.source_row_number,
+                      i.observation_date,i.article_number,i.article_id,i.family_id,
+                      i.ean_upc,i.upc_id,i.on_hand_quantity,i.uom_code,i.source_type,
+                      a.article_id AS catalog_article_id,
+                      a.article_description AS catalog_article_description,
+                      a.category_code AS catalog_category_code,
+                      pf_main.family_id AS main_article_family_id,
+                      pf_main.main_article_number AS main_article_family_number,
+                      pf_main.family_description AS main_article_family_description,
+                      baf.family_id AS confirmed_bridge_family_id,
+                      pf_bridge.main_article_number AS confirmed_bridge_main_article,
+                      pf_bridge.family_description AS confirmed_bridge_family_description,
+                      baf.mapping_status AS confirmed_bridge_status,
+                      baf.is_primary AS confirmed_bridge_is_primary
+               FROM inventory_observation i
+               LEFT JOIN article a
+                 ON a.article_number=i.article_number
+               LEFT JOIN product_family pf_main
+                 ON pf_main.main_article_number=i.article_number
+               LEFT JOIN bridge_article_family baf
+                 ON baf.article_id=a.article_id
+                AND baf.mapping_status='CONFIRMED'
+                AND baf.is_primary=TRUE
+                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+               LEFT JOIN product_family pf_bridge
+                 ON pf_bridge.family_id=baf.family_id
+               WHERE i.family_id IS NULL OR i.article_id IS NULL
+               ORDER BY i.observation_date DESC,i.file_id DESC,i.raw_id DESC
                LIMIT %s""",
             (limit,),
         )
