@@ -14,8 +14,11 @@ from data_coverage import source_data_days, coverage_summary
 from manual_overrides import (
     ensure_override_table,
     ensure_retirement_table,
+    ensure_cost_conversion_table,
     apply_manual_upc_overrides,
     apply_manual_upc_retirements,
+    apply_manual_cost_conversions,
+    confirmed_cost_conversion,
 )
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
@@ -1338,6 +1341,26 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             cost_sell = Decimal(str(cost['cost_per_base']))
         elif cost and factor is not None and cost_uom and norm_base_uom and cost_uom == norm_base_uom:
             cost_sell = Decimal(str(cost['cost_per_base'])) * factor
+        elif cost and norm_selling_uom and cost_uom:
+            # v7.0.41: use only an exact user-confirmed cost-to-selling
+            # conversion. This does NOT alter Base/Inventory UOM or its factor.
+            conv = confirmed_cost_conversion(cur, p['ean_upc'])
+            if conv:
+                conv_sell = _norm_cost_serving_uom(conv.get('selling_uom_code'))
+                conv_cost = _norm_cost_serving_uom(conv.get('cost_uom_code'))
+                sell_qty = Decimal(str(conv.get('selling_qty')))
+                cost_qty = Decimal(str(conv.get('cost_qty')))
+                if (
+                    conv_sell == norm_selling_uom
+                    and conv_cost == cost_uom
+                    and sell_qty > 0
+                    and cost_qty > 0
+                ):
+                    cost_sell = (
+                        Decimal(str(cost['cost_per_base']))
+                        * cost_qty
+                        / sell_qty
+                    )
         fm7, fm_uom, _fm_days = _family_movement_metrics(cur, family_id, mvt_days_7)
         inv = _latest_inventory(cur, upc_id, family_id)
         cp = _company_prices(cur, upc_id, family_id)
@@ -1471,6 +1494,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # and would invalidate the later Quick Check SAVEPOINT.
             ensure_override_table(cur)
             ensure_retirement_table(cur)
+            ensure_cost_conversion_table(cur)
             conn.commit()
             conn.start_transaction()
 
@@ -1486,6 +1510,12 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # automatic repair is never allowed to be the last writer.
             override_result_pre = apply_manual_upc_overrides(cur)
             retirement_result_pre = apply_manual_upc_retirements(cur)
+            cost_conversion_result = apply_manual_cost_conversions(cur)
+            if cost_conversion_result.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed cost conversions could not be applied: '
+                    + str(cost_conversion_result.get('held'))
+                )
             retired_recomputed_issues = retire_recomputed_phase3_issues(cur, batch_id)
 
             cur.execute(
