@@ -678,11 +678,15 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
 
 
 def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
-    """Re-derive company_price_observation.cost_uom_code from RAW headers safely.
+    """Re-derive company-report Cost UOM from authoritative source semantics.
 
-    Historical v7.0.36-v7.0.39 data may contain numeric cost values in
-    cost_uom_code because substring matching let alias "Unit" match header
-    "Unit Cost". RAW remains immutable; this repairs only derived observations.
+    Source authority confirmed by the user:
+    - Frozen Inventory: Unit Cost UOM is the item-specific BUN column.
+    - Live/Fresh Suggestion: all Unit Cost values are per LB.
+    - TX Seafood ABC Price: retired from current authority; preserve provenance
+      but do not use its cost or suggested prices for current serving.
+
+    RAW remains immutable. Only derived observations are repaired.
     """
 
     sources = {
@@ -695,10 +699,14 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
         'sheets_scanned': 0,
         'rows_examined': 0,
         'rows_changed': 0,
-        'rows_set_null_no_explicit_uom_header': 0,
-        'rows_set_from_explicit_uom_header': 0,
+        'rows_set_from_frozen_bun': 0,
+        'rows_set_from_live_fresh_lb_rule': 0,
+        'rows_set_null_tx_retired': 0,
+        'rows_missing_frozen_bun': 0,
         'derived_cost_rows_superseded_no_supported_uom': 0,
+        'derived_cost_rows_superseded_tx_retired': 0,
         'derived_cost_rows_reactivated_supported_uom': 0,
+        'derived_cost_rows_reanchored_to_main_article': 0,
         'sheet_header_audit': [],
     }
 
@@ -727,17 +735,13 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
                     continue
 
                 hmap = _sheet_header_map(cur, raw_table, sh['sheet_id'], header_row)
-                c_uom = _pick_exact(
-                    hmap,
-                    [
-                        'Cost UOM',
-                        'Cost Unit',
-                        'Cost Unit of Measure',
-                        'Cost Base UOM',
-                        'UOM',
-                        'UM',
-                        'Unit of Measure',
-                    ],
+                bun_col = _pick_exact(hmap, ['BUN']) if source_type == 'frozen_inventory' else None
+                policy = (
+                    'FROZEN_BUN_COLUMN'
+                    if source_type == 'frozen_inventory'
+                    else 'LIVE_FRESH_SOURCE_RULE_LB'
+                    if source_type == 'live_fresh_suggestion'
+                    else 'TX_SEAFOOD_ABC_RETIRED'
                 )
                 result['sheets_scanned'] += 1
                 result['sheet_header_audit'].append(
@@ -746,28 +750,43 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
                         'filename': f.get('original_filename'),
                         'sheet_id': int(sh['sheet_id']),
                         'sheet_name': sh.get('sheet_name'),
-                        'explicit_cost_uom_column': c_uom,
+                        'cost_uom_policy': policy,
+                        'bun_column': bun_col,
                         'normalized_headers': sorted(hmap.keys()),
                     }
                 )
 
                 cur.execute(
                     f"""SELECT c.company_price_observation_id,c.raw_id,c.cost_uom_code,
-                               r.raw_payload
+                               c.official_cost,r.raw_payload
                         FROM company_price_observation c
                         JOIN {raw_table} r ON r.raw_id=c.raw_id
                         WHERE c.file_id=%s AND c.sheet_id=%s
                         ORDER BY c.company_price_observation_id""",
                     (f['file_id'], sh['sheet_id']),
                 )
-                rows = cur.fetchall()
 
-                for row in rows:
+                for row in cur.fetchall():
                     result['rows_examined'] += 1
                     payload = _j(row['raw_payload'])
                     parsed = None
-                    if c_uom:
-                        parsed = (_text(payload.get(c_uom)) or '').upper() or None
+
+                    if source_type == 'frozen_inventory':
+                        if bun_col:
+                            parsed = (_text(payload.get(bun_col)) or '').upper() or None
+                        if row.get('official_cost') is not None and row.get('official_cost') > 0:
+                            if parsed:
+                                result['rows_set_from_frozen_bun'] += 1
+                            else:
+                                result['rows_missing_frozen_bun'] += 1
+                    elif source_type == 'live_fresh_suggestion':
+                        if row.get('official_cost') is not None and row.get('official_cost') > 0:
+                            parsed = 'LB'
+                            result['rows_set_from_live_fresh_lb_rule'] += 1
+                    elif source_type == 'tx_seafood_abc_price':
+                        parsed = None
+                        if row.get('cost_uom_code') is not None:
+                            result['rows_set_null_tx_retired'] += 1
 
                     current = (_text(row.get('cost_uom_code')) or '').upper() or None
                     if current != parsed:
@@ -778,13 +797,23 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
                             (parsed, row['company_price_observation_id']),
                         )
                         result['rows_changed'] += 1
-                        if parsed is None:
-                            result['rows_set_null_no_explicit_uom_header'] += 1
-                        else:
-                            result['rows_set_from_explicit_uom_header'] += 1
 
-    # Reconcile already-derived official-cost observations to the corrected
-    # company cost-UOM evidence. Unsupported/missing UOM cannot remain active.
+    # TX Seafood ABC is retired from CURRENT authority regardless of historical
+    # UOM state. Preserve all RAW/company observations, but supersede derived cost.
+    cur.execute(
+        """UPDATE article_cost_observation aco
+           JOIN company_price_observation c
+             ON c.raw_id=aco.raw_id
+            AND aco.raw_table_name='raw_tx_seafood_abc_price'
+           SET aco.cost_status='SUPERSEDED'
+           WHERE c.source_type='tx_seafood_abc_price'
+             AND aco.source_type='TX_SEAFOOD_ABC_PRICE_OFFICIAL_COST'
+             AND aco.cost_status NOT IN ('REJECTED','SUPERSEDED')"""
+    )
+    result['derived_cost_rows_superseded_tx_retired'] = int(cur.rowcount or 0)
+
+    # Frozen/Live-Fresh rows with missing or unsupported resolved UOM cannot
+    # remain active official costs.
     cur.execute(
         """UPDATE article_cost_observation aco
            JOIN company_price_observation c
@@ -792,26 +821,24 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
             AND aco.raw_table_name=
                 CASE c.source_type
                   WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
-                  WHEN 'tx_seafood_abc_price' THEN 'raw_tx_seafood_abc_price'
                   WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
                   ELSE '__NO_MATCH__'
                 END
            LEFT JOIN dim_uom du
              ON UPPER(du.uom_code)=UPPER(TRIM(c.cost_uom_code))
            SET aco.cost_status='SUPERSEDED'
-           WHERE c.source_type IN (
-                   'frozen_inventory',
-                   'tx_seafood_abc_price',
-                   'live_fresh_suggestion'
-                 )
-             AND aco.source_type LIKE '%_OFFICIAL_COST'
+           WHERE c.source_type IN ('frozen_inventory','live_fresh_suggestion')
+             AND aco.source_type IN (
+                 'FROZEN_INVENTORY_OFFICIAL_COST',
+                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
              AND aco.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND (c.cost_uom_code IS NULL OR du.uom_id IS NULL)"""
     )
     result['derived_cost_rows_superseded_no_supported_uom'] = int(cur.rowcount or 0)
 
-    # If a strict explicit UOM is present and supported, synchronize the derived
-    # observation to that exact source token. This is a derived repair only.
+    # A company-report cost is Family/Main-Article authority. Re-anchor and
+    # synchronize supported Frozen/Live-Fresh derived rows accordingly.
     cur.execute(
         """UPDATE article_cost_observation aco
            JOIN company_price_observation c
@@ -819,31 +846,53 @@ def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
             AND aco.raw_table_name=
                 CASE c.source_type
                   WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
-                  WHEN 'tx_seafood_abc_price' THEN 'raw_tx_seafood_abc_price'
                   WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
                   ELSE '__NO_MATCH__'
                 END
+           JOIN product_family pf ON pf.family_id=c.family_id
+           JOIN article ma ON ma.article_number=pf.main_article_number
            JOIN dim_uom du
              ON UPPER(du.uom_code)=UPPER(TRIM(c.cost_uom_code))
-           SET aco.cost_uom_id=du.uom_id,
+           SET aco.article_id=ma.article_id,
+               aco.family_id=c.family_id,
+               aco.cost_uom_id=du.uom_id,
                aco.cost_amount=c.official_cost,
+               aco.source_type=CONCAT(UPPER(c.source_type),'_OFFICIAL_COST'),
                aco.cost_status='OBSERVED',
                aco.confidence=1.0
-           WHERE c.source_type IN (
-                   'frozen_inventory',
-                   'tx_seafood_abc_price',
-                   'live_fresh_suggestion'
-                 )
-             AND aco.source_type LIKE '%_OFFICIAL_COST'
+           WHERE c.source_type IN ('frozen_inventory','live_fresh_suggestion')
              AND c.official_cost IS NOT NULL
              AND c.official_cost>0
              AND (
-                 NOT (aco.cost_uom_id <=> du.uom_id)
+                 NOT (aco.article_id <=> ma.article_id)
+                 OR NOT (aco.family_id <=> c.family_id)
+                 OR NOT (aco.cost_uom_id <=> du.uom_id)
                  OR NOT (aco.cost_amount <=> c.official_cost)
                  OR aco.cost_status<>'OBSERVED'
              )"""
     )
     result['derived_cost_rows_reactivated_supported_uom'] = int(cur.rowcount or 0)
+
+    cur.execute(
+        """SELECT COUNT(*) AS c
+           FROM article_cost_observation aco
+           JOIN company_price_observation cp
+             ON cp.raw_id=aco.raw_id
+            AND aco.raw_table_name=
+                CASE cp.source_type
+                  WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
+                  WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
+                  ELSE '__NO_MATCH__'
+                END
+           JOIN product_family pf ON pf.family_id=aco.family_id
+           JOIN article ma ON ma.article_number=pf.main_article_number
+           WHERE cp.source_type IN ('frozen_inventory','live_fresh_suggestion')
+             AND aco.cost_status='OBSERVED'
+             AND aco.article_id=ma.article_id"""
+    )
+    result['derived_cost_rows_reanchored_to_main_article'] = int(
+        (cur.fetchone() or {}).get('c') or 0
+    )
 
     return result
 
