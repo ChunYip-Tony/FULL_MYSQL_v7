@@ -999,7 +999,7 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
         if movement_file_ids and family_id is not None:
             placeholders = ",".join(["%s"] * len(movement_file_ids))
             cur.execute(
-                f"""SELECT movement_history_id,file_id,raw_id,source_row_number,
+                f"""SELECT file_id,raw_id,source_row_number,
                            article_number,article_id,family_id,description,
                            movement_type,posting_date,
                            entry_quantity,entry_uom_code,
@@ -1010,7 +1010,7 @@ def inventory_position_diagnostic(upc: str) -> dict[str, Any]:
                     WHERE family_id=%s
                       AND file_id IN ({placeholders})
                     ORDER BY posting_date,file_id,article_number,movement_type,
-                             movement_history_id""",
+                             raw_id,source_row_number""",
                 (family_id, *movement_file_ids),
             )
             family_movement_history = cur.fetchall()
