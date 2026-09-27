@@ -16,7 +16,7 @@ from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage
 
-VERSION='7.0.51-single-service'
+VERSION='7.0.52-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -38,6 +38,7 @@ class ManualAuthorityRefreshRequest(BaseModel):
 
 class TrueStockSubmit(BaseModel):
     true_stock: Decimal
+    uom: str
 
 @app.get('/healthz')
 def healthz(): return {'ok':True,'version':VERSION}
@@ -839,15 +840,33 @@ def app_submit_true_stock(
 ):
     device=device_from_auth(authorization)
     try:
-        result=submit_true_stock(upc,body.true_stock,device)
+        result=submit_true_stock(upc,body.true_stock,body.uom,device)
     except KeyError:
         raise HTTPException(404,'Quick Check UPC not found')
     except ValueError as exc:
         code=str(exc)
-        if code in {'SYSTEM_OH_NOT_AVAILABLE','FAMILY_ID_NOT_AVAILABLE'}:
+        if code in {
+            'SYSTEM_OH_NOT_AVAILABLE',
+            'SYSTEM_OH_LINEAGE_NOT_AVAILABLE',
+            'SYSTEM_OH_SCOPE_UNRESOLVED',
+            'FAMILY_ID_NOT_AVAILABLE',
+        }:
             raise HTTPException(409,detail={'status':'BLOCKED','reason':code,'upc':upc})
         if code=='TRUE_STOCK_NEGATIVE':
             raise HTTPException(422,detail={'status':'INVALID','reason':code,'upc':upc})
+        if code=='TRUE_STOCK_UOM_REQUIRED':
+            raise HTTPException(422,detail={'status':'INVALID','reason':code,'upc':upc})
+        if code.startswith('TRUE_STOCK_UOM_MISMATCH:'):
+            required=code.split(':',1)[1]
+            raise HTTPException(
+                422,
+                detail={
+                    'status':'INVALID',
+                    'reason':'TRUE_STOCK_UOM_MISMATCH',
+                    'required_uom':required,
+                    'upc':upc,
+                },
+            )
         raise HTTPException(400,str(exc))
     except Exception as exc:
         raise HTTPException(500,f'True Stock submit failed: {exc}')

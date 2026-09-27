@@ -26,6 +26,9 @@ def ensure_true_stock_tables(cur) -> None:
                 true_stock_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 family_id BIGINT UNSIGNED NOT NULL,
                 main_article_number VARCHAR(64) NULL,
+                scope_type VARCHAR(16) NOT NULL,
+                article_id BIGINT UNSIGNED NULL,
+                article_number VARCHAR(64) NULL,
                 upc_id BIGINT UNSIGNED NULL,
                 ean_upc VARCHAR(32) NULL,
                 true_stock_quantity DECIMAL(24,8) NOT NULL,
@@ -41,6 +44,7 @@ def ensure_true_stock_tables(cur) -> None:
                 superseded_by_oh_file_id BIGINT UNSIGNED NULL,
                 PRIMARY KEY (true_stock_id),
                 KEY ix_manual_true_stock_family_status (family_id,override_status),
+                KEY ix_manual_true_stock_article_status (article_id,override_status),
                 KEY ix_manual_true_stock_upc (ean_upc),
                 KEY ix_manual_true_stock_anchor (anchor_on_hand_file_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -54,6 +58,9 @@ def ensure_true_stock_tables(cur) -> None:
                 discrepancy_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
                 family_id BIGINT UNSIGNED NOT NULL,
                 main_article_number VARCHAR(64) NULL,
+                scope_type VARCHAR(16) NOT NULL,
+                article_id BIGINT UNSIGNED NULL,
+                article_number VARCHAR(64) NULL,
                 source_true_stock_id BIGINT UNSIGNED NOT NULL,
                 ean_upc VARCHAR(32) NULL,
                 system_oh_quantity DECIMAL(24,8) NOT NULL,
@@ -257,7 +264,7 @@ def ready_quick_checks_with_system_oh(limit: int = 50) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            """SELECT ean_upc,article_number,family_id,main_article_number,
+            """SELECT upc_id,ean_upc,article_id,article_number,family_id,main_article_number,
                       selling_description,family_description,selling_uom,
                       current_oh,current_oh_uom,oh_date,current_price,current_price_type,
                       current_cost_per_selling_unit,pos_qty_7d,pos_qty_30d,
@@ -276,6 +283,11 @@ def ready_quick_checks_with_system_oh(limit: int = 50) -> dict[str, Any]:
             (limit,),
         )
         rows = cur.fetchall()
+        for row in rows:
+            ctx = _system_oh_context(cur, row)
+            row["system_oh_scope_type"] = ctx.get("scope_type") if ctx else None
+            row["system_oh_article_number"] = ctx.get("article_number") if ctx else None
+            row["true_stock_required_uom"] = row.get("current_oh_uom")
         cur.close()
     return {"count": len(rows), "results": rows}
 
@@ -309,17 +321,91 @@ def _refresh_expired_true_stock(cur) -> int | None:
     return latest_oh_file_id
 
 
-def _active_true_stock(cur, family_id: int) -> dict[str, Any] | None:
-    if not _table_exists(cur, "manual_true_stock"):
-        return None
+def _system_oh_context(cur, row: dict[str, Any]) -> dict[str, Any] | None:
+    """Return the exact inventory owner that supplied System OH."""
+    upc_id = int(row["upc_id"])
+    article_id = int(row["article_id"]) if row.get("article_id") is not None else None
+    family_id = int(row["family_id"]) if row.get("family_id") is not None else None
+
     cur.execute(
-        """SELECT *
-           FROM manual_true_stock
-           WHERE family_id=%s
-             AND override_status='ACTIVE'
-           ORDER BY true_stock_id DESC
+        """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                  observation_date,article_id,article_number,family_id,
+                  ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+           FROM inventory_observation
+           WHERE upc_id=%s AND on_hand_quantity IS NOT NULL
+           ORDER BY observation_date DESC,file_id DESC,raw_id DESC
            LIMIT 1""",
-        (int(family_id),),
+        (upc_id,),
+    )
+    r = cur.fetchone()
+    if r:
+        r["scope_type"] = "UPC"
+        return r
+
+    if article_id is not None:
+        cur.execute(
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      observation_date,article_id,article_number,family_id,
+                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+               FROM inventory_observation
+               WHERE article_id=%s
+                 AND upc_id IS NULL
+                 AND on_hand_quantity IS NOT NULL
+               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
+               LIMIT 1""",
+            (article_id,),
+        )
+        r = cur.fetchone()
+        if r:
+            r["scope_type"] = "ARTICLE"
+            return r
+
+    if family_id is not None:
+        cur.execute(
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      observation_date,article_id,article_number,family_id,
+                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+               FROM inventory_observation
+               WHERE family_id=%s
+                 AND article_id IS NULL
+                 AND upc_id IS NULL
+                 AND on_hand_quantity IS NOT NULL
+               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
+               LIMIT 1""",
+            (family_id,),
+        )
+        r = cur.fetchone()
+        if r:
+            r["scope_type"] = "FAMILY"
+            return r
+    return None
+
+
+def _active_true_stock(cur, system_oh: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not system_oh or not _table_exists(cur, "manual_true_stock"):
+        return None
+
+    scope = str(system_oh.get("scope_type") or "").upper()
+    if scope == "UPC" and system_oh.get("upc_id") is not None:
+        where = "scope_type='UPC' AND upc_id=%s"
+        args = (int(system_oh["upc_id"]),)
+    elif scope == "ARTICLE" and system_oh.get("article_id") is not None:
+        where = "scope_type='ARTICLE' AND article_id=%s"
+        args = (int(system_oh["article_id"]),)
+    elif scope == "FAMILY" and system_oh.get("family_id") is not None:
+        where = "scope_type='FAMILY' AND family_id=%s"
+        args = (int(system_oh["family_id"]),)
+    else:
+        return None
+
+    cur.execute(
+        f"""SELECT *
+            FROM manual_true_stock
+            WHERE {where}
+              AND override_status='ACTIVE'
+            ORDER BY true_stock_id DESC
+            LIMIT 1""",
+        args,
     )
     return cur.fetchone()
 
@@ -334,13 +420,14 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
 
         latest_oh_file_id = _refresh_expired_true_stock(cur)
         family_id = int(row["family_id"])
-        true_stock = _active_true_stock(cur, family_id)
+        system_oh = _system_oh_context(cur, row)
+        true_stock = _active_true_stock(cur, system_oh)
 
         cur.execute(
             """SELECT ean_upc,article_number,selling_description,selling_uom,
                       current_price,current_price_type,current_cost_per_selling_unit,
                       pos_qty_7d,pos_qty_30d,upc_velocity_7d,upc_velocity_30d,
-                      current_oh,current_oh_uom,oh_date,quick_check_status,blocking_reason
+                      quick_check_status,blocking_reason
                FROM quick_check_current
                WHERE family_id=%s
                ORDER BY
@@ -359,6 +446,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             "uom": row.get("current_oh_uom"),
             "source": "SYSTEM_OH",
             "date": row.get("oh_date"),
+            "scope_type": system_oh.get("scope_type") if system_oh else None,
+            "article_id": system_oh.get("article_id") if system_oh else None,
+            "article_number": system_oh.get("article_number") if system_oh else None,
         }
         if true_stock:
             effective_oh = {
@@ -367,6 +457,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
                 "source": "TRUE_STOCK",
                 "date": true_stock.get("submitted_at"),
                 "submitted_by": true_stock.get("submitted_by"),
+                "scope_type": true_stock.get("scope_type"),
+                "article_id": true_stock.get("article_id"),
+                "article_number": true_stock.get("article_number"),
             }
 
         detail = {
@@ -375,6 +468,17 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
                 "quantity": row.get("current_oh"),
                 "uom": row.get("current_oh_uom"),
                 "date": row.get("oh_date"),
+                "scope_type": system_oh.get("scope_type") if system_oh else None,
+                "article_id": system_oh.get("article_id") if system_oh else None,
+                "article_number": system_oh.get("article_number") if system_oh else None,
+                "source_file_id": system_oh.get("file_id") if system_oh else None,
+                "source_raw_id": system_oh.get("raw_id") if system_oh else None,
+            },
+            "true_stock_input": {
+                "required_uom": row.get("current_oh_uom"),
+                "scope_type": system_oh.get("scope_type") if system_oh else None,
+                "article_number": system_oh.get("article_number") if system_oh else None,
+                "cross_uom_submission_allowed": False,
             },
             "active_true_stock": true_stock,
             "effective_oh": effective_oh,
@@ -386,8 +490,14 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         return detail
 
 
-def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> dict[str, Any]:
+def submit_true_stock(
+    upc: str,
+    true_stock_quantity: Decimal,
+    true_stock_uom: str,
+    device: str,
+) -> dict[str, Any]:
     qty = Decimal(str(true_stock_quantity))
+    submitted_uom = str(true_stock_uom or "").strip().upper()
     if qty < 0:
         raise ValueError("TRUE_STOCK_NEGATIVE")
 
@@ -409,29 +519,55 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
             family_id = int(row["family_id"])
             system_qty = Decimal(str(row["current_oh"]))
             system_uom = str(row["current_oh_uom"]).strip().upper()
+            if not submitted_uom:
+                raise ValueError("TRUE_STOCK_UOM_REQUIRED")
+            if submitted_uom != system_uom:
+                raise ValueError(f"TRUE_STOCK_UOM_MISMATCH:{system_uom}")
+
+            system_oh = _system_oh_context(cur, row)
+            if not system_oh:
+                raise ValueError("SYSTEM_OH_LINEAGE_NOT_AVAILABLE")
+            scope_type = str(system_oh["scope_type"]).upper()
+            article_id = int(system_oh["article_id"]) if system_oh.get("article_id") is not None else None
+            article_number = system_oh.get("article_number")
             latest_oh_file_id = _refresh_expired_true_stock(cur)
 
+            if scope_type == "UPC":
+                scope_where = "scope_type='UPC' AND upc_id=%s"
+                scope_args = (int(row["upc_id"]),)
+            elif scope_type == "ARTICLE":
+                scope_where = "scope_type='ARTICLE' AND article_id=%s"
+                scope_args = (article_id,)
+            elif scope_type == "FAMILY":
+                scope_where = "scope_type='FAMILY' AND family_id=%s"
+                scope_args = (family_id,)
+            else:
+                raise ValueError("SYSTEM_OH_SCOPE_UNRESOLVED")
+
             cur.execute(
-                """UPDATE manual_true_stock
-                   SET override_status='SUPERSEDED_BY_NEW_TRUE_STOCK',
-                       superseded_at=CURRENT_TIMESTAMP(6)
-                   WHERE family_id=%s
-                     AND override_status='ACTIVE'""",
-                (family_id,),
+                f"""UPDATE manual_true_stock
+                    SET override_status='SUPERSEDED_BY_NEW_TRUE_STOCK',
+                        superseded_at=CURRENT_TIMESTAMP(6)
+                    WHERE {scope_where}
+                      AND override_status='ACTIVE'""",
+                scope_args,
             )
 
             discrepancy = system_qty - qty
             cur.execute(
                 """INSERT INTO manual_true_stock
-                   (family_id,main_article_number,upc_id,ean_upc,
-                    true_stock_quantity,uom_code,
+                   (family_id,main_article_number,scope_type,article_id,article_number,
+                    upc_id,ean_upc,true_stock_quantity,uom_code,
                     system_oh_quantity,system_oh_uom_code,
                     discrepancy_quantity,anchor_on_hand_file_id,
                     override_status,submitted_by)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s)""",
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s)""",
                 (
                     family_id,
                     row.get("main_article_number"),
+                    scope_type,
+                    article_id,
+                    article_number,
                     row.get("upc_id"),
                     row.get("ean_upc"),
                     qty,
@@ -451,10 +587,22 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
                     """SELECT discrepancy_id
                        FROM dumping_discrepancy_queue
                        WHERE family_id=%s
+                         AND scope_type=%s
+                         AND (
+                              (%s='UPC' AND ean_upc=%s)
+                           OR (%s='ARTICLE' AND article_id=%s)
+                           OR (%s='FAMILY')
+                         )
                          AND queue_status='PENDING'
                        ORDER BY discrepancy_id DESC
                        LIMIT 1""",
-                    (family_id,),
+                    (
+                        family_id,
+                        scope_type,
+                        scope_type,row.get("ean_upc"),
+                        scope_type,article_id,
+                        scope_type,
+                    ),
                 )
                 pending = cur.fetchone()
                 if pending:
@@ -462,6 +610,9 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
                         """UPDATE dumping_discrepancy_queue
                            SET source_true_stock_id=%s,
                                main_article_number=%s,
+                               scope_type=%s,
+                               article_id=%s,
+                               article_number=%s,
                                ean_upc=%s,
                                system_oh_quantity=%s,
                                true_stock_quantity=%s,
@@ -473,6 +624,9 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
                         (
                             true_stock_id,
                             row.get("main_article_number"),
+                            scope_type,
+                            article_id,
+                            article_number,
                             row.get("ean_upc"),
                             system_qty,
                             qty,
@@ -485,13 +639,16 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
                 else:
                     cur.execute(
                         """INSERT INTO dumping_discrepancy_queue
-                           (family_id,main_article_number,source_true_stock_id,ean_upc,
-                            system_oh_quantity,true_stock_quantity,discrepancy_quantity,
-                            uom_code,queue_status)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'PENDING')""",
+                           (family_id,main_article_number,scope_type,article_id,article_number,
+                            source_true_stock_id,ean_upc,system_oh_quantity,true_stock_quantity,
+                            discrepancy_quantity,uom_code,queue_status)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING')""",
                         (
                             family_id,
                             row.get("main_article_number"),
+                            scope_type,
+                            article_id,
+                            article_number,
                             true_stock_id,
                             row.get("ean_upc"),
                             system_qty,
@@ -507,8 +664,20 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
                        SET queue_status='RESOLVED',
                            resolved_at=CURRENT_TIMESTAMP(6)
                        WHERE family_id=%s
+                         AND scope_type=%s
+                         AND (
+                              (%s='UPC' AND ean_upc=%s)
+                           OR (%s='ARTICLE' AND article_id=%s)
+                           OR (%s='FAMILY')
+                         )
                          AND queue_status='PENDING'""",
-                    (family_id,),
+                    (
+                        family_id,
+                        scope_type,
+                        scope_type,row.get("ean_upc"),
+                        scope_type,article_id,
+                        scope_type,
+                    ),
                 )
                 if int(cur.rowcount or 0) > 0:
                     queue_action = "RESOLVED_PENDING"
@@ -518,6 +687,9 @@ def submit_true_stock(upc: str, true_stock_quantity: Decimal, device: str) -> di
                 "status": "COMMITTED",
                 "family_id": family_id,
                 "main_article_number": row.get("main_article_number"),
+                "scope_type": scope_type,
+                "article_id": article_id,
+                "article_number": article_number,
                 "ean_upc": row.get("ean_upc"),
                 "system_oh": system_qty,
                 "true_stock": qty,
@@ -646,6 +818,18 @@ def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:
         observation_sample = cur.fetchall()
 
         cur.execute(
+            """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                      observation_date,article_number,article_id,family_id,
+                      ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+               FROM inventory_observation
+               WHERE family_id IS NULL OR article_id IS NULL
+               ORDER BY observation_date DESC,file_id DESC,raw_id DESC
+               LIMIT %s""",
+            (limit,),
+        )
+        unmapped_inventory_rows = cur.fetchall()
+
+        cur.execute(
             """SELECT ean_upc,article_number,family_id,main_article_number,
                       selling_description,selling_uom,current_oh,current_oh_uom,
                       oh_date,quick_check_status,blocking_reason
@@ -680,6 +864,7 @@ def diagnose_on_hand_lineage(limit: int = 50) -> dict[str, Any]:
         "on_hand_files": on_hand_files,
         "possible_misclassified_oh_filenames": filename_candidates,
         "inventory_observation_sample": observation_sample,
+        "unmapped_inventory_observations": unmapped_inventory_rows,
         "quick_check_oh_sample": qc_oh_sample,
     }
 
@@ -796,7 +981,8 @@ def pending_dumping_discrepancies() -> list[dict[str, Any]]:
             return []
         _refresh_expired_true_stock(cur)
         cur.execute(
-            """SELECT discrepancy_id,family_id,main_article_number,source_true_stock_id,
+            """SELECT discrepancy_id,family_id,main_article_number,scope_type,
+                      article_id,article_number,source_true_stock_id,
                       ean_upc,system_oh_quantity,true_stock_quantity,
                       discrepancy_quantity,uom_code,queue_status,created_at,updated_at
                FROM dumping_discrepancy_queue
