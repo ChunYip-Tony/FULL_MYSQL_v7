@@ -369,9 +369,13 @@ def _movement_header_map(cur, sheet_id: int, declared_header_row: int | None) ->
     detector can therefore point at a data row. For movement parsing, scan the
     first 80 RAW rows and require semantic header tokens.
     """
-    candidates = []
-    if declared_header_row:
-        candidates.append(int(declared_header_row))
+    def _col_rank(col: str) -> int:
+        n = 0
+        for ch in str(col or "").upper():
+            if "A" <= ch <= "Z":
+                n = n * 26 + (ord(ch) - 64)
+        return n if n > 0 else 10**9
+
     cur.execute(
         """SELECT source_row_number,raw_payload
            FROM raw_movement
@@ -390,7 +394,18 @@ def _movement_header_map(cur, sheet_id: int, declared_header_row: int | None) ->
             continue
         seen.add(row_no)
         p = _j(rr["raw_payload"])
-        norms = {_norm_header(v): k for k, v in p.items() if _norm_header(v)}
+
+        # SAP exports can contain two visually similar headers in the same row:
+        # the real movement type column "MvT" appears before a later status-like
+        # "Mvt" column. Both normalize to MVT. MySQL JSON member order is not an
+        # authority, so sort by Excel column position and keep the FIRST semantic
+        # occurrence. Otherwise the later "Mvt" column (values like B) can replace
+        # the real movement type (101/109/251/252) and every detail row is skipped.
+        norms: dict[str, str] = {}
+        for col, value in sorted(p.items(), key=lambda kv: _col_rank(kv[0])):
+            key = _norm_header(value)
+            if key and key not in norms:
+                norms[key] = col
         tokens = set(norms.keys())
         has_article = "ARTICLE" in tokens
         has_mvt = any(x in tokens for x in {"MVT", "MOVEMENT TYPE", "MOVEMENT"})
