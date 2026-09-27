@@ -1,56 +1,63 @@
-FULL MYSQL v7.0.41 GitHub Patch
+FULL MYSQL v7.0.42 GitHub Patch
 
 Purpose:
-- Resolve the final 8 current cost-to-selling conversion holds using Tony's
-  explicit per-UPC confirmations.
-- Keep Cost conversion independent from Base/Inventory UOM.
+Apply Tony's clarified business semantics to the remaining current-cost holds.
 
-Confirmed equations:
-402954957   : 1 BX   = 3 LB
-75339379281 : 1 EA   = 2 LB
-4816        : 1 EA   = 4 LB
-8231817551  : 1 PACK = 2 LB
-4029551288  : 1 PAC  = 2 LB
-7441092018  : 1 EA   = 1.2 LB
-4883        : 1 PAC  = 2.2 LB
-81223402632 : 1 PACK = 1 BAG
+Authoritative rules:
+- Frozen Inventory Unit Cost UOM = BUN column value for that item.
+  The current workbook layout places BUN in column I.
+- Live/Fresh Suggestion Unit Cost = LB for every row.
+- TX SEAFOOD ABC PRICE is retired from current authority.
+- Official report cost belongs to the receiving Main/Family Article and is
+  shared by related selling UPCs/sub-articles in that Family.
+- Pack-description text is reference only and is never auto-conversion authority.
+- Cost priority remains:
+  receipt 101/107/109 > official report > explicit OH fallback.
 
-Calculation:
-cost_per_selling_unit =
-    authoritative_cost_per_cost_uom * cost_qty / selling_qty
+Code changes:
+1) Future company-report ingest
+   Frozen:
+   - exact BUN header only
+   - row BUN value becomes cost_uom_code
+   Live/Fresh:
+   - source rule sets cost_uom_code=LB for positive cost
+   TX:
+   - cost_uom_code remains NULL for current authority
+2) Historical derived repair
+   - re-read immutable RAW Frozen BUN values
+   - assign Live/Fresh LB source rule
+   - supersede TX official derived cost
+   - supersede Frozen/Live rows with missing/unsupported resolved UOM
+   - re-anchor supported official costs to the Family Main Article
+3) Current authority
+   - TX removed from official cost selection
+   - TX removed from current company-price serving
+4) Diagnostics
+   - TX removed from official-cost evidence
+   - no receipt/report evidence is classified as
+     NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST
+5) Full Phase 3
+   - source Cost-UOM normalization runs before current-active cost repair
 
-Examples with the current authoritative receipt costs:
-- 402954957: 2.44444444/LB * 3 LB/BX = 7.33333332/BX
-- 75339379281: 3.00/LB * 2 LB/EA = 6.00/EA
-- 4816: 3.16666667/LB * 4 LB/EA = 12.66666668/EA
-- 8231817551: 4.20/LB * 2 LB/PACK = 8.40/PACK
-- 4029551288: 3.60/LB * 2 LB/PAC = 7.20/PAC
-- 7441092018: 3.54545455/LB * 1.2 LB/EA = 4.25454546/EA
-- 4883: 11.08333333/PAC / 2.2 LB/PAC = 5.03787879/LB
-- 81223402632: 7.90/BAG * 1 BAG/PACK = 7.90/PACK
-
-Persistence:
-- new table manual_cost_selling_conversion
-- one confirmed row per exact UPC
-- source-controlled seeds refresh the values on Phase 3 / maintenance flows
-- no Base UOM or base factor is inferred or overwritten
-
-Deploy and run:
-1) Confirm /healthz = 7.0.41-single-service.
-2) POST /v1/maintenance/confirmed-cost-conversion-refresh
-   with:
-   {"confirm":"APPLY_CONFIRMED_COST_CONVERSIONS_AND_REBUILD"}
-3) PASS requires:
-   - status=COMMITTED
-   - target_count=8
-   - verified_target_count=8
-   - all target_checks.pass=True
-   - every target has COST_TO_SELLING_UOM_UNRESOLVED cleared
-   - Base UOM and base_qty_per_selling_unit unchanged
-   - product identity remains PASS
+Deployment:
+1) Verify /healthz = 7.0.42-single-service.
+2) Run POST /v1/maintenance/safe-cost-refresh with:
+   {"confirm":"APPLY_SAFE_COST_REPAIR_AND_REBUILD"}
+3) Review:
+   - company_cost_uom_repair
+   - before_cost_summary
+   - after_cost_summary
+   - target_checks
+   - quick_check
 4) Re-run GET /v1/diagnostics/cost-holds.
-   Expected conversion hold count: 8 -> 0, assuming no unrelated data changed.
-   Current-cost-missing rows remain separate and are not modified by this patch.
+5) For remaining NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST rows,
+   surface the exact UPC/Article/Family to Tony for direct cost confirmation.
+
+Expected behavior:
+- many/all previous OFFICIAL_COST_WITHOUT_EXPLICIT_UOM rows should move to
+  executable official-cost authority when Frozen BUN or Live/Fresh LB resolves.
+- receipt valuation still outranks those report costs.
+- no automatic pack conversion is introduced.
 
 No RAW mutation.
-No generic prefix/description inference.
+No generic source guessing.
