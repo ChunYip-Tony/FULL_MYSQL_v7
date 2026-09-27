@@ -447,6 +447,19 @@ def _sheet_header_map(cur, raw_table: str, sheet_id: int, header_row: int | None
     return {_norm_header(v): k for k, v in p.items() if _norm_header(v)}
 
 
+def _pick_exact(hmap: dict[str, str], aliases: Iterable[str]) -> str | None:
+    """Strict header match for semantically dangerous fields such as Cost UOM.
+
+    Do not fall back to substring matching here. In particular, the generic
+    token "Unit" must never match a numeric "Unit Cost" column.
+    """
+    for alias in aliases:
+        key = _norm_header(alias)
+        if key in hmap:
+            return hmap[key]
+    return None
+
+
 def _pick(hmap: dict[str, str], aliases: Iterable[str]) -> str | None:
     norm_alias = [_norm_header(a) for a in aliases]
     for a in norm_alias:
@@ -509,7 +522,18 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
         c_b = _pick(hmap, ['Price B', 'Suggested Price B', 'B Price'])
         c_c = _pick(hmap, ['Price C', 'Suggested Price C', 'C Price'])
         c_cost = _pick(hmap, ['Cost', 'Official Cost', 'Unit Cost'])
-        c_uom = _pick(hmap, ['Cost UOM', 'UOM', 'Unit'])
+        c_uom = _pick_exact(
+            hmap,
+            [
+                'Cost UOM',
+                'Cost Unit',
+                'Cost Unit of Measure',
+                'Cost Base UOM',
+                'UOM',
+                'UM',
+                'Unit of Measure',
+            ],
+        )
         if not any([c_a, c_b, c_c, c_cost]):
             continue
         cur.execute(f'SELECT raw_id,source_row_number,raw_payload FROM {raw_table} WHERE sheet_id=%s AND source_row_number>%s ORDER BY source_row_number',
@@ -559,6 +583,177 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
                         )
     return inserted
 
+
+
+def repair_company_cost_uom_observations(cur) -> dict[str, Any]:
+    """Re-derive company_price_observation.cost_uom_code from RAW headers safely.
+
+    Historical v7.0.36-v7.0.39 data may contain numeric cost values in
+    cost_uom_code because substring matching let alias "Unit" match header
+    "Unit Cost". RAW remains immutable; this repairs only derived observations.
+    """
+
+    sources = {
+        'frozen_inventory': 'raw_frozen_inventory',
+        'tx_seafood_abc_price': 'raw_tx_seafood_abc_price',
+        'live_fresh_suggestion': 'raw_live_fresh_suggestion',
+    }
+    result = {
+        'files_scanned': 0,
+        'sheets_scanned': 0,
+        'rows_examined': 0,
+        'rows_changed': 0,
+        'rows_set_null_no_explicit_uom_header': 0,
+        'rows_set_from_explicit_uom_header': 0,
+        'derived_cost_rows_superseded_no_supported_uom': 0,
+        'derived_cost_rows_reactivated_supported_uom': 0,
+        'sheet_header_audit': [],
+    }
+
+    for source_type, raw_table in sources.items():
+        cur.execute(
+            """SELECT file_id,original_filename
+               FROM ingest_file
+               WHERE source_type=%s
+               ORDER BY file_id""",
+            (source_type,),
+        )
+        files = cur.fetchall()
+        result['files_scanned'] += len(files)
+
+        for f in files:
+            cur.execute(
+                """SELECT sheet_id,sheet_name,header_row_number
+                   FROM ingest_sheet
+                   WHERE file_id=%s
+                   ORDER BY sheet_index""",
+                (f['file_id'],),
+            )
+            for sh in cur.fetchall():
+                header_row = sh.get('header_row_number')
+                if not header_row:
+                    continue
+
+                hmap = _sheet_header_map(cur, raw_table, sh['sheet_id'], header_row)
+                c_uom = _pick_exact(
+                    hmap,
+                    [
+                        'Cost UOM',
+                        'Cost Unit',
+                        'Cost Unit of Measure',
+                        'Cost Base UOM',
+                        'UOM',
+                        'UM',
+                        'Unit of Measure',
+                    ],
+                )
+                result['sheets_scanned'] += 1
+                result['sheet_header_audit'].append(
+                    {
+                        'file_id': int(f['file_id']),
+                        'filename': f.get('original_filename'),
+                        'sheet_id': int(sh['sheet_id']),
+                        'sheet_name': sh.get('sheet_name'),
+                        'explicit_cost_uom_column': c_uom,
+                        'normalized_headers': sorted(hmap.keys()),
+                    }
+                )
+
+                cur.execute(
+                    f"""SELECT c.company_price_observation_id,c.raw_id,c.cost_uom_code,
+                               r.raw_payload
+                        FROM company_price_observation c
+                        JOIN {raw_table} r ON r.raw_id=c.raw_id
+                        WHERE c.file_id=%s AND c.sheet_id=%s
+                        ORDER BY c.company_price_observation_id""",
+                    (f['file_id'], sh['sheet_id']),
+                )
+                rows = cur.fetchall()
+
+                for row in rows:
+                    result['rows_examined'] += 1
+                    payload = _j(row['raw_payload'])
+                    parsed = None
+                    if c_uom:
+                        parsed = (_text(payload.get(c_uom)) or '').upper() or None
+
+                    current = (_text(row.get('cost_uom_code')) or '').upper() or None
+                    if current != parsed:
+                        cur.execute(
+                            """UPDATE company_price_observation
+                               SET cost_uom_code=%s
+                               WHERE company_price_observation_id=%s""",
+                            (parsed, row['company_price_observation_id']),
+                        )
+                        result['rows_changed'] += 1
+                        if parsed is None:
+                            result['rows_set_null_no_explicit_uom_header'] += 1
+                        else:
+                            result['rows_set_from_explicit_uom_header'] += 1
+
+    # Reconcile already-derived official-cost observations to the corrected
+    # company cost-UOM evidence. Unsupported/missing UOM cannot remain active.
+    cur.execute(
+        """UPDATE article_cost_observation aco
+           JOIN company_price_observation c
+             ON c.raw_id=aco.raw_id
+            AND aco.raw_table_name=
+                CASE c.source_type
+                  WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
+                  WHEN 'tx_seafood_abc_price' THEN 'raw_tx_seafood_abc_price'
+                  WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
+                  ELSE '__NO_MATCH__'
+                END
+           LEFT JOIN dim_uom du
+             ON UPPER(du.uom_code)=UPPER(TRIM(c.cost_uom_code))
+           SET aco.cost_status='SUPERSEDED'
+           WHERE c.source_type IN (
+                   'frozen_inventory',
+                   'tx_seafood_abc_price',
+                   'live_fresh_suggestion'
+                 )
+             AND aco.source_type LIKE '%_OFFICIAL_COST'
+             AND aco.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND (c.cost_uom_code IS NULL OR du.uom_id IS NULL)"""
+    )
+    result['derived_cost_rows_superseded_no_supported_uom'] = int(cur.rowcount or 0)
+
+    # If a strict explicit UOM is present and supported, synchronize the derived
+    # observation to that exact source token. This is a derived repair only.
+    cur.execute(
+        """UPDATE article_cost_observation aco
+           JOIN company_price_observation c
+             ON c.raw_id=aco.raw_id
+            AND aco.raw_table_name=
+                CASE c.source_type
+                  WHEN 'frozen_inventory' THEN 'raw_frozen_inventory'
+                  WHEN 'tx_seafood_abc_price' THEN 'raw_tx_seafood_abc_price'
+                  WHEN 'live_fresh_suggestion' THEN 'raw_live_fresh_suggestion'
+                  ELSE '__NO_MATCH__'
+                END
+           JOIN dim_uom du
+             ON UPPER(du.uom_code)=UPPER(TRIM(c.cost_uom_code))
+           SET aco.cost_uom_id=du.uom_id,
+               aco.cost_amount=c.official_cost,
+               aco.cost_status='OBSERVED',
+               aco.confidence=1.0
+           WHERE c.source_type IN (
+                   'frozen_inventory',
+                   'tx_seafood_abc_price',
+                   'live_fresh_suggestion'
+                 )
+             AND aco.source_type LIKE '%_OFFICIAL_COST'
+             AND c.official_cost IS NOT NULL
+             AND c.official_cost>0
+             AND (
+                 NOT (aco.cost_uom_id <=> du.uom_id)
+                 OR NOT (aco.cost_amount <=> c.official_cost)
+                 OR aco.cost_status<>'OBSERVED'
+             )"""
+    )
+    result['derived_cost_rows_reactivated_supported_uom'] = int(cur.rowcount or 0)
+
+    return result
 
 
 PRODUCT_IDENTITY_GUARD_ISSUE_CODES = (

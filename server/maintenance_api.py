@@ -13,7 +13,7 @@ from manual_overrides import (
 from product_identity_audit import audit_product_identity
 from current_active_cost_repair import repair_current_active_cost
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from phase3 import rebuild_quick_check
+from phase3 import rebuild_quick_check, repair_company_cost_uom_observations
 
 
 def _retirement_ok(row: dict[str, Any]) -> bool:
@@ -438,6 +438,12 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             conn.start_transaction()
 
             batch_id = _latest_serving_batch_id(cur)
+
+            # v7.0.40: repair historical derived Cost-UOM parsing before deciding
+            # what is actually safe. Older substring matching could let "Unit"
+            # match "Unit Cost", storing a numeric cost value as cost_uom_code.
+            company_cost_uom_repair = repair_company_cost_uom_observations(cur)
+
             before_diag = diagnose_global_cost_holds(cur)
             before_summary = before_diag.get("summary") or {}
             before_safe_count = int(
@@ -470,7 +476,7 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
                        detail_json=JSON_SET(
                          COALESCE(detail_json,JSON_OBJECT()),
                          '$.resolution',
-                         'Superseded by v7.0.37 safe cost serving refresh'
+                         'Superseded by v7.0.40 safe cost serving refresh'
                        )
                    WHERE batch_id=%s
                      AND issue_status='OPEN'
@@ -553,9 +559,10 @@ def run_safe_cost_refresh(device: str) -> dict[str, Any]:
             return {
                 "status": "COMMITTED",
                 "device": device,
-                "mode": "SERVER_SIDE_SAFE_COST_REPAIR_AND_QC_REBUILD_V7037",
+                "mode": "SERVER_SIDE_SAFE_COST_REPAIR_AND_QC_REBUILD_V7040",
                 "publish_batch_id": batch_id,
                 "before_safe_candidate_count": before_safe_count,
+                "company_cost_uom_repair": company_cost_uom_repair,
                 "verified_target_count": len(target_checks),
                 "prior_core_holds_resolved": prior_core_holds_resolved,
                 "cost_repair": cost_repair,
