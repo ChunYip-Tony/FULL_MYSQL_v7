@@ -1,16 +1,17 @@
-FULL MYSQL v7.0.26 GitHub Patch
+FULL MYSQL v7.0.27 GitHub Patch
 
 Scope:
-- Add read-only GET /v1/diagnostics/product-identity-audit
-- No schema migration
-- No automatic identity mutation
-- No Quick Check rebuild triggered by this endpoint
-- Preserve existing v7.0.25 Family 291 manual override + retirement authority lock
+- Refine GET /v1/diagnostics/product-identity-audit semantics.
+- Keep current-active missing Selling UOM as row-level serving QA_HOLD, not a global identity blocker.
+- Classify UPC-A short/long pairs by current vs historical Quick Check scope.
+- Validate manual UPC overrides against canonical Main/Family identity.
+- Fix manual-authority UOM cleanup so SQL NULL semantics cannot leave stale confirmed variants active.
+- Add maintenance_v727.py for a targeted manual-authority refresh with no Quick Check rebuild.
 
-Deployment:
-- Merge branch v7.0.26-product-identity-audit into main
-- DigitalOcean App Platform autodeploy will deploy server/
-- Verify /healthz returns 7.0.26-single-service
-- Then call /v1/diagnostics/product-identity-audit with an existing Bearer token
+After deploy:
+1) Verify /healthz = 7.0.27-single-service.
+2) In App Platform Console run: python maintenance_v727.py
+3) Re-run GET /v1/diagnostics/product-identity-audit.
+4) Do not integrate the audit as a Phase3 global publish guard until the remaining current-scope blockers are reviewed.
 
-Do not run a maintenance script for this patch.
+No schema migration is required.

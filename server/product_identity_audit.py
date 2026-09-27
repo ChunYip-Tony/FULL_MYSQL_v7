@@ -19,6 +19,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
 
     blockers: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
+    serving_holds: list[dict[str, Any]] = []
 
     pos_days_28 = source_data_days(
         cur,
@@ -351,7 +352,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
     )
     current_active_missing_uom = cur.fetchall()
     for row in current_active_missing_uom:
-        blockers.append(
+        serving_holds.append(
             {
                 "code": "CURRENT_ACTIVE_SELLING_UOM_MISSING",
                 "ean_upc": str(row["ean_upc"]),
@@ -365,7 +366,8 @@ def audit_product_identity(cur) -> dict[str, Any]:
 
     cur.execute(
         """
-        SELECT su.ean_upc,baf.family_id,a.article_number,du.uom_code AS selling_uom
+        SELECT su.ean_upc,baf.family_id,a.article_number,
+               q.selling_uom,q.quick_check_status
         FROM selling_upc su
         JOIN bridge_article_upc bau
           ON bau.upc_id=su.upc_id
@@ -378,8 +380,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
          AND baf.mapping_status='CONFIRMED'
          AND baf.is_primary=TRUE
          AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
-        LEFT JOIN v_current_upc_uom qu ON qu.ean_upc=su.ean_upc
-        LEFT JOIN dim_uom du ON du.uom_code=qu.selling_uom
+        LEFT JOIN quick_check_current q ON q.upc_id=su.upc_id
         LEFT JOIN manual_upc_retirement mur
           ON mur.ean_upc=su.ean_upc
          AND mur.retirement_status='CONFIRMED'
@@ -406,6 +407,12 @@ def audit_product_identity(cur) -> dict[str, Any]:
             x = (v or "").upper()
             return "PACK" if x in {"PAC", "PACK"} else x
         same_uom = _norm_uom(row.get("selling_uom")) == _norm_uom(other.get("selling_uom"))
+        short_status = row.get("quick_check_status")
+        long_status = other.get("quick_check_status")
+        current_scope = (
+            short_status in {"READY", "QA_HOLD"}
+            or long_status in {"READY", "QA_HOLD"}
+        )
         item = {
             "short_upc": short,
             "valid_upca": long_upc,
@@ -413,24 +420,40 @@ def audit_product_identity(cur) -> dict[str, Any]:
             "same_selling_uom": same_uom,
             "merge_candidate": bool(same_family and same_uom),
             "family_id": int(row["family_id"]) if row.get("family_id") is not None else None,
-            "selling_uom": row.get("selling_uom"),
+            "short_selling_uom": row.get("selling_uom"),
+            "long_selling_uom": other.get("selling_uom"),
+            "short_quick_check_status": short_status,
+            "long_quick_check_status": long_status,
+            "current_scope": current_scope,
         }
         safe_alias_candidates.append(item)
-        if item["merge_candidate"]:
-            blockers.append({"code": "DUPLICATE_UPCA_SHORT_LONG_ACTIVE", **item})
+        if current_scope:
+            if item["merge_candidate"]:
+                blockers.append({"code": "DUPLICATE_UPCA_SHORT_LONG_CURRENT", **item})
+            else:
+                blockers.append({"code": "UPCA_SHORT_LONG_CURRENT_IDENTITY_CONFLICT", **item})
         else:
-            blockers.append({"code": "UPCA_SHORT_LONG_IDENTITY_CONFLICT", **item})
+            warnings.append({"code": "HISTORICAL_UPCA_SHORT_LONG_PAIR", **item})
 
     cur.execute(
         """
         SELECT o.ean_upc,o.article_number,o.selling_uom_code,o.base_uom_code,
                o.base_qty_per_selling_unit,
+               opf.main_article_number AS expected_main_article_number,
                q.article_number AS qc_article_number,
+               q.main_article_number AS qc_main_article_number,
                q.selling_uom AS qc_selling_uom,
                q.base_uom AS qc_base_uom,
                q.base_qty_per_selling_unit AS qc_factor,
                q.quick_check_status
         FROM manual_upc_override o
+        LEFT JOIN article oa ON oa.article_number=o.article_number
+        LEFT JOIN bridge_article_family obaf
+          ON obaf.article_id=oa.article_id
+         AND obaf.mapping_status='CONFIRMED'
+         AND obaf.is_primary=TRUE
+         AND (obaf.valid_to IS NULL OR obaf.valid_to>CURRENT_TIMESTAMP(6))
+        LEFT JOIN product_family opf ON opf.family_id=obaf.family_id
         LEFT JOIN quick_check_current q ON q.ean_upc=o.ean_upc
         WHERE o.override_status='CONFIRMED'
         ORDER BY o.override_id
@@ -439,8 +462,10 @@ def audit_product_identity(cur) -> dict[str, Any]:
     override_checks: list[dict[str, Any]] = []
     for row in cur.fetchall():
         pass_identity = (
-            row.get("qc_article_number") is not None
-            and str(row.get("qc_article_number")) == str(row.get("article_number"))
+            row.get("expected_main_article_number") is not None
+            and row.get("qc_main_article_number") is not None
+            and str(row.get("qc_main_article_number"))
+                == str(row.get("expected_main_article_number"))
         )
         pass_selling_uom = (
             row.get("selling_uom_code") is None
@@ -467,13 +492,15 @@ def audit_product_identity(cur) -> dict[str, Any]:
         )
         item = {
             "ean_upc": str(row["ean_upc"]),
-            "article_number": row.get("article_number"),
+            "source_article_number": row.get("article_number"),
+            "expected_main_article_number": row.get("expected_main_article_number"),
             "expected_selling_uom": row.get("selling_uom_code"),
             "expected_base_uom": row.get("base_uom_code"),
             "expected_factor": str(row.get("base_qty_per_selling_unit"))
             if row.get("base_qty_per_selling_unit") is not None
             else None,
             "qc_article_number": row.get("qc_article_number"),
+            "qc_main_article_number": row.get("qc_main_article_number"),
             "qc_selling_uom": row.get("qc_selling_uom"),
             "qc_base_uom": row.get("qc_base_uom"),
             "qc_factor": str(row.get("qc_factor")) if row.get("qc_factor") is not None else None,
@@ -489,6 +516,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
         "summary": {
             "blocking_count": len(blockers),
             "warning_count": len(warnings),
+            "serving_hold_count": len(serving_holds),
             "duplicate_canonical_active_upc_count": len(duplicate_canonical_active_upc),
             "multi_article_upc_count": len(multi_article_upc),
             "retirement_regression_count": len(retirement_regressions),
@@ -504,6 +532,7 @@ def audit_product_identity(cur) -> dict[str, Any]:
         "pos_28_valid_data_days": pos_dates,
         "blockers": blockers,
         "warnings": warnings,
+        "serving_holds": serving_holds,
         "duplicate_canonical_active_upc": duplicate_canonical_active_upc,
         "multi_article_upc": multi_article_upc,
         "retirement_checks": retirement_checks,
