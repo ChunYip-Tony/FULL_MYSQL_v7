@@ -12,7 +12,7 @@ from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_
 from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh
 
-VERSION='7.0.29-single-service'
+VERSION='7.0.30-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -237,6 +237,7 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'quick_check_reason_counts':reason_counts,
             'quick_check_scope':qc_scope,
             'current_active_cost_repair':p3_detail.get('current_active_cost_repair'),
+            'product_identity_guard':p3_detail.get('product_identity_guard'),
             'sold_upc_unmapped':sold_unmapped,
             'temporarily_waived_sold_upc_unmapped':temporarily_waived_sold_unmapped,
             'historical_sold_upc_unmapped':historical_unmapped,

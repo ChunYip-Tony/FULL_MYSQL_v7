@@ -18,6 +18,7 @@ from cross_tab_signature_repair import repair_cross_tab_signature
 from temporary_qa_waivers import apply_temporary_identity_waivers
 from active_28d_uom_repair import repair_active_28d_uom
 from current_active_cost_repair import repair_current_active_cost
+from product_identity_audit import audit_product_identity
 
 PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
@@ -555,12 +556,26 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
 
 
 
+PRODUCT_IDENTITY_GUARD_ISSUE_CODES = (
+    'DUPLICATE_CANONICAL_ACTIVE_UPC',
+    'UPC_MULTI_AUTHORITATIVE_IDENTITY',
+    'RETIRED_UPC_RESURRECTED',
+    'UPC_CURRENT_UOM_CONFLICT',
+    'ACTIVE_UPC_WITHOUT_AUTHORITATIVE_IDENTITY',
+    'SERVING_IDENTITY_NOT_AUTHORITATIVE',
+    'MANUAL_UPC_OVERRIDE_NOT_ENFORCED',
+    'DUPLICATE_UPCA_SHORT_LONG_CURRENT',
+    'UPCA_SHORT_LONG_CURRENT_IDENTITY_CONFLICT',
+    'PRODUCT_IDENTITY_GUARD_BLOCKER',
+)
+
 RECOMPUTED_PHASE3_ISSUE_CODES = (
     'SALES_PERIOD_UNRESOLVED',
     'SOLD_UPC_UNMAPPED',
     'HISTORICAL_SOLD_UPC_UNMAPPED',
     'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED',
     'QUICK_CHECK_CORE_FIELD_MISSING',
+    *PRODUCT_IDENTITY_GUARD_ISSUE_CODES,
 )
 
 def retire_recomputed_phase3_issues(cur, batch_id: int) -> int:
@@ -571,7 +586,7 @@ def retire_recomputed_phase3_issues(cur, batch_id: int) -> int:
                 detail_json=JSON_SET(
                     COALESCE(detail_json,JSON_OBJECT()),
                     '$.resolution',
-                    'Superseded by Phase 3 re-evaluation under v7.0.5'
+                    'Superseded by Phase 3 re-evaluation'
                 )
             WHERE batch_id=%s
               AND issue_status='OPEN'
@@ -579,6 +594,50 @@ def retire_recomputed_phase3_issues(cur, batch_id: int) -> int:
         (batch_id, *RECOMPUTED_PHASE3_ISSUE_CODES),
     )
     return int(cur.rowcount)
+
+def _record_product_identity_guard_issues(
+    cur,
+    batch_id: int,
+    identity_audit: dict[str, Any],
+) -> int:
+    """Persist only GLOBAL identity blockers from the read-only audit."""
+    evaluated = 0
+    for blocker in identity_audit.get('blockers', []):
+        code = str(blocker.get('code') or 'PRODUCT_IDENTITY_GUARD_BLOCKER')
+        issue_code = (
+            code if code in PRODUCT_IDENTITY_GUARD_ISSUE_CODES
+            else 'PRODUCT_IDENTITY_GUARD_BLOCKER'
+        )
+
+        if blocker.get('ean_upc') is not None:
+            entity_type = 'UPC'
+            entity_key = str(blocker.get('ean_upc'))
+        elif blocker.get('short_upc') is not None or blocker.get('valid_upca') is not None:
+            entity_type = 'UPC_PAIR'
+            entity_key = f"{blocker.get('short_upc') or ''}|{blocker.get('valid_upca') or ''}"
+        elif blocker.get('canonical_key') is not None:
+            entity_type = 'UPC_CANONICAL'
+            entity_key = str(blocker.get('canonical_key'))
+        else:
+            entity_type = 'PRODUCT_IDENTITY'
+            entity_key = code
+
+        _issue(
+            cur,
+            batch_id,
+            issue_code,
+            entity_type,
+            entity_key,
+            f'Phase 3 product-identity publish guard blocked: {code}',
+            'CRITICAL',
+            detail={
+                'guard': 'PRODUCT_IDENTITY_FAIL_CLOSED_V730',
+                'original_blocker_code': code,
+                'blocker': blocker,
+            },
+        )
+        evaluated += 1
+    return evaluated
 
 def relink_history(cur) -> None:
     # Late-arriving identity evidence must repair prior history links without rewriting RAW.
@@ -1264,7 +1323,46 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             override_result = apply_manual_upc_overrides(cur)
             retirement_result = apply_manual_upc_retirements(cur)
 
-            qc = rebuild_quick_check(cur, batch_id)
+            # v7.0.30 fail-closed product-identity publish guard.
+            # Candidate serving rows are built under a SAVEPOINT. A GLOBAL
+            # identity blocker rolls back only that candidate snapshot so the
+            # previously published Quick Check remains intact.
+            cur.execute('SAVEPOINT before_quick_check_publish')
+            qc_attempt = rebuild_quick_check(cur, batch_id)
+            identity_audit = audit_product_identity(cur)
+            identity_guard_pass = bool(identity_audit.get('pass'))
+            identity_guard_blockers = list(identity_audit.get('blockers') or [])
+            serving_preserved = False
+
+            if identity_guard_pass:
+                cur.execute('RELEASE SAVEPOINT before_quick_check_publish')
+                qc = qc_attempt
+            else:
+                cur.execute('ROLLBACK TO SAVEPOINT before_quick_check_publish')
+                cur.execute('RELEASE SAVEPOINT before_quick_check_publish')
+                serving_preserved = True
+                _record_product_identity_guard_issues(cur, batch_id, identity_audit)
+                qc = {
+                    'rows': 0,
+                    'ready': 0,
+                    'hold': 0,
+                    'serving_rows_total': 0,
+                    'historical_rows': 0,
+                    'publish_blocked': True,
+                    'previous_serving_preserved': True,
+                }
+
+            product_identity_guard = {
+                'pass': identity_guard_pass,
+                'policy': 'FAIL_CLOSED_PRESERVE_PREVIOUS_SERVING',
+                'blocking_count': len(identity_guard_blockers),
+                'summary': identity_audit.get('summary'),
+                'blockers': identity_guard_blockers,
+                'warning_count': len(identity_audit.get('warnings') or []),
+                'serving_hold_count': len(identity_audit.get('serving_holds') or []),
+                'previous_serving_preserved': serving_preserved,
+                'candidate_quick_check': qc_attempt,
+            }
 
             # Batch blockers and serving-row QA are different scopes.
             # QUICK_CHECK_CORE_FIELD_MISSING affects only the individual serving UPC:
@@ -1280,7 +1378,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             )
             blocking = int(cur.fetchone()['c'])
 
-            if blocking > 0 or qc['rows'] == 0:
+            if (not identity_guard_pass) or blocking > 0 or qc['rows'] == 0:
                 status = 'PHASE3_QA_HOLD'
             elif qc['hold'] > 0:
                 status = 'QUICK_CHECK_READY_WITH_HOLDS'
@@ -1303,7 +1401,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                   'cross_tab_signature_repair': cross_tab_signature_repair,
                   'temporary_qa_waivers': temporary_qa_waivers,
                   'active_28d_uom_repair': active_28d_uom_repair,
-                  'current_active_cost_repair': current_active_cost_repair}, default=str)),
+                  'current_active_cost_repair': current_active_cost_repair,
+                  'product_identity_guard': product_identity_guard}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -1311,7 +1410,11 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                    WHERE pipeline_run_id=%s""",
                 ('COMPLETED' if status in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'} else 'FAILED_QA',
                  sum(counts.values()) + qc['rows'], blocking,
-                 json.dumps({'counts': counts, 'quick_check': qc}, default=str), run_id),
+                 json.dumps({
+                     'counts': counts,
+                     'quick_check': qc,
+                     'product_identity_guard': product_identity_guard,
+                 }, default=str), run_id),
             )
             conn.commit()
             return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
@@ -1321,6 +1424,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     'temporary_qa_waivers': temporary_qa_waivers,
                     'active_28d_uom_repair': active_28d_uom_repair,
                     'current_active_cost_repair': current_active_cost_repair,
+                    'product_identity_guard': product_identity_guard,
+                    'quick_check_attempt': qc_attempt,
                     'blocking_issues': blocking}
         except Exception:
             conn.rollback()

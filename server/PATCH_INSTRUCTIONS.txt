@@ -1,17 +1,32 @@
-FULL MYSQL v7.0.29 GitHub Patch
+FULL MYSQL v7.0.30 GitHub Patch
 
 Purpose:
-- Work-PC no longer needs direct TCP/MySQL access for manual-authority refresh.
-- Add authenticated HTTPS POST /v1/maintenance/manual-authority-refresh.
-- Endpoint is deterministic and idempotent: callers cannot submit arbitrary UPC/article/UOM values.
-- Server applies only confirmed authority encoded in manual_overrides.py.
-- Refuses to run while POST_RAW_PIPELINE is actively processing.
-- Rolls back if any manual override or retirement fails post-refresh verification.
-- Does not rebuild Quick Check.
-- No schema migration.
+- Promote the validated product-identity audit into the Phase 3 publish path.
+- Fail closed before accepting a candidate Quick Check snapshot.
+
+Guard flow:
+1) Run normal Phase 3 history, repair, and final user-authority lock.
+2) Create SAVEPOINT before_quick_check_publish.
+3) Rebuild candidate quick_check_current.
+4) Run audit_product_identity against that candidate.
+5) If audit has zero GLOBAL blockers:
+   - release SAVEPOINT
+   - publish normally (READY or READY_WITH_HOLDS).
+6) If audit has any GLOBAL blocker:
+   - rollback to SAVEPOINT
+   - preserve prior Quick Check serving snapshot
+   - persist CRITICAL identity guard issues in qa_phase3_issue
+   - set batch PHASE3_QA_HOLD.
+
+Non-global conditions:
+- CURRENT_ACTIVE_SELLING_UOM_MISSING stays per-UPC QA_HOLD.
+- current/historical UPC-A pairs stay warnings.
+- historical/historical UPC-A pairs stay warnings.
+
+No schema migration.
+No direct Work-PC MySQL TCP dependency.
 
 After deploy:
-1) Verify /healthz = 7.0.29-single-service.
-2) From Work-PC call the maintenance endpoint through HTTPS 443.
-3) Re-run /v1/diagnostics/product-identity-audit.
-4) Do not open MySQL TCP 25060 on the Work-PC for routine operations.
+- Verify /healthz = 7.0.30-single-service.
+- Re-run the read-only identity audit; current production baseline should remain blocking_count=0.
+- Do not force a production Phase 3 rerun merely to test the guard. Let the next normal upload exercise it.

@@ -1,7 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.29 Single-Service Edition
-API-only maintenance bridge for Work-PC environments without direct MySQL TCP access.
-Adds authenticated POST /v1/maintenance/manual-authority-refresh.
-The endpoint accepts no arbitrary identity values; it only reapplies pre-defined user-confirmed
-authority from manual_overrides.py, verifies post-state, and rolls back on verification failure.
-Routine Work-PC operations remain HTTPS 443 only.
+Version: 7.0.30 Single-Service Edition
+Phase 3 fail-closed product-identity publish guard.
+
+Behavior:
+- Build candidate Quick Check snapshot under a MySQL SAVEPOINT.
+- Run the production product-identity audit before publish is accepted.
+- GLOBAL identity blockers force PHASE3_QA_HOLD.
+- On a global identity blocker, roll back the candidate Quick Check rebuild and preserve
+  the previously published serving snapshot.
+- Persist guard blockers into qa_phase3_issue as CRITICAL issues for normal QA visibility.
+- Per-UPC Quick Check QA_HOLD rows and audit warnings remain non-global and do not block
+  otherwise valid publication.
+- Work-PC remains HTTPS 443 only; direct MySQL TCP is not required.
