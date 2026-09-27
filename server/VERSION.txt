@@ -1,44 +1,30 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.42 Single-Service Edition
-Authoritative source-level company cost semantics.
+Version: 7.0.43 Single-Service Edition
+Adds four exact user-confirmed Cost-UOM -> POS-Selling-UOM conversions.
 
-User-confirmed source rules:
-1) Frozen Inventory report
-   - Unit Cost varies by item.
-   - Cost UOM is the row's BUN value from the BUN column (column I in the current layout).
-   - BUN is authoritative for the Unit Cost UOM.
-2) Live/Fresh Suggestion report
-   - Unit Cost is always per LB.
-   - LB is a source-level authoritative rule.
-3) TX SEAFOOD ABC PRICE
-   - retired from CURRENT authority.
-   - no future upload is expected.
-   - historical RAW/provenance is preserved.
-   - its historical cost and suggested-price rows do not drive current serving.
-4) Official report cost belongs to the receiving Main/Family Article.
-   - related selling UPCs / sub-articles in the Family share that Family cost.
-   - derived official cost observations are anchored to the Family Main Article.
-5) Pack text such as 20/1LB, 10/2LB, 12/3LB remains reference-only.
-   - it is not automatic conversion authority.
-6) Cost priority remains:
-   101/107/109 receipt valuation
-   > authoritative official report cost
-   > explicit OH fallback.
-7) If no receipt history and no authoritative report cost exist, the system
-   classifies the item as NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST so
-   it can be surfaced for user cost confirmation rather than guessed.
+New confirmations:
+- 4843: 1 EA = 2 LB
+- 82995307020: 1 EA = 4.4 LB
+- 81223402832: 1 PACK = 1 LB
+- 4029550743: 1 EA = 1 LB
 
-Implementation:
-- future Frozen ingest reads Cost UOM from exact BUN header only
-- future Live/Fresh ingest assigns Cost UOM=LB by source rule
-- historical company_price_observation rows are repaired from immutable RAW
-- TX-derived official cost rows are superseded for current authority
-- Frozen/Live-Fresh official costs are re-anchored to the Family Main Article
-- current company-price serving excludes TX Seafood ABC rows
-- Phase 3 re-applies these semantics on every rebuild
-- safe-cost-refresh performs the same repair before classifying safe targets
+These are added to the existing exact per-UPC conversion authority.
+Total confirmed conversion registry seeds: 12 UPCs.
+
+Expected current cost-per-selling calculations from the v7.0.42 authoritative
+Frozen report costs:
+- 4843: 9.25/LB * 2 LB/EA = 18.50/EA
+- 82995307020: 2.556818/LB * 4.4 LB/EA = 11.2499992/EA
+- 81223402832: 7.00/LB * 1 LB/PACK = 7.00/PACK
+- 4029550743: 5.666667/LB * 1 LB/EA = 5.666667/EA
+
+Safety:
+- no Base/Inventory UOM mutation
+- no base_qty_per_selling_unit mutation
+- no description-derived conversion
+- exact UPC only
+- existing atomic confirmed-cost-conversion refresh verifies all 12 targets
+- rollback on any target mismatch
 
 No RAW mutation.
-No description/pack-text conversion inference.
-No change to receipt authority.
-No change to explicit OH fallback authority.
+No schema change.
