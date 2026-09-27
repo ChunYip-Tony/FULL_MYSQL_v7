@@ -447,6 +447,19 @@ def _sheet_header_map(cur, raw_table: str, sheet_id: int, header_row: int | None
     return {_norm_header(v): k for k, v in p.items() if _norm_header(v)}
 
 
+def _pick_exact(hmap: dict[str, str], aliases: Iterable[str]) -> str | None:
+    """Strict header match for semantically dangerous fields such as Cost UOM.
+
+    Do not fall back to substring matching here. In particular, the generic
+    token "Unit" must never match a numeric "Unit Cost" column.
+    """
+    for alias in aliases:
+        key = _norm_header(alias)
+        if key in hmap:
+            return hmap[key]
+    return None
+
+
 def _pick(hmap: dict[str, str], aliases: Iterable[str]) -> str | None:
     norm_alias = [_norm_header(a) for a in aliases]
     for a in norm_alias:
@@ -509,7 +522,18 @@ def _process_company(cur, batch_id: int, f: dict[str, Any], raw_table: str) -> i
         c_b = _pick(hmap, ['Price B', 'Suggested Price B', 'B Price'])
         c_c = _pick(hmap, ['Price C', 'Suggested Price C', 'C Price'])
         c_cost = _pick(hmap, ['Cost', 'Official Cost', 'Unit Cost'])
-        c_uom = _pick(hmap, ['Cost UOM', 'UOM', 'Unit'])
+        c_uom = _pick_exact(
+            hmap,
+            [
+                'Cost UOM',
+                'Cost Unit',
+                'Cost Unit of Measure',
+                'Cost Base UOM',
+                'UOM',
+                'UM',
+                'Unit of Measure',
+            ],
+        )
         if not any([c_a, c_b, c_c, c_cost]):
             continue
         cur.execute(f'SELECT raw_id,source_row_number,raw_payload FROM {raw_table} WHERE sheet_id=%s AND source_row_number>%s ORDER BY source_row_number',
