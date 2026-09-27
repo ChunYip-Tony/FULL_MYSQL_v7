@@ -34,3 +34,11 @@ def confirmed_uom_refresh():
         {'confirm':'APPLY_CONFIRMED_UOM_AND_REBUILD'},
         timeout=180,
     )
+
+
+def safe_cost_refresh():
+    return post_json(
+        '/v1/maintenance/safe-cost-refresh',
+        {'confirm':'APPLY_SAFE_COST_REPAIR_AND_REBUILD'},
+        timeout=240,
+    )
