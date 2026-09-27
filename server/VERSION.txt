@@ -1,4 +1,4 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.5 Single-Service Edition
-Central identity/UOM backfill + Phase 3 stale-QA re-evaluation
-Persistent user-confirmed UPC override registry included
+Version: 7.0.26 Single-Service Edition
+Read-only product identity audit endpoint for canonical UPC, authoritative article/family identity,
+confirmed retirement regressions, Selling-UOM conflicts, serving identity parity, and manual override parity.
