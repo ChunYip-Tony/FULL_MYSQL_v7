@@ -9,7 +9,7 @@ from config import get_settings
 from db import db_conn, test_database
 from data_coverage import required_daily_coverage
 from ingest import recent_batches
-from v7_ingest import begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
+from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair
 from uom_evidence_diagnostic import diagnose_uom_lineage
@@ -19,7 +19,7 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.71-single-service'
+VERSION='7.0.72-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
