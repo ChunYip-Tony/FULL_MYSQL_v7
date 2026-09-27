@@ -18,6 +18,19 @@ def _table_exists(cur, table_name: str) -> bool:
     return bool(cur.fetchone())
 
 
+def _column_exists(cur, table_name: str, column_name: str) -> bool:
+    cur.execute(
+        """SELECT 1
+           FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA=DATABASE()
+             AND TABLE_NAME=%s
+             AND COLUMN_NAME=%s
+           LIMIT 1""",
+        (table_name, column_name),
+    )
+    return bool(cur.fetchone())
+
+
 def ensure_true_stock_tables(cur) -> None:
     if not _table_exists(cur, "manual_true_stock"):
         cur.execute(
@@ -77,6 +90,28 @@ def ensure_true_stock_tables(cur) -> None:
                 KEY ix_dumping_source_true_stock (source_true_stock_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """
+        )
+
+    # v7.0.56: preserve cancellation audit without deleting historical counts.
+    # DDL is intentionally performed by ensure_true_stock_tables before the
+    # business transaction begins.
+    if not _column_exists(cur, "manual_true_stock", "cancelled_at"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN cancelled_at DATETIME(6) NULL
+               AFTER superseded_by_oh_file_id"""
+        )
+    if not _column_exists(cur, "manual_true_stock", "cancelled_by"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN cancelled_by VARCHAR(128) NULL
+               AFTER cancelled_at"""
+        )
+    if not _column_exists(cur, "manual_true_stock", "cancel_reason"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN cancel_reason VARCHAR(255) NULL
+               AFTER cancelled_by"""
         )
 
 
@@ -410,6 +445,38 @@ def _active_true_stock(cur, system_oh: dict[str, Any] | None) -> dict[str, Any] 
     return cur.fetchone()
 
 
+def _true_stock_history(
+    cur,
+    system_oh: dict[str, Any] | None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    if not system_oh or not _table_exists(cur, "manual_true_stock"):
+        return []
+
+    scope = str(system_oh.get("scope_type") or "").upper()
+    if scope == "UPC" and system_oh.get("upc_id") is not None:
+        where = "scope_type='UPC' AND upc_id=%s"
+        args = (int(system_oh["upc_id"]),)
+    elif scope == "ARTICLE" and system_oh.get("article_id") is not None:
+        where = "scope_type='ARTICLE' AND article_id=%s"
+        args = (int(system_oh["article_id"]),)
+    elif scope == "FAMILY" and system_oh.get("family_id") is not None:
+        where = "scope_type='FAMILY' AND family_id=%s"
+        args = (int(system_oh["family_id"]),)
+    else:
+        return []
+
+    cur.execute(
+        f"""SELECT *
+            FROM manual_true_stock
+            WHERE {where}
+            ORDER BY true_stock_id DESC
+            LIMIT %s""",
+        (*args, max(1, min(int(limit or 10), 50))),
+    )
+    return cur.fetchall()
+
+
 def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
@@ -422,6 +489,7 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         family_id = int(row["family_id"])
         system_oh = _system_oh_context(cur, row)
         true_stock = _active_true_stock(cur, system_oh)
+        true_stock_history = _true_stock_history(cur, system_oh)
 
         cur.execute(
             """SELECT ean_upc,article_number,selling_description,selling_uom,
@@ -481,6 +549,7 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
                 "cross_uom_submission_allowed": False,
             },
             "active_true_stock": true_stock,
+            "true_stock_history": true_stock_history,
             "effective_oh": effective_oh,
             "latest_on_hand_file_id": latest_oh_file_id,
             "related_upcs": related,
@@ -699,6 +768,99 @@ def submit_true_stock(
                 "anchor_on_hand_file_id": latest_oh_file_id,
                 "dumping_queue_action": queue_action,
                 "effective_oh_source": "TRUE_STOCK",
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
+def cancel_true_stock(
+    upc: str,
+    device: str,
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Cancel the active True Stock override and revert Effective OH to System OH.
+
+    The historical True Stock row is preserved for audit. Any PENDING dumping
+    discrepancy sourced from that exact True Stock row is cancelled as part of
+    the same transaction.
+    """
+    cancel_reason = str(reason or "USER_REVERT_TO_SYSTEM_OH").strip()[:255]
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            ensure_true_stock_tables(cur)
+            conn.commit()
+            conn.start_transaction()
+
+            row = _lookup_qc_row(cur, upc)
+            if not row:
+                raise KeyError("QUICK_CHECK_UPC_NOT_FOUND")
+            if row.get("family_id") is None:
+                raise ValueError("FAMILY_ID_NOT_AVAILABLE")
+            if row.get("current_oh") is None or not row.get("current_oh_uom"):
+                raise ValueError("SYSTEM_OH_NOT_AVAILABLE")
+
+            # If a newer OH upload already exists, this expires stale active
+            # overrides before cancellation lookup.
+            latest_oh_file_id = _refresh_expired_true_stock(cur)
+            system_oh = _system_oh_context(cur, row)
+            if not system_oh:
+                raise ValueError("SYSTEM_OH_LINEAGE_NOT_AVAILABLE")
+
+            active = _active_true_stock(cur, system_oh)
+            if not active:
+                raise ValueError("NO_ACTIVE_TRUE_STOCK")
+
+            true_stock_id = int(active["true_stock_id"])
+            cur.execute(
+                """UPDATE manual_true_stock
+                   SET override_status='CANCELLED_BY_USER',
+                       superseded_at=COALESCE(superseded_at,CURRENT_TIMESTAMP(6)),
+                       cancelled_at=CURRENT_TIMESTAMP(6),
+                       cancelled_by=%s,
+                       cancel_reason=%s
+                   WHERE true_stock_id=%s
+                     AND override_status='ACTIVE'""",
+                (device, cancel_reason, true_stock_id),
+            )
+            cancelled = int(cur.rowcount or 0)
+            if cancelled != 1:
+                raise RuntimeError("TRUE_STOCK_CANCEL_RACE")
+
+            dumping_cancelled = 0
+            if _table_exists(cur, "dumping_discrepancy_queue"):
+                cur.execute(
+                    """UPDATE dumping_discrepancy_queue
+                       SET queue_status='CANCELLED',
+                           resolved_at=CURRENT_TIMESTAMP(6)
+                       WHERE source_true_stock_id=%s
+                         AND queue_status='PENDING'""",
+                    (true_stock_id,),
+                )
+                dumping_cancelled = int(cur.rowcount or 0)
+
+            conn.commit()
+            return {
+                "status": "COMMITTED",
+                "action": "TRUE_STOCK_CANCELLED",
+                "true_stock_id": true_stock_id,
+                "family_id": int(row["family_id"]),
+                "main_article_number": row.get("main_article_number"),
+                "scope_type": system_oh.get("scope_type"),
+                "article_id": system_oh.get("article_id"),
+                "article_number": system_oh.get("article_number"),
+                "ean_upc": row.get("ean_upc"),
+                "cancelled_by": device,
+                "cancel_reason": cancel_reason,
+                "dumping_rows_cancelled": dumping_cancelled,
+                "effective_oh_source": "SYSTEM_OH",
+                "system_oh": row.get("current_oh"),
+                "system_oh_uom": row.get("current_oh_uom"),
+                "latest_on_hand_file_id": latest_oh_file_id,
             }
         except Exception:
             conn.rollback()
