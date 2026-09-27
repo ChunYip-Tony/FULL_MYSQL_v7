@@ -1,58 +1,61 @@
-FULL MYSQL v7.0.39 GitHub Patch
+FULL MYSQL v7.0.40 GitHub Patch
 
 Purpose:
-- Stop treating merely non-null official Cost UOM text as automatically repairable.
-- Make GET /v1/diagnostics/cost-holds use the same gates as official-cost repair.
+- Correct the company-report Cost-UOM parser bug proven by v7.0.39 diagnostics.
+- Clean historical derived Cost-UOM observations without touching RAW data.
+- Then safely resolve only the truly executable cost subset.
 
-Why:
-- v7.0.38 safe-cost-refresh rolled back because the same 53 official-cost targets
-  remained CURRENT_COST_MISSING.
-- This proves the diagnostic SAFE classification was still broader than the
-  actual executable repair path.
-- The rollback guard worked and preserved the original serving snapshot.
+Confirmed production evidence:
+- OFFICIAL_COST_UOM_UNSUPPORTED = 53 current holds
+- official_unsupported_uom_family_count = 66
+- official_repairable_family_count = 0
+- "UOM tokens" were numeric monetary values, proving "Unit" had matched
+  the "Unit Cost" header rather than a true UOM field.
 
-Read-only diagnostic changes:
-For official report cost evidence, a row is SAFE only when:
-1) positive official_cost exists
-2) source row can resolve to the target Family through:
-   - existing family_id
-   - confirmed article_id -> Family
-   - source article_number -> Family
-   - existing upc_id -> confirmed Article -> Family
-3) cost_uom_code resolves to dim_uom
-4) an Article anchor is available for article_cost_observation
+Parser fix:
+- Cost UOM now uses exact header matching only.
+- Accepted exact aliases:
+  Cost UOM
+  Cost Unit
+  Cost Unit of Measure
+  Cost Base UOM
+  UOM
+  UM
+  Unit of Measure
+- Exact "Unit" is not accepted because it is ambiguous.
+- Substring matching is never used for company Cost UOM.
 
-New classifications:
-- OFFICIAL_COST_UOM_UNSUPPORTED
-- OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED
+Historical derived cleanup:
+POST /v1/maintenance/safe-cost-refresh now, inside one transaction:
+1) re-read RAW headers/rows for all company cost-report sources
+2) re-derive company_price_observation.cost_uom_code strictly
+3) set cost_uom_code NULL when the RAW sheet has no explicit Cost-UOM column
+4) supersede existing official derived costs whose corrected UOM is missing/unsupported
+5) synchronize/reactivate official derived costs when strict explicit UOM is supported
+6) rerun GET-equivalent cost-hold classification inside the transaction
+7) apply existing evidence-backed current cost repair
+8) rebuild Quick Check
+9) verify only the post-cleanup safe targets
+10) rerun product-identity and hold-regression guards
+11) commit only if all checks pass
 
-New evidence fields:
-- positive_with_supported_uom_rows
-- positive_with_unsupported_uom_rows
-- positive_missing_uom_rows
-- repairable_official_rows
-- source_cost_uom_tokens
-- recent_rows[].canonical_cost_uom
-- recent_rows[].cost_uom_supported
-- recent_rows[].family_match_route
-- recent_rows[].projected_anchor_article_id
-- recent_rows[].repairable_by_current_rule
-
-Summary additions:
-- official_repairable_family_count
-- official_unsupported_uom_family_count
-- official_cost_uom_token_counts
+Expected behavior:
+- the false 53 SAFE official candidates should no longer be targeted simply because
+  a numeric Unit Cost value was stored as cost_uom_code
+- if those source reports truly have no explicit Cost-UOM field, they should become
+  OFFICIAL_COST_WITHOUT_EXPLICIT_UOM
+- the 17 DIRECT_COST_UOM_EQUALS_SELLING_UOM candidates remain eligible if their
+  existing authoritative cost evidence is valid
 
 After deploy:
-1) Verify /healthz = 7.0.39-single-service.
-2) Run GET /v1/diagnostics/cost-holds.
-3) Review summary.classification_counts.
-4) Review summary.official_cost_uom_token_counts.
-5) Do NOT run POST /v1/maintenance/safe-cost-refresh yet.
-6) Use the new evidence to decide whether source UOM aliases need explicit mapping
-   or whether identity-anchor repair remains.
+1) Verify /healthz = 7.0.40-single-service.
+2) Re-run POST /v1/maintenance/safe-cost-refresh.
+3) Inspect company_cost_uom_repair.
+4) Confirm target verification has no failures.
+5) Compare before_cost_summary vs after_cost_summary.
+6) Re-run GET /v1/diagnostics/cost-holds.
 
-No schema migration.
-No data mutation.
-No Base/Inventory UOM inference.
+No RAW mutation.
+No manual cost value.
+No inferred Cost UOM.
 No cross-UOM conversion inference.
