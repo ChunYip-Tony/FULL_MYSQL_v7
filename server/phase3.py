@@ -1229,6 +1229,90 @@ def _upc_match_sql(column: str, ean: str) -> tuple[str, tuple[Any, ...]]:
     )
 
 
+def _sales_daily_aggregates(
+    cur,
+    data_days: list[dict[str, Any]],
+    *,
+    upc_id: int | None = None,
+    ean: str | None = None,
+) -> dict[date, dict[str, Decimal]]:
+    """Return canonical daily POS totals from direct + derived daily sources."""
+    if not data_days or (upc_id is None and not ean):
+        return {}
+
+    out: dict[date, dict[str, Decimal]] = {}
+
+    direct_days = [
+        d for d in data_days
+        if d.get('coverage_kind') != 'DERIVED_PERIOD_RESIDUAL'
+    ]
+    if direct_days:
+        clauses: list[str] = []
+        args: list[Any] = []
+        for d in direct_days:
+            clauses.append(
+                '(file_id=%s AND period_start_date=%s AND period_end_date=%s)'
+            )
+            args.extend([int(d['file_id']), d['date'], d['date']])
+        if upc_id is not None:
+            pred = 'upc_id=%s'
+            pred_args: tuple[Any, ...] = (int(upc_id),)
+        else:
+            pred, pred_args = _upc_match_sql('ean_upc', str(ean))
+        cur.execute(
+            f"""SELECT period_end_date AS business_date,
+                       COALESCE(SUM(sales_amount),0) AS sales_amount,
+                       COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND ({' OR '.join(clauses)})
+                  AND {pred}
+                GROUP BY period_end_date""",
+            tuple(args) + tuple(pred_args),
+        )
+        for r in cur.fetchall():
+            d = r['business_date']
+            out[d] = {
+                'sales': Decimal(str(r.get('sales_amount') or 0)),
+                'qty': Decimal(str(r.get('sold_quantity') or 0)),
+            }
+
+    derived_days = [
+        d for d in data_days
+        if d.get('coverage_kind') == 'DERIVED_PERIOD_RESIDUAL'
+    ]
+    if derived_days:
+        clauses = []
+        args = []
+        for d in derived_days:
+            clauses.append('(source_file_id=%s AND business_date=%s)')
+            args.extend([int(d['file_id']), d['date']])
+        if upc_id is not None:
+            pred = 'upc_id=%s'
+            pred_args = (int(upc_id),)
+        else:
+            pred, pred_args = _upc_match_sql('ean_upc', str(ean))
+        cur.execute(
+            f"""SELECT business_date,
+                       COALESCE(SUM(sales_amount),0) AS sales_amount,
+                       COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                FROM pos_daily_backfill_observation
+                WHERE ({' OR '.join(clauses)})
+                  AND {pred}
+                GROUP BY business_date""",
+            tuple(args) + tuple(pred_args),
+        )
+        for r in cur.fetchall():
+            d = r['business_date']
+            prev = out.get(d, {'sales': Decimal('0'), 'qty': Decimal('0')})
+            out[d] = {
+                'sales': prev['sales'] + Decimal(str(r.get('sales_amount') or 0)),
+                'qty': prev['qty'] + Decimal(str(r.get('sold_quantity') or 0)),
+            }
+
+    return out
+
+
 def _active_selling_evidence_for_unmapped(cur, ean: str, batch_id: int) -> dict[str, Any]:
     """Current activity scope for an unmapped historical UPC.
 
@@ -1244,26 +1328,12 @@ def _active_selling_evidence_for_unmapped(cur, ean: str, batch_id: int) -> dict[
         cur, 'sales_by_price_type', limit=28,
         include_batch_id=batch_id, up_to=completed_through
     )
-    file_ids = [int(x['file_id']) for x in pos_days]
-
-    recent_qty = Decimal('0')
-    recent_latest = None
-    if file_ids:
-        placeholders = ','.join(['%s'] * len(file_ids))
-        pred, pred_params = _upc_match_sql('ean_upc', ean)
-        cur.execute(
-            f"""SELECT COALESCE(SUM(sold_quantity),0) AS q,
-                       MAX(period_end_date) AS latest_date
-                FROM sales_period_observation
-                WHERE temporal_grain='SINGLE_DATE'
-                  AND file_id IN ({placeholders})
-                  AND {pred}""",
-            (*file_ids, *pred_params),
-        )
-        row = cur.fetchone()
-        if row:
-            recent_qty = Decimal(str(row['q'] or 0))
-            recent_latest = row['latest_date']
+    daily = _sales_daily_aggregates(cur, pos_days, ean=ean)
+    recent_qty = sum(
+        (x['qty'] for x in daily.values()),
+        Decimal('0'),
+    )
+    recent_latest = max(daily) if daily else None
 
     if recent_qty > 0:
         scope = 'ACTIVE_SELLING'
@@ -1481,26 +1551,21 @@ def _current_price(cur, upc_id: int) -> dict[str, Any] | None:
 
 
 def _sales_metrics(cur, upc_id: int, data_days: list[dict[str, Any]]) -> dict[str, Any]:
-    """Metrics across the latest valid POS data days, not calendar days.
+    """Metrics across canonical POS data days.
 
-    A UPC with no row on a valid POS day is a verified zero sale for that day.
-    A calendar day without a valid POS file is absent from the denominator entirely.
+    Direct single-day files and one-missing-day residual backfills are valid
+    daily evidence. Multi-gap DATE_RANGE reports remain period-level only and
+    are deliberately excluded from daily velocity/GP metrics.
     """
     if not data_days:
         return {'sales': Decimal('0'), 'qty': Decimal('0'), 'days': 0, 'start': None, 'end': None}
-    file_ids = [int(x['file_id']) for x in data_days]
-    placeholders = ','.join(['%s'] * len(file_ids))
-    cur.execute(
-        f"""SELECT COALESCE(SUM(sales_amount),0) AS s,COALESCE(SUM(sold_quantity),0) AS q
-            FROM sales_period_observation
-            WHERE upc_id=%s AND temporal_grain='SINGLE_DATE' AND file_id IN ({placeholders})""",
-        tuple([upc_id] + file_ids),
-    )
-    r = cur.fetchone()
+    daily = _sales_daily_aggregates(cur, data_days, upc_id=upc_id)
+    sales = sum((x['sales'] for x in daily.values()), Decimal('0'))
+    qty = sum((x['qty'] for x in daily.values()), Decimal('0'))
     dates = [x['date'] for x in data_days]
     return {
-        'sales': r['s'] or Decimal('0'),
-        'qty': r['q'] or Decimal('0'),
+        'sales': sales,
+        'qty': qty,
         'days': len(data_days),
         'start': min(dates),
         'end': max(dates),
@@ -1601,16 +1666,12 @@ def _historical_sweet_spot(cur, upc_id: int, family_id: int, factor: Decimal | N
                            data_days: list[dict[str, Any]]) -> Decimal | None:
     if factor is None or not data_days:
         return None
-    file_ids = [int(x['file_id']) for x in data_days]
-    placeholders = ','.join(['%s'] * len(file_ids))
-    cur.execute(
-        f"""SELECT period_end_date,SUM(sales_amount) s,SUM(sold_quantity) q
-            FROM sales_period_observation
-            WHERE upc_id=%s AND temporal_grain='SINGLE_DATE' AND file_id IN ({placeholders})
-            GROUP BY period_end_date HAVING SUM(sold_quantity)<>0 ORDER BY period_end_date""",
-        tuple([upc_id] + file_ids),
-    )
-    daily = cur.fetchall()
+    daily_map = _sales_daily_aggregates(cur, data_days, upc_id=upc_id)
+    daily = [
+        {'period_end_date': d, 's': x['sales'], 'q': x['qty']}
+        for d, x in sorted(daily_map.items())
+        if x['qty'] != 0
+    ]
     if not daily:
         return None
     buckets: dict[Decimal, list[Decimal]] = defaultdict(list)
