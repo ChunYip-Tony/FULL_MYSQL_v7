@@ -44,16 +44,21 @@ def _file_business_date(row: dict[str, Any], source_type: str) -> date | None:
 
 
 def _source_snapshot_date(row: dict[str, Any]) -> date | None:
-    """Return the source snapshot date, never upload time.
+    """Return the latest source-evidenced snapshot date, never upload time.
 
-    For movement completeness we need evidence that the export was produced after
-    the business day closed. report_generated_at is preferred; the filename date
-    is the fallback source chronology already preserved by ingest.
+    report_generated_at and the structured filename date are both source evidence.
+    Use the later proven date so a next-morning filename such as mvt-091926-0830
+    can prove that a 2026-09-18 posting-day snapshot was produced after day close,
+    even when an internal report date field still carries the posting date.
     """
-    generated = _as_date(row.get('report_generated_at'))
-    if generated is not None:
-        return generated
-    return _as_date(row.get('filename_date_candidate'))
+    candidates = [
+        d for d in (
+            _as_date(row.get('report_generated_at')),
+            _as_date(row.get('filename_date_candidate')),
+        )
+        if d is not None
+    ]
+    return max(candidates) if candidates else None
 
 
 def _movement_daily_snapshot_complete(row: dict[str, Any], business_date: date) -> bool:
