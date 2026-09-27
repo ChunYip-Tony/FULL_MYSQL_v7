@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 from db import db_conn
-from data_coverage import source_data_days
+from data_coverage import source_data_days, _source_snapshot_date, _movement_daily_snapshot_complete
 
 
 _SIGNATURE_FIELDS = (
@@ -222,6 +222,9 @@ def movement_same_day_compare(movement_date: str) -> dict[str, Any]:
             )
             dated_raw = int((cur.fetchone() or {}).get("c") or 0)
 
+            source_snapshot_date = _source_snapshot_date(f)
+            daily_snapshot_complete = _movement_daily_snapshot_complete(f, requested)
+
             summaries.append(
                 {
                     "file_id": file_id,
@@ -233,6 +236,13 @@ def movement_same_day_compare(movement_date: str) -> dict[str, Any]:
                     "filename_date_candidate": f.get("filename_date_candidate"),
                     "filename_time_candidate": f.get("filename_time_candidate"),
                     "upload_timestamp": f.get("upload_timestamp"),
+                    "source_snapshot_date": source_snapshot_date,
+                    "daily_snapshot_complete": daily_snapshot_complete,
+                    "snapshot_completeness": (
+                        "COMPLETE_AFTER_BUSINESS_DATE"
+                        if daily_snapshot_complete
+                        else "PROVISIONAL_SAME_DAY_OR_UNPROVEN"
+                    ),
                     "source_row_count": int(f.get("source_row_count") or 0),
                     "dated_raw_rows": dated_raw,
                     "normalized_rows_on_date": len(rows),
@@ -272,12 +282,26 @@ def movement_same_day_compare(movement_date: str) -> dict[str, Any]:
                 counters[int(files[-1]["file_id"])],
             )
 
+        complete_files = [
+            x for x in summaries if bool(x.get("daily_snapshot_complete"))
+        ]
+        provisional_files = [
+            x for x in summaries if not bool(x.get("daily_snapshot_complete"))
+        ]
+
         if not files:
             assessment = "NO_ELIGIBLE_FILES"
             next_action = "No same-day comparison can be made."
+        elif len(files) == 1 and not complete_files:
+            assessment = "SINGLE_PROVISIONAL_FILE_NO_COMPLETE_DAY"
+            next_action = (
+                "Preserve this file as intraday/history evidence only. "
+                "Wait for a later source snapshot whose source date is after the business date "
+                "before treating this day as canonical movement coverage."
+            )
         elif len(files) == 1:
-            assessment = "SINGLE_ELIGIBLE_FILE"
-            next_action = "No same-day collision exists for this date."
+            assessment = "SINGLE_COMPLETE_FILE"
+            next_action = "This business date has one complete canonical-eligible movement snapshot."
         else:
             relation = (earliest_vs_latest or {}).get("relationship")
             if relation == "LATER_SUBSET_OF_EARLIER":
@@ -315,6 +339,8 @@ def movement_same_day_compare(movement_date: str) -> dict[str, Any]:
             "authority_changed": False,
             "current_canonical_file_id": canonical_file_id,
             "eligible_file_count": len(files),
+            "complete_file_count": len(complete_files),
+            "provisional_file_count": len(provisional_files),
             "assessment": assessment,
             "recommended_next_action": next_action,
             "signature_fields": list(_SIGNATURE_FIELDS),
