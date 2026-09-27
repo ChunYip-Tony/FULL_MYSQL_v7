@@ -6,7 +6,7 @@ from typing import Any
 
 from db import db_conn
 from data_coverage import source_data_days
-from inventory_position import latest_canonical_movement_day, rollforward_position
+from inventory_position import latest_canonical_movement_day, rollforward_position, UNRESTRICTED_APPLY_AS_SIGNED, UNRESTRICTED_NO_EFFECT
 
 
 def _table_exists(cur, table_name: str) -> bool:
@@ -1205,8 +1205,10 @@ def inventory_rollforward_candidates(
             ),
         }
 
+        apply_types = sorted(UNRESTRICTED_APPLY_AS_SIGNED)
+        apply_placeholders = ",".join(["%s"] * len(apply_types))
         cur.execute(
-            """SELECT article_id,article_number,family_id,base_uom_code,
+            f"""SELECT article_id,article_number,family_id,base_uom_code,
                       COUNT(*) AS movement_row_count,
                       COALESCE(SUM(base_quantity),0) AS movement_delta,
                       GROUP_CONCAT(DISTINCT movement_type
@@ -1215,12 +1217,13 @@ def inventory_rollforward_candidates(
                WHERE file_id=%s
                  AND posting_date=%s
                  AND base_quantity IS NOT NULL
+                 AND movement_type IN ({apply_placeholders})
                GROUP BY article_id,article_number,family_id,base_uom_code
                HAVING COALESCE(SUM(base_quantity),0)<>0
                ORDER BY ABS(COALESCE(SUM(base_quantity),0)) DESC,
                         article_number
                LIMIT %s""",
-            (file_id, business_date, limit * 4),
+            (file_id, business_date, *apply_types, limit * 4),
         )
         movement_groups = cur.fetchall()
 
@@ -1341,9 +1344,16 @@ def inventory_rollforward_candidates(
             },
             "count": len(results),
             "results": results,
+            "inventory_movement_policy": {
+                "stock_basis": "SAP_UNRESTRICTED",
+                "apply_signed": sorted(UNRESTRICTED_APPLY_AS_SIGNED),
+                "no_unrestricted_effect": sorted(UNRESTRICTED_NO_EFFECT),
+                "unknown_types_fail_closed": True,
+            },
             "diagnostic_note": (
-                "Use candidates where System OH anchor date is earlier than the "
-                "movement business date and movement UOM matches the anchor UOM."
+                "Candidates include only movement types with explicit Unrestricted-stock effect. "
+                "Use rows where System OH anchor date is earlier than the movement business date "
+                "and movement UOM matches the anchor UOM."
             ),
         }
 

@@ -361,6 +361,58 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
     return inserted
 
 
+def _movement_header_map(cur, sheet_id: int, declared_header_row: int | None) -> dict[str, str]:
+    """Find the SAP movement header from RAW rows instead of trusting generic header detection.
+
+    Dynamic List Display exports often have leading blank columns and detail rows
+    with more non-empty cells than the real header. The generic workbook header
+    detector can therefore point at a data row. For movement parsing, scan the
+    first 80 RAW rows and require semantic header tokens.
+    """
+    candidates = []
+    if declared_header_row:
+        candidates.append(int(declared_header_row))
+    cur.execute(
+        """SELECT source_row_number,raw_payload
+           FROM raw_movement
+           WHERE sheet_id=%s
+             AND source_row_number<=80
+           ORDER BY source_row_number""",
+        (sheet_id,),
+    )
+    rows = cur.fetchall()
+    seen = set()
+    best = None
+    best_score = -1
+    for rr in rows:
+        row_no = int(rr["source_row_number"])
+        if row_no in seen:
+            continue
+        seen.add(row_no)
+        p = _j(rr["raw_payload"])
+        norms = {_norm_header(v): k for k, v in p.items() if _norm_header(v)}
+        tokens = set(norms.keys())
+        has_article = "ARTICLE" in tokens
+        has_mvt = any(x in tokens for x in {"MVT", "MOVEMENT TYPE", "MOVEMENT"})
+        has_posting = any(x in tokens for x in {"PSTNG DATE", "POSTING DATE", "POST DATE", "BUSINESS DATE"})
+        if not (has_article and has_mvt and has_posting):
+            continue
+        score = 0
+        for t in (
+            "ARTICLE","ARTICLE DESCRIPTION","MVT","PSTNG DATE",
+            "QUANTITY","QTY IN UNE","EUN","QUANTITY I","BUN",
+            "AMOUNT LC","SALES VAL","PO","VENDOR","ART DOC",
+        ):
+            if t in tokens:
+                score += 1
+        if declared_header_row and row_no == int(declared_header_row):
+            score += 1
+        if score > best_score:
+            best = norms
+            best_score = score
+    return best or {}
+
+
 def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
     inserted = 0
     cur.execute(
@@ -368,7 +420,7 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
         (f['file_id'],),
     )
     for sh in cur.fetchall():
-        hmap = _sheet_header_map(cur, 'raw_movement', sh['sheet_id'], sh.get('header_row_number'))
+        hmap = _movement_header_map(cur, sh['sheet_id'], sh.get('header_row_number'))
 
         # SAP Dynamic List exports are not position-stable across report variants.
         # Resolve semantically dangerous movement fields from exact headers first,
@@ -377,7 +429,7 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
         desc_col = _pick_exact(hmap, ['Article Description', 'Description']) or 'D'
         mvt_col = _pick_exact(hmap, ['MvT', 'Movement Type', 'Movement']) or 'G'
         posting_col = _pick_exact(hmap, ['Pstng Date', 'Posting Date', 'Post Date', 'Business Date']) or 'H'
-        entry_qty_col = _pick_exact(hmap, ['Qty in UnE', 'Quantity in UnE', 'Entry Quantity']) or 'I'
+        entry_qty_col = _pick_exact(hmap, ['Qty in UnE', 'Quantity in UnE', 'Quantity', 'Entry Quantity']) or 'I'
         entry_uom_col = _pick_exact(hmap, ['EUn', 'Entry UOM', 'Entry Unit']) or 'J'
         base_qty_col = _pick_exact(
             hmap,
@@ -388,7 +440,7 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
         sales_value_col = _pick_exact(hmap, ['Sales Val.', 'Sales Value']) or 'N'
         vendor_col = _pick_exact(hmap, ['Vendor', 'Vendor Code']) or 'S'
         reference_col = _pick_exact(hmap, ['Reference']) or 'Q'
-        article_doc_col = _pick_exact(hmap, ['Article Document', 'Material Document', 'Mat. Doc.'])
+        article_doc_col = _pick_exact(hmap, ['Art. Doc.', 'Article Document', 'Material Document', 'Mat. Doc.'])
         po_col = _pick_exact(hmap, ['Purchase Order', 'PO', 'Purchase Order Number']) or 'R'
         cost_center_col = _pick_exact(hmap, ['Cost Center', 'Cost Ctr', 'CostCenter']) or 'V'
 
