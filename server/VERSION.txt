@@ -1,5 +1,5 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.57 Single-Service Edition
+Version: 7.0.58 Single-Service Edition
 
 Adds user-confirmed Family/Main-Article cost fallback authority for 13 families:
 1341156 3.82/LB
