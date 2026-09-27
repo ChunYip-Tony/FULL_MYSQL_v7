@@ -14,7 +14,12 @@ UNRESTRICTED_APPLY_AS_SIGNED = {
     "101", "102",  # direct GR / reversal
     "105", "106",  # release from GR blocked stock / reversal
     "109", "110",  # release from valuated GR blocked stock / reversal
-    "251", "252",  # store-confirmed sale / return movement
+    "161", "162",  # purchase-order return / reversal
+    "251", "252",  # goods issue for sale / reversal
+    "309", "310",  # material-to-material transfer / reversal
+    "317", "318",  # create structured article / reversal (SAP Retail)
+    "551", "552",  # scrap unrestricted stock / reversal
+    "701", "702",  # physical-inventory adjustment, unrestricted stock
 }
 UNRESTRICTED_NO_EFFECT = {
     "103", "104",  # GR blocked stock / reversal
