@@ -250,6 +250,37 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
     return {"query": q, "count": len(rows), "results": rows}
 
 
+
+def ready_quick_checks_with_system_oh(limit: int = 50) -> dict[str, Any]:
+    """Return current READY Quick Check rows that have a usable System OH."""
+    limit = max(1, min(int(limit or 50), 200))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT ean_upc,article_number,family_id,main_article_number,
+                      selling_description,family_description,selling_uom,
+                      current_oh,current_oh_uom,oh_date,current_price,current_price_type,
+                      current_cost_per_selling_unit,pos_qty_7d,pos_qty_30d,
+                      upc_velocity_7d,upc_velocity_30d,publish_batch_id,published_at
+               FROM quick_check_current
+               WHERE quick_check_status='READY'
+                 AND current_oh IS NOT NULL
+                 AND current_oh_uom IS NOT NULL
+               ORDER BY
+                 CASE WHEN current_oh>0 THEN 0 ELSE 1 END,
+                 oh_date DESC,
+                 ABS(current_oh) DESC,
+                 selling_description,
+                 ean_upc
+               LIMIT %s""",
+            (limit,),
+        )
+        rows = cur.fetchall()
+        cur.close()
+    return {"count": len(rows), "results": rows}
+
+
+
 def _lookup_qc_row(cur, upc: str) -> dict[str, Any] | None:
     raw = str(upc or "").strip()
     key = _numeric_key(raw)
