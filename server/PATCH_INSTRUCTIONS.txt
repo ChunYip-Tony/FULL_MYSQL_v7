@@ -1,17 +1,17 @@
-FULL MYSQL v7.0.27 GitHub Patch
+FULL MYSQL v7.0.29 GitHub Patch
 
-Scope:
-- Refine GET /v1/diagnostics/product-identity-audit semantics.
-- Keep current-active missing Selling UOM as row-level serving QA_HOLD, not a global identity blocker.
-- Classify UPC-A short/long pairs by current vs historical Quick Check scope.
-- Validate manual UPC overrides against canonical Main/Family identity.
-- Fix manual-authority UOM cleanup so SQL NULL semantics cannot leave stale confirmed variants active.
-- Add maintenance_v727.py for a targeted manual-authority refresh with no Quick Check rebuild.
+Purpose:
+- Work-PC no longer needs direct TCP/MySQL access for manual-authority refresh.
+- Add authenticated HTTPS POST /v1/maintenance/manual-authority-refresh.
+- Endpoint is deterministic and idempotent: callers cannot submit arbitrary UPC/article/UOM values.
+- Server applies only confirmed authority encoded in manual_overrides.py.
+- Refuses to run while POST_RAW_PIPELINE is actively processing.
+- Rolls back if any manual override or retirement fails post-refresh verification.
+- Does not rebuild Quick Check.
+- No schema migration.
 
 After deploy:
-1) Verify /healthz = 7.0.27-single-service.
-2) In App Platform Console run: python maintenance_v727.py
-3) Re-run GET /v1/diagnostics/product-identity-audit.
-4) Do not integrate the audit as a Phase3 global publish guard until the remaining current-scope blockers are reviewed.
-
-No schema migration is required.
+1) Verify /healthz = 7.0.29-single-service.
+2) From Work-PC call the maintenance endpoint through HTTPS 443.
+3) Re-run /v1/diagnostics/product-identity-audit.
+4) Do not open MySQL TCP 25060 on the Work-PC for routine operations.
