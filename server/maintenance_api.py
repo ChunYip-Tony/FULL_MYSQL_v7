@@ -5,6 +5,8 @@ from typing import Any
 from db import db_conn
 from manual_overrides import (
     USER_CONFIRMED_UOM_REVIEW_20260926,
+    ensure_override_table,
+    ensure_retirement_table,
     apply_manual_upc_overrides,
     apply_manual_upc_retirements,
 )
@@ -22,16 +24,17 @@ def _retirement_ok(row: dict[str, Any]) -> bool:
 
 
 def run_manual_authority_refresh(device: str) -> dict[str, Any]:
-    """Apply only pre-defined, user-confirmed identity/UOM authority server-side.
-
-    This is intentionally narrow: the caller cannot submit arbitrary UPC/article/UOM
-    values. It re-applies the authority already encoded in manual_overrides.py.
-    """
+    """Apply pre-defined user authority in one explicit transaction."""
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         try:
-            # Do not race the server-side post-RAW worker.
+            # Manual tables may be absent only on bootstrap. Ensure them BEFORE the
+            # business transaction because MySQL DDL implicitly commits.
+            ensure_override_table(cur)
+            ensure_retirement_table(cur)
+            conn.commit()
+
             cur.execute(
                 """SELECT COUNT(*) AS c
                    FROM pipeline_run
@@ -39,10 +42,15 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                      AND processing_status='STARTED'"""
             )
             if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
                 raise RuntimeError(
                     "Server pipeline is currently processing a batch; retry the "
                     "manual authority refresh after processing finishes."
                 )
+
+            # End the read transaction and begin the atomic authority transaction.
+            conn.commit()
+            conn.start_transaction()
 
             before = audit_product_identity(cur)
             overrides = apply_manual_upc_overrides(cur)
@@ -55,7 +63,6 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                 )
 
             after = audit_product_identity(cur)
-
             failed_overrides = [
                 x for x in after.get("manual_override_checks", [])
                 if not bool(x.get("pass"))
@@ -64,7 +71,6 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
                 x for x in after.get("retirement_checks", [])
                 if not _retirement_ok(x)
             ]
-
             if failed_overrides or failed_retirements:
                 raise RuntimeError(
                     "Post-refresh authority verification failed; transaction rolled back. "
@@ -76,7 +82,7 @@ def run_manual_authority_refresh(device: str) -> dict[str, Any]:
             return {
                 "status": "COMMITTED",
                 "device": device,
-                "mode": "SERVER_SIDE_API_ONLY_NO_QC_REBUILD",
+                "mode": "SERVER_SIDE_API_ONLY_NO_QC_REBUILD_TRANSACTION_SAFE",
                 "before_summary": before.get("summary"),
                 "manual_overrides": overrides,
                 "manual_retirements": retirements,
@@ -170,7 +176,7 @@ def _target_uom_verification(cur) -> list[dict[str, Any]]:
 
 
 def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
-    """Apply the exact 22 user-confirmed UOMs and rebuild current Quick Check atomically.
+    """Apply the exact 22 user-confirmed Selling UOMs and rebuild Quick Check atomically.
 
     No arbitrary caller-supplied product values are accepted. The authoritative tuples
     are code-reviewed constants in manual_overrides.py.
@@ -179,6 +185,12 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         try:
+            # CRITICAL: CREATE TABLE causes an implicit MySQL commit, even when used
+            # defensively. Perform schema bootstrap before the atomic transaction.
+            ensure_override_table(cur)
+            ensure_retirement_table(cur)
+            conn.commit()
+
             cur.execute(
                 """SELECT COUNT(*) AS c
                    FROM pipeline_run
@@ -186,14 +198,19 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
                      AND processing_status='STARTED'"""
             )
             if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
                 raise RuntimeError(
                     "Server pipeline is currently processing; retry the confirmed UOM refresh later."
                 )
 
+            # Close the read transaction, then use one explicit transaction for all
+            # authority writes + Quick Check rebuild + verification.
+            conn.commit()
+            conn.start_transaction()
+
             batch_id = _latest_serving_batch_id(cur)
             before = audit_product_identity(cur)
 
-            cur.execute("SAVEPOINT confirmed_uom_refresh")
             overrides = apply_manual_upc_overrides(cur)
             retirements = apply_manual_upc_retirements(cur)
             if overrides.get("held"):
@@ -209,7 +226,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
                        detail_json=JSON_SET(
                          COALESCE(detail_json,JSON_OBJECT()),
                          '$.resolution',
-                         'Superseded by v7.0.34 confirmed UOM serving refresh'
+                         'Superseded by v7.0.35 confirmed UOM serving refresh'
                        )
                    WHERE batch_id=%s
                      AND issue_status='OPEN'
@@ -220,10 +237,7 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
 
             qc = rebuild_quick_check(cur, batch_id)
             after = audit_product_identity(cur)
-
             if not bool(after.get("pass")):
-                cur.execute("ROLLBACK TO SAVEPOINT confirmed_uom_refresh")
-                cur.execute("RELEASE SAVEPOINT confirmed_uom_refresh")
                 raise RuntimeError(
                     "Product identity audit blocked the refreshed serving snapshot; "
                     f"blockers={after.get('blockers')}"
@@ -232,10 +246,8 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             target_checks = _target_uom_verification(cur)
             failed_targets = [x for x in target_checks if not x.get("pass")]
             if failed_targets:
-                cur.execute("ROLLBACK TO SAVEPOINT confirmed_uom_refresh")
-                cur.execute("RELEASE SAVEPOINT confirmed_uom_refresh")
                 raise RuntimeError(
-                    "Confirmed UOM target verification failed; serving snapshot restored. "
+                    "Confirmed UOM target verification failed; transaction rolled back. "
                     f"failed_targets={failed_targets}"
                 )
 
@@ -290,12 +302,11 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             )
             remaining_missing_selling_uom = int((cur.fetchone() or {}).get("c") or 0)
 
-            cur.execute("RELEASE SAVEPOINT confirmed_uom_refresh")
             conn.commit()
             return {
                 "status": "COMMITTED",
                 "device": device,
-                "mode": "SERVER_SIDE_CONFIRMED_UOM_APPLY_AND_QC_REBUILD",
+                "mode": "SERVER_SIDE_CONFIRMED_UOM_APPLY_AND_QC_REBUILD_TRANSACTION_SAFE",
                 "publish_batch_id": batch_id,
                 "target_count": len(USER_CONFIRMED_UOM_REVIEW_20260926),
                 "prior_core_holds_resolved": prior_core_holds_resolved,
@@ -313,3 +324,4 @@ def run_confirmed_uom_refresh(device: str) -> dict[str, Any]:
             raise
         finally:
             cur.close()
+
