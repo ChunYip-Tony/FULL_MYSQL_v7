@@ -135,6 +135,30 @@ def _numeric_identifier(value: Any) -> str | None:
         return None
     return s if re.fullmatch(r'\d+', s) else None
 
+
+def _article_manual_upc_identifier(value: Any) -> str | None:
+    """Parse Article Manual UPC cells without inventing digits.
+
+    Article Manual commonly formats EAN/UPC values with visual spaces or hyphens,
+    e.g. "4 71106163078 0". Accept only digits separated by whitespace/hyphens;
+    reject labels such as "Main" / "Sub" and all fuzzy/non-numeric values.
+    """
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if re.fullmatch(r'\d+\.0+', raw):
+        return raw.split('.', 1)[0]
+    if re.fullmatch(r'[\d\s-]+', raw):
+        digits = re.sub(r'\D', '', raw)
+        return digits or None
+    return None
+
 def _text(value: Any) -> str | None:
     if value is None:
         return None
@@ -617,7 +641,12 @@ def _mark_row_state(cur, ctx: RowContext, status: str, detail: dict[str, Any]) -
 def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: dict[str, str]) -> str:
     article_number = _numeric_identifier(_get(row, colmap, 'article'))
     source_main_article = _numeric_identifier(_get(row, colmap, 'main_article'))
-    ean_upc = _numeric_identifier(_get(row, colmap, 'upc'))
+    raw_upc = _get(row, colmap, 'upc')
+    ean_upc = (
+        _article_manual_upc_identifier(raw_upc)
+        if ctx.source_type == 'article_manual'
+        else _numeric_identifier(raw_upc)
+    )
     sales_set = _numeric_identifier(_get(row, colmap, 'sales_set'))
     description = _text(_get(row, colmap, 'description'))
     category = _text(_get(row, colmap, 'category'))
@@ -867,7 +896,7 @@ def _preload_article_manual_authority(cur, batch_id: int) -> dict[str, Any]:
         )
         for rr in cur.fetchall():
             payload = _json_obj(rr['raw_payload'])
-            ean_upc = _numeric_identifier(_get(payload, colmap, 'upc'))
+            ean_upc = _article_manual_upc_identifier(_get(payload, colmap, 'upc'))
             if not ean_upc:
                 continue
             anchor_article = (
