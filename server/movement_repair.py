@@ -27,13 +27,35 @@ def repair_movement_history(device: str):
             files=cur.fetchall()
             conn.commit(); conn.start_transaction()
             results=[]
+            failed_files=[]
             for f in files:
+                cur.execute(
+                    """SELECT COUNT(*) c FROM raw_movement
+                       WHERE file_id=%s AND observed_business_date IS NOT NULL""",
+                    (f['file_id'],),
+                )
+                dated_raw=int((cur.fetchone() or {}).get('c') or 0)
                 cur.execute("SELECT COUNT(*) c FROM movement_history WHERE file_id=%s",(f['file_id'],))
                 b=int((cur.fetchone() or {}).get('c') or 0)
                 n=int(_process_movement(cur,int(f['batch_id']),f) or 0)
                 cur.execute("SELECT COUNT(*) c FROM movement_history WHERE file_id=%s",(f['file_id'],))
                 a=int((cur.fetchone() or {}).get('c') or 0)
-                results.append({'file_id':int(f['file_id']),'filename':f['original_filename'],'before':b,'after':a,'processed':n})
+                item={
+                    'file_id':int(f['file_id']),
+                    'filename':f['original_filename'],
+                    'dated_raw_rows':dated_raw,
+                    'before':b,
+                    'after':a,
+                    'processed':n,
+                }
+                results.append(item)
+                if dated_raw>0 and a<=0:
+                    failed_files.append(item)
+            if failed_files:
+                raise RuntimeError(
+                    'Movement history repair left dated RAW files without normalized history: '
+                    + str(failed_files)
+                )
             relink_history(cur)
             qc=rebuild_quick_check(cur,publish_batch_id)
             audit=audit_product_identity(cur)
