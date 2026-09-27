@@ -11,7 +11,12 @@ from typing import Any, Iterable
 
 from db import db_conn
 from data_coverage import source_data_days, coverage_summary
-from manual_overrides import apply_manual_upc_overrides, apply_manual_upc_retirements
+from manual_overrides import (
+    ensure_override_table,
+    ensure_retirement_table,
+    apply_manual_upc_overrides,
+    apply_manual_upc_retirements,
+)
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
 from cross_tab_signature_repair import repair_cross_tab_signature
@@ -1248,6 +1253,14 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         try:
+            # Manual authority tables are bootstrap schema. Ensure them before the
+            # Phase 3 business transaction because MySQL DDL implicitly commits
+            # and would invalidate the later Quick Check SAVEPOINT.
+            ensure_override_table(cur)
+            ensure_retirement_table(cur)
+            conn.commit()
+            conn.start_transaction()
+
             cur.execute('SELECT processing_status FROM ingest_batch WHERE batch_id=%s', (batch_id,))
             b = cur.fetchone()
             if not b:
