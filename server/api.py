@@ -18,7 +18,7 @@ from quick_check_app import search_quick_check, get_quick_check_detail, submit_t
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 
-VERSION='7.0.66-single-service'
+VERSION='7.0.67-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
