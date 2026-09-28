@@ -40,6 +40,102 @@ def bridge_enabled() -> bool:
     return _truthy(os.environ.get("FULLMYSQL_CHATGPT_SHEET_ENABLED"))
 
 
+def _bridge_transport() -> str:
+    explicit = os.environ.get("FULLMYSQL_CHATGPT_SHEET_TRANSPORT", "").strip().upper()
+    if explicit:
+        if explicit not in {"APPS_SCRIPT", "SERVICE_ACCOUNT"}:
+            raise RuntimeError(
+                "FULLMYSQL_CHATGPT_SHEET_TRANSPORT must be APPS_SCRIPT or SERVICE_ACCOUNT."
+            )
+        return explicit
+    if os.environ.get("FULLMYSQL_APPS_SCRIPT_WEB_APP_URL", "").strip():
+        return "APPS_SCRIPT"
+    return "SERVICE_ACCOUNT"
+
+
+def _apps_script_url() -> str:
+    url = os.environ.get("FULLMYSQL_APPS_SCRIPT_WEB_APP_URL", "").strip()
+    if not url:
+        raise RuntimeError("FULLMYSQL_APPS_SCRIPT_WEB_APP_URL is not configured.")
+    if not url.startswith("https://script.google.com/"):
+        raise RuntimeError("FULLMYSQL_APPS_SCRIPT_WEB_APP_URL must be a Google Apps Script web-app URL.")
+    return url
+
+
+def _apps_script_secret() -> str:
+    secret = os.environ.get("FULLMYSQL_APPS_SCRIPT_WEBHOOK_SECRET", "")
+    if len(secret) < 24:
+        raise RuntimeError(
+            "FULLMYSQL_APPS_SCRIPT_WEBHOOK_SECRET must be configured with at least 24 characters."
+        )
+    return secret
+
+
+def _apps_script_post(payload: dict[str, Any], *, timeout: int = 90) -> dict[str, Any]:
+    import requests
+
+    body = {"secret": _apps_script_secret(), **payload}
+    resp = requests.post(_apps_script_url(), json=body, timeout=timeout, allow_redirects=True)
+    if resp.status_code >= 300:
+        raise RuntimeError(f"Apps Script bridge HTTP {resp.status_code}: {resp.text[:500]}")
+    try:
+        data = resp.json()
+    except Exception as exc:
+        raise RuntimeError(f"Apps Script bridge returned non-JSON: {resp.text[:500]}") from exc
+    if not isinstance(data, dict) or not data.get("ok"):
+        raise RuntimeError(f"Apps Script bridge rejected request: {data}")
+    return data
+
+
+def _apps_script_write_matrix(
+    spreadsheet_id: str,
+    title: str,
+    matrix: list[list[Any]],
+    *,
+    chunk_rows: int = 350,
+) -> None:
+    if not matrix:
+        _apps_script_post(
+            {
+                "action": "clear_tab",
+                "spreadsheet_id": spreadsheet_id,
+                "tab": title,
+            }
+        )
+        return
+    width = max(len(r) for r in matrix)
+    for start in range(0, len(matrix), chunk_rows):
+        chunk = matrix[start : start + chunk_rows]
+        normalized = [
+            [_wire(v) for v in row] + [""] * (width - len(row))
+            for row in chunk
+        ]
+        _apps_script_post(
+            {
+                "action": "write_tab_chunk",
+                "spreadsheet_id": spreadsheet_id,
+                "tab": title,
+                "start_row": start + 1,
+                "clear": start == 0,
+                "values": normalized,
+            },
+            timeout=120,
+        )
+
+
+def _apps_script_read_values(spreadsheet_id: str, a1: str) -> list[list[Any]]:
+    data = _apps_script_post(
+        {
+            "action": "read_range",
+            "spreadsheet_id": spreadsheet_id,
+            "a1": a1,
+        },
+        timeout=60,
+    )
+    values = data.get("values") or []
+    return values if isinstance(values, list) else []
+
+
 def _wire(value: Any) -> Any:
     if value is None:
         return ""
@@ -378,22 +474,38 @@ def _source_status(batch: dict[str, Any], phase3: dict[str, Any], row_count: int
     return [["Field","Value"]] + [[k,v] for k,v in fields]
 
 
-def _bridge_status(*, batch_id: int, row_count: int, service_account_email: str | None,
-                   status: str, detail: str) -> list[list[Any]]:
+def _bridge_status(
+    *,
+    batch_id: int,
+    row_count: int,
+    publisher_identity: str | None,
+    transport: str,
+    status: str,
+    detail: str,
+) -> list[list[Any]]:
     values = [
         ("Last_Publish_Status",status),("MySQL_Publish_Batch_ID",batch_id),("MySQL_Serving_Rows",row_count),
         ("Active_Source",_active_source()),("Cutover_Status","PARITY_REQUIRED"),
-        ("Service_Account",service_account_email or ""),("Last_Readback_At_UTC",datetime.now(timezone.utc).isoformat()),
+        ("Transport",transport),("Publisher_Identity",publisher_identity or ""),
+        ("Last_Readback_At_UTC",datetime.now(timezone.utc).isoformat()),
         ("Detail",detail),
     ]
     return [["Field","Value"]] + [[k,v] for k,v in values]
 
 
-def _validate_readback(session, spreadsheet_id: str, batch_id: int, row_count: int) -> dict[str, Any]:
-    source = _read_values(session, spreadsheet_id, f"'{MYSQL_TABS['source']}'!A1:B20")
-    lookup_head = _read_values(session, spreadsheet_id, f"'{MYSQL_TABS['lookup']}'!A1:I2")
-    lookup_tail = _read_values(session, spreadsheet_id,
-                               f"'{MYSQL_TABS['lookup']}'!A{row_count + 1}:I{row_count + 1}")
+def _validate_readback(
+    session,
+    spreadsheet_id: str,
+    batch_id: int,
+    row_count: int,
+    *,
+    reader=None,
+) -> dict[str, Any]:
+    read = reader or _read_values
+    source = read(session, spreadsheet_id, f"'{MYSQL_TABS['source']}'!A1:B20")
+    lookup_head = read(session, spreadsheet_id, f"'{MYSQL_TABS['lookup']}'!A1:I2")
+    lookup_tail = read(session, spreadsheet_id,
+                       f"'{MYSQL_TABS['lookup']}'!A{row_count + 1}:I{row_count + 1}")
     source_map = {str(r[0]): r[1] if len(r) > 1 else "" for r in source[1:] if r}
     failures: list[str] = []
     if str(source_map.get("MySQL_Batch_ID")) != str(batch_id):
@@ -415,7 +527,8 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 "reason":"FULLMYSQL_CHATGPT_SHEET_ENABLED is not enabled."}
     try:
         spreadsheet_id = _sheet_id()
-        session, service_account_email = _session()
+        transport = _bridge_transport()
+
         with db_conn() as conn:
             cur = conn.cursor(dictionary=True, buffered=True)
             try:
@@ -430,6 +543,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 rows = _fetch_quick_rows(cur)
             finally:
                 cur.close()
+
         if not rows:
             return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
 
@@ -445,30 +559,90 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             MYSQL_TABS["negative"]:_build_negative_stock(negative_queue.get("rows") or []),
             MYSQL_TABS["cost_backfill"]:_build_cost_backfill(cost_backfill.get("actions") or []),
         }
-        _ensure_tabs(session, spreadsheet_id, list(matrices) + [MYSQL_TABS["bridge"]])
-        for title, matrix in matrices.items():
-            _write_matrix(session, spreadsheet_id, title, matrix)
 
-        readback = _validate_readback(session, spreadsheet_id, batch_id, len(rows))
+        session = None
+        publisher_identity = None
+        if transport == "APPS_SCRIPT":
+            publisher_identity = "GOOGLE_APPS_SCRIPT_WEB_APP"
+            for title, matrix in matrices.items():
+                _apps_script_write_matrix(spreadsheet_id, title, matrix)
+            readback = _validate_readback(
+                None,
+                spreadsheet_id,
+                batch_id,
+                len(rows),
+                reader=lambda _session, sid, a1: _apps_script_read_values(sid, a1),
+            )
+        else:
+            session, publisher_identity = _session()
+            _ensure_tabs(session, spreadsheet_id, list(matrices) + [MYSQL_TABS["bridge"]])
+            for title, matrix in matrices.items():
+                _write_matrix(session, spreadsheet_id, title, matrix)
+            readback = _validate_readback(session, spreadsheet_id, batch_id, len(rows))
+
         if not readback["pass"]:
-            _write_matrix(session, spreadsheet_id, MYSQL_TABS["bridge"],
-                          _bridge_status(batch_id=batch_id,row_count=len(rows),
-                                         service_account_email=service_account_email,
-                                         status="FAILED_READBACK",detail=",".join(readback["failures"])))
-            return {"status":"FAILED_READBACK","batch_id":batch_id,"spreadsheet_id":spreadsheet_id,
-                    "row_count":len(rows),"readback":readback}
+            bridge_matrix = _bridge_status(
+                batch_id=batch_id,
+                row_count=len(rows),
+                publisher_identity=publisher_identity,
+                transport=transport,
+                status="FAILED_READBACK",
+                detail=",".join(readback["failures"]),
+            )
+            if transport == "APPS_SCRIPT":
+                _apps_script_write_matrix(spreadsheet_id, MYSQL_TABS["bridge"], bridge_matrix)
+            else:
+                _write_matrix(session, spreadsheet_id, MYSQL_TABS["bridge"], bridge_matrix)
+            return {
+                "status":"FAILED_READBACK",
+                "batch_id":batch_id,
+                "spreadsheet_id":spreadsheet_id,
+                "row_count":len(rows),
+                "transport":transport,
+                "readback":readback,
+            }
 
-        _write_matrix(session, spreadsheet_id, MYSQL_TABS["bridge"],
-                      _bridge_status(batch_id=batch_id,row_count=len(rows),
-                                     service_account_email=service_account_email,status="PASS",
-                                     detail="MySQL snapshot written and batch/row/lookup readback verified."))
-        bridge_rb = _read_values(session, spreadsheet_id, f"'{MYSQL_TABS['bridge']}'!A1:B12")
+        bridge_matrix = _bridge_status(
+            batch_id=batch_id,
+            row_count=len(rows),
+            publisher_identity=publisher_identity,
+            transport=transport,
+            status="PASS",
+            detail="MySQL snapshot written and batch/row/lookup readback verified.",
+        )
+        if transport == "APPS_SCRIPT":
+            _apps_script_write_matrix(spreadsheet_id, MYSQL_TABS["bridge"], bridge_matrix)
+            bridge_rb = _apps_script_read_values(
+                spreadsheet_id, f"'{MYSQL_TABS['bridge']}'!A1:B12"
+            )
+        else:
+            _write_matrix(session, spreadsheet_id, MYSQL_TABS["bridge"], bridge_matrix)
+            bridge_rb = _read_values(
+                session, spreadsheet_id, f"'{MYSQL_TABS['bridge']}'!A1:B12"
+            )
+
         bridge_map = {str(r[0]): r[1] if len(r) > 1 else "" for r in bridge_rb[1:] if r}
-        if str(bridge_map.get("Last_Publish_Status")) != "PASS" or str(bridge_map.get("MySQL_Publish_Batch_ID")) != str(batch_id):
-            return {"status":"FAILED_BRIDGE_READBACK","batch_id":batch_id,
-                    "spreadsheet_id":spreadsheet_id,"row_count":len(rows)}
-        return {"status":"PASS","batch_id":batch_id,"spreadsheet_id":spreadsheet_id,
-                "row_count":len(rows),"active_source":_active_source(),
-                "service_account":service_account_email,"readback":readback}
+        if (
+            str(bridge_map.get("Last_Publish_Status")) != "PASS"
+            or str(bridge_map.get("MySQL_Publish_Batch_ID")) != str(batch_id)
+        ):
+            return {
+                "status":"FAILED_BRIDGE_READBACK",
+                "batch_id":batch_id,
+                "spreadsheet_id":spreadsheet_id,
+                "row_count":len(rows),
+                "transport":transport,
+            }
+
+        return {
+            "status":"PASS",
+            "batch_id":batch_id,
+            "spreadsheet_id":spreadsheet_id,
+            "row_count":len(rows),
+            "active_source":_active_source(),
+            "transport":transport,
+            "publisher_identity":publisher_identity,
+            "readback":readback,
+        }
     except Exception as exc:
         return {"status":"FAILED","batch_id":batch_id,"error":repr(exc)}
