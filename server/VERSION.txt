@@ -1,5 +1,5 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.147 Single-Service Edition
+Version: 7.0.148 Single-Service Edition
 
 v7.0.147 QA HOLD Delete No-Body Fix:
 - QA HOLD delete endpoint no longer accepts or validates a JSON request body.
@@ -79,6 +79,11 @@ v7.0.139 Google Apps Script analysis bridge:
 - Apps Script restricts writes/reads to the configured spreadsheet and approved bridge tabs.
 - BRIDGE_STATUS becomes PUBLISHING before replacement and PASS only after batch/row/lookup read-back parity.
 - SERVICE_ACCOUNT remains available as an optional legacy transport.
+
+v7.0.148 Deployment Startup Hardening:
+- Added missing typing.Any import defensively to prevent annotation-time API startup failures.
+- Docker build now compiles Python sources and imports api + worker before image release.
+- Startup/import regressions now fail during build instead of causing a deploy-phase container crash.
 
 Public Web App main navigation:
 - Quick Check
