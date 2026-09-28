@@ -6,6 +6,7 @@ from typing import Any
 
 from data_coverage import source_data_days
 from business_clock import completed_through_date
+from manual_overrides import confirmed_operational_uom_basis
 
 
 # FULL MYSQL System OH is based on SAP Unrestricted stock. Only movement types
@@ -133,7 +134,13 @@ def movement_rollforward(
       movement days exist.
     """
     anchor_day = _as_date(anchor_date)
-    uom = str(anchor_uom or "").strip().upper() or None
+    source_anchor_uom = str(anchor_uom or "").strip().upper() or None
+    operational = confirmed_operational_uom_basis(cur, family_id)
+    operational_uom = (
+        str(operational.get("operational_uom_code") or "").strip().upper()
+        if operational else None
+    )
+    uom = operational_uom or source_anchor_uom
     scope = str(scope_type or "").strip().upper()
 
     result: dict[str, Any] = {
@@ -142,6 +149,8 @@ def movement_rollforward(
         "scope_type": scope or None,
         "anchor_date": anchor_day,
         "anchor_uom": uom,
+        "source_anchor_uom": source_anchor_uom,
+        "operational_uom_authority": operational,
         "movement_delta": Decimal("0"),
         "movement_through_date": anchor_day,
         "movement_days": [],
@@ -150,7 +159,10 @@ def movement_rollforward(
         "by_movement_type": [],
         "ignored_by_movement_type": [],
         "unresolved_movement_types": [],
-        "stock_basis": "SAP_UNRESTRICTED",
+        "stock_basis": (
+            "SAP_UNRESTRICTED_USER_CONFIRMED_OPERATIONAL_UOM"
+            if operational else "SAP_UNRESTRICTED"
+        ),
         "same_day_policy": "ANCHOR_OWNS_ENTIRE_BUSINESS_DATE",
         "movement_coverage_expected_through": None,
         "movement_coverage_complete": False,
@@ -240,14 +252,17 @@ def movement_rollforward(
     cur.execute(
         f"""SELECT file_id,posting_date,movement_type,
                    UPPER(TRIM(COALESCE(base_uom_code,''))) AS base_uom_code,
-                   COALESCE(SUM(base_quantity),0) AS movement_quantity,
+                   UPPER(TRIM(COALESCE(entry_uom_code,''))) AS entry_uom_code,
+                   SUM(base_quantity) AS base_movement_quantity,
+                   SUM(entry_quantity) AS entry_movement_quantity,
                    COUNT(*) AS row_count
             FROM movement_history
             WHERE file_id IN ({placeholders})
               AND {scope_sql}
-              AND base_quantity IS NOT NULL
+              AND (base_quantity IS NOT NULL OR entry_quantity IS NOT NULL)
             GROUP BY file_id,posting_date,movement_type,
-                     UPPER(TRIM(COALESCE(base_uom_code,'')))
+                     UPPER(TRIM(COALESCE(base_uom_code,''))),
+                     UPPER(TRIM(COALESCE(entry_uom_code,'')))
             ORDER BY posting_date,file_id,movement_type""",
         (*file_ids, scope_arg),
     )
@@ -263,9 +278,6 @@ def movement_rollforward(
     for row in rows:
         fid = int(row["file_id"])
         posting_day = _as_date(row.get("posting_date"))
-        qty = Decimal(str(row.get("movement_quantity") or 0))
-        if qty == 0:
-            continue
 
         # One multi-date MVT file may be canonical for several exact posting
         # dates. Accept only the canonical file/date pair and ignore other rows
@@ -273,7 +285,36 @@ def movement_rollforward(
         if posting_day is None or canonical_by_date.get(posting_day) != fid:
             continue
 
-        row_uom = str(row.get("base_uom_code") or "").strip().upper() or None
+        use_entry_basis = bool(
+            operational
+            and str(operational.get("movement_quantity_basis") or "").upper() == "ENTRY"
+        )
+        if use_entry_basis:
+            raw_qty = row.get("entry_movement_quantity")
+            row_uom = str(row.get("entry_uom_code") or "").strip().upper() or None
+            quantity_basis = "ENTRY"
+        else:
+            raw_qty = row.get("base_movement_quantity")
+            row_uom = str(row.get("base_uom_code") or "").strip().upper() or None
+            quantity_basis = "BASE"
+
+        if raw_qty is None:
+            bad_uoms.append({
+                "file_id": fid,
+                "posting_date": posting_day,
+                "movement_type": row.get("movement_type"),
+                "movement_uom": row_uom,
+                "anchor_uom": uom,
+                "quantity": None,
+                "quantity_basis": quantity_basis,
+                "reason": "AUTHORIZED_QUANTITY_BASIS_MISSING",
+            })
+            continue
+
+        qty = Decimal(str(raw_qty))
+        if qty == 0:
+            continue
+
         if row_uom != uom:
             bad_uoms.append({
                 "file_id": fid,
@@ -282,6 +323,7 @@ def movement_rollforward(
                 "movement_uom": row_uom,
                 "anchor_uom": uom,
                 "quantity": qty,
+                "quantity_basis": quantity_basis,
             })
             continue
 
@@ -358,7 +400,9 @@ def rollforward_position(
     return {
         "anchor_quantity": qty,
         "quantity": current,
-        "uom": str(anchor_uom or "").strip().upper() or None,
+        "uom": movement["anchor_uom"],
+        "source_anchor_uom": movement.get("source_anchor_uom"),
+        "operational_uom_authority": movement.get("operational_uom_authority"),
         "anchor_date": _as_date(anchor_date),
         "movement_delta": movement["movement_delta"],
         "movement_through_date": movement["movement_through_date"],

@@ -25,6 +25,7 @@ from manual_overrides import (
     confirmed_cost_conversion,
     confirmed_family_cost,
     confirmed_receipt_entry_cost_basis,
+    confirmed_operational_uom_basis,
 )
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
@@ -600,17 +601,40 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                             (article_id, family_id, unit_cost, valuation_uom_id, mvt, posting, datetime.combine(posting, datetime.min.time()),
                              valuation_uom_id, unit_cost, batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number']),
                         )
-            if family_id is not None and mvt in FAMILY_SALE_MOVEMENTS and base_qty is not None:
-                net_sold = -base_qty
-                cur.execute(
-                    """INSERT INTO family_movement_observation
-                       (batch_id,file_id,sheet_id,raw_id,family_id,article_id,movement_type,posting_date,
-                        base_quantity_signed,net_sold_quantity,base_uom_code)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                       ON DUPLICATE KEY UPDATE family_id=VALUES(family_id),article_id=VALUES(article_id),
-                        net_sold_quantity=VALUES(net_sold_quantity),base_uom_code=VALUES(base_uom_code)""",
-                    (batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], family_id, article_id, mvt, posting, base_qty, net_sold, base_uom),
-                )
+            if family_id is not None and mvt in FAMILY_SALE_MOVEMENTS:
+                # Family movement is a DERIVED operational measure. Preserve the
+                # raw SAP Base quantity/UOM in movement_history, but when explicit
+                # user authority says the family operates in another unit, use
+                # the matching Entry quantity/UOM for the derived movement.
+                operational = confirmed_operational_uom_basis(cur, family_id)
+                movement_qty = base_qty
+                movement_uom = base_uom
+                if (
+                    operational
+                    and str(operational.get('movement_quantity_basis') or '').upper() == 'ENTRY'
+                    and entry_qty is not None
+                    and entry_uom
+                    and str(entry_uom).upper() == str(operational.get('operational_uom_code') or '').upper()
+                ):
+                    movement_qty = entry_qty
+                    movement_uom = str(operational['operational_uom_code']).upper()
+
+                if movement_qty is not None:
+                    net_sold = -movement_qty
+                    cur.execute(
+                        """INSERT INTO family_movement_observation
+                           (batch_id,file_id,sheet_id,raw_id,family_id,article_id,movement_type,posting_date,
+                            base_quantity_signed,net_sold_quantity,base_uom_code)
+                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                           ON DUPLICATE KEY UPDATE family_id=VALUES(family_id),article_id=VALUES(article_id),
+                            base_quantity_signed=VALUES(base_quantity_signed),
+                            net_sold_quantity=VALUES(net_sold_quantity),base_uom_code=VALUES(base_uom_code)""",
+                        (
+                            batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'],
+                            family_id, article_id, mvt, posting,
+                            movement_qty, net_sold, movement_uom,
+                        ),
+                    )
     # Unmapped Seafood movement is isolated to the unresolved Article because
     # family_id remains NULL and therefore cannot enter family movement or
     # mapped inventory roll-forward. Record one Article-level review issue
@@ -1978,7 +2002,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
              price['price'] if price else None, price['type'] if price else None, price['source'] if price else None, price['date'] if price else None,
              m7['sales'], m7['qty'], velocity7, m7['days'], m30['sales'], m30['qty'], velocity30, m30['days'], fm7, fm_uom,
              (inv_position['quantity'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['on_hand_quantity'] if inv else None)),
-             inv['uom_code'] if inv else None,
+             (inv_position['uom'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['uom_code'] if inv else None)),
              (inv_position['movement_through_date'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['observation_date'] if inv else None)),
              dos, doh,
              gp_pct, gp7, gpday, sweet, wgpm, cp['price_a'] if cp else None, cp['price_b'] if cp else None, cp['price_c'] if cp else None,
