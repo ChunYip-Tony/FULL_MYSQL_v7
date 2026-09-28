@@ -3105,6 +3105,157 @@ def resolve_dumping_discrepancy(
             cur.close()
 
 
+def dumping_discrepancy_history(
+    limit: int = 100,
+    status: str | None = None,
+) -> dict[str, Any]:
+    limit = max(1, min(int(limit or 100), 300))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_true_stock_tables(cur)
+        conn.commit()
+        if status:
+            s = str(status).strip().upper()
+            cur.execute(
+                """SELECT discrepancy_id,family_id,main_article_number,scope_type,
+                          article_id,article_number,source_true_stock_id,
+                          ean_upc,system_oh_quantity,true_stock_quantity,
+                          discrepancy_quantity,uom_code,queue_status,
+                          created_at,updated_at,resolved_at,resolved_by,resolution_note
+                   FROM dumping_discrepancy_queue
+                   WHERE queue_status=%s
+                   ORDER BY COALESCE(resolved_at,updated_at) DESC,discrepancy_id DESC
+                   LIMIT %s""",
+                (s,limit),
+            )
+        else:
+            cur.execute(
+                """SELECT discrepancy_id,family_id,main_article_number,scope_type,
+                          article_id,article_number,source_true_stock_id,
+                          ean_upc,system_oh_quantity,true_stock_quantity,
+                          discrepancy_quantity,uom_code,queue_status,
+                          created_at,updated_at,resolved_at,resolved_by,resolution_note
+                   FROM dumping_discrepancy_queue
+                   WHERE queue_status<>'PENDING'
+                   ORDER BY COALESCE(resolved_at,updated_at) DESC,discrepancy_id DESC
+                   LIMIT %s""",
+                (limit,),
+            )
+        rows = cur.fetchall()
+        cur.close()
+    return {
+        "count": len(rows),
+        "rows": rows,
+        "contract_version": "DUMPING_HISTORY_V1",
+    }
+
+
+def operational_dashboard() -> dict[str, Any]:
+    """Compact operational counts for the four-module public Web App."""
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+
+        cur.execute(
+            """SELECT
+                 COUNT(*) AS total_rows,
+                 SUM(CASE WHEN quick_check_status='READY' THEN 1 ELSE 0 END) AS ready_rows,
+                 SUM(CASE WHEN quick_check_status='QA_HOLD' THEN 1 ELSE 0 END) AS qa_hold_rows,
+                 SUM(CASE WHEN quick_check_status='HISTORICAL_ONLY' THEN 1 ELSE 0 END) AS historical_rows,
+                 MAX(published_at) AS latest_published_at,
+                 MAX(publish_batch_id) AS latest_publish_batch_id
+               FROM quick_check_current"""
+        )
+        quick = cur.fetchone() or {}
+
+        ordering = {"configured_policy_count": 0}
+        if _table_exists(cur, "ordering_policy"):
+            cur.execute(
+                """SELECT
+                     COUNT(*) AS configured_policy_count,
+                     SUM(CASE WHEN enabled=TRUE THEN 1 ELSE 0 END) AS enabled_policy_count
+                   FROM ordering_policy"""
+            )
+            ordering.update(cur.fetchone() or {})
+
+        dumping = {
+            "pending": 0,
+            "resolved": 0,
+            "superseded": 0,
+            "other": 0,
+        }
+        if _table_exists(cur, "dumping_discrepancy_queue"):
+            cur.execute(
+                """SELECT queue_status,COUNT(*) AS cnt
+                   FROM dumping_discrepancy_queue
+                   GROUP BY queue_status"""
+            )
+            for row in cur.fetchall():
+                status = str(row.get("queue_status") or "").upper()
+                n = int(row.get("cnt") or 0)
+                if status == "PENDING":
+                    dumping["pending"] = n
+                elif status == "RESOLVED":
+                    dumping["resolved"] = n
+                elif status == "SUPERSEDED":
+                    dumping["superseded"] = n
+                else:
+                    dumping["other"] += n
+
+        pricing = {
+            "pending_review": 0,
+            "approved_for_execution": 0,
+            "marked_executed": 0,
+            "rejected": 0,
+            "cancelled": 0,
+            "other": 0,
+        }
+        if _table_exists(cur, "price_change_proposal"):
+            cur.execute(
+                """SELECT proposal_status,COUNT(*) AS cnt
+                   FROM price_change_proposal
+                   GROUP BY proposal_status"""
+            )
+            for row in cur.fetchall():
+                status = str(row.get("proposal_status") or "").upper()
+                n = int(row.get("cnt") or 0)
+                key = {
+                    "PENDING_REVIEW":"pending_review",
+                    "APPROVED_FOR_EXECUTION":"approved_for_execution",
+                    "MARKED_EXECUTED":"marked_executed",
+                    "REJECTED":"rejected",
+                    "CANCELLED":"cancelled",
+                }.get(status)
+                if key:
+                    pricing[key] = n
+                else:
+                    pricing["other"] += n
+
+        true_stock = {"active_count": 0}
+        if _table_exists(cur, "manual_true_stock"):
+            cur.execute(
+                """SELECT COUNT(*) AS active_count
+                   FROM manual_true_stock
+                   WHERE override_status='ACTIVE'"""
+            )
+            true_stock.update(cur.fetchone() or {})
+
+        cur.close()
+
+    negative = negative_stock_queue(limit=500)
+    return {
+        "contract_version": "OPERATIONS_DASHBOARD_V1",
+        "quick_check": quick,
+        "ordering": ordering,
+        "dumping": dumping,
+        "price_change": pricing,
+        "true_stock": true_stock,
+        "inventory_attention": {
+            "negative_stock_actionable_owner_count": negative.get("actionable_owner_count",0),
+            "negative_stock_blocked_owner_count": negative.get("blocked_owner_count",0),
+        },
+    }
+
+
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
