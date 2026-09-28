@@ -1,13 +1,22 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.119 Single-Service Edition
+Version: 7.0.122 Single-Service Edition
 
-Canonical runtime version: 7.0.119-single-service
+Canonical runtime version: 7.0.122-single-service
 Web App V2 route: /app/v2
 
-v7.0.119:
-- 7 supported-day Price vs Sales graph now has visible points and numeric labels for Qty Sold and Avg Price.
-- PERFORMANCE Sales Audit now identifies the unmapped POS portion behind Canonical POS vs Mapped UPC Total differences.
-- Top unmapped UPCs are shown with sales, qty and mapping status.
-- Canonical POS remains the authoritative Report Date Sales total.
-- Top 100 remains a review queue rather than disappearing when no price is immediately actionable.
-- Elder-friendly grouped/colorful Family and UPC pages remain active.
+V2 main functions:
+- CORE
+- PI
+- PERFORMANCE
+
+v7.0.122:
+- Modern flat non-card UI with smaller, cleaner sizing.
+- Family and UPC metrics are separated into themed section/list blocks.
+- Search results show UPC Type labels.
+- Every visible Qty includes UOM; unresolved UOM is shown explicitly.
+- No OH displays the reason instead of a blank value.
+- UPC page now includes Effective OH.
+- Family OH supports receiving/main-article fallback.
+- 7D Price Trend now includes Qty Sold, Avg Price, and GP$ curves.
+- GP$ curve uses current authoritative cost and discloses that basis.
+- Performance Sales Audit keeps canonical POS as authority and identifies unmapped UPC differences.
