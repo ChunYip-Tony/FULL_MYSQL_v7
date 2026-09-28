@@ -1,5 +1,5 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.122 Single-Service Edition
+Version: 7.0.123 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
@@ -7,7 +7,7 @@ Canonical V2 runtime:
 - Top-level functions: CORE / PI / PERFORMANCE
 - Standalone Main ORDERING remains cancelled.
 
-v7.0.122:
+v7.0.123:
 - Compact modern flat UI; no primary detail card layout.
 - Family and UPC metrics are separated into semantic list sections.
 - UI sizing reduced while retaining readable text and touch targets.
@@ -19,3 +19,6 @@ v7.0.122:
 - Price trend includes Qty, Avg Price and GP$ curves.
 - GP$ uses historical applicable cost as-of each supported sales date; missing historical cost leaves a gap instead of zero.
 - Completed supported-date rules remain authoritative.
+
+Price trend curves: GP$ + Avg Selling Price only.
+Qty Sold is not plotted on the 7 supported-day chart.
