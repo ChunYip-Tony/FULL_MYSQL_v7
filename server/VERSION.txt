@@ -1,5 +1,5 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.149 Single-Service Edition
+Version: 7.0.150 Single-Service Edition
 
 v7.0.149 DigitalOcean Deploy Fix:
 - Removed api/worker import smoke from Docker image build because App Platform runtime secrets are not guaranteed during build.
@@ -92,6 +92,12 @@ v7.0.148 Deployment Startup Hardening:
 - Added missing typing.Any import defensively to prevent annotation-time API startup failures.
 - Docker build now compiles Python sources and imports api + worker before image release.
 - Startup/import regressions now fail during build instead of causing a deploy-phase container crash.
+
+v7.0.150 Live Phase 3 Upload Visibility:
+- Current upload status now exposes pipeline_run.detail_json.phase3_stage.
+- Recent Uploads now returns the latest POST_RAW_PIPELINE / PHASE3_RERUN run per batch.
+- Phase 3 shows live stages such as PHASE3_CONNECT, PHASE3_QUICK_CHECK_REBUILD, PHASE3_ANALYSIS_LAYER_REFRESH, PHASE3_AUDIT, and PHASE3_FINALIZE instead of staying Pending until the final phase3_batch_result row exists.
+- Final Phase 3 result still comes from phase3_batch_result and remains authoritative.
 
 Public Web App main navigation:
 - Quick Check
