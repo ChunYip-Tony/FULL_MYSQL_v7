@@ -72,6 +72,27 @@ def _department_from_price_subdept(code: str | None) -> str | None:
         return '500'
     return None
 
+def _department_from_merch_category(code: str | None) -> str | None:
+    """Map perishable SAP merchandise categories to app department codes.
+
+    Current authoritative OH layout:
+    - 201... => Meat (300)
+    - 301... / 302... => Produce (500)
+    - 401... => Seafood (400)
+
+    Unknown categories remain unresolved rather than guessed.
+    """
+    if not code:
+        return None
+    s = str(code).strip()
+    if s.startswith('201'):
+        return '300'
+    if s.startswith('301') or s.startswith('302'):
+        return '500'
+    if s.startswith('401'):
+        return '400'
+    return None
+
 
 def _j(v: Any) -> dict[str, Any]:
     if isinstance(v, dict):
@@ -853,6 +874,7 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
         hmap = _sheet_header_map(cur, 'raw_on_hand', sh['sheet_id'], sh['header_row_number'])
         c_article = _pick_exact(hmap, ['Article', 'Article Number'])
         c_upc = _pick_exact(hmap, ['UPC', 'EAN', 'Barcode', 'Sales Set'])
+        c_merch = _pick_exact(hmap, ['Mdse Cat.', 'Mdse Cat', 'Merch. Cat.', 'Merch Cat', 'Merchandise Category'])
         # SAP stock/OH extracts use Unrestr. as the actual unrestricted stock.
         # Do NOT substring-match generic "Stock": that can select "Stock in Transit",
         # which is a different quantity and was the root cause of v7.0.50 zero-OH rows.
@@ -871,6 +893,8 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
             p = _j(rr['raw_payload'])
             article_num = _id(p.get(c_article)) if c_article else None
             ean = _id(p.get(c_upc)) if c_upc else None
+            merch_category = _id(p.get(c_merch)) if c_merch else None
+            department_code = _department_from_merch_category(merch_category)
             qty = _num(p.get(c_oh))
             if qty is None or (not article_num and not ean):
                 continue
@@ -878,6 +902,24 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
             upc_id = _find_upc_id(cur, ean)
             obs_date = _date(p.get(c_date)) if c_date else (f.get('coverage_end_date') or f.get('filename_date_candidate'))
             uom = (_text(p.get(c_uom)) or '').upper() or None if c_uom else None
+
+            if article_num and department_code:
+                cur.execute(
+                    """INSERT INTO article_department_observation
+                       (article_id,article_number,department_code,department_name,source_type,
+                        business_date,batch_id,file_id,sheet_id,source_row_number)
+                       VALUES (%s,%s,%s,%s,'ON_HAND',%s,%s,%s,%s,%s)
+                       ON DUPLICATE KEY UPDATE
+                         article_id=VALUES(article_id),
+                         department_name=VALUES(department_name),
+                         business_date=VALUES(business_date),
+                         batch_id=VALUES(batch_id)""",
+                    (
+                        article_id, article_num, department_code, DEPARTMENT_REGISTRY[department_code],
+                        obs_date, batch_id, f['file_id'], sh['sheet_id'], rr['source_row_number'],
+                    ),
+                )
+
             cur.execute(
                 """INSERT INTO inventory_observation
                    (batch_id,file_id,sheet_id,raw_id,source_row_number,observation_date,article_number,article_id,family_id,
