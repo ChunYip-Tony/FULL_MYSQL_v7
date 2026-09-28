@@ -192,6 +192,26 @@ def expire_true_stock_for_new_oh(cur, new_oh_file_id: int) -> dict[str, int]:
     return {"true_stock_expired": expired, "dumping_rows_superseded": dumping}
 
 
+def _stock_state(quantity: Any) -> dict[str, Any]:
+    """Return an explicit inventory state without mutating the quantity."""
+    if quantity is None:
+        return {"negative_stock": False, "stock_status": "UNKNOWN"}
+    try:
+        q = Decimal(str(quantity))
+    except Exception:
+        return {"negative_stock": False, "stock_status": "UNKNOWN"}
+    if q < 0:
+        return {"negative_stock": True, "stock_status": "NEGATIVE"}
+    if q == 0:
+        return {"negative_stock": False, "stock_status": "ZERO"}
+    return {"negative_stock": False, "stock_status": "POSITIVE"}
+
+
+def _annotate_stock_state(row: dict[str, Any] | None, quantity_key: str = "current_oh") -> None:
+    if row is not None:
+        row.update(_stock_state(row.get(quantity_key)))
+
+
 def _numeric_key(value: str) -> str:
     digits = "".join(ch for ch in str(value) if ch.isdigit())
     if not digits:
@@ -306,6 +326,8 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                 ),
             )
         rows = cur.fetchall()
+        for row in rows:
+            _annotate_stock_state(row)
         cur.close()
 
     return {"query": q, "count": len(rows), "results": rows}
@@ -352,6 +374,7 @@ def ready_quick_checks_with_system_oh(limit: int = 50) -> dict[str, Any]:
                 row["current_oh_uom"] = pos.get("uom")
                 row["oh_date"] = pos.get("movement_through_date")
             row["true_stock_required_uom"] = ctx.get("uom_code") if ctx else row.get("current_oh_uom")
+            _annotate_stock_state(row)
         cur.close()
     return {"count": len(rows), "results": rows}
 
@@ -596,6 +619,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             "article_number": (true_stock.get("article_number") if true_stock else system_oh.get("article_number")) if (true_stock or system_oh) else None,
         }
 
+        _annotate_stock_state(row)
+        effective_oh.update(_stock_state(effective_oh.get("quantity")))
+
         detail = {
             "item": row,
             "system_oh": {
@@ -644,6 +670,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             "latest_on_hand_file_id": latest_oh_file_id,
             "related_upcs": related,
         }
+        _annotate_stock_state(detail["system_oh"], "quantity")
+        if detail["actual_oh"] is not None:
+            _annotate_stock_state(detail["actual_oh"], "quantity")
         conn.commit()
         cur.close()
         return detail
