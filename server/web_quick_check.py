@@ -34,7 +34,7 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.107</div></div>
+    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.108</div></div>
     <div class="row" style="justify-content:space-between">
       <div id="globalStatus" class="msg">Public operational app</div>
       <a href="/admin" style="font-size:11px;color:var(--muted);text-decoration:none">Admin</a>
@@ -172,18 +172,20 @@ async function loadDashboard(){
   $('overviewMeta').textContent='Loading operational status…';
   try{
     const d=await api('/v1/app/dashboard');
-    const q=d.quick_check||{}, inv=d.inventory_attention||{}, ts=d.true_stock||{}, du=d.dumping||{}, pc=d.price_change||{}, ord=d.ordering||{};
+    const q=d.quick_check||{}, inv=d.inventory_attention||{}, ts=d.true_stock||{}, du=d.dumping||{}, pc=d.price_change||{}, ord=d.ordering||{}, ow=d.order_workflow||{};
     $('overviewMetrics').innerHTML=[
       metric('Quick READY',fmt(q.ready_rows,0)),
       metric('QA HOLD',fmt(q.qa_hold_rows,0)),
       metric('Negative Stock',fmt(inv.negative_stock_actionable_owner_count,0)),
       metric('Active True Stock',fmt(ts.active_count,0)),
       metric('Pending Dumping',fmt(du.pending,0)),
+      metric('Submitted Orders',fmt(ow.marked_submitted,0)),
       metric('Price Review',fmt(pc.pending_review,0))
     ].join('');
     $('overviewMeta').textContent='Batch '+(q.latest_publish_batch_id??'—')+
       ' · published '+(q.latest_published_at||'—')+
       ' · Ordering policies '+fmt(ord.enabled_policy_count??ord.configured_policy_count,0)+
+      ' · Draft/Confirmed '+fmt(ow.draft,0)+'/'+fmt(ow.confirmed,0)+
       ' · Price approved '+fmt(pc.approved_for_execution,0);
   }catch(e){$('overviewMeta').textContent=e.message;$('overviewMeta').className='msg error'}
 }
