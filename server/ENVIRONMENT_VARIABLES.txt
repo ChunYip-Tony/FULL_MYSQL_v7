@@ -15,23 +15,32 @@ FULLMYSQL_API_TOKENS_JSON remains supported only as a backward-compatible fallba
 If private VPC is not enabled yet, DATABASE_URL may be used temporarily instead of DATABASE_PRIVATE_URL.
 Do not create a separate App Platform Worker component for this edition.
 
-Optional ChatGPT Google Sheet bridge (v7.0.84):
+ChatGPT Google Sheet bridge (v7.0.124+):
+
+Preferred transport — Google Apps Script Web App (no service-account JSON):
 FULLMYSQL_CHATGPT_SHEET_ENABLED=0
 FULLMYSQL_CHATGPT_SHEET_REQUIRED=0
+FULLMYSQL_CHATGPT_SHEET_TRANSPORT=APPS_SCRIPT
 FULLMYSQL_CHATGPT_SHEET_ID=1kZQg_dQ79Jagg7hkBKs4YX33QBy9ByrDvq5KActCgwI
 FULLMYSQL_CHATGPT_BRIDGE_ACTIVE_SOURCE=HYBRID_SQLITE
+FULLMYSQL_APPS_SCRIPT_WEB_APP_URL=<production Apps Script /exec URL>
+FULLMYSQL_APPS_SCRIPT_WEBHOOK_SECRET=<encrypted high-entropy shared secret>
+
+Apps Script setup:
+1. Follow docs/GOOGLE_APPS_SCRIPT_BRIDGE.md.
+2. Store the same secret in Apps Script Script Properties as FULLMYSQL_WEBHOOK_SECRET.
+3. Store FULLMYSQL_APPS_SCRIPT_WEBHOOK_SECRET in DigitalOcean as an ENCRYPTED secret.
+4. Set FULLMYSQL_CHATGPT_SHEET_ENABLED=1.
+5. Keep FULLMYSQL_CHATGPT_SHEET_REQUIRED=0 for the first smoke-test publish.
+6. Verify BRIDGE_STATUS=PASS and MYSQL_SOURCE_STATUS batch/readback parity.
+7. Then set FULLMYSQL_CHATGPT_SHEET_REQUIRED=1 so every future READY batch must publish/read back before the outer pipeline can complete.
+8. Keep FULLMYSQL_CHATGPT_BRIDGE_ACTIVE_SOURCE=HYBRID_SQLITE until FULL MYSQL analysis parity is approved; then change it to FULL_MYSQL.
+
+Legacy optional transport — Service Account:
+FULLMYSQL_CHATGPT_SHEET_TRANSPORT=SERVICE_ACCOUNT
 FULLMYSQL_GOOGLE_SERVICE_ACCOUNT_JSON=<encrypted Google service-account JSON>
 
-Deployment sequence:
-1. Share FULL_MYSQL_CHATGPT_ANALYSIS with the service account as Editor.
-2. Add FULLMYSQL_GOOGLE_SERVICE_ACCOUNT_JSON as an ENCRYPTED runtime secret.
-3. Set FULLMYSQL_CHATGPT_SHEET_ENABLED=1.
-4. Keep FULLMYSQL_CHATGPT_SHEET_REQUIRED=0 for the first smoke-test publish.
-5. Verify BRIDGE_STATUS=PASS and MYSQL_SOURCE_STATUS batch/readback parity.
-6. Then set FULLMYSQL_CHATGPT_SHEET_REQUIRED=1 so every future READY batch must publish/read back before the outer pipeline can complete.
-7. Keep FULLMYSQL_CHATGPT_BRIDGE_ACTIVE_SOURCE=HYBRID_SQLITE until FULL MYSQL analysis parity is approved; then change it to FULL_MYSQL.
-
-Never commit the service-account JSON to GitHub.
+Never commit the Apps Script webhook secret or service-account JSON to GitHub.
 
 
 # v7.0.104 Admin Console browser sessions
