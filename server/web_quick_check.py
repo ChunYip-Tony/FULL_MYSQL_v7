@@ -30,15 +30,10 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:650}button.primary{ba
   <div class="top">
     <h1>FULL MYSQL · Quick Check</h1>
     <div class="row">
-      <input id="token" class="token" type="password" placeholder="API token (session only)" autocomplete="off">
-      <button id="saveToken">Use token</button>
-      <button id="clearToken">Clear</button>
-    </div>
-    <div class="row" style="margin-top:8px">
       <input id="q" placeholder="Search Article, UPC, or item name">
       <button id="search" class="primary">Search</button>
     </div>
-    <div id="status" class="msg">Enter a token and search.</div>
+    <div id="status" class="msg">Search an item.</div>
   </div>
 
   <div id="results"></div>
@@ -102,14 +97,11 @@ const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(v,d=2)=>{if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):String(v)}
 const money=v=>v===null||v===undefined||v===''?'—':'$'+fmt(v,2);
-const token=()=>sessionStorage.getItem('fullmysql_token')||$('token').value.trim();
 let currentUpc=null;
 
 function setStatus(text,bad=false){$('status').textContent=text;$('status').className='msg'+(bad?' error':'')}
 async function api(path,opts={}){
-  const t=token(); if(!t) throw new Error('API token required');
-  const headers=Object.assign({'Authorization':'Bearer '+t},opts.headers||{});
-  const r=await fetch(path,Object.assign({},opts,{headers}));
+  const r=await fetch(path,opts);
   let body=null; try{body=await r.json()}catch{}
   if(!r.ok){const detail=body?.detail;throw new Error(typeof detail==='string'?detail:(detail?.reason||('HTTP '+r.status)))}
   return body;
@@ -193,12 +185,9 @@ async function submitTrueStock(){
   }catch(e){$('trueStockMsg').textContent=e.message;$('trueStockMsg').className='msg error'}
 }
 
-$('saveToken').addEventListener('click',()=>{const t=$('token').value.trim();if(t){sessionStorage.setItem('fullmysql_token',t);$('token').value='';setStatus('Token stored for this browser session.')}});
-$('clearToken').addEventListener('click',()=>{sessionStorage.removeItem('fullmysql_token');$('token').value='';setStatus('Token cleared.')});
 $('search').addEventListener('click',search);
 $('q').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 $('submitTrueStock').addEventListener('click',submitTrueStock);
-if(sessionStorage.getItem('fullmysql_token'))setStatus('Session token available. Search an item.');
 </script>
 </body>
 </html>"""
