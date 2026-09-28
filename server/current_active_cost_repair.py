@@ -8,8 +8,9 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from data_coverage import source_data_days
+from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
-from manual_overrides import confirmed_family_cost
+from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
 VERSION = "7.0.45-current-active-cost-lineage-repair"
 
@@ -155,7 +156,7 @@ def _source_type_supported(cur, value: str) -> bool:
 
 
 def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str | None]:
-    completed_through = date.today() - timedelta(days=1)
+    completed_through = completed_through_date()
     days = source_data_days(
         cur,
         "sales_by_price_type",
@@ -543,7 +544,43 @@ def _backfill_receipt_cost(cur, target_family_ids: list[int]) -> int:
               )""",
         tuple(target_family_ids),
     )
-    return int(cur.rowcount)
+    inserted = int(cur.rowcount)
+
+    # If the business explicitly confirms that Entry UOM is the true
+    # receiving/cost basis for a family, repair DERIVED receipt-cost rows from
+    # amount / entry_quantity. RAW movement_history remains untouched.
+    for family_id in target_family_ids:
+        basis = confirmed_receipt_entry_cost_basis(cur, family_id)
+        if not basis:
+            continue
+        entry_uom_code = str(basis.get("entry_uom_code") or "").strip().upper()
+        if not entry_uom_code:
+            continue
+        cur.execute(
+            """UPDATE article_cost_observation co
+               JOIN movement_history m
+                 ON co.raw_table_name='raw_movement'
+                AND co.raw_id=m.raw_id
+               JOIN dim_uom eu
+                 ON UPPER(eu.uom_code)=UPPER(m.entry_uom_code)
+               SET co.cost_amount=ABS(m.amount_local_currency/m.entry_quantity),
+                   co.cost_uom_id=eu.uom_id,
+                   co.base_uom_id=eu.uom_id,
+                   co.cost_per_base_uom=ABS(m.amount_local_currency/m.entry_quantity),
+                   co.cost_status='OBSERVED',
+                   co.confidence=1.0
+               WHERE co.family_id=%s
+                 AND co.source_type='MOVEMENT_RECEIPT_VALUATION'
+                 AND m.movement_type IN ('101','107','109')
+                 AND UPPER(m.entry_uom_code)=UPPER(%s)
+                 AND m.entry_quantity IS NOT NULL
+                 AND m.entry_quantity<>0
+                 AND m.amount_local_currency IS NOT NULL
+                 AND m.amount_local_currency<>0""",
+            (int(family_id), entry_uom_code),
+        )
+
+    return inserted
 
 
 def _backfill_official_cost(cur, target_family_ids: list[int]) -> int:
