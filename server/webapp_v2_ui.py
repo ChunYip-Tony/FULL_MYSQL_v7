@@ -584,9 +584,13 @@ body{
   background:#fff0f0!important;color:#9b252b!important;font-weight:900!important;
 }
 #upload .delete-qa-batch:hover{background:#ffe5e5!important}
+#upload .delete-qa-batch.confirming{
+  background:#a8282f!important;color:#fff!important;border-color:#8f1e24!important
+}
+#upload .delete-qa-msg{margin-top:5px;font-size:9px}
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.143</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.144</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -964,15 +968,32 @@ function renderWebUploadRecentBatch(b){
       '</div></div><span class="pill '+(Number(x.error_count||0)>0?'bad':'ok')+'">'+esc(x.processing_status||'UNKNOWN')+'</span></div>'
     ).join('')+'</div>'+
     ((String(b.processing_status||'').toUpperCase()==='QA_HOLD'&&!b.phase2c_status&&!b.phase3_status)
-      ? '<button class="delete-qa-batch" data-delete-batch="'+esc(b.batch_id)+'" type="button">Delete QA HOLD Batch</button>'
+      ? '<button class="delete-qa-batch" data-delete-batch="'+esc(b.batch_id)+'" data-confirmed="0" type="button">Delete QA HOLD Batch</button><div class="msg delete-qa-msg" data-delete-msg="'+esc(b.batch_id)+'"></div>'
       : '')+
   '</div>';
 }
 
-async function deleteQAHoldBatch(batchId){
+async function deleteQAHoldBatch(batchId,button){
   let id=Number(batchId);
   if(!Number.isInteger(id)||id<1)return;
-  if(!confirm('Delete QA HOLD Batch '+id+' permanently?\n\nThis is allowed only when Phase 2C / Phase 3 never started. READY batches cannot be deleted.'))return;
+  let msg=document.querySelector('#uploadRecent [data-delete-msg="'+id+'"]');
+
+  if(String(button?.dataset?.confirmed||'0')!=='1'){
+    if(button){
+      button.dataset.confirmed='1';
+      button.textContent='Confirm Delete Batch '+id;
+      button.classList.add('confirming');
+    }
+    if(msg)msg.textContent='Press Confirm Delete Batch '+id+' again to permanently remove this raw-stage QA HOLD batch.';
+    return;
+  }
+
+  if(button){
+    button.disabled=true;
+    button.textContent='Deleting Batch '+id+'…';
+  }
+  if(msg)msg.textContent='Deleting…';
+
   try{
     let d=await api('/v1/web-upload/batches/'+id+'/delete',{
       method:'POST',
@@ -982,12 +1003,24 @@ async function deleteQAHoldBatch(batchId){
     if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
     webUploadSession=null;
     $('uploadStatusCard').classList.add('hide');
-    $('uploadMsg').textContent='Batch '+id+' deleted · '+fmt(d.file_count,0)+' file(s) removed.';
+    if(msg)msg.textContent='Batch '+id+' deleted · '+fmt(d.file_count,0)+' file(s) removed.';
+    $('uploadMsg').textContent='Batch '+id+' deleted.';
     await loadWebUploadRecent();
     await loadWebUploadCalendar();
     await loadLatestReferenceUploads();
   }catch(e){
-    $('uploadMsg').textContent='Delete blocked: '+e.message;
+    let reason=e?.message||String(e);
+    if(msg){
+      msg.className='msg bad delete-qa-msg';
+      msg.textContent='Delete failed: '+reason;
+    }
+    $('uploadMsg').textContent='Delete failed for Batch '+id+': '+reason;
+    if(button){
+      button.disabled=false;
+      button.dataset.confirmed='0';
+      button.textContent='Delete QA HOLD Batch';
+      button.classList.remove('confirming');
+    }
   }
 }
 
@@ -998,7 +1031,7 @@ async function loadWebUploadRecent(){
     $('uploadRecentMsg').textContent=(d.count||0)+' recent batch(es)';
     $('uploadRecent').innerHTML=(d.batches||[]).map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
     document.querySelectorAll('#uploadRecent [data-delete-batch]').forEach(
-      b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch)
+      b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch,b)
     );
   }catch(e){$('uploadRecentMsg').textContent=e.message}
 }
