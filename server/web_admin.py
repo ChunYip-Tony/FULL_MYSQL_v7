@@ -173,7 +173,7 @@ async function savePolicy(){
     enabled:true,
     notes:$('policyNotes').value.trim()||null
   };
-  try{await api('/v1/admin/ordering/policy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('policyMsg').textContent='Saved.';$('policyMsg').className='msg ok';await loadPolicies()}
+  try{await api('/v1/admin/ordering/policy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('policyMsg').textContent='Saved.';$('policyMsg').className='msg ok';await Promise.all([loadPolicies(),loadOrderWorkflow()])}
   catch(e){$('policyMsg').textContent=e.message;$('policyMsg').className='msg danger'}
 }
 async function addOrderRecommendation(upc){
