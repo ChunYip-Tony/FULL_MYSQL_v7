@@ -1566,7 +1566,7 @@ def _product_class(article_desc: str | None, family_desc: str | None, category: 
 def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     # Authority order:
     # 1) valid 101/107/109 receipt valuation
-    # 2) explicit supported OH-report cost
+    # 2) supported OH-report cost: explicit unit cost or Total Value / Unrestricted Qty
     # 3) Live/Fresh/Frozen official report cost
     # 4) user-confirmed fallback
     cur.execute(
