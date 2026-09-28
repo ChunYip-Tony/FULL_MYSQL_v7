@@ -3154,6 +3154,94 @@ def _canonical_report_date_sales(
     }
 
 
+def _canonical_report_date_mapping_breakdown(
+    cur,
+    day_entry: dict[str,Any],
+    mapped_upc_ids: set[int],
+) -> dict[str,Any]:
+    """Explain canonical POS vs current V2 serving-map differences."""
+    day=day_entry["date"]
+    file_id=int(day_entry["file_id"])
+    coverage=str(day_entry.get("coverage_kind") or "")
+
+    if coverage!="DERIVED_PERIOD_RESIDUAL":
+        cur.execute(
+            """SELECT ean_upc,upc_id,MAX(description) AS description,
+                      COALESCE(SUM(sales_amount),0) AS sales_amount,
+                      COALESCE(SUM(sold_quantity),0) AS sold_quantity
+               FROM sales_period_observation
+               WHERE file_id=%s
+                 AND period_start_date=%s
+                 AND period_end_date=%s
+                 AND temporal_grain='SINGLE_DATE'
+               GROUP BY ean_upc,upc_id
+               ORDER BY sales_amount DESC""",
+            (file_id,day,day),
+        )
+    else:
+        cur.execute(
+            """SELECT ean_upc,upc_id,NULL AS description,
+                      COALESCE(SUM(sales_amount),0) AS sales_amount,
+                      COALESCE(SUM(sold_quantity),0) AS sold_quantity
+               FROM pos_daily_backfill_observation
+               WHERE source_file_id=%s
+                 AND business_date=%s
+               GROUP BY ean_upc,upc_id
+               ORDER BY sales_amount DESC""",
+            (file_id,day),
+        )
+
+    source_rows=[]
+    mapped_sales=Decimal("0")
+    mapped_qty=Decimal("0")
+    unmapped_sales=Decimal("0")
+    unmapped_qty=Decimal("0")
+    unmapped=[]
+
+    for r in cur.fetchall():
+        upc_id=int(r["upc_id"]) if r.get("upc_id") is not None else None
+        sales=_d(r.get("sales_amount"))
+        qty=_d(r.get("sold_quantity"))
+        is_mapped=bool(upc_id is not None and upc_id in mapped_upc_ids)
+        row={
+            "ean_upc":r.get("ean_upc"),
+            "upc_id":upc_id,
+            "description":r.get("description"),
+            "sales_amount":sales,
+            "sold_quantity":qty,
+            "mapping_status":"MAPPED_TO_CURRENT_V2" if is_mapped else (
+                "SOURCE_UPC_ID_UNRESOLVED" if upc_id is None
+                else "NOT_IN_CURRENT_QUICK_CHECK_SERVING"
+            ),
+        }
+        source_rows.append(row)
+        if is_mapped:
+            mapped_sales+=sales
+            mapped_qty+=qty
+        else:
+            unmapped_sales+=sales
+            unmapped_qty+=qty
+            unmapped.append(row)
+
+    unmapped.sort(
+        key=lambda x:(
+            -float(x.get("sales_amount") or 0),
+            -float(x.get("sold_quantity") or 0),
+            str(x.get("ean_upc") or ""),
+        )
+    )
+    return {
+        "source_row_count":len(source_rows),
+        "mapped_source_sales":mapped_sales,
+        "mapped_source_qty":mapped_qty,
+        "unmapped_source_sales":unmapped_sales,
+        "unmapped_source_qty":unmapped_qty,
+        "unmapped_upc_count":len(unmapped),
+        "top_unmapped_upcs":unmapped[:25],
+        "explanation":"UNMAPPED = canonical POS row not represented by the current V2 Quick Check serving set.",
+    }
+
+
 def latest_performance_date() -> dict[str,Any]:
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
@@ -3213,6 +3301,19 @@ def performance_report(
         anchor_day_entry=[x for x in latest_days if x["date"]==anchor]
         canonical_day_sales=(
             _canonical_report_date_sales(cur,anchor_day_entry[0])
+            if anchor_day_entry else None
+        )
+        current_serving_upc_ids={
+            int(x["upc_id"])
+            for x in rows
+            if x.get("upc_id") is not None
+        }
+        mapping_breakdown=(
+            _canonical_report_date_mapping_breakdown(
+                cur,
+                anchor_day_entry[0],
+                current_serving_upc_ids,
+            )
             if anchor_day_entry else None
         )
         summary={
@@ -3472,6 +3573,35 @@ def performance_report(
                 if canonical_report_sales is not None else None
             ),
             "canonical_source":canonical_day_sales,
+            "mapping_breakdown":mapping_breakdown,
+            "unmapped_source_sales":(
+                mapping_breakdown.get("unmapped_source_sales")
+                if mapping_breakdown else None
+            ),
+            "unmapped_source_qty":(
+                mapping_breakdown.get("unmapped_source_qty")
+                if mapping_breakdown else None
+            ),
+            "unmapped_upc_count":(
+                mapping_breakdown.get("unmapped_upc_count")
+                if mapping_breakdown else None
+            ),
+            "top_unmapped_upcs":(
+                mapping_breakdown.get("top_unmapped_upcs",[])
+                if mapping_breakdown else []
+            ),
+            "mapped_source_sales":(
+                mapping_breakdown.get("mapped_source_sales")
+                if mapping_breakdown else None
+            ),
+            "mapped_source_vs_report_difference":(
+                mapped_report_sales-_d(mapping_breakdown.get("mapped_source_sales"))
+                if mapping_breakdown else None
+            ),
+            "canonical_minus_mapped_source":(
+                canonical_report_sales-_d(mapping_breakdown.get("mapped_source_sales"))
+                if canonical_report_sales is not None and mapping_breakdown else None
+            ),
             "mapped_basis":"SUM_OF_V2_MAPPED_UPCS_IN_REPORT_SCOPE",
             "audit_rule":"CANONICAL_SOURCE_TOTAL_IS_REPORT_DATE_SALES_AUTHORITY",
         }
@@ -3544,7 +3674,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V5",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V6",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
