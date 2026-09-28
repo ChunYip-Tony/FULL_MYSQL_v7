@@ -16,7 +16,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
@@ -25,7 +25,7 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 
-VERSION='7.0.104-single-service'
+VERSION='7.0.105-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1616,6 +1616,15 @@ def app_cancel_true_stock(
     return json.loads(json.dumps(result,default=j))
 
 
+@app.get('/v1/app/dashboard')
+def app_dashboard():
+    try:
+        result=operational_dashboard()
+    except Exception as exc:
+        raise HTTPException(500,f'Operations dashboard failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
 @app.get('/v1/app/ordering')
 def app_ordering(limit:int=80):
     return json.loads(json.dumps(ordering_queue(limit),default=j))
@@ -1757,6 +1766,15 @@ def admin_mark_price_change_executed(
 def app_pending_dumping():
     rows=pending_dumping_discrepancies()
     return json.loads(json.dumps({'count':len(rows),'rows':rows},default=j))
+
+
+@app.get('/v1/app/dumping/history')
+def app_dumping_history(limit:int=100,status:str|None=None):
+    try:
+        result=dumping_discrepancy_history(limit,status)
+    except Exception as exc:
+        raise HTTPException(500,f'Dumping history failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.post('/v1/app/dumping/{discrepancy_id}/resolve')
