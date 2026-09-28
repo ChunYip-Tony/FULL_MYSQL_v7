@@ -130,7 +130,7 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 
 <section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day Sales Trend</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill" style="color:var(--gp)">● GP$ (current cost)</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day GP$ vs Avg Selling Price</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill" style="color:var(--gp)">● GP$ (current cost)</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
 <section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
@@ -309,49 +309,90 @@ async function price(u){try{
 }catch(e){alert(e.message)}}
 
 function chart(rows){
-  let c=$('chart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=320;
+  let c=$('chart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=310;
   c.width=w*R;c.height=h*R;ctx.setTransform(R,0,0,R,0,0);ctx.clearRect(0,0,w,h);
-  let a=rows.slice(-7),p={l:38,r:28,t:48,b:58};
-  if(!a.length){ctx.fillStyle=getComputedStyle(document.body).color;ctx.font='15px system-ui';ctx.fillText('No trend data',20,30);return}
-  let prices=a.map(z=>Number(z.avg_sold_price)).filter(Number.isFinite);
-  let qtys=a.map(z=>Number(z.sold_quantity)).filter(Number.isFinite);
-  let gps=a.map(z=>Number(z.gp_dollars)).filter(Number.isFinite);
-  let pmax=Math.max(...prices,1),qmax=Math.max(...qtys,1),gpmin=gps.length?Math.min(...gps):0,gpmax=gps.length?Math.max(...gps):1;
-  if(gpmax===gpmin){gpmax=gpmin+1}
+  let a=rows.slice(-7),p={l:38,r:30,t:42,b:54};
+  if(!a.length){
+    ctx.fillStyle=getComputedStyle(document.body).color;
+    ctx.font='16px system-ui';
+    ctx.fillText('No trend data',20,30);
+    return;
+  }
+
+  let gpVals=a.map(z=>Number(z.gp_dollars)).filter(Number.isFinite);
+  let priceVals=a.map(z=>Number(z.avg_sold_price)).filter(Number.isFinite);
+  let gpMin=Math.min(...gpVals,0),gpMax=Math.max(...gpVals,1);
+  let priceMin=Math.min(...priceVals,0),priceMax=Math.max(...priceVals,1);
+  if(gpMax===gpMin)gpMax=gpMin+1;
+  if(priceMax===priceMin)priceMax=priceMin+1;
+
   let pw=w-p.l-p.r,ph=h-p.t-p.b;
   let xx=i=>p.l+(a.length===1?pw/2:pw*i/(a.length-1));
-  let yp=v=>p.t+ph*(1-v/pmax),yq=v=>p.t+ph*(1-v/qmax),yg=v=>p.t+ph*(1-(v-gpmin)/(gpmax-gpmin));
+  let ygp=v=>p.t+ph*(1-(v-gpMin)/(gpMax-gpMin));
+  let yp=v=>p.t+ph*(1-(v-priceMin)/(priceMax-priceMin));
+
   let line=getComputedStyle(document.documentElement).getPropertyValue('--line');
-  let qtyColor=getComputedStyle(document.documentElement).getPropertyValue('--ok');
+  let gpColor=getComputedStyle(document.documentElement).getPropertyValue('--ok');
   let priceColor=getComputedStyle(document.documentElement).getPropertyValue('--a');
-  let gpColor=getComputedStyle(document.documentElement).getPropertyValue('--gp');
   let saleColor=getComputedStyle(document.documentElement).getPropertyValue('--sale');
   let muted=getComputedStyle(document.documentElement).getPropertyValue('--muted');
   let textColor=getComputedStyle(document.documentElement).getPropertyValue('--text');
-  let uom=a.find(z=>z.qty_uom)?.qty_uom||'—';
 
   ctx.strokeStyle=line;ctx.lineWidth=1;
-  for(let i=0;i<5;i++){let y=p.t+ph*i/4;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke()}
-
-  function curve(getVal,yFn,color,labelFn,labelOffset){
-    ctx.strokeStyle=color;ctx.lineWidth=2.6;ctx.beginPath();let started=false;
-    a.forEach((z,i)=>{let v=Number(getVal(z));if(!Number.isFinite(v)){started=false;return}let x=xx(i),y=yFn(v);if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)});
-    ctx.stroke();
-    a.forEach((z,i)=>{let v=Number(getVal(z));if(!Number.isFinite(v))return;let x=xx(i),y=yFn(v);ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4.5,0,Math.PI*2);ctx.fill();ctx.font='800 10px system-ui';ctx.textAlign='center';ctx.fillStyle=color;ctx.fillText(labelFn(v),x,Math.max(12,Math.min(h-p.b-7,y+labelOffset)))});
+  for(let i=0;i<5;i++){
+    let y=p.t+ph*i/4;
+    ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke();
   }
-  curve(z=>z.sold_quantity,yq,qtyColor,v=>fmt(v,1)+' '+uom,18);
-  curve(z=>z.avg_sold_price,yp,priceColor,v=>'$'+fmt(v,2),-10);
-  curve(z=>z.gp_dollars,yg,gpColor,v=>'GP $'+fmt(v,0),31);
 
-  ctx.font='10px system-ui';ctx.textAlign='center';
+  ctx.strokeStyle=gpColor;ctx.lineWidth=3;ctx.beginPath();
+  let gpOn=false;
+  a.forEach((z,i)=>{
+    let v=Number(z.gp_dollars);
+    if(!Number.isFinite(v)){gpOn=false;return}
+    let x=xx(i),y=ygp(v);
+    if(!gpOn){ctx.moveTo(x,y);gpOn=true}else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  a.forEach((z,i)=>{
+    let v=Number(z.gp_dollars);if(!Number.isFinite(v))return;
+    let x=xx(i),y=ygp(v);
+    ctx.fillStyle=gpColor;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+    ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillStyle=gpColor;
+    ctx.fillText('$'+fmt(v,2),x,Math.min(h-p.b-8,y+19));
+  });
+
+  ctx.strokeStyle=priceColor;ctx.lineWidth=3;ctx.beginPath();
+  let priceOn=false;
+  a.forEach((z,i)=>{
+    let v=Number(z.avg_sold_price);
+    if(!Number.isFinite(v)){priceOn=false;return}
+    let x=xx(i),y=yp(v);
+    if(!priceOn){ctx.moveTo(x,y);priceOn=true}else ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+  a.forEach((z,i)=>{
+    let v=Number(z.avg_sold_price);if(!Number.isFinite(v))return;
+    let x=xx(i),y=yp(v);
+    ctx.fillStyle=priceColor;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+    ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillStyle=priceColor;
+    ctx.fillText('$'+fmt(v,2),x,Math.max(14,y-10));
+  });
+
+  ctx.font='11px system-ui';ctx.textAlign='center';
   a.forEach((z,i)=>{
     let x=xx(i);
-    if((z.price_types||[]).some(v=>v.price_type==='SALE')){ctx.fillStyle=saleColor;ctx.fillRect(x-4,h-p.b+5,8,10)}
-    ctx.fillStyle=muted;ctx.fillText(dayName(z.date).slice(0,3),x,h-23);ctx.fillText(String(z.date).slice(5),x,h-8);
+    if((z.price_types||[]).some(v=>v.price_type==='SALE')){
+      ctx.fillStyle=saleColor;ctx.fillRect(x-4,h-p.b+5,8,11);
+    }
+    ctx.fillStyle=muted;
+    ctx.fillText(dayName(z.date).slice(0,3),x,h-23);
+    ctx.fillText(String(z.date).slice(5),x,h-8);
   });
-  ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillStyle=textColor;ctx.fillText('Qty '+fmt(qmax,1)+' '+uom,4,p.t+3);
-  ctx.textAlign='right';ctx.fillText('Price $'+fmt(pmax,2),w-4,p.t+3);
-  if(gps.length){ctx.textAlign='center';ctx.fillStyle=gpColor;ctx.fillText('GP$ uses historical applicable cost by date',w/2,14)}
+
+  ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillStyle=textColor;
+  ctx.fillText('GP$ '+(gpVals.length?'$'+fmt(gpMax,2):'—'),4,p.t+3);
+  ctx.textAlign='right';
+  ctx.fillText('Avg $ '+(priceVals.length?'$'+fmt(priceMax,2):'—'),w-4,p.t+3);
 }
 
 
