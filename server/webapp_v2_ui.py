@@ -449,8 +449,50 @@ body{
 #upload .upload-progress>div{height:100%;background:linear-gradient(90deg,#0b67a5,#27a2c7);width:0%;transition:width .25s ease}
 @media(max-width:560px){.nav button{font-size:8px!important}.nav button:first-line{font-size:16px}}
 
+
+/* v7.0.135 14-day daily upload coverage calendar */
+#upload .upload-calendar-card{padding:10px!important}
+#upload .upload-calendar-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap}
+#upload .upload-calendar-summary{display:flex;gap:6px;flex-wrap:wrap}
+#upload .upload-calendar-chip{border-radius:999px;padding:3px 8px;font-size:9px;font-weight:850;border:1px solid rgba(73,116,140,.16)}
+#upload .upload-calendar-chip.updated{background:#dff4df;color:#176b34}
+#upload .upload-calendar-chip.partial{background:#fff2c6;color:#855d04}
+#upload .upload-calendar-chip.missing{background:#fde0df;color:#a12a31}
+#upload .upload-calendar-legend{display:flex;gap:8px;flex-wrap:wrap;font-size:9px;color:#527084;margin:6px 0}
+#upload .upload-calendar-legend span:before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:0}
+#upload .upload-calendar-legend .updated:before{background:#49a963}
+#upload .upload-calendar-legend .partial:before{background:#e7b63d}
+#upload .upload-calendar-legend .missing:before{background:#dd5d62}
+#upload .upload-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+#upload .upload-day{
+  min-width:0;min-height:92px;border-radius:10px;padding:6px 5px;border:1px solid rgba(72,118,142,.16);
+  background:rgba(255,255,255,.70);display:flex;flex-direction:column;justify-content:space-between
+}
+#upload .upload-day.updated{background:linear-gradient(180deg,#effbef,#dcf2dd);border-color:#acd6b3}
+#upload .upload-day.partial{background:linear-gradient(180deg,#fffbed,#fff0bd);border-color:#ead18a}
+#upload .upload-day.missing{background:linear-gradient(180deg,#fff3f2,#fbdad8);border-color:#e4acab}
+#upload .upload-day .dow{font-size:8px;text-transform:uppercase;font-weight:850;color:#60798a}
+#upload .upload-day .date{font-size:14px;font-weight:950;color:#12364f;margin-top:1px}
+#upload .upload-day .state{font-size:8px;font-weight:950;margin-top:4px}
+#upload .upload-day.updated .state{color:#17703a}
+#upload .upload-day.partial .state{color:#8a6205}
+#upload .upload-day.missing .state{color:#a72e34}
+#upload .upload-day .srcs{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:5px}
+#upload .upload-day .src{
+  border-radius:5px;padding:2px 3px;text-align:center;font-size:7.5px;font-weight:850;background:rgba(255,255,255,.60)
+}
+#upload .upload-day .src.ok{color:#146e37}.upload-day .src.no{color:#b22f36}
+#upload .upload-day .need{font-size:7.5px;color:#765c32;margin-top:4px;line-height:1.1}
+@media(max-width:560px){
+  #upload .upload-calendar-grid{gap:3px}
+  #upload .upload-day{min-height:83px;padding:5px 3px;border-radius:8px}
+  #upload .upload-day .date{font-size:12px}
+  #upload .upload-day .dow,#upload .upload-day .state,#upload .upload-day .need{font-size:7px}
+  #upload .upload-day .src{font-size:6.8px;padding:2px 1px}
+}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.134</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.135</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -527,6 +569,19 @@ body{
     <div id="uploadServerFiles" style="margin-top:8px"></div>
   </div>
   <div id="uploadMsg" class="msg"></div>
+  <div class="card upload-calendar-card">
+    <div class="upload-calendar-top">
+      <div>
+        <div class="section">Past 14 Days</div>
+        <div id="uploadCalendarRange" class="small"></div>
+      </div>
+      <div id="uploadCalendarSummary" class="upload-calendar-summary"></div>
+    </div>
+    <div class="upload-calendar-legend"><span class="updated">Updated</span><span class="partial">Partial</span><span class="missing">Needs Upload</span></div>
+    <div class="small" style="margin-bottom:7px">A day is Updated when both POS and MVT canonical daily data are present.</div>
+    <div id="uploadCalendarMsg" class="msg"></div>
+    <div id="uploadCalendar" class="upload-calendar-grid"></div>
+  </div>
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">Recent Uploads</div>
   <div id="uploadRecentMsg" class="msg" style="color:#d9eef5!important"></div>
   <div id="uploadRecent"></div>
@@ -543,7 +598,7 @@ const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new 
 let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(id==='pid')return 'pi';return id}
-function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
+function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
@@ -687,6 +742,35 @@ function renderWebUploadStatus(d){
   ).join('');
   return status;
 }
+
+function renderUploadCalendarDay(x){
+  let cls=x.status==='UPDATED'?'updated':(x.status==='PARTIAL'?'partial':'missing');
+  let label=x.status==='UPDATED'?'UPDATED':(x.status==='PARTIAL'?'PARTIAL':'NEEDS UPLOAD');
+  let date=String(x.date||''),md=date.length>=10?date.slice(5).replace('-','/') : date;
+  let miss=(x.missing_sources||[]).length?'Need '+(x.missing_sources||[]).join(' + '):'Complete';
+  return '<div class="upload-day '+cls+'">'+
+    '<div><div class="dow">'+esc(x.weekday||'')+'</div><div class="date">'+esc(md)+'</div><div class="state">'+label+'</div></div>'+
+    '<div><div class="srcs"><div class="src '+(x.pos?.updated?'ok':'no')+'">POS '+(x.pos?.updated?'✓':'✕')+'</div><div class="src '+(x.mvt?.updated?'ok':'no')+'">MVT '+(x.mvt?.updated?'✓':'✕')+'</div></div>'+
+    '<div class="need">'+esc(miss)+'</div></div>'+
+  '</div>';
+}
+async function loadWebUploadCalendar(){
+  $('uploadCalendarMsg').textContent='Checking daily coverage…';
+  try{
+    let d=await api('/v1/web-upload/calendar?days=14'),s=d.summary||{};
+    $('uploadCalendarRange').textContent=(d.window_start||'')+' → '+(d.completed_through||'');
+    $('uploadCalendarSummary').innerHTML=
+      '<span class="upload-calendar-chip updated">'+fmt(s.updated_days,0)+' Updated</span>'+
+      '<span class="upload-calendar-chip partial">'+fmt(s.partial_days,0)+' Partial</span>'+
+      '<span class="upload-calendar-chip missing">'+fmt(s.needs_upload_days,0)+' Need Upload</span>';
+    $('uploadCalendar').innerHTML=(d.days||[]).map(renderUploadCalendarDay).join('');
+    $('uploadCalendarMsg').textContent='';
+  }catch(e){
+    $('uploadCalendarMsg').textContent=e.message;
+    $('uploadCalendar').innerHTML='';
+  }
+}
+
 function renderWebUploadRecentBatch(b){
   let files=b.files||[];
   let qc=b.quick_check_rows==null?'Pending':(fmt(b.quick_check_ready_rows,0)+' / '+fmt(b.quick_check_rows,0)+' READY · '+fmt(b.quick_check_hold_rows,0)+' HOLD');
@@ -726,6 +810,7 @@ async function pollWebUpload(session){
       ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
       : 'Server is processing this batch…';
     await loadWebUploadRecent();
+    if(terminalUploadStatus(status))await loadWebUploadCalendar();
     if(!terminalUploadStatus(status))webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
   }catch(e){$('uploadMsg').textContent=e.message}
 }
@@ -773,7 +858,7 @@ $('uploadDrop').onclick=()=>$('uploadFiles').click();
 $('uploadFiles').onchange=e=>setWebUploadFiles(e.target.files);
 $('uploadClear').onclick=()=>{setWebUploadFiles([]);$('uploadFiles').value=''};
 $('uploadStart').onclick=startWebUpload;
-$('uploadRefresh').onclick=()=>{loadWebUploadActive();loadWebUploadRecent()};
+$('uploadRefresh').onclick=()=>{loadWebUploadActive();loadWebUploadCalendar();loadWebUploadRecent()};
 ['dragenter','dragover'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.add('drag')}));
 ['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
 $('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
