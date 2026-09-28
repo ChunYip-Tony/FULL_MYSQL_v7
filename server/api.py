@@ -14,7 +14,7 @@ from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session
 from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
-from global_cost_hold_diagnostic import diagnose_global_cost_holds
+from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
@@ -22,7 +22,7 @@ from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 
-VERSION='7.0.94-single-service'
+VERSION='7.0.95-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -795,6 +795,25 @@ def global_cost_hold_diagnostic(
                     }],
                     'items':[],
                 }
+        finally:
+            cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/diagnostics/oh-cost-schema')
+def oh_cost_schema_diagnostic(
+    candidate_row_limit:int=20,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    """Read-only diagnostic for On-Hand cost header/schema matching."""
+    device_from_auth(authorization)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            result=diagnose_oh_cost_schema(
+                cur,
+                candidate_row_limit=candidate_row_limit,
+            )
         finally:
             cur.close()
     return json.loads(json.dumps(result,default=j))
