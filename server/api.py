@@ -556,6 +556,25 @@ def public_upload_commit(
     except Exception as exc:
         raise HTTPException(400,str(exc))
 
+@app.post('/v1/public-upload/batches/{session_id}/abort')
+def public_upload_abort(
+    session_id:str,
+    request:Request,
+):
+    _public_upload_same_origin(request)
+    try:
+        return abort_batch(
+            session_id,
+            PUBLIC_WEB_UPLOAD_DEVICE,
+            False,
+        )
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc))
+    except Exception as exc:
+        raise HTTPException(400,str(exc))
+
 @app.get('/v1/public-upload/batches/{session_id}')
 def public_upload_batch_status(session_id:str):
     try:
