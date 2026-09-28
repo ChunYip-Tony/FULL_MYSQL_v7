@@ -20,7 +20,7 @@ from manual_overrides import (
     apply_manual_family_subarticles,
 )
 from product_identity_audit import audit_product_identity
-from current_active_cost_repair import repair_current_active_cost, _scan_and_backfill_oh_cost
+from current_active_cost_repair import repair_current_active_cost, _scan_and_backfill_oh_cost, _backfill_receipt_cost, _backfill_official_cost, _relink_target_company_rows, _relink_existing_cost_observations
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from normalize import _preload_article_manual_authority
 from phase3 import rebuild_quick_check, refresh_quick_check_subset, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history, resolve_late_identity_issues
@@ -203,10 +203,31 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
             if not active_family_ids:
                 raise RuntimeError("No current-active families are available.")
 
-            # Old priority could prevent OH raw evidence from ever being materialized
-            # when an official report cost already existed. Re-scan current-active
-            # families before comparing expected source authority.
-            oh_backfill = _scan_and_backfill_oh_cost(cur, active_family_ids)
+            # Exhaust every configured authoritative source before deciding
+            # that a current-active family still has no usable cost.
+            #
+            # Identity relinking comes first so receipt/OH/official observations
+            # materialize against the correct Family.
+            company_rows_relinked = _relink_target_company_rows(
+                cur, active_family_ids
+            )
+            existing_cost_observations_relinked = _relink_existing_cost_observations(
+                cur, active_family_ids
+            )
+
+            # Materialize in the same order as cost authority:
+            # 1) receipt 101/107/109
+            # 2) OH explicit supported cost
+            # 3) Live/Fresh/Frozen official cost
+            receipt_backfill_rows = _backfill_receipt_cost(
+                cur, active_family_ids
+            )
+            oh_backfill = _scan_and_backfill_oh_cost(
+                cur, active_family_ids
+            )
+            official_backfill_rows = _backfill_official_cost(
+                cur, active_family_ids
+            )
 
             ph = ",".join(["%s"] * len(active_family_ids))
             cur.execute(
@@ -362,7 +383,19 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                 ],
                 "publish_batch_id": batch_id,
                 "active_family_count": len(active_family_ids),
+                "company_rows_relinked": company_rows_relinked,
+                "existing_cost_observations_relinked":
+                    existing_cost_observations_relinked,
+                "receipt_backfill_rows": receipt_backfill_rows,
                 "oh_backfill": oh_backfill,
+                "official_backfill_rows": official_backfill_rows,
+                "source_exhaustion_order": [
+                    "RELINK_IDENTITY",
+                    "MATERIALIZE_RECEIPT_101_107_109",
+                    "MATERIALIZE_ON_HAND_EXPLICIT_COST",
+                    "MATERIALIZE_LIVE_FRESH_FROZEN_OFFICIAL_COST",
+                    "REFRESH_AFFECTED_QUICK_CHECK_FAMILIES",
+                ],
                 "affected_family_count": len(affected_family_ids),
                 "affected_family_ids": sorted(affected_family_ids),
                 "before_mismatch_count": len(before_mismatches),
