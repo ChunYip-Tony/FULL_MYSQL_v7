@@ -2050,9 +2050,6 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
     pos_days_28 = source_data_days(cur, 'sales_by_price_type', limit=28, include_batch_id=batch_id, up_to=completed_through)
     pos_days_30 = source_data_days(cur, 'sales_by_price_type', limit=30, include_batch_id=batch_id, up_to=completed_through)
     mvt_days_7 = source_data_days(cur, 'movement', limit=7, include_batch_id=batch_id, up_to=completed_through)
-    pos_cov = coverage_summary(cur, 'sales_by_price_type', include_batch_id=batch_id)
-    mvt_cov = coverage_summary(cur, 'movement', include_batch_id=batch_id)
-
     # Targeted serving refresh: update only explicitly selected UPCs/families.
     # This intentionally does NOT delete or recalculate unrelated Quick Check rows.
     target_family_ids = sorted({int(x) for x in (family_ids or [])})
