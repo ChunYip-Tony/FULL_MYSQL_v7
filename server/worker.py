@@ -52,6 +52,8 @@ def _set_runtime_state(state:str, run_id:int|None=None, stage:str|None=None) -> 
         _RUNTIME_STATE['state']=state
         _RUNTIME_STATE['run_id']=run_id
         _RUNTIME_STATE['stage']=stage
+        if state != 'ERROR':
+            _RUNTIME_STATE.pop('error',None)
 
 
 def _write_runtime_health(state:str|None=None, run_id:int|None=None, stage:str|None=None) -> None:
@@ -68,6 +70,7 @@ def _write_runtime_health(state:str|None=None, run_id:int|None=None, stage:str|N
         'heartbeat_at':datetime.now(timezone.utc).isoformat(),
         'heartbeat_epoch':int(time.time()),
         'code_version':API_VERSION,
+        'error':current.get('error'),
     }
     try:
         RUNTIME_HEALTH_PATH.parent.mkdir(parents=True,exist_ok=True)
@@ -129,7 +132,6 @@ def _recover_stale_started(cur) -> int:
         cur.execute(
             """UPDATE pipeline_run
                SET processing_status='QUEUED',
-                   started_at=NULL,
                    completed_at=NULL,
                    error_count=0,
                    detail_json=%s
@@ -299,7 +301,10 @@ def main():
             try:
                 job=claim_job()
             except Exception as exc:
-                _write_runtime_health('ERROR',stage=f'CLAIM_ERROR:{type(exc).__name__}')
+                _set_runtime_state('ERROR',None,f'CLAIM_ERROR:{type(exc).__name__}')
+                with _RUNTIME_LOCK:
+                    _RUNTIME_STATE['error']=repr(exc)
+                _write_runtime_health()
                 print('Worker claim error:',repr(exc),flush=True)
                 time.sleep(max(2,POLL))
                 continue
