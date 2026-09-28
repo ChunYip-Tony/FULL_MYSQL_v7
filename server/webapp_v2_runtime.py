@@ -3082,6 +3082,19 @@ def _gp_day_price_suggestion(
         "cost_date":row.get("cost_date"),
     }
 
+def latest_performance_date() -> dict[str,Any]:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        days=_canonical_sales_days(cur,limit=1)
+        cur.close()
+    latest=max((x["date"] for x in days),default=None)
+    return {
+        "latest_completed_supported_sales_date":latest,
+        "weekday":WEEKDAY_NAMES[latest.weekday()] if latest is not None else None,
+        "data_day_definition":"COMPLETED_CANONICAL_SALES_DATA_DAY",
+    }
+
+
 def performance_report(
     category: str="ALL",
     limit: int=100,
