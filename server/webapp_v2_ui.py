@@ -590,7 +590,7 @@ body{
 #upload .delete-qa-msg{margin-top:5px;font-size:9px}
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.155</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.156</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -675,7 +675,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.156</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div class="card latest-ref-card">
     <div class="section">Latest Reference Uploads</div>
     <div id="latestRefMsg" class="msg"></div>
@@ -743,7 +743,7 @@ async function api(p,o={}){
   return b
 }
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(['pid','ohreport'].includes(id))return 'pi';if(['upload','pricechange'].includes(id))return 'performance';return id}
-function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
+function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadUploadRuntimeVersion();loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
@@ -910,6 +910,21 @@ function uploadDateTime(v){
   let d=new Date(v);
   return Number.isNaN(d.getTime())?String(v):d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
 }
+async function loadUploadRuntimeVersion(){
+  let el=$('uploadRuntimeVersion');
+  if(!el)return;
+  el.textContent='Runtime checking…';
+  el.className='pill warn';
+  try{
+    let d=await api('/healthz',{cache:'no-store'});
+    el.textContent='Runtime '+String(d.version||'unknown');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.156')?'ok':'warn');
+  }catch(e){
+    el.textContent='Runtime unavailable';
+    el.className='pill bad';
+  }
+}
+
 function referenceCoverage(x){
   let a=x?.coverage_start,b=x?.coverage_end;
   if(a&&b)return a===b?String(a):String(a)+' → '+String(b);
@@ -1060,7 +1075,7 @@ async function loadWebUploadRecent(){
   try{
     let d=await api('/v1/web-upload/recent?limit=8');
     let batches=(d.batches||[]).filter(b=>!deletedUploadBatchIds.has(Number(b.batch_id)));
-    $('uploadRecentMsg').textContent=batches.length+' recent batch(es)';
+    $('uploadRecentMsg').textContent=batches.length+' recent batch(es)'+(d.degraded?' · history loaded with limited stage detail':'');
     $('uploadRecent').innerHTML=batches.map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
     document.querySelectorAll('#uploadRecent [data-delete-batch]').forEach(
       b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch,b)
@@ -1126,7 +1141,7 @@ $('uploadDrop').onclick=()=>$('uploadFiles').click();
 $('uploadFiles').onchange=e=>setWebUploadFiles(e.target.files);
 $('uploadClear').onclick=()=>{setWebUploadFiles([]);$('uploadFiles').value=''};
 $('uploadStart').onclick=startWebUpload;
-$('uploadRefresh').onclick=()=>{loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent()};
+$('uploadRefresh').onclick=()=>{loadUploadRuntimeVersion();loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent()};
 ['dragenter','dragover'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.add('drag')}));
 ['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
 $('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
