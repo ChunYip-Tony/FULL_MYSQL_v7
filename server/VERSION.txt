@@ -1,5 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.143 Single-Service Edition
+Version: 7.0.144 Single-Service Edition
+
+v7.0.144 QA HOLD Delete Reliability:
+- Replaced browser-native confirm popup with a visible two-click confirmation inside the batch card.
+- First click changes the button to Confirm Delete Batch <id>; second click performs the API request.
+- Delete success or failure is shown directly on the same batch card.
+- Duplicate provenance now only references prior files from QUICK_CHECK_READY / QUICK_CHECK_READY_WITH_HOLDS batches with Phase 3 history.
+- Raw-stage QA_HOLD files are no longer valid duplicate authorities for future uploads.
+- If an old QA_HOLD batch is already referenced by a later file, Delete removes it from Upload History while preserving underlying lineage.
+- If no later references exist, the eligible raw-stage QA_HOLD batch is hard-deleted.
+- READY and downstream Phase2C/Phase3 batches remain protected from deletion.
+
 
 v7.0.143 QA HOLD Batch Deletion:
 - Recent Uploads now shows Delete QA HOLD Batch only for raw-stage QA_HOLD batches.
