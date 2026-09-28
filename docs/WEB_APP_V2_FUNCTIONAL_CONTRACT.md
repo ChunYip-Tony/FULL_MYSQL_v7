@@ -5,11 +5,12 @@ Date: 2026-09-28
 
 ## 1. Product boundary
 
-Web App V2 has exactly three top-level main functions:
+Web App V2 has four top-level main functions:
 
 1. CORE
 2. ORDERING
 3. PI (Physical Inventory)
+4. PERFORMANCE
 
 CORE is the single-item / family navigation and analysis path:
 Search -> Search Results -> Family Article / UPC -> Price / Ordering Analysis.
@@ -61,9 +62,9 @@ Search result entity types:
 - RECEIVING_ARTICLE redirect/reference when applicable
 
 Ranking:
-1. relevance
+1. 28-supported-day sold quantity descending
 2. readiness
-3. 28-supported-day sold quantity descending
+3. relevance as a tie-breaker
 
 Relevance priority:
 1. exact UPC/EAN
@@ -224,7 +225,7 @@ Price references:
 
 ### 7.1 Price vs Sales Trend
 
-Show price and qty sold over time.
+Show only the latest 7 completed canonical supported sales dates in the visual trend.
 
 Rules:
 - use completed canonical POS data dates only;
@@ -233,6 +234,17 @@ Rules:
 - show price type per date/period;
 - SALE must be visually distinguishable;
 - TPR is not Promotion.
+
+### 7.2 14-supported-day sales history
+
+Below the 7-day graph, show the latest 14 completed supported sales dates with:
+- weekday + date
+- sales dollars
+- sold quantity
+- average sold price
+- price type(s)
+
+Missing source dates are skipped and never displayed as zero-data dates.
 
 ## 8. Promotion definition
 
@@ -386,14 +398,16 @@ Promotion means SALE only. TPR is not Promotion.
 
 If PROMOTION_INVOLVED is selected:
 
-- show relevant observed historical SALE periods
+- promotion item selection is UPC-level
+- search by UPC or item name
+- show that UPC's own historical SALE periods as reference
 - identify WEEKEND_PROMOTION, WEEKLY_PROMOTION, OTHER_SALE, or UNCERTAIN
+- every historical promotion display must show weekday range in addition to dates, e.g. Monday to Friday
 - show SALE price, supported-day coverage, quantity, and velocity
-- let the user enter/select the families/items involved in the upcoming promotion
-- let the user enter the promotion price for each promoted family/item
-- let the user enter promotion start and end dates, with historical SALE periods available as reference
+- let the user enter the promotion price for each selected UPC
+- let the user enter promotion start and end dates
 
-A UPC selected as a promotion item should resolve to its Family Article for the family-level ordering result.
+The final replenishment decision remains Family Article level. Promotion-day family demand uses family regular demand adjusted by the selected promoted UPC's own regular and SALE behavior.
 
 There is no separate Sales Event model.
 
@@ -446,90 +460,40 @@ No Save Order, Final Order, Confirm, or Submit action exists in Web App V2.
 
 ## 11. PI (Physical Inventory)
 
-PI is the third top-level Web App function and is the primary user workflow for correcting on-hand inventory by entering True Stock.
+PI is the Family Article physical-inventory workflow.
 
-### 11.1 PI item selection
-
-Allow search by:
+Search may begin from:
 - item name / alias
 - Family Article number
 - Article / Receiving-Ordering number
 - UPC / EAN
 
-Search should resolve the actual inventory owner before applying a count:
-- UPC-owned inventory
-- Article-owned inventory
-- Family-owned inventory
+Every search result resolves to exactly one Family Article target. PI does not ask the user to count individual selling UPC inventory.
 
-Do not write the same True Stock independently to multiple child UPCs when they share one Family/Article inventory owner.
-
-### 11.2 PI count screen
-
-Display before entry:
-- Family / Article / UPC identity
-- inventory owner scope
-- category LIVE/FRESH/FROZEN
-- Current System OH + UOM
-- Current Effective OH + UOM
+The PI Family page displays:
+- Family Article number/name
+- category
+- Family System OH + UOM
+- Family Effective OH + UOM
 - OH source
-- latest accepted OH snapshot date
-- last receipt date / quantity where available
-- current True Stock status if one is already active
-- readiness / UOM status
+- current signed discrepancy
+- last receipt
+- recent Family True Stock history
 
 Input:
-- True Stock quantity
-- True Stock UOM, constrained to the authoritative inventory/operational UOM when known
+- Family True Stock quantity
+- authoritative Family UOM
 - optional note
 
-The primary action is Apply True Stock.
-
-### 11.3 True Stock authority
-
-After Apply True Stock:
-
-- True Stock becomes the active Effective OH for that inventory owner immediately.
-- True Stock remains authoritative until a later accepted OH upload for the same inventory owner supersedes it.
-- A later accepted OH upload resets the OH baseline and expires the older True Stock override.
-- Ordering calculations must immediately consume the updated Effective OH.
-- If entered True Stock is negative, reject the entry; a physical count cannot be negative.
-
-### 11.4 PI discrepancy
-
-Compute:
-
-Inventory Discrepancy = True Stock - System OH at time of count.
-
-Display both signed difference and absolute quantity.
-
-- True Stock < System OH: shortage / negative discrepancy.
-- True Stock = System OH: matched count.
-- True Stock > System OH: overage / positive discrepancy.
-
-Do not hide the original System OH after applying True Stock.
-
-For a shortage, create/update the related pending inventory discrepancy / dumping record using the shortage quantity.
-
-For an overage, retain a positive PI discrepancy record for audit/review; do not create a dumping quantity.
-
-For a matched count, no shortage/overage quantity remains outstanding.
-
-Resolving or reviewing a discrepancy must not independently mutate Effective OH; Effective OH already comes from the True Stock authority.
-
-### 11.5 PI history and repeat counting
-
-PI should show recent True Stock entries for the selected inventory owner:
-- counted at
-- prior System OH
-- entered True Stock
-- UOM
-- discrepancy
-- note / source user when available
-- superseded/current status
-
-A new True Stock entry supersedes the earlier True Stock entry for that owner, subject to the later-OH-upload rule above.
-
-PI is not an approval workflow. It is an operational inventory-correction workflow.
+Rules:
+- True Stock must be non-negative.
+- A new Family True Stock immediately becomes the Family Effective OH.
+- It supersedes any older active Family/Article/UPC True Stock inside that Family so only one physical-count authority remains active.
+- It remains authoritative until a later accepted OH upload supersedes it.
+- Ordering immediately uses the new Family Effective OH.
+- Shortage creates/updates the pending Family discrepancy/dumping record.
+- Overage is retained as a positive PI discrepancy; it does not create dumping quantity.
+- PI is an operational write function, not an approval workflow.
 
 ## 12. V2 UI transition
 
@@ -537,7 +501,50 @@ V2 test UI route: /app/v2.
 
 The existing /app remains available as a fallback while CORE / ORDERING / PI are tested. Do not switch the primary /app route until V2 interaction and data regression testing is complete.
 
-## 13. Implementation guard
+## 13. PERFORMANCE
+
+PERFORMANCE is a read-only analysis and review function.
+
+Category filter:
+- ALL
+- LIVE
+- FRESH
+- FROZEN
+
+Report summary includes:
+- active UPC count
+- 7 / 14 / 28 supported-day sales dollars
+- 7D GP dollars
+- slowing-item count
+- low-GP-item count
+- price-review candidate count
+
+The report may generate up to 100 urgent price-review suggestions.
+
+Price-review suggestion rules:
+- READY items only
+- active SALE items excluded
+- minimum 3% difference from the selected price reference
+- price reference priority: Sweet Spot -> WGPM -> Company A -> Company B -> Company C
+- urgency uses transparent evidence: reference-price gap, 7D vs 28D velocity, and GP vs category reference
+- projected GP/day assumes current 7D velocity and does not model elasticity
+- suggestions are analysis only; there is no Save/Approve/Execute action in Web App V2
+
+## 14. Elder-friendly UI and navigation
+
+UI must prioritize readability and low cognitive load:
+- large text and large touch targets
+- high contrast
+- clear page titles
+- key values in large cards
+- minimal dense tables
+- status conveyed by text/icons as well as color
+- no horizontal-scrolling dependency for primary decisions
+- four persistent main tabs: CORE / ORDERING / PI / PERFORMANCE
+
+Phone/system Back must move to the previous in-app screen. At the V2 root it must remain inside the app instead of navigating away.
+
+## 15. Implementation guard
 
 Do not redesign runtime UI until these contracts are represented by dedicated V2 API/data outputs.
 Do not reuse legacy promotion classification where TPR/IN STORE were labeled promotion.
