@@ -147,14 +147,110 @@ body{
 @media(min-width:760px){.price-duo{grid-template-columns:1.15fr .85fr}.screen{padding-left:16px;padding-right:16px}.chart-scroll .chart{width:100%;min-width:900px}}
 @media(max-width:560px){.w{padding:8px}.top{margin:0 -8px;padding-left:10px;padding-right:10px}.screen{border-radius:11px;padding:0 8px 7px}.metric-section,.card{padding:8px 9px!important}.metric-row{padding:7px 0}.metric-section-title{font-size:12px}.nav button{font-size:9px;line-height:1.05}.oh-row{grid-template-columns:1fr 1fr 1fr}}
 
-</style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.124</div></div><div class="msg">CORE · PI · OH DISCREPANCY · PERFORMANCE</div></div>
 
-<section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
+/* v7.0.125 mockup-faithful Quick Check detail */
+body.detail-open .top{display:none}
+#upc.qc-screen{padding:0 8px 10px;background:transparent;border-radius:0}
+.qc-shell{
+  position:relative;overflow:hidden;border-radius:22px;padding:0 0 12px;
+  background:
+    linear-gradient(rgba(1,45,68,.30),rgba(1,53,75,.38)),
+    radial-gradient(circle at 18% 15%,rgba(185,241,248,.34),transparent 25%),
+    radial-gradient(circle at 82% 42%,rgba(27,134,157,.26),transparent 26%),
+    repeating-linear-gradient(132deg,rgba(255,255,255,.025) 0 9px,rgba(0,52,79,.05) 9px 18px);
+  box-shadow:0 13px 36px rgba(0,27,43,.24)
+}
+.qc-shell:before,.qc-shell:after{content:"";position:absolute;inset:auto;pointer-events:none;opacity:.18;z-index:0}
+.qc-shell:before{width:240px;height:120px;right:-35px;top:76px;background:
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='120' viewBox='0 0 240 120'%3E%3Cg fill='none' stroke='%23d8f4fa' stroke-width='3'%3E%3Cpath d='M20 54c35-28 77-27 112 0-35 28-77 28-112 0zm112 0 29-19v38z'/%3E%3Cpath d='M112 24c24-19 54-18 79 1-25 20-55 20-79-1zm79 1 22-14v28z'/%3E%3C/g%3E%3C/svg%3E") center/contain no-repeat}
+.qc-shell:after{width:250px;height:160px;left:-55px;bottom:48px;background:
+  radial-gradient(ellipse at center,rgba(211,246,251,.55),rgba(211,246,251,0) 66%)}
+.qc-topbar{position:relative;z-index:2;height:62px;display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:7px;padding:8px 13px;color:#fff;background:linear-gradient(180deg,rgba(2,53,78,.82),rgba(2,66,91,.55));border-bottom:1px solid rgba(216,242,249,.18)}
+.qc-back{border:0;background:transparent;color:#fff;min-height:42px;height:42px;padding:0;font-size:33px;box-shadow:none}
+.qc-title{font-size:23px;font-weight:950;letter-spacing:.01em}
+.qc-market-sign{border:1px solid rgba(255,255,255,.35);border-radius:8px;padding:4px 7px;background:linear-gradient(180deg,#5b3c22,#3b2617);color:#fff2d9;font:900 10px/1.05 Georgia,serif;letter-spacing:.04em;box-shadow:0 3px 8px rgba(0,0,0,.24)}
+.qc-market-sign:before{content:"🐟 ";font-family:system-ui}
+.qc-content{position:relative;z-index:1;padding:8px}
+.qc-card{background:linear-gradient(135deg,rgba(249,254,255,.97),rgba(225,242,249,.95));color:#0c2b45;border:1px solid rgba(255,255,255,.78);border-radius:15px;box-shadow:0 5px 13px rgba(0,39,59,.20);margin:8px 0;overflow:hidden}
+@media(prefers-color-scheme:dark){.qc-card{background:linear-gradient(135deg,rgba(239,249,252,.97),rgba(218,239,246,.96));color:#0c2b45}}
+.qc-hero{display:grid;grid-template-columns:94px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 11px;background:
+  linear-gradient(90deg,rgba(246,253,255,.98),rgba(225,243,249,.88)),
+  repeating-linear-gradient(135deg,transparent 0 12px,rgba(27,111,147,.05) 12px 13px)}
+.qc-photo{height:78px;border-radius:10px;display:grid;place-items:center;font-size:46px;background:
+  radial-gradient(circle at 50% 20%,rgba(255,255,255,.98),rgba(213,237,244,.74) 55%,rgba(140,195,215,.58) 100%);
+  border:1px solid rgba(98,155,181,.24);box-shadow:inset 0 0 15px rgba(26,92,119,.10)}
+.qc-name{font-size:19px;font-weight:950;line-height:1.05;color:#0b1b32}.qc-meta{font-size:11px;line-height:1.35;color:#3d5d74;margin-top:4px}
+.qc-badges{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}.qc-badge{display:inline-flex;align-items:center;gap:3px;padding:3px 7px;border-radius:8px;font-size:10px;font-weight:900}.qc-fresh{background:#d9f4d4;color:#1d6d29}.qc-reg{background:#dceeff;color:#155e97}.qc-status{align-self:start}
+.qc-metrics{display:grid;grid-template-columns:repeat(4,1fr);padding:0}
+.qc-metric{padding:9px 10px;border-right:1px solid rgba(76,121,146,.20);border-bottom:1px solid rgba(76,121,146,.16);min-height:64px}
+.qc-metric:nth-child(4n){border-right:0}.qc-metric:nth-child(n+5){border-bottom:0}
+.qc-metric .k{font-size:11px;color:#3f627c;font-weight:700;white-space:nowrap}.qc-metric .v{font-size:18px;font-weight:950;line-height:1.08;color:#0b182a;margin-top:2px}.qc-metric .v.green{color:#176e32}.qc-metric .trend{font-size:8.5px;line-height:1.1;margin-top:3px;font-weight:850}
+.qc-intel{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(120px,.65fr);gap:9px;padding:9px 10px}.qc-intel-title{font-size:13px;font-weight:950;margin-bottom:5px}.qc-intel table{font-size:10px}.qc-intel th,.qc-intel td{padding:4px 3px}.qc-sweet{display:flex;flex-direction:column;justify-content:center;border-left:1px solid rgba(67,117,145,.20);padding-left:10px}.qc-sweet .price{font-size:26px;font-weight:950;color:#0b6f45}.qc-sweet .small{font-size:9px;color:#4c6778}
+.qc-two{display:grid;grid-template-columns:1.28fr 1fr;gap:9px}.qc-panel{padding:9px 10px}.qc-panel-title{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:950;margin-bottom:8px}.qc-unit{border:1px solid #7eb5d4;color:#105f94;border-radius:999px;padding:1px 7px;font-size:10px}
+.qc-inv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:8px}.qc-inv{padding:0 6px;border-right:1px solid rgba(68,115,141,.20)}.qc-inv:first-child{padding-left:0}.qc-inv:last-child{border-right:0;padding-right:0}.qc-inv .k{font-size:9px;color:#395a73}.qc-inv .v{font-size:18px;font-weight:950;margin-top:3px}.qc-inv .blue{color:#0d64d1}.qc-inv .red{color:#d12329}
+.qc-true-form{display:grid;grid-template-columns:minmax(0,1fr) 48px 118px;gap:0}.qc-true-form input{min-height:42px;height:42px;padding:7px 9px;border-radius:9px 0 0 9px;border-width:1px;font-size:15px;background:#fff;color:#0b1b32}.qc-true-uom{display:grid;place-items:center;background:#fff;border:1px solid #bdd5e0;border-left:0;font-size:11px;color:#254b66}.qc-true-form button{min-height:42px;height:42px;border-radius:8px;margin-left:7px;padding:5px 10px;font-size:13px}
+.qc-order-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}.qc-order-cell{padding:7px 7px;border-right:1px solid rgba(68,115,141,.15);border-bottom:1px solid rgba(68,115,141,.15);min-height:55px}.qc-order-cell:nth-child(2n){border-right:0}.qc-order-cell:nth-child(n+3){border-bottom:0}.qc-order-cell .k{font-size:10px;color:#3f6079}.qc-order-cell .v{font-size:13px;font-weight:950;margin-top:2px}.qc-order-open{border:0;background:transparent;color:#0b66a2;min-height:24px;padding:2px 0;font-size:10px;text-align:left}
+.qc-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 0}.qc-section-title{font-size:15px;font-weight:950;display:flex;gap:6px;align-items:center}.qc-legend{display:flex;gap:9px;font-size:9px;color:#31556d;align-items:center}.qc-legend i{display:inline-block;vertical-align:middle;margin-right:3px}.qc-legend .gp{width:18px;height:5px;background:#154a9f;border-radius:4px}.qc-legend .pr{width:18px;height:4px;background:#f27c1a;border-radius:4px}
+.qc-chart-scroll{overflow-x:auto;overflow-y:hidden;padding:0 5px 5px}.qc-chart{display:block;height:235px;min-width:760px;width:760px;background:transparent}
+.qc-family-head{display:flex;align-items:center;justify-content:space-between;padding:9px 10px 4px}.qc-viewall{border:0;background:transparent;color:#154f77;min-height:28px;padding:2px 0;font-size:10px;box-shadow:none}.qc-family-table{width:100%;font-size:9.5px}.qc-family-table th,.qc-family-table td{padding:5px 6px;border-bottom:1px solid rgba(76,121,146,.17)}.qc-family-table th{background:rgba(196,225,237,.44);color:#244a64}.qc-rel{display:inline-flex;padding:2px 7px;border-radius:999px;background:#d5ebfb;color:#164d73;font-size:9px;white-space:nowrap}.qc-rel.same{background:#e4edf3}.qc-rel.related{background:#fae7c8}
+.qc-highlights{padding:8px 10px}.qc-highlights-head{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:950}.qc-count{background:#f7a623;color:#182535;border-radius:999px;padding:2px 7px;font-size:9px}.qc-alert{display:grid;grid-template-columns:22px 1fr 16px;gap:5px;align-items:center;padding:6px 0;border-top:1px solid rgba(75,119,145,.18);font-size:10.5px}.qc-alert:first-of-type{margin-top:5px}.qc-alert-ico{font-size:14px}.qc-chevron{font-size:18px;color:#164e72}
+.qc-inline-msg{font-size:9px;color:#49687a;margin-top:5px}
+#upc .head,#upc #usum,#upc .actions{display:none!important}
+@media(max-width:620px){
+  .qc-shell{border-radius:0;margin:0 -8px}
+  .qc-content{padding:6px}.qc-topbar{height:55px}
+  .qc-hero{grid-template-columns:72px minmax(0,1fr) auto;padding:8px}.qc-photo{height:64px;font-size:37px}
+  .qc-name{font-size:17px}.qc-meta{font-size:10px}
+  .qc-metric{padding:7px 7px;min-height:58px}.qc-metric .k{font-size:9.5px}.qc-metric .v{font-size:16px}.qc-metric .trend{font-size:7.8px}
+  .qc-two{grid-template-columns:1fr 1fr;gap:7px}.qc-panel{padding:8px}.qc-panel-title{font-size:13px}
+  .qc-inv-grid{grid-template-columns:repeat(2,1fr);row-gap:8px}.qc-inv:nth-child(2){border-right:0}.qc-inv:nth-child(3){padding-left:0}.qc-inv .k{font-size:8.5px}.qc-inv .v{font-size:16px}
+  .qc-true-form{grid-template-columns:minmax(0,1fr) 40px}.qc-true-form button{grid-column:1/-1;margin:6px 0 0;height:38px;min-height:38px}.qc-true-form input{height:38px;min-height:38px}.qc-true-uom{height:38px}
+  .qc-order-cell{padding:6px 5px}.qc-order-cell .k{font-size:8.5px}.qc-order-cell .v{font-size:11px}
+  .qc-intel{grid-template-columns:1fr}.qc-sweet{border-left:0;border-top:1px solid rgba(67,117,145,.20);padding:8px 0 0}.qc-sweet .price{font-size:22px}
+  .qc-chart{height:220px}
+  .qc-family-table{font-size:8.8px}.qc-family-table th,.qc-family-table td{padding:5px 4px}
+}
+
+</style></head><body><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.125</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+
+<section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
 <section id="family" class="screen"><div class="head"><button class="back" data-go="core">←</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="metric-section blue"><div class="metric-section-title">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
 
-<section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
+<section id="upc" class="screen qc-screen">
+<div class="qc-shell">
+  <div class="qc-topbar"><button class="qc-back" id="ub">‹</button><div class="qc-title">Quick Check</div><div class="qc-market-sign">FISH MARKET</div></div>
+  <div class="qc-content">
+    <div id="qcHero" class="qc-card qc-hero"></div>
+    <div id="qcMetrics" class="qc-card qc-metrics"></div>
+    <div id="qcPriceIntel" class="qc-card qc-intel"></div>
+    <div class="qc-two">
+      <div class="qc-card qc-panel">
+        <div class="qc-panel-title"><span>📦 Inventory</span><span id="qcInvUom" class="qc-unit">—</span></div>
+        <div id="qcInventory" class="qc-inv-grid"></div>
+        <div class="qc-true-form"><input id="qcTrueStock" inputmode="decimal" placeholder="True Stock"><div id="qcTrueUom" class="qc-true-uom">—</div><button id="qcTrueUpdate" class="primary">Update</button></div>
+        <div id="qcTrueMsg" class="qc-inline-msg"></div>
+      </div>
+      <div class="qc-card qc-panel">
+        <div class="qc-panel-title"><span>🛒 Ordering</span></div>
+        <div id="qcOrdering" class="qc-order-grid"></div>
+        <button id="qcOrderOpen" class="qc-order-open">Open ordering analysis ›</button>
+      </div>
+    </div>
+    <div class="qc-card">
+      <div class="qc-section-head"><div class="qc-section-title">📊 Sales Trend <span class="small">(Last 28 Days)</span></div><div class="qc-legend"><span><i class="gp"></i>GP$</span><span><i class="pr"></i>Avg Selling Price</span></div></div>
+      <div class="qc-chart-scroll"><canvas id="qcChart" class="qc-chart"></canvas></div>
+    </div>
+    <div class="qc-card">
+      <div class="qc-family-head"><div class="qc-section-title">👥 Family / Ordering Article / Related UPC</div><button id="qcFamilyView" class="qc-viewall">View All ›</button></div>
+      <div class="scroll"><table class="qc-family-table"><thead><tr><th>Item / Description</th><th>Article</th><th>UPC</th><th>Relationship</th></tr></thead><tbody id="qcFamilyRows"></tbody></table></div>
+    </div>
+    <div id="qcHighlightsCard" class="qc-card qc-highlights"><div class="qc-highlights-head"><span>⚠️ Highlights / QA</span><span id="qcHighlightCount" class="qc-count">0 items</span></div><div id="qcHighlights"></div></div>
+  </div>
+</div>
+<div id="ut" class="hide"></div><div id="us" class="hide"></div><div id="usum" class="hide"></div><button id="uf" class="hide"></button><button id="upr" class="hide"></button><button id="uo" class="hide"></button>
+</section>
 
 <section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="price-duo"><div class="metric-section pink"><div class="metric-section-title">Price vs Velocity History</div><div id="pvh"></div></div><div class="metric-section green"><div class="metric-section-title">Suggested Sweet Spot</div><div id="psweet"></div></div></div><div class="card"><div class="section">28 Supported-Day Sales Trend</div><div class="chart-scroll"><canvas id="chart" class="chart"></canvas></div><div class="row" style="margin-top:7px"><span class="pill" style="color:var(--gpbar)">▮ GP$</span><span class="pill" style="color:var(--pricecurve)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:6px">GP$ is shown as columns and Avg Selling Price as a curve. Every plotted value is labeled. Missing supported dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
@@ -171,7 +267,7 @@ body{
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">←</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 </div>
 
-<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>CORE</button><button data-main="pi">🧮<br>PI</button><button data-main="ohreport">📋<br>OH REPORT</button><button data-main="performance">📊<br>PERFORMANCE</button></div></nav>
+<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="ohreport">📋<br>OH Report</button><button data-main="performance">📊<br>Reports</button></div></nav>
 
 <script>
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -180,7 +276,7 @@ const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new 
 let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(id==='pid')return 'pi';return id}
-function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();scrollTo({top:0,behavior:'smooth'})}
+function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
@@ -236,6 +332,19 @@ function priceVelocityBuckets(rows){
   });
   return [...m.values()].map(b=>({...b,velocity:b.days?b.qty/b.days:null,gpDay:(b.gpDays===b.days&&b.days)?b.gp/b.days:null})).sort((a,b)=>b.last.localeCompare(a.last)||b.price-a.price);
 }
+
+function seafoodEmoji(name,category){
+  let s=String(name||'').toUpperCase();
+  if(s.includes('LOBSTER'))return '🦞';if(s.includes('CRAB'))return '🦀';if(s.includes('SHRIMP')||s.includes('PRAWN'))return '🦐';
+  if(s.includes('OYSTER')||s.includes('CLAM')||s.includes('MUSSEL'))return '🦪';if(s.includes('SQUID')||s.includes('CALAMARI'))return '🦑';
+  if(s.includes('SALMON'))return '🍣';return String(category||'').toUpperCase()==='LIVE'?'🐠':'🐟';
+}
+function qcMetric(k,v,trend='',cls=''){return '<div class="qc-metric"><div class="k">'+esc(k)+'</div><div class="v '+cls+'">'+v+'</div>'+(trend?'<div class="trend">'+trend+'</div>':'')+'</div>'}
+function qcInv(k,v,cls=''){return '<div class="qc-inv"><div class="k">'+esc(k)+'</div><div class="v '+cls+'">'+v+'</div></div>'}
+function qcOrderCell(k,v){return '<div class="qc-order-cell"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div></div>'}
+function shortDate(v){if(!v)return '—';let d=new Date(String(v).slice(0,10)+'T12:00:00');return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString('en-US',{month:'short',day:'numeric',weekday:'short'})}
+function coverageDays(delivery,nextNext){if(!delivery||!nextNext)return null;let a=new Date(String(delivery).slice(0,10)+'T12:00:00'),b=new Date(String(nextNext).slice(0,10)+'T12:00:00');let n=Math.round((b-a)/86400000);return Number.isFinite(n)&&n>=0?n:null}
+
 
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>history.back());document.querySelectorAll('[data-main]').forEach(b=>b.onclick=()=>go(b.dataset.main));
 
@@ -345,37 +454,84 @@ async function family(k){try{
 
 
 async function upc(u,b='core'){try{
-  let [d,p]=await Promise.all([
+  let [d,p,o,q]=await Promise.all([
     api('/v1/app/v2/upc/'+encodeURIComponent(u)),
-    api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=28')
+    api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=28'),
+    api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/ordering'),
+    api('/v1/app/quick-check/'+encodeURIComponent(u))
   ]);
   cupc=d.upc;uback=b;
-  let o=d.effective_oh||{},c0=p.current||{},s=p.sales||{},uom=d.qty_uom||d.selling_uom||p.qty_uom||'UOM UNKNOWN',tc=trendContext(p.price_vs_sales_trend?.rows||[],c0,s['7d']);
-  $('ut').textContent=d.upc_name;
-  $('us').textContent='UPC '+d.upc+' · '+(d.category||'—')+' · '+(d.upc_role||'OTHER UPC');
+  let c0=p.current||{},s=p.sales||{},uom=d.qty_uom||d.selling_uom||p.qty_uom||'UOM UNKNOWN',tc=trendContext(p.price_vs_sales_trend?.rows||[],c0,s['7d']);
   let vel=(nv(s['7d']?.supported_day_count)>0&&nv(s['7d']?.sold_quantity)!==null)?nv(s['7d'].sold_quantity)/nv(s['7d'].supported_day_count):nv(d.upc_velocity_7d);
-  $('usum').innerHTML=
-    ms('Identity','blue',[
-      mr('UPC',d.upc),mr('UPC Type',d.upc_role||'OTHER UPC'),mr('Family Article',d.family_article_number||'—'),
-      mr('Category',d.category||'—'),mr('Status',d.readiness||'—'),mr('Selling UOM',uom)
-    ])+
-    ms('Key Metrics · Latest 7 Supported Data Days','green',[
-      mrh('Price',priceText(c0.price,uom)+' · '+(c0.price_type||'—'),trendNote(tc.price[0],tc.price[1],'money',uom)),
-      mrh('Cost',priceText(c0.cost,c0.cost_uom||uom),trendNote(tc.cost[0],tc.cost[1],'money',uom)),
-      mrh('GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+' %',trendNote(tc.gpPct[0],tc.gpPct[1],'pct')),
-      mrh('GP$/Day',c0.gp_per_day_7d==null?'—':money(c0.gp_per_day_7d)+' / day',trendNote(tc.gpDay[0],tc.gpDay[1],'moneyday')),
-      mrh('7D Qty',qv(s['7d']?.sold_quantity,uom)+' / 7D',trendNote(tc.qty[0],tc.qty[1],'qty',uom)),
-      mrh('Velocity',vel==null?'—':fmt(vel,2)+' '+uom+' / day',trendNote(tc.velocity[0],tc.velocity[1],'velocity',uom)),
-      mr('DOS',c0.dos==null?'—':fmt(c0.dos,1)+' days'),
-      mr('DOH',c0.doh==null?'—':fmt(c0.doh,1)+' days')
-    ])+
-    ms('Inventory','amber',[
-      mr('Effective OH',o.quantity==null?'No OH':qv(o.quantity,o.uom),o.quantity==null?(o.reason||o.status||'OH unavailable'):(o.source||o.status||'READY')),
-      mr('OH Status',o.status||'—')
-    ]);
-  $('uf').onclick=()=>family(d.family_article_number);
-  $('upr').onclick=()=>price(d.upc);
-  $('uo').onclick=()=>corder(d.upc);
+  let item=q.item||{},cat=d.category||item.product_class||'ITEM',priceType=c0.price_type||d.current_price_type||'—';
+  $('qcHero').innerHTML=
+    '<div class="qc-photo">'+seafoodEmoji(d.upc_name,cat)+'</div>'+
+    '<div><div class="qc-name">'+esc(d.upc_name||d.upc)+'</div>'+
+    '<div class="qc-meta">Family: '+esc(d.family_article_name||d.family_article_number||'—')+' &nbsp; Article: '+esc(item.article_number||'—')+'<br>UPC: '+esc(d.upc)+'</div>'+
+    '<div class="qc-badges"><span class="qc-badge qc-fresh">'+(String(cat).toUpperCase()==='FRESH'?'🌿 ':'')+esc(cat)+'</span><span class="qc-badge qc-reg">🏷 '+esc(priceType)+'</span></div></div>'+
+    '<div class="qc-status">'+pill(d.readiness)+'</div>';
+
+  $('qcMetrics').innerHTML=[
+    qcMetric('💲 Price',priceText(c0.price,uom),trendNote(tc.price[0],tc.price[1],'money',uom)),
+    qcMetric('🏷 Cost',priceText(c0.cost,c0.cost_uom||uom),trendNote(tc.cost[0],tc.cost[1],'money',uom)),
+    qcMetric('📊 GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+'%',trendNote(tc.gpPct[0],tc.gpPct[1],'pct'),'green'),
+    qcMetric('📈 GP$/Day',c0.gp_per_day_7d==null?'—':money(c0.gp_per_day_7d)+'/day',trendNote(tc.gpDay[0],tc.gpDay[1],'moneyday')),
+    qcMetric('💵 7D Qty',qv(s['7d']?.sold_quantity,uom),trendNote(tc.qty[0],tc.qty[1],'qty',uom)),
+    qcMetric('📉 Velocity',vel==null?'—':fmt(vel,2)+'/'+esc(uom)+'/day',trendNote(tc.velocity[0],tc.velocity[1],'velocity',uom)),
+    qcMetric('◉ DOS',c0.dos==null?'—':fmt(c0.dos,1)+' days'),
+    qcMetric('▣ DOH',c0.doh==null?'—':fmt(c0.doh,1)+' days')
+  ].join('');
+
+  let pv=priceVelocityBuckets(p.price_vs_sales_trend?.rows||[]).slice(0,4),sweet=p.references?.sweet_spot;
+  $('qcPriceIntel').innerHTML=
+    '<div><div class="qc-intel-title">💹 Price vs Velocity</div>'+
+      (pv.length?'<div class="scroll"><table><thead><tr><th>Price</th><th>Velocity</th><th>GP$/day</th></tr></thead><tbody>'+
+        pv.map(x=>'<tr><td>'+esc(priceText(x.price,uom))+'</td><td>'+fmt(x.velocity,2)+' '+esc(uom)+'/day</td><td>'+(x.gpDay==null?'—':money(x.gpDay)+'/day')+'</td></tr>').join('')+
+      '</tbody></table></div>':'<div class="small">No validated price/velocity history.</div>')+
+    '</div><div class="qc-sweet"><div class="qc-intel-title">🎯 Sweet Spot</div><div class="price">'+(sweet==null?'—':esc(priceText(sweet,uom)))+'</div><div class="small">Highest historical avg GP$/supported day.</div><button id="qcPriceOpen" class="qc-order-open">Full price analysis ›</button></div>';
+
+  let sys=q.system_oh||{},ts=q.active_true_stock||{},eff=q.effective_oh||{},invUom=eff.uom||sys.uom||uom;
+  let trueQty=ts.true_stock_quantity,sysQty=sys.quantity,diff=null;
+  if(nv(trueQty)!==null&&nv(sysQty)!==null)diff=nv(trueQty)-nv(sysQty);
+  else if(nv(eff.quantity)!==null&&nv(sysQty)!==null)diff=nv(eff.quantity)-nv(sysQty);
+  $('qcInvUom').textContent=invUom||'—';$('qcTrueUom').textContent=q.true_stock_input?.required_uom||invUom||'—';
+  $('qcInventory').innerHTML=[
+    qcInv('System OH',nv(sysQty)==null?'—':fmt(sysQty,1)),
+    qcInv('True Stock',nv(trueQty)==null?'—':fmt(trueQty,1),'blue'),
+    qcInv('Effective OH',nv(eff.quantity)==null?'—':fmt(eff.quantity,1)),
+    qcInv('Difference',diff==null?'—':(diff>0?'+':'')+fmt(diff,1),diff<0?'red':'')
+  ].join('');
+  $('qcTrueStock').value=nv(trueQty)==null?'':String(trueQty);
+  $('qcTrueMsg').textContent='';
+
+  let fi=o.forecast||{},inp=o.inputs||{},cov=coverageDays(inp.expected_delivery_date,o.next_next_delivery_date),ou=fi.suggested_order_uom||uom;
+  $('qcOrdering').innerHTML=[
+    qcOrderCell('📅 Next Order',esc(shortDate(inp.ordering_date))),
+    qcOrderCell('🚚 Delivery',esc(shortDate(inp.expected_delivery_date))),
+    qcOrderCell('📋 Suggested Qty',fi.suggested_order_qty==null?'—':qv(fi.suggested_order_qty,ou)),
+    qcOrderCell('🗓 Coverage',cov==null?'—':cov+' days')
+  ].join('');
+
+  quickChart(p.price_vs_sales_trend?.rows||[]);
+
+  let related=q.related_upcs||[];
+  $('qcFamilyRows').innerHTML=related.slice(0,4).map(r=>{
+    let rel=String(r.ean_upc)===String(d.upc)?'This Item':'Same Family';
+    let cls=rel==='This Item'?'':' same';
+    return '<tr><td>'+esc(r.selling_description||r.ean_upc)+'</td><td>'+esc(r.article_number||'—')+'</td><td>'+esc(r.ean_upc||'—')+'</td><td><span class="qc-rel'+cls+'">'+rel+'</span></td></tr>';
+  }).join('')||'<tr><td colspan="4">No related UPCs.</td></tr>';
+
+  let highs=(q.highlights||[]);
+  $('qcHighlightCount').textContent=highs.length+' item'+(highs.length===1?'':'s');
+  $('qcHighlights').innerHTML=highs.map(h=>'<div class="qc-alert"><div class="qc-alert-ico">'+(h.severity==='HIGH'?'⚠️':'🏷️')+'</div><div>'+esc(h.text||h.code)+'</div><div class="qc-chevron">›</div></div>').join('');
+  $('qcHighlightsCard').classList.toggle('hide',highs.length===0);
+
+  $('qcPriceOpen').onclick=()=>price(d.upc);
+  $('qcOrderOpen').onclick=()=>corder(d.upc);
+  $('qcFamilyView').onclick=()=>family(d.family_article_number);
+  $('qcTrueUpdate').onclick=()=>submitQcTrueStock(d.upc,q.true_stock_input?.required_uom||invUom||uom);
+  $('uf').onclick=()=>family(d.family_article_number);$('upr').onclick=()=>price(d.upc);$('uo').onclick=()=>corder(d.upc);
+  $('ut').textContent=d.upc_name;$('us').textContent='UPC '+d.upc;
   go('upc')
 }catch(e){alert(e.message)}}
 $('ub').onclick=()=>history.back();
@@ -428,6 +584,33 @@ async function price(u){try{
   ).join('')||'<div class="small">No historical SALE periods.</div>';
   go('price')
 }catch(e){alert(e.message)}}
+
+
+async function submitQcTrueStock(upc,uom){
+  let raw=$('qcTrueStock').value.trim();if(raw===''){ $('qcTrueMsg').textContent='Enter True Stock.';return }
+  $('qcTrueMsg').textContent='Updating…';
+  try{
+    await api('/v1/app/quick-check/'+encodeURIComponent(upc)+'/true-stock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:raw,uom:uom})});
+    ohLoaded=false;$('qcTrueMsg').textContent='Saved. Refreshing current OH…';await upc(upc,uback)
+  }catch(e){$('qcTrueMsg').textContent=e.message}
+}
+function quickChart(rows){
+  let c=$('qcChart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=760,h=235;
+  c.width=w*R;c.height=h*R;ctx.setTransform(R,0,0,R,0,0);ctx.clearRect(0,0,w,h);
+  let a=(rows||[]).slice(-28),p={l:36,r:40,t:27,b:35};
+  if(!a.length){ctx.fillStyle='#234b65';ctx.font='13px system-ui';ctx.fillText('No trend data',18,28);return}
+  let gpVals=a.map(z=>nv(z.gp_dollars)).filter(z=>z!==null),prVals=a.map(z=>nv(z.avg_sold_price)).filter(z=>z!==null);
+  let gpMin=Math.min(0,...gpVals),gpMax=Math.max(1,...gpVals),prMin=prVals.length?Math.max(0,Math.min(...prVals)*.94):0,prMax=prVals.length?Math.max(prMin+1,Math.max(...prVals)*1.06):1;
+  if(gpMax===gpMin)gpMax=gpMin+1;if(prMax===prMin)prMax=prMin+1;
+  let pw=w-p.l-p.r,ph=h-p.t-p.b,step=pw/a.length,xx=i=>p.l+step*i+step/2,yg=v=>p.t+ph*(1-(v-gpMin)/(gpMax-gpMin)),yp=v=>p.t+ph*(1-(v-prMin)/(prMax-prMin)),y0=yg(0),bw=Math.max(7,Math.min(17,step*.58));
+  ctx.strokeStyle='rgba(44,92,120,.16)';ctx.lineWidth=1;
+  for(let i=0;i<5;i++){let y=p.t+ph*i/4;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke()}
+  a.forEach((z,i)=>{let v=nv(z.gp_dollars);if(v===null)return;let x=xx(i),y=yg(v),top=Math.min(y,y0),bh=Math.max(1,Math.abs(y-y0));ctx.fillStyle='#164d9f';ctx.globalAlpha=.88;ctx.fillRect(x-bw/2,top,bw,bh);ctx.globalAlpha=1;ctx.font='800 8px system-ui';ctx.textAlign='center';ctx.fillStyle='#164d9f';ctx.fillText('$'+fmt(v,0),x,v>=0?Math.max(9,y-3):Math.min(h-p.b-2,y+10))});
+  let pts=[];a.forEach((z,i)=>{let v=nv(z.avg_sold_price);if(v!==null)pts.push([xx(i),yp(v),v])});
+  if(pts.length){ctx.strokeStyle='#f27c1a';ctx.lineWidth=2.4;ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke();pts.forEach(q=>{ctx.fillStyle='#f27c1a';ctx.beginPath();ctx.arc(q[0],q[1],2.7,0,Math.PI*2);ctx.fill();ctx.font='800 8px system-ui';ctx.textAlign='center';ctx.fillText('$'+fmt(q[2],2),q[0],Math.min(h-p.b-2,q[1]+11))})}
+  ctx.font='9px system-ui';ctx.textAlign='center';ctx.fillStyle='#355d75';a.forEach((z,i)=>{if(i===0||i===a.length-1||i%7===0)ctx.fillText(String(z.date).slice(5),xx(i),h-9)});
+  ctx.textAlign='left';ctx.fillText('GP$',3,p.t);ctx.textAlign='right';ctx.fillText('Price $',w-3,p.t);
+}
 
 function chart(rows){
   let c=$('chart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(920,c.clientWidth),h=285;
