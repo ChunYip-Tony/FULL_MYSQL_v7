@@ -1529,6 +1529,13 @@ def bulk_ordering_suggestions(
             raise ValueError("PROMOTION_DATES_REQUIRED")
         if promotion_end_date < promotion_start_date:
             raise ValueError("PROMOTION_END_BEFORE_START")
+        if not promo_map:
+            raise ValueError("PROMOTION_ITEMS_REQUIRED")
+        for item in promo_map.values():
+            if item.get("promotion_price") is None:
+                raise ValueError("PROMOTION_ITEM_PRICE_REQUIRED")
+            if Decimal(str(item.get("promotion_price"))) <= 0:
+                raise ValueError("PROMOTION_ITEM_PRICE_INVALID")
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
