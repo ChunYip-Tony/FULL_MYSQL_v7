@@ -25,7 +25,7 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
-from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item
+from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock
 
 VERSION='7.0.112-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
@@ -1751,43 +1751,50 @@ def app_v2_pi_search(q:str,limit:int=30):
     return json.loads(json.dumps(result,default=j))
 
 
-@app.get('/v1/app/v2/pi/{upc}')
-def app_v2_pi_item(upc:str,history_limit:int=20):
+@app.get('/v1/app/v2/pi/{family_key}')
+def app_v2_pi_item(family_key:str,history_limit:int=20):
     try:
-        result=v2_pi_item(upc,history_limit)
+        result=v2_pi_item(family_key,history_limit)
     except KeyError:
-        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_PI_ITEM_NOT_FOUND'})
+        raise HTTPException(
+            404,
+            detail={'status':'NOT_FOUND','reason':'V2_PI_FAMILY_NOT_FOUND'},
+        )
     except ValueError as exc:
         raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
     except Exception as exc:
-        raise HTTPException(500,f'V2 PI item failed: {exc}')
+        raise HTTPException(500,f'V2 PI family failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
-@app.post('/v1/app/v2/pi/{upc}/true-stock')
+@app.post('/v1/app/v2/pi/{family_key}/true-stock')
 def app_v2_pi_submit_true_stock(
-    upc:str,
+    family_key:str,
     body:V2PITrueStockRequest,
     authorization: Annotated[str|None,Header()]=None,
 ):
     device=public_app_actor(authorization)
     try:
-        committed=submit_true_stock(
-            upc,
+        committed=v2_submit_family_true_stock(
+            family_key,
             body.true_stock,
             body.uom,
             device,
             body.note,
         )
-        detail=v2_pi_item(upc)
+        detail=v2_pi_item(family_key)
     except KeyError:
-        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_PI_ITEM_NOT_FOUND'})
+        raise HTTPException(
+            404,
+            detail={'status':'NOT_FOUND','reason':'V2_PI_FAMILY_NOT_FOUND'},
+        )
     except ValueError as exc:
         code=str(exc)
-        if code=='TRUE_STOCK_NEGATIVE':
-            raise HTTPException(422,detail={'status':'INVALID','reason':code,'upc':upc})
-        if code=='TRUE_STOCK_UOM_REQUIRED':
-            raise HTTPException(422,detail={'status':'INVALID','reason':code,'upc':upc})
+        if code in {'TRUE_STOCK_NEGATIVE','TRUE_STOCK_UOM_REQUIRED'}:
+            raise HTTPException(
+                422,
+                detail={'status':'INVALID','reason':code,'family_key':family_key},
+            )
         if code.startswith('TRUE_STOCK_UOM_MISMATCH:'):
             required=code.split(':',1)[1]
             raise HTTPException(
@@ -1796,21 +1803,17 @@ def app_v2_pi_submit_true_stock(
                     'status':'INVALID',
                     'reason':'TRUE_STOCK_UOM_MISMATCH',
                     'required_uom':required,
-                    'upc':upc,
+                    'family_key':family_key,
                 },
             )
-        if code in {
-            'SYSTEM_OH_NOT_AVAILABLE',
-            'SYSTEM_OH_LINEAGE_NOT_AVAILABLE',
-            'SYSTEM_OH_SCOPE_UNRESOLVED',
-            'SYSTEM_OH_ROLLFORWARD_BLOCKED',
-            'FAMILY_ID_NOT_AVAILABLE',
-            'PI_INVENTORY_OWNER_UNRESOLVED',
-        }:
-            raise HTTPException(409,detail={'status':'BLOCKED','reason':code,'upc':upc})
+        if code in {'UNAVAILABLE','BLOCKED_MIXED_UOM','FAMILY_SYSTEM_OH_UNAVAILABLE'}:
+            raise HTTPException(
+                409,
+                detail={'status':'BLOCKED','reason':code,'family_key':family_key},
+            )
         raise HTTPException(400,str(exc))
     except Exception as exc:
-        raise HTTPException(500,f'V2 PI True Stock submit failed: {exc}')
+        raise HTTPException(500,f'V2 PI Family True Stock submit failed: {exc}')
 
     system_qty=Decimal(str(committed['system_oh']))
     true_qty=Decimal(str(committed['true_stock']))
@@ -1823,7 +1826,6 @@ def app_v2_pi_submit_true_stock(
         'overage_quantity':max(Decimal('0'),signed),
         'pi':detail,
     },default=j))
-
 
 @app.get('/v1/app/v2/family/{family_key}')
 def app_v2_family(family_key:str):
