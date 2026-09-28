@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.149-single-service'
+VERSION='7.0.150-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -543,6 +543,7 @@ def web_upload_recent(request:Request,limit:int=8):
         batches=cur.fetchall()
         ids=[int(x['batch_id']) for x in batches]
         file_map={bid:[] for bid in ids}
+        pipeline_map={}
         if ids:
             ph=','.join(['%s']*len(ids))
             cur.execute(
@@ -567,9 +568,35 @@ def web_upload_recent(request:Request,limit:int=8):
                     'coverage_start_date':row.get('coverage_start_date'),
                     'coverage_end_date':row.get('coverage_end_date'),
                 })
+
+            cur.execute(
+                f"""SELECT pipeline_run_id,batch_id,stage_name,processing_status,
+                           JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.phase3_stage')) AS phase3_stage,
+                           started_at,completed_at,error_count
+                    FROM pipeline_run
+                    WHERE batch_id IN ({ph})
+                      AND pipeline_name=%s
+                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                    ORDER BY pipeline_run_id DESC""",
+                tuple(ids)+(API_PIPELINE,),
+            )
+            for row in cur.fetchall():
+                bid=int(row['batch_id'])
+                if bid not in pipeline_map:
+                    pipeline_map[bid]={
+                        'pipeline_run_id':row.get('pipeline_run_id'),
+                        'stage_name':row.get('stage_name'),
+                        'processing_status':row.get('processing_status'),
+                        'phase3_stage':row.get('phase3_stage'),
+                        'started_at':row.get('started_at'),
+                        'completed_at':row.get('completed_at'),
+                        'error_count':row.get('error_count'),
+                    }
         cur.close()
     for batch in batches:
-        batch['files']=file_map.get(int(batch['batch_id']),[])
+        bid=int(batch['batch_id'])
+        batch['files']=file_map.get(bid,[])
+        batch['pipeline_run']=pipeline_map.get(bid)
     return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
 
 
