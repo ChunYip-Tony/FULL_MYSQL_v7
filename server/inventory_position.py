@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from data_coverage import source_data_days
+from business_clock import completed_through_date
 
 
 # FULL MYSQL System OH is based on SAP Unrestricted stock. Only movement types
@@ -68,7 +69,7 @@ def _movement_coverage_after_anchor(
     business date from anchor+1 through yesterday must have one canonical COMPLETE
     movement snapshot; otherwise the roll-forward is not analysis-usable.
     """
-    expected_through = date.today() - timedelta(days=1)
+    expected_through = completed_through_date()
     if anchor_day >= expected_through:
         return {
             "expected_through_date": expected_through,
