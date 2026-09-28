@@ -1,18 +1,34 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.119 Single-Service Edition
+Version: 7.0.122 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
 - Web App V2 route: /app/v2
 - Top-level functions: CORE / PI / PERFORMANCE
+- Standalone Main ORDERING remains cancelled.
 
-v7.0.119:
-- Price vs Sales chart labels every 7D point with Qty Sold and Avg Price values.
-- SALE dates remain visibly marked on the chart.
-- PERFORMANCE Sales Audit now explains canonical POS vs mapped V2 differences.
-- Audit shows Canonical POS, Mapped UPC Total, Difference, Unmapped POS, Unmapped Qty, Unmapped UPC count and source file.
-- Audit lists top unmapped canonical POS UPCs with sales, qty and mapping status.
-- Unmapped means the canonical POS row is not represented by the current V2 Quick Check serving set.
-- Canonical POS remains Report Date Sales authority.
-- Top 100 Urgent Price Reviews remains a review queue; specific prices only appear for evidence-backed ACTIONABLE items.
-- Family/UPC colorful grouped metrics and mobile overflow protection remain active.
+v7.0.122 UI:
+- Modern flat section/list design; no visual card layout.
+- Family page is organized into Identity / Sales / Inventory / Delivery & Receipt sections.
+- UPC page is organized into Identity / Sales / Inventory / Price sections.
+- Typography and controls were reduced from the oversized elder-friendly revision while retaining readability and large tap targets.
+- Search results label Family Article clearly and show UPC Type: PACKAGED UPC / COOK SERVICE UPC / CATCH-WEIGHT UPC / OTHER UPC.
+- All visible quantity values include UOM; unresolved UOM displays UOM UNKNOWN.
+- No-OH states display status, reason, source/anchor when available.
+- Family OH can fall back to confirmed receiving/main-article inventory ownership when selling-child ownership does not resolve.
+
+Price trend:
+- Latest 7 completed supported sales dates only.
+- Curves: Qty Sold, Avg Price, GP$.
+- Every point is labeled.
+- GP$ curve is recalculated using current authoritative cost and is explicitly labeled as current-cost basis.
+- SALE dates remain visibly marked.
+
+Performance:
+- Report Date remains limited to completed canonical supported POS dates.
+- Sales Audit explains canonical POS vs mapped V2 differences and lists top unmapped UPCs.
+- Unmapped quantity totals are shown only when one reliable UOM exists; otherwise mixed/unknown UOM is stated.
+- Top 100 remains a review queue; specific price only for evidence-backed ACTIONABLE items.
+
+Known OH correction:
+- Family/article 1342107 has OH source history; V2 now routes Family/System OH and receiving-article fallback before returning no OH.
