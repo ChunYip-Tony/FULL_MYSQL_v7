@@ -491,8 +491,27 @@ body{
   #upload .upload-day .src{font-size:6.8px;padding:2px 1px}
 }
 
+
+/* v7.0.136 latest OH / live-fresh / frozen report uploads */
+#upload .latest-ref-card{padding:10px!important}
+#upload .latest-ref-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+#upload .latest-ref{
+  border:1px solid rgba(90,145,171,.22);border-radius:11px;padding:9px;
+  background:linear-gradient(135deg,rgba(255,255,255,.82),rgba(231,246,250,.75))
+}
+#upload .latest-ref .label{font-size:11px;font-weight:950;color:#123d59}
+#upload .latest-ref .uploaded{font-size:14px;font-weight:950;color:#0b6a98;margin-top:4px}
+#upload .latest-ref .coverage{font-size:9px;color:#536f80;margin-top:4px;line-height:1.25}
+#upload .latest-ref .filename{font-size:8px;color:#6a8190;margin-top:5px;overflow-wrap:anywhere}
+#upload .latest-ref.missing{background:linear-gradient(135deg,#fff8ed,#fff0dc);border-color:#e6c997}
+#upload .latest-ref.missing .uploaded{color:#9b6509}
+@media(max-width:560px){
+  #upload .latest-ref-grid{grid-template-columns:1fr}
+  #upload .latest-ref{padding:8px}
+}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.135</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.136</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -547,6 +566,11 @@ body{
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
   <div class="head"><div><div class="title">⬆ Raw File Upload</div><div class="meta">Upload and view readiness directly in the Web App — no login or Windows client required.</div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="card latest-ref-card">
+    <div class="section">Latest Reference Uploads</div>
+    <div id="latestRefMsg" class="msg"></div>
+    <div id="latestRefUploads" class="latest-ref-grid"></div>
+  </div>
   <div id="uploadDrop" class="card upload-drop">
     <div class="upload-icon">📂</div>
     <div class="upload-title">Choose raw files</div>
@@ -598,7 +622,7 @@ const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new 
 let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(id==='pid')return 'pi';return id}
-function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
+function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
@@ -743,6 +767,43 @@ function renderWebUploadStatus(d){
   return status;
 }
 
+
+function uploadDateTime(v){
+  if(!v)return '—';
+  let d=new Date(v);
+  return Number.isNaN(d.getTime())?String(v):d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+}
+function referenceCoverage(x){
+  let a=x?.coverage_start,b=x?.coverage_end;
+  if(a&&b)return a===b?String(a):String(a)+' → '+String(b);
+  if(a||b)return String(a||b);
+  if(x?.report_generated_at)return 'Generated '+String(x.report_generated_at).slice(0,10);
+  if(x?.filename_date_candidate)return 'Report date '+String(x.filename_date_candidate);
+  return 'Coverage date unavailable';
+}
+function renderLatestReferenceUpload(x){
+  if(!x?.available){
+    return '<div class="latest-ref missing"><div class="label">'+esc(x?.label||'REPORT')+'</div><div class="uploaded">No valid upload</div><div class="coverage">No successful non-duplicate report is currently available.</div></div>';
+  }
+  return '<div class="latest-ref">'+
+    '<div class="label">'+esc(x.label||x.source_type||'REPORT')+'</div>'+
+    '<div class="uploaded">'+esc(uploadDateTime(x.uploaded_at))+'</div>'+
+    '<div class="coverage"><b>Coverage:</b> '+esc(referenceCoverage(x))+'<br><b>Rows:</b> '+fmt(x.rows,0)+'</div>'+
+    '<div class="filename">'+esc(x.filename||'')+'</div>'+
+  '</div>';
+}
+async function loadLatestReferenceUploads(){
+  $('latestRefMsg').textContent='Checking latest OH / Live-Fresh / Frozen reports…';
+  try{
+    let d=await api('/v1/web-upload/latest-reference-uploads');
+    $('latestRefUploads').innerHTML=(d.sources||[]).map(renderLatestReferenceUpload).join('');
+    $('latestRefMsg').textContent='';
+  }catch(e){
+    $('latestRefMsg').textContent=e.message;
+    $('latestRefUploads').innerHTML='';
+  }
+}
+
 function renderUploadCalendarDay(x){
   let cls=x.status==='UPDATED'?'updated':(x.status==='PARTIAL'?'partial':'missing');
   let label=x.status==='UPDATED'?'UPDATED':(x.status==='PARTIAL'?'PARTIAL':'NEEDS UPLOAD');
@@ -810,7 +871,7 @@ async function pollWebUpload(session){
       ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
       : 'Server is processing this batch…';
     await loadWebUploadRecent();
-    if(terminalUploadStatus(status))await loadWebUploadCalendar();
+    if(terminalUploadStatus(status)){await loadLatestReferenceUploads();await loadWebUploadCalendar();}
     if(!terminalUploadStatus(status))webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
   }catch(e){$('uploadMsg').textContent=e.message}
 }
@@ -858,7 +919,7 @@ $('uploadDrop').onclick=()=>$('uploadFiles').click();
 $('uploadFiles').onchange=e=>setWebUploadFiles(e.target.files);
 $('uploadClear').onclick=()=>{setWebUploadFiles([]);$('uploadFiles').value=''};
 $('uploadStart').onclick=startWebUpload;
-$('uploadRefresh').onclick=()=>{loadWebUploadActive();loadWebUploadCalendar();loadWebUploadRecent()};
+$('uploadRefresh').onclick=()=>{loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent()};
 ['dragenter','dragover'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.add('drag')}));
 ['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
 $('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
