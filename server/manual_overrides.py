@@ -294,6 +294,17 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927 = (
             "1 CV = 30 PAC and 1 PAC = 1 LB, so 1 selling PAC = 1 cost LB."
         ),
     },
+    {
+        "ean_upc": "24570200000",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "EA",
+        "cost_qty": Decimal("1"),
+        "cost_uom_code": "LB",
+        "source_note": (
+            "USER_CONFIRMED_COST_CONVERSION_20260927: SCALLOP 10/20 U10 / "
+            "Article 1341651; 1 selling EA = 1 LB."
+        ),
+    },
 )
 
 
