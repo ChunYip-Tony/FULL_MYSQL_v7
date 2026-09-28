@@ -3198,10 +3198,10 @@ def performance_report(
             raise ValueError("REPORT_DATE_NOT_SUPPORTED")
 
         if cat=="ALL":
-            cur.execute(
-                """SELECT * FROM quick_check_current
-                   WHERE UPPER(COALESCE(product_class,'')) IN ('LIVE','FRESH','FROZEN')"""
-            )
+            # ALL means the complete Seafood serving scope, including QA/OTHER
+            # classifications.  LIVE/FRESH/FROZEN are filters, not the definition
+            # of department total.
+            cur.execute("""SELECT * FROM quick_check_current""")
         else:
             cur.execute(
                 """SELECT * FROM quick_check_current
