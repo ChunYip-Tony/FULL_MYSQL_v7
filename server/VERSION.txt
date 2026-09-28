@@ -1,18 +1,18 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.135 Single-Service Edition
+Version: 7.0.136 Single-Service Edition
 
 Public Web App:
 - Quick Check / PI / Upload / OH Discrepancy / Reports
-- Raw upload and upload/readiness status do not require login.
+- Upload and upload/readiness status do not require login.
 - Windows client remains optional.
 
-v7.0.135 Upload Coverage Calendar:
-- Upload page now includes a rolling calendar for the past 14 completed calendar days.
-- Daily completeness uses the existing canonical FULL MYSQL daily coverage rule.
-- A day is UPDATED only when both canonical POS Sales and MVT daily coverage are present.
-- PARTIAL means one required daily source is present and the calendar explicitly shows whether POS or MVT is still needed.
-- NEEDS UPLOAD means both required daily sources are missing.
-- Price, OH, ABC, Article Manual and other periodic/non-daily sources do not determine daily calendar completeness.
-- Calendar excludes the current incomplete business day and runs through the latest completed business date.
-- Calendar refreshes when Upload opens, on manual Refresh, and when an upload batch reaches a terminal processing state.
-- Current Batch and Recent Uploads continue to show per-file ingest status plus Phase2C, Phase3 and Quick Check READY/HOLD readiness.
+v7.0.136 Latest Reference Uploads:
+- Upload page now shows the latest accepted OH, Live / Fresh, and Frozen report uploads.
+- Each source shows actual database upload_timestamp, report coverage date/range, row count, and filename.
+- Latest accepted means processing_status=INGESTED, zero errors, and not a duplicate file.
+- Source mappings:
+  OH -> on_hand
+  Live / Fresh -> live_fresh_suggestion
+  Frozen -> frozen_inventory
+- Latest Reference Uploads refreshes whenever the Upload page opens, Refresh is pressed, or a batch reaches a terminal processing state.
+- The existing 14-day POS/MVT coverage calendar and Recent Uploads remain unchanged.
