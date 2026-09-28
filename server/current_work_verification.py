@@ -104,6 +104,7 @@ def verify_current_work(
         {
             "safe_to_auto_resolve_upc_count":
                 cost_backfill.get("safe_to_auto_resolve_upc_count"),
+            "source_coverage": cost_backfill.get("source_coverage"),
         },
     )
 
