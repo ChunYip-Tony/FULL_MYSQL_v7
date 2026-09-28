@@ -2142,7 +2142,13 @@ def _family_owner_positions(cur, rows: list[dict[str,Any]], *, use_child_true_st
     # inventory owner, supplement from confirmed article-level OH in the same
     # family.  This fixes valid Family OH such as 1342107 without double
     # counting an already-resolved child owner.
-    if not owners and rows:
+    has_usable_child_owner=any(
+        x.get("analysis_usable")
+        and x.get("quantity") is not None
+        and x.get("uom")
+        for x in owners.values()
+    )
+    if not has_usable_child_owner and rows:
         family_id=next(
             (int(x["family_id"]) for x in rows if x.get("family_id") is not None),
             None,
