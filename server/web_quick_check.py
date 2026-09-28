@@ -34,7 +34,7 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.104</div></div>
+    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.105</div></div>
     <div class="row" style="justify-content:space-between">
       <div id="globalStatus" class="msg">Public operational app</div>
       <a href="/admin" style="font-size:11px;color:var(--muted);text-decoration:none">Admin</a>
@@ -42,6 +42,11 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
   </div>
 
   <section id="mod-quick" class="module">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><div class="section-title" style="margin:0">Operations Overview</div><button id="refreshOverview" class="smallbtn">Refresh</button></div>
+      <div id="overviewMetrics" class="grid metrics" style="margin-top:10px"></div>
+      <div id="overviewMeta" class="msg">Loading operational status…</div>
+    </div>
     <div class="module-head"><h2>🔎 Quick Check</h2></div>
     <div class="row search-row">
       <input id="q" placeholder="Search Article, UPC, or item name" autocomplete="off">
@@ -99,6 +104,16 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
     <div class="small">Pending discrepancies created automatically when submitted True Stock is below System OH.</div>
     <div id="dumpingStatus" class="msg">Open this tab to load.</div>
     <div id="dumpingList" class="grid list-grid"></div>
+    <div class="module-head" style="margin-top:18px">
+      <h2 style="font-size:16px">Recent History</h2>
+      <select id="dumpingHistoryFilter" style="width:auto;padding:7px 9px">
+        <option value="">Resolved + Superseded</option>
+        <option value="RESOLVED">Resolved</option>
+        <option value="SUPERSEDED">Superseded</option>
+      </select>
+    </div>
+    <div id="dumpingHistoryStatus" class="msg"></div>
+    <div id="dumpingHistoryList" class="grid list-grid"></div>
   </section>
 
   <section id="mod-price" class="module hidden">
@@ -106,7 +121,17 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
     <div class="small">Public users can review and run what-if price impact. Proposal creation, approval, rejection, and execution marking remain admin-only. No action here directly changes live retail.</div>
     <div id="priceStatus" class="msg">Open this tab to load.</div>
     <div id="priceList" class="grid list-grid"></div>
-    <div class="module-head" style="margin-top:18px"><h2 style="font-size:16px">Proposal Queue</h2></div>
+    <div class="module-head" style="margin-top:18px">
+      <h2 style="font-size:16px">Proposal Queue</h2>
+      <select id="proposalFilter" style="width:auto;padding:7px 9px">
+        <option value="">All Statuses</option>
+        <option value="PENDING_REVIEW">Pending Review</option>
+        <option value="APPROVED_FOR_EXECUTION">Approved</option>
+        <option value="MARKED_EXECUTED">Marked Executed</option>
+        <option value="REJECTED">Rejected</option>
+        <option value="CANCELLED">Cancelled</option>
+      </select>
+    </div>
     <div id="proposalStatus" class="msg">Loading with Price Change.</div>
     <div id="proposalList" class="grid list-grid"></div>
   </section>
@@ -142,6 +167,26 @@ function pill(status){
 }
 function metric(k,v){return '<div class="metric"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>'}
 function flags(items){return '<div class="flags">'+(items||[]).map(x=>'<span class="flag">'+esc(x)+'</span>').join('')+'</div>'}
+
+async function loadDashboard(){
+  $('overviewMeta').textContent='Loading operational status…';
+  try{
+    const d=await api('/v1/app/dashboard');
+    const q=d.quick_check||{}, inv=d.inventory_attention||{}, ts=d.true_stock||{}, du=d.dumping||{}, pc=d.price_change||{}, ord=d.ordering||{};
+    $('overviewMetrics').innerHTML=[
+      metric('Quick READY',fmt(q.ready_rows,0)),
+      metric('QA HOLD',fmt(q.qa_hold_rows,0)),
+      metric('Negative Stock',fmt(inv.negative_stock_actionable_owner_count,0)),
+      metric('Active True Stock',fmt(ts.active_count,0)),
+      metric('Pending Dumping',fmt(du.pending,0)),
+      metric('Price Review',fmt(pc.pending_review,0))
+    ].join('');
+    $('overviewMeta').textContent='Batch '+(q.latest_publish_batch_id??'—')+
+      ' · published '+(q.latest_published_at||'—')+
+      ' · Ordering policies '+fmt(ord.enabled_policy_count??ord.configured_policy_count,0)+
+      ' · Price approved '+fmt(pc.approved_for_execution,0);
+  }catch(e){$('overviewMeta').textContent=e.message;$('overviewMeta').className='msg error'}
+}
 
 function switchTab(tab){
   document.querySelectorAll('.module').forEach(x=>x.classList.add('hidden'));
@@ -226,7 +271,7 @@ async function submitTrueStock(){
     });
     const saved='Saved. Discrepancy '+fmt(r.discrepancy)+' '+(r.uom||'')+' · Dumping: '+(r.dumping_queue_action||'NONE');
     loadedDumping=false; loadedOrdering=false;
-    await loadDetail(currentUpc);
+    await Promise.all([loadDetail(currentUpc),loadDashboard()]);
     $('trueStockMsg').className='msg ok'; $('trueStockMsg').textContent=saved;
   }catch(e){$('trueStockMsg').textContent=e.message;$('trueStockMsg').className='msg error'}
 }
@@ -266,10 +311,19 @@ async function loadOrdering(){
 }
 
 async function loadDumping(){
-  $('dumpingStatus').textContent='Loading pending discrepancies…'; $('dumpingList').innerHTML='';
+  $('dumpingStatus').textContent='Loading pending discrepancies…';
+  $('dumpingHistoryStatus').textContent='Loading history…';
+  $('dumpingList').innerHTML=''; $('dumpingHistoryList').innerHTML='';
+  const historyStatus=$('dumpingHistoryFilter').value;
+  const historyPath='/v1/app/dumping/history?limit=80'+(historyStatus?'&status='+encodeURIComponent(historyStatus):'');
   try{
-    const d=await api('/v1/app/dumping/pending'); loadedDumping=true;
+    const [d,h]=await Promise.all([
+      api('/v1/app/dumping/pending'),
+      api(historyPath)
+    ]);
+    loadedDumping=true;
     $('dumpingStatus').textContent=(d.count??(d.rows||[]).length)+' pending discrepancy item(s)';
+    $('dumpingHistoryStatus').textContent=h.count+' recent history item(s)';
     $('dumpingList').innerHTML=(d.rows||[]).map(r=>`
       <div class="card module-card" data-open-upc="${esc(r.ean_upc||'')}">
         <div class="row" style="justify-content:space-between"><div class="name">Family ${esc(r.main_article_number||r.family_id||'—')}</div><span class="pill warn">${esc(r.queue_status||'PENDING')}</span></div>
@@ -284,11 +338,26 @@ async function loadDumping(){
           <button class="smallbtn resolveDump" data-dumping-id="${esc(r.discrepancy_id)}">Mark handled</button>
         </div>
       </div>`).join('')||'<div class="empty">No pending dumping discrepancies.</div>';
-    bindOpenCards('dumpingList');
+    $('dumpingHistoryList').innerHTML=(h.rows||[]).map(r=>`
+      <div class="card module-card" data-open-upc="${esc(r.ean_upc||'')}">
+        <div class="row" style="justify-content:space-between"><div class="name">Family ${esc(r.main_article_number||r.family_id||'—')}</div>${pill(r.queue_status)}</div>
+        <div class="meta">UPC ${esc(r.ean_upc||'—')} · Article ${esc(r.article_number||'—')}</div>
+        <div class="kv">
+          <div class="k">System OH → True</div><div class="v">${fmt(r.system_oh_quantity)} → ${fmt(r.true_stock_quantity)} ${esc(r.uom_code||'')}</div>
+          <div class="k">Discrepancy</div><div class="v">${fmt(r.discrepancy_quantity)} ${esc(r.uom_code||'')}</div>
+          <div class="k">Resolved</div><div class="v">${esc(r.resolved_at||'—')}</div>
+          <div class="k">Resolved By</div><div class="v">${esc(r.resolved_by||'—')}</div>
+        </div>
+        <div class="small" style="margin-top:8px">${esc(r.resolution_note||'')}</div>
+      </div>`).join('')||'<div class="empty">No matching dumping history.</div>';
+    bindOpenCards('dumpingList'); bindOpenCards('dumpingHistoryList');
     $('dumpingList').querySelectorAll('.resolveDump').forEach(btn=>btn.addEventListener('click',e=>{
       e.stopPropagation(); resolveDumping(btn.dataset.dumpingId,btn);
     }));
-  }catch(e){$('dumpingStatus').textContent=e.message;$('dumpingStatus').className='msg error'}
+  }catch(e){
+    $('dumpingStatus').textContent=e.message;$('dumpingStatus').className='msg error';
+    $('dumpingHistoryStatus').textContent=e.message;$('dumpingHistoryStatus').className='msg error';
+  }
 }
 
 async function resolveDumping(id,btn){
@@ -300,7 +369,7 @@ async function resolveDumping(id,btn){
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({confirm:'RESOLVE_DUMPING_DISCREPANCY'})
     });
-    loadedDumping=false; await loadDumping();
+    loadedDumping=false; await Promise.all([loadDumping(),loadDashboard()]);
   }catch(e){
     $('dumpingStatus').textContent=e.message; $('dumpingStatus').className='msg error';
     btn.disabled=false; btn.textContent='Mark handled';
@@ -332,9 +401,11 @@ async function loadPrice(){
   $('proposalStatus').textContent='Loading proposal queue…';
   $('priceList').innerHTML=''; $('proposalList').innerHTML='';
   try{
+    const proposalStatusFilter=$('proposalFilter').value;
+    const proposalPath='/v1/app/price-change/proposals?limit=60'+(proposalStatusFilter?'&status='+encodeURIComponent(proposalStatusFilter):'');
     const [d,p]=await Promise.all([
       api('/v1/app/price-change?limit=160'),
-      api('/v1/app/price-change/proposals?limit=60')
+      api(proposalPath)
     ]);
     loadedPrice=true;
     $('priceStatus').textContent=d.count+' item(s) · '+esc(d.mode||'');
@@ -412,9 +483,13 @@ function bindOpenCards(containerId){
 $('search').addEventListener('click',search);
 $('q').addEventListener('keydown',e=>{if(e.key==='Enter')search()});
 $('submitTrueStock').addEventListener('click',submitTrueStock);
+$('refreshOverview').addEventListener('click',loadDashboard);
 $('refreshOrdering').addEventListener('click',()=>{loadedOrdering=false;loadOrdering()});
 $('refreshDumping').addEventListener('click',()=>{loadedDumping=false;loadDumping()});
+$('dumpingHistoryFilter').addEventListener('change',()=>{loadedDumping=false;loadDumping()});
 $('refreshPrice').addEventListener('click',()=>{loadedPrice=false;loadPrice()});
+$('proposalFilter').addEventListener('change',()=>{loadedPrice=false;loadPrice()});
+loadDashboard();
 </script>
 </body>
 </html>"""
