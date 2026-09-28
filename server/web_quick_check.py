@@ -119,7 +119,7 @@ details summary{cursor:pointer;font-weight:780;font-size:12px}
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Fish Market Ops · v7.0.115</div></div>
+    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Fish Market Ops · v7.0.124</div></div>
     <div class="row" style="justify-content:space-between">
       <div id="globalStatus" class="msg" style="color:#cfe7f2">Live operational view</div>
       <a href="/admin" style="font-size:10px;color:#d5edf6;text-decoration:none">Admin</a>
