@@ -1507,10 +1507,15 @@ def bulk_ordering_suggestions(
     promotion_end_date: date|None=None,
     promotion_items: list[dict[str,Any]]|None=None,
 ) -> dict[str,Any]:
-    """Read-only Family Article ordering simulator for the main Ordering page."""
+    """Read-only Family Article ordering simulator for the main Ordering page.
+
+    Promotion selection/evidence is UPC-level. Final replenishment remains
+    Family Article level.
+    """
     kind=str(order_type or "").strip().upper()
     if kind not in {"FRESH","FROZEN"}:
         raise ValueError("ORDER_TYPE_MUST_BE_FRESH_OR_FROZEN")
+
     order_day=ordering_date or business_today()
     default_weekday=4 if kind=="FRESH" else 1  # Friday / Tuesday
     delivery=expected_delivery_date or _strict_next_weekday(order_day,default_weekday)
@@ -1537,8 +1542,7 @@ def bulk_ordering_suggestions(
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
 
-        # Promotion evidence is UPC-level.  The final replenishment decision
-        # remains Family Article level.
+        # Resolve every selected promotion item to one canonical UPC.
         promo_by_family: dict[int,list[dict[str,Any]]] = {}
         seen_promo_upcs=set()
         for item in raw_promo_items:
@@ -1547,8 +1551,61 @@ def bulk_ordering_suggestions(
             cur.execute(
                 """SELECT * FROM quick_check_current
                    WHERE ean_upc=%s
-                      OR (ean_upc REGEXP '^[0-9]+
-        classes=("FRESH",) if kind=="FRESH" else ("FROZEN",)
+                      OR (
+                           ean_upc REGEXP '^[0-9]+$'
+                           AND TRIM(LEADING '0' FROM ean_upc)=%s
+                         )
+                   ORDER BY CASE quick_check_status
+                              WHEN 'READY' THEN 0
+                              WHEN 'QA_HOLD' THEN 1
+                              ELSE 2
+                            END
+                   LIMIT 1""",
+                (raw_upc,nk),
+            )
+            prow=cur.fetchone()
+            if not prow:
+                raise ValueError(f"PROMOTION_UPC_NOT_FOUND:{raw_upc}")
+
+            canonical_upc=str(prow.get("ean_upc") or raw_upc)
+            if canonical_upc in seen_promo_upcs:
+                raise ValueError(f"DUPLICATE_PROMOTION_UPC:{canonical_upc}")
+            seen_promo_upcs.add(canonical_upc)
+
+            pclass=str(prow.get("product_class") or "").upper()
+            if pclass!=kind:
+                raise ValueError(
+                    f"PROMOTION_UPC_CATEGORY_MISMATCH:{canonical_upc}:{pclass}:{kind}"
+                )
+
+            upc_id=int(prow["upc_id"])
+            upc_history=_historical_sale_periods(cur,upc_id,365)
+            upc_regular=_regular_baseline(cur,upc_id,28)
+            promo_baseline=(
+                _promotion_forecast_baseline(
+                    cur,
+                    upc_id,
+                    promotion_start_date,
+                    promotion_end_date,
+                    Decimal(str(item.get("promotion_price"))),
+                )
+                if promotion_involved else None
+            )
+            promo_by_family.setdefault(int(prow["family_id"]),[]).append({
+                "upc":canonical_upc,
+                "upc_id":upc_id,
+                "upc_name":prow.get("selling_description"),
+                "selling_uom":prow.get("selling_uom"),
+                "family_id":prow.get("family_id"),
+                "family_article_number":prow.get("main_article_number"),
+                "family_article_name":prow.get("family_description"),
+                "promotion_price":Decimal(str(item.get("promotion_price"))),
+                "historical_promotions":upc_history,
+                "regular_baseline":upc_regular,
+                "promotion_baseline":promo_baseline,
+            })
+
+        classes=(kind,)
         ph=",".join(["%s"]*len(classes))
         cur.execute(
             f"""SELECT DISTINCT family_id,main_article_number,family_description
@@ -1611,6 +1668,8 @@ def bulk_ordering_suggestions(
             raw_oh=_d(family_oh.get("quantity"))
             ordering_oh=max(Decimal("0"),raw_oh)
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
+
+            # User rule: only active 28-supported-day sellers with DOS < 7.
             if not active_28 or dos is None or dos>=Decimal("7"):
                 continue
 
@@ -1628,20 +1687,27 @@ def bulk_ordering_suggestions(
             promo_items_for_family=promo_by_family.get(fid,[])
             promo_fallback=False
             promo_family_vel=_d(reg_vel)
+
             if promotion_involved and promo_items_for_family:
-                # Family promotion-day demand =
+                # Family promotion-day demand:
                 # family regular demand
-                # - each promoted UPC's regular demand
-                # + each promoted UPC's observed SALE demand.
+                # - promoted UPC regular demand
+                # + promoted UPC observed SALE demand.
                 for pitem in promo_items_for_family:
-                    upc_reg=pitem.get("regular_baseline",{}).get("regular_velocity_per_supported_day")
+                    upc_reg=(
+                        pitem.get("regular_baseline",{})
+                        .get("regular_velocity_per_supported_day")
+                    )
                     baseline=pitem.get("promotion_baseline") or {}
                     upc_sale=baseline.get("promotion_velocity_per_day")
+
                     if upc_reg is None:
                         upc_reg=Decimal("0")
                     if upc_sale is None:
+                        # No invented uplift: keep this UPC at its regular rate.
                         upc_sale=upc_reg
                         promo_fallback=True
+
                     promo_family_vel=max(
                         Decimal("0"),
                         promo_family_vel-_d(upc_reg)+_d(upc_sale),
@@ -1651,9 +1717,11 @@ def bulk_ordering_suggestions(
             before_delivery=Decimal("0")
             day=order_day
             segments={"REGULAR":Decimal("0"),"PROMOTION":Decimal("0")}
+
             while day<next_next:
                 is_promo=bool(
-                    promotion_involved and promo_items_for_family
+                    promotion_involved
+                    and promo_items_for_family
                     and promotion_start_date<=day<=promotion_end_date
                 )
                 use_vel=_d(promo_family_vel if is_promo else reg_vel)
@@ -1694,30 +1762,41 @@ def bulk_ordering_suggestions(
                 "suggested_order_qty":suggested,
                 "suggested_order_uom":demand_uom,
                 "readiness":(
-                    "READY" if any(str(x.get("quick_check_status") or "")=="READY" for x in rows)
+                    "READY"
+                    if any(
+                        str(x.get("quick_check_status") or "")=="READY"
+                        for x in rows
+                    )
                     else str(rows[0].get("quick_check_status") or "UNKNOWN")
                 ),
             })
 
-        suggestions.sort(key=lambda x:(float(x.get("dos") or 999999),-float(x.get("qty_28d") or 0),str(x.get("family_article_name") or "")))
+        suggestions.sort(
+            key=lambda x:(
+                float(x.get("dos") or 999999),
+                -float(x.get("qty_28d") or 0),
+                str(x.get("family_article_name") or ""),
+            )
+        )
         cur.close()
 
     return {
         "contract_version":"WEBAPP_V2_BULK_ORDERING_V2",
         "order_type":kind,
-        "category_scope":["FRESH"] if kind=="FRESH" else ["FROZEN"],
+        "category_scope":[kind],
         "inputs":{
             "ordering_date":order_day,
             "expected_delivery_date":delivery,
             "expected_delivery_default_source":(
-                "USER_INPUT" if expected_delivery_date is not None
+                "USER_INPUT"
+                if expected_delivery_date is not None
                 else ("FOLLOWING_FRIDAY" if kind=="FRESH" else "FOLLOWING_TUESDAY")
             ),
             "next_next_delivery_date":next_next,
             "promotion_involved":bool(promotion_involved),
             "promotion_start_date":promotion_start_date,
             "promotion_end_date":promotion_end_date,
-            "promotion_items":promotion_items or [],
+            "promotion_items":raw_promo_items,
         },
         "eligibility":{
             "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
@@ -1732,6 +1811,9 @@ def bulk_ordering_suggestions(
             "sales_history":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
             "missing_source_dates_count_as_zero":False,
             "promotion_definition":"PRICE_TYPE_SALE_ONLY",
+            "promotion_item_identity":"UPC",
+            "promotion_reference_history":"SELECTED_UPC_SALE_HISTORY",
+            "family_promotion_demand_method":"FAMILY_REGULAR_MINUS_PROMO_UPC_REGULAR_PLUS_PROMO_UPC_SALE",
             "tpr_is_promotion":False,
             "coverage_target":"THROUGH_DAY_BEFORE_NEXT_NEXT_DELIVERY",
             "saved":False,
