@@ -190,6 +190,9 @@ def _price_sales_trend(
     upc_id: int,
     supported_day_count: int = 90,
     up_to: date | None = None,
+    *,
+    cost_per_selling_unit: Decimal|None = None,
+    qty_uom: str|None = None,
 ) -> dict[str, Any]:
     days = _canonical_sales_days(
         cur,
@@ -200,15 +203,22 @@ def _price_sales_trend(
     rows = []
     for day in sorted(daily):
         x = daily[day]
+        qty=_d(x["sold_quantity"])
+        sales=_d(x["sales_amount"])
+        avg=(sales/qty if qty != 0 else None)
+        gp_dollars=(
+            sales-(cost_per_selling_unit*qty)
+            if cost_per_selling_unit is not None else None
+        )
         rows.append({
             "date": day,
             "supported": True,
-            "sold_quantity": x["sold_quantity"],
-            "sales_amount": x["sales_amount"],
-            "avg_sold_price": (
-                x["sales_amount"] / x["sold_quantity"]
-                if x["sold_quantity"] != 0 else None
-            ),
+            "sold_quantity": qty,
+            "qty_uom": qty_uom,
+            "sales_amount": sales,
+            "avg_sold_price": avg,
+            "gp_dollars": gp_dollars,
+            "gp_cost_basis":"CURRENT_AUTHORITATIVE_COST" if cost_per_selling_unit is not None else "UNAVAILABLE",
             "price_types": [
                 {
                     "price_type": pt,
@@ -225,8 +235,10 @@ def _price_sales_trend(
         "missing_calendar_dates_are_zero": False,
         "promotion_price_type": "SALE",
         "tpr_is_promotion": False,
+        "qty_uom":qty_uom,
+        "gp_curve_cost_basis":"CURRENT_AUTHORITATIVE_COST" if cost_per_selling_unit is not None else "UNAVAILABLE",
+        "gp_curve_cost_per_selling_unit":cost_per_selling_unit,
     }
-
 
 def _promotion_type(start: date, end: date) -> str:
     duration = (end - start).days + 1
@@ -623,6 +635,10 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
             "source":"TRUE_STOCK" if true_stock else "SYSTEM_OH",
             "analysis_usable":bool(pos and pos.get("analysis_usable")),
             "blockers":pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+            "reason":_oh_display_reason(
+                "OH_NOT_ANALYSIS_USABLE",
+                pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+            ),
         }
 
     usable=[x for x in owners.values() if x.get("analysis_usable") and x.get("quantity") is not None and x.get("uom")]
@@ -893,7 +909,7 @@ def family_info(family_key: str) -> dict[str,Any]:
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_FAMILY_V3",
+        "contract_version":"WEBAPP_V2_FAMILY_V4",
         "family_article_number":family.get("main_article_number"),
         "family_article_name":family.get("family_description"),
         "family_id":fid,
@@ -938,9 +954,10 @@ def upc_info(upc: str) -> dict[str,Any]:
             raise KeyError("V2_UPC_NOT_FOUND")
         m7=_sales_metric(cur,int(row["upc_id"]),7)
         m28=_sales_metric(cur,int(row["upc_id"]),28)
+        effective_oh=_selling_equivalent_effective_oh(cur,row)
         cur.close()
     return {
-        "contract_version":"WEBAPP_V2_UPC_V3",
+        "contract_version":"WEBAPP_V2_UPC_V4",
         "upc":row.get("ean_upc"),
         "upc_name":row.get("selling_description"),
         "category":row.get("product_class"),
@@ -951,6 +968,7 @@ def upc_info(upc: str) -> dict[str,Any]:
         "family_article_name":row.get("family_description"),
         "current_price":row.get("current_price"),
         "current_price_type":row.get("current_price_type"),
+        "effective_oh":effective_oh,
         "qty_7d":m7,
         "qty_28d":m28,
         "actions":["FAMILY_ARTICLE","PRICE","ORDERING"],
@@ -975,13 +993,19 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
             cur.close()
             raise KeyError("V2_UPC_NOT_FOUND")
         upc_id=int(row["upc_id"])
+        qty_uom=_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom"))
+        current_cost=(
+            Decimal(str(row["current_cost_per_selling_unit"]))
+            if row.get("current_cost_per_selling_unit") is not None else None
+        )
         result={
-            "contract_version":"WEBAPP_V2_PRICE_V3",
+            "contract_version":"WEBAPP_V2_PRICE_V4",
             "upc":row.get("ean_upc"),
             "name":row.get("selling_description"),
             "category":row.get("product_class"),
             "readiness":row.get("quick_check_status"),
             "selling_uom":row.get("selling_uom"),
+            "qty_uom":qty_uom,
             "upc_role":_upc_role(row),
             "current":{
                 "price":row.get("current_price"),
@@ -1005,8 +1029,16 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
                 "company_b":row.get("company_price_b"),
                 "company_c":row.get("company_price_c"),
             },
-            "price_vs_sales_trend":_price_sales_trend(cur,upc_id,min(max(int(trend_supported_days or 7),1),7)),
-            "sales_history_14d":_price_sales_trend(cur,upc_id,14),
+            "price_vs_sales_trend":_price_sales_trend(
+                cur,upc_id,min(max(int(trend_supported_days or 7),1),7),
+                cost_per_selling_unit=current_cost,
+                qty_uom=qty_uom,
+            ),
+            "sales_history_14d":_price_sales_trend(
+                cur,upc_id,14,
+                cost_per_selling_unit=current_cost,
+                qty_uom=qty_uom,
+            ),
             "historical_promotions":_historical_sale_periods(cur,upc_id),
             "promotion_definition":{
                 "promotion_price_type":"SALE",
@@ -1019,10 +1051,39 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
     return result
 
 
+def _oh_display_reason(status: Any, blockers: Any=None, owners: Any=None) -> str|None:
+    s=str(status or "").upper()
+    if s=="READY":
+        return None
+    if s=="BLOCKED_MIXED_UOM":
+        return "Inventory exists under more than one UOM, so OH cannot be safely totaled."
+    if s=="OH_UOM_CONVERSION_UNRESOLVED":
+        return "OH exists, but its UOM cannot be safely converted to the selling UOM."
+    if s=="OH_NOT_ANALYSIS_USABLE":
+        return "OH exists, but the inventory position is not analysis-usable."
+    if s=="FAMILY_TRUE_STOCK_ROLLFORWARD_BLOCKED":
+        return "Family True Stock exists, but movement roll-forward is blocked."
+    if s=="FAMILY_SYSTEM_OH_ROLLFORWARD_BLOCKED":
+        return "Family OH snapshot exists, but movement roll-forward is blocked."
+    flat=[]
+    if isinstance(blockers,(list,tuple,set)):
+        flat=[str(x) for x in blockers if x]
+    elif blockers:
+        flat=[str(blockers)]
+    if flat:
+        return "OH unavailable: " + ", ".join(flat)
+    if owners:
+        return "OH owner records were found, but none produced a usable inventory position."
+    return "No compatible OH snapshot was found for this item/family."
+
+
 def _selling_equivalent_effective_oh(cur, row: dict[str,Any]) -> dict[str,Any]:
     ctx=_system_oh_context(cur,row)
     if not ctx:
-        return {"status":"OH_NOT_AVAILABLE","quantity":None,"uom":row.get("selling_uom")}
+        return {
+            "status":"OH_NOT_AVAILABLE","quantity":None,"uom":row.get("selling_uom"),
+            "reason":_oh_display_reason("OH_NOT_AVAILABLE"),
+        }
     system=_system_position(cur,ctx)
     true_stock=_active_true_stock(cur,ctx)
     actual=_actual_position(cur,true_stock)
@@ -1058,6 +1119,7 @@ def _selling_equivalent_effective_oh(cur, row: dict[str,Any]) -> dict[str,Any]:
             "source_uom":oh_uom or None,
             "base_uom":row.get("base_uom"),
             "base_qty_per_selling_unit":factor,
+            "reason":_oh_display_reason("OH_UOM_CONVERSION_UNRESOLVED"),
         }
     return {
         "status":"READY",
@@ -2227,19 +2289,30 @@ def _family_owner_positions(cur, rows: list[dict[str,Any]], *, use_child_true_st
     ]
     uoms={str(x["uom"]).upper() for x in usable}
     if not usable:
-        return {
+        result={
             "status":"UNAVAILABLE","quantity":None,"uom":None,
             "owners":list(owners.values()),
         }
+        result["reason"]=_oh_display_reason(
+            result["status"],
+            [b for x in result["owners"] for b in (x.get("blockers") or [])],
+            result["owners"],
+        )
+        return result
     if len(uoms)!=1:
-        return {
+        result={
             "status":"BLOCKED_MIXED_UOM","quantity":None,"uom":None,
             "owners":list(owners.values()),
         }
+        result["reason"]=_oh_display_reason(result["status"],owners=result["owners"])
+        return result
+    owner_sources=sorted({str(x.get("source") or "") for x in usable if x.get("source")})
     return {
         "status":"READY",
         "quantity":sum((_d(x["quantity"]) for x in usable),Decimal("0")),
         "uom":next(iter(uoms)),
+        "source":" + ".join(owner_sources) if owner_sources else "SYSTEM_OH",
+        "reason":None,
         "owners":list(owners.values()),
     }
 
@@ -2266,7 +2339,10 @@ def _active_family_true_stock(cur, family_id: int) -> dict[str,Any] | None:
 
 def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
     if not rows:
-        return {"status":"UNAVAILABLE","quantity":None,"uom":None,"owners":[]}
+        return {
+            "status":"UNAVAILABLE","quantity":None,"uom":None,"owners":[],
+            "reason":_oh_display_reason("UNAVAILABLE"),
+        }
 
     family_id=next(
         (int(x["family_id"]) for x in rows if x.get("family_id") is not None),
@@ -2285,6 +2361,7 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
                     "family_true_stock_id":family_true.get("true_stock_id"),
                     "submitted_at":family_true.get("submitted_at"),
                     "movement_through_date":pos.get("movement_through_date"),
+                    "reason":None,
                     "owners":[{
                         "scope_type":"FAMILY",
                         "owner_id":family_id,
@@ -2303,6 +2380,10 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
                 "family_true_stock_id":family_true.get("true_stock_id"),
                 "owners":[],
                 "blockers":pos.get("blockers") if pos else ["TRUE_STOCK_POSITION_NOT_AVAILABLE"],
+                "reason":_oh_display_reason(
+                    "FAMILY_TRUE_STOCK_ROLLFORWARD_BLOCKED",
+                    pos.get("blockers") if pos else ["TRUE_STOCK_POSITION_NOT_AVAILABLE"],
+                ),
             }
 
     family_anchor=_family_system_oh_anchor(cur,rows)
@@ -2317,6 +2398,7 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
                 "anchor_on_hand_file_id":family_anchor.get("file_id"),
                 "anchor_date":family_anchor.get("observation_date"),
                 "movement_through_date":pos.get("movement_through_date"),
+                "reason":None,
                 "owners":[{
                     "scope_type":"FAMILY",
                     "owner_id":family_id,
@@ -2338,6 +2420,10 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
             "anchor_date":family_anchor.get("observation_date"),
             "owners":[],
             "blockers":pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+            "reason":_oh_display_reason(
+                "FAMILY_SYSTEM_OH_ROLLFORWARD_BLOCKED",
+                pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+            ),
         }
 
     # Legacy fallback for families whose OH is genuinely child-owned.
