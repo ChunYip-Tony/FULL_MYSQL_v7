@@ -477,7 +477,7 @@ async function upc(u,b='core'){try{
     qcMetric('📊 GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+'%',trendNote(tc.gpPct[0],tc.gpPct[1],'pct'),'green'),
     qcMetric('📈 GP$/Day',c0.gp_per_day_7d==null?'—':money(c0.gp_per_day_7d)+'/day',trendNote(tc.gpDay[0],tc.gpDay[1],'moneyday')),
     qcMetric('💵 7D Qty',qv(s['7d']?.sold_quantity,uom),trendNote(tc.qty[0],tc.qty[1],'qty',uom)),
-    qcMetric('📉 Velocity',vel==null?'—':fmt(vel,2)+'/'+esc(uom)+'/day',trendNote(tc.velocity[0],tc.velocity[1],'velocity',uom)),
+    qcMetric('📉 Velocity',vel==null?'—':fmt(vel,2)+' '+esc(uom)+'/day',trendNote(tc.velocity[0],tc.velocity[1],'velocity',uom)),
     qcMetric('◉ DOS',c0.dos==null?'—':fmt(c0.dos,1)+' days'),
     qcMetric('▣ DOH',c0.doh==null?'—':fmt(c0.doh,1)+' days')
   ].join('');
@@ -490,10 +490,10 @@ async function upc(u,b='core'){try{
       '</tbody></table></div>':'<div class="small">No validated price/velocity history.</div>')+
     '</div><div class="qc-sweet"><div class="qc-intel-title">🎯 Sweet Spot</div><div class="price">'+(sweet==null?'—':esc(priceText(sweet,uom)))+'</div><div class="small">Highest historical avg GP$/supported day.</div><button id="qcPriceOpen" class="qc-order-open">Full price analysis ›</button></div>';
 
-  let sys=q.system_oh||{},ts=q.active_true_stock||{},eff=q.effective_oh||{},invUom=eff.uom||sys.uom||uom;
-  let trueQty=ts.true_stock_quantity,sysQty=sys.quantity,diff=null;
-  if(nv(trueQty)!==null&&nv(sysQty)!==null)diff=nv(trueQty)-nv(sysQty);
-  else if(nv(eff.quantity)!==null&&nv(sysQty)!==null)diff=nv(eff.quantity)-nv(sysQty);
+  let sys=q.system_oh||{},ts=q.active_true_stock||{},actual=q.actual_oh||{},eff=q.effective_oh||{},invUom=eff.uom||sys.uom||uom;
+  let trueQty=(actual.quantity??ts.true_stock_quantity),sysQty=sys.quantity,diff=null;
+  if(nv(eff.quantity)!==null&&nv(sysQty)!==null)diff=nv(eff.quantity)-nv(sysQty);
+  else if(nv(trueQty)!==null&&nv(sysQty)!==null)diff=nv(trueQty)-nv(sysQty);
   $('qcInvUom').textContent=invUom||'—';$('qcTrueUom').textContent=q.true_stock_input?.required_uom||invUom||'—';
   $('qcInventory').innerHTML=[
     qcInv('System OH',nv(sysQty)==null?'—':fmt(sysQty,1)),
