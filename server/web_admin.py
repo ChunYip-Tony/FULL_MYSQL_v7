@@ -19,14 +19,14 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:680px){.grid{grid-template-columns:1fr}}.field label{display:block;font-size:11px;color:var(--muted);margin:0 0 4px}
 .msg{font-size:12px;color:var(--muted);margin-top:8px}.hidden{display:none!important}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:3px 8px;font-size:11px;font-weight:700}
 .item{border-top:1px solid var(--line);padding:10px 0}.item:first-child{border-top:0}.name{font-weight:800}.meta{font-size:12px;color:var(--muted);margin-top:3px}.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;font-size:12px;margin-top:8px}.kv .k{color:var(--muted)}.kv .v{text-align:right;font-weight:700}
-.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.smallbtn{padding:6px 9px;font-size:12px}.toplinks{display:flex;gap:8px;align-items:center}.toplinks a{color:var(--accent);text-decoration:none;font-size:12px}
+.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.smallbtn{padding:6px 9px;font-size:12px}.receipt{border-left:3px solid var(--line);padding-left:8px;margin-top:6px}.toplinks{display:flex;gap:8px;align-items:center}.toplinks a{color:var(--accent);text-decoration:none;font-size:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <div class="top">
     <div class="row" style="justify-content:space-between">
-      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.107 · ID/password secure session</div></div>
+      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.108 · ID/password secure session</div></div>
       <div class="toplinks"><a href="/app">Open App</a><button id="logout" class="smallbtn hidden">Logout</button></div>
     </div>
     <div id="sessionMsg" class="msg">Checking admin session…</div>
@@ -213,13 +213,66 @@ async function transitionOrderDraft(id,action){
   };
   if(!window.confirm(labels[action]||'Continue?'))return;
   const note=window.prompt('Workflow note (optional):','');
+  let external_order_reference=null;
+  if(action==='MARK_SUBMITTED'){
+    external_order_reference=window.prompt('Supplier PO / order reference (recommended, optional):','')||null;
+  }
   try{
     await api('/v1/admin/ordering/drafts/'+id+'/transition',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({action,note:note||null})
+      body:JSON.stringify({action,note:note||null,external_order_reference})
     });
     await loadOrderWorkflow();
   }catch(e){alert(e.message)}
+}
+
+async function saveOrderReference(id){
+  const input=$('orderRef_'+id); if(!input)return;
+  try{
+    await api('/v1/admin/ordering/drafts/'+id+'/reference',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({external_order_reference:input.value.trim()||null})
+    });
+    await loadOrderWorkflow();
+  }catch(e){alert(e.message)}
+}
+
+async function reconcileOrderDraft(id){
+  const target=$('orderRecon_'+id); if(!target)return;
+  target.className='msg'; target.textContent='Reconciling canonical receipt evidence…';
+  try{
+    const d=await api('/v1/admin/ordering/drafts/'+id+'/reconciliation');
+    const lines=(d.lines||[]).map(l=>{
+      const evidence=(l.receipt_evidence||[]).map(r=>
+        '<div class="receipt"><div><b>MVT '+esc(r.movement_type)+'</b> · '+esc(r.posting_date||'')+
+        ' · '+fmt(r.selling_equivalent_quantity)+' '+esc(r.selling_equivalent_uom||'')+'</div>'+
+        '<div class="meta">PO '+esc(r.purchase_order||'—')+' · Doc '+esc(r.article_document||'—')+
+        ' · '+esc(r.conversion_basis||'')+' · file '+esc(r.file_id||'')+'</div></div>'
+      ).join('');
+      const blocked=(l.uom_blocked_evidence||[]).map(r=>
+        '<div class="receipt warn"><div><b>UOM REVIEW · MVT '+esc(r.movement_type)+'</b></div>'+
+        '<div class="meta">'+esc(r.base_quantity)+' '+esc(r.base_uom_code||'')+
+        ' / '+esc(r.entry_quantity)+' '+esc(r.entry_uom_code||'')+
+        ' · '+esc(r.conversion_basis||'')+'</div></div>'
+      ).join('');
+      return '<div class="item"><div class="row" style="justify-content:space-between"><div class="name">'+
+        esc(l.selling_description||l.ean_upc)+'</div><span class="pill">'+esc(l.reconciliation_status||'')+'</span></div>'+
+        '<div class="meta">UPC '+esc(l.ean_upc)+' · '+esc(l.match_basis||'')+' · '+esc(l.identity_basis||'')+'</div>'+
+        '<div class="kv"><div class="k">Ordered</div><div class="v">'+fmt(l.ordered_qty)+' '+esc(l.selling_uom||'')+'</div>'+
+        '<div class="k">Received</div><div class="v">'+fmt(l.received_qty)+' '+esc(l.selling_uom||'')+'</div>'+
+        '<div class="k">Variance</div><div class="v">'+fmt(l.variance_qty)+' '+esc(l.selling_uom||'')+'</div>'+
+        '<div class="k">Receipt Basis</div><div class="v">'+esc(l.receipt_basis||'')+'</div>'+
+        '<div class="k">Receipt Window</div><div class="v">'+esc(l.window_start||'')+' → '+esc(l.window_end_exclusive||'')+'</div>'+
+        '<div class="k">MVT Data Through</div><div class="v">'+esc(l.movement_data_through||'—')+'</div></div>'+
+        evidence+blocked+'</div>';
+    }).join('');
+    target.className='card';
+    target.innerHTML='<div class="row" style="justify-content:space-between"><div class="name">Delivery Reconciliation</div><span class="pill">'+
+      esc(d.overall_status||'')+'</span></div>'+
+      '<div class="meta">Order #'+esc(d.order_draft_id)+' · '+esc(d.order_date)+' → '+esc(d.delivery_date)+
+      ' · Ref '+esc(d.external_order_reference||'DATE-WINDOW FALLBACK')+'</div>'+lines+
+      '<div class="sub">101/107 are receipt-stage evidence. 109 is ignored when 101/107 evidence exists and used only as fallback. 107 never changes unrestricted OH here.</div>';
+  }catch(e){target.className='msg danger';target.textContent=e.message}
 }
 
 async function loadOrderWorkflow(){
@@ -268,9 +321,15 @@ async function loadOrderWorkflow(){
         }).join('');
         let actions='';
         if(s==='DRAFT')actions='<div class="actions"><button class="smallbtn primary" onclick="transitionOrderDraft('+d.order_draft_id+',\'CONFIRM\')">Confirm</button><button class="smallbtn" onclick="transitionOrderDraft('+d.order_draft_id+',\'CANCEL_DRAFT\')">Cancel</button></div>';
-        if(s==='CONFIRMED')actions='<div class="actions"><button class="smallbtn primary" onclick="transitionOrderDraft('+d.order_draft_id+',\'MARK_SUBMITTED\')">Mark Submitted</button><button class="smallbtn" onclick="transitionOrderDraft('+d.order_draft_id+',\'CANCEL_CONFIRMED\')">Cancel</button></div>';
+        if(s==='CONFIRMED')actions='<div class="actions"><button class="smallbtn primary" onclick="transitionOrderDraft('+d.order_draft_id+',\'MARK_SUBMITTED\')">Mark Submitted</button><button class="smallbtn" onclick="transitionOrderDraft('+d.order_draft_id+',\'CANCEL_CONFIRMED\')">Cancel</button><button class="smallbtn" onclick="reconcileOrderDraft('+d.order_draft_id+')">Reconcile Delivery</button></div>';
+        if(s==='MARKED_SUBMITTED')actions='<div class="actions"><button class="smallbtn" onclick="reconcileOrderDraft('+d.order_draft_id+')">Reconcile Delivery</button></div>';
+        const refEditor=(s==='CONFIRMED'||s==='MARKED_SUBMITTED')
+          ? '<div class="row" style="margin-top:8px"><input id="orderRef_'+d.order_draft_id+'" value="'+esc(d.external_order_reference||'')+'" placeholder="Supplier PO / order reference"><button class="smallbtn" onclick="saveOrderReference('+d.order_draft_id+')">Save Ref</button></div>'
+          : '';
+        const reconBox=(s==='CONFIRMED'||s==='MARKED_SUBMITTED')?'<div id="orderRecon_'+d.order_draft_id+'" class="msg"></div>':'';
         return '<div class="item"><div class="row" style="justify-content:space-between"><div class="name">Order #'+esc(d.order_draft_id)+' · '+esc(d.order_date)+' → '+esc(d.delivery_date)+'</div><span class="pill">'+esc(s)+'</span></div>'+
-          '<div class="meta">'+fmt(d.line_count,0)+' line(s) · total final qty '+fmt(d.total_final_qty)+'</div>'+lines+actions+'</div>';
+          '<div class="meta">'+fmt(d.line_count,0)+' line(s) · total final qty '+fmt(d.total_final_qty)+
+          ' · Ref '+esc(d.external_order_reference||'—')+'</div>'+lines+refEditor+actions+reconBox+'</div>';
       }).join('');
   }catch(e){
     $('orderRecommendationStatus').textContent=e.message;
