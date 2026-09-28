@@ -1,18 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.136 Single-Service Edition
+Version: 7.0.137 Single-Service Edition
 
-Public Web App:
-- Quick Check / PI / Upload / OH Discrepancy / Reports
-- Upload and upload/readiness status do not require login.
-- Windows client remains optional.
+Public Web App main navigation:
+- Quick Check
+- PI
+- Upload
+- Reports
 
-v7.0.136 Latest Reference Uploads:
-- Upload page now shows the latest accepted OH, Live / Fresh, and Frozen report uploads.
-- Each source shows actual database upload_timestamp, report coverage date/range, row count, and filename.
-- Latest accepted means processing_status=INGESTED, zero errors, and not a duplicate file.
-- Source mappings:
-  OH -> on_hand
-  Live / Fresh -> live_fresh_suggestion
-  Frozen -> frozen_inventory
-- Latest Reference Uploads refreshes whenever the Upload page opens, Refresh is pressed, or a batch reaches a terminal processing state.
-- The existing 14-day POS/MVT coverage calendar and Recent Uploads remain unchanged.
+v7.0.137 PI information architecture:
+- OH Discrepancy Report is no longer a separate bottom-navigation module.
+- OH Discrepancy Report is now nested under the PI main module.
+- PI main page shows two inventory functions: Physical Inventory and OH Discrepancy Report.
+- Opening OH Discrepancy keeps the PI bottom-navigation item highlighted.
+- OH Discrepancy Report includes a back control to PI.
+- Existing discrepancy pending/history/clear behavior is unchanged; this release changes navigation and presentation only.
