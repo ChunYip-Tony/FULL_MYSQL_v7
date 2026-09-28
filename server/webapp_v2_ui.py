@@ -657,7 +657,7 @@ async function family(k){try{
     ]);
   $('fu').innerHTML=(d.related_upcs||[]).map((x,i)=>
     '<div class="related-card" data-i="'+i+'">'+
-      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div><span class="upc-type">'+esc(x.upc_role||'OTHER UPC')+'</span></div>'+pill(x.readiness)+'</div>'+
+      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div></div>'+pill(x.readiness)+'</div>'+
       mr('Price',priceText(x.current_price,x.selling_uom)+' · '+(x.current_price_type||'—'))+
       mr('7D Qty',qv(x.qty_7d,x.selling_uom))+
       mr('28D Qty',qv(x.qty_28d,x.selling_uom))+
@@ -756,10 +756,10 @@ async function price(u){try{
   let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=28'),c0=d.current||{},r=d.references||{},s=d.sales||{},uom=d.qty_uom||d.selling_uom||'UOM UNKNOWN';
   let rows=d.price_vs_sales_trend?.rows||[],tc=trendContext(rows,c0,s['7d']);
   $('pt').textContent=d.name;
-  $('ps').textContent='UPC '+d.upc+' · '+(d.category||'—')+' · '+(d.upc_role||'OTHER UPC');
+  $('ps').textContent='UPC '+d.upc+' · '+(d.category||'—');
   let vel=(nv(s['7d']?.supported_day_count)>0&&nv(s['7d']?.sold_quantity)!==null)?nv(s['7d'].sold_quantity)/nv(s['7d'].supported_day_count):nv(c0.velocity_7d);
   $('pc').innerHTML=
-    ms('Key Metrics · Latest 7 Supported Data Days','pink',[
+    ms('Key Metrics · 7D','pink',[
       mrh('Current Price',priceText(c0.price,uom)+' · '+(c0.price_type||'—'),trendNote(tc.price[0],tc.price[1],'money',uom)),
       mrh('Cost',priceText(c0.cost,c0.cost_uom||uom),trendNote(tc.cost[0],tc.cost[1],'money',uom)),
       mrh('GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+' %',trendNote(tc.gpPct[0],tc.gpPct[1],'pct')),
@@ -795,7 +795,7 @@ async function price(u){try{
   $('ph').innerHTML=(d.historical_promotions||[]).map(p=>
     '<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b>'+
     '<div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+esc(priceText(p.sale_price,uom))+'</div>'+
-    '<div class="meta">'+qv(p.sale_quantity,uom)+' sold · '+qv(p.sale_velocity_per_supported_day,uom)+'/supported day · coverage '+fmt(p.supported_sales_day_count,0)+'/'+fmt(p.calendar_duration_days,0)+'</div></div>'
+    '<div class="meta">'+qv(p.sale_quantity,uom)+' sold · '+qv(p.sale_velocity_per_supported_day,uom)+'/day · coverage '+fmt(p.supported_sales_day_count,0)+'/'+fmt(p.calendar_duration_days,0)+'</div></div>'
   ).join('')||'<div class="small">No historical SALE periods.</div>';
   go('price')
 }catch(e){alert(e.message)}}
