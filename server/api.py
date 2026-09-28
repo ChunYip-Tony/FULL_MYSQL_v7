@@ -5,6 +5,7 @@ from pathlib import Path
 from decimal import Decimal
 from typing import Annotated
 from fastapi import FastAPI, UploadFile, File, Header, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from config import get_settings
 from db import db_conn, test_database
@@ -21,8 +22,9 @@ from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
+from web_quick_check import quick_check_web_html
 
-VERSION='7.0.98-single-service'
+VERSION='7.0.99-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -49,6 +51,12 @@ class TrueStockSubmit(BaseModel):
 class TrueStockCancelRequest(BaseModel):
     confirm: str
     reason: str|None=None
+
+@app.get('/app',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/quick-check',response_class=HTMLResponse,include_in_schema=False)
+def quick_check_web():
+    return HTMLResponse(quick_check_web_html())
+
 
 @app.get('/healthz')
 def healthz(): return {'ok':True,'version':VERSION}
