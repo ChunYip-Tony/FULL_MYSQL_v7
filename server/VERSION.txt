@@ -1,16 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.137 Single-Service Edition
+Version: 7.0.138 Single-Service Edition
 
 Public Web App main navigation:
 - Quick Check
 - PI
-- Upload
 - Reports
 
-v7.0.137 PI information architecture:
-- OH Discrepancy Report is no longer a separate bottom-navigation module.
-- OH Discrepancy Report is now nested under the PI main module.
-- PI main page shows two inventory functions: Physical Inventory and OH Discrepancy Report.
-- Opening OH Discrepancy keeps the PI bottom-navigation item highlighted.
-- OH Discrepancy Report includes a back control to PI.
-- Existing discrepancy pending/history/clear behavior is unchanged; this release changes navigation and presentation only.
+v7.0.138 Reports information architecture:
+- Raw File Upload is no longer a separate bottom-navigation module.
+- Raw File Upload is now nested under the Reports main module.
+- Reports main page shows Performance Reports and Raw File Upload as its two top-level report tools.
+- Opening Upload keeps the Reports bottom-navigation item highlighted.
+- Upload includes a back control to Reports.
+- All existing upload functionality is unchanged: no-login upload, Latest Reference Uploads, Current Batch status, 14-day POS/MVT coverage calendar, Recent Uploads, Phase2C, Phase3, and Quick Check READY/HOLD status.
+- PI continues to contain OH Discrepancy Report as a nested module.
