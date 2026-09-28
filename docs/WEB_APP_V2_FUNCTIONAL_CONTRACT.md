@@ -5,17 +5,14 @@ Date: 2026-09-28
 
 ## 1. Product boundary
 
-Web App V2 has four top-level main functions:
+Web App V2 has three top-level main functions:
 
 1. CORE
-2. ORDERING
-3. PI (Physical Inventory)
-4. PERFORMANCE
+2. PI (Physical Inventory)
+3. PERFORMANCE
 
 CORE is the single-item / family navigation and analysis path:
 Search -> Search Results -> Family Article / UPC -> Price / Ordering Analysis.
-
-ORDERING is the batch family-article ordering analysis path. It scans eligible Fresh or Frozen families and produces ordering suggestions using the same forecast engine as CORE -> Ordering.
 
 PI is the inventory-count adjustment path. It lets the user locate an inventory owner, enter True Stock, make True Stock immediately authoritative for Effective OH, and record the inventory discrepancy lineage.
 
@@ -373,90 +370,11 @@ If current OH is forecast to run out before Expected Delivery, show the pre-deli
 
 Apply only confirmed UOM/order-multiple conversions. Show raw qty and rounded qty separately. Fail closed if UOM conversion is unresolved.
 
-## 10. Main ORDERING function
+## 10. Main ORDERING function — CANCELLED
 
-The top-level ORDERING function is a batch family-article ordering analyzer. It must use the same demand, OH, promotion, supported-date, UOM, and delivery-cadence engine as CORE -> Ordering. The same family with the same inputs must produce the same recommendation in both places.
+The standalone/top-level Main ORDERING function is cancelled and must not appear in Web App V2 navigation or public V2 routes.
 
-### 10.1 Ordering setup
-
-On entry, ask for:
-
-- Order category: FRESH or FROZEN
-- Expected Delivery Date
-  - FROZEN default: following Tuesday
-  - FRESH default: following Friday
-  - user may override
-- Order context: REGULAR or PROMOTION_INVOLVED
-
-The expected delivery default is a convenience default. Observed receipt cadence should also be shown when available.
-
-Derive and show Next Next Delivery Date from the expected delivery / observed cadence. If the next-next date cannot be determined safely, require the user to supply it rather than guess.
-
-### 10.2 Promotion setup
-
-Promotion means SALE only. TPR is not Promotion.
-
-If PROMOTION_INVOLVED is selected:
-
-- promotion item selection is UPC-level
-- search by UPC or item name
-- show that UPC's own historical SALE periods as reference
-- identify WEEKEND_PROMOTION, WEEKLY_PROMOTION, OTHER_SALE, or UNCERTAIN
-- every historical promotion display must show weekday range in addition to dates, e.g. Monday to Friday
-- show SALE price, supported-day coverage, quantity, and velocity
-- let the user enter the promotion price for each selected UPC
-- let the user enter promotion start and end dates
-
-The final replenishment decision remains Family Article level. Promotion-day family demand uses family regular demand adjusted by the selected promoted UPC's own regular and SALE behavior.
-
-There is no separate Sales Event model.
-
-### 10.3 Family candidate eligibility
-
-Generate suggestions at Family Article level.
-
-A family becomes an automatic ordering candidate only when:
-
-1. it is actively selling in the latest 28 completed canonical POS data-supported dates; and
-2. ordering DOS is less than 7 days.
-
-Ordering DOS uses Ordering OH = max(Current Effective OH, 0).
-
-If DOS >= 7 days, do not generate an automatic ordering suggestion. Promotion involvement does not override the DOS < 7 eligibility rule.
-
-If safe family UOM normalization cannot be proven, show BLOCKED / REVIEW rather than summing incompatible units.
-
-### 10.4 Family demand authority
-
-When related UPC quantities share one confirmed operational UOM, family demand may aggregate those UPC quantities without double counting.
-
-When UPC UOMs cannot be safely normalized, use canonical family movement only when it is the authoritative comparable family quantity.
-
-If neither route is safe, family demand and ordering suggestion are unavailable.
-
-### 10.5 Batch ordering forecast and result
-
-Coverage target is through the day before Next Next Delivery Date.
-
-For each eligible family:
-
-- forecast pre-delivery demand
-- forecast post-delivery demand through next-next delivery
-- segment regular vs SALE demand when a promotion is involved
-- use Ordering OH, not raw negative OH, for the quantity calculation
-- show projected OH at delivery
-- show any pre-delivery stockout separately
-- show total forecast usage through next-next delivery
-- show raw suggested quantity
-- show confirmed UOM/order-multiple rounded quantity when available
-
-Suggested order quantity:
-
-max(0, forecast usage through day before Next Next Delivery - Ordering OH)
-
-Sort results by urgency, with lower DOS first. Promotion-involved families should be clearly labeled SALE.
-
-No Save Order, Final Order, Confirm, or Submit action exists in Web App V2.
+Ordering analysis remains available only through CORE -> UPC -> Ordering, where the decision level is Family Article.
 
 ## 11. PI (Physical Inventory)
 
@@ -543,7 +461,7 @@ UI must prioritize readability and low cognitive load:
 - minimal dense tables
 - status conveyed by text/icons as well as color
 - no horizontal-scrolling dependency for primary decisions
-- four persistent main tabs: CORE / ORDERING / PI / PERFORMANCE
+- three persistent main tabs: CORE / PI / PERFORMANCE
 
 Phone/system Back must move to the previous in-app screen. At the V2 root it must remain inside the app instead of navigating away.
 
@@ -552,3 +470,18 @@ Phone/system Back must move to the previous in-app screen. At the V2 root it mus
 Do not redesign runtime UI until these contracts are represented by dedicated V2 API/data outputs.
 Do not reuse legacy promotion classification where TPR/IN STORE were labeled promotion.
 Do not reuse calendar-day denominators for 7D/28D metrics.
+
+
+## Elder-friendly UI requirements
+
+The V2 UI must prioritize readability and low cognitive load:
+- large body text and large numeric values
+- minimum large touch targets for buttons and controls
+- high contrast between text, cards, controls, and status
+- clear page titles and visible Back controls
+- primary actions presented as large buttons
+- avoid dense multi-column presentation on phones when not necessary
+- key operational values shown in large cards
+- status conveyed using text/icons in addition to color
+- mobile/system Back remains inside the V2 navigation flow
+- top-level navigation contains only CORE / PI / PERFORMANCE
