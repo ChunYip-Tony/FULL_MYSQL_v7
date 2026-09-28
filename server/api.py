@@ -1,10 +1,10 @@
 from __future__ import annotations
-import hmac, json, os, time
+import base64, hashlib, hmac, json, os, time
 from datetime import date, datetime
 from pathlib import Path
 from decimal import Decimal
 from typing import Annotated
-from fastapi import FastAPI, UploadFile, File, Header, HTTPException
+from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from config import get_settings
@@ -23,8 +23,9 @@ from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
+from web_admin import admin_web_html
 
-VERSION='7.0.103-single-service'
+VERSION='7.0.104-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -49,6 +50,78 @@ def public_app_actor(authorization: str|None):
     if not authorization:
         return 'PUBLIC-WEB'
     return device_from_auth(authorization)
+
+ADMIN_SESSION_COOKIE='fullmysql_admin_session'
+ADMIN_SESSION_TTL_SECONDS=12*60*60
+
+def _admin_session_secret() -> bytes:
+    explicit=os.environ.get('FULLMYSQL_ADMIN_SESSION_SECRET','').strip()
+    if explicit:
+        return explicit.encode('utf-8')
+    s=get_settings()
+    material='|'.join(f'{k}:{s.api_tokens[k]}' for k in sorted(s.api_tokens))
+    return hashlib.sha256(('FULLMYSQL_ADMIN_SESSION_V1|'+material).encode('utf-8')).digest()
+
+def _b64url(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode('ascii').rstrip('=')
+
+def _make_admin_session(device: str) -> tuple[str,int]:
+    expires=int(time.time())+ADMIN_SESSION_TTL_SECONDS
+    payload=f'{device}|{expires}'
+    sig=hmac.new(_admin_session_secret(),payload.encode('utf-8'),hashlib.sha256).digest()
+    token=_b64url(payload.encode('utf-8'))+'.'+_b64url(sig)
+    return token,expires
+
+def _parse_admin_session(token: str|None) -> tuple[str,int] | None:
+    if not token or '.' not in token:
+        return None
+    try:
+        p64,s64=token.split('.',1)
+        payload_raw=base64.urlsafe_b64decode(p64+'='*((4-len(p64)%4)%4))
+        sig_raw=base64.urlsafe_b64decode(s64+'='*((4-len(s64)%4)%4))
+        expected=hmac.new(_admin_session_secret(),payload_raw,hashlib.sha256).digest()
+        if not hmac.compare_digest(sig_raw,expected):
+            return None
+        payload=payload_raw.decode('utf-8')
+        device,expiry_text=payload.rsplit('|',1)
+        expiry=int(expiry_text)
+        if expiry<int(time.time()):
+            return None
+        s=get_settings()
+        if device not in s.admin_devices:
+            return None
+        return device,expiry
+    except Exception:
+        return None
+
+def _same_origin_admin_request(request: Request) -> bool:
+    origin=(request.headers.get('origin') or '').strip()
+    if not origin:
+        return True
+    try:
+        from urllib.parse import urlsplit
+        return urlsplit(origin).netloc.lower()==(request.headers.get('host') or '').lower()
+    except Exception:
+        return False
+
+def admin_device_from_request(
+    request: Request,
+    authorization: str|None=None,
+    *,
+    write: bool=False,
+) -> str:
+    if authorization:
+        device=device_from_auth(authorization)
+        s=get_settings()
+        if device not in s.admin_devices:
+            raise HTTPException(403,'Admin device required')
+        return device
+    parsed=_parse_admin_session(request.cookies.get(ADMIN_SESSION_COOKIE))
+    if not parsed:
+        raise HTTPException(401,'Admin session required')
+    if write and not _same_origin_admin_request(request):
+        raise HTTPException(403,'Same-origin admin request required')
+    return parsed[0]
 
 class BatchCreate(BaseModel):
     label: str|None=None
@@ -94,11 +167,73 @@ class PriceChangeReviewRequest(BaseModel):
 class PriceChangeExecutionRequest(BaseModel):
     note: str|None=None
 
+class AdminLoginRequest(BaseModel):
+    access_key: str
+
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/quick-check',response_class=HTMLResponse,include_in_schema=False)
 def quick_check_web():
     return HTMLResponse(quick_check_web_html())
+
+
+@app.get('/admin',response_class=HTMLResponse,include_in_schema=False)
+def admin_web():
+    return HTMLResponse(admin_web_html())
+
+
+@app.post('/v1/admin/login')
+def admin_login(body:AdminLoginRequest,response:Response):
+    key=str(body.access_key or '').strip()
+    if not key:
+        raise HTTPException(401,'Admin access key required')
+    device=device_from_auth('Bearer '+key)
+    s=get_settings()
+    if device not in s.admin_devices:
+        raise HTTPException(403,'Admin device required')
+    token,expires=_make_admin_session(device)
+    response.set_cookie(
+        key=ADMIN_SESSION_COOKIE,
+        value=token,
+        max_age=ADMIN_SESSION_TTL_SECONDS,
+        expires=ADMIN_SESSION_TTL_SECONDS,
+        path='/',
+        secure=True,
+        httponly=True,
+        samesite='lax',
+    )
+    return {
+        'ok':True,
+        'device':device,
+        'expires_at':datetime.fromtimestamp(expires).isoformat(),
+        'session_type':'HTTPONLY_COOKIE',
+    }
+
+
+@app.get('/v1/admin/session')
+def admin_session(request:Request,authorization: Annotated[str|None,Header()]=None):
+    device=admin_device_from_request(request,authorization)
+    parsed=_parse_admin_session(request.cookies.get(ADMIN_SESSION_COOKIE))
+    return {
+        'ok':True,
+        'device':device,
+        'expires_at':(
+            datetime.fromtimestamp(parsed[1]).isoformat()
+            if parsed and parsed[0]==device else None
+        ),
+    }
+
+
+@app.post('/v1/admin/logout')
+def admin_logout(response:Response):
+    response.delete_cookie(
+        key=ADMIN_SESSION_COOKIE,
+        path='/',
+        secure=True,
+        httponly=True,
+        samesite='lax',
+    )
+    return {'ok':True}
 
 
 @app.get('/healthz')
@@ -1494,12 +1629,10 @@ def app_ordering_policies():
 @app.post('/v1/admin/ordering/policy')
 def admin_upsert_ordering_policy(
     body:OrderingPolicyUpsertRequest,
+    request:Request,
     authorization: Annotated[str|None,Header()]=None,
 ):
-    device=device_from_auth(authorization)
-    settings=get_settings()
-    if device not in settings.admin_devices:
-        raise HTTPException(403,'Admin device required')
+    device=admin_device_from_request(request,authorization,write=True)
     try:
         result=upsert_ordering_policy(
             scope_type=body.scope_type,
@@ -1547,12 +1680,10 @@ def app_price_change_preview(upc:str,proposed_price:Decimal):
 @app.post('/v1/admin/price-change/proposals')
 def admin_create_price_change_proposal(
     body:PriceChangeProposalCreateRequest,
+    request:Request,
     authorization: Annotated[str|None,Header()]=None,
 ):
-    device=device_from_auth(authorization)
-    settings=get_settings()
-    if device not in settings.admin_devices:
-        raise HTTPException(403,'Admin device required')
+    device=admin_device_from_request(request,authorization,write=True)
     try:
         result=create_price_change_proposal(
             upc=body.upc,
@@ -1575,12 +1706,10 @@ def admin_create_price_change_proposal(
 def admin_review_price_change_proposal(
     proposal_id:int,
     body:PriceChangeReviewRequest,
+    request:Request,
     authorization: Annotated[str|None,Header()]=None,
 ):
-    device=device_from_auth(authorization)
-    settings=get_settings()
-    if device not in settings.admin_devices:
-        raise HTTPException(403,'Admin device required')
+    device=admin_device_from_request(request,authorization,write=True)
     try:
         result=review_price_change_proposal(
             proposal_id,
@@ -1603,12 +1732,10 @@ def admin_review_price_change_proposal(
 def admin_mark_price_change_executed(
     proposal_id:int,
     body:PriceChangeExecutionRequest,
+    request:Request,
     authorization: Annotated[str|None,Header()]=None,
 ):
-    device=device_from_auth(authorization)
-    settings=get_settings()
-    if device not in settings.admin_devices:
-        raise HTTPException(403,'Admin device required')
+    device=admin_device_from_request(request,authorization,write=True)
     try:
         result=mark_price_change_executed(
             proposal_id,
