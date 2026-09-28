@@ -10,6 +10,7 @@ from quick_check_app import (
     pending_dumping_discrepancies,
 )
 from cost_backfill_queue import cost_backfill_queue
+from phase3 import _latest_cost
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -179,6 +180,49 @@ def verify_current_work(
         qc_scope = cur.fetchone() or {}
 
         cur.execute(
+            """SELECT ean_upc,family_id,main_article_number,cost_source,
+                      quick_check_status
+               FROM quick_check_current
+               WHERE quick_check_status IN ('READY','QA_HOLD')
+                 AND family_id IS NOT NULL
+               ORDER BY family_id,ean_upc"""
+        )
+        authority_rows = cur.fetchall()
+        expected_cost_by_family: dict[int, dict[str, Any] | None] = {}
+        cost_authority_mismatches: list[dict[str, Any]] = []
+        for row in authority_rows:
+            fid = int(row["family_id"])
+            if fid not in expected_cost_by_family:
+                expected_cost_by_family[fid] = _latest_cost(cur, fid)
+            expected = expected_cost_by_family[fid]
+            expected_source = expected.get("source") if expected else None
+            if row.get("cost_source") != expected_source:
+                cost_authority_mismatches.append(
+                    {
+                        "ean_upc": str(row["ean_upc"]),
+                        "family_id": fid,
+                        "main_article_number": row.get("main_article_number"),
+                        "actual_cost_source": row.get("cost_source"),
+                        "expected_cost_source": expected_source,
+                    }
+                )
+
+        check(
+            "COST_AUTHORITY_CURRENT_PARITY",
+            not cost_authority_mismatches,
+            {
+                "authority_order": [
+                    "MOVEMENT_RECEIPT_VALUATION_101_107_109",
+                    "ON_HAND_EXPLICIT_COST_FALLBACK",
+                    "LIVE_FRESH_FROZEN_OFFICIAL_COST",
+                    "USER_CONFIRMED_FAMILY_COST",
+                ],
+                "mismatch_count": len(cost_authority_mismatches),
+                "sample_mismatches": cost_authority_mismatches[:20],
+            },
+        )
+
+        cur.execute(
             """SELECT ean_upc,blocking_reason
                FROM quick_check_current
                WHERE quick_check_status='QA_HOLD'
@@ -283,6 +327,16 @@ def verify_current_work(
             "duplicate_owner_keys": duplicate_owner_keys,
         },
         "pending_dumping_count": len(pending),
+        "cost_authority": {
+            "order": [
+                "MOVEMENT_RECEIPT_VALUATION_101_107_109",
+                "ON_HAND_EXPLICIT_COST_FALLBACK",
+                "LIVE_FRESH_FROZEN_OFFICIAL_COST",
+                "USER_CONFIRMED_FAMILY_COST",
+            ],
+            "mismatch_count": len(cost_authority_mismatches),
+            "sample_mismatches": cost_authority_mismatches[:20],
+        },
         "cost_backfill": {
             "queue_type": cost_backfill.get("queue_type"),
             "queue_grain": cost_backfill.get("queue_grain"),
