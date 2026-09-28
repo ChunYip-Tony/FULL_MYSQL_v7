@@ -271,7 +271,7 @@ Do not claim continuity across missing dates unless price/source evidence suppor
 
 ## 9. CORE -> Ordering page
 
-Single-family / single-item analysis calculator only. No Save Order / Final Order / Submit.
+CORE Ordering is a Family Article decision reached from the selected UPC. The UPC is the navigation context; demand, Effective OH, promotion history, delivery cadence, DOS, forecast usage, and Suggested Order Qty are calculated at the Family Article level. No Save Order / Final Order / Submit.
 
 Inputs:
 - Ordering Date — default current date
@@ -531,7 +531,13 @@ A new True Stock entry supersedes the earlier True Stock entry for that owner, s
 
 PI is not an approval workflow. It is an operational inventory-correction workflow.
 
-## 12. Implementation guard
+## 12. V2 UI transition
+
+V2 test UI route: /app/v2.
+
+The existing /app remains available as a fallback while CORE / ORDERING / PI are tested. Do not switch the primary /app route until V2 interaction and data regression testing is complete.
+
+## 13. Implementation guard
 
 Do not redesign runtime UI until these contracts are represented by dedicated V2 API/data outputs.
 Do not reuse legacy promotion classification where TPR/IN STORE were labeled promotion.
