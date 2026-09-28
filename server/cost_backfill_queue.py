@@ -10,6 +10,32 @@ from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from data_coverage import source_data_days
 
 
+def _date_ranges(dates: list[Any]) -> list[dict[str, Any]]:
+    if not dates:
+        return []
+    ordered = sorted(set(dates))
+    out: list[dict[str, Any]] = []
+    start = ordered[0]
+    prev = ordered[0]
+    for current in ordered[1:]:
+        if current == prev + timedelta(days=1):
+            prev = current
+            continue
+        out.append({
+            "start": start,
+            "end": prev,
+            "day_count": (prev - start).days + 1,
+        })
+        start = current
+        prev = current
+    out.append({
+        "start": start,
+        "end": prev,
+        "day_count": (prev - start).days + 1,
+    })
+    return out
+
+
 def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
     """Plan historical MVT backfill for current CURRENT_COST_MISSING holds.
 
@@ -46,6 +72,13 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
         )
         source_last_missing_date = (
             max(missing_source_dates) if missing_source_dates else None
+        )
+
+        missing_source_ranges = _date_ranges(missing_source_dates)
+        planning_status = (
+            "SOURCE_BACKFILL_REQUIRED"
+            if not source_coverage_complete
+            else "SOURCE_LOOKBACK_COMPLETE_FAMILY_DIAGNOSIS_ACTIVE"
         )
 
         missing_items = [
@@ -208,6 +241,11 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     ),
                     "diagnostic_classification": diagnostic_classification or None,
                     "diagnostic_proposed_action": diagnostic_action or None,
+                    "diagnostic_status": (
+                        "PRELIMINARY_UNTIL_SOURCE_COVERAGE_COMPLETE"
+                        if not source_coverage_complete
+                        else "ACTIVE"
+                    ),
                     "requested_lookback_days": lookback_days,
                     "requested_backfill_start": requested_start,
                     "requested_backfill_end": through,
@@ -251,6 +289,18 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
         "lookback_days": lookback_days,
         "requested_backfill_start": requested_start,
         "requested_backfill_end": through,
+        "planning_status": planning_status,
+        "recommended_upload_scope": (
+            "FULL_MVT_HISTORY_NOT_FILTERED"
+            if not source_coverage_complete
+            else "NONE"
+        ),
+        "recommended_upload_start": (
+            source_first_missing_date if not source_coverage_complete else None
+        ),
+        "recommended_upload_end": (
+            source_last_missing_date if not source_coverage_complete else None
+        ),
         "source_coverage": {
             "source_type": "movement",
             "coverage_complete": source_coverage_complete,
@@ -258,6 +308,8 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
             "missing_day_count": len(missing_source_dates),
             "first_missing_date": source_first_missing_date,
             "last_missing_date": source_last_missing_date,
+            "missing_range_count": len(missing_source_ranges),
+            "missing_ranges": missing_source_ranges,
             "missing_dates": missing_source_dates,
         },
         "current_cost_missing_upc_count": len(missing_items),

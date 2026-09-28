@@ -321,7 +321,7 @@ def _build_cost_backfill(rows: list[dict[str, Any]]) -> list[list[Any]]:
         "source_missing_day_count","source_first_missing_date","source_last_missing_date",
         "earliest_loaded_receipt_date","latest_loaded_receipt_date",
         "loaded_receipt_row_count","valid_receipt_valuation_row_count",
-        "diagnostic_classification","diagnostic_proposed_action",
+        "diagnostic_classification","diagnostic_proposed_action","diagnostic_status",
         "coverage_status","backfill_needed","backfill_mode","required_upload_scope",
         "required_receipt_movements","action_code",
     ]

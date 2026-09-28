@@ -289,6 +289,10 @@ def verify_current_work(
             "lookback_days": cost_backfill.get("lookback_days"),
             "requested_backfill_start": cost_backfill.get("requested_backfill_start"),
             "requested_backfill_end": cost_backfill.get("requested_backfill_end"),
+            "planning_status": cost_backfill.get("planning_status"),
+            "recommended_upload_scope": cost_backfill.get("recommended_upload_scope"),
+            "recommended_upload_start": cost_backfill.get("recommended_upload_start"),
+            "recommended_upload_end": cost_backfill.get("recommended_upload_end"),
             "current_cost_missing_upc_count":
                 cost_backfill.get("current_cost_missing_upc_count"),
             "family_action_count": cost_backfill.get("family_action_count"),
