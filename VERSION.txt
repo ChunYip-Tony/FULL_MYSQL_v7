@@ -1,9 +1,11 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.108 Single-Service Edition
+Version: 7.0.109 Single-Service Edition
 
-Canonical runtime version: 7.0.108-single-service
-Web App: v7.0.108
-Admin Console: v7.0.108
-Admin login: ID + Password -> signed HttpOnly session
-Ordering: Recommendation -> Final Order -> Delivery/Receiving Reconciliation
+Canonical runtime version: 7.0.109-single-service
+Web App runtime badge: v7.0.109
+Web App V2: isolated read-only contracts implemented; UI redesign pending
+V2 core: Search -> Family/UPC -> Price or Ordering
+Sales metrics: completed canonical data-supported dates only
+Promotion: SALE only; TPR excluded
+Ordering: read-only simulation; no save or submit
 Deployment model: Single-Service API + background worker
