@@ -76,7 +76,9 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:650}button.primary{ba
     <div class="card">
       <div class="section-title">Family / Related UPCs</div>
       <div id="familyMeta" class="meta"></div>
-      <div class="scroll"><table><thead><tr><th>UPC</th><th>Description</th><th>UOM</th><th>Price</th><th>7D</th><th>Status</th></tr></thead><tbody id="relatedRows"></tbody></table></div>
+      <div id="familyArticles" class="small" style="margin-top:6px"></div>
+      <div id="receivingArticles" class="small" style="margin-top:4px"></div>
+      <div class="scroll" style="margin-top:8px"><table><thead><tr><th>UPC</th><th>Description</th><th>UOM</th><th>Price</th><th>7D</th><th>Status</th></tr></thead><tbody id="relatedRows"></tbody></table></div>
     </div>
 
     <div class="card">
@@ -159,11 +161,13 @@ async function loadDetail(upc){
       metric('Through',eff.movement_through_date||eff.date||'—')
     ].join('');
     $('trueStockUom').value=d.true_stock_input?.required_uom||'';
-    $('trueStock').value=''; $('trueStockMsg').textContent='';
+    $('trueStock').value=''; $('trueStockMsg').className='msg'; $('trueStockMsg').textContent='';
 
     $('ordering').innerHTML='<div><b>'+esc(ord.status||'—')+'</b> · '+esc(ord.action||'—')+'</div><div class="small">'+esc(ord.reason||'')+'</div>'+(ord.days_supply!==undefined?'<div class="small">Effective DOS: '+fmt(ord.days_supply,1)+'</div>':'');
-    const fam=d.family_relationships?.family||{};
+    const rel=d.family_relationships||{}, fam=rel.family||{};
     $('familyMeta').textContent='Main Article '+(fam.main_article_number||x.main_article_number||'—')+' · '+(fam.family_description||x.family_description||'');
+    $('familyArticles').textContent='Articles: '+((rel.articles||[]).map(a=>(a.article_number||'—')+' ['+(a.relationship_type||'')+']').join(', ')||'—');
+    $('receivingArticles').textContent='Receiving observed: '+((rel.receiving_articles_observed||[]).map(a=>(a.article_number||'—')+' · '+(a.receiving_uoms||'')+' · last '+(a.latest_receipt_date||'—')).join(' | ')||'—');
     $('relatedRows').innerHTML=(d.related_upcs||[]).map(r=>'<tr><td>'+esc(r.ean_upc)+'</td><td>'+esc(r.selling_description)+'</td><td>'+esc(r.selling_uom||'')+'</td><td>'+money(r.current_price)+'</td><td>'+fmt(r.pos_qty_7d)+'</td><td>'+pill(r.quick_check_status)+'</td></tr>').join('');
     $('salesRows').innerHTML=(d.sales_trend||[]).slice(0,20).map(r=>'<tr><td>'+esc(r.period_start_date)+' → '+esc(r.period_end_date)+'</td><td>'+esc(r.price_type)+'</td><td>'+fmt(r.sold_quantity)+'</td><td>'+money(r.sales_amount)+'</td><td>'+money(r.avg_sold_price)+'</td></tr>').join('');
     $('costRows').innerHTML=(d.cost_trend||[]).slice(0,20).map(r=>'<tr><td>'+esc(r.business_date||'')+'</td><td>'+esc(r.source_type||'')+'</td><td>'+money(r.cost_per_base_uom??r.cost_amount)+'</td><td>'+esc(r.base_uom||r.cost_uom||'')+'</td><td>'+esc(r.article_number||'')+'</td></tr>').join('');
@@ -182,8 +186,10 @@ async function submitTrueStock(){
     const r=await api('/v1/app/quick-check/'+encodeURIComponent(currentUpc)+'/true-stock',{
       method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:qty,uom})
     });
-    $('trueStockMsg').textContent='Saved. Discrepancy '+fmt(r.discrepancy)+' '+(r.uom||'')+' · Dumping: '+(r.dumping_queue_action||'NONE');
+    const saved='Saved. Discrepancy '+fmt(r.discrepancy)+' '+(r.uom||'')+' · Dumping: '+(r.dumping_queue_action||'NONE');
     await loadDetail(currentUpc);
+    $('trueStockMsg').className='msg ok';
+    $('trueStockMsg').textContent=saved;
   }catch(e){$('trueStockMsg').textContent=e.message;$('trueStockMsg').className='msg error'}
 }
 
