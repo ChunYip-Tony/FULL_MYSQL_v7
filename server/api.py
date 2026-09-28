@@ -16,7 +16,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard, add_order_recommendation_to_draft, update_order_draft_line, order_draft_history, transition_order_draft
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
@@ -25,7 +25,7 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 
-VERSION='7.0.106-single-service'
+VERSION='7.0.107-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -209,6 +209,17 @@ class OrderingPolicyUpsertRequest(BaseModel):
     order_multiple: Decimal|None=None
     enabled: bool=True
     notes: str|None=None
+
+class OrderDraftAddRequest(BaseModel):
+    upc: str
+
+class OrderDraftLineUpdateRequest(BaseModel):
+    final_qty: Decimal
+    adjustment_note: str|None=None
+
+class OrderDraftTransitionRequest(BaseModel):
+    action: str
+    note: str|None=None
 
 class PriceChangeProposalCreateRequest(BaseModel):
     upc: str
@@ -1728,6 +1739,89 @@ def admin_upsert_ordering_policy(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Ordering policy save failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/admin/ordering/drafts')
+def admin_order_drafts(
+    request:Request,
+    status:str|None=None,
+    limit:int=60,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    admin_device_from_request(request,authorization)
+    try:
+        result=order_draft_history(status,limit)
+    except Exception as exc:
+        raise HTTPException(500,f'Order draft history failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/ordering/drafts/add-recommendation')
+def admin_add_order_recommendation(
+    body:OrderDraftAddRequest,
+    request:Request,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=admin_device_from_request(request,authorization,write=True)
+    try:
+        result=add_order_recommendation_to_draft(body.upc,device=device)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'ORDERING_UPC_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Add order recommendation failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/ordering/drafts/lines/{order_draft_line_id}')
+def admin_update_order_draft_line(
+    order_draft_line_id:int,
+    body:OrderDraftLineUpdateRequest,
+    request:Request,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=admin_device_from_request(request,authorization,write=True)
+    try:
+        result=update_order_draft_line(
+            order_draft_line_id,
+            final_qty=body.final_qty,
+            adjustment_note=body.adjustment_note,
+            device=device,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'ORDER_DRAFT_LINE_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Order draft line update failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/ordering/drafts/{order_draft_id}/transition')
+def admin_transition_order_draft(
+    order_draft_id:int,
+    body:OrderDraftTransitionRequest,
+    request:Request,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=admin_device_from_request(request,authorization,write=True)
+    try:
+        result=transition_order_draft(
+            order_draft_id,
+            action=body.action,
+            note=body.note,
+            device=device,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'ORDER_DRAFT_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Order draft transition failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
