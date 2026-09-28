@@ -410,12 +410,28 @@ body{
   .nav button{min-height:52px!important}
 }
 
+
+/* v7.0.127 Quick Check search simplification */
+#core #cres .result{
+  background:linear-gradient(135deg,#effbea,#e2f6df)!important;
+  border:1px solid #c4dfbd!important;
+}
+#core #cres .result.family-result{
+  background:linear-gradient(135deg,#fff9dc,#fff1b9)!important;
+  border:1px solid #ead78d!important;
+  border-left:4px solid #d3a82c!important;
+}
+#core #cres .family-badge{
+  background:#f5dfa0!important;
+  color:#6e5710!important;
+}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.126</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.127</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
-<section id="family" class="screen"><div class="head"><button class="back" data-go="core">‹</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="metric-section blue"><div class="metric-section-title">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
+<section id="family" class="screen"><div class="head"><button class="back" data-go="core">‹</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="metric-section blue"><div class="metric-section-title">Related UPCs</div><div class="hint">Sorted by 28D Qty, then readiness.</div><div id="fu" class="related-list"></div></div></section>
 
 <section id="upc" class="screen qc-screen">
 <div class="qc-shell">
@@ -451,7 +467,7 @@ body{
 <div id="ut" class="hide"></div><div id="us" class="hide"></div><div id="usum" class="hide"></div><button id="uf" class="hide"></button><button id="upr" class="hide"></button><button id="uo" class="hide"></button>
 </section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">‹</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="price-duo"><div class="metric-section pink"><div class="metric-section-title">Price vs Velocity History</div><div id="pvh"></div></div><div class="metric-section green"><div class="metric-section-title">Suggested Sweet Spot</div><div id="psweet"></div></div></div><div class="card"><div class="section">28 Supported-Day Sales Trend</div><div class="chart-scroll"><canvas id="chart" class="chart"></canvas></div><div class="row" style="margin-top:7px"><span class="pill" style="color:var(--gpbar)">▮ GP$</span><span class="pill" style="color:var(--pricecurve)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:6px">GP$ is shown as columns and Avg Selling Price as a curve. Every plotted value is labeled. Missing supported dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">‹</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="price-duo"><div class="metric-section pink"><div class="metric-section-title">Price vs Velocity History</div><div id="pvh"></div></div><div class="metric-section green"><div class="metric-section-title">Suggested Sweet Spot</div><div id="psweet"></div></div></div><div class="card"><div class="section">28D Sales Trend</div><div class="chart-scroll"><canvas id="chart" class="chart"></canvas></div><div class="row" style="margin-top:7px"><span class="pill" style="color:var(--gpbar)">▮ GP$</span><span class="pill" style="color:var(--pricecurve)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:6px">GP$ is shown as columns and Avg Selling Price as a curve. Every plotted value is labeled. Missing supported dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14D Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
 <section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">‹</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
@@ -519,7 +535,7 @@ function trendNote(cur,prev,kind,uom){
   else if(kind==='qty')val=(d>=0?'+':'-')+fmt(abs,2)+' '+esc(uom||'unit');
   else if(kind==='velocity')val=(d>=0?'+':'-')+fmt(abs,2)+' '+esc(uom||'unit')+'/day';
   else val=(d>=0?'+':'-')+fmt(abs,2);
-  return '<span class="'+cls+'">'+arrow+' '+val+'</span> <span class="small">vs prior 7 data days</span>';
+  return '<span class="'+cls+'">'+arrow+' '+val+'</span> <span class="small">vs prior 7D</span>';
 }
 function priceVelocityBuckets(rows){
   let m=new Map();
@@ -593,8 +609,8 @@ async function csearch(){
         +'<div class="row" style="justify-content:space-between"><div class="name">'+esc(r.name)+'</div>'+pill(r.readiness)+'</div>'
         +numberHtml
         +'<div class="result-type">'+esc(r.result_type)+' · '+esc(r.category||'—')+'</div>'
-        +(isUpc?'<span class="upc-type">'+esc(r.upc_role||'OTHER UPC')+'</span>':'')
-        +'<div class="meta">28 supported-day Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
+        
+        +'<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
         +'</div>';
     }).join('')||'<div class="card small">No match found.</div>';
     document.querySelectorAll('#cres .result').forEach(e=>e.onclick=()=>{
@@ -622,8 +638,8 @@ async function family(k){try{
       mr('Receiving / Ordering',articleText)
     ])+
     ms('Sales','green',[
-      mr('7D Sold',qv(d.family_sales_7d?.sold_quantity,d.family_sales_7d?.uom),fmt(d.family_sales_7d?.supported_day_count,0)+' supported days'),
-      mr('28D Sold',qv(d.family_sales_28d?.sold_quantity,d.family_sales_28d?.uom),fmt(d.family_sales_28d?.supported_day_count,0)+' supported days')
+      mr('7D Sold',qv(d.family_sales_7d?.sold_quantity,d.family_sales_7d?.uom)),
+      mr('28D Sold',qv(d.family_sales_28d?.sold_quantity,d.family_sales_28d?.uom))
     ])+
     ms('Inventory','amber',[
       mr('Effective OH',ohText,ohReason),
@@ -643,8 +659,8 @@ async function family(k){try{
     '<div class="related-card" data-i="'+i+'">'+
       '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div><span class="upc-type">'+esc(x.upc_role||'OTHER UPC')+'</span></div>'+pill(x.readiness)+'</div>'+
       mr('Price',priceText(x.current_price,x.selling_uom)+' · '+(x.current_price_type||'—'))+
-      mr('7D Qty',qv(x.qty_7d,x.selling_uom),fmt(x.supported_days_7d,0)+' supported days')+
-      mr('28D Qty',qv(x.qty_28d,x.selling_uom),fmt(x.supported_days_28d,0)+' supported days')+
+      mr('7D Qty',qv(x.qty_7d,x.selling_uom))+
+      mr('28D Qty',qv(x.qty_28d,x.selling_uom))+
     '</div>'
   ).join('')||'<div class="small">No related UPCs.</div>';
   document.querySelectorAll('#fu [data-i]').forEach(e=>e.onclick=()=>upc(d.related_upcs[+e.dataset.i].upc,'family'));
@@ -687,7 +703,7 @@ async function upc(u,b='core'){try{
       (pv.length?'<div class="scroll"><table><thead><tr><th>Price</th><th>Velocity</th><th>GP$/day</th></tr></thead><tbody>'+
         pv.map(x=>'<tr><td>'+esc(priceText(x.price,uom))+'</td><td>'+fmt(x.velocity,2)+' '+esc(uom)+'/day</td><td>'+(x.gpDay==null?'—':money(x.gpDay)+'/day')+'</td></tr>').join('')+
       '</tbody></table></div>':'<div class="small">No validated price/velocity history.</div>')+
-    '</div><div class="qc-sweet"><div class="qc-intel-title">🎯 Sweet Spot</div><div class="price">'+(sweet==null?'—':esc(priceText(sweet,uom)))+'</div><div class="small">Highest historical avg GP$/supported day.</div><button id="qcPriceOpen" class="qc-order-open">Full price analysis ›</button></div>';
+    '</div><div class="qc-sweet"><div class="qc-intel-title">🎯 Sweet Spot</div><div class="price">'+(sweet==null?'—':esc(priceText(sweet,uom)))+'</div><div class="small">Highest historical avg GP$/day.</div><button id="qcPriceOpen" class="qc-order-open">Full price analysis ›</button></div>';
 
   let sys=q.system_oh||{},ts=q.active_true_stock||{},actual=q.actual_oh||{},eff=q.effective_oh||{},invUom=eff.uom||sys.uom||uom;
   let trueQty=(actual.quantity??ts.true_stock_quantity),sysQty=sys.quantity,diff=null;
@@ -769,13 +785,13 @@ async function price(u){try{
     : '<div class="small">No validated price/velocity history.</div>';
   $('psweet').innerHTML=r.sweet_spot==null
     ? '<div class="small">Not enough validated price/cost history to calculate a sweet spot.</div>'
-    : '<div class="sweet-hero">'+esc(priceText(r.sweet_spot,uom))+'</div><div class="small">Canonical Sweet Spot = historical price with the highest average GP$/completed supported data day. It is an analytical reference, not an automatic price change.</div>';
+    : '<div class="sweet-hero">'+esc(priceText(r.sweet_spot,uom))+'</div><div class="small">Canonical Sweet Spot = historical price with the highest average GP$/day. It is an analytical reference, not an automatic price change.</div>';
 
   chart(rows);
   $('p14').innerHTML=(d.sales_history_14d?.rows||[]).slice().reverse().map(x=>
     '<div class="promo"><div class="row" style="justify-content:space-between"><b>'+esc(dayName(x.date))+' · '+esc(x.date)+'</b><b>'+qv(x.sold_quantity,x.qty_uom||uom)+' sold</b></div>'+
     '<div class="meta">Sales '+money(x.sales_amount)+' · Avg price '+esc(priceText(x.avg_sold_price,uom))+' · GP$ '+money(x.gp_dollars)+' · '+((x.price_types||[]).map(p=>esc(p.price_type)).join(', ')||'No item sale')+'</div></div>'
-  ).join('')||'<div class="small">No 14-day supported sales history.</div>';
+  ).join('')||'<div class="small">No 14D sales history.</div>';
   $('ph').innerHTML=(d.historical_promotions||[]).map(p=>
     '<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b>'+
     '<div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+esc(priceText(p.sale_price,uom))+'</div>'+
