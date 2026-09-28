@@ -450,7 +450,7 @@ body{
 @media(max-width:560px){.nav button{font-size:8px!important}.nav button:first-line{font-size:16px}}
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.133</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.134</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -504,7 +504,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><div><div class="title">⬆ Raw File Upload</div><div class="meta">Upload directly from the Web App — Windows client is not required.</div></div></div>
+  <div class="head"><div><div class="title">⬆ Raw File Upload</div><div class="meta">Upload and view readiness directly in the Web App — no login or Windows client required.</div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div id="uploadDrop" class="card upload-drop">
     <div class="upload-icon">📂</div>
     <div class="upload-title">Choose raw files</div>
@@ -527,6 +527,9 @@ body{
     <div id="uploadServerFiles" style="margin-top:8px"></div>
   </div>
   <div id="uploadMsg" class="msg"></div>
+  <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">Recent Uploads</div>
+  <div id="uploadRecentMsg" class="msg" style="color:#d9eef5!important"></div>
+  <div id="uploadRecent"></div>
 </section>
 
 </div>
@@ -540,7 +543,7 @@ const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new 
 let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(id==='pid')return 'pi';return id}
-function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload')loadWebUploadActive();scrollTo({top:0,behavior:'smooth'})}
+function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
@@ -676,12 +679,41 @@ function renderWebUploadStatus(d){
     uploadStage(status.includes('READY')?'✅':'⏳','Pipeline',status,status.includes('READY')?'ok':(status.includes('HOLD')||status.includes('FAIL')?'bad':'warn')),
     uploadStage('📄','Files',String(files.length)),
     uploadStage('🧩','Phase 2C',p2.result_status||'Pending',String(p2.result_status||'').includes('READY')?'ok':''),
-    uploadStage('⚙️','Phase 3',p3.result_status||'Pending',String(p3.result_status||'').includes('READY')?'ok':'')
+    uploadStage('⚙️','Phase 3',p3.result_status||'Pending',String(p3.result_status||'').includes('READY')?'ok':''),
+    uploadStage('🔎','Quick Check',p3.quick_check_rows==null?'Pending':(fmt(p3.quick_check_ready_rows,0)+' / '+fmt(p3.quick_check_rows,0)+' READY · '+fmt(p3.quick_check_hold_rows,0)+' HOLD'),Number(p3.quick_check_hold_rows||0)>0?'warn':(p3.quick_check_rows!=null?'ok':''))
   ].join('');
   $('uploadServerFiles').innerHTML=files.map(x=>
     '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
   ).join('');
   return status;
+}
+function renderWebUploadRecentBatch(b){
+  let files=b.files||[];
+  let qc=b.quick_check_rows==null?'Pending':(fmt(b.quick_check_ready_rows,0)+' / '+fmt(b.quick_check_rows,0)+' READY · '+fmt(b.quick_check_hold_rows,0)+' HOLD');
+  return '<div class="card">'+
+    '<div class="row" style="justify-content:space-between"><div><div class="name">Batch '+esc(b.batch_id??'—')+'</div><div class="meta">'+esc(b.batch_label||'')+'</div></div>'+pill(b.processing_status||'UNKNOWN')+'</div>'+
+    '<div id="uploadRecentStages" style="margin-top:6px">'+
+      uploadStage('📄','Files',String(b.file_count??files.length))+
+      uploadStage('🧩','Phase 2C',b.phase2c_status||'Pending',String(b.phase2c_status||'').includes('READY')?'ok':'')+
+      uploadStage('⚙️','Phase 3',b.phase3_status||'Pending',String(b.phase3_status||'').includes('READY')?'ok':'')+
+      uploadStage('🔎','Quick Check',qc,Number(b.quick_check_hold_rows||0)>0?'warn':(b.quick_check_rows!=null?'ok':''))+
+    '</div>'+
+    '<div style="margin-top:7px">'+files.map(x=>
+      '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div>'+
+      '<div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+
+      (x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+(x.coverage_end_date&&x.coverage_end_date!==x.coverage_start_date?' → '+esc(x.coverage_end_date):''):'')+
+      (x.duplicate_of_file_id?' · duplicate of file '+esc(x.duplicate_of_file_id):'')+
+      '</div></div><span class="pill '+(Number(x.error_count||0)>0?'bad':'ok')+'">'+esc(x.processing_status||'UNKNOWN')+'</span></div>'
+    ).join('')+'</div>'+
+  '</div>';
+}
+async function loadWebUploadRecent(){
+  $('uploadRecentMsg').textContent='Loading recent upload status…';
+  try{
+    let d=await api('/v1/web-upload/recent?limit=8');
+    $('uploadRecentMsg').textContent=(d.count||0)+' recent batch(es)';
+    $('uploadRecent').innerHTML=(d.batches||[]).map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
+  }catch(e){$('uploadRecentMsg').textContent=e.message}
 }
 async function pollWebUpload(session){
   if(!session)return;
@@ -693,6 +725,7 @@ async function pollWebUpload(session){
     $('uploadMsg').textContent=terminalUploadStatus(status)
       ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
       : 'Server is processing this batch…';
+    await loadWebUploadRecent();
     if(!terminalUploadStatus(status))webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
   }catch(e){$('uploadMsg').textContent=e.message}
 }
@@ -706,6 +739,7 @@ async function loadWebUploadActive(){
 async function startWebUpload(){
   if(!webUploadFiles.length){$('uploadMsg').textContent='Choose at least one raw file.';return}
   $('uploadStart').disabled=true;$('uploadClear').disabled=true;$('uploadMsg').textContent='Creating upload batch…';
+  let committed=false;
   try{
     let create=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Web raw upload '+new Date().toLocaleString()})});
     webUploadSession=create.session_id;
@@ -716,14 +750,21 @@ async function startWebUpload(){
       $('uploadProgressBar').style.width=Math.round(((i+.3)/webUploadFiles.length)*30)+'%';
       let fd=new FormData();fd.append('file',f,f.name);
       await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/files',{method:'POST',body:fd});
+      let current=await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession));
+      renderWebUploadStatus(current);
     }
     $('uploadMsg').textContent='Files uploaded. Committing batch…';
     await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/commit',{method:'POST'});
-    setWebUploadFiles([]);
+    committed=true;
+    setWebUploadFiles([]);$('uploadFiles').value='';
+    await loadWebUploadRecent();
     await pollWebUpload(webUploadSession);
   }catch(e){
     $('uploadMsg').textContent=e.message;
-    if(webUploadSession)pollWebUpload(webUploadSession);
+    if(webUploadSession&&!committed){
+      try{await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/abort',{method:'POST'})}catch{}
+    }
+    await loadWebUploadRecent();
   }finally{
     $('uploadStart').disabled=false;$('uploadClear').disabled=false;
   }
@@ -732,6 +773,7 @@ $('uploadDrop').onclick=()=>$('uploadFiles').click();
 $('uploadFiles').onchange=e=>setWebUploadFiles(e.target.files);
 $('uploadClear').onclick=()=>{setWebUploadFiles([]);$('uploadFiles').value=''};
 $('uploadStart').onclick=startWebUpload;
+$('uploadRefresh').onclick=()=>{loadWebUploadActive();loadWebUploadRecent()};
 ['dragenter','dragover'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.add('drag')}));
 ['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
 $('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
