@@ -5,7 +5,7 @@ from db import db_conn, test_database
 from ingest import audit_batch, release_batch
 from normalize import normalize_batch, audit_phase2c
 from phase3 import process_phase3, audit_phase3
-from v7_ingest import API_PIPELINE
+from v7_ingest import API_PIPELINE, API_VERSION
 
 POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
@@ -135,9 +135,11 @@ def claim_job():
                 "started_at=CURRENT_TIMESTAMP(6),"
                 "completed_at=NULL,"
                 "error_count=0,"
+                "code_version=%s,"
                 "detail_json=%s "
                 "WHERE pipeline_run_id=%s",
                 (
+                    API_VERSION,
                     json.dumps({
                         'worker':WORKER,
                         'heartbeat_at':datetime.utcnow().isoformat()+'Z',
