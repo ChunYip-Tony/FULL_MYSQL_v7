@@ -291,12 +291,34 @@ def movement_rollforward(
         )
         if use_entry_basis:
             raw_qty = row.get("entry_movement_quantity")
-            row_uom = str(row.get("entry_uom_code") or "").strip().upper() or None
+            source_row_uom = str(row.get("entry_uom_code") or "").strip().upper() or None
+            row_uom = source_row_uom
             quantity_basis = "ENTRY"
         else:
             raw_qty = row.get("base_movement_quantity")
-            row_uom = str(row.get("base_uom_code") or "").strip().upper() or None
+            source_row_uom = str(row.get("base_uom_code") or "").strip().upper() or None
+            row_uom = source_row_uom
             quantity_basis = "BASE"
+
+        mt = str(row.get("movement_type") or "UNKNOWN").strip().upper()
+        relabel_types = {
+            str(x).strip().upper()
+            for x in ((operational or {}).get("source_uom_relabel_movement_types") or ())
+            if str(x).strip()
+        }
+        source_uom_relabel_applied = bool(
+            operational
+            and mt in relabel_types
+            and operational_uom
+            and source_row_uom
+            and source_row_uom != operational_uom
+        )
+        if source_uom_relabel_applied:
+            # Explicit family authority: for selected physical-inventory movements,
+            # preserve the source quantity but interpret its operational unit as the
+            # family's confirmed unit. This never creates an EA<->LB conversion;
+            # RAW movement_history remains unchanged for provenance.
+            row_uom = operational_uom
 
         if raw_qty is None:
             bad_uoms.append({
@@ -304,9 +326,11 @@ def movement_rollforward(
                 "posting_date": posting_day,
                 "movement_type": row.get("movement_type"),
                 "movement_uom": row_uom,
+                "source_movement_uom": source_row_uom,
                 "anchor_uom": uom,
                 "quantity": None,
                 "quantity_basis": quantity_basis,
+                "source_uom_relabel_applied": source_uom_relabel_applied,
                 "reason": "AUTHORIZED_QUANTITY_BASIS_MISSING",
             })
             continue
@@ -321,13 +345,14 @@ def movement_rollforward(
                 "posting_date": posting_day,
                 "movement_type": row.get("movement_type"),
                 "movement_uom": row_uom,
+                "source_movement_uom": source_row_uom,
                 "anchor_uom": uom,
                 "quantity": qty,
                 "quantity_basis": quantity_basis,
+                "source_uom_relabel_applied": source_uom_relabel_applied,
             })
             continue
 
-        mt = str(row.get("movement_type") or "UNKNOWN").strip().upper()
         if mt in UNRESTRICTED_NO_EFFECT:
             ignored_by_type[mt] = ignored_by_type.get(mt, Decimal("0")) + qty
             continue
