@@ -19,7 +19,7 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.74-single-service'
+VERSION='7.0.75-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -122,7 +122,8 @@ def phase3_rerun(
                 )
             bid=int(b['batch_id'])
             cur.execute(
-                """SELECT pipeline_run_id,processing_status
+                """SELECT pipeline_run_id,processing_status,code_version,
+                          started_at,completed_at
                    FROM pipeline_run
                    WHERE batch_id=%s
                      AND pipeline_name=%s
@@ -133,15 +134,42 @@ def phase3_rerun(
                 (bid,API_PIPELINE),
             )
             existing=cur.fetchone()
+            recovered_interrupted_run_id=None
             if existing:
-                return {
-                    'batch_id':bid,
-                    'session_id':session_id,
-                    'queued':existing['processing_status']=='QUEUED',
-                    'already_active':True,
-                    'pipeline_run_id':int(existing['pipeline_run_id']),
-                    'status':existing['processing_status'],
-                }
+                existing_status=str(existing['processing_status'])
+                existing_version=str(existing.get('code_version') or '')
+                if existing_status=='STARTED' and existing_version!=VERSION:
+                    recovered_interrupted_run_id=int(existing['pipeline_run_id'])
+                    cur.execute(
+                        """UPDATE pipeline_run
+                           SET processing_status='FAILED',
+                               completed_at=CURRENT_TIMESTAMP(6),
+                               error_count=GREATEST(COALESCE(error_count,0),1),
+                               detail_json=JSON_SET(
+                                   COALESCE(detail_json,JSON_OBJECT()),
+                                   '$.deployment_interrupted',TRUE,
+                                   '$.interrupted_run_code_version',%s,
+                                   '$.recovered_by_code_version',%s,
+                                   '$.recovery_reason','OLD_WORKER_RESTARTED_DURING_DEPLOYMENT'
+                               )
+                           WHERE pipeline_run_id=%s
+                             AND processing_status='STARTED'""",
+                        (
+                            existing_version,
+                            VERSION,
+                            recovered_interrupted_run_id,
+                        ),
+                    )
+                else:
+                    return {
+                        'batch_id':bid,
+                        'session_id':session_id,
+                        'queued':existing_status=='QUEUED',
+                        'already_active':True,
+                        'pipeline_run_id':int(existing['pipeline_run_id']),
+                        'status':existing_status,
+                        'code_version':existing_version,
+                    }
             cur.execute(
                 """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
                    FROM pipeline_run
@@ -177,6 +205,7 @@ def phase3_rerun(
                 'queued':True,
                 'pipeline_run_id':run_id,
                 'status':'QUEUED',
+                'recovered_interrupted_run_id':recovered_interrupted_run_id,
             }
         except HTTPException:
             conn.rollback()
