@@ -2038,6 +2038,262 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     }
 
 
+
+def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] | None = None, upcs: Iterable[str] | None = None) -> dict[str, Any]:
+    calendar_today = business_today()
+    completed_through = completed_through_date()
+
+    # Rolling metrics use completed DATA DAYS, not calendar days. The current batch is eligible
+    # because its history rows are inserted immediately before this rebuild. Today's date is
+    # excluded to prevent a partial intraday file from entering daily velocity/GP metrics.
+    pos_days_7 = source_data_days(cur, 'sales_by_price_type', limit=7, include_batch_id=batch_id, up_to=completed_through)
+    pos_days_28 = source_data_days(cur, 'sales_by_price_type', limit=28, include_batch_id=batch_id, up_to=completed_through)
+    pos_days_30 = source_data_days(cur, 'sales_by_price_type', limit=30, include_batch_id=batch_id, up_to=completed_through)
+    mvt_days_7 = source_data_days(cur, 'movement', limit=7, include_batch_id=batch_id, up_to=completed_through)
+    pos_cov = coverage_summary(cur, 'sales_by_price_type', include_batch_id=batch_id)
+    mvt_cov = coverage_summary(cur, 'movement', include_batch_id=batch_id)
+
+    # Targeted serving refresh: update only explicitly selected UPCs/families.
+    # This intentionally does NOT delete or recalculate unrelated Quick Check rows.
+    target_family_ids = sorted({int(x) for x in (family_ids or [])})
+    target_upcs = sorted({str(x).strip() for x in (upcs or []) if str(x).strip()})
+    if not target_family_ids and not target_upcs:
+        raise ValueError('TARGETED_QUICK_CHECK_SCOPE_EMPTY')
+
+    target_clauses: list[str] = []
+    target_args: list[Any] = []
+    if target_family_ids:
+        ph = ','.join(['%s'] * len(target_family_ids))
+        target_clauses.append(f'pf.family_id IN ({ph})')
+        target_args.extend(target_family_ids)
+    if target_upcs:
+        ph = ','.join(['%s'] * len(target_upcs))
+        target_clauses.append(f'su.ean_upc IN ({ph})')
+        target_args.extend(target_upcs)
+    target_where = ' AND (' + ' OR '.join(target_clauses) + ')'
+
+    cur.execute(
+        f"""SELECT su.upc_id,su.ean_upc,su.selling_description,a.article_id,a.article_number,a.article_description,a.category_code,
+                  pf.family_id,pf.main_article_number,pf.family_description,
+                  qu.selling_uom,qu.base_uom,qu.base_qty_per_selling_unit
+           FROM selling_upc su
+           JOIN bridge_article_upc bau ON bau.upc_id=su.upc_id AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
+                AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN article a ON a.article_id=bau.article_id
+           JOIN bridge_article_family baf ON baf.article_id=a.article_id AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
+                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN product_family pf ON pf.family_id=baf.family_id
+           LEFT JOIN v_current_upc_uom qu ON qu.ean_upc=su.ean_upc
+           LEFT JOIN manual_upc_retirement mur
+             ON mur.ean_upc=su.ean_upc
+            AND mur.retirement_status='CONFIRMED'
+           WHERE su.record_status='ACTIVE'
+             AND mur.retirement_id IS NULL
+             {target_where}
+           ORDER BY su.upc_id""",
+        tuple(target_args),
+    )
+    products = cur.fetchall()
+    if not products:
+        raise ValueError('TARGETED_QUICK_CHECK_SCOPE_NOT_FOUND')
+
+    # Resolve only prior per-UPC core holds in the target scope. If a target is
+    # still invalid below, _issue() will create a fresh current hold.
+    target_eans = sorted({str(p['ean_upc']) for p in products})
+    ph = ','.join(['%s'] * len(target_eans))
+    cur.execute(
+        f"""UPDATE qa_phase3_issue
+            SET issue_status='RESOLVED',
+                detail_json=JSON_SET(
+                  COALESCE(detail_json,JSON_OBJECT()),
+                  '$.resolution',
+                  'Superseded by targeted Quick Check refresh'
+                )
+            WHERE batch_id=%s
+              AND issue_status='OPEN'
+              AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'
+              AND entity_type='UPC'
+              AND entity_key IN ({ph})""",
+        (batch_id, *target_eans),
+    )
+    prior_target_core_holds_resolved = int(cur.rowcount or 0)
+    active_rows = active_ready = active_hold = historical_rows = 0
+    for p in products:
+        upc_id = int(p['upc_id']); family_id = int(p['family_id'])
+        m7 = _sales_metrics(cur, upc_id, pos_days_7)
+        m28 = _sales_metrics(cur, upc_id, pos_days_28)
+        m30 = _sales_metrics(cur, upc_id, pos_days_30)
+        price = _current_price(cur, upc_id)
+        cost = _latest_cost(cur, family_id)
+        cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'107\',\'109\')', (family_id,))
+        rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
+        factor = Decimal(str(p['base_qty_per_selling_unit'])) if p['base_qty_per_selling_unit'] is not None else None
+        selling_uom = p['selling_uom']; base_uom = p['base_uom']
+        norm_selling_uom = _norm_cost_serving_uom(selling_uom)
+        norm_base_uom = _norm_cost_serving_uom(base_uom)
+        cost_uom = _norm_cost_serving_uom(cost.get('base_uom')) if cost else None
+        if factor is None and norm_selling_uom and norm_base_uom and norm_selling_uom == norm_base_uom:
+            factor = Decimal('1')
+
+        cost_sell = None
+        # v7.0.37: a cost stated in the exact POS Selling UOM can be used
+        # directly as cost-per-selling-unit with factor 1. This is a calculation
+        # rule only; it does NOT infer or write Base/Inventory UOM.
+        if cost and norm_selling_uom and cost_uom and norm_selling_uom == cost_uom:
+            cost_sell = Decimal(str(cost['cost_per_base']))
+        elif cost and factor is not None and cost_uom and norm_base_uom and cost_uom == norm_base_uom:
+            cost_sell = Decimal(str(cost['cost_per_base'])) * factor
+        elif cost and norm_selling_uom and cost_uom:
+            # v7.0.41: use only an exact user-confirmed cost-to-selling
+            # conversion. This does NOT alter Base/Inventory UOM or its factor.
+            conv = confirmed_cost_conversion(cur, p['ean_upc'])
+            if conv:
+                conv_sell = _norm_cost_serving_uom(conv.get('selling_uom_code'))
+                conv_cost = _norm_cost_serving_uom(conv.get('cost_uom_code'))
+                sell_qty = Decimal(str(conv.get('selling_qty')))
+                cost_qty = Decimal(str(conv.get('cost_qty')))
+                if (
+                    conv_sell == norm_selling_uom
+                    and conv_cost == cost_uom
+                    and sell_qty > 0
+                    and cost_qty > 0
+                ):
+                    cost_sell = (
+                        Decimal(str(cost['cost_per_base']))
+                        * cost_qty
+                        / sell_qty
+                    )
+        fm7, fm_uom, _fm_days = _family_movement_metrics(cur, family_id, mvt_days_7)
+        inv = _latest_inventory(cur, upc_id, int(p['article_id']) if p.get('article_id') is not None else None, family_id)
+        inv_position = None
+        if inv:
+            inv_position = rollforward_position(
+                cur,
+                anchor_quantity=inv.get('on_hand_quantity'),
+                anchor_uom=inv.get('uom_code'),
+                anchor_date=inv.get('observation_date'),
+                scope_type=inv.get('scope_type'),
+                article_id=inv.get('article_id'),
+                family_id=inv.get('family_id') if inv.get('family_id') is not None else family_id,
+                upc_id=inv.get('upc_id') if inv.get('upc_id') is not None else upc_id,
+                include_batch_id=batch_id,
+            )
+        cp = _company_prices(cur, upc_id, family_id)
+        pclass = _product_class(p['article_description'], p['family_description'], p['category_code'])
+
+        # A valid data day with no UPC sales row is a real zero and remains in the denominator.
+        velocity7 = (Decimal(m7['qty']) / Decimal(m7['days'])) if m7['days'] > 0 else Decimal('0')
+        velocity30 = (Decimal(m30['qty']) / Decimal(m30['days'])) if m30['days'] > 0 else Decimal('0')
+        gp_pct = gp7 = gpday = None
+        if price and cost_sell is not None and Decimal(price['price']) > 0:
+            gp_pct = (Decimal(price['price']) - cost_sell) / Decimal(price['price'])
+            gp7 = Decimal(m7['sales']) - Decimal(m7['qty']) * cost_sell
+            gpday = (gp7 / Decimal(m7['days'])) if m7['days'] > 0 else None
+        dos = None
+        if inv and inv_position and inv_position.get('analysis_usable') and velocity7 > 0:
+            iq = Decimal(str(inv_position['quantity']))
+            iu = (inv_position.get('uom') or '').upper()
+            if iu and selling_uom and iu == str(selling_uom).upper():
+                dos = iq / velocity7
+            elif iu and base_uom and iu == str(base_uom).upper() and factor and factor > 0:
+                dos = (iq / factor) / velocity7
+
+        # DOH is physical/calendar age, not a rolling-data-day metric.
+        doh = (calendar_today - last_receipt).days if pclass in {'FRESH', 'LIVE'} and last_receipt else None
+        wgpm = None
+        if cost_sell is not None and pclass in {'LIVE', 'FRESH', 'FROZEN'}:
+            target = {'LIVE': Decimal('0.15'), 'FRESH': Decimal('0.30'), 'FROZEN': Decimal('0.44')}[pclass]
+            wgpm = (cost_sell / (Decimal('1') - target)).quantize(Decimal('0.01'))
+        sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30) if cost else None
+        reasons = []
+        activity_scope, activity_basis = _mapped_current_activity_scope(m28)
+        # Only positive sales in the latest up-to-28 VALID POS data days make
+        # a UPC current-active. Everything else remains historical/non-blocking.
+        active_current = activity_scope == 'ACTIVE_SELLING'
+        if active_current:
+            if not selling_uom: reasons.append('SELLING_UOM_MISSING')
+            if cost is None: reasons.append('CURRENT_COST_MISSING')
+            if price is None: reasons.append('CURRENT_PRICE_MISSING')
+            if cost is not None and cost_sell is None: reasons.append('COST_TO_SELLING_UOM_UNRESOLVED')
+            if inv and inv_position and not inv_position.get('analysis_usable'):
+                reasons.append('OH_MOVEMENT_ROLLFORWARD_BLOCKED')
+        if active_current:
+            active_rows += 1
+            qc_status = 'QA_HOLD' if reasons else 'READY'
+            if qc_status == 'READY':
+                active_ready += 1
+            else:
+                active_hold += 1
+                _issue(cur, batch_id, 'QUICK_CHECK_CORE_FIELD_MISSING', 'UPC', p['ean_upc'],
+                       f"Quick Check core fields are unresolved for UPC {p['ean_upc']}: {', '.join(reasons)}",
+                       'HIGH', detail={
+                           'reasons': reasons,
+                           'activity_scope': activity_scope,
+                           'activity_basis': activity_basis,
+                           'recent_pos_qty_28_valid_days': str(m28['qty']),
+                           'recent_pos_valid_day_count': m28['days'],
+                       })
+        else:
+            historical_rows += 1
+            qc_status = 'HISTORICAL_ONLY'
+        cur.execute(
+            """INSERT INTO quick_check_current
+               (upc_id,ean_upc,selling_description,article_id,article_number,family_id,main_article_number,family_description,
+                product_class,selling_uom,base_uom,base_qty_per_selling_unit,current_cost_per_base_uom,current_cost_per_selling_unit,
+                cost_source,cost_date,last_receipt_date,current_price,current_price_type,current_price_source,current_price_asof_date,
+                sales_dollars_7d,pos_qty_7d,upc_velocity_7d,sales_days_7d,sales_dollars_30d,pos_qty_30d,upc_velocity_30d,sales_days_30d,
+                family_movement_7d,family_movement_uom,current_oh,current_oh_uom,oh_date,dos,doh,gp_pct_current,gp_dollars_7d,gp_per_day_7d,
+                sweet_spot_price,wgpm_price,company_price_a,company_price_b,company_price_c,quick_check_status,blocking_reason,publish_batch_id,published_at)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP(6))
+               ON DUPLICATE KEY UPDATE
+                selling_description=VALUES(selling_description),article_id=VALUES(article_id),article_number=VALUES(article_number),
+                family_id=VALUES(family_id),main_article_number=VALUES(main_article_number),family_description=VALUES(family_description),
+                product_class=VALUES(product_class),selling_uom=VALUES(selling_uom),base_uom=VALUES(base_uom),
+                base_qty_per_selling_unit=VALUES(base_qty_per_selling_unit),current_cost_per_base_uom=VALUES(current_cost_per_base_uom),
+                current_cost_per_selling_unit=VALUES(current_cost_per_selling_unit),cost_source=VALUES(cost_source),cost_date=VALUES(cost_date),
+                last_receipt_date=VALUES(last_receipt_date),current_price=VALUES(current_price),current_price_type=VALUES(current_price_type),
+                current_price_source=VALUES(current_price_source),current_price_asof_date=VALUES(current_price_asof_date),
+                sales_dollars_7d=VALUES(sales_dollars_7d),pos_qty_7d=VALUES(pos_qty_7d),upc_velocity_7d=VALUES(upc_velocity_7d),
+                sales_days_7d=VALUES(sales_days_7d),sales_dollars_30d=VALUES(sales_dollars_30d),pos_qty_30d=VALUES(pos_qty_30d),
+                upc_velocity_30d=VALUES(upc_velocity_30d),sales_days_30d=VALUES(sales_days_30d),family_movement_7d=VALUES(family_movement_7d),
+                family_movement_uom=VALUES(family_movement_uom),current_oh=VALUES(current_oh),current_oh_uom=VALUES(current_oh_uom),
+                oh_date=VALUES(oh_date),dos=VALUES(dos),doh=VALUES(doh),gp_pct_current=VALUES(gp_pct_current),gp_dollars_7d=VALUES(gp_dollars_7d),
+                gp_per_day_7d=VALUES(gp_per_day_7d),sweet_spot_price=VALUES(sweet_spot_price),wgpm_price=VALUES(wgpm_price),
+                company_price_a=VALUES(company_price_a),company_price_b=VALUES(company_price_b),company_price_c=VALUES(company_price_c),
+                quick_check_status=VALUES(quick_check_status),blocking_reason=VALUES(blocking_reason),publish_batch_id=VALUES(publish_batch_id),
+                published_at=CURRENT_TIMESTAMP(6)""",
+            (upc_id, p['ean_upc'], p['selling_description'], p['article_id'], p['article_number'], family_id, p['main_article_number'], p['family_description'],
+             pclass, selling_uom, base_uom, factor, cost['cost_per_base'] if cost else None, cost_sell,
+             cost['source'] if cost else None, cost['date'] if cost else None, last_receipt,
+             price['price'] if price else None, price['type'] if price else None, price['source'] if price else None, price['date'] if price else None,
+             m7['sales'], m7['qty'], velocity7, m7['days'], m30['sales'], m30['qty'], velocity30, m30['days'], fm7, fm_uom,
+             (inv_position['quantity'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['on_hand_quantity'] if inv else None)),
+             (inv_position['uom'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['uom_code'] if inv else None)),
+             (inv_position['movement_through_date'] if inv and inv_position and inv_position.get('analysis_usable') else (inv['observation_date'] if inv else None)),
+             dos, doh,
+             gp_pct, gp7, gpday, sweet, wgpm, cp['price_a'] if cp else None, cp['price_b'] if cp else None, cp['price_c'] if cp else None,
+             qc_status,
+             (','.join(reasons) if reasons else
+              ('NO_POS_SALES_LATEST_28_VALID_DATA_DAYS' if not active_current else None)),
+             batch_id),
+        )
+
+    return {
+        'mode': 'TARGETED_UPSERT_NO_GLOBAL_DELETE',
+        'target_family_ids': target_family_ids,
+        'target_upcs_requested': target_upcs,
+        'target_upcs_refreshed': target_eans,
+        'target_rows': len(products),
+        'target_active_rows': active_rows,
+        'target_ready_rows': active_ready,
+        'target_hold_rows': active_hold,
+        'target_historical_rows': historical_rows,
+        'prior_target_core_holds_resolved': prior_target_core_holds_resolved,
+    }
+
+
+
 def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
     def report(stage: str, **payload):
         if progress:
