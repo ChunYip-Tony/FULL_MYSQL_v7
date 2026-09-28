@@ -14,6 +14,7 @@ from quick_check_app import (
     _actual_position,
     _system_oh_context,
     _system_position,
+    _true_stock_history,
 )
 
 
@@ -448,6 +449,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                     "readiness":row.get("quick_check_status"),
                     "relevance":rel,
                     "qty_28d":m28["sold_quantity"],
+                    "qty_28d_uom":row.get("selling_uom"),
                     "supported_days_28d":m28["supported_day_count"],
                     "matched_as":"UPC" if _numeric_key(q)==_numeric_key(row.get("ean_upc")) else "ITEM",
                 })
@@ -457,16 +459,12 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         for fid,fam in family_map.items():
             cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s",(fid,))
             children=cur.fetchall()
-            qty=Decimal("0")
-            day_counts=[]
-            statuses=[]
-            for child in children:
-                statuses.append(str(child.get("quick_check_status") or ""))
-                m28=metric28(int(child["upc_id"]))
-                qty += _d(m28["sold_quantity"])
-                day_counts.append(int(m28["supported_day_count"]))
-            fam["qty_28d"]=qty
-            fam["supported_days_28d"]=min(day_counts) if day_counts else 0
+            statuses=[str(child.get("quick_check_status") or "") for child in children]
+            family_sales=_family_sales_series(cur,children,28)
+            fam["qty_28d"]=family_sales.get("sold_quantity")
+            fam["qty_28d_uom"]=family_sales.get("uom")
+            fam["supported_days_28d"]=int(family_sales.get("supported_day_count") or 0)
+            fam["family_sales_status"]=family_sales.get("status")
             fam["readiness"]=(
                 "READY" if "READY" in statuses
                 else ("QA_HOLD" if "QA_HOLD" in statuses else "HISTORICAL_ONLY")
@@ -486,13 +484,11 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
             else:
                 cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s",(fid,))
                 children=cur.fetchall()
-                qty=Decimal("0"); statuses=[]; day_counts=[]
-                category=None
+                statuses=[]; category=None
                 for child in children:
                     statuses.append(str(child.get("quick_check_status") or ""))
                     category=category or child.get("product_class")
-                    m28=metric28(int(child["upc_id"]))
-                    qty+=_d(m28["sold_quantity"]); day_counts.append(int(m28["supported_day_count"]))
+                family_sales=_family_sales_series(cur,children,28)
                 results.append({
                     "result_type":"FAMILY",
                     "family_id":fid,
@@ -504,8 +500,10 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                         else ("QA_HOLD" if "QA_HOLD" in statuses else "HISTORICAL_ONLY")
                     ),
                     "relevance":rel,
-                    "qty_28d":qty,
-                    "supported_days_28d":min(day_counts) if day_counts else 0,
+                    "qty_28d":family_sales.get("sold_quantity"),
+                    "qty_28d_uom":family_sales.get("uom"),
+                    "supported_days_28d":int(family_sales.get("supported_day_count") or 0),
+                    "family_sales_status":family_sales.get("status"),
                     "matched_as":"ARTICLE",
                     "matched_article_number":match.get("article_number"),
                 })
@@ -1534,7 +1532,7 @@ def bulk_ordering_suggestions(
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
-        classes=("FRESH","LIVE") if kind=="FRESH" else ("FROZEN",)
+        classes=("FRESH",) if kind=="FRESH" else ("FROZEN",)
         ph=",".join(["%s"]*len(classes))
         cur.execute(
             f"""SELECT DISTINCT family_id,main_article_number,family_description
@@ -1686,7 +1684,7 @@ def bulk_ordering_suggestions(
     return {
         "contract_version":"WEBAPP_V2_BULK_ORDERING_V1",
         "order_type":kind,
-        "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
+        "category_scope":["FRESH"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
             "ordering_date":order_day,
             "expected_delivery_date":delivery,
@@ -1719,3 +1717,268 @@ def bulk_ordering_suggestions(
             "submitted":False,
         },
     }
+
+def _pi_owner_key(system_oh: dict[str,Any]) -> tuple[str,int] | None:
+    scope=str(system_oh.get("scope_type") or "").upper()
+    if scope=="UPC" and system_oh.get("upc_id") is not None:
+        return scope,int(system_oh["upc_id"])
+    if scope=="ARTICLE" and system_oh.get("article_id") is not None:
+        return scope,int(system_oh["article_id"])
+    if scope=="FAMILY" and system_oh.get("family_id") is not None:
+        return scope,int(system_oh["family_id"])
+    return None
+
+
+def _pi_owner_summary(cur,row:dict[str,Any]) -> dict[str,Any] | None:
+    system_oh=_system_oh_context(cur,row)
+    if not system_oh:
+        return None
+    owner_key=_pi_owner_key(system_oh)
+    if owner_key is None:
+        return None
+
+    system_position=_system_position(cur,system_oh)
+    active_true_stock=_active_true_stock(cur,system_oh)
+    actual_position=_actual_position(cur,active_true_stock)
+    effective_position=actual_position if active_true_stock else system_position
+
+    scope,owner_id=owner_key
+    owner_name=None
+    if scope=="UPC":
+        owner_name=row.get("selling_description")
+    elif scope=="ARTICLE":
+        cur.execute(
+            "SELECT article_description FROM article WHERE article_id=%s LIMIT 1",
+            (owner_id,),
+        )
+        a=cur.fetchone() or {}
+        owner_name=a.get("article_description") or row.get("selling_description")
+    else:
+        owner_name=row.get("family_description")
+
+    return {
+        "owner_scope":scope,
+        "owner_id":owner_id,
+        "owner_name":owner_name,
+        "family_id":row.get("family_id"),
+        "family_article_number":row.get("main_article_number"),
+        "family_name":row.get("family_description"),
+        "article_id":row.get("article_id"),
+        "article_number":row.get("article_number"),
+        "representative_upc":row.get("ean_upc"),
+        "representative_upc_name":row.get("selling_description"),
+        "category":row.get("product_class"),
+        "readiness":row.get("quick_check_status"),
+        "system_oh":{
+            "quantity":system_position.get("quantity") if system_position else None,
+            "uom":system_position.get("uom") if system_position else system_oh.get("uom_code"),
+            "analysis_usable":bool(system_position and system_position.get("analysis_usable")),
+            "blockers":system_position.get("blockers") if system_position else ["SYSTEM_OH_POSITION_NOT_AVAILABLE"],
+            "anchor_quantity":system_position.get("anchor_quantity") if system_position else system_oh.get("on_hand_quantity"),
+            "anchor_date":system_position.get("anchor_date") if system_position else system_oh.get("observation_date"),
+            "movement_delta":system_position.get("movement_delta") if system_position else None,
+            "movement_through_date":system_position.get("movement_through_date") if system_position else None,
+            "source_file_id":system_oh.get("file_id"),
+            "snapshot_date":system_oh.get("observation_date"),
+        },
+        "effective_oh":{
+            "quantity":effective_position.get("quantity") if effective_position else None,
+            "uom":effective_position.get("uom") if effective_position else (system_position.get("uom") if system_position else system_oh.get("uom_code")),
+            "analysis_usable":bool(effective_position and effective_position.get("analysis_usable")),
+            "source":"TRUE_STOCK" if active_true_stock else "SYSTEM_OH",
+            "movement_through_date":effective_position.get("movement_through_date") if effective_position else None,
+        },
+        "active_true_stock":active_true_stock,
+        "required_true_stock_uom":(
+            system_position.get("uom")
+            if system_position and system_position.get("uom")
+            else system_oh.get("uom_code")
+        ),
+    }
+
+
+def pi_search_items(query:str,limit:int=30) -> dict[str,Any]:
+    """Search PI targets and deduplicate UPCs that share one inventory owner."""
+    core=search_items(query,max(1,min(int(limit or 30)*2,50)))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        targets:dict[tuple[str,int],dict[str,Any]]={}
+        for result in core.get("results",[]):
+            rows=[]
+            if result.get("result_type")=="UPC":
+                cur.execute(
+                    "SELECT * FROM quick_check_current WHERE ean_upc=%s LIMIT 1",
+                    (result.get("number"),),
+                )
+                row=cur.fetchone()
+                if row:
+                    rows=[row]
+            elif result.get("result_type")=="FAMILY" and result.get("family_id") is not None:
+                cur.execute(
+                    "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                    (int(result["family_id"]),),
+                )
+                rows=cur.fetchall()
+
+            for row in rows:
+                summary=_pi_owner_summary(cur,row)
+                if not summary:
+                    continue
+                key=(summary["owner_scope"],int(summary["owner_id"]))
+                m28=_sales_metric(cur,int(row["upc_id"]),28)
+                existing=targets.get(key)
+                if existing is None:
+                    targets[key]={
+                        **summary,
+                        "relevance":int(result.get("relevance") or 0),
+                        "qty_28d":_d(m28.get("sold_quantity")),
+                        "qty_28d_uom":row.get("selling_uom"),
+                        "supported_days_28d":int(m28.get("supported_day_count") or 0),
+                        "_upc_ids":{int(row["upc_id"])},
+                        "_qty_uoms":{str(row.get("selling_uom") or "").strip().upper()},
+                    }
+                else:
+                    existing["relevance"]=max(int(existing.get("relevance") or 0),int(result.get("relevance") or 0))
+                    uid=int(row["upc_id"])
+                    if uid not in existing["_upc_ids"]:
+                        existing["_upc_ids"].add(uid)
+                        uom=str(row.get("selling_uom") or "").strip().upper()
+                        existing["_qty_uoms"].add(uom)
+                        if len({x for x in existing["_qty_uoms"] if x})==1:
+                            existing["qty_28d"]=_d(existing.get("qty_28d"))+_d(m28.get("sold_quantity"))
+                        else:
+                            existing["qty_28d"]=None
+                            existing["qty_28d_uom"]=None
+                    existing["supported_days_28d"]=min(
+                        int(existing.get("supported_days_28d") or 0),
+                        int(m28.get("supported_day_count") or 0),
+                    )
+
+        rows=[]
+        for x in targets.values():
+            x.pop("_upc_ids",None)
+            x.pop("_qty_uoms",None)
+            rows.append(x)
+        rows.sort(
+            key=lambda x:(
+                -int(x.get("relevance") or 0),
+                _readiness_rank(x.get("readiness")),
+                -float(x.get("qty_28d") or 0),
+                str(x.get("owner_name") or ""),
+            )
+        )
+        cur.close()
+    rows=rows[:max(1,min(int(limit or 30),50))]
+    return {
+        "contract_version":"WEBAPP_V2_PI_SEARCH_V1",
+        "query":str(query or "").strip(),
+        "count":len(rows),
+        "results":rows,
+        "dedupe_contract":"ONE_RESULT_PER_INVENTORY_OWNER",
+        "inventory_owner_scopes":["UPC","ARTICLE","FAMILY"],
+    }
+
+
+def pi_item(upc:str,history_limit:int=20) -> dict[str,Any]:
+    raw=str(upc or "").strip()
+    nk=_numeric_key(raw)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT * FROM quick_check_current
+               WHERE ean_upc=%s
+                  OR (ean_upc REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM ean_upc)=%s)
+               ORDER BY CASE quick_check_status WHEN 'READY' THEN 0 WHEN 'QA_HOLD' THEN 1 ELSE 2 END
+               LIMIT 1""",
+            (raw,nk),
+        )
+        row=cur.fetchone()
+        if not row:
+            cur.close()
+            raise KeyError("V2_PI_ITEM_NOT_FOUND")
+
+        summary=_pi_owner_summary(cur,row)
+        if not summary:
+            cur.close()
+            raise ValueError("PI_INVENTORY_OWNER_UNRESOLVED")
+
+        system_oh=_system_oh_context(cur,row)
+        history=_true_stock_history(cur,system_oh,max(1,min(int(history_limit or 20),50)))
+        hist=[]
+        for h in history:
+            system_qty=(Decimal(str(h["system_oh_quantity"])) if h.get("system_oh_quantity") is not None else None)
+            true_qty=(Decimal(str(h["true_stock_quantity"])) if h.get("true_stock_quantity") is not None else None)
+            signed=(true_qty-system_qty if true_qty is not None and system_qty is not None else None)
+            hist.append({
+                "true_stock_id":h.get("true_stock_id"),
+                "submitted_at":h.get("submitted_at"),
+                "submitted_by":h.get("submitted_by"),
+                "system_oh_quantity":system_qty,
+                "true_stock_quantity":true_qty,
+                "uom":h.get("uom_code"),
+                "signed_difference_true_minus_system":signed,
+                "shortage_quantity":max(Decimal("0"),-signed) if signed is not None else None,
+                "overage_quantity":max(Decimal("0"),signed) if signed is not None else None,
+                "count_note":h.get("count_note"),
+                "status":h.get("override_status"),
+                "superseded_at":h.get("superseded_at"),
+                "superseded_by_oh_file_id":h.get("superseded_by_oh_file_id"),
+            })
+
+        events=_family_receipt_events(cur,int(row["family_id"]),180)
+        article_id=int(row["article_id"]) if row.get("article_id") is not None else None
+        relevant_events=[
+            x for x in events
+            if x.get("receipt_quantity") is not None
+            and _d(x.get("receipt_quantity"))>0
+            and (article_id is None or x.get("article_id")==article_id)
+        ]
+        last_receipt=relevant_events[0] if relevant_events else None
+
+        sys_qty=summary["system_oh"].get("quantity")
+        eff_qty=summary["effective_oh"].get("quantity")
+        sys_uom=str(summary["system_oh"].get("uom") or "").upper()
+        eff_uom=str(summary["effective_oh"].get("uom") or "").upper()
+        current_signed=(
+            _d(eff_qty)-_d(sys_qty)
+            if sys_qty is not None and eff_qty is not None and sys_uom and sys_uom==eff_uom
+            else None
+        )
+        cur.close()
+
+    return {
+        "contract_version":"WEBAPP_V2_PI_ITEM_V1",
+        "identity":{
+            "upc":row.get("ean_upc"),
+            "upc_name":row.get("selling_description"),
+            "article_number":row.get("article_number"),
+            "family_article_number":row.get("main_article_number"),
+            "family_name":row.get("family_description"),
+            "category":row.get("product_class"),
+            "readiness":row.get("quick_check_status"),
+        },
+        "inventory_owner":{
+            "scope":summary.get("owner_scope"),
+            "owner_id":summary.get("owner_id"),
+            "owner_name":summary.get("owner_name"),
+        },
+        "system_oh":summary.get("system_oh"),
+        "effective_oh":summary.get("effective_oh"),
+        "active_true_stock":summary.get("active_true_stock"),
+        "required_true_stock_uom":summary.get("required_true_stock_uom"),
+        "current_discrepancy":{
+            "signed_difference_true_minus_system":current_signed,
+            "shortage_quantity":max(Decimal("0"),-current_signed) if current_signed is not None else None,
+            "overage_quantity":max(Decimal("0"),current_signed) if current_signed is not None else None,
+            "uom":sys_uom or eff_uom or None,
+        },
+        "last_receipt":last_receipt,
+        "true_stock_history":hist,
+        "rules":{
+            "negative_true_stock_allowed":False,
+            "true_stock_authority":"ACTIVE_UNTIL_LATER_ACCEPTED_OH_UPLOAD",
+            "shortage_creates_pending_dumping_discrepancy":True,
+            "overage_creates_dumping_quantity":False,
+        },
+    }
+
