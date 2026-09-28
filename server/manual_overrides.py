@@ -60,6 +60,49 @@ USER_CONFIRMED_UOM_REVIEW_20260926 = (
      "source_note":"USER_CONFIRMED_UOM_REVIEW_20260926: BASS HYBD STRP; POS Selling UOM=LB only; no Base/Inventory UOM or conversion factor inferred."},
 )
 
+
+USER_CONFIRMED_UOM_REVIEW_20260927 = (
+    {
+        "ean_upc": "4029550610",
+        "article_number": "3401403",
+        "selling_uom_code": "PAC",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("1"),
+        "source_note": (
+            "USER_CONFIRMED_UOM_REVIEW_20260927: ALL NATURAL COOKED OCTOPUS 30/1LB. "
+            "User confirmed 1 CV = 30 PAC and 1 PAC = 1 LB. Therefore POS Selling UOM=PAC, "
+            "Base UOM=LB, and 1 selling PAC = 1 LB. Receipt 2026-09-23 independently shows "
+            "1 CV = 30 LB."
+        ),
+    },
+    {
+        "ean_upc": "74709410002",
+        "article_number": "1348438",
+        "selling_uom_code": "EA",
+        "base_uom_code": "EA",
+        "base_qty_per_selling_unit": Decimal("1"),
+        "source_note": (
+            "USER_CONFIRMED_UOM_REVIEW_20260927: FRESH OYSTER JAR is received by EA and sold by EA. "
+            "One EA is NOT one pound. Any SAP movement Base-UOM label of LB for this article must not "
+            "be interpreted as a physical EA-to-LB conversion."
+        ),
+    },
+)
+
+
+USER_CONFIRMED_RECEIPT_ENTRY_COST_BASIS_20260927 = (
+    {
+        "main_article_number": "1348438",
+        "entry_uom_code": "EA",
+        "source_note": (
+            "USER_CONFIRMED_RECEIPT_COST_BASIS_20260927: FRESH OYSTER JAR is received by EA. "
+            "For receipt valuation, use amount_local_currency / entry_quantity with cost UOM=EA "
+            "when entry_uom_code=EA. Preserve RAW movement base_quantity/base_uom exactly as supplied; "
+            "do not infer that 1 EA = 1 LB."
+        ),
+    },
+)
+
 SEED_OVERRIDES = (
     {
         "ean_upc": "4918",
@@ -85,7 +128,7 @@ SEED_OVERRIDES = (
         "base_qty_per_selling_unit": 1,
         "source_note": "Resolved 2026-09-26 from combined authoritative evidence: user confirmed POS Selling UOM=PACK and case configuration=40/150G; receipt 107 for Article 3461050 shows 3 CV = 120 EA with $330 valuation, exactly matching 3 cases x 40 selling packs = 120. Therefore 1 selling PACK = 1 base EA and authoritative receipt cost is $2.75 per PACK.",
     },
- ) + USER_CONFIRMED_UOM_REVIEW_20260926
+ ) + USER_CONFIRMED_UOM_REVIEW_20260926 + USER_CONFIRMED_UOM_REVIEW_20260927
 
 
 USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
@@ -200,6 +243,21 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
         "cost_qty": Decimal("12"),
         "cost_uom_code": "EA",
         "source_note": "OYSTER_UOM_RECONCILED_20260927: 1 selling PACK = 12 EA; exact 2026-09-01 POS-to-family-movement reconciliation.",
+    },
+)
+
+
+USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927 = (
+    {
+        "ean_upc": "4029550610",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PAC",
+        "cost_qty": Decimal("1"),
+        "cost_uom_code": "LB",
+        "source_note": (
+            "USER_CONFIRMED_COST_CONVERSION_20260927: ALL NATURAL COOKED OCTOPUS 30/1LB; "
+            "1 CV = 30 PAC and 1 PAC = 1 LB, so 1 selling PAC = 1 cost LB."
+        ),
     },
 )
 
@@ -634,7 +692,7 @@ def ensure_cost_conversion_table(cur) -> None:
 
 def seed_confirmed_cost_conversions(cur) -> int:
     changed = 0
-    for row in USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926:
+    for row in (USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 + USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927):
         cur.execute(
             """
             INSERT INTO manual_cost_selling_conversion
@@ -715,6 +773,30 @@ def confirmed_cost_conversion(cur, ean_upc: str) -> dict[str, Any] | None:
     )
     return cur.fetchone()
 
+
+
+
+def confirmed_receipt_entry_cost_basis(cur, family_id: int | None) -> dict[str, Any] | None:
+    """Return explicit user authority to value receipt cost by Entry UOM.
+
+    RAW movement fields are never changed. This only controls the derived
+    article_cost_observation when the source Entry UOM exactly matches the
+    user-confirmed receiving/cost UOM.
+    """
+    if family_id is None:
+        return None
+    cur.execute(
+        "SELECT main_article_number FROM product_family WHERE family_id=%s LIMIT 1",
+        (int(family_id),),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    main = str(row.get("main_article_number") or "").strip()
+    for basis in USER_CONFIRMED_RECEIPT_ENTRY_COST_BASIS_20260927:
+        if str(basis["main_article_number"]) == main:
+            return dict(basis)
+    return None
 
 
 def ensure_retirement_table(cur) -> None:
