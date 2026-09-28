@@ -234,6 +234,124 @@ def session_status(session_id: str) -> dict[str,Any]:
     return {'batch':conv(b),'files':[conv(x) for x in files],'api_runs':[conv(x) for x in runs],'phase2c':conv(p2),'phase3':conv(p3)}
 
 
+
+def delete_raw_stage_qa_hold_batch(batch_id: int, actor: str='WEBAPP-PUBLIC') -> dict[str,Any]:
+    """Hard-delete a QA_HOLD batch only when downstream processing never began.
+
+    This is intentionally narrower than a generic batch delete. READY batches,
+    Phase2C/Phase3 holds, and any batch with downstream pipeline evidence are
+    not eligible.
+    """
+    bid=int(batch_id)
+    if bid < 1:
+        raise ValueError('INVALID_BATCH_ID')
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,batch_key,batch_label,processing_status,
+                          upload_started_at,completed_at,file_count,source_row_count,error_count
+                   FROM ingest_batch
+                   WHERE batch_id=%s
+                   FOR UPDATE""",
+                (bid,),
+            )
+            batch=cur.fetchone()
+            if not batch:
+                raise KeyError('Batch not found')
+
+            status=str(batch.get('processing_status') or '').upper()
+            if status!='QA_HOLD':
+                raise RuntimeError(
+                    f'Only raw-stage QA_HOLD batches can be deleted; current status={status}'
+                )
+
+            cur.execute(
+                "SELECT COUNT(*) AS c FROM phase2c_batch_result WHERE batch_id=%s",
+                (bid,),
+            )
+            if int((cur.fetchone() or {}).get('c') or 0):
+                raise RuntimeError('DELETE_BLOCKED_PHASE2C_HISTORY_EXISTS')
+
+            cur.execute(
+                "SELECT COUNT(*) AS c FROM phase3_batch_result WHERE batch_id=%s",
+                (bid,),
+            )
+            if int((cur.fetchone() or {}).get('c') or 0):
+                raise RuntimeError('DELETE_BLOCKED_PHASE3_HISTORY_EXISTS')
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND stage_name<>'RAW_INGEST'""",
+                (bid,),
+            )
+            if int((cur.fetchone() or {}).get('c') or 0):
+                raise RuntimeError('DELETE_BLOCKED_DOWNSTREAM_PIPELINE_HISTORY_EXISTS')
+
+            cur.execute(
+                """SELECT file_id,original_filename,source_type,
+                          processing_status,source_row_count,error_count
+                   FROM ingest_file
+                   WHERE batch_id=%s
+                   ORDER BY file_id""",
+                (bid,),
+            )
+            files=cur.fetchall()
+
+            # Remove immutable raw rows first, then ingest metadata.
+            for table in sorted(set(RAW_TABLE_BY_SOURCE.values())):
+                cur.execute(f"DELETE FROM {table} WHERE batch_id=%s",(bid,))
+
+            cur.execute("DELETE FROM ingest_error WHERE batch_id=%s",(bid,))
+            cur.execute(
+                """DELETE ic
+                   FROM ingest_column ic
+                   JOIN ingest_sheet s ON s.sheet_id=ic.sheet_id
+                   JOIN ingest_file f ON f.file_id=s.file_id
+                   WHERE f.batch_id=%s""",
+                (bid,),
+            )
+            cur.execute(
+                """DELETE s
+                   FROM ingest_sheet s
+                   JOIN ingest_file f ON f.file_id=s.file_id
+                   WHERE f.batch_id=%s""",
+                (bid,),
+            )
+            cur.execute("DELETE FROM ingest_file WHERE batch_id=%s",(bid,))
+            cur.execute("DELETE FROM pipeline_run WHERE batch_id=%s",(bid,))
+            cur.execute("DELETE FROM ingest_batch WHERE batch_id=%s",(bid,))
+            conn.commit()
+
+            return {
+                'deleted':True,
+                'batch_id':bid,
+                'batch_key':batch.get('batch_key'),
+                'batch_label':batch.get('batch_label'),
+                'previous_status':status,
+                'file_count':len(files),
+                'files':[
+                    {
+                        'file_id':x.get('file_id'),
+                        'filename':x.get('original_filename'),
+                        'source_type':x.get('source_type'),
+                        'status':x.get('processing_status'),
+                    }
+                    for x in files
+                ],
+                'deleted_by':actor,
+                'scope':'RAW_STAGE_QA_HOLD_ONLY',
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
 def abort_batch(session_id: str, device_id: str, is_admin: bool=False) -> dict[str,Any]:
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
