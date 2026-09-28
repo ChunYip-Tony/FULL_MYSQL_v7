@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from db import db_conn
 from quick_check_app import negative_stock_queue
+from cost_backfill_queue import cost_backfill_queue
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -22,6 +23,7 @@ MYSQL_TABS = {
     "analysis": "MYSQL_ANALYSIS_CURRENT",
     "qa": "MYSQL_QA_HOLD",
     "negative": "MYSQL_NEGATIVE_STOCK",
+    "cost_backfill": "MYSQL_COST_BACKFILL",
     "bridge": "BRIDGE_STATUS",
 }
 
@@ -307,6 +309,32 @@ def _build_negative_stock(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 
+
+def _build_cost_backfill(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    columns = [
+        "backfill_sequence","family_id","main_article_number","representative_upc",
+        "related_upcs","related_upc_count","confirmed_article_numbers",
+        "current_hold_row_count","current_hold_reason",
+        "requested_lookback_days","requested_backfill_start","requested_backfill_end",
+        "earliest_loaded_movement_date","latest_loaded_movement_date",
+        "loaded_movement_row_count","missing_days_before_loaded_history",
+        "earliest_loaded_receipt_date","latest_loaded_receipt_date",
+        "loaded_receipt_row_count","valid_receipt_valuation_row_count",
+        "diagnostic_classification","diagnostic_proposed_action",
+        "coverage_status","backfill_needed","required_upload_scope",
+        "required_receipt_movements","action_code",
+    ]
+
+    def value(row: dict[str, Any], col: str) -> Any:
+        v = row.get(col)
+        if isinstance(v, list):
+            return ",".join(str(x) for x in v)
+        return v
+
+    return [columns] + [[value(row, col) for col in columns] for row in rows]
+
+
+
 def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
     header = ["family_id","main_article_number","family_description","Representative_UPC","UPC_Row_Count",
               "Current_Active_Row_Count","READY_Row_Count","QA_HOLD_Row_Count","Historical_Row_Count",
@@ -405,6 +433,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
 
         negative_queue = negative_stock_queue(limit=500)
+        cost_backfill = cost_backfill_queue(lookback_days=90)
         matrices = {
             MYSQL_TABS["source"]:_source_status(batch,phase3,len(rows)),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
@@ -413,6 +442,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             MYSQL_TABS["analysis"]:_build_analysis(rows),
             MYSQL_TABS["qa"]:_build_qa(rows),
             MYSQL_TABS["negative"]:_build_negative_stock(negative_queue.get("rows") or []),
+            MYSQL_TABS["cost_backfill"]:_build_cost_backfill(cost_backfill.get("actions") or []),
         }
         _ensure_tabs(session, spreadsheet_id, list(matrices) + [MYSQL_TABS["bridge"]])
         for title, matrix in matrices.items():
