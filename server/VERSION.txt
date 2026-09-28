@@ -1,46 +1,41 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.116 Single-Service Edition
+Version: 7.0.117 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
-- server/webapp_v2.py is a compatibility shim only.
-- Web App V2 route: /app/v2.
-- Top-level functions: CORE / PI / PERFORMANCE.
-- Standalone Main ORDERING remains cancelled.
-
-CORE:
-- Search -> Family / UPC -> Price / Ordering Analysis.
-- Family page shows Family 7D Sold + Family 28D Sold.
-- Search sort: 28D Qty Sold descending -> readiness.
-- CORE Ordering is Family Article level.
-- Expected Delivery: user input -> observed cadence -> FRESH following Friday / FROZEN following Tuesday fallback.
-- If next observed delivery cannot be inferred for Fresh/Frozen, Next Next Delivery = Expected Delivery + 7 days.
-- Negative OH is displayed but ordering calculations use max(OH,0).
-
-PRICE:
-- Price vs Sales trend = latest 7 completed supported days.
-- Detailed sales history = latest 14 completed supported days.
-- Historical SALE periods show weekday range plus dates.
-- Promotion = SALE only; TPR excluded.
-
-PI:
-- PI target is Family Article.
-- Family True Stock becomes authoritative Effective OH until a later accepted OH upload supersedes it.
+- Web App V2 route: /app/v2
+- Top-level functions: CORE / PI / PERFORMANCE
+- Standalone Main ORDERING is cancelled
 
 PERFORMANCE:
-- Report is anchored to a selected completed canonical supported POS date.
-- Default Report Date = latest completed supported sales date.
-- Unsupported manual dates are rejected, not silently shifted.
-- Report Date sales performance is shown separately.
-- 7D / 14D / 28D are supported-day windows ending on or before Report Date.
-- Report Date Top Sellers are included.
-- Analysis compares the selected day's performance against supported-day baselines.
-- Top 100 urgent price suggestions use sales evidence only through Report Date.
-- Company Price C is the hard floor when applicable.
-- Price suggestions require positive observed GP$/day opportunity.
-- Current authoritative cost is used until historical daily cost lineage is exposed; the UI discloses this limitation.
+- Report Date can only be selected from completed canonical supported POS dates.
+- UI receives the allowed date list from /v1/app/v2/performance/dates.
+- ALL means complete Seafood scope, including QA/OTHER, not only LIVE/FRESH/FROZEN.
+- Report Date Sales authority is the direct canonical Seafood POS source total.
+- Report also shows mapped UPC total, difference, canonical source file ID and coverage kind.
+- 09/21 historical validation benchmark: Seafood POS Sales $3,501.11; prior mismatch risk came from excluding QA/OTHER.
+- 7D/14D/28D metrics remain completed supported-date windows ending on Report Date.
+- Top 100 price suggestions use evidence only through Report Date.
+- Company Price C remains the hard floor when applicable.
+- Positive observed GP$/day opportunity is the primary objective.
+
+CORE SEARCH UX:
+- Search bar includes Clear.
+- Family Article search results are visually highlighted and explicitly labeled.
+- UPC numbers are larger in the search selection list.
+- Results remain sorted by 28D Qty Sold descending, then readiness.
+
+PI:
+- PI search bar includes Clear.
+- PI remains Family Article True Stock.
 
 UI:
-- Elder-friendly larger typography and touch targets.
-- Three persistent tabs only: CORE / PI / PERFORMANCE.
-- Phone/system Back remains inside the V2 navigation flow.
+- Elder-friendly large type and touch targets remain active.
+- Additional search-result hierarchy, accent cards, and audit cards improve readability.
+- Phone/system Back remains inside V2 flow.
+
+CORE ORDERING:
+- Family Article decision level.
+- FRESH fallback delivery = following Friday.
+- FROZEN fallback delivery = following Tuesday.
+- Next-next weekly fallback = Expected Delivery + 7 days when observed cadence is unresolved.
