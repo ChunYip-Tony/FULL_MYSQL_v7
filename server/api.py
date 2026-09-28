@@ -25,7 +25,7 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 
-VERSION='7.0.105-single-service'
+VERSION='7.0.106-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -50,6 +50,58 @@ def public_app_actor(authorization: str|None):
     if not authorization:
         return 'PUBLIC-WEB'
     return device_from_auth(authorization)
+
+def _admin_login_id() -> str:
+    return os.environ.get('FULLMYSQL_ADMIN_LOGIN_ID','admin').strip() or 'admin'
+
+def _verify_pbkdf2_password(password: str, encoded: str) -> bool:
+    """Verify pbkdf2_sha256$iterations$salt_b64$digest_b64."""
+    try:
+        scheme,iterations_text,salt_b64,digest_b64=encoded.split('$',3)
+        if scheme!='pbkdf2_sha256':
+            return False
+        iterations=int(iterations_text)
+        if iterations<100000 or iterations>2000000:
+            return False
+        salt=base64.urlsafe_b64decode(salt_b64+'='*((4-len(salt_b64)%4)%4))
+        expected=base64.urlsafe_b64decode(digest_b64+'='*((4-len(digest_b64)%4)%4))
+        actual=hashlib.pbkdf2_hmac('sha256',password.encode('utf-8'),salt,iterations,dklen=len(expected))
+        return hmac.compare_digest(actual,expected)
+    except Exception:
+        return False
+
+def _verify_admin_password(login_id: str, password: str) -> tuple[bool,str]:
+    configured_id=_admin_login_id()
+    if not hmac.compare_digest(str(login_id or '').strip(),configured_id):
+        return False,'INVALID_CREDENTIALS'
+
+    password_hash=os.environ.get('FULLMYSQL_ADMIN_PASSWORD_HASH','').strip()
+    if password_hash:
+        return (
+            _verify_pbkdf2_password(str(password or ''),password_hash),
+            'CONFIGURED_HASH',
+        )
+
+    password_secret=os.environ.get('FULLMYSQL_ADMIN_PASSWORD','')
+    if password_secret:
+        return (
+            hmac.compare_digest(str(password or ''),password_secret),
+            'CONFIGURED_SECRET',
+        )
+
+    # Migration-safe fallback only when a dedicated admin password is not yet
+    # configured. This lets the new ID/password screen work immediately while
+    # preserving existing API-token access. Set FULLMYSQL_ADMIN_PASSWORD or
+    # FULLMYSQL_ADMIN_PASSWORD_HASH to disable this browser fallback.
+    s=get_settings()
+    supplied=str(password or '')
+    for device,expected in s.api_tokens.items():
+        if device in s.admin_devices and hmac.compare_digest(supplied,expected):
+            return True,'LEGACY_ADMIN_TOKEN_FALLBACK'
+    return False,'INVALID_CREDENTIALS'
+
+def _admin_session_principal(login_id: str) -> str:
+    return 'ADMIN:'+str(login_id).strip()
 
 ADMIN_SESSION_COOKIE='fullmysql_admin_session'
 ADMIN_SESSION_TTL_SECONDS=12*60*60
@@ -88,7 +140,12 @@ def _parse_admin_session(token: str|None) -> tuple[str,int] | None:
         if expiry<int(time.time()):
             return None
         s=get_settings()
-        if device not in s.admin_devices:
+        is_bearer_device=device in s.admin_devices
+        is_admin_login=(
+            device.startswith('ADMIN:')
+            and hmac.compare_digest(device.split(':',1)[1],_admin_login_id())
+        )
+        if not (is_bearer_device or is_admin_login):
             return None
         return device,expiry
     except Exception:
@@ -168,7 +225,8 @@ class PriceChangeExecutionRequest(BaseModel):
     note: str|None=None
 
 class AdminLoginRequest(BaseModel):
-    access_key: str
+    login_id: str
+    password: str
 
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
@@ -184,14 +242,18 @@ def admin_web():
 
 @app.post('/v1/admin/login')
 def admin_login(body:AdminLoginRequest,response:Response):
-    key=str(body.access_key or '').strip()
-    if not key:
-        raise HTTPException(401,'Admin access key required')
-    device=device_from_auth('Bearer '+key)
-    s=get_settings()
-    if device not in s.admin_devices:
-        raise HTTPException(403,'Admin device required')
-    token,expires=_make_admin_session(device)
+    login_id=str(body.login_id or '').strip()
+    password=str(body.password or '')
+    if not login_id or not password:
+        raise HTTPException(401,'Admin ID and password required')
+
+    valid,auth_mode=_verify_admin_password(login_id,password)
+    if not valid:
+        # Keep the response intentionally generic so login ID validity is not exposed.
+        raise HTTPException(401,'Invalid Admin ID or password')
+
+    principal=_admin_session_principal(login_id)
+    token,expires=_make_admin_session(principal)
     response.set_cookie(
         key=ADMIN_SESSION_COOKIE,
         value=token,
@@ -204,9 +266,11 @@ def admin_login(body:AdminLoginRequest,response:Response):
     )
     return {
         'ok':True,
-        'device':device,
+        'device':principal,
+        'login_id':login_id,
         'expires_at':datetime.fromtimestamp(expires).isoformat(),
         'session_type':'HTTPONLY_COOKIE',
+        'auth_mode':auth_mode,
     }
 
 
@@ -217,6 +281,10 @@ def admin_session(request:Request,authorization: Annotated[str|None,Header()]=No
     return {
         'ok':True,
         'device':device,
+        'login_id':(
+            device.split(':',1)[1]
+            if device.startswith('ADMIN:') else device
+        ),
         'expires_at':(
             datetime.fromtimestamp(parsed[1]).isoformat()
             if parsed and parsed[0]==device else None
