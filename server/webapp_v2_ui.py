@@ -428,7 +428,7 @@ body{
 
 
 /* v7.0.133 no-client web raw upload */
-.navin{grid-template-columns:repeat(4,1fr)!important}
+.navin{grid-template-columns:repeat(3,1fr)!important}
 #upload .upload-drop{
   border:2px dashed #75abc5!important;border-radius:14px!important;padding:22px 12px!important;
   text-align:center;background:linear-gradient(135deg,rgba(244,253,255,.97),rgba(222,242,248,.94))!important;
@@ -528,8 +528,25 @@ body{
 #pi .pi-module .s{font-size:9px;color:#5c7788;margin-top:3px;line-height:1.25}
 @media(max-width:480px){#pi .pi-module-grid{grid-template-columns:1fr}}
 
+
+/* v7.0.138 Upload nested under Reports */
+#performance .report-module-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+#performance .report-module{
+  border-radius:13px;padding:11px;border:1px solid rgba(79,134,160,.22);
+  background:linear-gradient(135deg,rgba(255,255,255,.92),rgba(229,245,250,.88));
+  min-height:72px;display:flex;flex-direction:column;justify-content:center
+}
+#performance .report-module.current{
+  background:linear-gradient(135deg,#e8f5ff,#d9edf9);border-color:#9ec7df
+}
+#performance .report-module.action{cursor:pointer;text-align:left}
+#performance .report-module.action:hover{filter:brightness(.985)}
+#performance .report-module .t{font-size:12px;font-weight:950;color:#143b56}
+#performance .report-module .s{font-size:9px;color:#5c7788;margin-top:3px;line-height:1.25}
+@media(max-width:480px){#performance .report-module-grid{grid-template-columns:1fr}}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.137</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.138</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -577,13 +594,13 @@ body{
 
 <section id="pi" class="screen"><div class="head"><div><div class="title">🧮 Physical Inventory</div><div class="meta">Inventory verification, True Stock and OH discrepancy controls.</div></div></div><div class="pi-module-grid"><div class="pi-module current"><div class="t">🧮 Physical Inventory</div><div class="s">Search Family Article and apply True Stock.</div></div><button id="piOHOpen" class="pi-module action" type="button"><div class="t">📋 OH Discrepancy Report</div><div class="s">Review pending discrepancies and cleared / superseded history.</div></button></div><div class="search-bar"><input id="piq" placeholder="Search Family, item, article, or UPC" autocomplete="off"><button id="pic" class="clear-btn" type="button">Clear</button><button id="pis" class="primary">Search</button></div><div id="pim" class="msg"></div><div id="pir"></div></section>
 
-<section id="performance" class="screen"><div class="head"><div><div class="title">📊 Reports</div><div class="meta">Performance, pricing opportunities and completed-day sales analysis.</div></div></div><div class="card"><div class="form"><div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div><div><label>Category</label><select id="percat"><option>ALL</option><option>LIVE</option><option>FRESH</option><option>FROZEN</option></select></div></div><div class="hint" style="margin-top:10px">Report Date must have completed canonical sales data. The app defaults to the latest supported date.</div><button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Performance Report</button><div id="permsg" class="msg" style="margin-top:8px"></div></div><div id="persummary"></div><div id="peranalysis"></div><div class="card"><div class="section">Report Date Top Sellers</div><div id="pertop"></div></div><div class="card"><div class="section">Top 100 Urgent Price Reviews</div><div class="hint">Suggestions are analysis only. Sales evidence stops at the selected Report Date. Company C is the bottom line when applicable. Current authoritative cost is used until historical daily cost lineage is exposed.</div><div id="peritems"></div></div></section>
+<section id="performance" class="screen"><div class="head"><div><div class="title">📊 Reports</div><div class="meta">Performance, pricing analysis and raw-data upload tools.</div></div></div><div class="report-module-grid"><div class="report-module current"><div class="t">📊 Performance Reports</div><div class="s">Performance, pricing opportunities and completed-day sales analysis.</div></div><button id="reportsUploadOpen" class="report-module action" type="button"><div class="t">⬆ Raw File Upload</div><div class="s">Upload raw files, review 14-day coverage, readiness and recent upload history.</div></button></div><div class="card"><div class="form"><div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div><div><label>Category</label><select id="percat"><option>ALL</option><option>LIVE</option><option>FRESH</option><option>FROZEN</option></select></div></div><div class="hint" style="margin-top:10px">Report Date must have completed canonical sales data. The app defaults to the latest supported date.</div><button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Performance Report</button><div id="permsg" class="msg" style="margin-top:8px"></div></div><div id="persummary"></div><div id="peranalysis"></div><div class="card"><div class="section">Report Date Top Sellers</div><div id="pertop"></div></div><div class="card"><div class="section">Top 100 Urgent Price Reviews</div><div class="hint">Suggestions are analysis only. Sales evidence stops at the selected Report Date. Company C is the bottom line when applicable. Current authoritative cost is used until historical daily cost lineage is exposed.</div><div id="peritems"></div></div></section>
 
 <section id="ohreport" class="screen"><div class="head"><button class="back" id="ohBack" type="button">‹</button><div><div class="title">📋 OH Discrepancy Report</div><div class="meta">PI · Review and clear inventory discrepancies without changing stock.</div></div><button id="ohrefresh" class="primary" style="margin-left:auto;min-height:44px;padding:8px 12px">Refresh</button></div><div id="ohmsg" class="msg"></div><div id="ohlist"></div><div class="section" style="margin-top:12px">Recent Cleared / Superseded</div><select id="ohfilter" style="margin-bottom:7px"><option value="">All history</option><option value="RESOLVED">Cleared</option><option value="SUPERSEDED">Superseded</option></select><div id="ohhmsg" class="msg"></div><div id="ohhist"></div></section>
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><div><div class="title">⬆ Raw File Upload</div><div class="meta">Upload and view readiness directly in the Web App — no login or Windows client required.</div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div class="card latest-ref-card">
     <div class="section">Latest Reference Uploads</div>
     <div id="latestRefMsg" class="msg"></div>
@@ -631,7 +648,7 @@ body{
 
 </div>
 
-<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="upload">⬆<br>Upload</button><button data-main="performance">📊<br>Reports</button></div></nav>
+<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="performance">📊<br>Reports</button></div></nav>
 
 <script>
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -639,7 +656,7 @@ const fmt=(v,d=2)=>{if(v===null||v===undefined||v==='')return '—';let n=Number
 const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new Date(s+'T12:00:00'),x=(t-d.getDay()+7)%7;if(!x)x=7;d.setDate(d.getDate()+x);return d.toLocaleDateString('en-CA')};const dayName=s=>{if(!s)return '—';return new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date(s+'T12:00:00'))};const promoRange=p=>p.weekday_range||((p.start_weekday||dayName(p.start_date))+' → '+(p.end_weekday||dayName(p.end_date)));
 let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
-function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(['pid','ohreport'].includes(id))return 'pi';return id}
+function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(['pid','ohreport'].includes(id))return 'pi';if(id==='upload')return 'performance';return id}
 function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
@@ -712,6 +729,7 @@ function coverageDays(delivery,nextNext){if(!delivery||!nextNext)return null;let
 
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>history.back());document.querySelectorAll('[data-main]').forEach(b=>b.onclick=()=>go(b.dataset.main));
 $('piOHOpen').onclick=()=>go('ohreport');$('ohBack').onclick=()=>go('pi');
+$('reportsUploadOpen').onclick=()=>go('upload');$('uploadBack').onclick=()=>go('performance');
 
 async function loadOHReport(force=false){
   if(ohLoaded&&!force)return;
