@@ -2580,7 +2580,19 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
                 score+=min(Decimal("25"),gap*Decimal("100"))
                 reasons.append("GP_BELOW_CATEGORY_REFERENCE")
 
-            # Price review must be READY, non-SALE, and materially different.
+            current_gp_day=(
+                Decimal(str(row["gp_per_day_7d"]))
+                if row.get("gp_per_day_7d") is not None else None
+            )
+            expected_gp_day=price_opt.get("expected_gp_per_day_from_observed_demand")
+            gp_day_gain=(
+                _d(expected_gp_day)-current_gp_day
+                if expected_gp_day is not None and current_gp_day is not None
+                else None
+            )
+
+            # Price review must be READY, non-SALE, materially different, and
+            # supported by a positive GP$/day opportunity.
             blocked_reason=None
             if status!="READY":
                 blocked_reason="NOT_READY"
@@ -2592,6 +2604,10 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
                 blocked_reason=price_opt.get("reason") or "GP_DAY_PRICE_OPTIMIZATION_UNAVAILABLE"
             elif price_gap_pct is None or price_gap_pct<Decimal("0.03"):
                 blocked_reason="PRICE_GAP_BELOW_3PCT"
+            elif gp_day_gain is None:
+                blocked_reason="GP_DAY_OPPORTUNITY_UNPROVEN"
+            elif gp_day_gain<=0:
+                blocked_reason="NO_POSITIVE_GP_DAY_OPPORTUNITY"
 
             if blocked_reason is None:
                 summary["price_review_candidates"]+=1
@@ -2606,17 +2622,6 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
                 suggested_gp=(
                     (_d(suggested)-cost)/_d(suggested)
                     if cost is not None and _d(suggested)>0 else None
-                )
-
-                current_gp_day=(
-                    Decimal(str(row["gp_per_day_7d"]))
-                    if row.get("gp_per_day_7d") is not None else None
-                )
-                expected_gp_day=price_opt.get("expected_gp_per_day_from_observed_demand")
-                gp_day_gain=(
-                    _d(expected_gp_day)-current_gp_day
-                    if expected_gp_day is not None and current_gp_day is not None
-                    else None
                 )
                 gp_day_gain_pct=(
                     gp_day_gain/abs(current_gp_day)
