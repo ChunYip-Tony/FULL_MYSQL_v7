@@ -534,7 +534,7 @@ body{
 
 
 /* v7.0.138 Upload nested under Reports */
-#performance .report-module-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+#performance .report-module-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:10px}
 #performance .report-module{
   border-radius:13px;padding:11px;border:1px solid rgba(79,134,160,.22);
   background:linear-gradient(135deg,rgba(255,255,255,.92),rgba(229,245,250,.88));
@@ -549,8 +549,36 @@ body{
 #performance .report-module .s{font-size:9px;color:#5c7788;margin-top:3px;line-height:1.25}
 @media(max-width:480px){#performance .report-module-grid{grid-template-columns:1fr}}
 
+
+/* v7.0.140 Reports: Report / Price Change / Uploads */
+#performance .report-analysis-text{
+  font-size:11px;line-height:1.58;color:#28495d;white-space:normal
+}
+#performance .top-seller-compact{
+  display:grid;grid-template-columns:minmax(0,1.55fr) .72fr .72fr .72fr;
+  gap:7px;align-items:center;padding:7px 4px;border-bottom:1px solid rgba(82,129,153,.18);
+  cursor:pointer
+}
+#performance .top-seller-compact:last-child{border-bottom:0}
+#performance .top-seller-compact .rankname{min-width:0}
+#performance .top-seller-compact .name{font-size:11px;font-weight:900;color:#123a56;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#performance .top-seller-compact .sub{font-size:8px;color:#6b8190;margin-top:2px}
+#performance .top-seller-compact .sv{text-align:right}
+#performance .top-seller-compact .sv .k{font-size:7.5px;color:#6b8190;text-transform:uppercase}
+#performance .top-seller-compact .sv .v{font-size:10.5px;font-weight:900;color:#12364f;margin-top:1px}
+#pricechange .pricechange-list .promo{margin:6px 0!important}
+@media(max-width:560px){
+  #performance .report-module-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+  #performance .report-module{padding:8px 5px;min-height:68px}
+  #performance .report-module .t{font-size:10px}
+  #performance .report-module .s{font-size:7px}
+  #performance .top-seller-compact{grid-template-columns:minmax(0,1.35fr) .7fr .7fr .7fr;gap:4px;padding:7px 2px}
+  #performance .top-seller-compact .name{font-size:9.5px}
+  #performance .top-seller-compact .sv .v{font-size:9px}
+}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.139</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.140</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -598,7 +626,38 @@ body{
 
 <section id="pi" class="screen"><div class="head"><div><div class="title">🧮 Physical Inventory</div><div class="meta">Inventory verification, True Stock and OH discrepancy controls.</div></div></div><div class="pi-module-grid"><div class="pi-module current"><div class="t">🧮 Physical Inventory</div><div class="s">Search Family Article and apply True Stock.</div></div><button id="piOHOpen" class="pi-module action" type="button"><div class="t">📋 OH Discrepancy Report</div><div class="s">Review pending discrepancies and cleared / superseded history.</div></button></div><div class="search-bar"><input id="piq" placeholder="Search Family, item, article, or UPC" autocomplete="off"><button id="pic" class="clear-btn" type="button">Clear</button><button id="pis" class="primary">Search</button></div><div id="pim" class="msg"></div><div id="pir"></div></section>
 
-<section id="performance" class="screen"><div class="head"><div><div class="title">📊 Reports</div><div class="meta">Performance, pricing analysis and raw-data upload tools.</div></div></div><div class="report-module-grid"><div class="report-module current"><div class="t">📊 Performance Reports</div><div class="s">Performance, pricing opportunities and completed-day sales analysis.</div></div><button id="reportsUploadOpen" class="report-module action" type="button"><div class="t">⬆ Raw File Upload</div><div class="s">Upload raw files, review 14-day coverage, readiness and recent upload history.</div></button></div><div class="card"><div class="form"><div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div><div><label>Category</label><select id="percat"><option>ALL</option><option>LIVE</option><option>FRESH</option><option>FROZEN</option></select></div></div><div class="hint" style="margin-top:10px">Report Date must have completed canonical sales data. The app defaults to the latest supported date.</div><button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Performance Report</button><div id="permsg" class="msg" style="margin-top:8px"></div></div><div id="persummary"></div><div id="peranalysis"></div><div class="card"><div class="section">Report Date Top Sellers</div><div id="pertop"></div></div><div class="card"><div class="section">Top 100 Urgent Price Reviews</div><div class="hint">Suggestions are analysis only. Sales evidence stops at the selected Report Date. Company C is the bottom line when applicable. Current authoritative cost is used until historical daily cost lineage is exposed.</div><div id="peritems"></div></div></section>
+<section id="performance" class="screen">
+  <div class="head"><div><div class="title">📊 Reports</div><div class="meta">Performance report, price changes and raw-data uploads.</div></div></div>
+  <div class="report-module-grid">
+    <div class="report-module current"><div class="t">📊 Report</div><div class="s">Daily performance and sales analysis.</div></div>
+    <button id="reportsPriceOpen" class="report-module action" type="button"><div class="t">💲 Price Change</div><div class="s">Open price change suggestions.</div></button>
+    <button id="reportsUploadOpen" class="report-module action" type="button"><div class="t">⬆ Uploads</div><div class="s">Raw files and readiness.</div></button>
+  </div>
+  <div class="card">
+    <div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div>
+    <div class="hint" style="margin-top:10px">Uses completed canonical sales data for the full Seafood scope.</div>
+    <button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Report</button>
+    <div id="permsg" class="msg" style="margin-top:8px"></div>
+  </div>
+  <div id="persummary"></div>
+  <div id="peranalysis"></div>
+  <div class="card">
+    <div class="section">Report Date Top 20 Sellers</div>
+    <div class="hint">Ranked by sales dollars. Sales, quantity and average sold price are shown for the selected date.</div>
+    <div id="pertop"></div>
+  </div>
+</section>
+
+<section id="pricechange" class="screen">
+  <div class="head"><button class="back" id="priceChangeBack" type="button">‹</button><div><div class="title">💲 Price Change Suggestions</div><div class="meta">Reports · Pricing review based on observed sales response and GP$/day opportunity.</div></div></div>
+  <div class="card">
+    <div><label>Report Date</label><select id="pcdate"><option value="">Loading supported dates…</option></select></div>
+    <div class="hint" style="margin-top:10px">Price suggestions use completed sales evidence through the selected date. QA HOLD and active SALE items remain blocked from automatic action.</div>
+    <button id="pcrun" class="primary" style="margin-top:12px;width:100%">Generate Price Change Suggestions</button>
+    <div id="pcmsg" class="msg" style="margin-top:8px"></div>
+  </div>
+  <div id="pcitems" class="pricechange-list"></div>
+</section>
 
 <section id="ohreport" class="screen"><div class="head"><button class="back" id="ohBack" type="button">‹</button><div><div class="title">📋 OH Discrepancy Report</div><div class="meta">PI · Review and clear inventory discrepancies without changing stock.</div></div><button id="ohrefresh" class="primary" style="margin-left:auto;min-height:44px;padding:8px 12px">Refresh</button></div><div id="ohmsg" class="msg"></div><div id="ohlist"></div><div class="section" style="margin-top:12px">Recent Cleared / Superseded</div><select id="ohfilter" style="margin-bottom:7px"><option value="">All history</option><option value="RESOLVED">Cleared</option><option value="SUPERSEDED">Superseded</option></select><div id="ohhmsg" class="msg"></div><div id="ohhist"></div></section>
 
@@ -660,7 +719,7 @@ const fmt=(v,d=2)=>{if(v===null||v===undefined||v==='')return '—';let n=Number
 const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new Date(s+'T12:00:00'),x=(t-d.getDay()+7)%7;if(!x)x=7;d.setDate(d.getDate()+x);return d.toLocaleDateString('en-CA')};const dayName=s=>{if(!s)return '—';return new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date(s+'T12:00:00'))};const promoRange=p=>p.weekday_range||((p.start_weekday||dayName(p.start_date))+' → '+(p.end_weekday||dayName(p.end_date)));
 let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
-function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(['pid','ohreport'].includes(id))return 'pi';if(id==='upload')return 'performance';return id}
+function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(['pid','ohreport'].includes(id))return 'pi';if(['upload','pricechange'].includes(id))return 'performance';return id}
 function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
@@ -733,6 +792,7 @@ function coverageDays(delivery,nextNext){if(!delivery||!nextNext)return null;let
 
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>history.back());document.querySelectorAll('[data-main]').forEach(b=>b.onclick=()=>go(b.dataset.main));
 $('piOHOpen').onclick=()=>go('ohreport');$('ohBack').onclick=()=>go('pi');
+$('reportsPriceOpen').onclick=()=>go('pricechange');$('priceChangeBack').onclick=()=>go('performance');
 $('reportsUploadOpen').onclick=()=>go('upload');$('uploadBack').onclick=()=>go('performance');
 
 async function loadOHReport(force=false){
@@ -1279,100 +1339,97 @@ async function pid(k){try{
 }catch(e){alert(e.message)}}
 $('papply').onclick=async()=>{let q=$('pqty').value.trim(),u=$('puom').value;if(q===''||!u)return;$('pamsg').textContent='Applying Family True Stock…';try{let d=await api('/v1/app/v2/pi/'+encodeURIComponent(pifamily)+'/true-stock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:q,uom:u,note:$('pnote').value||null})});await pid(pifamily);$('pamsg').className='msg success';$('pamsg').textContent='Applied to Family Article · difference '+qv(d.signed_difference_true_minus_system,u)+' · shortage '+qv(d.shortage_quantity,u)+' · overage '+qv(d.overage_quantity,u)}catch(e){$('pamsg').className='msg bad';$('pamsg').textContent=e.message}};
 
-async function initPerformanceDate(){try{let d=await api('/v1/app/v2/performance/dates?limit=180'),rows=d.dates||[];$('perdate').innerHTML=rows.map(x=>'<option value="'+esc(x.date)+'">'+esc(x.weekday)+' · '+esc(x.date)+'</option>').join('');if(!rows.length)$('perdate').innerHTML='<option value="">No supported dates</option>'}catch(e){$('perdate').innerHTML='<option value="">Date list unavailable</option>';$('permsg').textContent=e.message}}
-async function performance(){
-  let cat=$('percat').value,rd=$('perdate').value;
-  $('permsg').textContent='Generating report…';
-  $('persummary').innerHTML='';
-  $('peranalysis').innerHTML='';
-  $('pertop').innerHTML='';
-  $('peritems').innerHTML='';
+async function initPerformanceDate(){
   try{
-    let q='/v1/app/v2/performance?category='+encodeURIComponent(cat)+'&limit=100'+(rd?'&report_date='+encodeURIComponent(rd):'');
-    let d=await api(q),s=d.summary||{};
-    if(d.report_date)$('perdate').value=d.report_date;
-    $('permsg').textContent=esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+' · '+(d.top_urgent_price_suggestions||[]).length+' urgent review item(s)';
+    let d=await api('/v1/app/v2/performance/dates?limit=180'),rows=d.dates||[];
+    let options=rows.map(x=>'<option value="'+esc(x.date)+'">'+esc(x.weekday)+' · '+esc(x.date)+'</option>').join('');
+    $('perdate').innerHTML=options||'<option value="">No supported dates</option>';
+    $('pcdate').innerHTML=options||'<option value="">No supported dates</option>';
+  }catch(e){
+    $('perdate').innerHTML='<option value="">Date list unavailable</option>';
+    $('pcdate').innerHTML='<option value="">Date list unavailable</option>';
+    $('permsg').textContent=e.message;
+  }
+}
+async function performance(){
+  let rd=$('perdate').value;
+  $('permsg').textContent='Generating report…';
+  $('persummary').innerHTML='';$('peranalysis').innerHTML='';$('pertop').innerHTML='';
+  try{
+    let q='/v1/app/v2/performance?category=ALL&limit=100'+(rd?'&report_date='+encodeURIComponent(rd):'');
+    let d=await api(q),s=d.summary||{},rec=d.report_date_reconciliation||null;
+    if(d.report_date){$('perdate').value=d.report_date;$('pcdate').value=d.report_date}
+    $('permsg').textContent=esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+' · '+fmt(s.upcs_sold_report_date,0)+' UPCs sold';
 
-    let rec=d.report_date_reconciliation||null;
     $('persummary').innerHTML=
-      '<div class="card"><div class="section">'+esc(cat)+' · '+esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+'</div><div class="grid">'+
+      '<div class="card"><div class="section">'+esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+'</div><div class="grid">'+
         m('Report Date Sales',money(s.report_date_sales_dollars))+
-        m('UPCs Sold That Day',fmt(s.upcs_sold_report_date,0))+
+        m('UPCs Sold',fmt(s.upcs_sold_report_date,0))+
         m('Active UPCs 28D',fmt(s.active_upcs_28d,0))+
         m('7D Sales',money(s.sales_dollars_7d))+
         m('14D Sales',money(s.sales_dollars_14d))+
         m('28D Sales',money(s.sales_dollars_28d))+
         m('Slowing Items',fmt(s.slowing_items,0))+
-        m('Actionable Price Reviews',fmt(s.price_review_candidates,0))+
+        m('QA HOLD',fmt(s.qa_hold_upcs,0))+
       '</div></div>'+
-      (cat==='ALL'&&rec
+      (rec
         ? '<div class="card '+(rec.matches_to_cent?'audit-ok':'audit-warn')+'"><div class="section">Sales Audit</div><div class="grid">'+
             m('Canonical POS',money(rec.canonical_source_sales))+
             m('Mapped UPC Total',money(rec.mapped_report_sales))+
             m('Difference',money(rec.difference))+
             m('Unmapped POS',money(rec.unmapped_source_sales))+
-            m('Unmapped Qty',rec.unmapped_source_qty==null?(rec.unmapped_qty_mixed_or_unknown?'Mixed / unknown UOM':'—'):qv(rec.unmapped_source_qty,rec.unmapped_source_qty_uom))+
             m('Unmapped UPCs',fmt(rec.unmapped_upc_count,0))+
-            m('Source File',rec.canonical_source?.source_file_id??'—')+
-          '</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+esc(rec.canonical_source?.coverage_kind||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div>'+
-          ((rec.top_unmapped_upcs||[]).length
-            ? '<div class="section" style="margin-top:16px">Why the Difference</div><div class="hint">Canonical POS rows below are not represented by the current V2 Quick Check serving set.</div>'+
-              rec.top_unmapped_upcs.slice(0,12).map(x=>
-                '<div class="promo"><div class="row" style="justify-content:space-between"><div><b>UPC '+esc(x.ean_upc||'—')+'</b><div class="meta">'+esc(x.description||x.mapping_status||'Unmapped POS row')+'</div></div><b>'+money(x.sales_amount)+'</b></div><div class="meta">Qty '+qv(x.sold_quantity,x.qty_uom)+' · '+esc(x.mapping_status||'')+'</div></div>'
-              ).join('')
-            : '')+
-          '</div>'
+          '</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div></div>'
         : '');
 
+    let narrative=d.narrative_analysis||{};
     $('peranalysis').innerHTML=
-      '<div class="card"><div class="section">Analysis for '+esc(d.report_date||'')+'</div>'+
-      (d.analysis||[]).map(x=>
-        '<div class="promo"><b>'+esc(x.type.replaceAll('_',' '))+'</b>'+
-        '<div class="meta">'+esc(x.message)+'</div>'+
-        (x.value_pct!=null?'<div class="'+(Number(x.value_pct)>=0?'ok':'warn')+'">'+fmt(Number(x.value_pct)*100,1)+'%</div>':'')+
-        '</div>'
-      ).join('')+
-      '</div>';
+      '<div class="card"><div class="section">Analysis · About 200 Words</div>'+
+      '<div class="report-analysis-text">'+esc(narrative.text||'Analysis unavailable.')+'</div>'+
+      '<div class="meta" style="margin-top:7px">'+fmt(narrative.word_count,0)+' words</div></div>';
 
-    $('pertop').innerHTML=(d.report_date_top_sellers||[]).map((x,i)=>
-      '<div class="promo clickable" data-upc="'+esc(x.upc)+'">'+
-        '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div>'+pill(x.readiness)+'</div>'+
-        '<div class="grid" style="margin-top:10px">'+
-          m('Day Sales',money(x.sales_amount))+
-          m('Day Qty',qv(x.sold_quantity,x.qty_uom))+
-          m('Avg Sold Price',money(x.avg_sold_price))+
-          m('7D Velocity',qv(x.velocity_7d,x.qty_uom)+'/day')+
-        '</div>'+
-        '<div class="meta">'+(x.price_types||[]).map(esc).join(' · ')+'</div>'+
+    $('pertop').innerHTML=(d.report_date_top_sellers||[]).slice(0,20).map((x,i)=>
+      '<div class="top-seller-compact" data-upc="'+esc(x.upc)+'">'+
+        '<div class="rankname"><div class="name">#'+(i+1)+' · '+esc(x.name||'')+'</div><div class="sub">UPC '+esc(x.upc||'—')+' · '+esc(x.category||'')+'</div></div>'+
+        '<div class="sv"><div class="k">Sales</div><div class="v">'+money(x.sales_amount)+'</div></div>'+
+        '<div class="sv"><div class="k">Qty</div><div class="v">'+qv(x.sold_quantity,x.qty_uom)+'</div></div>'+
+        '<div class="sv"><div class="k">Avg Price</div><div class="v">'+money(x.avg_sold_price)+'</div></div>'+
       '</div>'
-    ).join('')||'<div class="small">No sales for this category on the selected report date.</div>';
-
-    $('peritems').innerHTML=(d.top_urgent_price_suggestions||[]).map((x,i)=>{
+    ).join('')||'<div class="small">No sales on the selected report date.</div>';
+    document.querySelectorAll('#pertop [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
+  }catch(e){$('permsg').textContent=e.message}
+}
+async function priceChanges(){
+  let rd=$('pcdate').value;
+  $('pcmsg').textContent='Generating price change suggestions…';$('pcitems').innerHTML='';
+  try{
+    let q='/v1/app/v2/performance?category=ALL&limit=100'+(rd?'&report_date='+encodeURIComponent(rd):'');
+    let d=await api(q);
+    if(d.report_date){$('pcdate').value=d.report_date;$('perdate').value=d.report_date}
+    let rows=d.top_urgent_price_suggestions||[];
+    $('pcmsg').textContent=esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+' · '+rows.length+' review item(s)';
+    $('pcitems').innerHTML=rows.map((x,i)=>{
       let cls=x.actionable?'review-actionable':(x.review_status==='QA_HOLD'?'review-hold':'review-only');
       let badge=x.actionable?'ACTIONABLE':(x.review_status||'REVIEW ONLY').replaceAll('_',' ');
       let suggestion=x.suggested_price!=null?money(x.suggested_price):'Review Only';
       let gpopp=x.gp_per_day_opportunity!=null?money(x.gp_per_day_opportunity):'Unproven';
       return '<div class="promo report-item clickable '+cls+'" data-upc="'+esc(x.upc)+'">'+
         '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill '+(x.actionable?'ok':'warn')+' review-badge">'+esc(badge)+'</span></div>'+
-        '<div class="row" style="margin-top:10px"><div><div class="small">Price Used</div><div class="hero-number">'+money(x.current_price)+'</div></div><div class="price-arrow">→</div><div><div class="small">'+(x.actionable?'Suggested':'Review Status')+'</div><div class="hero-number">'+suggestion+'</div></div></div>'+
-        '<div class="grid" style="margin-top:10px">'+
+        '<div class="row" style="margin-top:8px"><div><div class="small">Current</div><div class="hero-number">'+money(x.current_price)+'</div></div><div class="price-arrow">→</div><div><div class="small">Suggested</div><div class="hero-number">'+suggestion+'</div></div></div>'+
+        '<div class="grid" style="margin-top:8px">'+
           m('GP$/day Opportunity',gpopp)+
-          m('Urgency',fmt(x.urgency_score,1))+
           m('7D Qty',qv(x.qty_7d,x.qty_uom))+
           m('28D Qty',qv(x.qty_28d,x.qty_uom))+
+          m('Company C Floor',money(x.company_price_c_floor))+
         '</div>'+
-        '<div class="meta">Sales evidence through '+esc(x.report_date)+' · '+(x.review_blocker?'Review reason '+esc(x.review_blocker.replaceAll('_',' ')):'Price evidence supports action')+'</div>'+
-        '<div class="meta">Company C floor '+money(x.company_price_c_floor)+' · Basis '+esc(x.suggestion_basis||'—')+'</div>'+
-        '<div class="meta">'+(x.reasons||[]).map(r=>esc(r.replaceAll('_',' '))).join(' · ')+'</div>'+
+        '<div class="meta">Sales evidence through '+esc(x.report_date)+' · '+(x.review_blocker?'Reason: '+esc(x.review_blocker.replaceAll('_',' ')):'Price evidence supports action')+'</div>'+
       '</div>';
-    }).join('')||'<div class="small">No active items available for review.</div>';
-
-    document.querySelectorAll('#pertop [data-upc],#peritems [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
-  }catch(e){
-    $('permsg').textContent=e.message;
-  }
+    }).join('')||'<div class="card small">No active price change review items.</div>';
+    document.querySelectorAll('#pcitems [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
+  }catch(e){$('pcmsg').textContent=e.message}
 }
 $('perrun').onclick=performance;
+$('pcrun').onclick=priceChanges;
 initPerformanceDate();
 </script></body></html>"""
 
