@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.141 Single-Service Edition
+Version: 7.0.142 Single-Service Edition
+
+v7.0.142 OH Upload Classification Repair:
+- Standalone OH filename tokens are recognized as on_hand, including OH-*, OH_*, and OH <date> naming.
+- Fixes files such as oh-092826.xls being incorrectly classified as unclassified.
+- Duplicate suppression now requires the same SHA to have been successfully INGESTED under the same resolved source type with zero errors.
+- A previous unclassified / QA_HOLD copy no longer blocks corrected re-ingest of the same bytes.
+- Existing historical QA_HOLD batches remain preserved for audit; re-uploading the corrected file creates a new valid batch.
+
 
 v7.0.141 Upload History Timestamps:
 - Recent Uploads now shows each batch Uploaded date/time.
