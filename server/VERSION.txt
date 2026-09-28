@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.146 Single-Service Edition
+Version: 7.0.147 Single-Service Edition
+
+v7.0.147 QA HOLD Delete No-Body Fix:
+- QA HOLD delete endpoint no longer accepts or validates a JSON request body.
+- Two-click confirmation remains entirely in the Web UI.
+- Backend still restricts deletion to raw-stage QA_HOLD batches and preserves downstream lineage when needed.
+- Public Web App HTML now sends no-store/no-cache headers plus X-FULLMYSQL-Version so stale browser HTML cannot keep an old delete contract.
+- This removes FastAPI request-body validation as a possible HTTP 422 source.
+
 
 v7.0.146 QA HOLD Delete 422 Fix:
 - Replaced the delete endpoint's implicit dict body with an explicit Pydantic request model.
