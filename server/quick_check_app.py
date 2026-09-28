@@ -1705,6 +1705,79 @@ def quick_check_lineage(upc: str) -> dict[str, Any] | None:
 
 
 
+def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
+    """Return actionable current-active negative-stock items using effective OH.
+
+    A row is included only when its effective position is analytically usable and
+    still negative after any active True Stock override. This keeps inventory
+    exceptions separate from Quick Check QA status (READY/QA_HOLD).
+    """
+    limit = max(1, min(int(limit or 100), 500))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        latest_oh_file_id = _refresh_expired_true_stock(cur)
+        cur.execute(
+            """SELECT upc_id,ean_upc,article_id,article_number,family_id,main_article_number,
+                      selling_description,family_description,selling_uom,
+                      current_oh,current_oh_uom,oh_date,dos,
+                      pos_qty_7d,upc_velocity_7d,
+                      quick_check_status,blocking_reason,publish_batch_id,published_at
+               FROM quick_check_current
+               WHERE quick_check_status IN ('READY','QA_HOLD')
+                 AND current_oh IS NOT NULL
+                 AND current_oh < 0
+               ORDER BY current_oh ASC,upc_velocity_7d DESC,ean_upc
+               LIMIT %s""",
+            (limit * 4,),
+        )
+        candidates = cur.fetchall()
+
+        rows = []
+        for row in candidates:
+            system_oh = _system_oh_context(cur, row)
+            system_position = _system_position(cur, system_oh)
+            if not system_position or not system_position.get("analysis_usable"):
+                continue
+
+            true_stock = _active_true_stock(cur, system_oh)
+            actual_position = _actual_position(cur, true_stock)
+            effective_position = actual_position if true_stock else system_position
+            if not effective_position or not effective_position.get("analysis_usable"):
+                continue
+
+            quantity = effective_position.get("quantity")
+            if quantity is None:
+                continue
+            effective_qty = Decimal(str(quantity))
+            if effective_qty >= 0:
+                continue
+
+            row.update(_stock_state(effective_qty))
+            row["system_oh"] = system_position.get("quantity")
+            row["system_oh_uom"] = system_position.get("uom")
+            row["effective_oh"] = effective_qty
+            row["effective_oh_uom"] = effective_position.get("uom")
+            row["effective_oh_source"] = "TRUE_STOCK" if true_stock else "SYSTEM_OH"
+            row["active_true_stock"] = true_stock.get("true_stock_quantity") if true_stock else None
+            row["active_true_stock_uom"] = true_stock.get("uom_code") if true_stock else None
+            row["true_stock_required_uom"] = system_position.get("uom")
+            row["action_code"] = "COUNT_AND_SUBMIT_TRUE_STOCK"
+            row["action_reason"] = "EFFECTIVE_OH_NEGATIVE"
+            row["latest_on_hand_file_id"] = latest_oh_file_id
+            rows.append(row)
+            if len(rows) >= limit:
+                break
+
+        conn.commit()
+        cur.close()
+        return {
+            "count": len(rows),
+            "queue_type": "NEGATIVE_STOCK_ACTION_QUEUE",
+            "action_code": "COUNT_AND_SUBMIT_TRUE_STOCK",
+            "rows": rows,
+        }
+
+
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
