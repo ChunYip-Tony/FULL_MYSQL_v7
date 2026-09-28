@@ -1564,7 +1564,11 @@ def _product_class(article_desc: str | None, family_desc: str | None, category: 
 
 
 def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
-    # Authority: valid receipt valuation first, then official Live/Fresh/Frozen report cost.
+    # Authority order:
+    # 1) valid 101/107/109 receipt valuation
+    # 2) explicit supported OH-report cost
+    # 3) Live/Fresh/Frozen official report cost
+    # 4) user-confirmed fallback
     cur.execute(
         """SELECT co.cost_per_base_uom,co.cost_amount,co.business_date,co.source_type,
                   bu.uom_code AS base_uom, cu.uom_code AS cost_uom
@@ -1579,25 +1583,13 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     )
     r = cur.fetchone()
     if r:
-        return {'cost_per_base': r['cost_per_base_uom'] or r['cost_amount'], 'date': r['business_date'],
-                'source': r['source_type'], 'base_uom': r['base_uom'] or r['cost_uom']}
-    cur.execute(
-        """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
-           FROM article_cost_observation co
-           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
-           WHERE co.family_id=%s AND co.source_type IN ('FROZEN_INVENTORY_OFFICIAL_COST','LIVE_FRESH_SUGGESTION_OFFICIAL_COST')
-             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED') AND co.cost_amount>0
-           ORDER BY co.business_date DESC, co.cost_observation_id DESC LIMIT 1""",
-        (family_id,),
-    )
-    r = cur.fetchone()
-    if r:
-        return {'cost_per_base': r['cost_amount'], 'date': r['business_date'], 'source': r['source_type'], 'base_uom': r['cost_uom']}
+        return {
+            'cost_per_base': r['cost_per_base_uom'] or r['cost_amount'],
+            'date': r['business_date'],
+            'source': r['source_type'],
+            'base_uom': r['base_uom'] or r['cost_uom'],
+        }
 
-    # Third authority: explicit cost observed in an On-Hand source.
-    # This is used only when the raw OH row contains both a positive explicit
-    # cost and an explicit supported cost-UOM. Generic inventory UOM is never
-    # silently treated as cost UOM.
     cur.execute(
         """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
            FROM article_cost_observation co
@@ -1611,10 +1603,36 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     )
     r = cur.fetchone()
     if r:
-        return {'cost_per_base': r['cost_amount'], 'date': r['business_date'], 'source': r['source_type'], 'base_uom': r['cost_uom']}
+        return {
+            'cost_per_base': r['cost_amount'],
+            'date': r['business_date'],
+            'source': r['source_type'],
+            'base_uom': r['cost_uom'],
+        }
 
-    # Fourth authority: explicit user-confirmed Family/Main-Article fallback.
-    # This is used only when no valid receipt/report/OH authority exists.
+    cur.execute(
+        """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
+           FROM article_cost_observation co
+           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+           WHERE co.family_id=%s
+             AND co.source_type IN (
+                 'FROZEN_INVENTORY_OFFICIAL_COST',
+                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
+             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND co.cost_amount>0
+           ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
+        (family_id,),
+    )
+    r = cur.fetchone()
+    if r:
+        return {
+            'cost_per_base': r['cost_amount'],
+            'date': r['business_date'],
+            'source': r['source_type'],
+            'base_uom': r['cost_uom'],
+        }
+
     manual = confirmed_family_cost(cur, family_id)
     if manual:
         return {
@@ -1801,7 +1819,16 @@ def _historical_sweet_spot(cur, upc_id: int, family_id: int, factor: Decimal | N
                FROM article_cost_observation
                WHERE family_id=%s AND business_date<=%s AND cost_status NOT IN ('REJECTED','SUPERSEDED')
                  AND COALESCE(cost_per_base_uom,cost_amount)>0
-               ORDER BY CASE WHEN source_type='MOVEMENT_RECEIPT_VALUATION' THEN 1 ELSE 2 END,
+               ORDER BY CASE
+                          WHEN source_type='MOVEMENT_RECEIPT_VALUATION' THEN 1
+                          WHEN source_type='ON_HAND_EXPLICIT_COST_FALLBACK' THEN 2
+                          WHEN source_type IN (
+                              'FROZEN_INVENTORY_OFFICIAL_COST',
+                              'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+                          ) THEN 3
+                          WHEN source_type='USER_CONFIRMED_FAMILY_COST' THEN 4
+                          ELSE 9
+                        END,
                         business_date DESC,cost_observation_id DESC LIMIT 1""", (family_id, r['period_end_date']))
         cr = cur.fetchone()
         if not cr or cr['c'] is None:
