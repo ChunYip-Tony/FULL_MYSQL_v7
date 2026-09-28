@@ -3768,6 +3768,51 @@ def latest_performance_date() -> dict[str,Any]:
     }
 
 
+def _performance_narrative(
+    *,
+    anchor: date,
+    summary: dict[str,Any],
+    report_vs_7: Decimal|None,
+    report_vs_14: Decimal|None,
+) -> dict[str,Any]:
+    def money_text(v: Any) -> str:
+        try:
+            return f"${Decimal(str(v or 0)):,.2f}"
+        except Exception:
+            return "$0.00"
+
+    def pct_text(v: Decimal|None, label: str) -> str:
+        if v is None:
+            return f"{label} comparison is unavailable"
+        direction="above" if v>=0 else "below"
+        return f"{abs(v)*Decimal('100'):.1f}% {direction} the {label} average"
+
+    text=(
+        f"Performance for {anchor.isoformat()} closed at "
+        f"{money_text(summary.get('report_date_sales_dollars'))}. "
+        "This report uses completed canonical sales days only, so intraday or unresolved uploads are excluded from the comparison. "
+        f"Daily sales were {pct_text(report_vs_7,'7-day')} and {pct_text(report_vs_14,'14-day')}. "
+        f"Sales totalled {money_text(summary.get('sales_dollars_7d'))} across the latest 7 completed data days, "
+        f"{money_text(summary.get('sales_dollars_14d'))} across 14 days, and "
+        f"{money_text(summary.get('sales_dollars_28d'))} across 28 days. "
+        f"There were {int(summary.get('active_upcs_28d') or 0)} active UPCs with movement in the 28-day window, "
+        f"and {int(summary.get('upcs_sold_report_date') or 0)} UPCs recorded sales on the report date. "
+        f"{int(summary.get('slowing_items') or 0)} items have 7-day velocity below 80% of their 28-day rate, which identifies products where recent demand has softened. "
+        f"{int(summary.get('low_gp_items') or 0)} items are below their current category GP reference. "
+        f"{int(summary.get('price_review_candidates') or 0)} items currently qualify for price review based on positive observed GP$/day opportunity; "
+        "pricing actions are intentionally separated from this performance report. "
+        f"Data quality also matters: {int(summary.get('ready_upcs') or 0)} UPCs are READY and "
+        f"{int(summary.get('qa_hold_upcs') or 0)} are on QA HOLD. "
+        "The Top Sellers section ranks the 20 highest sales-dollar UPCs for the selected date and shows sales dollars, quantity, and average sold price. "
+        "Use this report to assess demand, sales concentration, item health, and data readiness; use the Price Change page for pricing actions. "
+        "All comparisons are descriptive and anchored to the selected report date."
+    )
+    return {
+        "text":text,
+        "word_count":len(text.split()),
+        "target_words":200,
+    }
+
 def performance_report(
     category: str="ALL",
     limit: int=100,
@@ -4198,10 +4243,16 @@ def performance_report(
                 "message":f"{summary['price_review_candidates']} items have positive GP$/day price opportunity using sales evidence through {anchor.isoformat()}.",
             },
         ]
+        narrative_analysis=_performance_narrative(
+            anchor=anchor,
+            summary=summary,
+            report_vs_7=report_vs_7,
+            report_vs_14=report_vs_14,
+        )
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V8",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V9",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
@@ -4216,7 +4267,8 @@ def performance_report(
         },
         "report_date_reconciliation":report_date_reconciliation,
         "analysis":analysis,
-        "report_date_top_sellers":day_items[:25],
+        "narrative_analysis":narrative_analysis,
+        "report_date_top_sellers":day_items[:20],
         "top_urgent_price_suggestions":suggestions,
         "top_urgent_limit":limit,
         "price_suggestion_rules":{
