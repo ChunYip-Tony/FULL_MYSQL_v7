@@ -105,26 +105,6 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
             latest_receipt = receipt.get("latest_receipt_date")
             valid_receipts = int(receipt.get("valid_valuation_row_count") or 0)
 
-            if earliest_movement is None:
-                coverage_status = "NO_MOVEMENT_HISTORY"
-                backfill_needed = True
-            elif earliest_movement > requested_start:
-                coverage_status = "PARTIAL_HISTORY_NEEDS_BACKFILL"
-                backfill_needed = True
-            elif valid_receipts == 0:
-                coverage_status = "LOOKBACK_COVERED_NO_VALID_RECEIPT"
-                backfill_needed = False
-            else:
-                coverage_status = "VALID_RECEIPT_PRESENT_REVIEW_HOLD"
-                backfill_needed = False
-
-            if earliest_movement is None:
-                missing_days_before_loaded_history = lookback_days
-            elif earliest_movement > requested_start:
-                missing_days_before_loaded_history = (earliest_movement - requested_start).days
-            else:
-                missing_days_before_loaded_history = 0
-
             representative = max(
                 items,
                 key=lambda x: (
@@ -133,9 +113,75 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     str(x.get("ean_upc") or ""),
                 ),
             )
-
             receipt_evidence = representative.get("receipt_evidence") or {}
             missing_class = representative.get("missing_cost_classification") or {}
+            diagnostic_classification = str(
+                missing_class.get("classification") or ""
+            )
+            diagnostic_action = str(
+                missing_class.get("proposed_action") or ""
+            )
+
+            if earliest_movement is None:
+                coverage_status = "NO_MOVEMENT_HISTORY"
+                backfill_needed = True
+                backfill_mode = "INITIAL_LOOKBACK"
+                required_upload_scope = "FULL_MVT_HISTORY_NOT_FILTERED"
+                action_code = "UPLOAD_FULL_MVT_BACKFILL"
+            elif earliest_movement > requested_start:
+                coverage_status = "PARTIAL_HISTORY_NEEDS_BACKFILL"
+                backfill_needed = True
+                backfill_mode = "INITIAL_LOOKBACK"
+                required_upload_scope = "FULL_MVT_HISTORY_NOT_FILTERED"
+                action_code = "UPLOAD_FULL_MVT_BACKFILL"
+            elif (
+                diagnostic_classification
+                == "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST"
+            ):
+                coverage_status = "LOOKBACK_COVERED_NO_RECEIVING_HISTORY"
+                backfill_needed = True
+                backfill_mode = "EXTEND_BEYOND_LOOKBACK"
+                required_upload_scope = (
+                    "FULL_MVT_HISTORY_BEFORE_REQUESTED_START_NOT_FILTERED"
+                )
+                action_code = "EXTEND_MVT_BACKFILL_BEYOND_LOOKBACK"
+            elif diagnostic_classification == "RECEIPT_ROWS_WITHOUT_VALID_VALUATION":
+                coverage_status = "LOOKBACK_COVERED_RECEIPT_VALUATION_INVALID"
+                backfill_needed = False
+                backfill_mode = "NONE"
+                required_upload_scope = (
+                    "NO_ADDITIONAL_MVT_REQUIRED_BY_CURRENT_DIAGNOSIS"
+                )
+                action_code = "REVIEW_RECEIPT_VALUATION_FIELDS"
+            elif valid_receipts > 0:
+                coverage_status = "VALID_RECEIPT_PRESENT_REVIEW_HOLD"
+                backfill_needed = False
+                backfill_mode = "NONE"
+                required_upload_scope = (
+                    "NO_ADDITIONAL_MVT_REQUIRED_BY_CURRENT_DIAGNOSIS"
+                )
+                action_code = (
+                    diagnostic_action or "REVIEW_EXISTING_COST_EVIDENCE"
+                )
+            else:
+                coverage_status = "LOOKBACK_COVERED_DIAGNOSTIC_REVIEW_REQUIRED"
+                backfill_needed = False
+                backfill_mode = "NONE"
+                required_upload_scope = (
+                    "NO_ADDITIONAL_MVT_REQUIRED_BY_CURRENT_DIAGNOSIS"
+                )
+                action_code = (
+                    diagnostic_action or "REVIEW_EXISTING_COST_EVIDENCE"
+                )
+
+            if earliest_movement is None:
+                missing_days_before_loaded_history = lookback_days
+            elif earliest_movement > requested_start:
+                missing_days_before_loaded_history = (
+                    earliest_movement - requested_start
+                ).days
+            else:
+                missing_days_before_loaded_history = 0
 
             actions.append(
                 {
@@ -151,8 +197,8 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     "safe_to_auto_resolve": all(
                         bool(x.get("safe_to_auto_resolve_cost_hold")) for x in items
                     ),
-                    "diagnostic_classification": missing_class.get("classification"),
-                    "diagnostic_proposed_action": missing_class.get("proposed_action"),
+                    "diagnostic_classification": diagnostic_classification or None,
+                    "diagnostic_proposed_action": diagnostic_action or None,
                     "requested_lookback_days": lookback_days,
                     "requested_backfill_start": requested_start,
                     "requested_backfill_end": through,
@@ -168,17 +214,10 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     "diagnostic_valid_valuation_rows": int(receipt_evidence.get("valid_valuation_rows") or 0),
                     "coverage_status": coverage_status,
                     "backfill_needed": backfill_needed,
-                    "required_upload_scope": (
-                        "FULL_MVT_HISTORY_NOT_FILTERED"
-                        if backfill_needed
-                        else "NO_UPLOAD_REQUIRED_BY_WINDOW_CHECK"
-                    ),
+                    "backfill_mode": backfill_mode,
+                    "required_upload_scope": required_upload_scope,
                     "required_receipt_movements": ["101","107","109"],
-                    "action_code": (
-                        "UPLOAD_FULL_MVT_BACKFILL"
-                        if backfill_needed
-                        else "REVIEW_EXISTING_COST_EVIDENCE"
-                    ),
+                    "action_code": action_code,
                 }
             )
 
