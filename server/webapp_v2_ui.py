@@ -142,7 +142,7 @@ async function family(k){try{
   let d=await api('/v1/app/v2/family/'+encodeURIComponent(k)),o=d.current_effective_oh||{},z=d.observed_delivery||{},r=d.last_receipt||{};
   $('ft').textContent=d.family_article_name;
   $('fs').textContent='Family '+(d.family_article_number||'—')+' · '+(d.category||'—');
-  let articleText=(d.receiving_ordering_articles||[]).map(a=>esc(a.article_number)+(a.article_description?' · '+esc(a.article_description):'')).join('<br>')||'—';
+  let articleText=(d.receiving_ordering_articles||[]).map(a=>String(a.article_number||'')+(a.article_description?' · '+String(a.article_description):'')).join(' | ')||'—';
   $('fsummary').innerHTML=
     '<div class="group-block group-identity"><div class="group-title">🪪 Identity</div><div class="grid">'+
       m('Family Article',d.family_article_number||'—')+
@@ -223,13 +223,68 @@ async function pid(k){try{let d=await api('/v1/app/v2/pi/'+encodeURIComponent(k)
 async function initPerformanceDate(){try{let d=await api('/v1/app/v2/performance/dates?limit=180'),rows=d.dates||[];$('perdate').innerHTML=rows.map(x=>'<option value="'+esc(x.date)+'">'+esc(x.weekday)+' · '+esc(x.date)+'</option>').join('');if(!rows.length)$('perdate').innerHTML='<option value="">No supported dates</option>'}catch(e){$('perdate').innerHTML='<option value="">Date list unavailable</option>';$('permsg').textContent=e.message}}
 async function performance(){
   let cat=$('percat').value,rd=$('perdate').value;
-  $('permsg').textContent='Generating report…';$('persummary').innerHTML='';$('peranalysis').innerHTML='';$('pertop').innerHTML='';$('peritems').innerHTML=(d.top_urgent_price_suggestions||[]).map((x,i)=>{
+  $('permsg').textContent='Generating report…';
+  $('persummary').innerHTML='';
+  $('peranalysis').innerHTML='';
+  $('pertop').innerHTML='';
+  $('peritems').innerHTML='';
+  try{
+    let q='/v1/app/v2/performance?category='+encodeURIComponent(cat)+'&limit=100'+(rd?'&report_date='+encodeURIComponent(rd):'');
+    let d=await api(q),s=d.summary||{};
+    if(d.report_date)$('perdate').value=d.report_date;
+    $('permsg').textContent=esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+' · '+(d.top_urgent_price_suggestions||[]).length+' urgent review item(s)';
+
+    let rec=d.report_date_reconciliation||null;
+    $('persummary').innerHTML=
+      '<div class="card"><div class="section">'+esc(cat)+' · '+esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+'</div><div class="grid">'+
+        m('Report Date Sales',money(s.report_date_sales_dollars))+
+        m('UPCs Sold That Day',fmt(s.upcs_sold_report_date,0))+
+        m('Active UPCs 28D',fmt(s.active_upcs_28d,0))+
+        m('7D Sales',money(s.sales_dollars_7d))+
+        m('14D Sales',money(s.sales_dollars_14d))+
+        m('28D Sales',money(s.sales_dollars_28d))+
+        m('Slowing Items',fmt(s.slowing_items,0))+
+        m('Actionable Price Reviews',fmt(s.price_review_candidates,0))+
+      '</div></div>'+
+      (cat==='ALL'&&rec
+        ? '<div class="card '+(rec.matches_to_cent?'audit-ok':'audit-warn')+'"><div class="section">Sales Audit</div><div class="grid">'+
+            m('Canonical POS',money(rec.canonical_source_sales))+
+            m('Mapped UPC Total',money(rec.mapped_report_sales))+
+            m('Difference',money(rec.difference))+
+            m('Source File',rec.canonical_source?.source_file_id??'—')+
+          '</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+esc(rec.canonical_source?.coverage_kind||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div></div>'
+        : '');
+
+    $('peranalysis').innerHTML=
+      '<div class="card"><div class="section">Analysis for '+esc(d.report_date||'')+'</div>'+
+      (d.analysis||[]).map(x=>
+        '<div class="promo"><b>'+esc(x.type.replaceAll('_',' '))+'</b>'+
+        '<div class="meta">'+esc(x.message)+'</div>'+
+        (x.value_pct!=null?'<div class="'+(Number(x.value_pct)>=0?'ok':'warn')+'">'+fmt(Number(x.value_pct)*100,1)+'%</div>':'')+
+        '</div>'
+      ).join('')+
+      '</div>';
+
+    $('pertop').innerHTML=(d.report_date_top_sellers||[]).map((x,i)=>
+      '<div class="promo clickable" data-upc="'+esc(x.upc)+'">'+
+        '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div>'+pill(x.readiness)+'</div>'+
+        '<div class="grid" style="margin-top:10px">'+
+          m('Day Sales',money(x.sales_amount))+
+          m('Day Qty',fmt(x.sold_quantity))+
+          m('Avg Sold Price',money(x.avg_sold_price))+
+          m('7D Velocity',fmt(x.velocity_7d))+
+        '</div>'+
+        '<div class="meta">'+(x.price_types||[]).map(esc).join(' · ')+'</div>'+
+      '</div>'
+    ).join('')||'<div class="small">No sales for this category on the selected report date.</div>';
+
+    $('peritems').innerHTML=(d.top_urgent_price_suggestions||[]).map((x,i)=>{
       let cls=x.actionable?'review-actionable':(x.review_status==='QA_HOLD'?'review-hold':'review-only');
       let badge=x.actionable?'ACTIONABLE':(x.review_status||'REVIEW ONLY').replaceAll('_',' ');
       let suggestion=x.suggested_price!=null?money(x.suggested_price):'Review Only';
       let gpopp=x.gp_per_day_opportunity!=null?money(x.gp_per_day_opportunity):'Unproven';
       return '<div class="promo report-item clickable '+cls+'" data-upc="'+esc(x.upc)+'">'+
-        '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="meta">UPC '+esc(x.upc)+' · '+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill '+(x.actionable?'ok':'warn')+' review-badge">'+esc(badge)+'</span></div>'+
+        '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill '+(x.actionable?'ok':'warn')+' review-badge">'+esc(badge)+'</span></div>'+
         '<div class="row" style="margin-top:10px"><div><div class="small">Price Used</div><div class="hero-number">'+money(x.current_price)+'</div></div><div class="price-arrow">→</div><div><div class="small">'+(x.actionable?'Suggested':'Review Status')+'</div><div class="hero-number">'+suggestion+'</div></div></div>'+
         '<div class="grid" style="margin-top:10px">'+
           m('GP$/day Opportunity',gpopp)+
@@ -242,8 +297,11 @@ async function performance(){
         '<div class="meta">'+(x.reasons||[]).map(r=>esc(r.replaceAll('_',' '))).join(' · ')+'</div>'+
       '</div>';
     }).join('')||'<div class="small">No active items available for review.</div>';
+
     document.querySelectorAll('#pertop [data-upc],#peritems [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
-  }catch(e){$('permsg').textContent=e.message}
+  }catch(e){
+    $('permsg').textContent=e.message;
+  }
 }
 $('perrun').onclick=performance;
 initPerformanceDate();
