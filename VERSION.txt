@@ -1,16 +1,21 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.111 Single-Service Edition
+Version: 7.0.113 Single-Service Edition
 
-Canonical runtime version: 7.0.111-single-service
-Web App runtime badge: v7.0.111
+Canonical runtime version: 7.0.113-single-service
 Web App V2 test route: /app/v2
-V2 main functions: CORE / ORDERING / PI
-CORE Ordering decision level: Family Article
-Price trend: completed canonical supported dates only
-Promotion: SALE only; TPR excluded
-ORDERING: Fresh/Frozen family-level simulator; active 28 supported-day selling + DOS < 7
-Ordering negative OH rule: max(Effective OH, 0)
-PI: inventory-owner-aware True Stock adjustment + history
-Price and Ordering: analysis only; no save or submit
-Existing /app remains fallback during V2 testing
-Deployment model: Single-Service API + background worker
+V2 main functions: CORE / ORDERING / PI / PERFORMANCE
+
+Key V2 rules:
+- all search: 28 supported-day Qty Sold descending -> readiness
+- completed canonical data-supported dates only
+- Price: 7D graph + 14D sales history
+- historical promotions show weekday range + dates
+- Promotion item evidence: UPC-level SALE history
+- Ordering decision: Family Article level
+- negative OH for ordering: max(Effective OH,0)
+- PI target: Family Article True Stock
+- PERFORMANCE: analysis + Top 100 urgent price-review suggestions
+- Performance suggestions are read-only; active SALE and non-READY excluded
+- elder-friendly large-text / large-touch UI
+- phone Back stays inside V2 and returns to previous app screen
+- existing /app remains fallback during testing
