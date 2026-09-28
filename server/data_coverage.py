@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from db import db_conn
+from business_clock import completed_through_date
 
 DAILY_REQUIRED_SOURCES = {
     'POS_SALES': 'sales_by_price_type',
@@ -322,7 +323,7 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
 
 def coverage_summary(cur, source_type: str, *, include_batch_id: int | None = None,
                      expected_through: date | None = None, lookback_days: int = 35) -> dict[str, Any]:
-    expected = expected_through or (date.today() - timedelta(days=1))
+    expected = expected_through if expected_through is not None else completed_through_date()
     days = source_data_days(cur, source_type, include_batch_id=include_batch_id, up_to=expected)
     valid = {x['date'] for x in days}
     latest = max(valid) if valid else None
