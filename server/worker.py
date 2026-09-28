@@ -73,7 +73,7 @@ def _recover_stale_started(cur) -> int:
                  OR
                  (
                    JSON_EXTRACT(detail_json,'$.heartbeat_epoch') IS NULL
-                   AND started_at < CURRENT_TIMESTAMP(6)-INTERVAL %s SECOND
+                   AND TIMESTAMPDIFF(SECOND,started_at,CURRENT_TIMESTAMP(6)) > %s
                  )
              )""",
         (
