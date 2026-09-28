@@ -78,7 +78,19 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                        SUM(CASE
                              WHEN amount_local_currency IS NOT NULL
                               AND amount_local_currency<>0
-                              AND COALESCE(NULLIF(entry_quantity,0),NULLIF(base_quantity,0)) IS NOT NULL
+                              AND (
+                                   (
+                                     entry_quantity IS NOT NULL
+                                     AND entry_quantity<>0
+                                     AND NULLIF(TRIM(entry_uom_code),'') IS NOT NULL
+                                   )
+                                   OR
+                                   (
+                                     base_quantity IS NOT NULL
+                                     AND base_quantity<>0
+                                     AND NULLIF(TRIM(base_uom_code),'') IS NOT NULL
+                                   )
+                              )
                              THEN 1 ELSE 0 END) AS valid_valuation_row_count
                     FROM movement_history
                     WHERE {where}
