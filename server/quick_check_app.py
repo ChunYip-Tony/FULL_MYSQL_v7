@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import date, datetime, timedelta
+from decimal import Decimal, ROUND_CEILING
 from typing import Any
 
 from db import db_conn
 from data_coverage import source_data_days
+from business_clock import business_today
 from inventory_position import latest_canonical_movement_day, rollforward_position, UNRESTRICTED_APPLY_AS_SIGNED, UNRESTRICTED_NO_EFFECT
 
 
@@ -32,6 +33,236 @@ def _column_exists(cur, table_name: str, column_name: str) -> bool:
         (table_name, column_name),
     )
     return bool(cur.fetchone())
+
+
+def ensure_ordering_policy_table(cur) -> None:
+    if not _table_exists(cur, "ordering_policy"):
+        cur.execute(
+            """
+            CREATE TABLE ordering_policy (
+                ordering_policy_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                scope_type VARCHAR(24) NOT NULL,
+                scope_key VARCHAR(64) NOT NULL,
+                order_weekday TINYINT UNSIGNED NOT NULL,
+                delivery_weekday TINYINT UNSIGNED NOT NULL,
+                coverage_days_after_delivery DECIMAL(10,2) NOT NULL,
+                safety_days DECIMAL(10,2) NOT NULL DEFAULT 0,
+                min_order_qty DECIMAL(24,8) NULL,
+                order_multiple DECIMAL(24,8) NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                notes VARCHAR(255) NULL,
+                updated_by VARCHAR(128) NULL,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                           ON UPDATE CURRENT_TIMESTAMP(6),
+                PRIMARY KEY (ordering_policy_id),
+                UNIQUE KEY uq_ordering_policy_scope (scope_type,scope_key),
+                KEY ix_ordering_policy_enabled (enabled,scope_type,scope_key)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+
+
+def _ordering_scope_candidates(row: dict[str, Any]) -> list[tuple[str, str]]:
+    candidates: list[tuple[str, str]] = []
+    for scope_type, value in (
+        ("UPC", row.get("ean_upc")),
+        ("ARTICLE", row.get("article_number")),
+        ("FAMILY", row.get("main_article_number") or row.get("family_id")),
+        ("PRODUCT_CLASS", row.get("product_class")),
+    ):
+        key = str(value or "").strip()
+        if key:
+            candidates.append((scope_type, key.upper() if scope_type == "PRODUCT_CLASS" else key))
+    candidates.append(("GLOBAL", "*"))
+    return candidates
+
+
+def _resolve_ordering_policy(cur, row: dict[str, Any]) -> dict[str, Any] | None:
+    ensure_ordering_policy_table(cur)
+    for scope_type, scope_key in _ordering_scope_candidates(row):
+        cur.execute(
+            """SELECT ordering_policy_id,scope_type,scope_key,order_weekday,
+                      delivery_weekday,coverage_days_after_delivery,safety_days,
+                      min_order_qty,order_multiple,enabled,notes,updated_by,updated_at
+               FROM ordering_policy
+               WHERE scope_type=%s AND scope_key=%s AND enabled=TRUE
+               LIMIT 1""",
+            (scope_type, scope_key),
+        )
+        policy = cur.fetchone()
+        if policy:
+            return policy
+    return None
+
+
+def list_ordering_policies() -> dict[str, Any]:
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_ordering_policy_table(cur)
+        conn.commit()
+        cur.execute(
+            """SELECT ordering_policy_id,scope_type,scope_key,order_weekday,
+                      delivery_weekday,coverage_days_after_delivery,safety_days,
+                      min_order_qty,order_multiple,enabled,notes,updated_by,updated_at
+               FROM ordering_policy
+               ORDER BY
+                 FIELD(scope_type,'UPC','ARTICLE','FAMILY','PRODUCT_CLASS','GLOBAL'),
+                 scope_key"""
+        )
+        rows = cur.fetchall()
+        cur.close()
+    return {"count": len(rows), "rows": rows, "contract_version": "ORDERING_POLICY_V1"}
+
+
+def upsert_ordering_policy(
+    *,
+    scope_type: str,
+    scope_key: str,
+    order_weekday: int,
+    delivery_weekday: int,
+    coverage_days_after_delivery: Decimal,
+    safety_days: Decimal = Decimal("0"),
+    min_order_qty: Decimal | None = None,
+    order_multiple: Decimal | None = None,
+    enabled: bool = True,
+    notes: str | None = None,
+    device: str,
+) -> dict[str, Any]:
+    scope = str(scope_type or "").strip().upper()
+    if scope not in {"GLOBAL","PRODUCT_CLASS","FAMILY","ARTICLE","UPC"}:
+        raise ValueError("ORDERING_POLICY_SCOPE_INVALID")
+    key = "*" if scope == "GLOBAL" else str(scope_key or "").strip()
+    if not key:
+        raise ValueError("ORDERING_POLICY_SCOPE_KEY_REQUIRED")
+    if scope == "PRODUCT_CLASS":
+        key = key.upper()
+    ow = int(order_weekday)
+    dw = int(delivery_weekday)
+    if ow < 0 or ow > 6 or dw < 0 or dw > 6:
+        raise ValueError("ORDERING_POLICY_WEEKDAY_INVALID")
+    coverage = Decimal(str(coverage_days_after_delivery))
+    safety = Decimal(str(safety_days))
+    if coverage <= 0:
+        raise ValueError("ORDERING_POLICY_COVERAGE_MUST_BE_POSITIVE")
+    if safety < 0:
+        raise ValueError("ORDERING_POLICY_SAFETY_NEGATIVE")
+    minimum = Decimal(str(min_order_qty)) if min_order_qty is not None else None
+    multiple = Decimal(str(order_multiple)) if order_multiple is not None else None
+    if minimum is not None and minimum < 0:
+        raise ValueError("ORDERING_POLICY_MIN_QTY_NEGATIVE")
+    if multiple is not None and multiple <= 0:
+        raise ValueError("ORDERING_POLICY_MULTIPLE_MUST_BE_POSITIVE")
+    clean_notes = str(notes or "").strip()[:255] or None
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_ordering_policy_table(cur)
+        conn.commit()
+        cur.execute(
+            """INSERT INTO ordering_policy
+               (scope_type,scope_key,order_weekday,delivery_weekday,
+                coverage_days_after_delivery,safety_days,min_order_qty,
+                order_multiple,enabled,notes,updated_by)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON DUPLICATE KEY UPDATE
+                 order_weekday=VALUES(order_weekday),
+                 delivery_weekday=VALUES(delivery_weekday),
+                 coverage_days_after_delivery=VALUES(coverage_days_after_delivery),
+                 safety_days=VALUES(safety_days),
+                 min_order_qty=VALUES(min_order_qty),
+                 order_multiple=VALUES(order_multiple),
+                 enabled=VALUES(enabled),
+                 notes=VALUES(notes),
+                 updated_by=VALUES(updated_by),
+                 updated_at=CURRENT_TIMESTAMP(6)""",
+            (
+                scope,key,ow,dw,coverage,safety,minimum,multiple,
+                bool(enabled),clean_notes,device,
+            ),
+        )
+        conn.commit()
+        cur.execute(
+            """SELECT ordering_policy_id,scope_type,scope_key,order_weekday,
+                      delivery_weekday,coverage_days_after_delivery,safety_days,
+                      min_order_qty,order_multiple,enabled,notes,updated_by,updated_at
+               FROM ordering_policy
+               WHERE scope_type=%s AND scope_key=%s""",
+            (scope,key),
+        )
+        row = cur.fetchone()
+        cur.close()
+    return {"status":"SAVED","policy":row}
+
+
+def _next_weekday_on_or_after(start: date, weekday: int) -> date:
+    return start + timedelta(days=(int(weekday)-start.weekday()) % 7)
+
+
+def _ordering_plan_from_policy(
+    row: dict[str, Any],
+    effective_oh: dict[str, Any],
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    dos = _quick_check_effective_dos(row, effective_oh)
+    selling_oh = _qc_decimal(dos.get("selling_equivalent_oh"))
+    velocity = _qc_decimal(row.get("upc_velocity_7d"))
+    if selling_oh is None or velocity is None or velocity <= 0:
+        return {
+            "status": dos.get("status") or "ORDER_QTY_BLOCKED",
+            "action": "MONITOR",
+            "suggested_order_qty": None,
+            "reason": "Suggested quantity requires compatible OH-to-selling-UOM conversion and positive 7D velocity.",
+            "ordering_calendar_required_for_quantity": False,
+            "policy": policy,
+            "effective_dos": dos,
+        }
+
+    today = business_today()
+    order_date = _next_weekday_on_or_after(today, int(policy["order_weekday"]))
+    delivery_delta = (int(policy["delivery_weekday"]) - int(policy["order_weekday"])) % 7
+    if delivery_delta == 0:
+        delivery_delta = 7
+    delivery_date = order_date + timedelta(days=delivery_delta)
+
+    days_to_delivery = Decimal((delivery_date - today).days)
+    coverage = _qc_decimal(policy.get("coverage_days_after_delivery")) or Decimal("0")
+    safety = _qc_decimal(policy.get("safety_days")) or Decimal("0")
+    demand_days = days_to_delivery + coverage + safety
+    target_units = velocity * demand_days
+    raw_needed = max(Decimal("0"), target_units - selling_oh)
+
+    suggested = raw_needed
+    multiple = _qc_decimal(policy.get("order_multiple"))
+    minimum = _qc_decimal(policy.get("min_order_qty"))
+    if suggested > 0 and multiple is not None and multiple > 0:
+        suggested = (suggested / multiple).to_integral_value(rounding=ROUND_CEILING) * multiple
+    if suggested > 0 and minimum is not None and minimum > suggested:
+        suggested = minimum
+
+    return {
+        "status": "ORDER_RECOMMENDATION_READY",
+        "action": "ORDER" if suggested > 0 else "NO_ORDER",
+        "suggested_order_qty": suggested,
+        "suggested_order_uom": row.get("selling_uom"),
+        "raw_required_qty": raw_needed,
+        "target_inventory_qty": target_units,
+        "effective_selling_oh": selling_oh,
+        "velocity_7d": velocity,
+        "days_supply": dos.get("days_supply"),
+        "next_order_date": order_date,
+        "next_delivery_date": delivery_date,
+        "days_to_delivery": days_to_delivery,
+        "coverage_days_after_delivery": coverage,
+        "safety_days": safety,
+        "demand_horizon_days": demand_days,
+        "ordering_calendar_required_for_quantity": False,
+        "policy": policy,
+        "reason": (
+            "Suggested quantity = demand through next delivery and configured coverage horizon "
+            "minus effective selling-unit OH, rounded by configured order multiple/minimum."
+        ),
+    }
 
 
 def ensure_true_stock_tables(cur) -> None:
@@ -770,6 +1001,7 @@ def _quick_check_effective_dos(
 def _quick_check_ordering(
     row: dict[str, Any],
     effective_oh: dict[str, Any],
+    policy: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not effective_oh.get("analysis_usable"):
         return {
@@ -777,7 +1009,8 @@ def _quick_check_ordering(
             "action": "VERIFY_INVENTORY_POSITION",
             "suggested_order_qty": None,
             "reason": "Effective OH roll-forward is not analysis-usable.",
-            "ordering_calendar_required_for_quantity": True,
+            "ordering_calendar_required_for_quantity": policy is None,
+            "policy": policy,
         }
 
     qty = _qc_decimal(effective_oh.get("quantity"))
@@ -787,7 +1020,8 @@ def _quick_check_ordering(
             "action": "SUBMIT_TRUE_STOCK",
             "suggested_order_qty": None,
             "reason": "Effective OH is negative; physical count takes precedence.",
-            "ordering_calendar_required_for_quantity": True,
+            "ordering_calendar_required_for_quantity": policy is None,
+            "policy": policy,
         }
 
     dos = _quick_check_effective_dos(row, effective_oh)
@@ -797,27 +1031,28 @@ def _quick_check_ordering(
             "status": dos.get("status"),
             "action": "MONITOR",
             "suggested_order_qty": None,
-            "reason": (
-                "A safe order quantity cannot be calculated without compatible "
-                "OH/velocity UOM evidence and an ordering coverage calendar."
-            ),
-            "ordering_calendar_required_for_quantity": True,
+            "reason": "A safe order quantity requires compatible OH/velocity UOM evidence.",
+            "ordering_calendar_required_for_quantity": policy is None,
+            "policy": policy,
             "effective_dos": dos,
         }
 
-    return {
-        "status": "COVERAGE_AVAILABLE",
-        "action": "REVIEW_AGAINST_ORDER_CALENDAR",
-        "suggested_order_qty": None,
-        "days_supply": days_supply,
-        "effective_dos": dos,
-        "ordering_calendar_required_for_quantity": True,
-        "reason": (
-            "Effective DOS is calculated from effective OH and current 7D UPC velocity. "
-            "No reorder threshold, order date, or order quantity is inferred until an "
-            "authoritative ordering calendar and target coverage policy are configured."
-        ),
-    }
+    if policy is None:
+        return {
+            "status": "POLICY_NOT_CONFIGURED",
+            "action": "CONFIGURE_ORDERING_POLICY",
+            "suggested_order_qty": None,
+            "days_supply": days_supply,
+            "effective_dos": dos,
+            "ordering_calendar_required_for_quantity": True,
+            "policy": None,
+            "reason": (
+                "Effective DOS is available, but no authoritative ordering policy matches this item. "
+                "No order quantity is inferred."
+            ),
+        }
+
+    return _ordering_plan_from_policy(row, effective_oh, policy)
 
 
 def _quick_check_highlights(
@@ -979,7 +1214,8 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         effective_oh.update(_stock_state(effective_oh.get("quantity")))
 
         promotion = _quick_check_promotion(row)
-        ordering = _quick_check_ordering(row, effective_oh)
+        ordering_policy = _resolve_ordering_policy(cur, row)
+        ordering = _quick_check_ordering(row, effective_oh, ordering_policy)
         highlights = _quick_check_highlights(
             row,
             effective_oh,
@@ -2378,7 +2614,8 @@ def ordering_queue(limit: int = 80) -> dict[str, Any]:
                 "blockers": effective_position.get("blockers") if effective_position else ["OH_POSITION_NOT_AVAILABLE"],
                 "movement_through_date": effective_position.get("movement_through_date") if effective_position else None,
             }
-            ordering = _quick_check_ordering(row, effective_oh)
+            ordering_policy = _resolve_ordering_policy(cur, row)
+            ordering = _quick_check_ordering(row, effective_oh, ordering_policy)
             out = dict(row)
             out["effective_oh"] = effective_oh.get("quantity")
             out["effective_oh_uom"] = effective_oh.get("uom")
@@ -2390,8 +2627,8 @@ def ordering_queue(limit: int = 80) -> dict[str, Any]:
         cur.close()
     return {
         "count": len(rows),
-        "contract_version": "ORDERING_APP_V1",
-        "quantity_policy": "REVIEW_ONLY_UNTIL_ORDER_CALENDAR_CONFIGURED",
+        "contract_version": "ORDERING_APP_V2",
+        "quantity_policy": "CONFIG_DRIVEN_ORDER_RECOMMENDATION",
         "rows": rows,
     }
 
