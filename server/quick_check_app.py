@@ -286,6 +286,7 @@ def ensure_true_stock_tables(cur) -> None:
                 anchor_movement_date DATE NULL,
                 anchor_movement_file_id BIGINT UNSIGNED NULL,
                 override_status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',
+                count_note VARCHAR(255) NULL,
                 submitted_by VARCHAR(128) NULL,
                 submitted_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
                 superseded_at DATETIME(6) NULL,
@@ -355,6 +356,13 @@ def ensure_true_stock_tables(cur) -> None:
             """ALTER TABLE dumping_discrepancy_queue
                ADD COLUMN resolution_note VARCHAR(255) NULL
                AFTER resolved_by"""
+        )
+
+    if not _column_exists(cur, "manual_true_stock", "count_note"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN count_note VARCHAR(255) NULL
+               AFTER override_status"""
         )
 
     if not _column_exists(cur, "manual_true_stock", "cancelled_at"):
@@ -1311,9 +1319,11 @@ def submit_true_stock(
     true_stock_quantity: Decimal,
     true_stock_uom: str,
     device: str,
+    note: str | None = None,
 ) -> dict[str, Any]:
     qty = Decimal(str(true_stock_quantity))
     submitted_uom = str(true_stock_uom or "").strip().upper()
+    count_note = str(note or "").strip()[:255] or None
     if qty < 0:
         raise ValueError("TRUE_STOCK_NEGATIVE")
 
@@ -1382,8 +1392,8 @@ def submit_true_stock(
                     system_oh_quantity,system_oh_uom_code,
                     discrepancy_quantity,anchor_on_hand_file_id,
                     anchor_movement_date,anchor_movement_file_id,
-                    override_status,submitted_by)
-                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s)""",
+                    override_status,count_note,submitted_by)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s,%s)""",
                 (
                     family_id,
                     row.get("main_article_number"),
@@ -1400,6 +1410,7 @@ def submit_true_stock(
                     system_oh.get("file_id"),
                     movement_anchor.get("date") if movement_anchor else None,
                     movement_anchor.get("file_id") if movement_anchor else None,
+                    count_note,
                     device,
                 ),
             )
@@ -1527,6 +1538,7 @@ def submit_true_stock(
                 "system_oh_movement_delta": system_position.get("movement_delta"),
                 "system_oh_movement_through_date": system_position.get("movement_through_date"),
                 "dumping_queue_action": queue_action,
+                "count_note": count_note,
                 "effective_oh_source": "TRUE_STOCK",
             }
         except Exception:
