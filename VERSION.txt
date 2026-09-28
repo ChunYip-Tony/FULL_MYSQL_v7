@@ -10,13 +10,11 @@ V2 main functions:
 - PERFORMANCE
 
 v7.0.122:
-- Modern flat non-card UI with smaller, cleaner sizing.
-- Family and UPC metrics are separated into themed section/list blocks.
-- Search results show UPC Type labels.
-- Every visible Qty includes UOM; unresolved UOM is shown explicitly.
-- No OH displays the reason instead of a blank value.
-- UPC page now includes Effective OH.
-- Family OH supports receiving/main-article fallback.
-- 7D Price Trend now includes Qty Sold, Avg Price, and GP$ curves.
-- GP$ curve uses current authoritative cost and discloses that basis.
-- Performance Sales Audit keeps canonical POS as authority and identifies unmapped UPC differences.
+- Compact flat modern UI.
+- Family/UPC metrics separated into Identity / Sales / Inventory / Delivery or Price sections.
+- Search labels UPC type and highlights Family Article options.
+- All Qty displays include UOM; unresolved units show UOM UNKNOWN.
+- No-OH states include the reason.
+- Family OH owner resolution covers main/receiving-article baselines such as 1342107.
+- Price trend shows Qty, Avg Price and GP$ curves.
+- GP$ uses historical applicable cost by supported date.
