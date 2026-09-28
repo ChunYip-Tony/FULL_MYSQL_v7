@@ -7,6 +7,7 @@ from ingest import audit_batch, release_batch
 from normalize import normalize_batch, audit_phase2c
 from phase3 import process_phase3, audit_phase3
 from v7_ingest import API_PIPELINE, API_VERSION
+from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, bridge_required
 
 POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
@@ -240,6 +241,20 @@ def finish(run_id:int,status:str,detail:dict,error_count:int=0):
         cur=conn.cursor(); cur.execute("UPDATE pipeline_run SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6),error_count=%s,detail_json=%s WHERE pipeline_run_id=%s",
             (status,error_count,json.dumps(detail,ensure_ascii=False,default=str),run_id)); conn.commit(); cur.close()
 
+
+def _publish_chatgpt_bridge(batch_id:int, detail:dict, progress) -> bool:
+    if not bridge_enabled():
+        detail['chatgpt_sheet_bridge']={'status':'DISABLED'}
+        return True
+    progress('CHATGPT_SHEET_PUBLISH')
+    result=publish_chatgpt_snapshot(batch_id)
+    detail['chatgpt_sheet_bridge']=result
+    if result.get('status')=='PASS':
+        progress('CHATGPT_SHEET_READBACK_PASS')
+        return True
+    progress('CHATGPT_SHEET_READBACK_FAILED', result)
+    return not bridge_required()
+
 def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     detail={'worker':WORKER,'batch_id':batch_id,'stage_name':stage_name,'started_at':datetime.utcnow().isoformat()+'Z'}
     stop_event=threading.Event()
@@ -265,6 +280,9 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
             if not a3['pass']:
                 finish(run_id,'QA_HOLD',detail,len(a3.get('blocking_issues',[])))
                 return
+            if not _publish_chatgpt_bridge(batch_id,detail,progress):
+                finish(run_id,'FAILED',detail,1)
+                return
             finish(run_id,'COMPLETED',detail,0)
             return
 
@@ -282,6 +300,8 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         a3=audit_phase3(batch_id); detail['phase3']=p3; detail['phase3_audit']=a3
         if not a3['pass']:
             finish(run_id,'QA_HOLD',detail,len(a3.get('blocking_issues',[]))); return
+        if not _publish_chatgpt_bridge(batch_id,detail,progress):
+            finish(run_id,'FAILED',detail,1); return
         finish(run_id,'COMPLETED',detail,0)
     except Exception as exc:
         detail['error']=repr(exc); detail['traceback']=traceback.format_exc(); finish(run_id,'FAILED',detail,1)
