@@ -1,21 +1,21 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.124 Single-Service Edition
+Version: 7.0.125 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
 - Web App V2 route: /app/v2
 - Root Quick Check routes: /, /app, /app/quick-check
-- Top-level V2 functions: CORE / PI / OH DISCREPANCY / PERFORMANCE
+- Top-level V2 functions: Quick Check / PI / OH Discrepancy / Reports
 - Standalone Main ORDERING remains cancelled; item-level Ordering analysis remains available.
 
-v7.0.124:
-- Fish-market / seafood visual theme with compact mobile-first layout.
-- Reduced wasted page space and tighter metric sections.
-- Quick Check key metrics show explicit units and 7-data-day trend arrows when comparison evidence exists.
-- Price vs Velocity History groups validated supported-day observations by actual average sold price.
-- Canonical Sweet Spot remains the historical price maximizing average GP$ per completed supported data day.
-- Sales Trend displays GP$ as columns and Avg Selling Price as a curve only.
-- Trend chart supports the latest 28 completed supported sales dates and labels every plotted GP$ / Avg Price value.
-- OH Discrepancy Report & Clear is a main navigation function; clearing closes the discrepancy report only and does not alter inventory.
-- Current price, cost, inventory, velocity, DOS, DOH and other quantity values display explicit UOM/time units.
-- GP$ trend uses historical applicable cost as-of each supported sales date; missing historical cost remains a gap, never zero.
+v7.0.125:
+- Rebuilt the UPC Quick Check detail page against the approved Seafood Quick Check Dashboard mockup.
+- Dedicated ocean/fish-market dashboard composition: Quick Check header, product hero, 8-metric strip, Inventory + Ordering row, 28-day Sales Trend, family/related UPC table, Highlights / QA, fixed bottom navigation.
+- Product hero shows Family, Article, UPC, category and price-type badges.
+- Key metrics retain explicit units and latest-7-vs-prior-7 supported-data-day trend arrows.
+- Price vs Velocity and canonical Sweet Spot remain directly under the key metrics while using the same mockup card language.
+- Inventory shows System OH, current rolled True Stock, Effective OH and signed Difference, with direct True Stock update.
+- Ordering summary is embedded in the Quick Check page with next order, delivery, suggested quantity and coverage.
+- Sales Trend uses GP$ columns plus Avg Selling Price curve across the latest 28 completed supported sales dates.
+- Related UPCs use a compact mockup-style table; Highlights / QA is hidden when there are no current items.
+- Bottom navigation visually follows the mockup while preserving the latest functional scope: Quick Check, PI, OH Report, Reports.
