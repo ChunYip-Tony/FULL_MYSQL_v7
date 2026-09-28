@@ -1827,6 +1827,10 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
             row["action_upc"] = representative.get("ean_upc")
             row["action_code"] = "COUNT_AND_SUBMIT_TRUE_STOCK"
             row["action_reason"] = "EFFECTIVE_OH_NEGATIVE"
+            row["action_endpoint"] = (
+                f"/v1/app/inventory/negative-stock/"
+                f"{group['scope_type']}/{group['owner_id']}/true-stock"
+            )
             row["latest_on_hand_file_id"] = latest_oh_file_id
             actions.append(row)
 
