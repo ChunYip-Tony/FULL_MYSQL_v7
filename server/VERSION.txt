@@ -1,26 +1,18 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.118 Single-Service Edition
+Version: 7.0.119 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
 - Web App V2 route: /app/v2
 - Top-level functions: CORE / PI / PERFORMANCE
-- Standalone Main ORDERING remains cancelled.
 
-v7.0.118 UI:
-- Mobile viewport containment prevents whole-page horizontal scrolling.
-- Mobile metric grids collapse to one column.
-- Family page groups similar metrics into colored Identity / Sales / Inventory / Delivery & Receipt blocks.
-- UPC page groups similar metrics into colored Identity / Sales / Price blocks.
-- Related UPCs on Family page use vertical mobile cards instead of a wide table.
-- Search results continue to highlight Family Article results and enlarge UPC numbers.
-- Elder-friendly large type and touch targets remain active.
-
-PERFORMANCE:
-- Top 100 Urgent Price Reviews is now a review queue, not only the subset with immediately executable price changes.
-- ACTIONABLE items receive a specific suggested price only when evidence supports a positive GP$/day opportunity.
-- REVIEW ONLY / WAIT ACTIVE SALE / QA HOLD items can still appear with a reason, but no fabricated suggested price.
-- Company Price C remains the hard floor when applicable.
-- Review ranking prioritizes actionable positive GP$/day opportunity, then urgency signals and 28D activity.
-- Report Date remains selectable only from completed supported POS dates.
-- Canonical POS reconciliation remains the Report Date Sales authority.
+v7.0.119:
+- Price vs Sales chart labels every 7D point with Qty Sold and Avg Price values.
+- SALE dates remain visibly marked on the chart.
+- PERFORMANCE Sales Audit now explains canonical POS vs mapped V2 differences.
+- Audit shows Canonical POS, Mapped UPC Total, Difference, Unmapped POS, Unmapped Qty, Unmapped UPC count and source file.
+- Audit lists top unmapped canonical POS UPCs with sales, qty and mapping status.
+- Unmapped means the canonical POS row is not represented by the current V2 Quick Check serving set.
+- Canonical POS remains Report Date Sales authority.
+- Top 100 Urgent Price Reviews remains a review queue; specific prices only appear for evidence-backed ACTIONABLE items.
+- Family/UPC colorful grouped metrics and mobile overflow protection remain active.
