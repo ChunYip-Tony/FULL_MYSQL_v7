@@ -389,17 +389,19 @@ body{
   border-top:1px solid rgba(212,242,250,.22)!important;box-shadow:0 -5px 16px rgba(0,30,47,.24)!important;
   backdrop-filter:blur(14px)!important
 }
-.navin{gap:4px}
+.navin{gap:6px}
 .nav button{
-  color:#c7e3ee!important;background:transparent!important;border:0!important;min-height:55px!important;
-  font-size:9px!important;line-height:1.05!important;border-radius:10px!important;padding:5px 2px!important
+  color:#c7e3ee!important;background:transparent!important;border:0!important;min-height:70px!important;
+  border-radius:12px!important;padding:7px 4px!important;display:flex!important;flex-direction:column!important;
+  align-items:center!important;justify-content:center!important;gap:4px!important
 }
-.nav button.on{background:rgba(116,202,239,.15)!important;color:#fff!important}
-.nav button::first-line{font-size:18px}
+.nav .nav-icon{display:block;font-size:27px!important;line-height:1!important}
+.nav .nav-label{display:block;font-size:13px!important;font-weight:900!important;line-height:1.08!important;letter-spacing:.01em}
+.nav button.on{background:rgba(116,202,239,.17)!important;color:#fff!important}
 
 /* Compact phone layout across all modules */
 @media(max-width:560px){
-  body{padding-bottom:72px!important}.w{padding:0 6px 10px!important}
+  body{padding-bottom:88px!important}.w{padding:0 6px 10px!important}
   .screen:not(#upc)>.head{min-height:58px;margin:0 -1px 7px;padding:8px 9px}.screen:not(#upc)>.head .title{font-size:19px}.screen:not(#upc)>.head .meta{font-size:9.5px}
   .screen:not(#upc) .card,.screen:not(#upc) .metric-section,.screen:not(#upc) .group-block,.screen:not(#upc) .promo,.screen:not(#upc) .related-card{padding:8px 9px!important;margin:6px 0!important;border-radius:12px!important}
   .screen:not(#upc) .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}
@@ -407,7 +409,9 @@ body{
   .screen:not(#upc) .metric-row{padding:6px 0!important}.screen:not(#upc) .metric-key{font-size:10px!important;min-width:92px!important}.screen:not(#upc) .metric-value{font-size:13px!important}
   .screen:not(#upc) .search-bar{margin:6px 0;padding:6px}
   .screen:not(#upc) table{font-size:10px!important}.screen:not(#upc) th,.screen:not(#upc) td{padding:6px 4px!important}
-  .nav button{min-height:52px!important}
+  .nav button{min-height:68px!important;padding:6px 3px!important}
+  .nav .nav-icon{font-size:26px!important}
+  .nav .nav-label{font-size:12.5px!important}
 }
 
 
@@ -447,7 +451,7 @@ body{
 #upload .upload-stage .ok{color:#15723b}.upload-stage .warn{color:#b46c08}.upload-stage .bad{color:#c92a2f}
 #upload .upload-progress{height:8px;background:#d8eaf2;border-radius:999px;overflow:hidden;margin:8px 0}
 #upload .upload-progress>div{height:100%;background:linear-gradient(90deg,#0b67a5,#27a2c7);width:0%;transition:width .25s ease}
-@media(max-width:560px){.nav button{font-size:8px!important}.nav button:first-line{font-size:16px}}
+@media(max-width:560px){.nav .nav-icon{font-size:26px!important}.nav .nav-label{font-size:12.5px!important;font-weight:900!important}}
 
 
 /* v7.0.135 14-day daily upload coverage calendar */
@@ -546,7 +550,7 @@ body{
 @media(max-width:480px){#performance .report-module-grid{grid-template-columns:1fr}}
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.138</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.139</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -648,7 +652,7 @@ body{
 
 </div>
 
-<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="performance">📊<br>Reports</button></div></nav>
+<nav class="nav"><div class="navin"><button data-main="core" class="on"><span class="nav-icon">🔎</span><span class="nav-label">Quick Check</span></button><button data-main="pi"><span class="nav-icon">🧮</span><span class="nav-label">PI</span></button><button data-main="performance"><span class="nav-icon">📊</span><span class="nav-label">Reports</span></button></div></nav>
 
 <script>
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
