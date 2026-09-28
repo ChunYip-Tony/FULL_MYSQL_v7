@@ -563,7 +563,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                     AND baf.mapping_status='CONFIRMED'
                     AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
                    JOIN product_family pf ON pf.family_id=baf.family_id
-                   ORDER BY a.article_id
+                   ORDER BY a.article_number,pf.family_id
                    LIMIT 4000"""
             )
             fallback_articles = cur.fetchall()
