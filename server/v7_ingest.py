@@ -98,7 +98,22 @@ def add_file(session_id: str, device_id: str, filename: str, data: bytes) -> dic
             if same:
                 conn.commit(); return {'batch_id':batch_id,'session_id':session_id,'idempotent':True,'file_id':int(same['file_id']),
                                        'filename':filename,'sha256':p.sha256,'status':same['processing_status'],'raw_rows_inserted':int(same['source_row_count'] or 0)}
-            cur.execute("SELECT file_id FROM ingest_file WHERE file_sha256=%s ORDER BY file_id LIMIT 1",(p.sha256,)); dup=cur.fetchone()
+            # A previous QA_HOLD/unclassified copy must not suppress a
+            # corrected re-ingest after classifier repairs. Treat a file as a
+            # true duplicate only when the same bytes were already successfully
+            # ingested under the same resolved source type.
+            cur.execute(
+                """SELECT file_id
+                   FROM ingest_file
+                   WHERE file_sha256=%s
+                     AND source_type=%s
+                     AND processing_status='INGESTED'
+                     AND COALESCE(error_count,0)=0
+                   ORDER BY file_id
+                   LIMIT 1""",
+                (p.sha256,p.source_type),
+            )
+            dup=cur.fetchone()
             duplicate_of=int(dup['file_id']) if dup else None
             cur.execute("""INSERT INTO ingest_file (
                 batch_id,original_filename,declared_extension,detected_format,source_type,source_type_confidence,file_size_bytes,file_sha256,
