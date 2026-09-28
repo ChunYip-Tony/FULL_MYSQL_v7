@@ -182,6 +182,20 @@ def _fetch_batch_state(cur, batch_id: int) -> tuple[dict[str, Any], dict[str, An
     return batch, (cur.fetchone() or {})
 
 
+def _stock_state(quantity: Any) -> tuple[bool, str]:
+    if quantity is None:
+        return False, "UNKNOWN"
+    try:
+        q = Decimal(str(quantity))
+    except Exception:
+        return False, "UNKNOWN"
+    if q < 0:
+        return True, "NEGATIVE"
+    if q == 0:
+        return False, "ZERO"
+    return False, "POSITIVE"
+
+
 QC_COLUMNS = [
     "upc_id","ean_upc","selling_description","article_id","article_number","family_id",
     "main_article_number","family_description","product_class","selling_uom","base_uom",
@@ -196,9 +210,17 @@ QC_COLUMNS = [
 ]
 
 
+DERIVED_QC_COLUMNS = ["negative_stock", "stock_status"]
+
+
 def _fetch_quick_rows(cur) -> list[dict[str, Any]]:
     cur.execute("SELECT " + ",".join(QC_COLUMNS) + " FROM quick_check_current ORDER BY ean_upc")
-    return list(cur.fetchall())
+    rows = list(cur.fetchall())
+    for row in rows:
+        negative_stock, stock_status = _stock_state(row.get("current_oh"))
+        row["negative_stock"] = negative_stock
+        row["stock_status"] = stock_status
+    return rows
 
 
 def _build_lookup(rows: list[dict[str, Any]]) -> list[list[Any]]:
@@ -219,8 +241,9 @@ def _build_lookup(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def _build_quick(rows: list[dict[str, Any]]) -> list[list[Any]]:
-    return [["Sheet_Row"] + QC_COLUMNS] + [
-        [sheet_row] + [row.get(col) for col in QC_COLUMNS]
+    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS
+    return [["Sheet_Row"] + export_columns] + [
+        [sheet_row] + [row.get(col) for col in export_columns]
         for sheet_row, row in enumerate(rows, start=2)
     ]
 
@@ -229,7 +252,8 @@ ANALYSIS_COLUMNS = [
     "ean_upc","main_article_number","article_number","selling_description","product_class",
     "selling_uom","current_price","current_price_type","current_cost_per_selling_unit",
     "gp_pct_current","gp_dollars_7d","gp_per_day_7d","pos_qty_7d","upc_velocity_7d",
-    "family_movement_7d","family_movement_uom","current_oh","current_oh_uom","dos","doh",
+    "family_movement_7d","family_movement_uom","current_oh","current_oh_uom",
+    "negative_stock","stock_status","dos","doh",
     "sweet_spot_price","wgpm_price","company_price_a","company_price_b","company_price_c",
     "quick_check_status","blocking_reason","publish_batch_id","published_at",
 ]
@@ -260,6 +284,7 @@ def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
     header = ["family_id","main_article_number","family_description","Representative_UPC","UPC_Row_Count",
               "Current_Active_Row_Count","READY_Row_Count","QA_HOLD_Row_Count","Historical_Row_Count",
               "Family_Movement_7D","Family_Movement_UOM","Representative_Current_OH","Representative_OH_UOM",
+              "Representative_Negative_Stock","Representative_Stock_Status",
               "Representative_DOS","Representative_DOH","Publish_Batch_ID"]
     groups: dict[Any, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
@@ -277,7 +302,8 @@ def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
                     representative.get("ean_upc"),len(rs),active,statuses.get("READY",0),statuses.get("QA_HOLD",0),
                     statuses.get("HISTORICAL_ONLY",0),representative.get("family_movement_7d"),
                     representative.get("family_movement_uom"),representative.get("current_oh"),
-                    representative.get("current_oh_uom"),representative.get("dos"),representative.get("doh"),
+                    representative.get("current_oh_uom"),representative.get("negative_stock"),
+                    representative.get("stock_status"),representative.get("dos"),representative.get("doh"),
                     representative.get("publish_batch_id")])
     return out
 
