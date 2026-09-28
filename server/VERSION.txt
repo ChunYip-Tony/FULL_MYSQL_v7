@@ -1,13 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.133 Single-Service Edition
+Version: 7.0.134 Single-Service Edition
 
-v7.0.133 No-client Web Upload:
-- Public Fish Market Web App now includes a fifth main tab: Upload.
-- No Admin login is required for this upload-only workflow.
+v7.0.134 No-login Web Upload Status:
+- Public Fish Market Web App includes Upload as a fifth main tab.
+- No Admin login, browser session, or API token is required for raw file upload.
+- No login is required to view active upload or readiness status.
 - Users can select or drag/drop multiple raw files into one ingest batch.
 - Supported browser upload extensions: XLSX, XLS, XLSM, CSV, TXT, TSV.
-- Browser upload reuses the same begin_batch -> add_file -> commit_batch -> worker pipeline used by the Windows client.
-- The Upload page displays filename, detected source type, raw row count, date coverage, Phase 2C status, Phase 3 status, and final Quick Check READY / QA HOLD state.
-- Guardrails: same-origin browser writes, existing per-file upload size limit, 40-file batch limit, supported-extension allowlist, and the existing one-active-batch rule.
-- Existing Bearer-token client upload endpoints remain unchanged and available.
-- No-client upload does not expose Admin, maintenance, price-change, or database mutation endpoints beyond ingest batch creation/file upload/commit.
+- Browser upload reuses the same canonical begin_batch -> add_file -> commit_batch -> worker -> Phase2C -> Phase3 -> Quick Check pipeline used by the Windows client.
+- Current Batch shows each file's filename, detected source type, raw row count, date coverage and ingest status.
+- Batch readiness shows Phase2C, Phase3, and Quick Check READY/HOLD counts.
+- Recent Uploads shows recent batches and per-file ingest/readiness information without login.
+- Failed pre-commit Web uploads automatically abort the incomplete batch to prevent an API_UPLOADING lock.
+- Browser guardrails remain: same-origin/cross-site protection, existing file-size limit, 40-file batch limit, supported-extension allowlist, and one-active-batch serialization.
+- Existing Bearer-token Windows client endpoints remain available but are optional.
