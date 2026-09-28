@@ -4,8 +4,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-# Catch Python syntax/import-time failures during image build instead of
-# discovering them only after App Platform starts the container.
-RUN python -m compileall -q . \
-    && python -c "import api; import worker; print('FULL MYSQL startup import smoke PASS')"
+# Build-time validation must not depend on runtime-only App Platform
+# secrets/environment variables. Syntax is safe to validate here; import-time
+# validation runs from single_service.py after runtime env is available.
+RUN python -m compileall -q .
 CMD ["python","single_service.py"]
