@@ -349,6 +349,29 @@ def _relevance(query: str, *, name: Any, number: Any, kind: str, matched_as: str
     return 0
 
 
+def _upc_role(row: dict[str,Any]) -> str:
+    """Evidence-based selling UPC role for V2 display."""
+    desc=str(row.get("selling_description") or "").upper()
+    uom=str(row.get("selling_uom") or "").upper().strip()
+    upc=_numeric_key(row.get("ean_upc"))
+    prefix=int(upc[:3]) if len(upc)>=3 and upc[:3].isdigit() else None
+
+    if any(token in desc for token in ("FRIED SERVICE","COOK SERVICE","COOK/SERVICE","(FRIED SERVICE)")):
+        return "COOK / SERVICE UPC"
+    if uom in {"PACK","PAC","PK","PKG","BAG","CASE","TRAY","EA","EACH","PCS","PC"}:
+        return "PACKAGED UPC"
+    weighted_prefix=(
+        prefix is not None and (
+            230<=prefix<=240
+            or prefix in {242,245,247,249}
+            or 250<=prefix<=269
+        )
+    )
+    if uom in {"LB","LBS"} or weighted_prefix:
+        return "WEIGHED UPC"
+    return "OTHER / UNCLASSIFIED"
+
+
 def search_items(query: str, limit: int = 30) -> dict[str, Any]:
     q = str(query or "").strip()
     if not q:
@@ -464,6 +487,8 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                     "family_name":row.get("family_description"),
                     "category":row.get("product_class"),
                     "readiness":row.get("quick_check_status"),
+                    "upc_role":_upc_role(row),
+                    "selling_uom":row.get("selling_uom"),
                     "relevance":rel,
                     "qty_28d":m28["sold_quantity"],
                     "qty_28d_uom":row.get("selling_uom"),
@@ -833,6 +858,8 @@ def family_info(family_key: str) -> dict[str,Any]:
                 "readiness":row.get("quick_check_status"),
                 "current_price":row.get("current_price"),
                 "current_price_type":row.get("current_price_type"),
+                "selling_uom":row.get("selling_uom"),
+                "upc_role":_upc_role(row),
                 "qty_7d":m7["sold_quantity"],
                 "supported_days_7d":m7["supported_day_count"],
                 "qty_28d":m28["sold_quantity"],
@@ -842,7 +869,7 @@ def family_info(family_key: str) -> dict[str,Any]:
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_FAMILY_V1",
+        "contract_version":"WEBAPP_V2_FAMILY_V2",
         "family_article_number":family.get("main_article_number"),
         "family_article_name":family.get("family_description"),
         "family_id":fid,
@@ -889,11 +916,13 @@ def upc_info(upc: str) -> dict[str,Any]:
         m28=_sales_metric(cur,int(row["upc_id"]),28)
         cur.close()
     return {
-        "contract_version":"WEBAPP_V2_UPC_V1",
+        "contract_version":"WEBAPP_V2_UPC_V2",
         "upc":row.get("ean_upc"),
         "upc_name":row.get("selling_description"),
         "category":row.get("product_class"),
         "readiness":row.get("quick_check_status"),
+        "selling_uom":row.get("selling_uom"),
+        "upc_role":_upc_role(row),
         "family_article_number":row.get("main_article_number"),
         "family_article_name":row.get("family_description"),
         "current_price":row.get("current_price"),
@@ -923,11 +952,13 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
             raise KeyError("V2_UPC_NOT_FOUND")
         upc_id=int(row["upc_id"])
         result={
-            "contract_version":"WEBAPP_V2_PRICE_V1",
+            "contract_version":"WEBAPP_V2_PRICE_V2",
             "upc":row.get("ean_upc"),
             "name":row.get("selling_description"),
             "category":row.get("product_class"),
             "readiness":row.get("quick_check_status"),
+            "selling_uom":row.get("selling_uom"),
+            "upc_role":_upc_role(row),
             "current":{
                 "price":row.get("current_price"),
                 "price_type":row.get("current_price_type"),
@@ -2105,6 +2136,58 @@ def _family_owner_positions(cur, rows: list[dict[str,Any]], *, use_child_true_st
             "anchor_on_hand_file_id":ctx.get("file_id"),
             "anchor_date":ctx.get("observation_date"),
         }
+
+    # Some inventory snapshots are owned by the receiving/main article rather
+    # than the selling article attached to a UPC.  If child lookup found no
+    # inventory owner, supplement from confirmed article-level OH in the same
+    # family.  This fixes valid Family OH such as 1342107 without double
+    # counting an already-resolved child owner.
+    if not owners and rows:
+        family_id=next(
+            (int(x["family_id"]) for x in rows if x.get("family_id") is not None),
+            None,
+        )
+        if family_id is not None:
+            cur.execute(
+                """SELECT io.*
+                   FROM inventory_observation io
+                   JOIN (
+                       SELECT article_id,MAX(observation_date) AS max_date
+                       FROM inventory_observation
+                       WHERE family_id=%s
+                         AND article_id IS NOT NULL
+                         AND upc_id IS NULL
+                         AND on_hand_quantity IS NOT NULL
+                       GROUP BY article_id
+                   ) latest
+                     ON latest.article_id=io.article_id
+                    AND latest.max_date=io.observation_date
+                   WHERE io.family_id=%s
+                     AND io.article_id IS NOT NULL
+                     AND io.upc_id IS NULL
+                     AND io.on_hand_quantity IS NOT NULL
+                   ORDER BY io.article_id,io.file_id DESC,io.raw_id DESC""",
+                (family_id,family_id),
+            )
+            seen_articles=set()
+            for ctx in cur.fetchall():
+                aid=ctx.get("article_id")
+                if aid is None or int(aid) in seen_articles:
+                    continue
+                seen_articles.add(int(aid))
+                ctx["scope_type"]="ARTICLE"
+                pos=_system_position(cur,ctx)
+                owners[("ARTICLE",int(aid))]={
+                    "scope_type":"ARTICLE",
+                    "owner_id":int(aid),
+                    "quantity":pos.get("quantity") if pos else None,
+                    "uom":pos.get("uom") if pos else None,
+                    "source":"SYSTEM_OH_RECEIVING_ARTICLE_FALLBACK",
+                    "analysis_usable":bool(pos and pos.get("analysis_usable")),
+                    "blockers":pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+                    "anchor_on_hand_file_id":ctx.get("file_id"),
+                    "anchor_date":ctx.get("observation_date"),
+                }
 
     usable=[
         x for x in owners.values()
@@ -3479,6 +3562,8 @@ def performance_report(
                     "family_article_number":row.get("main_article_number"),
                     "category":pclass,
                     "readiness":status,
+                    "selling_uom":row.get("selling_uom"),
+                    "upc_role":_upc_role(row),
                     "sold_quantity":day_qty,
                     "sales_amount":day_sales,
                     "avg_sold_price":day_sales/day_qty if day_qty else None,
@@ -3597,6 +3682,8 @@ def performance_report(
                 "family_name":row.get("family_description"),
                 "category":pclass,
                 "readiness":status,
+                "selling_uom":row.get("selling_uom"),
+                "upc_role":_upc_role(row),
                 "current_price":current,
                 "current_price_basis":price_opt.get("current_price_basis"),
                 "current_price_observed_date":price_opt.get("current_price_observed_date"),
