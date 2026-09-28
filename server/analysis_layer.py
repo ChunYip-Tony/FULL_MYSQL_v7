@@ -4,7 +4,7 @@ import json
 from decimal import Decimal
 from typing import Any
 
-ANALYSIS_LAYER_VERSION = "1.0.0-seafood-first"
+ANALYSIS_LAYER_VERSION = "1.2.0-all-perishable"
 SEAFOOD_DEPT_CODE = "400"
 
 DEPARTMENT_REGISTRY = {
@@ -15,6 +15,30 @@ DEPARTMENT_REGISTRY = {
 
 
 def ensure_analysis_layer_tables(cur) -> None:
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS upc_department_observation (
+            observation_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            upc_id BIGINT UNSIGNED NULL,
+            ean_upc VARCHAR(32) NOT NULL,
+            department_code VARCHAR(8) NOT NULL,
+            department_name VARCHAR(32) NOT NULL,
+            source_type VARCHAR(32) NOT NULL,
+            business_date DATE NULL,
+            batch_id BIGINT UNSIGNED NOT NULL,
+            file_id BIGINT UNSIGNED NOT NULL,
+            sheet_id BIGINT UNSIGNED NULL,
+            source_row_number INT NULL,
+            observed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            PRIMARY KEY (observation_id),
+            UNIQUE KEY uq_upc_department_source (
+                ean_upc,department_code,source_type,file_id,source_row_number
+            ),
+            KEY ix_upc_department_lookup (ean_upc,department_code,business_date),
+            KEY ix_upc_department_upc (upc_id,department_code,business_date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        """
+    )
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS analysis_item_current (
@@ -144,8 +168,10 @@ def ensure_analysis_layer_tables(cur) -> None:
     )
 
 
-def _mark_other_departments_pending(cur, batch_id: int) -> None:
-    for code in ("300", "500"):
+def _mark_other_departments_pending(cur, batch_id: int, enabled_department_code: str) -> None:
+    for code in DEPARTMENT_REGISTRY:
+        if code in {SEAFOOD_DEPT_CODE, enabled_department_code}:
+            continue
         cur.execute(
             """
             INSERT INTO analysis_layer_status
@@ -178,10 +204,8 @@ def _mark_other_departments_pending(cur, batch_id: int) -> None:
 
 
 def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DEPT_CODE) -> dict[str, Any]:
-    if department_code != SEAFOOD_DEPT_CODE:
-        raise ValueError(
-            f"Department {department_code} is not enabled yet; Seafood must pass first."
-        )
+    if department_code not in DEPARTMENT_REGISTRY:
+        raise ValueError(f"Unsupported department {department_code}.")
 
     department_name = DEPARTMENT_REGISTRY[department_code]
     cur.execute("DELETE FROM analysis_item_current WHERE department_code=%s", (department_code,))
@@ -205,10 +229,29 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
                  THEN MAX(UPPER(TRIM(selling_uom)))
                  ELSE NULL
                END AS family_pos_uom
-        FROM quick_check_current
-        WHERE family_id IS NOT NULL
+        FROM quick_check_current q
+        WHERE q.family_id IS NOT NULL
+          AND EXISTS (
+              SELECT 1
+              FROM upc_department_observation d
+              WHERE d.ean_upc=q.ean_upc
+                AND d.department_code=%s
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM upc_department_observation newer
+                    WHERE newer.ean_upc=d.ean_upc
+                      AND (
+                          COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                          OR (
+                              COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                              AND newer.observation_id > d.observation_id
+                          )
+                      )
+                )
+          )
         GROUP BY family_id
-        """
+        """,
+        (department_code,),
     )
     family_pos = {
         int(r["family_id"]): r
@@ -218,10 +261,29 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
 
     cur.execute(
         """
-        SELECT *
-        FROM quick_check_current
-        ORDER BY upc_id
-        """
+        SELECT q.*
+        FROM quick_check_current q
+        WHERE EXISTS (
+            SELECT 1
+            FROM upc_department_observation d
+            WHERE d.ean_upc=q.ean_upc
+              AND d.department_code=%s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM upc_department_observation newer
+                  WHERE newer.ean_upc=d.ean_upc
+                    AND (
+                        COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                        OR (
+                            COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                            AND newer.observation_id > d.observation_id
+                        )
+                    )
+              )
+        )
+        ORDER BY q.upc_id
+        """,
+        (department_code,),
     )
     qrows = cur.fetchall()
     item_rows = ready_rows = hold_rows = historical_rows = 0
@@ -414,7 +476,7 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
         ],
         "price_authority": "MOST_RECENT_PRICE_LIST_VS_POS; SAME_DATE_PRICE_LIST_WINS",
         "price_list_priority": ["IN STORE", "SALE", "TPR", "REG"],
-        "seafood_first": True,
+        "department_contract": "SEAFOOD_MEAT_PRODUCE_ENABLED",
     }
     cur.execute(
         """
@@ -439,7 +501,7 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
             json.dumps(detail),
         ),
     )
-    _mark_other_departments_pending(cur, batch_id)
+    _mark_other_departments_pending(cur, batch_id, department_code)
 
     return {
         "department_code": department_code,
@@ -466,7 +528,31 @@ def audit_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DEPT
     )
     status = cur.fetchone()
 
-    cur.execute("SELECT COUNT(*) AS c FROM quick_check_current")
+    cur.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM quick_check_current q
+        WHERE EXISTS (
+            SELECT 1
+            FROM upc_department_observation d
+            WHERE d.ean_upc=q.ean_upc
+              AND d.department_code=%s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM upc_department_observation newer
+                  WHERE newer.ean_upc=d.ean_upc
+                    AND (
+                        COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                        OR (
+                            COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                            AND newer.observation_id > d.observation_id
+                        )
+                    )
+              )
+        )
+        """,
+        (department_code,),
+    )
     qc_count = int((cur.fetchone() or {}).get("c") or 0)
     cur.execute(
         "SELECT COUNT(*) AS c FROM analysis_item_current WHERE department_code=%s",
