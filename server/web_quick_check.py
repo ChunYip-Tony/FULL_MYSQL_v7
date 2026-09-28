@@ -265,9 +265,31 @@ async function loadDumping(){
           <div class="k">Discrepancy</div><div class="v">${fmt(r.discrepancy_quantity)} ${esc(r.uom_code||'')}</div>
           <div class="k">Updated</div><div class="v">${esc(r.updated_at||'—')}</div>
         </div>
+        <div class="row" style="margin-top:10px;justify-content:flex-end">
+          <button class="smallbtn resolveDump" data-dumping-id="${esc(r.discrepancy_id)}">Mark handled</button>
+        </div>
       </div>`).join('')||'<div class="empty">No pending dumping discrepancies.</div>';
     bindOpenCards('dumpingList');
+    $('dumpingList').querySelectorAll('.resolveDump').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation(); resolveDumping(btn.dataset.dumpingId,btn);
+    }));
   }catch(e){$('dumpingStatus').textContent=e.message;$('dumpingStatus').className='msg error'}
+}
+
+async function resolveDumping(id,btn){
+  if(!id)return;
+  if(!window.confirm('Mark this dumping discrepancy handled? This closes the queue item only and does not change inventory.'))return;
+  btn.disabled=true; btn.textContent='Saving…';
+  try{
+    await api('/v1/app/dumping/'+encodeURIComponent(id)+'/resolve',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({confirm:'RESOLVE_DUMPING_DISCREPANCY'})
+    });
+    loadedDumping=false; await loadDumping();
+  }catch(e){
+    $('dumpingStatus').textContent=e.message; $('dumpingStatus').className='msg error';
+    btn.disabled=false; btn.textContent='Mark handled';
+  }
 }
 
 async function loadPrice(){
