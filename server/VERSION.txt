@@ -1,15 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.128 Single-Service Edition
+Version: 7.0.129 Single-Service Edition
 
 Canonical public app:
 - /, /app, /app/quick-check and /app/v2 render the same Fish Market V2 shell.
 - Public modules: Quick Check / PI / OH Discrepancy / Reports.
 
-v7.0.128 Quick Check search:
-- Added typo-tolerant fuzzy item-name matching using bounded token similarity.
-- Example: SALMOM resolves to SALMON candidates.
-- Multi-word searches require every query token to match a candidate token, which limits unrelated fuzzy results.
-- Exact numeric UPC / Article / Family matching remains strict and unchanged.
-- Search ranking is now relevance first, then 28D Qty, then readiness.
-- Search falls back to the active Quick Check / confirmed Article identity corpus only when strict text matching does not provide enough candidates.
-- UI now labels the ordering as "best match first".
+v7.0.129 Quick Check search ordering:
+- Family Article search results are always placed at the top.
+- Family Article results are sorted by 28D Qty Sold descending.
+- UPC / item results follow and are also sorted by 28D Qty Sold descending.
+- Fuzzy relevance determines result inclusion and is only a tie-break after 28D Qty.
+- Readiness and item name are lower-priority tie-breaks.
+- Typo-tolerant search remains enabled, e.g. SALMOM can still return SALMON.
