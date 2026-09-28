@@ -950,7 +950,8 @@ function renderWebUploadRecentBatch(b){
     '<div style="margin-top:7px">'+files.map(x=>
       '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div>'+
       '<div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+
-      (x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+(x.coverage_end_date&&x.coverage_end_date!==x.coverage_start_date?' → '+esc(x.coverage_end_date):''):'')+
+      (x.upload_timestamp?' · Uploaded '+esc(uploadDateTime(x.upload_timestamp)):'')+
+      (x.coverage_start_date||x.coverage_end_date?' · Coverage '+esc(x.coverage_start_date||'')+(x.coverage_end_date&&x.coverage_end_date!==x.coverage_start_date?' → '+esc(x.coverage_end_date):''):'')+
       (x.duplicate_of_file_id?' · duplicate of file '+esc(x.duplicate_of_file_id):'')+
       '</div></div><span class="pill '+(Number(x.error_count||0)>0?'bad':'ok')+'">'+esc(x.processing_status||'UNKNOWN')+'</span></div>'
     ).join('')+'</div>'+
