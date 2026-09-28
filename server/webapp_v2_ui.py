@@ -590,7 +590,7 @@ body{
 #upload .delete-qa-msg{margin-top:5px;font-size:9px}
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.149</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.150</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -862,19 +862,32 @@ function setWebUploadFiles(files){
 function uploadStage(icon,label,value,cls=''){
   return '<div class="upload-stage"><div>'+icon+'</div><div>'+esc(label)+'</div><div class="'+cls+'"><b>'+esc(value??'—')+'</b></div></div>'
 }
+function livePhase3FromRuns(runs){
+  let ordered=[...(runs||[])].sort((a,b)=>Number(b.pipeline_run_id||0)-Number(a.pipeline_run_id||0));
+  let run=ordered.find(x=>x?.phase3_stage);
+  return run?.phase3_stage||'';
+}
+function phase3Display(finalStatus,liveStage,pipelineStatus){
+  if(finalStatus)return String(finalStatus);
+  if(liveStage)return String(liveStage);
+  if(String(pipelineStatus||'').toUpperCase()==='STARTED')return 'STARTING';
+  return 'Pending';
+}
 function terminalUploadStatus(s){
   s=String(s||'').toUpperCase();
   return s.includes('QUICK_CHECK_READY')||s.includes('QA_HOLD')||s.includes('FAILED')||s.includes('ABORTED');
 }
 function renderWebUploadStatus(d){
-  let b=d?.batch||{},files=d?.files||[],p2=d?.phase2c||{},p3=d?.phase3||{};
+  let b=d?.batch||{},files=d?.files||[],p2=d?.phase2c||{},p3=d?.phase3||{},runs=d?.api_runs||[];
+  let liveP3=livePhase3FromRuns(runs);
+  let latestRun=[...runs].sort((a,b)=>Number(b.pipeline_run_id||0)-Number(a.pipeline_run_id||0))[0]||{};
   $('uploadStatusCard').classList.remove('hide');
   $('uploadBatchMeta').textContent='Batch '+(b.batch_id??'—')+' · '+(b.batch_label||'Web upload');
   let status=String(b.processing_status||'—'),pct=0;
   if(status==='API_UPLOADING')pct=15;
   else if(status==='INGESTED_PENDING_QA')pct=35;
+  else if(liveP3||status.includes('PHASE3'))pct=75;
   else if(status.includes('PHASE2'))pct=55;
-  else if(status.includes('PHASE3'))pct=75;
   else if(status.includes('QUICK_CHECK_READY'))pct=100;
   else if(status.includes('QA_HOLD'))pct=100;
   $('uploadProgressBar').style.width=pct+'%';
@@ -882,7 +895,7 @@ function renderWebUploadStatus(d){
     uploadStage(status.includes('READY')?'✅':'⏳','Pipeline',status,status.includes('READY')?'ok':(status.includes('HOLD')||status.includes('FAIL')?'bad':'warn')),
     uploadStage('📄','Files',String(files.length)),
     uploadStage('🧩','Phase 2C',p2.result_status||'Pending',String(p2.result_status||'').includes('READY')?'ok':''),
-    uploadStage('⚙️','Phase 3',p3.result_status||'Pending',String(p3.result_status||'').includes('READY')?'ok':''),
+    uploadStage('⚙️','Phase 3',phase3Display(p3.result_status,liveP3,latestRun.processing_status),p3.result_status?'ok':(liveP3?'warn':'')),
     uploadStage('🔎','Quick Check',p3.quick_check_rows==null?'Pending':(fmt(p3.quick_check_ready_rows,0)+' / '+fmt(p3.quick_check_rows,0)+' READY · '+fmt(p3.quick_check_hold_rows,0)+' HOLD'),Number(p3.quick_check_hold_rows||0)>0?'warn':(p3.quick_check_rows!=null?'ok':''))
   ].join('');
   $('uploadServerFiles').innerHTML=files.map(x=>
@@ -957,7 +970,9 @@ async function loadWebUploadCalendar(){
 }
 
 function renderWebUploadRecentBatch(b){
-  let files=b.files||[];
+  let files=b.files||[],run=b.pipeline_run||{};
+  let liveP3=run.phase3_stage||'';
+  let p3Label=phase3Display(b.phase3_status,liveP3,run.processing_status);
   let qc=b.quick_check_rows==null?'Pending':(fmt(b.quick_check_ready_rows,0)+' / '+fmt(b.quick_check_rows,0)+' READY · '+fmt(b.quick_check_hold_rows,0)+' HOLD');
   return '<div class="card" data-upload-batch-card="'+esc(b.batch_id)+'">'+
     '<div class="row" style="justify-content:space-between"><div><div class="name">Batch '+esc(b.batch_id??'—')+'</div><div class="meta">'+esc(b.batch_label||'')+'</div>'+
@@ -967,7 +982,7 @@ function renderWebUploadRecentBatch(b){
     '<div id="uploadRecentStages" style="margin-top:6px">'+
       uploadStage('📄','Files',String(b.file_count??files.length))+
       uploadStage('🧩','Phase 2C',b.phase2c_status||'Pending',String(b.phase2c_status||'').includes('READY')?'ok':'')+
-      uploadStage('⚙️','Phase 3',b.phase3_status||'Pending',String(b.phase3_status||'').includes('READY')?'ok':'')+
+      uploadStage('⚙️','Phase 3',p3Label,b.phase3_status?'ok':(liveP3?'warn':''))+
       uploadStage('🔎','Quick Check',qc,Number(b.quick_check_hold_rows||0)>0?'warn':(b.quick_check_rows!=null?'ok':''))+
     '</div>'+
     '<div style="margin-top:7px">'+files.map(x=>
