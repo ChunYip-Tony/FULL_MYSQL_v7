@@ -1,20 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.118 Single-Service Edition
+Version: 7.0.119 Single-Service Edition
 
-Canonical runtime version: 7.0.118-single-service
+Canonical runtime version: 7.0.119-single-service
 Web App V2 route: /app/v2
 
-V2 main functions:
-- CORE
-- PI
-- PERFORMANCE
-
-v7.0.118:
-- Fixed whole-page horizontal scrolling on phones.
-- Family/UPC metrics are grouped into colorful semantic blocks.
-- Family Related UPCs changed from wide table to mobile cards.
-- Top 100 Urgent Price Reviews always acts as a review queue for active items.
-- Specific price is shown only for ACTIONABLE evidence-backed cases.
-- REVIEW ONLY items show the blocker instead of inventing a new price.
-- Company Price C floor and GP$/day priority remain active.
-- Elder-friendly typography, tap targets, Family highlighting, larger UPC numbers and Clear buttons remain active.
+v7.0.119:
+- 7 supported-day Price vs Sales graph now has visible points and numeric labels for Qty Sold and Avg Price.
+- PERFORMANCE Sales Audit now identifies the unmapped POS portion behind Canonical POS vs Mapped UPC Total differences.
+- Top unmapped UPCs are shown with sales, qty and mapping status.
+- Canonical POS remains the authoritative Report Date Sales total.
+- Top 100 remains a review queue rather than disappearing when no price is immediately actionable.
+- Elder-friendly grouped/colorful Family and UPC pages remain active.
