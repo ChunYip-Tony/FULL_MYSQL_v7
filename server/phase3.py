@@ -2553,12 +2553,15 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             seafood_analysis_audit = audit_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
             meat_analysis_attempt = refresh_analysis_layer(cur, batch_id, '300')
             meat_analysis_audit = audit_analysis_layer(cur, batch_id, '300')
+            produce_analysis_attempt = refresh_analysis_layer(cur, batch_id, '500')
+            produce_analysis_audit = audit_analysis_layer(cur, batch_id, '500')
             report('PHASE3_IDENTITY_AUDIT')
             identity_audit = audit_product_identity(cur)
             identity_guard_pass = bool(identity_audit.get('pass'))
             identity_guard_blockers = list(identity_audit.get('blockers') or [])
             analysis_guard_pass = bool(seafood_analysis_audit.get('pass'))
             meat_analysis_pass = bool(meat_analysis_audit.get('pass'))
+            produce_analysis_pass = bool(produce_analysis_audit.get('pass'))
             serving_preserved = False
 
             if identity_guard_pass and analysis_guard_pass:
@@ -2592,6 +2595,13 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     'audit': meat_analysis_audit,
                     'pass': meat_analysis_pass,
                     'gate_role': 'DEPARTMENT_LOCAL_STATUS',
+                },
+                'produce': {
+                    'refresh': produce_analysis_attempt,
+                    'audit': produce_analysis_audit,
+                    'pass': produce_analysis_pass,
+                    'gate_role': 'DEPARTMENT_LOCAL_STATUS',
+                    'inventory_policy': 'OH_SUPPORTING_ONLY_DO_NOT_DRIVE_DECISIONS_ALONE',
                 },
                 'policy': 'FAIL_CLOSED_PRESERVE_PREVIOUS_SERVING',
                 'previous_serving_preserved': serving_preserved,
