@@ -1,5 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.155 Single-Service Edition
+Version: 7.0.156 Single-Service Edition
+
+v7.0.156 Upload Runtime Visibility + Resilient Recent History:
+- Uploads screen now shows both static UI version and live runtime version from /healthz.
+- Runtime version is fetched with cache disabled so deployment state is immediately visible.
+- Recent Uploads uses a core-first history query that depends only on ingest_batch core fields.
+- File history, Phase2C, Phase3, and pipeline status are independent best-effort enrichments.
+- Optional enrichment failures no longer cause the entire Recent Uploads endpoint to return HTTP 500.
+- If an enrichment is unavailable, batch history still renders and the UI indicates limited stage detail.
+
 
 v7.0.155 Upload History Schema Compatibility:
 - Recent Uploads now detects whether ingest_file.upload_timestamp exists before querying it.
