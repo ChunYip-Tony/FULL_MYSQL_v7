@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import quote
 
 from db import db_conn
+from quick_check_app import negative_stock_queue
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -20,6 +21,7 @@ MYSQL_TABS = {
     "family": "MYSQL_FAMILY_CURRENT",
     "analysis": "MYSQL_ANALYSIS_CURRENT",
     "qa": "MYSQL_QA_HOLD",
+    "negative": "MYSQL_NEGATIVE_STOCK",
     "bridge": "BRIDGE_STATUS",
 }
 
@@ -280,6 +282,21 @@ def _build_qa(rows: list[dict[str, Any]]) -> list[list[Any]]:
     return out
 
 
+
+def _build_negative_stock(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    columns = [
+        "ean_upc","main_article_number","article_number","selling_description",
+        "family_id","selling_uom","system_oh","system_oh_uom",
+        "effective_oh","effective_oh_uom","effective_oh_source",
+        "active_true_stock","active_true_stock_uom","true_stock_required_uom",
+        "pos_qty_7d","upc_velocity_7d","dos","quick_check_status","blocking_reason",
+        "stock_status","negative_stock","action_code","action_reason",
+        "publish_batch_id","published_at",
+    ]
+    return [columns] + [[row.get(col) for col in columns] for row in rows]
+
+
+
 def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
     header = ["family_id","main_article_number","family_description","Representative_UPC","UPC_Row_Count",
               "Current_Active_Row_Count","READY_Row_Count","QA_HOLD_Row_Count","Historical_Row_Count",
@@ -377,6 +394,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
         if not rows:
             return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
 
+        negative_queue = negative_stock_queue(limit=500)
         matrices = {
             MYSQL_TABS["source"]:_source_status(batch,phase3,len(rows)),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
@@ -384,6 +402,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             MYSQL_TABS["family"]:_build_family(rows),
             MYSQL_TABS["analysis"]:_build_analysis(rows),
             MYSQL_TABS["qa"]:_build_qa(rows),
+            MYSQL_TABS["negative"]:_build_negative_stock(negative_queue.get("rows") or []),
         }
         _ensure_tabs(session, spreadsheet_id, list(matrices) + [MYSQL_TABS["bridge"]])
         for title, matrix in matrices.items():
