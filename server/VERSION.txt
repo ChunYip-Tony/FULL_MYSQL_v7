@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.150 Single-Service Edition
+Version: 7.0.151 Single-Service Edition
+
+v7.0.151 DigitalOcean Syntax Fix:
+- Fixed api.py Recent Uploads SQL at the build-log-reported failing line.
+- Removed the Python f-string around SQL containing the JSON literal '{}'.
+- LIMIT is now parameterized with %s instead of interpolated into an f-string.
+- This removes the SyntaxError: f-string: valid expression required before '}' that blocked Docker image build.
+- Docker compileall remains enabled so syntax regressions fail immediately during build.
+
 
 v7.0.149 DigitalOcean Deploy Fix:
 - Removed api/worker import smoke from Docker image build because App Platform runtime secrets are not guaranteed during build.
