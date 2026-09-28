@@ -1,21 +1,32 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.114 Single-Service Edition
+Version: 7.0.115 Single-Service Edition
 
-Canonical runtime version: 7.0.114-single-service
+Canonical runtime version: 7.0.115-single-service
 Web App V2 route: /app/v2
 Canonical V2 module: server/webapp_v2_runtime.py
-V2 main functions: CORE / ORDERING / PI / PERFORMANCE
 
-Latest V2 rules:
+V2 main functions:
+- CORE
+- PI
+- PERFORMANCE
+
+Main ORDERING is cancelled.
+CORE -> UPC -> Ordering Analysis remains available at Family Article decision level.
+
+Latest UI:
+- Elder-friendly larger text
+- larger buttons and Back control
+- high-contrast cards
+- simplified three-tab navigation
+- mobile/system Back remains inside V2 flow
+
+Latest data rules:
 - Search sort: 28D Qty Sold descending -> readiness.
 - Family Info shows Family 7D Sold + Family 28D Sold.
 - 7D/14D/28D use completed canonical supported dates only.
-- Price chart = latest 7 supported days; detailed sales history = latest 14 supported days.
+- Price chart = latest 7 supported days.
+- Detailed price/sales history = latest 14 supported days.
 - Historical SALE displays weekday range plus dates.
-- Promotion items are UPC-based and use selected UPC historical SALE evidence.
 - PI writes Family Article True Stock.
-- Ordering is Family Article level; negative OH is treated as zero for calculations.
-- Performance Top 100 price suggestions prioritize positive observed GP$/day opportunity.
+- Performance Top 100 prioritizes positive observed GP$/day opportunity.
 - Company Price C is the hard bottom line when applicable.
-- Price and Ordering remain analysis-only; no save/submit.
-- Mobile Back stays inside V2 navigation.
