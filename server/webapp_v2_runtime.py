@@ -47,12 +47,17 @@ def _readiness_rank(status: Any) -> int:
     }.get(str(status or "").upper(), 3)
 
 
-def _canonical_sales_days(cur, limit: int | None = None) -> list[dict[str, Any]]:
+def _canonical_sales_days(
+    cur,
+    limit: int | None = None,
+    up_to: date | None = None,
+) -> list[dict[str, Any]]:
+    cutoff=min(up_to,completed_through_date()) if up_to is not None else completed_through_date()
     return source_data_days(
         cur,
         "sales_by_price_type",
         limit=limit,
-        up_to=completed_through_date(),
+        up_to=cutoff,
     )
 
 
@@ -160,8 +165,9 @@ def _sales_metric(
     cur,
     upc_id: int,
     supported_day_count: int,
+    up_to: date | None = None,
 ) -> dict[str, Any]:
-    days = _canonical_sales_days(cur, limit=supported_day_count)
+    days = _canonical_sales_days(cur, limit=supported_day_count, up_to=up_to)
     daily = _daily_sales_by_price_type(cur, upc_id, days)
     qty = sum((_d(x["sold_quantity"]) for x in daily.values()), Decimal("0"))
     sales = sum((_d(x["sales_amount"]) for x in daily.values()), Decimal("0"))
@@ -183,8 +189,13 @@ def _price_sales_trend(
     cur,
     upc_id: int,
     supported_day_count: int = 90,
+    up_to: date | None = None,
 ) -> dict[str, Any]:
-    days = _canonical_sales_days(cur, limit=max(1, min(int(supported_day_count), 365)))
+    days = _canonical_sales_days(
+        cur,
+        limit=max(1, min(int(supported_day_count), 365)),
+        up_to=up_to,
+    )
     daily = _daily_sales_by_price_type(cur, upc_id, days)
     rows = []
     for day in sorted(daily):
@@ -2874,6 +2885,7 @@ def _observed_price_gp_day_candidates(
     current_cost: Decimal,
     supported_day_limit: int=90,
     company_c_floor: Decimal|None=None,
+    up_to: date|None=None,
 ) -> list[dict[str,Any]]:
     """Observed-price GP$/day candidates using completed canonical POS days.
 
@@ -2881,7 +2893,11 @@ def _observed_price_gp_day_candidates(
     observed price. Current cost is used so candidates are comparable under
     today's cost structure.
     """
-    days=_canonical_sales_days(cur,limit=max(7,min(int(supported_day_limit),180)))
+    days=_canonical_sales_days(
+        cur,
+        limit=max(7,min(int(supported_day_limit),180)),
+        up_to=up_to,
+    )
     daily=_daily_sales_by_price_type(cur,upc_id,days)
     buckets: dict[Decimal,dict[str,Any]]={}
     for day in sorted(daily):
@@ -2928,18 +2944,61 @@ def _observed_price_gp_day_candidates(
     return out
 
 
+def _observed_price_as_of(
+    cur,
+    upc_id: int,
+    as_of_date: date,
+    lookback_supported_days: int=28,
+) -> dict[str,Any]:
+    days=_canonical_sales_days(
+        cur,
+        limit=max(1,min(int(lookback_supported_days),90)),
+        up_to=as_of_date,
+    )
+    daily=_daily_sales_by_price_type(cur,upc_id,days)
+    for day in sorted(daily,reverse=True):
+        x=daily[day]
+        qty=_d(x.get("sold_quantity"))
+        sales=_d(x.get("sales_amount"))
+        if qty>0:
+            return {
+                "status":"READY",
+                "date":day,
+                "price":sales/qty,
+                "price_types":sorted(str(k).upper() for k in (x.get("price_types") or {}).keys()),
+                "basis":"LAST_OBSERVED_SOLD_PRICE_ON_OR_BEFORE_REPORT_DATE",
+            }
+    return {
+        "status":"UNAVAILABLE",
+        "date":None,
+        "price":None,
+        "price_types":[],
+        "basis":"NO_OBSERVED_SOLD_PRICE_ON_OR_BEFORE_REPORT_DATE",
+    }
+
+
 def _gp_day_price_suggestion(
     cur,
     row: dict[str,Any],
     upc_id: int,
+    *,
+    as_of_date: date|None=None,
 ) -> dict[str,Any]:
     cost=(
         Decimal(str(row["current_cost_per_selling_unit"]))
         if row.get("current_cost_per_selling_unit") is not None else None
     )
+    observed_asof=(
+        _observed_price_as_of(cur,upc_id,as_of_date)
+        if as_of_date is not None else None
+    )
     current=(
-        Decimal(str(row["current_price"]))
-        if row.get("current_price") is not None else None
+        _d(observed_asof.get("price"))
+        if observed_asof and observed_asof.get("price") is not None
+        else (
+            Decimal(str(row["current_price"]))
+            if row.get("current_price") is not None else None
+        )
     )
     company_c=(
         Decimal(str(row["company_price_c"]))
@@ -2962,6 +3021,7 @@ def _gp_day_price_suggestion(
         current_cost=cost,
         supported_day_limit=90,
         company_c_floor=company_c,
+        up_to=as_of_date,
     )
     eligible=[x for x in candidates if x["meets_company_c_floor"]]
     floor_constrained=False
@@ -3009,12 +3069,31 @@ def _gp_day_price_suggestion(
         "sweet_spot_price":sweet,
         "candidate_count":len(candidates),
         "top_observed_candidates":candidates[:5],
+        "current_price_used":current,
+        "current_price_basis":(
+            observed_asof.get("basis")
+            if observed_asof else "CURRENT_QUICK_CHECK_PRICE"
+        ),
+        "current_price_observed_date":(
+            observed_asof.get("date")
+            if observed_asof else row.get("current_price_asof_date")
+        ),
+        "cost_basis":"CURRENT_AUTHORITATIVE_COST",
+        "cost_date":row.get("cost_date"),
     }
 
-def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
-    """Read-only performance report + transparent urgent price suggestions.
+def performance_report(
+    category: str="ALL",
+    limit: int=100,
+    report_date: date|None=None,
+) -> dict[str,Any]:
+    """Date-anchored performance analysis and urgent price suggestions.
 
-    Urgency is a review priority, not an automatic execution score.
+    Sales evidence is strictly limited to completed canonical supported dates on
+    or before report_date. Price suggestions are generated from sales response
+    through report_date. Current authoritative cost and current Company C are
+    used because historical daily cost/company-price lineage is not published
+    in the V2 serving layer.
     """
     cat=str(category or "ALL").strip().upper()
     if cat not in {"ALL","LIVE","FRESH","FROZEN"}:
@@ -3023,6 +3102,16 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
+
+        latest_days=_canonical_sales_days(cur,limit=1,up_to=report_date)
+        if not latest_days:
+            cur.close()
+            raise ValueError("NO_COMPLETED_SUPPORTED_SALES_DATE")
+        anchor=max(x["date"] for x in latest_days)
+        if report_date is not None and anchor!=report_date:
+            cur.close()
+            raise ValueError("REPORT_DATE_NOT_SUPPORTED")
+
         if cat=="ALL":
             cur.execute(
                 """SELECT * FROM quick_check_current
@@ -3036,32 +3125,35 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
             )
         rows=cur.fetchall()
 
+        anchor_day_entry=[x for x in latest_days if x["date"]==anchor]
         summary={
-            "active_upcs":0,
+            "report_date":anchor,
+            "active_upcs_28d":0,
+            "upcs_sold_report_date":0,
             "ready_upcs":0,
             "qa_hold_upcs":0,
+            "report_date_sales_dollars":Decimal("0"),
             "sales_dollars_7d":Decimal("0"),
             "sales_dollars_14d":Decimal("0"),
             "sales_dollars_28d":Decimal("0"),
-            "gp_dollars_7d":Decimal("0"),
             "slowing_items":0,
             "low_gp_items":0,
             "price_review_candidates":0,
         }
         suggestions=[]
-
+        day_items=[]
         targets={"LIVE":Decimal("0.15"),"FRESH":Decimal("0.30"),"FROZEN":Decimal("0.44")}
 
         for row in rows:
             upc_id=int(row["upc_id"])
-            m7=_sales_metric(cur,upc_id,7)
-            m14=_sales_metric(cur,upc_id,14)
-            m28=_sales_metric(cur,upc_id,28)
+            m7=_sales_metric(cur,upc_id,7,up_to=anchor)
+            m14=_sales_metric(cur,upc_id,14,up_to=anchor)
+            m28=_sales_metric(cur,upc_id,28,up_to=anchor)
             q28=_d(m28.get("sold_quantity"))
             if q28<=0:
                 continue
 
-            summary["active_upcs"]+=1
+            summary["active_upcs_28d"]+=1
             status=str(row.get("quick_check_status") or "")
             if status=="READY":
                 summary["ready_upcs"]+=1
@@ -3071,15 +3163,25 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
             summary["sales_dollars_7d"]+=_d(m7.get("sales_amount"))
             summary["sales_dollars_14d"]+=_d(m14.get("sales_amount"))
             summary["sales_dollars_28d"]+=_d(m28.get("sales_amount"))
-            summary["gp_dollars_7d"]+=_d(row.get("gp_dollars_7d"))
+
+            day_daily=_daily_sales_by_price_type(cur,upc_id,anchor_day_entry)
+            day_obs=day_daily.get(anchor,{
+                "sold_quantity":Decimal("0"),
+                "sales_amount":Decimal("0"),
+                "price_types":{},
+            })
+            day_qty=_d(day_obs.get("sold_quantity"))
+            day_sales=_d(day_obs.get("sales_amount"))
+            summary["report_date_sales_dollars"]+=day_sales
+            if day_qty>0:
+                summary["upcs_sold_report_date"]+=1
 
             v7=m7.get("velocity_per_supported_day")
             v14=m14.get("velocity_per_supported_day")
             v28=m28.get("velocity_per_supported_day")
             trend_ratio=(
                 _d(v7)/_d(v28)
-                if v7 is not None and v28 is not None and _d(v28)>0
-                else None
+                if v7 is not None and v28 is not None and _d(v28)>0 else None
             )
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 summary["slowing_items"]+=1
@@ -3093,58 +3195,77 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
             if gp is not None and target_gp is not None and gp<target_gp:
                 summary["low_gp_items"]+=1
 
-            current=(
-                Decimal(str(row["current_price"]))
-                if row.get("current_price") is not None else None
+            if day_qty>0:
+                day_items.append({
+                    "upc":row.get("ean_upc"),
+                    "name":row.get("selling_description"),
+                    "family_article_number":row.get("main_article_number"),
+                    "category":pclass,
+                    "readiness":status,
+                    "sold_quantity":day_qty,
+                    "sales_amount":day_sales,
+                    "avg_sold_price":day_sales/day_qty if day_qty else None,
+                    "price_types":sorted(str(k).upper() for k in (day_obs.get("price_types") or {}).keys()),
+                    "velocity_7d":v7,
+                    "velocity_14d":v14,
+                    "velocity_28d":v28,
+                })
+
+            price_opt=_gp_day_price_suggestion(
+                cur,row,upc_id,as_of_date=anchor
             )
-            price_opt=_gp_day_price_suggestion(cur,row,upc_id)
+            current=price_opt.get("current_price_used")
             suggested=price_opt.get("suggested_price")
             basis=price_opt.get("basis")
             company_c_floor=price_opt.get("company_c_floor")
-            current_type=str(row.get("current_price_type") or "").upper()
+            current_types=price_opt.get("current_price_basis")
+            # If report-date UPC actually sold on SALE, suppress automated review.
+            report_day_types=set(str(k).upper() for k in (day_obs.get("price_types") or {}).keys())
 
             reasons=[]
             score=Decimal("0")
             price_gap_pct=None
-            if current is not None and current>0 and suggested is not None:
-                price_gap_pct=abs(_d(suggested)-current)/current
+            if current is not None and _d(current)>0 and suggested is not None:
+                price_gap_pct=abs(_d(suggested)-_d(current))/_d(current)
                 if price_gap_pct>=Decimal("0.03"):
                     reasons.append(
                         f"{basis}_PRICE_GAP_{(price_gap_pct*Decimal('100')).quantize(Decimal('0.1'))}PCT"
                     )
             if price_opt.get("floor_constrained"):
                 reasons.append("COMPANY_C_FLOOR_CONSTRAINED")
-
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
-                slowdown=(Decimal("1")-trend_ratio)
-                score+=min(Decimal("30"),slowdown*Decimal("50"))
                 reasons.append("7D_VELOCITY_BELOW_28D")
-
             if gp is not None and target_gp is not None and gp<target_gp:
-                gap=target_gp-gp
-                score+=min(Decimal("25"),gap*Decimal("100"))
                 reasons.append("GP_BELOW_CATEGORY_REFERENCE")
 
+            cost=(
+                Decimal(str(row["current_cost_per_selling_unit"]))
+                if row.get("current_cost_per_selling_unit") is not None else None
+            )
             current_gp_day=(
-                Decimal(str(row["gp_per_day_7d"]))
-                if row.get("gp_per_day_7d") is not None else None
+                (_d(current)-cost)*_d(v7)
+                if current is not None and cost is not None and v7 is not None
+                else None
             )
             expected_gp_day=price_opt.get("expected_gp_per_day_from_observed_demand")
             gp_day_gain=(
-                _d(expected_gp_day)-current_gp_day
+                _d(expected_gp_day)-_d(current_gp_day)
                 if expected_gp_day is not None and current_gp_day is not None
                 else None
             )
+            gp_day_gain_pct=(
+                gp_day_gain/abs(_d(current_gp_day))
+                if gp_day_gain is not None and current_gp_day not in (None,Decimal("0"))
+                else None
+            )
 
-            # Price review must be READY, non-SALE, materially different, and
-            # supported by a positive GP$/day opportunity.
             blocked_reason=None
             if status!="READY":
                 blocked_reason="NOT_READY"
-            elif current_type=="SALE":
-                blocked_reason="ACTIVE_SALE"
-            elif current is None or current<=0:
-                blocked_reason="CURRENT_PRICE_UNAVAILABLE"
+            elif "SALE" in report_day_types:
+                blocked_reason="REPORT_DATE_ACTIVE_SALE"
+            elif current is None or _d(current)<=0:
+                blocked_reason="REPORT_DATE_PRICE_UNAVAILABLE"
             elif price_opt.get("status")!="READY" or suggested is None:
                 blocked_reason=price_opt.get("reason") or "GP_DAY_PRICE_OPTIMIZATION_UNAVAILABLE"
             elif price_gap_pct is None or price_gap_pct<Decimal("0.03"):
@@ -3156,25 +3277,6 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
 
             if blocked_reason is None:
                 summary["price_review_candidates"]+=1
-                direction=(
-                    "INCREASE" if _d(suggested)>current
-                    else ("DECREASE" if _d(suggested)<current else "KEEP")
-                )
-                cost=(
-                    Decimal(str(row["current_cost_per_selling_unit"]))
-                    if row.get("current_cost_per_selling_unit") is not None else None
-                )
-                suggested_gp=(
-                    (_d(suggested)-cost)/_d(suggested)
-                    if cost is not None and _d(suggested)>0 else None
-                )
-                gp_day_gain_pct=(
-                    gp_day_gain/abs(current_gp_day)
-                    if gp_day_gain is not None and current_gp_day not in (None,Decimal("0"))
-                    else None
-                )
-
-                # GP$/day opportunity is the primary urgency driver.
                 if gp_day_gain is not None and gp_day_gain>0:
                     score+=min(Decimal("70"),gp_day_gain*Decimal("2"))
                     reasons.append("POSITIVE_OBSERVED_GP_DAY_OPPORTUNITY")
@@ -3185,8 +3287,13 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
                 if gp is not None and target_gp is not None and gp<target_gp:
                     score+=min(Decimal("3"),(target_gp-gp)*Decimal("12"))
 
+                suggested_gp=(
+                    (_d(suggested)-cost)/_d(suggested)
+                    if cost is not None and _d(suggested)>0 else None
+                )
                 suggestions.append({
                     "urgency_score":score.quantize(Decimal("0.01")),
+                    "report_date":anchor,
                     "upc":row.get("ean_upc"),
                     "name":row.get("selling_description"),
                     "family_article_number":row.get("main_article_number"),
@@ -3194,22 +3301,27 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
                     "category":pclass,
                     "readiness":status,
                     "current_price":current,
-                    "current_price_type":row.get("current_price_type"),
+                    "current_price_basis":price_opt.get("current_price_basis"),
+                    "current_price_observed_date":price_opt.get("current_price_observed_date"),
                     "suggested_price":suggested,
                     "suggestion_basis":basis,
                     "company_price_c_floor":company_c_floor,
                     "company_c_applied":price_opt.get("company_c_applied"),
                     "company_c_floor_constrained":price_opt.get("floor_constrained"),
-                    "direction":direction,
+                    "direction":(
+                        "INCREASE" if _d(suggested)>_d(current)
+                        else ("DECREASE" if _d(suggested)<_d(current) else "KEEP")
+                    ),
                     "price_gap_pct":price_gap_pct,
-                    "current_gp_pct":gp,
-                    "suggested_gp_pct":suggested_gp,
+                    "current_gp_pct_reference":gp,
+                    "suggested_gp_pct_at_current_cost":suggested_gp,
                     "current_gp_per_day_7d":current_gp_day,
                     "expected_gp_per_day_observed_price_demand":expected_gp_day,
                     "gp_per_day_opportunity":gp_day_gain,
                     "gp_per_day_opportunity_pct":gp_day_gain_pct,
                     "observed_velocity_at_suggested_price":price_opt.get("expected_velocity_from_observed_price_days"),
-                    "top_observed_price_candidates":price_opt.get("top_observed_candidates"),
+                    "qty_report_date":day_qty,
+                    "sales_report_date":day_sales,
                     "qty_7d":m7.get("sold_quantity"),
                     "qty_14d":m14.get("sold_quantity"),
                     "qty_28d":m28.get("sold_quantity"),
@@ -3217,6 +3329,8 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
                     "velocity_14d":v14,
                     "velocity_28d":v28,
                     "velocity_7d_vs_28d_ratio":trend_ratio,
+                    "cost_basis":price_opt.get("cost_basis"),
+                    "cost_date":price_opt.get("cost_date"),
                     "reasons":reasons,
                 })
 
@@ -3229,65 +3343,86 @@ def performance_report(category: str="ALL", limit: int=100) -> dict[str,Any]:
             )
         )
         suggestions=suggestions[:limit]
+        day_items.sort(
+            key=lambda x:(
+                -float(x.get("sales_amount") or 0),
+                -float(x.get("sold_quantity") or 0),
+                str(x.get("name") or ""),
+            )
+        )
 
-        avg7=(
-            summary["sales_dollars_7d"]/Decimal("7")
-            if summary["active_upcs"] else Decimal("0")
+        avg7=summary["sales_dollars_7d"]/Decimal("7") if summary["sales_dollars_7d"] else Decimal("0")
+        avg14=summary["sales_dollars_14d"]/Decimal("14") if summary["sales_dollars_14d"] else Decimal("0")
+        report_vs_7=(
+            (summary["report_date_sales_dollars"]-avg7)/avg7
+            if avg7>0 else None
         )
-        avg14=(
-            summary["sales_dollars_14d"]/Decimal("14")
-            if summary["active_upcs"] else Decimal("0")
-        )
-        sales_daily_change_pct=(
-            (avg7-avg14)/avg14
+        report_vs_14=(
+            (summary["report_date_sales_dollars"]-avg14)/avg14
             if avg14>0 else None
         )
 
-        analysis=[]
-        if sales_daily_change_pct is not None:
-            analysis.append({
-                "type":"SALES_MOMENTUM",
-                "value_pct":sales_daily_change_pct,
+        analysis=[
+            {
+                "type":"REPORT_DATE_SALES_VS_7D_AVG",
+                "value_pct":report_vs_7,
                 "message":(
-                    "7D average daily sales is above the 14D baseline."
-                    if sales_daily_change_pct>=0
-                    else "7D average daily sales is below the 14D baseline."
+                    f"{anchor.isoformat()} sales were "
+                    + ("above" if report_vs_7 is not None and report_vs_7>=0 else "below")
+                    + " the 7-supported-day daily average."
+                    if report_vs_7 is not None
+                    else "7-day comparison unavailable."
                 ),
-            })
-        analysis.append({
-            "type":"ITEM_HEALTH",
-            "message":f"{summary['slowing_items']} active items have 7D velocity below 80% of their 28D velocity.",
-        })
-        analysis.append({
-            "type":"MARGIN",
-            "message":f"{summary['low_gp_items']} active items are below the category GP reference.",
-        })
-        analysis.append({
-            "type":"PRICE_REVIEW",
-            "message":f"{summary['price_review_candidates']} READY non-SALE items meet the price-review threshold.",
-        })
-
+            },
+            {
+                "type":"REPORT_DATE_SALES_VS_14D_AVG",
+                "value_pct":report_vs_14,
+                "message":(
+                    f"{anchor.isoformat()} sales were "
+                    + ("above" if report_vs_14 is not None and report_vs_14>=0 else "below")
+                    + " the 14-supported-day daily average."
+                    if report_vs_14 is not None
+                    else "14-day comparison unavailable."
+                ),
+            },
+            {
+                "type":"ITEM_HEALTH",
+                "message":f"{summary['slowing_items']} active items have 7D velocity below 80% of their 28D velocity as of {anchor.isoformat()}.",
+            },
+            {
+                "type":"MARGIN_REFERENCE",
+                "message":f"{summary['low_gp_items']} active items are below the current category GP reference.",
+            },
+            {
+                "type":"PRICE_REVIEW",
+                "message":f"{summary['price_review_candidates']} items have positive GP$/day price opportunity using sales evidence through {anchor.isoformat()}.",
+            },
+        ]
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V2",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V3",
         "category":cat,
+        "report_date":anchor,
+        "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
         "supported_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
         "summary":summary,
         "analysis":analysis,
+        "report_date_top_sellers":day_items[:25],
         "top_urgent_price_suggestions":suggestions,
         "top_urgent_limit":limit,
         "price_suggestion_rules":{
             "execution":"ANALYSIS_ONLY_NO_SAVE",
+            "sales_evidence_cutoff":anchor,
             "primary_objective":"MAXIMIZE_OBSERVED_GP_DOLLARS_PER_DAY",
             "candidate_demand_basis":"ACTUAL_HISTORICAL_SALES_RESPONSE_AT_OBSERVED_PRICE",
-            "current_cost_used_for_comparability":True,
             "company_price_c_rule":"HARD_BOTTOM_LINE_WHEN_AVAILABLE",
+            "cost_basis":"CURRENT_AUTHORITATIVE_COST",
+            "cost_caveat":"Historical daily cost lineage is not yet exposed in V2 Performance; suggestions use current authoritative cost while sales evidence is cut off at report date.",
             "minimum_price_gap_pct":Decimal("0.03"),
-            "active_sale_excluded":True,
+            "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
             "urgency_primary_sort":"GP_DOLLARS_PER_DAY_OPPORTUNITY_DESC",
-            "urgency_secondary_inputs":["7D_VS_28D_VELOCITY","GP_VS_CATEGORY_REFERENCE"],
         },
     }
 
