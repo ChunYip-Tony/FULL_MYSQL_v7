@@ -24,7 +24,7 @@ from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
-from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis
+from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis
 
 VERSION='7.0.109-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
@@ -1748,6 +1748,33 @@ def app_v2_price(upc:str,trend_supported_days:int=90):
         raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_UPC_NOT_FOUND'})
     except Exception as exc:
         raise HTTPException(500,f'V2 price analysis failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/v2/upc/{upc}/ordering')
+def app_v2_ordering(
+    upc:str,
+    ordering_date:date|None=None,
+    expected_delivery_date:date|None=None,
+    promotion_involved:bool=False,
+    promotion_start_date:date|None=None,
+    promotion_end_date:date|None=None,
+    promotion_price:Decimal|None=None,
+):
+    try:
+        result=v2_ordering_analysis(
+            upc,
+            ordering_date=ordering_date,
+            expected_delivery_date=expected_delivery_date,
+            promotion_involved=promotion_involved,
+            promotion_start_date=promotion_start_date,
+            promotion_end_date=promotion_end_date,
+            promotion_price=promotion_price,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_UPC_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 ordering analysis failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
