@@ -2315,6 +2315,131 @@ def submit_negative_stock_true_stock(
     }
 
 
+
+def ordering_queue(limit: int = 80) -> dict[str, Any]:
+    """Operational ordering review queue for the public Web App.
+
+    Uses the same effective-OH and DOS logic as Quick Check. It intentionally
+    does not invent an order quantity until an authoritative order calendar and
+    target-coverage policy are configured.
+    """
+    limit = max(1, min(int(limit or 80), 200))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        _refresh_expired_true_stock(cur)
+        cur.execute(
+            """SELECT upc_id,ean_upc,article_id,article_number,family_id,main_article_number,
+                      selling_description,family_description,product_class,selling_uom,
+                      current_price,current_price_type,current_cost_per_selling_unit,
+                      current_oh,current_oh_uom,oh_date,dos,doh,
+                      pos_qty_7d,pos_qty_30d,upc_velocity_7d,upc_velocity_30d,
+                      gp_pct_current,gp_dollars_7d,gp_per_day_7d,
+                      quick_check_status,blocking_reason,publish_batch_id,published_at
+               FROM quick_check_current
+               WHERE quick_check_status IN ('READY','QA_HOLD')
+                 AND current_oh IS NOT NULL
+               ORDER BY
+                 CASE WHEN dos IS NULL THEN 1 ELSE 0 END,
+                 dos ASC,
+                 upc_velocity_7d DESC,
+                 selling_description,
+                 ean_upc
+               LIMIT %s""",
+            (limit,),
+        )
+        base_rows = cur.fetchall()
+        rows: list[dict[str, Any]] = []
+        for row in base_rows:
+            system_oh = _system_oh_context(cur, row)
+            system_position = _system_position(cur, system_oh)
+            true_stock = _active_true_stock(cur, system_oh)
+            actual_position = _actual_position(cur, true_stock)
+            effective_position = actual_position if true_stock else system_position
+            effective_oh = {
+                "quantity": effective_position.get("quantity") if effective_position else None,
+                "uom": effective_position.get("uom") if effective_position else None,
+                "source": "TRUE_STOCK" if true_stock else "SYSTEM_OH",
+                "analysis_usable": effective_position.get("analysis_usable") if effective_position else False,
+                "rollforward_status": effective_position.get("rollforward_status") if effective_position else "BLOCKED",
+                "blockers": effective_position.get("blockers") if effective_position else ["OH_POSITION_NOT_AVAILABLE"],
+                "movement_through_date": effective_position.get("movement_through_date") if effective_position else None,
+            }
+            ordering = _quick_check_ordering(row, effective_oh)
+            out = dict(row)
+            out["effective_oh"] = effective_oh.get("quantity")
+            out["effective_oh_uom"] = effective_oh.get("uom")
+            out["effective_oh_source"] = effective_oh.get("source")
+            out["effective_oh_through"] = effective_oh.get("movement_through_date")
+            out["ordering"] = ordering
+            rows.append(out)
+        cur.close()
+    return {
+        "count": len(rows),
+        "contract_version": "ORDERING_APP_V1",
+        "quantity_policy": "REVIEW_ONLY_UNTIL_ORDER_CALENDAR_CONFIGURED",
+        "rows": rows,
+    }
+
+
+def price_change_queue(limit: int = 120) -> dict[str, Any]:
+    """Read-only price review queue using current precomputed Quick Check fields."""
+    limit = max(1, min(int(limit or 120), 300))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT ean_upc,article_number,family_id,main_article_number,
+                      selling_description,family_description,product_class,selling_uom,
+                      current_price,current_price_type,current_price_source,current_price_asof_date,
+                      current_cost_per_selling_unit,cost_source,cost_date,
+                      pos_qty_7d,pos_qty_30d,upc_velocity_7d,upc_velocity_30d,
+                      current_oh,current_oh_uom,oh_date,dos,doh,
+                      gp_pct_current,gp_dollars_7d,gp_per_day_7d,
+                      sweet_spot_price,wgpm_price,
+                      company_price_a,company_price_b,company_price_c,
+                      quick_check_status,blocking_reason,publish_batch_id,published_at
+               FROM quick_check_current
+               WHERE quick_check_status IN ('READY','QA_HOLD')
+                 AND current_price IS NOT NULL
+               ORDER BY
+                 CASE
+                   WHEN sweet_spot_price IS NOT NULL
+                    AND ABS(current_price-sweet_spot_price) >= 0.01 THEN 0
+                   ELSE 1
+                 END,
+                 gp_per_day_7d ASC,
+                 upc_velocity_7d ASC,
+                 selling_description,
+                 ean_upc
+               LIMIT %s""",
+            (limit,),
+        )
+        rows = cur.fetchall()
+        for row in rows:
+            current = _qc_decimal(row.get("current_price"))
+            flags: list[str] = []
+            refs = {
+                "sweet_spot": row.get("sweet_spot_price"),
+                "wgpm": row.get("wgpm_price"),
+                "company_a": row.get("company_price_a"),
+                "company_b": row.get("company_price_b"),
+                "company_c": row.get("company_price_c"),
+            }
+            for key, value in refs.items():
+                ref = _qc_decimal(value)
+                if current is not None and ref is not None and abs(current-ref) >= Decimal("0.01"):
+                    flags.append(f"{key.upper()}_DIFF")
+            row["review_flags"] = flags
+            row["reference_prices"] = refs
+            row["price_review_only"] = True
+        cur.close()
+    return {
+        "count": len(rows),
+        "contract_version": "PRICE_CHANGE_APP_V1",
+        "mode": "READ_ONLY_REVIEW",
+        "rows": rows,
+    }
+
+
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
