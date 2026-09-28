@@ -64,11 +64,12 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
     <div class="section">💲 Create Price Proposal</div>
     <div class="card">
       <div class="grid">
-        <div class="field"><label>UPC</label><input id="proposalUpc" placeholder="UPC"></div>
+        <div class="field"><label>UPC</label><div class="row"><input id="proposalUpc" placeholder="UPC"><button id="loadProposalUpc" class="smallbtn">Load</button></div></div>
         <div class="field"><label>Proposed price</label><input id="proposalPrice" inputmode="decimal" placeholder="0.00"></div>
         <div class="field"><label>Basis</label><select id="proposalBasis"><option>MANUAL</option><option>SWEET_SPOT</option><option>WGPM</option><option>COMPANY_A</option><option>COMPANY_B</option><option>COMPANY_C</option><option>CURRENT</option></select></div>
         <div class="field"><label>Price type</label><select id="proposalType"><option value="">Unspecified</option><option>REG</option><option>TPR</option><option>SALE</option><option>IN STORE</option></select></div>
       </div>
+      <div id="proposalItemSummary" class="msg"></div>
       <div class="field" style="margin-top:8px"><label>Reason</label><textarea id="proposalReason" placeholder="Why this proposal is being created"></textarea></div>
       <div class="actions"><button id="createProposal" class="primary">Create Proposal</button></div>
       <div id="proposalCreateMsg" class="msg"></div>
@@ -145,6 +146,31 @@ async function savePolicy(){
   try{await api('/v1/admin/ordering/policy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('policyMsg').textContent='Saved.';$('policyMsg').className='msg ok';await loadPolicies()}
   catch(e){$('policyMsg').textContent=e.message;$('policyMsg').className='msg danger'}
 }
+let loadedProposalItem=null;
+async function loadProposalUpc(){
+  const upc=$('proposalUpc').value.trim(); if(!upc)return;
+  $('proposalItemSummary').textContent='Loading…';
+  try{
+    const d=await api('/v1/app/quick-check/'+encodeURIComponent(upc));
+    const x=d.item||{};
+    loadedProposalItem=x;
+    $('proposalItemSummary').className='card';
+    $('proposalItemSummary').innerHTML='<div class="name">'+esc(x.selling_description||x.ean_upc)+'</div>'+
+      '<div class="kv"><div class="k">Current</div><div class="v">'+money(x.current_price)+'</div>'+
+      '<div class="k">Cost</div><div class="v">'+money(x.current_cost_per_selling_unit)+'</div>'+
+      '<div class="k">GP%</div><div class="v">'+pct(x.gp_pct_current)+'</div>'+
+      '<div class="k">Sweet / WGPM</div><div class="v">'+money(x.sweet_spot_price)+' / '+money(x.wgpm_price)+'</div>'+
+      '<div class="k">Company A/B/C</div><div class="v">'+money(x.company_price_a)+' / '+money(x.company_price_b)+' / '+money(x.company_price_c)+'</div></div>';
+    applyBasisPrice();
+  }catch(e){loadedProposalItem=null;$('proposalItemSummary').textContent=e.message;$('proposalItemSummary').className='msg danger'}
+}
+function applyBasisPrice(){
+  if(!loadedProposalItem)return;
+  const map={SWEET_SPOT:'sweet_spot_price',WGPM:'wgpm_price',COMPANY_A:'company_price_a',COMPANY_B:'company_price_b',COMPANY_C:'company_price_c',CURRENT:'current_price'};
+  const basis=$('proposalBasis').value, field=map[basis];
+  if(field && loadedProposalItem[field]!==null && loadedProposalItem[field]!==undefined)$('proposalPrice').value=loadedProposalItem[field];
+}
+
 async function createProposal(){
   $('proposalCreateMsg').textContent='Creating…';
   const body={
@@ -185,6 +211,9 @@ async function loadProposals(){
 }
 $('login').addEventListener('click',login);$('adminKey').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('logout').addEventListener('click',logout);
 $('savePolicy').addEventListener('click',savePolicy);$('refreshPolicies').addEventListener('click',loadPolicies);
+$('loadProposalUpc').addEventListener('click',loadProposalUpc);
+$('proposalUpc').addEventListener('keydown',e=>{if(e.key==='Enter')loadProposalUpc()});
+$('proposalBasis').addEventListener('change',applyBasisPrice);
 $('createProposal').addEventListener('click',createProposal);$('refreshProposals').addEventListener('click',loadProposals);
 $('scopeType').addEventListener('change',()=>{if($('scopeType').value==='GLOBAL')$('scopeKey').value='*'});
 checkSession();
