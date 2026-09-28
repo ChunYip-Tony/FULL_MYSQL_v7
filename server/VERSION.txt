@@ -9,6 +9,7 @@ v7.0.130 Seafood-first analysis layer:
 - Fixes cost authority to 101/107/109 receipt valuation > official Live/Fresh/Frozen report > explicit OH fallback > user-confirmed fallback.
 - Applies the same authority order to historical Sweet Spot GP/day cost selection.
 - Normalizes Price List STOR to IN STORE and preserves IN STORE > SALE > TPR > REG priority.
+- Seafood Price List ingestion includes both SubDept 400 Fish and SubDept 401 Fried Fish so 249/fried-service prices are not dropped.
 - Meat and Produce are explicitly staged as PENDING_PIPELINE_ENABLEMENT until Seafood passes and their department-specific authority rules are enabled.
 
 FULL MYSQL Secure API Architecture
