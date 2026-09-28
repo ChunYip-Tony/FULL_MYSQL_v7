@@ -1767,7 +1767,7 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
         actions: list[dict[str, Any]] = []
         suppressed_by_true_stock = 0
         blocked_owner_count = 0
-        for (_, _), group in owner_groups.items():
+        for group in owner_groups.values():
             system_oh = group["system_oh"]
             system_position = _system_position(cur, system_oh)
             if not system_position or not system_position.get("analysis_usable"):
@@ -1848,6 +1848,7 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
             "action_code": "COUNT_AND_SUBMIT_TRUE_STOCK",
             "candidate_upc_count": len(candidates),
             "inventory_owner_count": len(owner_groups),
+            "actionable_owner_count": len(actions),
             "suppressed_by_true_stock_count": suppressed_by_true_stock,
             "blocked_owner_count": blocked_owner_count,
             "unresolved_owner_upc_count": unresolved_owner_rows,
