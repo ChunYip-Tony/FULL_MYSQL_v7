@@ -1,15 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.126 Single-Service Edition
+Version: 7.0.127 Single-Service Edition
 
 Canonical public app:
-- /, /app, /app/quick-check and /app/v2 all render the same Fish Market V2 application shell.
+- /, /app, /app/quick-check and /app/v2 render the same Fish Market V2 shell.
 - Public modules: Quick Check / PI / OH Discrepancy / Reports.
-- Admin remains a separate administrative interface.
-- Standalone Main ORDERING remains cancelled; item-level Ordering analysis remains available.
 
-v7.0.126:
-- Promoted the approved seafood/fish-market mockup styling into one global public-app design system.
-- All public modules and detail/sub-analysis screens now use the same ocean background, deep-sea headers, ice-white cards, blue controls, rounded tables, badges, shadows, spacing and bottom navigation.
-- Unified styling covers Quick Check search/results, Family detail, UPC dashboard, Price analysis, item Ordering analysis, PI search/detail, OH Discrepancy report/clear, and Reports/Performance.
-- Quick Check UPC dashboard remains the visual reference implementation.
-- All public entry routes now open the same V2 application to prevent old and new themes from appearing depending on URL.
+v7.0.127 Quick Check refinements:
+- Search selection rows use light green.
+- Family Article search options override the list color with light yellow for immediate visual distinction.
+- 7D / 28D labels now stand alone; completed canonical data-day semantics are assumed and are no longer repeated in user-facing labels.
+- UPC role/type text such as "Catch Weighted UPC" is hidden from Quick Check search, Family related-UPC cards, and Price analysis headers.
+- Quick Check-linked Price Analysis uses simplified 7D / 28D language while preserving the same canonical data logic.
