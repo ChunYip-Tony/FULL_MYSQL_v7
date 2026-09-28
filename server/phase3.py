@@ -11,6 +11,7 @@ from typing import Any, Iterable
 
 from db import db_conn
 from data_coverage import source_data_days, coverage_summary
+from business_clock import business_today, completed_through_date
 from manual_overrides import (
     ensure_override_table,
     ensure_retirement_table,
@@ -23,6 +24,7 @@ from manual_overrides import (
     apply_manual_family_subarticles,
     confirmed_cost_conversion,
     confirmed_family_cost,
+    confirmed_receipt_entry_cost_basis,
 )
 from active_product_repair import repair_active_product_master
 from article_manual_multitab_repair import repair_article_manual_multitab
@@ -537,10 +539,57 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                         (article_id, family_id, mvt, posting, art_doc, po, vendor, entry_qty, entry_uom_id, base_qty, base_uom_id,
                          amount, batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number']),
                     )
-                if amount not in (None, 0) and base_qty not in (None, 0) and base_uom_id is not None:
-                    unit_cost = abs(amount / base_qty)
-                    cur.execute("SELECT cost_observation_id FROM article_cost_observation WHERE raw_table_name='raw_movement' AND raw_id=%s LIMIT 1", (rr['raw_id'],))
-                    if not cur.fetchone():
+                # Default receipt valuation uses SAP Base quantity/UOM. A narrow
+                # user-confirmed exception may instead use Entry quantity/UOM when
+                # the business confirms that Entry UOM is the true receiving/cost
+                # unit and the SAP Base-UOM label is not a physical conversion.
+                receipt_basis = confirmed_receipt_entry_cost_basis(cur, family_id)
+                basis_entry_uom = (
+                    str(receipt_basis.get('entry_uom_code') or '').strip().upper()
+                    if receipt_basis else None
+                )
+                use_entry_cost_basis = bool(
+                    receipt_basis
+                    and basis_entry_uom
+                    and entry_uom
+                    and basis_entry_uom == entry_uom
+                    and entry_qty not in (None, 0)
+                    and entry_uom_id is not None
+                    and amount not in (None, 0)
+                )
+
+                valuation_qty = entry_qty if use_entry_cost_basis else base_qty
+                valuation_uom_id = entry_uom_id if use_entry_cost_basis else base_uom_id
+                if amount not in (None, 0) and valuation_qty not in (None, 0) and valuation_uom_id is not None:
+                    unit_cost = abs(amount / valuation_qty)
+                    cur.execute(
+                        "SELECT cost_observation_id FROM article_cost_observation "
+                        "WHERE raw_table_name='raw_movement' AND raw_id=%s LIMIT 1",
+                        (rr['raw_id'],),
+                    )
+                    existing_cost = cur.fetchone()
+                    if existing_cost and use_entry_cost_basis:
+                        # Repair only DERIVED cost semantics. RAW movement_history
+                        # remains unchanged, including its supplied Base UOM.
+                        cur.execute(
+                            """UPDATE article_cost_observation
+                               SET article_id=%s,family_id=%s,cost_amount=%s,
+                                   currency_code='USD',cost_uom_id=%s,
+                                   source_type='MOVEMENT_RECEIPT_VALUATION',
+                                   movement_type=%s,business_date=%s,observed_at=%s,
+                                   cost_status='OBSERVED',confidence=1.0,
+                                   base_uom_id=%s,cost_per_base_uom=%s,
+                                   batch_id=%s,file_id=%s,sheet_id=%s,source_row_number=%s
+                               WHERE cost_observation_id=%s""",
+                            (
+                                article_id, family_id, unit_cost, valuation_uom_id,
+                                mvt, posting, datetime.combine(posting, datetime.min.time()),
+                                valuation_uom_id, unit_cost,
+                                batch_id, f['file_id'], sh['sheet_id'], rr['source_row_number'],
+                                existing_cost['cost_observation_id'],
+                            ),
+                        )
+                    elif not existing_cost:
                         cur.execute(
                             """INSERT INTO article_cost_observation
                                (article_id,family_id,cost_amount,currency_code,cost_uom_id,source_type,movement_type,business_date,
@@ -548,8 +597,8 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                                 batch_id,file_id,sheet_id,raw_table_name,raw_id,source_row_number)
                                VALUES (%s,%s,%s,'USD',%s,'MOVEMENT_RECEIPT_VALUATION',%s,%s,%s,'OBSERVED',1.0,%s,%s,
                                        %s,%s,%s,'raw_movement',%s,%s)""",
-                            (article_id, family_id, unit_cost, base_uom_id, mvt, posting, datetime.combine(posting, datetime.min.time()),
-                             base_uom_id, unit_cost, batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number']),
+                            (article_id, family_id, unit_cost, valuation_uom_id, mvt, posting, datetime.combine(posting, datetime.min.time()),
+                             valuation_uom_id, unit_cost, batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number']),
                         )
             if family_id is not None and mvt in FAMILY_SALE_MOVEMENTS and base_qty is not None:
                 net_sold = -base_qty
@@ -1362,7 +1411,7 @@ def _active_selling_evidence_for_unmapped(cur, ean: str, batch_id: int) -> dict[
     A configured Price List price by itself is NOT active-selling evidence.
     Historical sales and lineage are preserved.
     """
-    completed_through = date.today() - timedelta(days=1)
+    completed_through = completed_through_date()
     pos_days = source_data_days(
         cur, 'sales_by_price_type', limit=28,
         include_batch_id=batch_id, up_to=completed_through
@@ -1742,8 +1791,8 @@ def _historical_sweet_spot(cur, upc_id: int, family_id: int, factor: Decimal | N
 
 
 def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
-    calendar_today = date.today()
-    completed_through = calendar_today - timedelta(days=1)
+    calendar_today = business_today()
+    completed_through = completed_through_date()
 
     # Rolling metrics use completed DATA DAYS, not calendar days. The current batch is eligible
     # because its history rows are inserted immediately before this rebuild. Today's date is
