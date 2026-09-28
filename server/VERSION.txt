@@ -1,19 +1,24 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.105 Single-Service Edition
+Version: 7.0.106 Single-Service Edition
 
 Current runtime:
 - Public 4-module Web App: Quick Check, Ordering, Dumping, Price Change
-- Public Operations Overview dashboard
+- Operations Overview dashboard
 - Dumping Pending + resolved/superseded history
-- Price Change what-if analysis + proposal audit history
-- Secure /admin console with HttpOnly signed admin session
+- Price Change what-if analysis + audited proposal workflow
+- Admin Console uses Admin ID + Password and a signed HttpOnly browser session
 - Config-driven Ordering Policy engine and Suggested Order Qty
-- API and background worker version aligned to 7.0.105-single-service
+- API and background worker aligned to 7.0.106-single-service
+
+Admin authentication:
+- Browser login: FULLMYSQL_ADMIN_LOGIN_ID + FULLMYSQL_ADMIN_PASSWORD or FULLMYSQL_ADMIN_PASSWORD_HASH.
+- Password is never stored in browser localStorage/sessionStorage.
+- Browser session remains HttpOnly, Secure, SameSite=Lax and same-origin protected for writes.
+- Legacy admin API Bearer tokens remain supported for PowerShell / API clients.
+- Migration fallback accepts an admin API token as browser password only until a dedicated admin password/hash is configured.
 
 Safety / authority:
-- Public App does not require an API token.
-- Admin writes require an authenticated admin session or admin Bearer credential.
-- Admin browser session is HttpOnly, Secure, SameSite=Lax and same-origin protected for writes.
+- Public App does not require login.
+- Missing Ordering policy remains POLICY_NOT_CONFIGURED; quantity is not guessed.
 - Price proposal execution marking does not directly mutate authoritative live retail price.
-- Missing Ordering policy remains POLICY_NOT_CONFIGURED; order quantity is not guessed.
 - No RAW mutation.
