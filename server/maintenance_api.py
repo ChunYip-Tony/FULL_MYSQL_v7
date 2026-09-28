@@ -174,7 +174,7 @@ def run_operational_uom_quick_check_refresh(device: str) -> dict[str, Any]:
                 """SELECT COUNT(*) AS c
                    FROM pipeline_run
                    WHERE stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                     AND processing_status='STARTED'"""
+                     AND processing_status IN ('QUEUED','STARTED')"""
             )
             if int((cur.fetchone() or {}).get("c") or 0) > 0:
                 conn.rollback()
