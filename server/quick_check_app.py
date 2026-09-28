@@ -1855,6 +1855,83 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
             "rows": rows,
         }
 
+def submit_negative_stock_true_stock(
+    inventory_owner_scope: str,
+    inventory_owner_id: int,
+    true_stock_quantity: Decimal,
+    true_stock_uom: str,
+    device: str,
+) -> dict[str, Any]:
+    """Close one owner-level negative-stock action through the existing True Stock workflow."""
+
+    scope = str(inventory_owner_scope or "").strip().upper()
+    if scope not in {"UPC","ARTICLE","FAMILY"}:
+        raise ValueError("NEGATIVE_STOCK_OWNER_SCOPE_INVALID")
+    owner_id = int(inventory_owner_id)
+    owner_key = f"{scope}:{owner_id}"
+
+    before = negative_stock_queue(limit=500)
+    action = next(
+        (r for r in before.get("rows", []) if str(r.get("inventory_owner_key")) == owner_key),
+        None,
+    )
+    if not action:
+        raise KeyError("NEGATIVE_STOCK_ACTION_NOT_FOUND")
+
+    action_upc = str(action.get("action_upc") or "").strip()
+    if not action_upc:
+        raise ValueError("NEGATIVE_STOCK_ACTION_UPC_MISSING")
+
+    submitted = submit_true_stock(
+        action_upc,
+        true_stock_quantity,
+        true_stock_uom,
+        device,
+    )
+
+    after = negative_stock_queue(limit=500)
+    still_present = any(
+        str(r.get("inventory_owner_key")) == owner_key
+        for r in after.get("rows", [])
+    )
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT discrepancy_id,family_id,main_article_number,scope_type,
+                      article_id,article_number,source_true_stock_id,ean_upc,
+                      system_oh_quantity,true_stock_quantity,discrepancy_quantity,
+                      uom_code,queue_status,created_at,updated_at
+               FROM dumping_discrepancy_queue
+               WHERE source_true_stock_id=%s
+               ORDER BY discrepancy_id DESC
+               LIMIT 1""",
+            (submitted.get("true_stock_id"),),
+        )
+        dumping = cur.fetchone()
+        cur.close()
+
+    return {
+        "status": "COMMITTED",
+        "inventory_owner_scope": scope,
+        "inventory_owner_id": owner_id,
+        "inventory_owner_key": owner_key,
+        "action_upc": action_upc,
+        "representative_upc": action.get("representative_upc"),
+        "related_upcs": action.get("related_upcs") or [],
+        "queue_count_before": before.get("count"),
+        "queue_count_after": after.get("count"),
+        "queue_removed": not still_present,
+        "submitted_true_stock": submitted,
+        "dumping_record": dumping,
+        "closed_loop_status": (
+            "CLOSED"
+            if not still_present
+            else "STILL_NEGATIVE_AFTER_TRUE_STOCK"
+        ),
+    }
+
+
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
