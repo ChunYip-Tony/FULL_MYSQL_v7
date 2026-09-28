@@ -27,7 +27,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.133-single-service'
+VERSION='7.0.134-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -416,230 +416,6 @@ def active(authorization: Annotated[str|None,Header()]=None):
     device_from_auth(authorization); return {'active_batch':find_active_batch()}
 
 
-PUBLIC_WEB_UPLOAD_DEVICE='WEBAPP-PUBLIC'
-PUBLIC_WEB_UPLOAD_EXTENSIONS={'.xlsx','.xls','.xlsm','.csv','.txt','.tsv'}
-PUBLIC_WEB_UPLOAD_MAX_FILES=50
-
-def _public_upload_same_origin(request: Request):
-    if not _same_origin_admin_request(request):
-        raise HTTPException(403,'Same-origin upload request required')
-
-def _public_upload_status_payload(session_id: str) -> dict:
-    payload=session_status(session_id)
-    batch=dict(payload.get('batch') or {})
-    batch.pop('notes',None)
-    files=[]
-    for row in payload.get('files') or []:
-        files.append({
-            'file_id':row.get('file_id'),
-            'filename':row.get('original_filename'),
-            'source_type':row.get('source_type'),
-            'status':row.get('processing_status'),
-            'rows':row.get('source_row_count'),
-            'errors':row.get('error_count'),
-            'duplicate_of_file_id':row.get('duplicate_of_file_id'),
-            'coverage_start':row.get('coverage_start_date'),
-            'coverage_end':row.get('coverage_end_date'),
-        })
-    return {
-        'batch':batch,
-        'files':files,
-        'phase2c':payload.get('phase2c'),
-        'phase3':payload.get('phase3'),
-        'pipeline_runs':payload.get('api_runs') or [],
-    }
-
-@app.post('/v1/public-upload/batches')
-def public_upload_create(
-    body:BatchCreate,
-    request:Request,
-):
-    _public_upload_same_origin(request)
-    result=begin_batch(
-        PUBLIC_WEB_UPLOAD_DEVICE,
-        body.label or f'Web App Raw Upload {datetime.now().isoformat(timespec="minutes")}',
-    )
-    if not result.get('created'):
-        active=result.get('active') or {}
-        raise HTTPException(
-            409,
-            detail={
-                'reason':'ANOTHER_BATCH_IS_ACTIVE',
-                'batch_id':active.get('batch_id'),
-                'status':active.get('processing_status'),
-                'started_at':active.get('upload_started_at'),
-            },
-        )
-    return {
-        'created':True,
-        'batch_id':result.get('batch_id'),
-        'session_id':result.get('session_id'),
-    }
-
-@app.post('/v1/public-upload/batches/{session_id}/files')
-async def public_upload_file(
-    session_id:str,
-    request:Request,
-    file:UploadFile=File(...),
-):
-    _public_upload_same_origin(request)
-    s=get_settings()
-    filename=(file.filename or 'upload.bin').strip()
-    suffix=Path(filename).suffix.lower()
-    if suffix not in PUBLIC_WEB_UPLOAD_EXTENSIONS:
-        raise HTTPException(
-            415,
-            detail={
-                'reason':'UNSUPPORTED_UPLOAD_EXTENSION',
-                'filename':filename,
-                'allowed':sorted(PUBLIC_WEB_UPLOAD_EXTENSIONS),
-            },
-        )
-    data=await file.read()
-    if len(data)>s.upload_limit_mb*1024*1024:
-        raise HTTPException(413,f'File exceeds {s.upload_limit_mb} MB limit')
-    with db_conn() as conn:
-        cur=conn.cursor(dictionary=True)
-        cur.execute(
-            """SELECT COUNT(*) AS c
-               FROM ingest_file f
-               JOIN ingest_batch b ON b.batch_id=f.batch_id
-               WHERE b.batch_key=%s""",
-            (session_id,),
-        )
-        count=int((cur.fetchone() or {}).get('c') or 0)
-        cur.close()
-    if count>=PUBLIC_WEB_UPLOAD_MAX_FILES:
-        raise HTTPException(
-            413,
-            f'Batch file limit is {PUBLIC_WEB_UPLOAD_MAX_FILES}',
-        )
-    try:
-        result=add_file(
-            session_id,
-            PUBLIC_WEB_UPLOAD_DEVICE,
-            filename,
-            data,
-        )
-        return {
-            'batch_id':result.get('batch_id'),
-            'session_id':result.get('session_id'),
-            'file_id':result.get('file_id'),
-            'filename':result.get('filename'),
-            'status':result.get('status'),
-            'source_type':result.get('source_type'),
-            'rows':result.get('raw_rows_inserted'),
-            'idempotent':result.get('idempotent',False),
-        }
-    except KeyError as exc:
-        raise HTTPException(404,str(exc))
-    except PermissionError as exc:
-        raise HTTPException(403,str(exc))
-    except Exception as exc:
-        raise HTTPException(400,str(exc))
-
-@app.post('/v1/public-upload/batches/{session_id}/commit')
-def public_upload_commit(
-    session_id:str,
-    request:Request,
-):
-    _public_upload_same_origin(request)
-    try:
-        return commit_batch(
-            session_id,
-            PUBLIC_WEB_UPLOAD_DEVICE,
-        )
-    except KeyError as exc:
-        raise HTTPException(404,str(exc))
-    except PermissionError as exc:
-        raise HTTPException(403,str(exc))
-    except Exception as exc:
-        raise HTTPException(400,str(exc))
-
-@app.post('/v1/public-upload/batches/{session_id}/abort')
-def public_upload_abort(
-    session_id:str,
-    request:Request,
-):
-    _public_upload_same_origin(request)
-    try:
-        return abort_batch(
-            session_id,
-            PUBLIC_WEB_UPLOAD_DEVICE,
-            False,
-        )
-    except KeyError as exc:
-        raise HTTPException(404,str(exc))
-    except PermissionError as exc:
-        raise HTTPException(403,str(exc))
-    except Exception as exc:
-        raise HTTPException(400,str(exc))
-
-@app.get('/v1/public-upload/batches/{session_id}')
-def public_upload_batch_status(session_id:str):
-    try:
-        return json.loads(
-            json.dumps(
-                _public_upload_status_payload(session_id),
-                default=j,
-            )
-        )
-    except KeyError as exc:
-        raise HTTPException(404,str(exc))
-    except Exception as exc:
-        raise HTTPException(500,f'Upload status failed: {exc}')
-
-@app.get('/v1/public-upload/recent')
-def public_upload_recent(limit:int=8):
-    limit=max(1,min(int(limit or 8),20))
-    with db_conn() as conn:
-        cur=conn.cursor(dictionary=True)
-        cur.execute(
-            f"""SELECT b.batch_id,b.batch_label,b.processing_status,
-                       b.upload_started_at,b.completed_at,b.file_count,
-                       b.source_row_count,b.error_count,
-                       p2.result_status AS phase2c_status,
-                       p2.blocking_issue_count AS phase2c_blockers,
-                       p3.result_status AS phase3_status,
-                       p3.blocking_issue_count AS phase3_blockers,
-                       p3.quick_check_rows,p3.quick_check_ready_rows,
-                       p3.quick_check_hold_rows
-                FROM ingest_batch b
-                LEFT JOIN phase2c_batch_result p2 ON p2.batch_id=b.batch_id
-                LEFT JOIN phase3_batch_result p3 ON p3.batch_id=b.batch_id
-                ORDER BY b.batch_id DESC
-                LIMIT {limit}"""
-        )
-        batches=cur.fetchall()
-        ids=[int(x['batch_id']) for x in batches]
-        file_map={bid:[] for bid in ids}
-        if ids:
-            ph=','.join(['%s']*len(ids))
-            cur.execute(
-                f"""SELECT batch_id,file_id,original_filename,source_type,
-                           processing_status,source_row_count,error_count,
-                           coverage_start_date,coverage_end_date
-                    FROM ingest_file
-                    WHERE batch_id IN ({ph})
-                    ORDER BY batch_id DESC,file_id""",
-                tuple(ids),
-            )
-            for row in cur.fetchall():
-                file_map[int(row['batch_id'])].append({
-                    'file_id':row.get('file_id'),
-                    'filename':row.get('original_filename'),
-                    'source_type':row.get('source_type'),
-                    'status':row.get('processing_status'),
-                    'rows':row.get('source_row_count'),
-                    'errors':row.get('error_count'),
-                    'coverage_start':row.get('coverage_start_date'),
-                    'coverage_end':row.get('coverage_end_date'),
-                })
-        cur.close()
-    for b in batches:
-        b['files']=file_map.get(int(b['batch_id']),[])
-    return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
-
 @app.post('/v1/web-upload/batches')
 def web_upload_create_batch(body:BatchCreate,request:Request):
     _browser_upload_guard(request)
@@ -691,6 +467,19 @@ def web_upload_commit(session_id:str,request:Request):
         raise HTTPException(400,str(exc))
 
 
+@app.post('/v1/web-upload/batches/{session_id}/abort')
+def web_upload_abort(session_id:str,request:Request):
+    _browser_upload_guard(request)
+    try:
+        return abort_batch(session_id,WEB_UPLOAD_DEVICE,False)
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc))
+    except Exception as exc:
+        raise HTTPException(400,str(exc))
+
+
 @app.get('/v1/web-upload/batches/{session_id}')
 def web_upload_status(session_id:str,request:Request):
     _browser_upload_guard(request)
@@ -706,6 +495,60 @@ def web_upload_status(session_id:str,request:Request):
 def web_upload_active(request:Request):
     _browser_upload_guard(request)
     return {'active_batch':find_active_batch()}
+
+
+@app.get('/v1/web-upload/recent')
+def web_upload_recent(request:Request,limit:int=8):
+    _browser_upload_guard(request)
+    limit=max(1,min(int(limit or 8),20))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute(
+            f"""SELECT b.batch_id,b.batch_label,b.processing_status,
+                       b.upload_started_at,b.completed_at,b.file_count,
+                       b.source_row_count,b.error_count,
+                       p2.result_status AS phase2c_status,
+                       p2.blocking_issue_count AS phase2c_blockers,
+                       p3.result_status AS phase3_status,
+                       p3.blocking_issue_count AS phase3_blockers,
+                       p3.quick_check_rows,p3.quick_check_ready_rows,
+                       p3.quick_check_hold_rows
+                FROM ingest_batch b
+                LEFT JOIN phase2c_batch_result p2 ON p2.batch_id=b.batch_id
+                LEFT JOIN phase3_batch_result p3 ON p3.batch_id=b.batch_id
+                ORDER BY b.batch_id DESC
+                LIMIT {limit}"""
+        )
+        batches=cur.fetchall()
+        ids=[int(x['batch_id']) for x in batches]
+        file_map={bid:[] for bid in ids}
+        if ids:
+            ph=','.join(['%s']*len(ids))
+            cur.execute(
+                f"""SELECT batch_id,file_id,original_filename,source_type,
+                           processing_status,source_row_count,error_count,
+                           duplicate_of_file_id,coverage_start_date,coverage_end_date
+                    FROM ingest_file
+                    WHERE batch_id IN ({ph})
+                    ORDER BY batch_id DESC,file_id""",
+                tuple(ids),
+            )
+            for row in cur.fetchall():
+                file_map[int(row['batch_id'])].append({
+                    'file_id':row.get('file_id'),
+                    'original_filename':row.get('original_filename'),
+                    'source_type':row.get('source_type'),
+                    'processing_status':row.get('processing_status'),
+                    'source_row_count':row.get('source_row_count'),
+                    'error_count':row.get('error_count'),
+                    'duplicate_of_file_id':row.get('duplicate_of_file_id'),
+                    'coverage_start_date':row.get('coverage_start_date'),
+                    'coverage_end_date':row.get('coverage_end_date'),
+                })
+        cur.close()
+    for batch in batches:
+        batch['files']=file_map.get(int(batch['batch_id']),[])
+    return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
 
 
 @app.post('/v1/batches')
