@@ -110,9 +110,10 @@ USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927 = (
         "operational_uom_code": "EA",
         "movement_quantity_basis": "ENTRY",
         "source_note": (
-            "USER_CONFIRMED_OPERATIONAL_UOM_20260927: FRESH OYSTER JAR is received, inventoried, "
-            "and sold by EA. One EA is NOT one LB. RAW SAP movement/OH Base-UOM labels of LB are "
-            "preserved as source provenance but must not drive resolved operational quantity/UOM."
+            "USER_CONFIRMED_OPERATIONAL_UOM_20260927: User confirmed FRESH OYSTER JAR is received "
+            "by EA and sold by EA, and one EA is NOT one LB. System resolution: use EA as the "
+            "operational UOM for movement/OH analysis; preserve RAW SAP LB labels as provenance "
+            "rather than treating them as physical weight."
         ),
     },
 )
