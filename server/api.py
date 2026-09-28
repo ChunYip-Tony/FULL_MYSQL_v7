@@ -19,8 +19,9 @@ from quick_check_app import search_quick_check, get_quick_check_detail, submit_t
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
+from current_work_verification import verify_current_work
 
-VERSION='7.0.89-single-service'
+VERSION='7.0.90-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1104,6 +1105,26 @@ def cost_lineage_diagnostic(
         'upc_alias_checks':alias_checks,
         'family_article_numbers':article_numbers,
     },default=j))
+
+
+@app.get('/v1/diagnostics/current-work-verification')
+def current_work_verification(
+    session_id:str|None=None,
+    expected_version:str|None=None,
+    focus_upc:str="74709410002",
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    try:
+        result=verify_current_work(
+            api_version=VERSION,
+            expected_version=expected_version,
+            session_id=session_id,
+            focus_upc=focus_upc,
+        )
+    except Exception as exc:
+        raise HTTPException(500,f'Current work verification failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/diagnostics/on-hand-lineage')
