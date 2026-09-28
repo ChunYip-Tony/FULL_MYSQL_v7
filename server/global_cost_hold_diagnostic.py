@@ -488,7 +488,7 @@ def _scan_oh_evidence(
 
 
 def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, Any]:
-    """Read-only explanation of why raw On-Hand sheets are or are not cost-scannable."""
+    """Read-only explanation of OH cost schema and supported derivation modes."""
 
     candidate_row_limit = max(5, min(int(candidate_row_limit or 20), 100))
     cur.execute(
@@ -533,13 +533,8 @@ def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, 
 
             configured_header_payload = None
             configured_header_values: list[str] = []
-            configured_matches: dict[str, Any] = {
-                "article_column": None,
-                "upc_column": None,
-                "cost_column": None,
-                "cost_uom_column": None,
-                "date_column": None,
-            }
+            configured_matches: dict[str, Any] = {}
+            supported_modes: list[str] = []
 
             if header_row:
                 cur.execute(
@@ -552,51 +547,48 @@ def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, 
                 hr = cur.fetchone()
                 if hr:
                     configured_header_payload = _j(hr["raw_payload"])
-                    hmap = _header_map(configured_header_payload)
+                    cols = _oh_cost_columns(
+                        _header_map(configured_header_payload)
+                    )
                     configured_header_values = [
-                        str(v) for v in configured_header_payload.values()
+                        str(v)
+                        for v in configured_header_payload.values()
                         if v is not None and str(v).strip()
                     ][:40]
                     configured_matches = {
-                        "article_column": _pick(
-                            hmap,
-                            ["Article", "Article Number", "Material", "Material Number"],
-                        ),
-                        "upc_column": _pick(
-                            hmap,
-                            ["UPC", "EAN", "Barcode", "Sales Set"],
-                        ),
-                        "cost_column": _pick(
-                            hmap,
-                            [
-                                "Cost", "Unit Cost", "Current Cost", "Average Cost",
-                                "Avg Cost", "Moving Average Price", "Moving Price", "MAP",
-                            ],
-                        ),
-                        "cost_uom_column": _pick(
-                            hmap,
-                            [
-                                "Cost UOM", "Cost Unit", "Price UOM", "Price Unit",
-                                "Cost Base UOM",
-                            ],
-                        ),
-                        "date_column": _pick(
-                            hmap,
-                            ["Date", "Inventory Date", "Count Date", "Snapshot Date"],
-                        ),
+                        "article_column": cols.get("article"),
+                        "upc_column": cols.get("upc"),
+                        "cost_column": cols.get("explicit_cost"),
+                        "cost_uom_column": cols.get("explicit_cost_uom"),
+                        "unrestricted_qty_column": cols.get("unrestricted_qty"),
+                        "base_uom_column": cols.get("base_uom"),
+                        "total_value_column": cols.get("total_value"),
+                        "currency_column": cols.get("currency"),
+                        "date_column": cols.get("date"),
                     }
+                    if cols.get("explicit_cost"):
+                        supported_modes.append("EXPLICIT_UNIT_COST")
+                    if (
+                        cols.get("total_value")
+                        and cols.get("unrestricted_qty")
+                        and cols.get("base_uom")
+                    ):
+                        supported_modes.append(
+                            "TOTAL_VALUE_DIV_UNRESTRICTED"
+                        )
 
+            identity_ok = bool(
+                configured_matches.get("article_column")
+                or configured_matches.get("upc_column")
+            )
             if not header_row:
                 skip_reason = "HEADER_ROW_NUMBER_MISSING"
             elif configured_header_payload is None:
                 skip_reason = "CONFIGURED_HEADER_RAW_ROW_MISSING"
-            elif not configured_matches["cost_column"]:
-                skip_reason = "COST_COLUMN_NOT_MATCHED"
-            elif not (
-                configured_matches["article_column"]
-                or configured_matches["upc_column"]
-            ):
+            elif not identity_ok:
                 skip_reason = "ARTICLE_OR_UPC_COLUMN_NOT_MATCHED"
+            elif not supported_modes:
+                skip_reason = "NO_SUPPORTED_OH_COST_MODE_MATCHED"
             else:
                 skip_reason = None
                 scannable_sheets += 1
@@ -617,57 +609,50 @@ def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, 
             candidate_headers: list[dict[str, Any]] = []
             for rr in cur.fetchall():
                 payload = _j(rr["raw_payload"])
-                hmap = _header_map(payload)
-                article_col = _pick(
-                    hmap,
-                    ["Article", "Article Number", "Material", "Material Number"],
-                )
-                upc_col = _pick(
-                    hmap,
-                    ["UPC", "EAN", "Barcode", "Sales Set"],
-                )
-                cost_col = _pick(
-                    hmap,
-                    [
-                        "Cost", "Unit Cost", "Current Cost", "Average Cost",
-                        "Avg Cost", "Moving Average Price", "Moving Price", "MAP",
-                    ],
-                )
-                cost_uom_col = _pick(
-                    hmap,
-                    [
-                        "Cost UOM", "Cost Unit", "Price UOM", "Price Unit",
-                        "Cost Base UOM",
-                    ],
-                )
-                date_col = _pick(
-                    hmap,
-                    ["Date", "Inventory Date", "Count Date", "Snapshot Date"],
-                )
+                cols = _oh_cost_columns(_header_map(payload))
+                modes: list[str] = []
+                if cols.get("explicit_cost"):
+                    modes.append("EXPLICIT_UNIT_COST")
+                if (
+                    cols.get("total_value")
+                    and cols.get("unrestricted_qty")
+                    and cols.get("base_uom")
+                ):
+                    modes.append("TOTAL_VALUE_DIV_UNRESTRICTED")
+                identity = bool(cols.get("article") or cols.get("upc"))
                 score = (
-                    (1 if article_col or upc_col else 0)
-                    + (1 if cost_col else 0)
-                    + (1 if cost_uom_col else 0)
-                    + (1 if date_col else 0)
+                    (2 if identity else 0)
+                    + len(modes) * 2
+                    + (1 if cols.get("currency") else 0)
+                    + (1 if cols.get("date") else 0)
                 )
                 if score >= 1:
                     candidate_headers.append(
                         {
                             "source_row_number": rr["source_row_number"],
                             "score": score,
-                            "article_column": article_col,
-                            "upc_column": upc_col,
-                            "cost_column": cost_col,
-                            "cost_uom_column": cost_uom_col,
-                            "date_column": date_col,
+                            "supported_modes": modes,
+                            "article_column": cols.get("article"),
+                            "upc_column": cols.get("upc"),
+                            "cost_column": cols.get("explicit_cost"),
+                            "cost_uom_column": cols.get("explicit_cost_uom"),
+                            "unrestricted_qty_column": cols.get("unrestricted_qty"),
+                            "base_uom_column": cols.get("base_uom"),
+                            "total_value_column": cols.get("total_value"),
+                            "currency_column": cols.get("currency"),
+                            "date_column": cols.get("date"),
                             "values": [
-                                str(v) for v in payload.values()
+                                str(v)
+                                for v in payload.values()
                                 if v is not None and str(v).strip()
                             ][:40],
                         }
                     )
             candidate_headers.sort(
-                key=lambda x: (int(x["score"]), -int(x["source_row_number"])),
+                key=lambda x: (
+                    int(x["score"]),
+                    -int(x["source_row_number"]),
+                ),
                 reverse=True,
             )
 
@@ -680,9 +665,12 @@ def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, 
                     "raw_row_count": int(row_stats.get("c") or 0),
                     "first_raw_row": row_stats.get("first_row"),
                     "last_raw_row": row_stats.get("last_row"),
-                    "scannable_by_current_oh_cost_rule": skip_reason is None,
+                    "scannable_by_current_oh_cost_rule":
+                        skip_reason is None,
                     "skip_reason": skip_reason,
-                    "configured_header_values": configured_header_values,
+                    "supported_cost_modes": supported_modes,
+                    "configured_header_values":
+                        configured_header_values,
                     "configured_matches": configured_matches,
                     "candidate_headers": candidate_headers[:8],
                 }
@@ -691,10 +679,14 @@ def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, 
         file_results.append(
             {
                 "file_id": file_id,
-                "coverage_start_date": file_row.get("coverage_start_date"),
-                "coverage_end_date": file_row.get("coverage_end_date"),
-                "filename_date_candidate": file_row.get("filename_date_candidate"),
-                "upload_timestamp": file_row.get("upload_timestamp"),
+                "coverage_start_date":
+                    file_row.get("coverage_start_date"),
+                "coverage_end_date":
+                    file_row.get("coverage_end_date"),
+                "filename_date_candidate":
+                    file_row.get("filename_date_candidate"),
+                "upload_timestamp":
+                    file_row.get("upload_timestamp"),
                 "sheet_count": len(sheets),
                 "sheets": sheet_results,
             }
@@ -710,7 +702,6 @@ def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, 
         "skip_reason_counts": skip_reason_counts,
         "files": file_results,
     }
-
 
 
 def diagnose_global_cost_holds(
