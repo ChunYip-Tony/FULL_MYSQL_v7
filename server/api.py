@@ -16,7 +16,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
@@ -63,6 +63,10 @@ class TrueStockSubmit(BaseModel):
 class TrueStockCancelRequest(BaseModel):
     confirm: str
     reason: str|None=None
+
+class DumpingResolveRequest(BaseModel):
+    confirm: str
+    note: str|None=None
 
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
@@ -1465,6 +1469,28 @@ def app_price_change(limit:int=120):
 def app_pending_dumping():
     rows=pending_dumping_discrepancies()
     return json.loads(json.dumps({'count':len(rows),'rows':rows},default=j))
+
+
+@app.post('/v1/app/dumping/{discrepancy_id}/resolve')
+def app_resolve_dumping(
+    discrepancy_id:int,
+    body:DumpingResolveRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    if body.confirm!='RESOLVE_DUMPING_DISCREPANCY':
+        raise HTTPException(400,'confirm must be RESOLVE_DUMPING_DISCREPANCY')
+    device=public_app_actor(authorization)
+    try:
+        result=resolve_dumping_discrepancy(discrepancy_id,device,body.note)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'DUMPING_DISCREPANCY_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Dumping resolve failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/quick-check/{upc}')
