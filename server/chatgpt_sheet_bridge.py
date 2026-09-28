@@ -293,7 +293,7 @@ def _build_negative_stock(rows: list[dict[str, Any]]) -> list[list[Any]]:
         "active_true_stock","active_true_stock_uom","true_stock_required_uom",
         "pos_qty_7d","upc_velocity_7d","dos",
         "related_quick_check_statuses","quick_check_status","blocking_reason",
-        "stock_status","negative_stock","action_upc","action_code","action_reason",
+        "stock_status","negative_stock","action_upc","action_code","action_reason","action_endpoint",
         "publish_batch_id","published_at",
     ]
 
