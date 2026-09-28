@@ -19,7 +19,7 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.75-single-service'
+VERSION='7.0.76-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -260,6 +260,47 @@ def batch_run_detail(
                 """SELECT pipeline_run_id,batch_id,pipeline_name,stage_name,run_number,
                           processing_status,started_at,completed_at,rows_inserted,
                           error_count,code_version,detail_json
+                   FROM pipeline_run
+                   WHERE pipeline_run_id=%s
+                     AND batch_id=%s
+                   LIMIT 1""",
+                (pipeline_run_id,int(b['batch_id'])),
+            )
+            row=cur.fetchone()
+            if not row:
+                raise HTTPException(404,'Pipeline run not found for this batch')
+            return json.loads(json.dumps(row,default=j))
+        finally:
+            cur.close()
+
+
+@app.get('/v1/batches/{session_id}/runs/{pipeline_run_id}/summary')
+def batch_run_summary(
+    session_id:str,
+    pipeline_run_id:int,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT ib.batch_id
+                   FROM ingest_batch ib
+                   WHERE ib.batch_key=%s
+                   LIMIT 1""",
+                (session_id,),
+            )
+            b=cur.fetchone()
+            if not b:
+                raise HTTPException(404,'Batch session not found')
+            cur.execute(
+                """SELECT pipeline_run_id,batch_id,pipeline_name,stage_name,run_number,
+                          processing_status,started_at,completed_at,rows_inserted,
+                          error_count,code_version,
+                          JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.worker')) AS worker,
+                          JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.heartbeat_at')) AS heartbeat_at,
+                          JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.phase3_stage')) AS phase3_stage
                    FROM pipeline_run
                    WHERE pipeline_run_id=%s
                      AND batch_id=%s
