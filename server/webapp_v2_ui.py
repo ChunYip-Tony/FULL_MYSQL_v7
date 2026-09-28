@@ -77,7 +77,7 @@ html,body{max-width:100%;overflow-x:hidden}
 
 <section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum" class="card"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day Sales Trend</div><canvas id="chart" class="chart"></canvas><div class="hint">Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day Sales Trend</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
 <section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
@@ -207,7 +207,60 @@ $('ub').onclick=()=>history.back();
 
 
 async function price(u){try{let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=7'),c=d.current||{},r=d.references||{},s=d.sales||{};$('pt').textContent=d.name;$('ps').textContent='UPC '+d.upc+' · '+(d.category||'—');$('pc').innerHTML='<div class="card"><div class="grid">'+m('Current Price',money(c.price)+' '+(c.price_type||''))+m('Cost',money(c.cost)+' '+(c.cost_uom||''))+m('GP%',c.gp_pct==null?'—':fmt(Number(c.gp_pct)*100,1)+'%')+m('GP$/Day',money(c.gp_per_day_7d))+m('7D Qty',fmt(s['7d']?.sold_quantity))+m('28D Qty',fmt(s['28d']?.sold_quantity))+m('Sweet Spot',money(r.sweet_spot))+m('WGPM',money(r.wgpm))+m('Company A',money(r.company_a))+m('Company B',money(r.company_b))+m('Company C',money(r.company_c))+'</div></div>';chart(d.price_vs_sales_trend?.rows||[]);$('p14').innerHTML=(d.sales_history_14d?.rows||[]).slice().reverse().map(x=>'<div class="promo"><div class="row" style="justify-content:space-between"><b>'+esc(dayName(x.date))+' · '+esc(x.date)+'</b><b>'+fmt(x.sold_quantity)+' sold</b></div><div class="meta">Sales '+money(x.sales_amount)+' · Avg price '+money(x.avg_sold_price)+' · '+((x.price_types||[]).map(p=>esc(p.price_type)).join(', ')||'No item sale')+'</div></div>').join('')||'<div class="small">No 14-day supported sales history.</div>';$('ph').innerHTML=(d.historical_promotions||[]).map(p=>'<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b><div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+'</div><div class="meta">'+fmt(p.sale_quantity)+' sold · '+fmt(p.sale_velocity_per_supported_day)+'/supported day · coverage '+fmt(p.supported_sales_day_count,0)+'/'+fmt(p.calendar_duration_days,0)+'</div></div>').join('')||'<div class="small">No historical SALE periods.</div>';go('price')}catch(e){alert(e.message)}}
-function chart(rows){let c=$('chart'),x=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=290;c.width=w*R;c.height=h*R;x.setTransform(R,0,0,R,0,0);x.clearRect(0,0,w,h);let a=rows.slice(-7),p={l:42,r:42,t:18,b:38};if(!a.length){x.fillText('No trend data',20,30);return}let ps=a.map(z=>Number(z.avg_sold_price)).filter(Number.isFinite),qs=a.map(z=>Number(z.sold_quantity)||0),pm=Math.max(...ps,1),qm=Math.max(...qs,1),pw=w-p.l-p.r,ph=h-p.t-p.b,xx=i=>p.l+(a.length===1?0:pw*i/(a.length-1)),yp=v=>p.t+ph*(1-v/pm),yq=v=>p.t+ph*(1-v/qm);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--line');for(let i=0;i<5;i++){let y=p.t+ph*i/4;x.beginPath();x.moveTo(p.l,y);x.lineTo(w-p.r,y);x.stroke()}x.lineWidth=2;x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--ok');x.beginPath();a.forEach((z,i)=>i?x.lineTo(xx(i),yq(Number(z.sold_quantity)||0)):x.moveTo(xx(i),yq(Number(z.sold_quantity)||0)));x.stroke();x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--a');x.beginPath();let on=false;a.forEach((z,i)=>{let v=Number(z.avg_sold_price);if(!Number.isFinite(v)){on=false;return}if(!on){x.moveTo(xx(i),yp(v));on=true}else x.lineTo(xx(i),yp(v))});x.stroke();x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--sale');a.forEach((z,i)=>{if((z.price_types||[]).some(v=>v.price_type==='SALE'))x.fillRect(xx(i)-2,h-p.b+6,4,9)})}
+function chart(rows){
+  let c=$('chart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=310;
+  c.width=w*R;c.height=h*R;ctx.setTransform(R,0,0,R,0,0);ctx.clearRect(0,0,w,h);
+  let a=rows.slice(-7),p={l:34,r:24,t:42,b:54};
+  if(!a.length){ctx.fillStyle=getComputedStyle(document.body).color;ctx.font='16px system-ui';ctx.fillText('No trend data',20,30);return}
+  let prices=a.map(z=>Number(z.avg_sold_price)).filter(Number.isFinite);
+  let qtys=a.map(z=>Number(z.sold_quantity)||0);
+  let pmax=Math.max(...prices,1),qmax=Math.max(...qtys,1),pw=w-p.l-p.r,ph=h-p.t-p.b;
+  let xx=i=>p.l+(a.length===1?pw/2:pw*i/(a.length-1));
+  let yp=v=>p.t+ph*(1-v/pmax),yq=v=>p.t+ph*(1-v/qmax);
+  let line=getComputedStyle(document.documentElement).getPropertyValue('--line');
+  let qtyColor=getComputedStyle(document.documentElement).getPropertyValue('--ok');
+  let priceColor=getComputedStyle(document.documentElement).getPropertyValue('--a');
+  let saleColor=getComputedStyle(document.documentElement).getPropertyValue('--sale');
+  let muted=getComputedStyle(document.documentElement).getPropertyValue('--muted');
+  let textColor=getComputedStyle(document.documentElement).getPropertyValue('--text');
+
+  ctx.strokeStyle=line;ctx.lineWidth=1;
+  for(let i=0;i<5;i++){let y=p.t+ph*i/4;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke()}
+
+  ctx.strokeStyle=qtyColor;ctx.lineWidth=3;ctx.beginPath();
+  a.forEach((z,i)=>{let x=xx(i),y=yq(Number(z.sold_quantity)||0);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
+  ctx.stroke();
+  a.forEach((z,i)=>{
+    let v=Number(z.sold_quantity)||0,x=xx(i),y=yq(v);
+    ctx.fillStyle=qtyColor;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+    ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillStyle=qtyColor;
+    ctx.fillText(fmt(v,1),x,Math.min(h-p.b-8,y+19));
+  });
+
+  ctx.strokeStyle=priceColor;ctx.lineWidth=3;ctx.beginPath();let on=false;
+  a.forEach((z,i)=>{
+    let v=Number(z.avg_sold_price);if(!Number.isFinite(v)){on=false;return}
+    let x=xx(i),y=yp(v);if(!on){ctx.moveTo(x,y);on=true}else ctx.lineTo(x,y)
+  });
+  ctx.stroke();
+  a.forEach((z,i)=>{
+    let v=Number(z.avg_sold_price);if(!Number.isFinite(v))return;
+    let x=xx(i),y=yp(v);
+    ctx.fillStyle=priceColor;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
+    ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillStyle=priceColor;
+    ctx.fillText('$'+fmt(v,2),x,Math.max(14,y-10));
+  });
+
+  ctx.font='11px system-ui';ctx.textAlign='center';
+  a.forEach((z,i)=>{
+    let x=xx(i);
+    if((z.price_types||[]).some(v=>v.price_type==='SALE')){ctx.fillStyle=saleColor;ctx.fillRect(x-4,h-p.b+5,8,11)}
+    ctx.fillStyle=muted;ctx.fillText(dayName(z.date).slice(0,3),x,h-23);ctx.fillText(String(z.date).slice(5),x,h-8);
+  });
+  ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillStyle=textColor;ctx.fillText('Qty '+fmt(qmax,1),4,p.t+3);
+  ctx.textAlign='right';ctx.fillText('$'+fmt(pmax,2),w-4,p.t+3);
+}
+
 
 async function corder(u){cupc=u;$('cod').value=today();$('cop').value='0';$('cpf').classList.add('hide');try{let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/ordering');$('cot').textContent=d.family_article_name||d.name;$('cos').textContent='Family '+(d.family_article_number||'—')+' · '+(d.category||'—')+' · from UPC '+(d.source_upc||u);$('cdd').value=d.inputs?.expected_delivery_date||'';corender(d);go('corder')}catch(e){$('coout').innerHTML='<div class="card bad">'+esc(e.message)+'</div>';go('corder')}}$('cop').onchange=()=> $('cpf').classList.toggle('hide',$('cop').value!=='1');$('coa').onclick=async()=>{let q=new URLSearchParams();q.set('ordering_date',$('cod').value);q.set('expected_delivery_date',$('cdd').value);let p=$('cop').value==='1';q.set('promotion_involved',p);if(p){q.set('promotion_start_date',$('cps').value);q.set('promotion_end_date',$('cpe').value);q.set('promotion_price',$('cpp').value)}try{corender(await api('/v1/app/v2/upc/'+encodeURIComponent(cupc)+'/ordering?'+q))}catch(e){$('coout').innerHTML='<div class="card bad">'+esc(e.message)+'</div>'}};
 function corender(d){let i=d.inventory||{},f=d.forecast||{},r=d.regular_baseline||{};$('cohist').innerHTML=(d.historical_promotions||[]).slice(0,5).map(p=>'<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b><div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+' · '+fmt(p.sale_quantity)+' sold</div></div>').join('');$('coout').innerHTML='<div class="card order"><div class="grid">'+m('Effective OH',fmt(i.raw_effective_oh_qty)+' '+(f.suggested_order_uom||''))+m('OH Used',fmt(i.ordering_oh_qty)+' '+(f.suggested_order_uom||''))+m('Regular Velocity',fmt(r.regular_velocity_per_supported_day))+m('Next Next Delivery',d.next_next_delivery_date||'—')+m('Forecast Usage',fmt(f.forecast_usage_until_next_next_delivery))+m('Projected OH @ Delivery',fmt(f.projected_oh_at_expected_delivery))+'</div><div class="small">Suggested Order Qty</div><div class="big">'+fmt(f.suggested_order_qty)+' '+esc(f.suggested_order_uom||'')+'</div>'+(i.negative_oh_treated_as_zero?'<div class="warn">Negative OH treated as 0 for ordering.</div>':'')+'</div>'}
