@@ -103,6 +103,37 @@ USER_CONFIRMED_RECEIPT_ENTRY_COST_BASIS_20260927 = (
     },
 )
 
+
+USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927 = (
+    {
+        "main_article_number": "1348438",
+        "operational_uom_code": "EA",
+        "movement_quantity_basis": "ENTRY",
+        "source_note": (
+            "USER_CONFIRMED_OPERATIONAL_UOM_20260927: FRESH OYSTER JAR is received, inventoried, "
+            "and sold by EA. One EA is NOT one LB. RAW SAP movement/OH Base-UOM labels of LB are "
+            "preserved as source provenance but must not drive resolved operational quantity/UOM."
+        ),
+    },
+)
+
+
+def confirmed_operational_uom_basis(cur, family_id: int | None) -> dict[str, Any] | None:
+    if family_id is None:
+        return None
+    cur.execute(
+        "SELECT main_article_number FROM product_family WHERE family_id=%s LIMIT 1",
+        (int(family_id),),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    main = str(row.get("main_article_number") or "").strip()
+    for basis in USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927:
+        if str(basis["main_article_number"]) == main:
+            return dict(basis)
+    return None
+
 SEED_OVERRIDES = (
     {
         "ean_upc": "4918",
