@@ -13,6 +13,8 @@ HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS'
 STALE_STARTED_SECONDS=max(90,int(os.environ.get('FULLMYSQL_WORKER_STALE_STARTED_SECONDS','180')))
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
 RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
+_RUNTIME_LOCK=threading.Lock()
+_RUNTIME_STATE={'state':'STARTING','run_id':None,'stage':None}
 
 def _touch_run(run_id:int, *, stage:str|None=None) -> None:
     payload={
@@ -45,13 +47,24 @@ def _heartbeat_loop(run_id:int, stop_event:threading.Event) -> None:
             pass
 
 
-def _write_runtime_health(state:str='IDLE', run_id:int|None=None, stage:str|None=None) -> None:
+def _set_runtime_state(state:str, run_id:int|None=None, stage:str|None=None) -> None:
+    with _RUNTIME_LOCK:
+        _RUNTIME_STATE['state']=state
+        _RUNTIME_STATE['run_id']=run_id
+        _RUNTIME_STATE['stage']=stage
+
+
+def _write_runtime_health(state:str|None=None, run_id:int|None=None, stage:str|None=None) -> None:
+    if state is not None:
+        _set_runtime_state(state,run_id,stage)
+    with _RUNTIME_LOCK:
+        current=dict(_RUNTIME_STATE)
     payload={
         'worker':WORKER,
         'pid':os.getpid(),
-        'state':state,
-        'run_id':run_id,
-        'stage':stage,
+        'state':current.get('state'),
+        'run_id':current.get('run_id'),
+        'stage':current.get('stage'),
         'heartbeat_at':datetime.now(timezone.utc).isoformat(),
         'heartbeat_epoch':int(time.time()),
         'code_version':API_VERSION,
