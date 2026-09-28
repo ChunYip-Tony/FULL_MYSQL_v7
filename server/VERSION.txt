@@ -1,37 +1,51 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.113 Single-Service Edition
+Version: 7.0.114 Single-Service Edition
 
-Web App V2 test route: /app/v2
-V2 main functions: CORE / ORDERING / PI / PERFORMANCE
+Canonical V2 runtime:
+- server/webapp_v2_runtime.py
+- server/webapp_v2.py is a compatibility shim only.
+- Existing /app remains available as fallback.
+- Web App V2 test route: /app/v2.
+- V2 top-level functions: CORE / ORDERING / PI / PERFORMANCE.
 
-Current V2 behavior:
-- Search results sort by 28 supported-day Qty Sold descending, then readiness, then relevance tie-break.
-- CORE: Search -> Family / UPC -> Price / Family-level Ordering.
-- Phone/system Back navigates previous in-app screens and is guarded at the V2 root.
-- Price page shows a 7-supported-day Price vs Sales trend plus a 14-supported-day sales history.
-- Historical SALE references show weekday range plus dates.
-- Promotion item selection is UPC-level and uses that UPC's historical SALE evidence.
-- Final ordering recommendations remain Family Article level.
-- Main ORDERING scans FRESH only or FROZEN only.
-- Ordering eligibility: active selling in latest 28 supported days + DOS < 7.
-- Negative Effective OH is displayed but ordering calculation uses max(OH,0).
-- PI targets Family Article True Stock only.
-- Family PI supersedes older child-level True Stock inside the family.
-- PERFORMANCE provides ALL/LIVE/FRESH/FROZEN analysis and up to Top 100 urgent price-review suggestions.
-- Performance price suggestions are analysis-only and exclude active SALE / non-READY items.
-- Web UI is elder-oriented: larger fonts, controls, cards and stronger contrast.
-- Price and Ordering have no save/submit workflow.
+Core data rules:
+- 7D / 14D / 28D use completed canonical data-supported dates only.
+- Missing source dates are ignored, never zero-filled.
+- Family page shows Family 7D Sold and Family 28D Sold with supported-day count and UOM.
+- All searches sort by 28D Qty Sold descending, then readiness.
+- Historical SALE promotion cards show both dates and weekday range.
+- Promotion = SALE only; TPR is not Promotion.
 
-V2 endpoints include:
-- GET /v1/app/v2/search
-- GET /v1/app/v2/family/{family_key}
-- GET /v1/app/v2/upc/{upc}
-- GET /v1/app/v2/upc/{upc}/price
-- GET /v1/app/v2/upc/{upc}/ordering
-- POST /v1/app/v2/ordering/suggestions
-- GET /v1/app/v2/pi/search
-- GET /v1/app/v2/pi/{family_key}
-- POST /v1/app/v2/pi/{family_key}/true-stock
-- GET /v1/app/v2/performance
+Ordering:
+- CORE Ordering decision level is Family Article.
+- Main Ordering scans FRESH only or FROZEN only.
+- Eligibility: active selling in latest 28 supported completed POS dates AND DOS < 7.
+- Negative Effective OH is displayed but ordering calculations use max(OH,0).
+- Promotion items are selected by exact UPC and use that UPC's own historical SALE response.
+- Final order suggestion remains Family Article level and covers through the day before next-next delivery.
+- No Web App order save/submit workflow.
 
-Existing /app remains fallback during V2 testing.
+PI:
+- PI target is always Family Article.
+- Search may start from name / Family Article / Article / UPC.
+- Family True Stock becomes authoritative Effective OH until superseded by a later accepted OH upload.
+- Family PI supersedes active child-level True Stock for that family.
+- No negative physical count.
+
+Price:
+- Price vs Sales chart shows latest 7 completed supported sales days.
+- Price page also shows latest 14 completed supported days as detailed sales history.
+- Historical promotion includes weekday range.
+
+PERFORMANCE:
+- Read-only performance report for ALL / LIVE / FRESH / FROZEN.
+- Top 100 urgent price suggestions are analysis-only.
+- Company Price C is a hard bottom line when available.
+- Primary objective is higher observed GP$/day.
+- Candidate demand response comes from actual historical supported-day sales at observed prices.
+- Only positive GP$/day opportunities qualify for automatic suggestion.
+- Active SALE and QA HOLD items are excluded from automatic price suggestions.
+
+Mobile UI:
+- Android/system Back navigates to the previous V2 screen instead of leaving the app flow.
+- Elder-friendly presentation: larger type, larger tap targets, high contrast, clearer cards and simplified page hierarchy.
