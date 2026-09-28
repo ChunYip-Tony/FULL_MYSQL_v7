@@ -41,8 +41,13 @@ from coverage_backfill import (
     resolve_pos_period_backfill,
     relink_pos_backfill,
 )
+from analysis_layer import (
+    ensure_analysis_layer_tables,
+    refresh_analysis_layer,
+    audit_analysis_layer,
+)
 
-PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
+PRICE_TYPE_PRIORITY = {'IN STORE': 4, 'INSTORE': 4, 'STOR': 4, 'SALE': 3, 'TPR': 2, 'REG': 1, 'REGULAR': 1}
 SALES_COLS = {
     'REG': ('E', 'F'),
     'IN STORE': ('G', 'H'),
@@ -52,6 +57,7 @@ SALES_COLS = {
 RECEIPT_MOVEMENTS = {'101', '107', '109'}
 FAMILY_SALE_MOVEMENTS = {'251', '252'}
 SEAFOOD_DEPT_CODE = '400'
+SEAFOOD_PRICE_SUBDEPT_CODES = {'400', '401'}
 
 
 def _j(v: Any) -> dict[str, Any]:
@@ -342,7 +348,7 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
             if 'SUBDEPT' in a_txt.upper():
                 current_dept = _id(p.get('B'))
                 continue
-            if current_dept != SEAFOOD_DEPT_CODE:
+            if current_dept not in SEAFOOD_PRICE_SUBDEPT_CODES:
                 continue
             ean = _id(p.get('A'))
             desc = _text(p.get('B'))
@@ -351,8 +357,9 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
             price = _num(p.get('J'))
             price_qty = _num(p.get('K'))
             ptype = (_text(p.get('P')) or '').upper()
-            if ptype not in {'REG', 'TPR', 'SALE', 'IN STORE', 'INSTORE'}:
+            if ptype not in {'REG', 'TPR', 'SALE', 'IN STORE', 'INSTORE', 'STOR'}:
                 continue
+            normalized_ptype = 'IN STORE' if ptype in {'INSTORE', 'STOR'} else ptype
             since = _date(p.get('Q'))
             upc_id = _find_upc_id(cur, ean)
             cur.execute(
@@ -363,7 +370,7 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
                    ON DUPLICATE KEY UPDATE upc_id=VALUES(upc_id),configured_price=VALUES(configured_price),
                     price_quantity=VALUES(price_quantity),price_type=VALUES(price_type),source_since_date=VALUES(source_since_date),snapshot_at=VALUES(snapshot_at)""",
                 (batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number'], ean, upc_id, desc,
-                 price, price_qty, 'IN STORE' if ptype == 'INSTORE' else ptype, since, snapshot),
+                 price, price_qty, normalized_ptype, since, snapshot),
             )
             inserted += 1
     return inserted
@@ -1590,12 +1597,16 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
             'base_uom': r['base_uom'] or r['cost_uom'],
         }
 
+    # Department official cost is authoritative ahead of OH fallback.
     cur.execute(
         """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s
-             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
+             AND co.source_type IN (
+                 'FROZEN_INVENTORY_OFFICIAL_COST',
+                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
@@ -1615,10 +1626,7 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s
-             AND co.source_type IN (
-                 'FROZEN_INVENTORY_OFFICIAL_COST',
-                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-             )
+             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
@@ -1821,11 +1829,11 @@ def _historical_sweet_spot(cur, upc_id: int, family_id: int, factor: Decimal | N
                  AND COALESCE(cost_per_base_uom,cost_amount)>0
                ORDER BY CASE
                           WHEN source_type='MOVEMENT_RECEIPT_VALUATION' THEN 1
-                          WHEN source_type='ON_HAND_EXPLICIT_COST_FALLBACK' THEN 2
                           WHEN source_type IN (
                               'FROZEN_INVENTORY_OFFICIAL_COST',
                               'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-                          ) THEN 3
+                          ) THEN 2
+                          WHEN source_type='ON_HAND_EXPLICIT_COST_FALLBACK' THEN 3
                           WHEN source_type='USER_CONFIRMED_FAMILY_COST' THEN 4
                           ELSE 9
                         END,
@@ -2367,6 +2375,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             ensure_cost_conversion_table(cur)
             ensure_family_cost_table(cur)
             ensure_coverage_backfill_tables(cur)
+            ensure_analysis_layer_tables(cur)
             conn.commit()
             report('PHASE3_SCHEMA_READY')
             conn.start_transaction()
@@ -2516,20 +2525,25 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             cur.execute('SAVEPOINT before_quick_check_publish')
             report('PHASE3_QUICK_CHECK_REBUILD')
             qc_attempt = rebuild_quick_check(cur, batch_id)
+            report('PHASE3_ANALYSIS_LAYER_REFRESH')
+            analysis_attempt = refresh_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
+            analysis_audit = audit_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
             report('PHASE3_IDENTITY_AUDIT')
             identity_audit = audit_product_identity(cur)
             identity_guard_pass = bool(identity_audit.get('pass'))
             identity_guard_blockers = list(identity_audit.get('blockers') or [])
+            analysis_guard_pass = bool(analysis_audit.get('pass'))
             serving_preserved = False
 
-            if identity_guard_pass:
+            if identity_guard_pass and analysis_guard_pass:
                 cur.execute('RELEASE SAVEPOINT before_quick_check_publish')
                 qc = qc_attempt
             else:
                 cur.execute('ROLLBACK TO SAVEPOINT before_quick_check_publish')
                 cur.execute('RELEASE SAVEPOINT before_quick_check_publish')
                 serving_preserved = True
-                _record_product_identity_guard_issues(cur, batch_id, identity_audit)
+                if not identity_guard_pass:
+                    _record_product_identity_guard_issues(cur, batch_id, identity_audit)
                 qc = {
                     'rows': 0,
                     'ready': 0,
@@ -2539,6 +2553,14 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     'publish_blocked': True,
                     'previous_serving_preserved': True,
                 }
+
+            analysis_layer = {
+                'refresh': analysis_attempt,
+                'audit': analysis_audit,
+                'pass': analysis_guard_pass,
+                'policy': 'FAIL_CLOSED_PRESERVE_PREVIOUS_SERVING',
+                'previous_serving_preserved': serving_preserved,
+            }
 
             product_identity_guard = {
                 'pass': identity_guard_pass,
@@ -2566,7 +2588,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             )
             blocking = int(cur.fetchone()['c'])
 
-            if (not identity_guard_pass) or blocking > 0 or qc['rows'] == 0:
+            if (not identity_guard_pass) or (not analysis_guard_pass) or blocking > 0 or qc['rows'] == 0:
                 status = 'PHASE3_QA_HOLD'
             elif qc['hold'] > 0:
                 status = 'QUICK_CHECK_READY_WITH_HOLDS'
@@ -2595,7 +2617,8 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                   'coverage_backfill': pos_period_backfill,
                   'pos_backfill_relinked_pre_repair': pos_backfill_relinked_pre,
                   'pos_backfill_relinked': pos_backfill_relinked,
-                  'product_identity_guard': product_identity_guard}, default=str)),
+                  'product_identity_guard': product_identity_guard,
+                  'analysis_layer': analysis_layer}, default=str)),
             )
             cur.execute('UPDATE ingest_batch SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE batch_id=%s', (status, batch_id))
             cur.execute(
@@ -2607,6 +2630,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                      'counts': counts,
                      'quick_check': qc,
                      'product_identity_guard': product_identity_guard,
+                     'analysis_layer': analysis_layer,
                  }, default=str), run_id),
             )
             conn.commit()
@@ -2622,6 +2646,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     'pos_backfill_relinked_pre_repair': pos_backfill_relinked_pre,
                     'pos_backfill_relinked': pos_backfill_relinked,
                     'product_identity_guard': product_identity_guard,
+                    'analysis_layer': analysis_layer,
                     'quick_check_attempt': qc_attempt,
                     'blocking_issues': blocking}
         except Exception:
