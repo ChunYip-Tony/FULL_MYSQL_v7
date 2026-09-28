@@ -1133,7 +1133,7 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
             },
             "price_vs_sales_trend":_historical_gp_trend(
                 cur,row,_price_sales_trend(
-                    cur,upc_id,min(max(int(trend_supported_days or 7),1),7),
+                    cur,upc_id,min(max(int(trend_supported_days or 28),1),28),
                     qty_uom=qty_uom,
                 )
             ),
