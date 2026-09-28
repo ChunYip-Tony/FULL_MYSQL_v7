@@ -16,7 +16,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
@@ -24,7 +24,7 @@ from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 
-VERSION='7.0.102-single-service'
+VERSION='7.0.103-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -79,6 +79,20 @@ class OrderingPolicyUpsertRequest(BaseModel):
     order_multiple: Decimal|None=None
     enabled: bool=True
     notes: str|None=None
+
+class PriceChangeProposalCreateRequest(BaseModel):
+    upc: str
+    proposed_price: Decimal
+    proposal_basis: str
+    proposed_price_type: str|None=None
+    reason: str|None=None
+
+class PriceChangeReviewRequest(BaseModel):
+    decision: str
+    note: str|None=None
+
+class PriceChangeExecutionRequest(BaseModel):
+    note: str|None=None
 
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
@@ -1510,6 +1524,106 @@ def admin_upsert_ordering_policy(
 @app.get('/v1/app/price-change')
 def app_price_change(limit:int=120):
     return json.loads(json.dumps(price_change_queue(limit),default=j))
+
+
+@app.get('/v1/app/price-change/proposals')
+def app_price_change_proposals(status:str|None=None,limit:int=100):
+    return json.loads(json.dumps(list_price_change_proposals(status,limit),default=j))
+
+
+@app.get('/v1/app/price-change/{upc}/preview')
+def app_price_change_preview(upc:str,proposed_price:Decimal):
+    try:
+        result=price_change_preview(upc,proposed_price)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'PRICE_CHANGE_UPC_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Price Change preview failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/price-change/proposals')
+def admin_create_price_change_proposal(
+    body:PriceChangeProposalCreateRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    settings=get_settings()
+    if device not in settings.admin_devices:
+        raise HTTPException(403,'Admin device required')
+    try:
+        result=create_price_change_proposal(
+            upc=body.upc,
+            proposed_price=body.proposed_price,
+            proposal_basis=body.proposal_basis,
+            proposed_price_type=body.proposed_price_type,
+            reason=body.reason,
+            device=device,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'PRICE_CHANGE_UPC_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Price Change proposal create failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/price-change/proposals/{proposal_id}/review')
+def admin_review_price_change_proposal(
+    proposal_id:int,
+    body:PriceChangeReviewRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    settings=get_settings()
+    if device not in settings.admin_devices:
+        raise HTTPException(403,'Admin device required')
+    try:
+        result=review_price_change_proposal(
+            proposal_id,
+            decision=body.decision,
+            note=body.note,
+            device=device,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'PRICE_CHANGE_PROPOSAL_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Price Change review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/price-change/proposals/{proposal_id}/mark-executed')
+def admin_mark_price_change_executed(
+    proposal_id:int,
+    body:PriceChangeExecutionRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    settings=get_settings()
+    if device not in settings.admin_devices:
+        raise HTTPException(403,'Admin device required')
+    try:
+        result=mark_price_change_executed(
+            proposal_id,
+            note=body.note,
+            device=device,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'PRICE_CHANGE_PROPOSAL_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Price Change execution mark failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/app/dumping/pending')
