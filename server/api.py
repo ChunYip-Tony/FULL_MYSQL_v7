@@ -27,7 +27,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.132-single-service'
+VERSION='7.0.133-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -262,6 +262,33 @@ class V2PITrueStockRequest(BaseModel):
     true_stock: Decimal
     uom: str
     note: str|None=None
+
+
+WEB_UPLOAD_DEVICE='PUBLIC-WEB-UPLOAD'
+WEB_UPLOAD_MAX_FILES=40
+WEB_UPLOAD_EXTENSIONS={'.xlsx','.xls','.xlsm','.csv','.txt','.tsv'}
+
+
+def _browser_upload_guard(request: Request) -> None:
+    """Narrow no-login upload transport guard for the public app."""
+    origin=(request.headers.get('origin') or '').strip()
+    host=(request.headers.get('host') or '').strip().lower()
+    if origin:
+        try:
+            from urllib.parse import urlsplit
+            if urlsplit(origin).netloc.lower()!=host:
+                raise HTTPException(403,'Cross-site upload is not allowed')
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(403,'Invalid upload origin')
+    fetch_site=(request.headers.get('sec-fetch-site') or '').strip().lower()
+    if fetch_site and fetch_site not in {'same-origin','same-site','none'}:
+        raise HTTPException(403,'Cross-site upload is not allowed')
+
+
+def _web_upload_filename_ok(filename: str) -> bool:
+    return Path(str(filename or '')).suffix.lower() in WEB_UPLOAD_EXTENSIONS
 
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
@@ -593,6 +620,74 @@ def public_upload_recent(limit:int=8):
     for b in batches:
         b['files']=file_map.get(int(b['batch_id']),[])
     return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
+
+@app.post('/v1/web-upload/batches')
+def web_upload_create_batch(body:BatchCreate,request:Request):
+    _browser_upload_guard(request)
+    label=(str(body.label or '').strip() or f'Web raw upload {datetime.now().isoformat(timespec="minutes")}')
+    r=begin_batch(WEB_UPLOAD_DEVICE,label)
+    if not r.get('created'):
+        raise HTTPException(409,detail={'message':'Another ingest batch is active','active':r.get('active')})
+    return r
+
+
+@app.post('/v1/web-upload/batches/{session_id}/files')
+async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(...)):
+    _browser_upload_guard(request)
+    filename=file.filename or 'upload.bin'
+    if not _web_upload_filename_ok(filename):
+        raise HTTPException(415,'Supported raw files: XLSX, XLS, XLSM, CSV, TXT, TSV')
+    try:
+        existing=session_status(session_id)
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    if len(existing.get('files') or [])>=WEB_UPLOAD_MAX_FILES:
+        raise HTTPException(413,f'Batch file limit is {WEB_UPLOAD_MAX_FILES}')
+    s=get_settings()
+    data=await file.read()
+    if not data:
+        raise HTTPException(400,'Empty file is not allowed')
+    if len(data)>s.upload_limit_mb*1024*1024:
+        raise HTTPException(413,f'File exceeds {s.upload_limit_mb} MB limit')
+    try:
+        return add_file(session_id,WEB_UPLOAD_DEVICE,filename,data)
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc))
+    except Exception as exc:
+        raise HTTPException(400,str(exc))
+
+
+@app.post('/v1/web-upload/batches/{session_id}/commit')
+def web_upload_commit(session_id:str,request:Request):
+    _browser_upload_guard(request)
+    try:
+        return commit_batch(session_id,WEB_UPLOAD_DEVICE)
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    except PermissionError as exc:
+        raise HTTPException(403,str(exc))
+    except Exception as exc:
+        raise HTTPException(400,str(exc))
+
+
+@app.get('/v1/web-upload/batches/{session_id}')
+def web_upload_status(session_id:str,request:Request):
+    _browser_upload_guard(request)
+    try:
+        return json.loads(json.dumps(session_status(session_id),default=j))
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Batch status failed: {exc}')
+
+
+@app.get('/v1/web-upload/active')
+def web_upload_active(request:Request):
+    _browser_upload_guard(request)
+    return {'active_batch':find_active_batch()}
+
 
 @app.post('/v1/batches')
 def create_batch(body:BatchCreate,authorization: Annotated[str|None,Header()]=None):
