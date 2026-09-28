@@ -1,54 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.132 Single-Service Edition
+Version: 7.0.133 Single-Service Edition
 
-v7.0.132 All-department OH routing:
-- Treat ON_HAND snapshots as multi-department sources instead of Seafood-only context.
-- SAP Mdse Cat. department lineage from the verified 2026-09-28 OH layout:
-  201... = Meat (300), 301.../302... = Produce (500), 401... = Seafood (400).
-- Preserve raw Unrestr. quantity and BUn exactly; department routing does not alter OH quantity or UOM.
-- Adds Article-level department observations so OH-only/historical items can enter the correct department analysis layer before POS/Price activity exists.
-- Department analysis membership can resolve from latest UPC POS/Price lineage or latest Article OH lineage.
-- Unknown merchandise categories remain unresolved rather than guessed.
-- Produce OH remains supporting evidence only for decisions.
-
-FULL MYSQL Secure API Architecture
-Version: 7.0.131 Single-Service Edition
-
-v7.0.131 Multi-department analysis enablement:
-- Preserves POS department lineage for Meat 300, Seafood 400, and Produce 500.
-- Normalized POS history now ingests all three perishable departments instead of Seafood-only.
-- Meat and Produce unresolved sold UPCs are department-local MEDIUM QA and do not block Seafood READY.
-- Price List routing now supports Seafood 400/401 plus 3xx Meat and 5xx Produce subdepartments.
-- Analysis snapshots are department-scoped and use the latest observed department ownership for each UPC.
-- Seafood remains the primary READY gate; Meat and Produce maintain independent department-local analysis status.
-- Produce inventory remains supporting evidence only and must not drive decisions by itself.
-- Department POS-vs-251/252 comparisons remain UOM-guarded.
-
-FULL MYSQL Secure API Architecture
-Version: 7.0.130 Single-Service Edition
-
-v7.0.130 Seafood-first analysis layer:
-- Adds fail-closed precomputed analysis_item_current, analysis_family_current, and analysis_layer_status.
-- Seafood Phase 3 READY requires analysis-layer parity/audit in addition to Quick Check and product-identity guards.
-- UPC sold quantity remains POS-only; family 251/252 movement stays a separate whole-family metric.
-- Family POS-vs-MVT gaps are calculated only when family POS UOM is unique and matches movement UOM.
-- Fixes cost authority to 101/107/109 receipt valuation > official Live/Fresh/Frozen report > explicit OH fallback > user-confirmed fallback.
-- Applies the same authority order to historical Sweet Spot GP/day cost selection.
-- Normalizes Price List STOR to IN STORE and preserves IN STORE > SALE > TPR > REG priority.
-- Seafood Price List ingestion includes both SubDept 400 Fish and SubDept 401 Fried Fish so 249/fried-service prices are not dropped.
-- Meat and Produce are explicitly staged as PENDING_PIPELINE_ENABLEMENT until Seafood passes and their department-specific authority rules are enabled.
-
-FULL MYSQL Secure API Architecture
-Version: 7.0.129 Single-Service Edition
-
-Canonical public app:
-- /, /app, /app/quick-check and /app/v2 render the same Fish Market V2 shell.
-- Public modules: Quick Check / PI / OH Discrepancy / Reports.
-
-v7.0.129 Quick Check search ordering:
-- Family Article search results are always placed at the top.
-- Family Article results are sorted by 28D Qty Sold descending.
-- UPC / item results follow and are also sorted by 28D Qty Sold descending.
-- Fuzzy relevance determines result inclusion and is only a tie-break after 28D Qty.
-- Readiness and item name are lower-priority tie-breaks.
-- Typo-tolerant search remains enabled, e.g. SALMOM can still return SALMON.
+v7.0.133 No-client Web Upload:
+- Public Fish Market Web App now includes a fifth main tab: Upload.
+- No Admin login is required for this upload-only workflow.
+- Users can select or drag/drop multiple raw files into one ingest batch.
+- Supported browser upload extensions: XLSX, XLS, XLSM, CSV, TXT, TSV.
+- Browser upload reuses the same begin_batch -> add_file -> commit_batch -> worker pipeline used by the Windows client.
+- The Upload page displays filename, detected source type, raw row count, date coverage, Phase 2C status, Phase 3 status, and final Quick Check READY / QA HOLD state.
+- Guardrails: same-origin browser writes, existing per-file upload size limit, 40-file batch limit, supported-extension allowlist, and the existing one-active-batch rule.
+- Existing Bearer-token client upload endpoints remain unchanged and available.
+- No-client upload does not expose Admin, maintenance, price-change, or database mutation endpoints beyond ingest batch creation/file upload/commit.
