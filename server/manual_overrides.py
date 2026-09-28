@@ -109,11 +109,14 @@ USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927 = (
         "main_article_number": "1348438",
         "operational_uom_code": "EA",
         "movement_quantity_basis": "ENTRY",
+        "source_uom_relabel_movement_types": ("701", "702"),
         "source_note": (
             "USER_CONFIRMED_OPERATIONAL_UOM_20260927: User confirmed FRESH OYSTER JAR is received "
             "by EA and sold by EA, and one EA is NOT one LB. System resolution: use EA as the "
             "operational UOM for movement/OH analysis; preserve RAW SAP LB labels as provenance "
-            "rather than treating them as physical weight."
+            "rather than treating them as physical weight. For physical-inventory adjustments "
+            "701/702 only, retain the source quantity but relabel the resolved operational UOM to EA; "
+            "this is a semantic correction, not an EA-to-LB conversion."
         ),
     },
 )
