@@ -1,32 +1,35 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.107 Single-Service Edition
+Version: 7.0.108 Single-Service Edition
 
 Current runtime:
 - Public 4-module Web App: Quick Check, Ordering, Dumping, Price Change
-- Operations Overview dashboard
-- Dumping Pending + resolved/superseded history
-- Price Change what-if analysis + audited proposal workflow
+- Operations Overview dashboard with order workflow counts
 - Admin Console with Admin ID + Password and signed HttpOnly browser session
 - Config-driven Ordering Policy engine and Suggested Order Qty
 - Final Order workflow: Recommendation -> Draft -> Confirmed -> Marked Submitted -> History
-- API and background worker aligned to 7.0.107-single-service
+- Delivery / Receiving Reconciliation against canonical movement evidence
+- API and background worker aligned to 7.0.108-single-service
+
+Delivery / Receiving reconciliation:
+- Optional supplier PO / external order reference can be saved per order.
+- Exact external-reference match is preferred when available.
+- Without a reference, receipt evidence is partitioned from this order date to the next later confirmed/submitted order for the same UPC.
+- Only canonical movement file/date snapshots are used.
+- MVT 101 and 107 are physical receipt-stage evidence.
+- MVT 102 and 108 are receipt reversals and force review when present.
+- MVT 109/110 are ignored when 101/102 or 107/108 evidence exists; otherwise they are release-only fallback evidence.
+- MVT 107 remains NO UNRESTRICTED STOCK EFFECT and is never added again to System OH.
+- Receipt quantity must convert explicitly into the ordered Selling UOM; unresolved UOM conversion fails to REVIEW.
+- Article identity is preferred; family-level identity is review-only.
+- Reconciliation reports Ordered, Received, Variance, receipt docs/PO, match basis, and canonical source lineage.
 
 Final Order safety:
 - Only positive ORDER_RECOMMENDATION_READY items can be added to a Draft.
-- Drafts are grouped by next order date + next delivery date.
-- Final quantity can be adjusted only while workflow_status=DRAFT.
-- Confirmed orders are no longer editable.
-- MARKED_SUBMITTED is an internal audit state only; it does not transmit an order to any supplier.
-- Every line snapshots Suggested Qty, Effective OH, 7D velocity, DOS, price, policy, and publish lineage.
+- Final quantity is editable only while DRAFT.
+- MARKED_SUBMITTED is audit-only and does not transmit an order to a supplier.
+- No RAW mutation.
 
 Admin authentication:
 - Browser login: FULLMYSQL_ADMIN_LOGIN_ID + FULLMYSQL_ADMIN_PASSWORD or FULLMYSQL_ADMIN_PASSWORD_HASH.
-- Password is never stored in browser localStorage/sessionStorage.
 - Browser session is HttpOnly, Secure, SameSite=Lax and same-origin protected for writes.
 - Legacy admin API Bearer tokens remain supported for PowerShell / API clients.
-
-Safety / authority:
-- Public App does not require login.
-- Missing Ordering policy remains POLICY_NOT_CONFIGURED; quantity is not guessed.
-- Price proposal execution marking does not directly mutate authoritative live retail price.
-- No RAW mutation.
