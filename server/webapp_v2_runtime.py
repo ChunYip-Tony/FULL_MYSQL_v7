@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from difflib import SequenceMatcher
 from statistics import median
 from typing import Any
 
@@ -337,6 +338,62 @@ def _historical_sale_periods(
     return results
 
 
+def _search_tokens(value: Any) -> list[str]:
+    normalized = "".join(
+        ch if ch.isalnum() else " "
+        for ch in _norm_text(value)
+    )
+    return [x for x in normalized.split() if x]
+
+
+def _token_similarity(query_token: str, candidate_token: str) -> float:
+    q = str(query_token or "")
+    c = str(candidate_token or "")
+    if not q or not c:
+        return 0.0
+    if q == c:
+        return 1.0
+    if len(q) >= 3 and c.startswith(q):
+        return 0.97
+    if len(c) >= 3 and q.startswith(c):
+        # Allow modest suffix mistakes/extra characters without making very
+        # short prefixes overly broad.
+        return 0.92 if min(len(q), len(c)) >= 4 else 0.0
+    return SequenceMatcher(None, q, c).ratio()
+
+
+def _fuzzy_name_relevance(query: str, name: Any) -> int:
+    """Typo-tolerant text relevance.
+
+    Every query token must match a candidate token. Short tokens remain strict;
+    longer tokens allow a small edit distance via SequenceMatcher. This makes
+    SALMOM -> SALMON work without turning an unrelated one-token query into a
+    broad substring scan.
+    """
+    q_tokens = _search_tokens(query)
+    n_tokens = _search_tokens(name)
+    if not q_tokens or not n_tokens:
+        return 0
+
+    scores: list[float] = []
+    for qtok in q_tokens:
+        best = max((_token_similarity(qtok, ntok) for ntok in n_tokens), default=0.0)
+        if len(qtok) <= 3:
+            minimum = 0.97
+        elif len(qtok) == 4:
+            minimum = 0.80
+        else:
+            minimum = 0.74
+        if best < minimum:
+            return 0
+        scores.append(best)
+
+    avg = sum(scores) / len(scores)
+    # Keep fuzzy results below exact/prefix matches but above weak substring
+    # matches when all query tokens are convincingly accounted for.
+    return 610 + int(round(avg * 120))
+
+
 def _relevance(query: str, *, name: Any, number: Any, kind: str, matched_as: str | None = None) -> int:
     q = _norm_text(query)
     n = _norm_text(name)
@@ -358,7 +415,7 @@ def _relevance(query: str, *, name: Any, number: Any, kind: str, matched_as: str
         return 760
     if q and q in n:
         return 700
-    return 0
+    return _fuzzy_name_relevance(query, name)
 
 
 def _upc_role(row: dict[str,Any]) -> str:
@@ -442,6 +499,27 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                 (like,like),
             )
         rows = cur.fetchall()
+        if not q.isdigit() and len(rows) < limit:
+            # Strict LIKE cannot find misspellings such as SALMOM. Pull the
+            # serving corpus only as a fallback, then let _relevance() perform
+            # bounded typo-tolerant scoring. Store-level Quick Check cardinality
+            # is small enough for this controlled fallback.
+            cur.execute(
+                """SELECT *
+                   FROM quick_check_current
+                   ORDER BY upc_id
+                   LIMIT 4000"""
+            )
+            fallback_rows = cur.fetchall()
+            by_upc = {
+                int(r["upc_id"]): r
+                for r in rows
+                if r.get("upc_id") is not None
+            }
+            for r in fallback_rows:
+                if r.get("upc_id") is not None:
+                    by_upc.setdefault(int(r["upc_id"]), r)
+            rows = list(by_upc.values())
 
         # Article/receiving aliases may resolve to a family even when no UPC
         # description contains the query.
@@ -475,6 +553,29 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                 (like,),
             )
         article_matches = cur.fetchall()
+        if not q.isdigit() and len(article_matches) < limit:
+            cur.execute(
+                """SELECT DISTINCT pf.family_id,pf.main_article_number,pf.family_description,
+                                  a.article_number,a.article_description
+                   FROM article a
+                   JOIN bridge_article_family baf
+                     ON baf.article_id=a.article_id
+                    AND baf.mapping_status='CONFIRMED'
+                    AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+                   JOIN product_family pf ON pf.family_id=baf.family_id
+                   ORDER BY a.article_id
+                   LIMIT 4000"""
+            )
+            fallback_articles = cur.fetchall()
+            seen = {
+                (int(x["family_id"]), str(x.get("article_number") or ""))
+                for x in article_matches
+            }
+            for x in fallback_articles:
+                key = (int(x["family_id"]), str(x.get("article_number") or ""))
+                if key not in seen:
+                    article_matches.append(x)
+                    seen.add(key)
 
         metric_cache: dict[int,dict[str,Any]] = {}
         def metric28(upc_id: int) -> dict[str,Any]:
@@ -586,9 +687,9 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
 
         results.sort(
             key=lambda x:(
+                -int(x.get("relevance") or 0),
                 -float(x.get("qty_28d") or 0),
                 _readiness_rank(x.get("readiness")),
-                -int(x.get("relevance") or 0),
                 str(x.get("name") or ""),
             )
         )
@@ -598,7 +699,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         "query":q,
         "count":min(len(results),limit),
         "results":results[:limit],
-        "sort_contract":["QTY_28_SUPPORTED_DAYS_DESC","READINESS","RELEVANCE_DESC_TIEBREAK"],
+        "sort_contract":["RELEVANCE_DESC","QTY_28D_DESC","READINESS"],
         "sales_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
     }
 
