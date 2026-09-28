@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.149-single-service'
+API_VERSION='7.0.150-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 
@@ -219,11 +219,19 @@ def session_status(session_id: str) -> dict[str,Any]:
         files.sort(key=lambda x: int(x.get('file_id') or 0))
         cur.execute(
             """SELECT pipeline_run_id,stage_name,processing_status,started_at,completed_at,
-                      error_count
+                      error_count,detail_json
                FROM pipeline_run
                WHERE batch_id=%s AND pipeline_name=%s""",
             (bid,API_PIPELINE),
         ); runs=cur.fetchall()
+        for run in runs:
+            detail={}
+            try:
+                detail=json.loads(run.get('detail_json') or '{}')
+            except Exception:
+                detail={}
+            run['phase3_stage']=detail.get('phase3_stage')
+            run.pop('detail_json',None)
         runs.sort(key=lambda x: int(x.get('pipeline_run_id') or 0))
         cur.execute("SELECT result_status,blocking_issue_count,updated_at FROM phase2c_batch_result WHERE batch_id=%s",(bid,)); p2=cur.fetchone()
         cur.execute("SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,quick_check_hold_rows,updated_at FROM phase3_batch_result WHERE batch_id=%s",(bid,)); p3=cur.fetchone()
