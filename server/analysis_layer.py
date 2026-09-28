@@ -588,7 +588,7 @@ def audit_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DEPT
         FROM analysis_layer_status
         WHERE department_code=%s
         """,
-        (department_code, department_code,),
+        (department_code,),
     )
     status = cur.fetchone()
 
@@ -596,33 +596,55 @@ def audit_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DEPT
         """
         SELECT COUNT(*) AS c
         FROM quick_check_current q
-        WHERE EXISTS (
-            SELECT 1
-            FROM upc_department_observation d
-            WHERE d.ean_upc=q.ean_upc
-              AND d.department_code=%s
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM upc_department_observation newer
-                  WHERE newer.ean_upc=d.ean_upc
-                    AND (
-                        COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
-                        OR (
-                            COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
-                            AND newer.observation_id > d.observation_id
+        WHERE (
+            EXISTS (
+                SELECT 1
+                FROM upc_department_observation d
+                WHERE d.ean_upc=q.ean_upc
+                  AND d.department_code=%s
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM upc_department_observation newer
+                      WHERE newer.ean_upc=d.ean_upc
+                        AND (
+                            COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                            OR (
+                                COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                                AND newer.observation_id > d.observation_id
+                            )
                         )
-                    )
-              )
+                  )
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM article_department_observation ad
+                WHERE ad.article_number=q.article_number
+                  AND ad.department_code=%s
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM article_department_observation newer_ad
+                      WHERE newer_ad.article_number=ad.article_number
+                        AND (
+                            COALESCE(newer_ad.business_date,'1000-01-01') > COALESCE(ad.business_date,'1000-01-01')
+                            OR (
+                                COALESCE(newer_ad.business_date,'1000-01-01') = COALESCE(ad.business_date,'1000-01-01')
+                                AND newer_ad.observation_id > ad.observation_id
+                            )
+                        )
+                  )
+            )
         )
         """,
-        (department_code, department_code,),
+        (department_code, department_code),
     )
     qc_count = int((cur.fetchone() or {}).get("c") or 0)
+
     cur.execute(
         "SELECT COUNT(*) AS c FROM analysis_item_current WHERE department_code=%s",
-        (department_code, department_code,),
+        (department_code,),
     )
     analysis_count = int((cur.fetchone() or {}).get("c") or 0)
+
     cur.execute(
         """
         SELECT COUNT(*) AS c
