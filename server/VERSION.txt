@@ -7,28 +7,15 @@ Canonical V2 runtime:
 - Top-level functions: CORE / PI / PERFORMANCE
 - Standalone Main ORDERING remains cancelled.
 
-v7.0.122 UI:
-- Modern flat section/list design; no visual card layout.
-- Family page is organized into Identity / Sales / Inventory / Delivery & Receipt sections.
-- UPC page is organized into Identity / Sales / Inventory / Price sections.
-- Typography and controls were reduced from the oversized elder-friendly revision while retaining readability and large tap targets.
-- Search results label Family Article clearly and show UPC Type: PACKAGED UPC / COOK SERVICE UPC / CATCH-WEIGHT UPC / OTHER UPC.
-- All visible quantity values include UOM; unresolved UOM displays UOM UNKNOWN.
-- No-OH states display status, reason, source/anchor when available.
-- Family OH can fall back to confirmed receiving/main-article inventory ownership when selling-child ownership does not resolve.
-
-Price trend:
-- Latest 7 completed supported sales dates only.
-- Curves: Qty Sold, Avg Price, GP$.
-- Every point is labeled.
-- GP$ curve is recalculated using current authoritative cost and is explicitly labeled as current-cost basis.
-- SALE dates remain visibly marked.
-
-Performance:
-- Report Date remains limited to completed canonical supported POS dates.
-- Sales Audit explains canonical POS vs mapped V2 differences and lists top unmapped UPCs.
-- Unmapped quantity totals are shown only when one reliable UOM exists; otherwise mixed/unknown UOM is stated.
-- Top 100 remains a review queue; specific price only for evidence-backed ACTIONABLE items.
-
-Known OH correction:
-- Family/article 1342107 has OH source history; V2 now routes Family/System OH and receiving-article fallback before returning no OH.
+v7.0.122:
+- Compact modern flat UI; no primary detail card layout.
+- Family and UPC metrics are separated into semantic list sections.
+- UI sizing reduced while retaining readable text and touch targets.
+- Search results label UPC role: PACKAGED UPC / COOK-SERVICE UPC / CATCH-WEIGHT UPC / OTHER UPC.
+- Family Article results remain highlighted.
+- Every displayed Qty includes UOM; unresolved units display UOM UNKNOWN.
+- Family/UPC pages show a reason whenever OH is unavailable or blocked.
+- Family OH resolver recognizes Family Article baselines mapped through the main/receiving article, including the 1342107 pattern.
+- Price trend includes Qty, Avg Price and GP$ curves.
+- GP$ uses historical applicable cost as-of each supported sales date; missing historical cost leaves a gap instead of zero.
+- Completed supported-date rules remain authoritative.
