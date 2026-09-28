@@ -1,24 +1,21 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.123 Single-Service Edition
+Version: 7.0.124 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
 - Web App V2 route: /app/v2
-- Top-level functions: CORE / PI / PERFORMANCE
-- Standalone Main ORDERING remains cancelled.
+- Root Quick Check routes: /, /app, /app/quick-check
+- Top-level V2 functions: CORE / PI / OH DISCREPANCY / PERFORMANCE
+- Standalone Main ORDERING remains cancelled; item-level Ordering analysis remains available.
 
-v7.0.123:
-- Compact modern flat UI; no primary detail card layout.
-- Family and UPC metrics are separated into semantic list sections.
-- UI sizing reduced while retaining readable text and touch targets.
-- Search results label UPC role: PACKAGED UPC / COOK-SERVICE UPC / CATCH-WEIGHT UPC / OTHER UPC.
-- Family Article results remain highlighted.
-- Every displayed Qty includes UOM; unresolved units display UOM UNKNOWN.
-- Family/UPC pages show a reason whenever OH is unavailable or blocked.
-- Family OH resolver recognizes Family Article baselines mapped through the main/receiving article, including the 1342107 pattern.
-- Price trend includes Qty, Avg Price and GP$ curves.
-- GP$ uses historical applicable cost as-of each supported sales date; missing historical cost leaves a gap instead of zero.
-- Completed supported-date rules remain authoritative.
-
-Price trend curves: GP$ + Avg Selling Price only.
-Qty Sold is not plotted on the 7 supported-day chart.
+v7.0.124:
+- Fish-market / seafood visual theme with compact mobile-first layout.
+- Reduced wasted page space and tighter metric sections.
+- Quick Check key metrics show explicit units and 7-data-day trend arrows when comparison evidence exists.
+- Price vs Velocity History groups validated supported-day observations by actual average sold price.
+- Canonical Sweet Spot remains the historical price maximizing average GP$ per completed supported data day.
+- Sales Trend displays GP$ as columns and Avg Selling Price as a curve only.
+- Trend chart supports the latest 28 completed supported sales dates and labels every plotted GP$ / Avg Price value.
+- OH Discrepancy Report & Clear is a main navigation function; clearing closes the discrepancy report only and does not alter inventory.
+- Current price, cost, inventory, velocity, DOS, DOH and other quantity values display explicit UOM/time units.
+- GP$ trend uses historical applicable cost as-of each supported sales date; missing historical cost remains a gap, never zero.
