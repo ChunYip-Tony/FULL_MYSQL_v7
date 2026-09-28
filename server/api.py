@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.150-single-service'
+VERSION='7.0.151-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -513,32 +513,33 @@ def web_upload_recent(request:Request,limit:int=8):
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         cur.execute(
-            f"""SELECT b.batch_id,b.batch_label,b.processing_status,
-                       b.upload_started_at,b.completed_at,b.file_count,
-                       b.source_row_count,b.error_count,
-                       p2.result_status AS phase2c_status,
-                       p2.blocking_issue_count AS phase2c_blockers,
-                       p3.result_status AS phase3_status,
-                       p3.blocking_issue_count AS phase3_blockers,
-                       p3.quick_check_rows,p3.quick_check_ready_rows,
-                       p3.quick_check_hold_rows
-                FROM ingest_batch b
-                LEFT JOIN phase2c_batch_result p2 ON p2.batch_id=b.batch_id
-                LEFT JOIN phase3_batch_result p3 ON p3.batch_id=b.batch_id
-                WHERE COALESCE(
-                    JSON_UNQUOTE(
-                        JSON_EXTRACT(
-                            CASE
-                                WHEN JSON_VALID(b.notes)=1 THEN b.notes
-                                ELSE '{}'
-                            END,
-                            '$.history_hidden'
-                        )
-                    ),
-                    'false'
-                ) <> 'true'
-                ORDER BY b.batch_id DESC
-                LIMIT {limit}"""
+            """SELECT b.batch_id,b.batch_label,b.processing_status,
+                      b.upload_started_at,b.completed_at,b.file_count,
+                      b.source_row_count,b.error_count,
+                      p2.result_status AS phase2c_status,
+                      p2.blocking_issue_count AS phase2c_blockers,
+                      p3.result_status AS phase3_status,
+                      p3.blocking_issue_count AS phase3_blockers,
+                      p3.quick_check_rows,p3.quick_check_ready_rows,
+                      p3.quick_check_hold_rows
+               FROM ingest_batch b
+               LEFT JOIN phase2c_batch_result p2 ON p2.batch_id=b.batch_id
+               LEFT JOIN phase3_batch_result p3 ON p3.batch_id=b.batch_id
+               WHERE COALESCE(
+                   JSON_UNQUOTE(
+                       JSON_EXTRACT(
+                           CASE
+                               WHEN JSON_VALID(b.notes)=1 THEN b.notes
+                               ELSE '{}'
+                           END,
+                           '$.history_hidden'
+                       )
+                   ),
+                   'false'
+               ) <> 'true'
+               ORDER BY b.batch_id DESC
+               LIMIT %s""",
+            (limit,),
         )
         batches=cur.fetchall()
         ids=[int(x['batch_id']) for x in batches]
