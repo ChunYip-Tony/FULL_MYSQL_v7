@@ -1,54 +1,46 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.115 Single-Service Edition
+Version: 7.0.116 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
 - server/webapp_v2.py is a compatibility shim only.
 - Web App V2 route: /app/v2.
-- V2 top-level functions: CORE / PI / PERFORMANCE.
-- Standalone Main ORDERING is cancelled.
+- Top-level functions: CORE / PI / PERFORMANCE.
+- Standalone Main ORDERING remains cancelled.
 
 CORE:
 - Search -> Family / UPC -> Price / Ordering Analysis.
-- CORE Ordering remains available and is a Family Article decision.
-- Family page shows Family 7D Sold and Family 28D Sold with supported-day count and UOM.
-- All search result lists sort by 28D Qty Sold descending, then readiness.
+- Family page shows Family 7D Sold + Family 28D Sold.
+- Search sort: 28D Qty Sold descending -> readiness.
+- CORE Ordering is Family Article level.
+- Expected Delivery: user input -> observed cadence -> FRESH following Friday / FROZEN following Tuesday fallback.
+- If next observed delivery cannot be inferred for Fresh/Frozen, Next Next Delivery = Expected Delivery + 7 days.
+- Negative OH is displayed but ordering calculations use max(OH,0).
 
-Data-day rule:
-- 7D / 14D / 28D use completed canonical data-supported dates only.
-- Missing source dates are ignored and never treated as zero.
-
-Price:
-- Price vs Sales chart shows latest 7 completed supported sales days.
-- Detailed sales history shows latest 14 completed supported days.
-- Historical SALE promotions show dates plus weekday range.
-
-Promotion:
-- Promotion = SALE only.
-- TPR is not Promotion.
-- Historical promotion references are UPC-specific when selecting a promoted UPC.
+PRICE:
+- Price vs Sales trend = latest 7 completed supported days.
+- Detailed sales history = latest 14 completed supported days.
+- Historical SALE periods show weekday range plus dates.
+- Promotion = SALE only; TPR excluded.
 
 PI:
 - PI target is Family Article.
-- Search may begin from name / Family Article / Article / UPC.
-- Family True Stock becomes authoritative Effective OH until superseded by a later accepted OH upload.
+- Family True Stock becomes authoritative Effective OH until a later accepted OH upload supersedes it.
 
 PERFORMANCE:
-- Read-only performance report for ALL / LIVE / FRESH / FROZEN.
-- Top 100 urgent price suggestions are analysis-only.
-- Company Price C is the hard bottom line when available.
-- Primary objective is positive observed GP$/day opportunity.
+- Report is anchored to a selected completed canonical supported POS date.
+- Default Report Date = latest completed supported sales date.
+- Unsupported manual dates are rejected, not silently shifted.
+- Report Date sales performance is shown separately.
+- 7D / 14D / 28D are supported-day windows ending on or before Report Date.
+- Report Date Top Sellers are included.
+- Analysis compares the selected day's performance against supported-day baselines.
+- Top 100 urgent price suggestions use sales evidence only through Report Date.
+- Company Price C is the hard floor when applicable.
+- Price suggestions require positive observed GP$/day opportunity.
+- Current authoritative cost is used until historical daily cost lineage is exposed; the UI discloses this limitation.
 
-Elder-friendly UI:
-- larger text and numeric values
-- larger touch targets
-- high contrast
-- clear page hierarchy
-- large Back controls
-- simplified mobile actions
-- three persistent top-level tabs only: CORE / PI / PERFORMANCE
-- phone/system Back stays inside the app flow
-
-Public V2 Ordering boundary:
-- POST /v1/app/v2/ordering/suggestions removed.
-- GET /v1/app/v2/upc/{upc}/ordering retained for CORE Ordering Analysis.
+UI:
+- Elder-friendly larger typography and touch targets.
+- Three persistent tabs only: CORE / PI / PERFORMANCE.
+- Phone/system Back remains inside the V2 navigation flow.
