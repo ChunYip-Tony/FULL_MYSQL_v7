@@ -408,7 +408,7 @@ A family becomes an automatic ordering candidate only when:
 
 Ordering DOS uses Ordering OH = max(Current Effective OH, 0).
 
-If DOS >= 7 days, do not generate a positive automatic replenishment suggestion unless a selected upcoming SALE promotion creates incremental forecast demand that makes additional stock necessary.
+If DOS >= 7 days, do not generate an automatic ordering suggestion. Promotion involvement does not override the DOS < 7 eligibility rule.
 
 If safe family UOM normalization cannot be proven, show BLOCKED / REVIEW rather than summing incompatible units.
 
