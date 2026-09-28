@@ -1,37 +1,37 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.111 Single-Service Edition
+Version: 7.0.113 Single-Service Edition
 
-Current runtime:
-- Existing public Web App remains available at /app during V2 transition.
-- Web App V2 test UI is available at /app/v2.
-- V2 top-level functions: CORE, ORDERING, PI.
-- V2 data/API contracts remain under /v1/app/v2.
+Web App V2 test route: /app/v2
+V2 main functions: CORE / ORDERING / PI / PERFORMANCE
 
-Web App V2 rules:
-- CORE: Search -> Family/UPC -> Price / Ordering.
-- CORE Ordering is Family Article level even when entered from a UPC.
-- Price includes Price vs Sales trend using completed canonical supported dates only.
-- Missing source dates are ignored, never zero-filled.
-- Promotion = SALE only; TPR is not Promotion.
-- Historical SALE periods identify Weekend / Weekly / Other patterns.
+Current V2 behavior:
+- Search results sort by 28 supported-day Qty Sold descending, then readiness, then relevance tie-break.
+- CORE: Search -> Family / UPC -> Price / Family-level Ordering.
+- Phone/system Back navigates previous in-app screens and is guarded at the V2 root.
+- Price page shows a 7-supported-day Price vs Sales trend plus a 14-supported-day sales history.
+- Historical SALE references show weekday range plus dates.
+- Promotion item selection is UPC-level and uses that UPC's historical SALE evidence.
+- Final ordering recommendations remain Family Article level.
 - Main ORDERING scans FRESH only or FROZEN only.
-- Main ORDERING eligibility: active selling in latest 28 supported completed POS dates AND DOS < 7.
-- Negative Effective OH is displayed but ordering calculations use max(OH,0).
-- Suggested quantity covers demand through the day before next-next delivery.
-- Price and Ordering are analysis-only; no save/submit workflow.
-- PI is inventory-owner-aware and writes authoritative True Stock.
-- True Stock stays active until superseded by a later accepted OH upload.
+- Ordering eligibility: active selling in latest 28 supported days + DOS < 7.
+- Negative Effective OH is displayed but ordering calculation uses max(OH,0).
+- PI targets Family Article True Stock only.
+- Family PI supersedes older child-level True Stock inside the family.
+- PERFORMANCE provides ALL/LIVE/FRESH/FROZEN analysis and up to Top 100 urgent price-review suggestions.
+- Performance price suggestions are analysis-only and exclude active SALE / non-READY items.
+- Web UI is elder-oriented: larger fonts, controls, cards and stronger contrast.
+- Price and Ordering have no save/submit workflow.
 
-V2 endpoints:
+V2 endpoints include:
 - GET /v1/app/v2/search
 - GET /v1/app/v2/family/{family_key}
 - GET /v1/app/v2/upc/{upc}
 - GET /v1/app/v2/upc/{upc}/price
 - GET /v1/app/v2/upc/{upc}/ordering
-- GET /v1/app/v2/family/{family_key}/promotions
 - POST /v1/app/v2/ordering/suggestions
 - GET /v1/app/v2/pi/search
-- GET /v1/app/v2/pi/{upc}
-- POST /v1/app/v2/pi/{upc}/true-stock
+- GET /v1/app/v2/pi/{family_key}
+- POST /v1/app/v2/pi/{family_key}/true-stock
+- GET /v1/app/v2/performance
 
-Legacy Admin remains in source during transition but is not part of the V2 target architecture.
+Existing /app remains fallback during V2 testing.
