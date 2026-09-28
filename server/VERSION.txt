@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.157 Single-Service Edition
+Version: 7.0.158 Single-Service Edition
+
+v7.0.158 Phase 2C -> Phase 3 Recovery:
+- STARTED worker jobs left by an older deployment are recovered immediately instead of waiting for the 180-second stale heartbeat window.
+- If an interrupted batch is already PHASE2C_READY, the worker resumes directly at Phase 3 instead of repeating Raw and Phase 2C.
+- PHASE2C_READY batches with no Phase 3 result and no active outer job are automatically queued for one PHASE3_RERUN recovery attempt.
+- Auto recovery is one-shot to prevent retry loops when Phase 3 has a real blocking error.
+- This specifically prevents deployment interruptions from stranding historical batches between Phase 2C and Phase 3.
+
 
 v7.0.157 Global Version Visibility:
 - App version is now shown in a fixed badge above the bottom navigation on every screen.
