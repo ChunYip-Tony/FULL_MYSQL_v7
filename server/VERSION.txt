@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.151 Single-Service Edition
+Version: 7.0.152 Single-Service Edition
+
+v7.0.152 Recent Uploads HTTP 500 Repair:
+- Recent Uploads no longer runs MySQL JSON_EXTRACT against historical ingest_batch.notes.
+- Hidden-history filtering is performed in Python with tolerant json.loads handling.
+- pipeline_run.detail_json is also parsed in Python instead of MySQL JSON functions.
+- Malformed legacy JSON now degrades to an empty object instead of causing the entire Recent Uploads endpoint to return HTTP 500.
+- The visible history limit remains 1-20 batches; additional rows are scanned so hidden batches do not reduce the requested visible count.
+
 
 v7.0.151 DigitalOcean Syntax Fix:
 - Fixed api.py Recent Uploads SQL at the build-log-reported failing line.
