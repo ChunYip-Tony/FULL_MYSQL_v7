@@ -24,7 +24,7 @@ from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 
-VERSION='7.0.99-single-service'
+VERSION='7.0.100-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -37,6 +37,18 @@ def device_from_auth(authorization: str|None):
     for device,expected in s.api_tokens.items():
         if hmac.compare_digest(token,expected): return device
     raise HTTPException(401,'Invalid API token')
+
+def public_app_actor(authorization: str|None):
+    """Allow the public Quick Check web app to work without a manually entered API token.
+
+    If a valid Bearer token is supplied by an existing trusted client, retain its
+    device identity. Anonymous browser users are recorded as PUBLIC-WEB.
+    Administrative, ingest, maintenance, and diagnostic endpoints continue to
+    use device_from_auth() and remain protected.
+    """
+    if not authorization:
+        return 'PUBLIC-WEB'
+    return device_from_auth(authorization)
 
 class BatchCreate(BaseModel):
     label: str|None=None
@@ -52,6 +64,7 @@ class TrueStockCancelRequest(BaseModel):
     confirm: str
     reason: str|None=None
 
+@app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/quick-check',response_class=HTMLResponse,include_in_schema=False)
 def quick_check_web():
@@ -1199,8 +1212,7 @@ def diagnostics_quick_check_lineage(
 
 
 @app.get('/v1/app/quick-check/search')
-def app_quick_check_search(q:str,limit:int=20,authorization: Annotated[str|None,Header()]=None):
-    device_from_auth(authorization)
+def app_quick_check_search(q:str,limit:int=20):
     return json.loads(json.dumps(search_quick_check(q,limit),default=j))
 
 
@@ -1360,8 +1372,7 @@ def app_quick_check_with_oh(
 
 
 @app.get('/v1/app/quick-check/{upc}')
-def app_quick_check_detail(upc:str,authorization: Annotated[str|None,Header()]=None):
-    device_from_auth(authorization)
+def app_quick_check_detail(upc:str):
     detail=get_quick_check_detail(upc)
     if not detail:
         raise HTTPException(404,'Quick Check UPC not found')
@@ -1374,7 +1385,7 @@ def app_submit_true_stock(
     body:TrueStockSubmit,
     authorization: Annotated[str|None,Header()]=None,
 ):
-    device=device_from_auth(authorization)
+    device=public_app_actor(authorization)
     try:
         result=submit_true_stock(upc,body.true_stock,body.uom,device)
     except KeyError:
