@@ -920,6 +920,8 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         true_stock = _active_true_stock(cur, system_oh)
         actual_position = _actual_position(cur, true_stock)
         true_stock_history = _true_stock_history(cur, system_oh)
+        sales_trend = _quick_check_sales_trend(cur, int(row["upc_id"]))
+        cost_trend = _quick_check_cost_trend(cur, family_id)
 
         cur.execute(
             """SELECT ean_upc,article_number,selling_description,selling_uom,
@@ -938,6 +940,11 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             (family_id,),
         )
         related = cur.fetchall()
+        family_relationships = _quick_check_family_relationships(
+            cur,
+            family_id,
+            related,
+        )
 
         effective_source = "TRUE_STOCK" if true_stock else "SYSTEM_OH"
         effective_position = actual_position if true_stock else system_position
@@ -968,7 +975,18 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         _annotate_stock_state(row)
         effective_oh.update(_stock_state(effective_oh.get("quantity")))
 
+        promotion = _quick_check_promotion(row)
+        ordering = _quick_check_ordering(row, effective_oh)
+        highlights = _quick_check_highlights(
+            row,
+            effective_oh,
+            true_stock,
+            promotion,
+            ordering,
+        )
+
         detail = {
+            "contract_version": "QUICK_CHECK_APP_V1",
             "item": row,
             "system_oh": {
                 "quantity": system_position.get("quantity") if system_position else None,
@@ -1014,7 +1032,30 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             "true_stock_history": true_stock_history,
             "effective_oh": effective_oh,
             "latest_on_hand_file_id": latest_oh_file_id,
+            "promotion": promotion,
+            "sales_trend": sales_trend,
+            "cost_trend": cost_trend,
+            "highlights": highlights,
+            "family_relationships": family_relationships,
             "related_upcs": related,
+            "ordering": ordering,
+            "inventory_policy": {
+                "system_oh_quantity_basis": "UNRESTRICTED_ONLY",
+                "oh_cost_derivation": "TOTAL_VALUE_DIV_UNRESTRICTED_WHEN_VALID",
+                "ignored_source_fields": [
+                    "Stock in Transit",
+                    "Value in Transit",
+                    "In Transfer (Site)",
+                    "Value in Stock Tfr",
+                ],
+                "ignored_fields_must_not_affect": [
+                    "OH",
+                    "OH_COST",
+                    "INVENTORY_VALUATION",
+                    "DOS",
+                    "COST_CONVERSION",
+                ],
+            },
         }
         _annotate_stock_state(detail["system_oh"], "quantity")
         if detail["actual_oh"] is not None:
