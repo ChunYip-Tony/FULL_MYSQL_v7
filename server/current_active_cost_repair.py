@@ -12,7 +12,7 @@ from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
-VERSION = "7.0.80-current-active-cost-lineage-repair"
+VERSION = "7.0.93-current-active-cost-authority-order"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -202,7 +202,11 @@ def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str
 
 
 def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
-    # 1) Receipt valuation authority.
+    # Authority order:
+    # 1) Valid receipt valuation from 101/107/109.
+    # 2) Explicit supported cost from the On-Hand report.
+    # 3) Live/Fresh/Frozen official report cost.
+    # 4) Explicit user-confirmed Family/Main-Article fallback.
     cur.execute(
         """SELECT co.cost_observation_id,co.cost_per_base_uom,co.cost_amount,
                   co.business_date,co.source_type,co.movement_type,
@@ -228,7 +232,30 @@ def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
             "movement_type": row.get("movement_type"),
         }
 
-    # 2) Live/Fresh/Frozen official report cost.
+    # 2) Explicit OH cost authority.
+    cur.execute(
+        """SELECT co.cost_observation_id,co.cost_amount,co.business_date,
+                  co.source_type,cu.uom_code AS cost_uom
+           FROM article_cost_observation co
+           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+           WHERE co.family_id=%s
+             AND co.source_type=%s
+             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND co.cost_amount>0
+           ORDER BY co.business_date DESC,co.cost_observation_id DESC
+           LIMIT 1""",
+        (family_id, OH_FALLBACK_SOURCE_TYPE),
+    )
+    row = cur.fetchone()
+    if row:
+        return {
+            "source": row["source_type"],
+            "date": row["business_date"],
+            "uom": row["cost_uom"],
+            "amount": row["cost_amount"],
+        }
+
+    # 3) Live/Fresh/Frozen official report cost.
     placeholders = ",".join(["%s"] * len(OFFICIAL_COST_SOURCE_TYPES))
     cur.execute(
         f"""SELECT co.cost_observation_id,co.cost_amount,co.business_date,
@@ -252,30 +279,6 @@ def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
             "amount": row["cost_amount"],
         }
 
-    # 3) Explicit OH cost fallback only.
-    cur.execute(
-        """SELECT co.cost_observation_id,co.cost_amount,co.business_date,
-                  co.source_type,cu.uom_code AS cost_uom
-           FROM article_cost_observation co
-           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
-           WHERE co.family_id=%s
-             AND co.source_type=%s
-             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
-             AND co.cost_amount>0
-           ORDER BY co.business_date DESC,co.cost_observation_id DESC
-           LIMIT 1""",
-        (family_id, OH_FALLBACK_SOURCE_TYPE),
-    )
-    row = cur.fetchone()
-    if row:
-        return {
-            "source": row["source_type"],
-            "date": row["business_date"],
-            "uom": row["cost_uom"],
-            "amount": row["cost_amount"],
-        }
-
-    # 4) Explicit user-confirmed Family/Main-Article fallback.
     manual = confirmed_family_cost(cur, family_id)
     if manual:
         return {
@@ -845,10 +848,10 @@ def _family_diagnostics(
 
     if receipt_rows > 0 and valid_receipt_rows == 0:
         reason = "RECEIPT_ROWS_WITHOUT_VALID_VALUATION"
-    elif positive_official > 0 and positive_official_uom == 0:
-        reason = "OFFICIAL_COST_WITHOUT_EXPLICIT_UOM"
     elif oh_positive > 0 and oh_supported == 0:
         reason = "OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM"
+    elif positive_official > 0 and positive_official_uom == 0:
+        reason = "OFFICIAL_COST_WITHOUT_EXPLICIT_UOM"
     elif receipt_rows == 0 and positive_official == 0 and oh_positive == 0:
         reason = "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST"
     else:
@@ -917,8 +920,8 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
     )
 
     result["receipt_cost_rows_backfilled"] = _backfill_receipt_cost(cur, target_family_ids)
-    result["official_cost_rows_backfilled"] = _backfill_official_cost(cur, target_family_ids)
     result["oh_fallback"] = _scan_and_backfill_oh_cost(cur, target_family_ids)
+    result["official_cost_rows_backfilled"] = _backfill_official_cost(cur, target_family_ids)
 
     remaining_families = set()
     for p in initial_missing:
