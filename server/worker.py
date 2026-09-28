@@ -89,11 +89,11 @@ def _runtime_heartbeat_loop(stop_event:threading.Event) -> None:
 
 
 def _recover_stale_started(cur) -> int:
-    # Inspect only the tiny set of currently STARTED outer API jobs. Parse the
-    # heartbeat in Python instead of JSON_EXTRACT/JSON_SET so recovery does not
-    # depend on MySQL JSON execution or large sort buffers.
+    # STARTED jobs from an older deployment cannot still be owned by the
+    # current worker, so recover them immediately. Same-version jobs continue
+    # to use heartbeat age as the stale guard.
     cur.execute(
-        """SELECT pipeline_run_id,started_at,code_version,detail_json
+        """SELECT pipeline_run_id,batch_id,started_at,code_version,detail_json
            FROM pipeline_run
            WHERE pipeline_name=%s
              AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
@@ -108,15 +108,17 @@ def _recover_stale_started(cur) -> int:
             detail=json.loads(row.get('detail_json') or '{}')
         except Exception:
             detail={}
+        previous_version=str(row.get('code_version') or '')
+        deployment_interrupted=bool(previous_version and previous_version!=API_VERSION)
         heartbeat_epoch=detail.get('heartbeat_epoch')
         started_at=row.get('started_at')
-        stale=False
-        if heartbeat_epoch is not None:
+        stale=deployment_interrupted
+        if not stale and heartbeat_epoch is not None:
             try:
                 stale=(now-float(heartbeat_epoch)) > STALE_STARTED_SECONDS
             except Exception:
                 stale=False
-        elif started_at is not None:
+        elif not stale and started_at is not None:
             try:
                 stale=(datetime.utcnow()-started_at).total_seconds() > STALE_STARTED_SECONDS
             except Exception:
@@ -126,9 +128,15 @@ def _recover_stale_started(cur) -> int:
         recovery_detail={
             'recovered_stale_started':True,
             'recovered_at':datetime.now(timezone.utc).isoformat(),
-            'recovery_reason':'WORKER_HEARTBEAT_STALE',
+            'recovery_reason':(
+                'OLD_DEPLOYMENT_WORKER_GONE'
+                if deployment_interrupted
+                else 'WORKER_HEARTBEAT_STALE'
+            ),
             'previous_worker':detail.get('worker'),
-            'previous_code_version':row.get('code_version'),
+            'previous_code_version':previous_version,
+            'recovered_by_code_version':API_VERSION,
+            'batch_id':row.get('batch_id'),
         }
         cur.execute(
             """UPDATE pipeline_run
@@ -142,6 +150,68 @@ def _recover_stale_started(cur) -> int:
         )
         recovered += int(cur.rowcount or 0)
     return recovered
+
+
+def _queue_orphaned_phase2c_ready(cur) -> int:
+    # A deployment can terminate the worker after Phase 2C committed but before
+    # Phase 3 started. If no active outer job and no prior Phase3 rerun exists,
+    # enqueue exactly one recovery run. This is intentionally one-shot to avoid
+    # retry loops when Phase 3 has a real blocking error.
+    cur.execute(
+        """SELECT ib.batch_id
+           FROM ingest_batch ib
+           LEFT JOIN phase3_batch_result p3 ON p3.batch_id=ib.batch_id
+           WHERE ib.processing_status='PHASE2C_READY'
+             AND p3.batch_id IS NULL
+             AND NOT EXISTS (
+                 SELECT 1
+                 FROM pipeline_run active
+                 WHERE active.batch_id=ib.batch_id
+                   AND active.pipeline_name=%s
+                   AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                   AND active.processing_status IN ('QUEUED','STARTED')
+             )
+             AND NOT EXISTS (
+                 SELECT 1
+                 FROM pipeline_run prior
+                 WHERE prior.batch_id=ib.batch_id
+                   AND prior.pipeline_name=%s
+                   AND prior.stage_name='PHASE3_RERUN'
+             )
+           ORDER BY ib.batch_id""",
+        (API_PIPELINE,API_PIPELINE),
+    )
+    queued=0
+    for row in cur.fetchall():
+        bid=int(row['batch_id'])
+        cur.execute(
+            """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+               FROM pipeline_run
+               WHERE batch_id=%s
+                 AND pipeline_name=%s
+                 AND stage_name='PHASE3_RERUN'""",
+            (bid,API_PIPELINE),
+        )
+        run_number=int((cur.fetchone() or {}).get('next_run') or 1)
+        cur.execute(
+            """INSERT INTO pipeline_run
+               (batch_id,pipeline_name,stage_name,run_number,
+                processing_status,code_version,detail_json)
+               VALUES (%s,%s,'PHASE3_RERUN',%s,'QUEUED',%s,%s)""",
+            (
+                bid,
+                API_PIPELINE,
+                run_number,
+                API_VERSION,
+                json.dumps({
+                    'auto_recovery':True,
+                    'reason':'ORPHANED_PHASE2C_READY',
+                    'queued_at':datetime.now(timezone.utc).isoformat(),
+                },ensure_ascii=False),
+            ),
+        )
+        queued += 1
+    return queued
 
 
 def claim_job():
@@ -161,6 +231,7 @@ def claim_job():
                 return None
 
             _recover_stale_started(cur)
+            _queue_orphaned_phase2c_ready(cur)
             conn.commit()
 
             cur.execute(
@@ -286,15 +357,30 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
             finish(run_id,'COMPLETED',detail,0)
             return
 
-        a=audit_batch(batch_id); detail['raw_audit']=a
-        if not a['pass']:
-            finish(run_id,'QA_HOLD',detail,len(a.get('blocking_issues',[]))); return
-        r=release_batch(batch_id); detail['raw_release']=r
-        if not r.get('released'):
-            finish(run_id,'FAILED',{**detail,'error':'RAW release failed'},1); return
-        p2=normalize_batch(batch_id); a2=audit_phase2c(batch_id); detail['phase2c']=p2; detail['phase2c_audit']=a2
-        if not a2['pass']:
-            finish(run_id,'QA_HOLD',detail,len(a2.get('blocking_issues',[]))); return
+        with db_conn() as status_conn:
+            status_cur=status_conn.cursor(dictionary=True)
+            status_cur.execute(
+                "SELECT processing_status FROM ingest_batch WHERE batch_id=%s",
+                (batch_id,),
+            )
+            status_row=status_cur.fetchone() or {}
+            status_cur.close()
+        batch_status=str(status_row.get('processing_status') or '')
+
+        if batch_status=='PHASE2C_READY':
+            detail['resume_from']='PHASE2C_READY'
+            progress('PHASE3_RESUME_FROM_PHASE2C')
+        else:
+            a=audit_batch(batch_id); detail['raw_audit']=a
+            if not a['pass']:
+                finish(run_id,'QA_HOLD',detail,len(a.get('blocking_issues',[]))); return
+            r=release_batch(batch_id); detail['raw_release']=r
+            if not r.get('released'):
+                finish(run_id,'FAILED',{**detail,'error':'RAW release failed'},1); return
+            p2=normalize_batch(batch_id); a2=audit_phase2c(batch_id); detail['phase2c']=p2; detail['phase2c_audit']=a2
+            if not a2['pass']:
+                finish(run_id,'QA_HOLD',detail,len(a2.get('blocking_issues',[]))); return
+
         p3=process_phase3(batch_id,progress=progress)
         progress('PHASE3_AUDIT')
         a3=audit_phase3(batch_id); detail['phase3']=p3; detail['phase3_audit']=a3
