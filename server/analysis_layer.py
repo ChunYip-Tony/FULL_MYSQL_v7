@@ -374,9 +374,14 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
             MIN(dos),
             SUM(is_sale_promotion),
             CASE
-              WHEN MAX(product_class)='FROZEN' AND MAX(family_pos_velocity_7d) IS NULL THEN 'FAMILY_POS_UOM_UNRESOLVED'
-              WHEN MAX(product_class)='FROZEN' AND SUM(COALESCE(pos_qty_7d,0))<3 THEN 'UNDER_3_UNITS_7D'
-              WHEN MAX(product_class)='FROZEN' THEN 'AT_LEAST_3_UNITS_7D'
+              WHEN COUNT(DISTINCT NULLIF(product_class,''))=1
+               AND MAX(product_class)='FROZEN'
+               AND MAX(family_pos_velocity_7d) IS NULL THEN 'FAMILY_POS_UOM_UNRESOLVED'
+              WHEN COUNT(DISTINCT NULLIF(product_class,''))=1
+               AND MAX(product_class)='FROZEN'
+               AND SUM(COALESCE(pos_qty_7d,0))<3 THEN 'UNDER_3_UNITS_7D'
+              WHEN COUNT(DISTINCT NULLIF(product_class,''))=1
+               AND MAX(product_class)='FROZEN' THEN 'AT_LEAST_3_UNITS_7D'
               ELSE NULL
             END,
             CASE
