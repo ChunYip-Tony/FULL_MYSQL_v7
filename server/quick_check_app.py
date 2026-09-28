@@ -1841,6 +1841,8 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
                 str(r.get("representative_upc") or ""),
             )
         )
+        for index, action in enumerate(actions, start=1):
+            action["count_sequence"] = index
         rows = actions[:limit]
 
         conn.commit()

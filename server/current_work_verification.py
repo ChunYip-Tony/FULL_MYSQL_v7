@@ -9,6 +9,7 @@ from quick_check_app import (
     negative_stock_queue,
     pending_dumping_discrepancies,
 )
+from cost_backfill_queue import cost_backfill_queue
 
 
 def _decimal(value: Any) -> Decimal | None:
@@ -89,6 +90,22 @@ def verify_current_work(
         "NEGATIVE_QUEUE_NO_UNRESOLVED_OWNER_UPCS",
         unresolved_owner_upc_count == 0,
         {"unresolved_owner_upc_count": unresolved_owner_upc_count},
+    )
+
+    cost_backfill = cost_backfill_queue(lookback_days=90)
+    check(
+        "COST_BACKFILL_QUEUE_FAMILY_GRAIN",
+        cost_backfill.get("queue_grain") == "FAMILY",
+        {"actual": cost_backfill.get("queue_grain")},
+    )
+    check(
+        "COST_BACKFILL_NO_SAFE_AUTO_RESOLVE",
+        int(cost_backfill.get("safe_to_auto_resolve_upc_count") or 0) == 0,
+        {
+            "safe_to_auto_resolve_upc_count":
+                cost_backfill.get("safe_to_auto_resolve_upc_count"),
+            "source_coverage": cost_backfill.get("source_coverage"),
+        },
     )
 
     pending = pending_dumping_discrepancies()
@@ -179,6 +196,17 @@ def verify_current_work(
                 reason_counts[reason] = reason_counts.get(reason, 0) + 1
 
         hold_count = int(qc_scope.get("current_hold_rows") or 0)
+        current_cost_missing_count = int(reason_counts.get("CURRENT_COST_MISSING") or 0)
+        check(
+            "COST_BACKFILL_UPC_COUNT_PARITY",
+            int(cost_backfill.get("current_cost_missing_upc_count") or 0)
+            == current_cost_missing_count,
+            {
+                "queue_current_cost_missing_upc_count":
+                    cost_backfill.get("current_cost_missing_upc_count"),
+                "serving_current_cost_missing_count": current_cost_missing_count,
+            },
+        )
         check(
             "QUICK_CHECK_HOLD_ROW_PARITY",
             hold_count == len(hold_rows),
@@ -255,6 +283,22 @@ def verify_current_work(
             "duplicate_owner_keys": duplicate_owner_keys,
         },
         "pending_dumping_count": len(pending),
+        "cost_backfill": {
+            "queue_type": cost_backfill.get("queue_type"),
+            "queue_grain": cost_backfill.get("queue_grain"),
+            "lookback_days": cost_backfill.get("lookback_days"),
+            "requested_backfill_start": cost_backfill.get("requested_backfill_start"),
+            "requested_backfill_end": cost_backfill.get("requested_backfill_end"),
+            "current_cost_missing_upc_count":
+                cost_backfill.get("current_cost_missing_upc_count"),
+            "family_action_count": cost_backfill.get("family_action_count"),
+            "backfill_needed_family_count":
+                cost_backfill.get("backfill_needed_family_count"),
+            "review_existing_evidence_family_count":
+                cost_backfill.get("review_existing_evidence_family_count"),
+            "safe_to_auto_resolve_upc_count":
+                cost_backfill.get("safe_to_auto_resolve_upc_count"),
+        },
         "focus": focus_summary,
         "quick_check_scope": {
             **qc_scope,

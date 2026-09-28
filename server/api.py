@@ -20,8 +20,9 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
+from cost_backfill_queue import cost_backfill_queue
 
-VERSION='7.0.90-single-service'
+VERSION='7.0.91-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1213,6 +1214,19 @@ def diagnostic_inventory_position(
         raise HTTPException(404,'Quick Check UPC not found')
     except Exception as exc:
         raise HTTPException(500,f'Inventory position diagnostic failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/cost/backfill-queue')
+def app_cost_backfill_queue(
+    lookback_days:int=90,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    try:
+        result=cost_backfill_queue(lookback_days)
+    except Exception as exc:
+        raise HTTPException(500,f'Cost backfill queue failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
