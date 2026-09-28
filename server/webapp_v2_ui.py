@@ -69,7 +69,7 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(min-width:760px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.form{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){body{font-size:18px}.w{padding:11px}.card{padding:15px}.m .v{font-size:21px}.m .k{font-size:13px}.title{font-size:26px}.actions{grid-template-columns:1fr}.actions button{font-size:19px;min-height:72px}.nav button{font-size:13px;min-height:68px}.scroll{margin-left:-4px;margin-right:-4px}}
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.118</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.119</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -304,8 +304,18 @@ async function performance(){
             m('Canonical POS',money(rec.canonical_source_sales))+
             m('Mapped UPC Total',money(rec.mapped_report_sales))+
             m('Difference',money(rec.difference))+
+            m('Unmapped POS',money(rec.unmapped_source_sales))+
+            m('Unmapped Qty',fmt(rec.unmapped_source_qty))+
+            m('Unmapped UPCs',fmt(rec.unmapped_upc_count,0))+
             m('Source File',rec.canonical_source?.source_file_id??'—')+
-          '</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+esc(rec.canonical_source?.coverage_kind||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div></div>'
+          '</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+esc(rec.canonical_source?.coverage_kind||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div>'+
+          ((rec.top_unmapped_upcs||[]).length
+            ? '<div class="section" style="margin-top:16px">Why the Difference</div><div class="hint">Canonical POS rows below are not represented by the current V2 Quick Check serving set.</div>'+
+              rec.top_unmapped_upcs.slice(0,12).map(x=>
+                '<div class="promo"><div class="row" style="justify-content:space-between"><div><b>UPC '+esc(x.ean_upc||'—')+'</b><div class="meta">'+esc(x.description||x.mapping_status||'Unmapped POS row')+'</div></div><b>'+money(x.sales_amount)+'</b></div><div class="meta">Qty '+fmt(x.sold_quantity)+' · '+esc(x.mapping_status||'')+'</div></div>'
+              ).join('')
+            : '')+
+          '</div>'
         : '');
 
     $('peranalysis').innerHTML=
