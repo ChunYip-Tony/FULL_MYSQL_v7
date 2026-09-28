@@ -1,4 +1,17 @@
 FULL MYSQL Secure API Architecture
+Version: 7.0.130 Single-Service Edition
+
+v7.0.130 Seafood-first analysis layer:
+- Adds fail-closed precomputed analysis_item_current, analysis_family_current, and analysis_layer_status.
+- Seafood Phase 3 READY requires analysis-layer parity/audit in addition to Quick Check and product-identity guards.
+- UPC sold quantity remains POS-only; family 251/252 movement stays a separate whole-family metric.
+- Family POS-vs-MVT gaps are calculated only when family POS UOM is unique and matches movement UOM.
+- Fixes cost authority to 101/107/109 receipt valuation > official Live/Fresh/Frozen report > explicit OH fallback > user-confirmed fallback.
+- Applies the same authority order to historical Sweet Spot GP/day cost selection.
+- Normalizes Price List STOR to IN STORE and preserves IN STORE > SALE > TPR > REG priority.
+- Meat and Produce are explicitly staged as PENDING_PIPELINE_ENABLEMENT until Seafood passes and their department-specific authority rules are enabled.
+
+FULL MYSQL Secure API Architecture
 Version: 7.0.129 Single-Service Edition
 
 Canonical public app:
