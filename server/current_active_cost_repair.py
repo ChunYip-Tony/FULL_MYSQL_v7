@@ -12,7 +12,7 @@ from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
-VERSION = "7.0.45-current-active-cost-lineage-repair"
+VERSION = "7.0.80-current-active-cost-lineage-repair"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
