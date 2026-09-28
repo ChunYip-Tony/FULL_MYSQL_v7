@@ -5,12 +5,22 @@ Date: 2026-09-28
 
 ## 1. Product boundary
 
-Web App V2 is an analysis/navigation app centered on:
-Search -> Search Results -> Family Article / UPC -> Price / Ordering.
+Web App V2 has exactly three top-level main functions:
 
-Do not make Quick Check, Ordering, Dumping, Price Change, Admin, Work Queue, or More separate top-level modules.
+1. CORE
+2. ORDERING
+3. PI (Physical Inventory)
 
-There is no Web App price-change save/approval workflow and no order save/submit workflow.
+CORE is the single-item / family navigation and analysis path:
+Search -> Search Results -> Family Article / UPC -> Price / Ordering Analysis.
+
+ORDERING is the batch family-article ordering analysis path. It scans eligible Fresh or Frozen families and produces ordering suggestions using the same forecast engine as CORE -> Ordering.
+
+PI is the inventory-count adjustment path. It lets the user locate an inventory owner, enter True Stock, make True Stock immediately authoritative for Effective OH, and record the inventory discrepancy lineage.
+
+Do not make legacy Quick Check, Dumping, Price Change, Admin, Work Queue, or More separate top-level modules.
+
+There is no Web App price-change save/approval workflow and no order save/submit workflow. PI is intentionally write-capable because entering True Stock changes the active inventory reference.
 
 ## 2. Global completed-data-day rule
 
@@ -24,6 +34,18 @@ All historical sales, velocity, ranking, trend, promotion, and forecast baseline
 - 28D means latest 28 completed canonical POS data dates.
 - If fewer than the requested supported dates exist, expose actual supported-day count and do not pretend the metric has full 7D/28D coverage.
 - Price-vs-sales charts must leave missing-source dates as gaps, never plot them as zero.
+
+### 2.1 Global Ordering OH rule
+
+For every ordering-related calculation in both CORE and the main ORDERING function:
+
+Ordering OH = max(Current Effective OH, 0).
+
+- If Current Effective OH is negative, retain and display the real negative value as an inventory warning.
+- Use 0, not the negative number, for DOS eligibility, projected OH, forecast consumption coverage, and suggested order quantity.
+- Never let a negative OH artificially increase the suggested order beyond the quantity needed from a zero-stock starting point.
+- Example: Effective OH = -18 LB -> Ordering OH Used = 0 LB.
+- This rule does not relax UOM requirements. Unresolved/incompatible UOM remains blocked/review rather than guessed.
 
 ## 3. Search
 
@@ -247,9 +269,9 @@ Display:
 Do not treat missing-source dates inside a promotion as zero sales.
 Do not claim continuity across missing dates unless price/source evidence supports the calendar boundaries.
 
-## 9. Ordering page
+## 9. CORE -> Ordering page
 
-Analysis/calculator only. No Save Order / Final Order / Submit.
+Single-family / single-item analysis calculator only. No Save Order / Final Order / Submit.
 
 Inputs:
 - Ordering Date — default current date
@@ -339,7 +361,177 @@ If current OH is forecast to run out before Expected Delivery, show the pre-deli
 
 Apply only confirmed UOM/order-multiple conversions. Show raw qty and rounded qty separately. Fail closed if UOM conversion is unresolved.
 
-## 10. Implementation guard
+## 10. Main ORDERING function
+
+The top-level ORDERING function is a batch family-article ordering analyzer. It must use the same demand, OH, promotion, supported-date, UOM, and delivery-cadence engine as CORE -> Ordering. The same family with the same inputs must produce the same recommendation in both places.
+
+### 10.1 Ordering setup
+
+On entry, ask for:
+
+- Order category: FRESH or FROZEN
+- Expected Delivery Date
+  - FROZEN default: following Tuesday
+  - FRESH default: following Friday
+  - user may override
+- Order context: REGULAR or PROMOTION_INVOLVED
+
+The expected delivery default is a convenience default. Observed receipt cadence should also be shown when available.
+
+Derive and show Next Next Delivery Date from the expected delivery / observed cadence. If the next-next date cannot be determined safely, require the user to supply it rather than guess.
+
+### 10.2 Promotion setup
+
+Promotion means SALE only. TPR is not Promotion.
+
+If PROMOTION_INVOLVED is selected:
+
+- show relevant observed historical SALE periods
+- identify WEEKEND_PROMOTION, WEEKLY_PROMOTION, OTHER_SALE, or UNCERTAIN
+- show SALE price, supported-day coverage, quantity, and velocity
+- let the user enter/select the families/items involved in the upcoming promotion
+- let the user enter the promotion price for each promoted family/item
+- let the user enter promotion start and end dates, with historical SALE periods available as reference
+
+A UPC selected as a promotion item should resolve to its Family Article for the family-level ordering result.
+
+There is no separate Sales Event model.
+
+### 10.3 Family candidate eligibility
+
+Generate suggestions at Family Article level.
+
+A family becomes an automatic ordering candidate only when:
+
+1. it is actively selling in the latest 28 completed canonical POS data-supported dates; and
+2. ordering DOS is less than 7 days.
+
+Ordering DOS uses Ordering OH = max(Current Effective OH, 0).
+
+If DOS >= 7 days, do not generate a positive automatic replenishment suggestion unless a selected upcoming SALE promotion creates incremental forecast demand that makes additional stock necessary.
+
+If safe family UOM normalization cannot be proven, show BLOCKED / REVIEW rather than summing incompatible units.
+
+### 10.4 Family demand authority
+
+When related UPC quantities share one confirmed operational UOM, family demand may aggregate those UPC quantities without double counting.
+
+When UPC UOMs cannot be safely normalized, use canonical family movement only when it is the authoritative comparable family quantity.
+
+If neither route is safe, family demand and ordering suggestion are unavailable.
+
+### 10.5 Batch ordering forecast and result
+
+Coverage target is through the day before Next Next Delivery Date.
+
+For each eligible family:
+
+- forecast pre-delivery demand
+- forecast post-delivery demand through next-next delivery
+- segment regular vs SALE demand when a promotion is involved
+- use Ordering OH, not raw negative OH, for the quantity calculation
+- show projected OH at delivery
+- show any pre-delivery stockout separately
+- show total forecast usage through next-next delivery
+- show raw suggested quantity
+- show confirmed UOM/order-multiple rounded quantity when available
+
+Suggested order quantity:
+
+max(0, forecast usage through day before Next Next Delivery - Ordering OH)
+
+Sort results by urgency, with lower DOS first. Promotion-involved families should be clearly labeled SALE.
+
+No Save Order, Final Order, Confirm, or Submit action exists in Web App V2.
+
+## 11. PI (Physical Inventory)
+
+PI is the third top-level Web App function and is the primary user workflow for correcting on-hand inventory by entering True Stock.
+
+### 11.1 PI item selection
+
+Allow search by:
+- item name / alias
+- Family Article number
+- Article / Receiving-Ordering number
+- UPC / EAN
+
+Search should resolve the actual inventory owner before applying a count:
+- UPC-owned inventory
+- Article-owned inventory
+- Family-owned inventory
+
+Do not write the same True Stock independently to multiple child UPCs when they share one Family/Article inventory owner.
+
+### 11.2 PI count screen
+
+Display before entry:
+- Family / Article / UPC identity
+- inventory owner scope
+- category LIVE/FRESH/FROZEN
+- Current System OH + UOM
+- Current Effective OH + UOM
+- OH source
+- latest accepted OH snapshot date
+- last receipt date / quantity where available
+- current True Stock status if one is already active
+- readiness / UOM status
+
+Input:
+- True Stock quantity
+- True Stock UOM, constrained to the authoritative inventory/operational UOM when known
+- optional note
+
+The primary action is Apply True Stock.
+
+### 11.3 True Stock authority
+
+After Apply True Stock:
+
+- True Stock becomes the active Effective OH for that inventory owner immediately.
+- True Stock remains authoritative until a later accepted OH upload for the same inventory owner supersedes it.
+- A later accepted OH upload resets the OH baseline and expires the older True Stock override.
+- Ordering calculations must immediately consume the updated Effective OH.
+- If entered True Stock is negative, reject the entry; a physical count cannot be negative.
+
+### 11.4 PI discrepancy
+
+Compute:
+
+Inventory Discrepancy = True Stock - System OH at time of count.
+
+Display both signed difference and absolute quantity.
+
+- True Stock < System OH: shortage / negative discrepancy.
+- True Stock = System OH: matched count.
+- True Stock > System OH: overage / positive discrepancy.
+
+Do not hide the original System OH after applying True Stock.
+
+For a shortage, create/update the related pending inventory discrepancy / dumping record using the shortage quantity.
+
+For an overage, retain a positive PI discrepancy record for audit/review; do not create a dumping quantity.
+
+For a matched count, no shortage/overage quantity remains outstanding.
+
+Resolving or reviewing a discrepancy must not independently mutate Effective OH; Effective OH already comes from the True Stock authority.
+
+### 11.5 PI history and repeat counting
+
+PI should show recent True Stock entries for the selected inventory owner:
+- counted at
+- prior System OH
+- entered True Stock
+- UOM
+- discrepancy
+- note / source user when available
+- superseded/current status
+
+A new True Stock entry supersedes the earlier True Stock entry for that owner, subject to the later-OH-upload rule above.
+
+PI is not an approval workflow. It is an operational inventory-correction workflow.
+
+## 12. Implementation guard
 
 Do not redesign runtime UI until these contracts are represented by dedicated V2 API/data outputs.
 Do not reuse legacy promotion classification where TPR/IN STORE were labeled promotion.
