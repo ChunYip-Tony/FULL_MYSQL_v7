@@ -34,7 +34,7 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.101</div></div>
+    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.102</div></div>
     <div id="globalStatus" class="msg">Public operational app</div>
   </div>
 
@@ -86,7 +86,7 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 
   <section id="mod-order" class="module hidden">
     <div class="module-head"><h2>📦 Ordering</h2><button class="smallbtn" id="refreshOrdering">Refresh</button></div>
-    <div class="small">Uses effective OH and current 7D UPC velocity. Order quantity remains review-only until an authoritative ordering calendar / target coverage policy is configured.</div>
+    <div class="small">Uses effective OH and current 7D UPC velocity. When a matching ordering policy is configured, the app calculates next order/delivery dates and a suggested order quantity.</div>
     <div id="orderingStatus" class="msg">Open this tab to load.</div>
     <div id="orderingList" class="grid list-grid"></div>
   </section>
@@ -191,7 +191,11 @@ async function loadDetail(upc){
     $('trueStockUom').value=d.true_stock_input?.required_uom||'';
     $('trueStock').value=''; $('trueStockMsg').className='msg'; $('trueStockMsg').textContent='';
 
-    $('ordering').innerHTML='<div><b>'+esc(ord.status||'—')+'</b> · '+esc(ord.action||'—')+'</div><div class="small">'+esc(ord.reason||'')+'</div>'+(ord.days_supply!==undefined?'<div class="small">Effective DOS: '+fmt(ord.days_supply,1)+'</div>':'');
+    $('ordering').innerHTML='<div><b>'+esc(ord.status||'—')+'</b> · '+esc(ord.action||'—')+'</div>'+
+      (ord.suggested_order_qty!==undefined&&ord.suggested_order_qty!==null?'<div><b>Suggested: '+fmt(ord.suggested_order_qty)+' '+esc(ord.suggested_order_uom||'')+'</b></div>':'')+
+      (ord.next_order_date?'<div class="small">Next order: '+esc(ord.next_order_date)+' · delivery: '+esc(ord.next_delivery_date||'—')+'</div>':'')+
+      '<div class="small">'+esc(ord.reason||'')+'</div>'+
+      (ord.days_supply!==undefined?'<div class="small">Effective DOS: '+fmt(ord.days_supply,1)+'</div>':'');
     const rel=d.family_relationships||{}, fam=rel.family||{};
     $('familyMeta').textContent='Main Article '+(fam.main_article_number||x.main_article_number||'—')+' · '+(fam.family_description||x.family_description||'');
     $('familyArticles').textContent='Articles: '+((rel.articles||[]).map(a=>(a.article_number||'—')+' ['+(a.relationship_type||'')+']').join(', ')||'—');
@@ -240,6 +244,11 @@ async function loadOrdering(){
           <div class="k">Effective OH</div><div class="v">${fmt(r.effective_oh)} ${esc(r.effective_oh_uom||'')}</div>
           <div class="k">7D velocity</div><div class="v">${fmt(r.upc_velocity_7d,2)}</div>
           <div class="k">Effective DOS</div><div class="v">${fmt(o.days_supply??o.effective_dos?.days_supply,1)}</div>
+          <div class="k">Suggested Order</div><div class="v">${fmt(o.suggested_order_qty)} ${esc(o.suggested_order_uom||'')}</div>
+          <div class="k">Next Order</div><div class="v">${esc(o.next_order_date||'—')}</div>
+          <div class="k">Next Delivery</div><div class="v">${esc(o.next_delivery_date||'—')}</div>
+          <div class="k">Coverage + Safety</div><div class="v">${fmt(o.coverage_days_after_delivery,1)} + ${fmt(o.safety_days,1)} days</div>
+          <div class="k">Policy Scope</div><div class="v">${esc(o.policy?.scope_type||'—')} ${esc(o.policy?.scope_key||'')}</div>
           <div class="k">Price</div><div class="v">${money(r.current_price)}</div>
           <div class="k">Price type</div><div class="v">${esc(r.current_price_type||'—')}</div>
         </div>
