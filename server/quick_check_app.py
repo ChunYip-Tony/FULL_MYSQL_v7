@@ -2634,8 +2634,362 @@ def ordering_queue(limit: int = 80) -> dict[str, Any]:
     }
 
 
+def ensure_price_change_tables(cur) -> None:
+    if not _table_exists(cur, "price_change_proposal"):
+        cur.execute(
+            """
+            CREATE TABLE price_change_proposal (
+                proposal_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                upc_id BIGINT UNSIGNED NOT NULL,
+                ean_upc VARCHAR(32) NOT NULL,
+                article_number VARCHAR(64) NULL,
+                family_id BIGINT UNSIGNED NULL,
+                main_article_number VARCHAR(64) NULL,
+                selling_description VARCHAR(255) NULL,
+                selling_uom VARCHAR(32) NULL,
+                current_price DECIMAL(24,8) NOT NULL,
+                proposed_price DECIMAL(24,8) NOT NULL,
+                proposed_price_type VARCHAR(32) NULL,
+                proposal_basis VARCHAR(32) NOT NULL,
+                basis_reference_price DECIMAL(24,8) NULL,
+                current_cost_per_selling_unit DECIMAL(24,8) NULL,
+                current_gp_pct DECIMAL(24,8) NULL,
+                proposed_gp_pct DECIMAL(24,8) NULL,
+                current_gp_per_day_7d DECIMAL(24,8) NULL,
+                projected_gp_per_day_7d DECIMAL(24,8) NULL,
+                projected_gp_per_day_delta DECIMAL(24,8) NULL,
+                upc_velocity_7d DECIMAL(24,8) NULL,
+                sweet_spot_price DECIMAL(24,8) NULL,
+                wgpm_price DECIMAL(24,8) NULL,
+                company_price_a DECIMAL(24,8) NULL,
+                company_price_b DECIMAL(24,8) NULL,
+                company_price_c DECIMAL(24,8) NULL,
+                current_price_source VARCHAR(64) NULL,
+                current_price_asof_date DATE NULL,
+                cost_source VARCHAR(64) NULL,
+                cost_date DATE NULL,
+                reason VARCHAR(255) NULL,
+                proposal_status VARCHAR(32) NOT NULL DEFAULT 'PENDING_REVIEW',
+                proposed_by VARCHAR(128) NOT NULL,
+                proposed_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                reviewed_by VARCHAR(128) NULL,
+                reviewed_at DATETIME(6) NULL,
+                review_note VARCHAR(255) NULL,
+                execution_marked_by VARCHAR(128) NULL,
+                execution_marked_at DATETIME(6) NULL,
+                execution_note VARCHAR(255) NULL,
+                PRIMARY KEY (proposal_id),
+                KEY ix_price_change_status (proposal_status,proposed_at),
+                KEY ix_price_change_upc (ean_upc,proposal_status),
+                KEY ix_price_change_family (family_id,proposal_status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+
+
+def _price_reference_from_basis(row: dict[str, Any], basis: str) -> Decimal | None:
+    key = str(basis or "").strip().upper()
+    mapping = {
+        "SWEET_SPOT": "sweet_spot_price",
+        "WGPM": "wgpm_price",
+        "COMPANY_A": "company_price_a",
+        "COMPANY_B": "company_price_b",
+        "COMPANY_C": "company_price_c",
+        "CURRENT": "current_price",
+    }
+    field = mapping.get(key)
+    return _qc_decimal(row.get(field)) if field else None
+
+
+def _price_change_impact(row: dict[str, Any], proposed_price: Decimal) -> dict[str, Any]:
+    price = Decimal(str(proposed_price))
+    if price <= 0:
+        raise ValueError("PROPOSED_PRICE_MUST_BE_POSITIVE")
+    cost = _qc_decimal(row.get("current_cost_per_selling_unit"))
+    velocity = _qc_decimal(row.get("upc_velocity_7d"))
+    current_gp_day = _qc_decimal(row.get("gp_per_day_7d"))
+    proposed_gp_pct = None
+    projected_gp_day = None
+    projected_delta = None
+    if cost is not None:
+        proposed_gp_pct = (price - cost) / price
+        if velocity is not None and velocity >= 0:
+            projected_gp_day = (price - cost) * velocity
+            if current_gp_day is not None:
+                projected_delta = projected_gp_day - current_gp_day
+    return {
+        "proposed_price": price,
+        "proposed_gp_pct": proposed_gp_pct,
+        "projected_gp_per_day_7d": projected_gp_day,
+        "projected_gp_per_day_delta": projected_delta,
+        "calculation_basis": "CURRENT_COST_X_CURRENT_7D_UPC_VELOCITY",
+        "volume_response_assumed": False,
+        "caveat": (
+            "Projected GP/day holds current 7D UPC velocity constant and does not predict "
+            "price elasticity or future unit movement."
+        ),
+    }
+
+
+def price_change_preview(upc: str, proposed_price: Decimal) -> dict[str, Any]:
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        row = _lookup_qc_row(cur, upc)
+        if not row:
+            cur.close()
+            raise KeyError("PRICE_CHANGE_UPC_NOT_FOUND")
+        impact = _price_change_impact(row, Decimal(str(proposed_price)))
+        family_id = int(row["family_id"]) if row.get("family_id") is not None else None
+        related = []
+        if family_id is not None:
+            cur.execute(
+                """SELECT ean_upc,article_number,selling_description,selling_uom,
+                          current_price,current_price_type,quick_check_status
+                   FROM quick_check_current
+                   WHERE family_id=%s
+                   ORDER BY ean_upc""",
+                (family_id,),
+            )
+            related = cur.fetchall()
+        cur.close()
+    return {
+        "contract_version": "PRICE_CHANGE_PREVIEW_V1",
+        "item": row,
+        "impact": impact,
+        "reference_prices": {
+            "sweet_spot": row.get("sweet_spot_price"),
+            "wgpm": row.get("wgpm_price"),
+            "company_a": row.get("company_price_a"),
+            "company_b": row.get("company_price_b"),
+            "company_c": row.get("company_price_c"),
+        },
+        "related_upcs": related,
+        "related_upc_sync_policy": "NOT_INFERRED",
+        "retail_price_mutated": False,
+    }
+
+
+def create_price_change_proposal(
+    *,
+    upc: str,
+    proposed_price: Decimal,
+    proposal_basis: str,
+    proposed_price_type: str | None,
+    reason: str | None,
+    device: str,
+) -> dict[str, Any]:
+    basis = str(proposal_basis or "").strip().upper()
+    allowed = {"MANUAL","SWEET_SPOT","WGPM","COMPANY_A","COMPANY_B","COMPANY_C","CURRENT"}
+    if basis not in allowed:
+        raise ValueError("PRICE_CHANGE_BASIS_INVALID")
+    price = Decimal(str(proposed_price))
+    if price <= 0:
+        raise ValueError("PROPOSED_PRICE_MUST_BE_POSITIVE")
+    clean_type = str(proposed_price_type or "").strip().upper()[:32] or None
+    clean_reason = str(reason or "").strip()[:255] or None
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_price_change_tables(cur)
+        conn.commit()
+        row = _lookup_qc_row(cur, upc)
+        if not row:
+            cur.close()
+            raise KeyError("PRICE_CHANGE_UPC_NOT_FOUND")
+        if row.get("current_price") is None:
+            cur.close()
+            raise ValueError("CURRENT_PRICE_NOT_AVAILABLE")
+        reference = _price_reference_from_basis(row, basis)
+        if basis != "MANUAL" and reference is None:
+            cur.close()
+            raise ValueError("PRICE_CHANGE_BASIS_REFERENCE_NOT_AVAILABLE")
+        if basis != "MANUAL" and abs(price-reference) >= Decimal("0.01"):
+            cur.close()
+            raise ValueError("PROPOSED_PRICE_DOES_NOT_MATCH_SELECTED_BASIS")
+
+        impact = _price_change_impact(row, price)
+        cur.execute(
+            """INSERT INTO price_change_proposal
+               (upc_id,ean_upc,article_number,family_id,main_article_number,
+                selling_description,selling_uom,current_price,proposed_price,
+                proposed_price_type,proposal_basis,basis_reference_price,
+                current_cost_per_selling_unit,current_gp_pct,proposed_gp_pct,
+                current_gp_per_day_7d,projected_gp_per_day_7d,projected_gp_per_day_delta,
+                upc_velocity_7d,sweet_spot_price,wgpm_price,
+                company_price_a,company_price_b,company_price_c,
+                current_price_source,current_price_asof_date,cost_source,cost_date,
+                reason,proposal_status,proposed_by)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                       %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'PENDING_REVIEW',%s)""",
+            (
+                row.get("upc_id"),row.get("ean_upc"),row.get("article_number"),
+                row.get("family_id"),row.get("main_article_number"),
+                row.get("selling_description"),row.get("selling_uom"),
+                row.get("current_price"),price,clean_type,basis,reference,
+                row.get("current_cost_per_selling_unit"),row.get("gp_pct_current"),
+                impact.get("proposed_gp_pct"),row.get("gp_per_day_7d"),
+                impact.get("projected_gp_per_day_7d"),
+                impact.get("projected_gp_per_day_delta"),
+                row.get("upc_velocity_7d"),row.get("sweet_spot_price"),
+                row.get("wgpm_price"),row.get("company_price_a"),
+                row.get("company_price_b"),row.get("company_price_c"),
+                row.get("current_price_source"),row.get("current_price_asof_date"),
+                row.get("cost_source"),row.get("cost_date"),
+                clean_reason,device,
+            ),
+        )
+        proposal_id = int(cur.lastrowid)
+        conn.commit()
+        cur.execute("SELECT * FROM price_change_proposal WHERE proposal_id=%s",(proposal_id,))
+        saved = cur.fetchone()
+        cur.close()
+    return {
+        "status":"PENDING_REVIEW",
+        "proposal":saved,
+        "retail_price_mutated":False,
+        "execution_required_externally":True,
+    }
+
+
+def list_price_change_proposals(
+    status: str | None = None,
+    limit: int = 100,
+) -> dict[str, Any]:
+    limit = max(1,min(int(limit or 100),300))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_price_change_tables(cur)
+        conn.commit()
+        if status:
+            s = str(status).strip().upper()
+            cur.execute(
+                """SELECT * FROM price_change_proposal
+                   WHERE proposal_status=%s
+                   ORDER BY proposed_at DESC,proposal_id DESC
+                   LIMIT %s""",
+                (s,limit),
+            )
+        else:
+            cur.execute(
+                """SELECT * FROM price_change_proposal
+                   ORDER BY proposed_at DESC,proposal_id DESC
+                   LIMIT %s""",
+                (limit,),
+            )
+        rows = cur.fetchall()
+        cur.close()
+    return {"count":len(rows),"rows":rows,"contract_version":"PRICE_CHANGE_PROPOSAL_V1"}
+
+
+def review_price_change_proposal(
+    proposal_id: int,
+    *,
+    decision: str,
+    note: str | None,
+    device: str,
+) -> dict[str, Any]:
+    decision_key = str(decision or "").strip().upper()
+    if decision_key not in {"APPROVE","REJECT","CANCEL"}:
+        raise ValueError("PRICE_CHANGE_REVIEW_DECISION_INVALID")
+    next_status = {
+        "APPROVE":"APPROVED_FOR_EXECUTION",
+        "REJECT":"REJECTED",
+        "CANCEL":"CANCELLED",
+    }[decision_key]
+    clean_note = str(note or "").strip()[:255] or None
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_price_change_tables(cur)
+        conn.commit()
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """SELECT * FROM price_change_proposal
+                   WHERE proposal_id=%s FOR UPDATE""",
+                (int(proposal_id),),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise KeyError("PRICE_CHANGE_PROPOSAL_NOT_FOUND")
+            if str(row.get("proposal_status") or "").upper() != "PENDING_REVIEW":
+                raise ValueError("PRICE_CHANGE_PROPOSAL_NOT_PENDING")
+            cur.execute(
+                """UPDATE price_change_proposal
+                   SET proposal_status=%s,
+                       reviewed_by=%s,
+                       reviewed_at=CURRENT_TIMESTAMP(6),
+                       review_note=%s
+                   WHERE proposal_id=%s
+                     AND proposal_status='PENDING_REVIEW'""",
+                (next_status,device,clean_note,int(proposal_id)),
+            )
+            if int(cur.rowcount or 0) != 1:
+                raise RuntimeError("PRICE_CHANGE_REVIEW_CONFLICT")
+            conn.commit()
+            return {
+                "status":next_status,
+                "proposal_id":int(proposal_id),
+                "retail_price_mutated":False,
+                "execution_required_externally": next_status=="APPROVED_FOR_EXECUTION",
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
+def mark_price_change_executed(
+    proposal_id: int,
+    *,
+    note: str | None,
+    device: str,
+) -> dict[str, Any]:
+    clean_note = str(note or "").strip()[:255] or None
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_price_change_tables(cur)
+        conn.commit()
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """SELECT * FROM price_change_proposal
+                   WHERE proposal_id=%s FOR UPDATE""",
+                (int(proposal_id),),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise KeyError("PRICE_CHANGE_PROPOSAL_NOT_FOUND")
+            if str(row.get("proposal_status") or "").upper() != "APPROVED_FOR_EXECUTION":
+                raise ValueError("PRICE_CHANGE_PROPOSAL_NOT_APPROVED")
+            cur.execute(
+                """UPDATE price_change_proposal
+                   SET proposal_status='MARKED_EXECUTED',
+                       execution_marked_by=%s,
+                       execution_marked_at=CURRENT_TIMESTAMP(6),
+                       execution_note=%s
+                   WHERE proposal_id=%s
+                     AND proposal_status='APPROVED_FOR_EXECUTION'""",
+                (device,clean_note,int(proposal_id)),
+            )
+            if int(cur.rowcount or 0) != 1:
+                raise RuntimeError("PRICE_CHANGE_EXECUTION_MARK_CONFLICT")
+            conn.commit()
+            return {
+                "status":"MARKED_EXECUTED",
+                "proposal_id":int(proposal_id),
+                "database_price_mutated":False,
+                "note":"Execution mark is audit-only; next authoritative price source must confirm the live retail price.",
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
 def price_change_queue(limit: int = 120) -> dict[str, Any]:
-    """Read-only price review queue using current precomputed Quick Check fields."""
+    """Price review queue using current precomputed Quick Check fields and proposal awareness."""
     limit = max(1, min(int(limit or 120), 300))
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
@@ -2687,8 +3041,8 @@ def price_change_queue(limit: int = 120) -> dict[str, Any]:
         cur.close()
     return {
         "count": len(rows),
-        "contract_version": "PRICE_CHANGE_APP_V1",
-        "mode": "READ_ONLY_REVIEW",
+        "contract_version": "PRICE_CHANGE_APP_V2",
+        "mode": "REVIEW_PLUS_AUDITED_PROPOSAL_WORKFLOW",
         "rows": rows,
     }
 
