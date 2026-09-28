@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.154-single-service'
+VERSION='7.0.155-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -782,27 +782,60 @@ def web_upload_latest_reference_uploads(request:Request):
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         try:
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA=DATABASE()
+                     AND TABLE_NAME='ingest_file'
+                     AND COLUMN_NAME='upload_timestamp'"""
+            )
+            has_file_upload_timestamp=int((cur.fetchone() or {}).get('c') or 0)>0
+
             for label,source_type in wanted:
-                cur.execute(
-                    """SELECT file_id,batch_id,original_filename,source_type,
-                              processing_status,source_row_count,error_count,
-                              upload_timestamp,coverage_type,
-                              coverage_start_date,coverage_end_date,
-                              header_period_start_date,header_period_end_date,
-                              report_generated_at,filename_date_candidate
-                       FROM ingest_file
-                       WHERE source_type=%s
-                         AND processing_status='INGESTED'
-                         AND COALESCE(error_count,0)=0
-                         AND duplicate_of_file_id IS NULL
-                       ORDER BY upload_timestamp DESC,file_id DESC
-                       LIMIT 1""",
-                    (source_type,),
-                )
+                if has_file_upload_timestamp:
+                    cur.execute(
+                        """SELECT f.file_id,f.batch_id,f.original_filename,f.source_type,
+                                  f.processing_status,f.source_row_count,f.error_count,
+                                  f.upload_timestamp,f.coverage_type,
+                                  f.coverage_start_date,f.coverage_end_date,
+                                  f.header_period_start_date,f.header_period_end_date,
+                                  f.report_generated_at,f.filename_date_candidate,
+                                  b.upload_started_at
+                           FROM ingest_file f
+                           JOIN ingest_batch b ON b.batch_id=f.batch_id
+                           WHERE f.source_type=%s
+                             AND f.processing_status='INGESTED'
+                             AND COALESCE(f.error_count,0)=0
+                             AND f.duplicate_of_file_id IS NULL
+                           ORDER BY f.upload_timestamp DESC,f.file_id DESC
+                           LIMIT 1""",
+                        (source_type,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT f.file_id,f.batch_id,f.original_filename,f.source_type,
+                                  f.processing_status,f.source_row_count,f.error_count,
+                                  NULL AS upload_timestamp,f.coverage_type,
+                                  f.coverage_start_date,f.coverage_end_date,
+                                  f.header_period_start_date,f.header_period_end_date,
+                                  f.report_generated_at,f.filename_date_candidate,
+                                  b.upload_started_at
+                           FROM ingest_file f
+                           JOIN ingest_batch b ON b.batch_id=f.batch_id
+                           WHERE f.source_type=%s
+                             AND f.processing_status='INGESTED'
+                             AND COALESCE(f.error_count,0)=0
+                             AND f.duplicate_of_file_id IS NULL
+                           ORDER BY b.upload_started_at DESC,f.file_id DESC
+                           LIMIT 1""",
+                        (source_type,),
+                    )
+
                 row=cur.fetchone()
                 if row:
                     coverage_start=row.get('coverage_start_date') or row.get('header_period_start_date')
                     coverage_end=row.get('coverage_end_date') or row.get('header_period_end_date')
+                    uploaded_at=row.get('upload_timestamp') or row.get('upload_started_at')
                     out.append({
                         'label':label,
                         'source_type':source_type,
@@ -810,7 +843,12 @@ def web_upload_latest_reference_uploads(request:Request):
                         'file_id':row.get('file_id'),
                         'batch_id':row.get('batch_id'),
                         'filename':row.get('original_filename'),
-                        'uploaded_at':row.get('upload_timestamp'),
+                        'uploaded_at':uploaded_at,
+                        'upload_timestamp_source':(
+                            'INGEST_FILE'
+                            if row.get('upload_timestamp') is not None
+                            else 'BATCH_UPLOAD_STARTED_AT'
+                        ),
                         'coverage_type':row.get('coverage_type'),
                         'coverage_start':coverage_start,
                         'coverage_end':coverage_end,
@@ -828,7 +866,6 @@ def web_upload_latest_reference_uploads(request:Request):
         finally:
             cur.close()
     return json.loads(json.dumps({'sources':out},default=j))
-
 
 @app.post('/v1/batches')
 def create_batch(body:BatchCreate,authorization: Annotated[str|None,Header()]=None):
