@@ -129,12 +129,17 @@ def classify_source(filename: str) -> tuple[str, float]:
         ("mvt", "movement"),
         ("movement", "movement"),
         ("on hand", "on_hand"),
-        ("-oh-", "on_hand"),
-        (" oh ", "on_hand"),
     ]
     for needle, source in rules:
         if needle in n:
             return source, 0.95
+
+    # OH reports are frequently named like:
+    #   oh-092826.xls, OH_092826.xls, OH 092826.xls
+    # Match OH as a standalone filename token, not as part of another word.
+    if re.search(r"(^|[^a-z0-9])oh([^a-z0-9]|$)", n):
+        return "on_hand", 0.95
+
     return "unclassified", 0.0
 
 
