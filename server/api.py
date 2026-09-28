@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.155-single-service'
+VERSION='7.0.156-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -511,26 +511,19 @@ def web_upload_recent(request:Request,limit:int=8):
     _browser_upload_guard(request)
     limit=max(1,min(int(limit or 8),20))
     scan_limit=max(limit,min(limit*4,80))
+
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
 
-        # Read notes as plain text and filter hidden history in Python.
-        # Historical rows may contain non-JSON text; SQL JSON_EXTRACT on one
-        # malformed row must never take down the whole Recent Uploads panel.
+        # Core history path: only columns already required by the ingest/session
+        # workflow. Optional Phase2C/Phase3/pipeline data is enriched later and
+        # must never prevent basic upload history from rendering.
         cur.execute(
-            """SELECT b.batch_id,b.batch_label,b.processing_status,
-                      b.upload_started_at,b.completed_at,b.file_count,
-                      b.source_row_count,b.error_count,b.notes,
-                      p2.result_status AS phase2c_status,
-                      p2.blocking_issue_count AS phase2c_blockers,
-                      p3.result_status AS phase3_status,
-                      p3.blocking_issue_count AS phase3_blockers,
-                      p3.quick_check_rows,p3.quick_check_ready_rows,
-                      p3.quick_check_hold_rows
-               FROM ingest_batch b
-               LEFT JOIN phase2c_batch_result p2 ON p2.batch_id=b.batch_id
-               LEFT JOIN phase3_batch_result p3 ON p3.batch_id=b.batch_id
-               ORDER BY b.batch_id DESC
+            """SELECT batch_id,batch_label,processing_status,
+                      upload_started_at,completed_at,file_count,
+                      source_row_count,error_count,notes
+               FROM ingest_batch
+               ORDER BY batch_id DESC
                LIMIT %s""",
             (scan_limit,),
         )
@@ -547,98 +540,135 @@ def web_upload_recent(request:Request,limit:int=8):
             if notes.get('history_hidden') is True:
                 continue
             row.pop('notes',None)
+            row.update({
+                'phase2c_status':None,
+                'phase2c_blockers':None,
+                'phase3_status':None,
+                'phase3_blockers':None,
+                'quick_check_rows':None,
+                'quick_check_ready_rows':None,
+                'quick_check_hold_rows':None,
+            })
             batches.append(row)
             if len(batches)>=limit:
                 break
 
         ids=[int(x['batch_id']) for x in batches]
+        by_id={int(x['batch_id']):x for x in batches}
         file_map={bid:[] for bid in ids}
         pipeline_map={}
+        warnings=[]
 
         if ids:
             ph=','.join(['%s']*len(ids))
-            cur.execute(
-                """SELECT COUNT(*) AS c
-                   FROM information_schema.COLUMNS
-                   WHERE TABLE_SCHEMA=DATABASE()
-                     AND TABLE_NAME='ingest_file'
-                     AND COLUMN_NAME='upload_timestamp'"""
-            )
-            has_file_upload_timestamp=int((cur.fetchone() or {}).get('c') or 0)>0
-            file_upload_expr=(
-                "upload_timestamp"
-                if has_file_upload_timestamp
-                else "NULL AS upload_timestamp"
-            )
-            cur.execute(
-                f"""SELECT batch_id,file_id,original_filename,source_type,
-                           processing_status,source_row_count,error_count,
-                           {file_upload_expr},duplicate_of_file_id,
-                           coverage_start_date,coverage_end_date
-                    FROM ingest_file
-                    WHERE batch_id IN ({ph})
-                    ORDER BY batch_id DESC,file_id""",
-                tuple(ids),
-            )
-            batch_started={
-                int(x['batch_id']):x.get('upload_started_at')
-                for x in batches
-            }
-            for row in cur.fetchall():
-                bid=int(row['batch_id'])
-                file_map[bid].append({
-                    'file_id':row.get('file_id'),
-                    'original_filename':row.get('original_filename'),
-                    'source_type':row.get('source_type'),
-                    'processing_status':row.get('processing_status'),
-                    'source_row_count':row.get('source_row_count'),
-                    'error_count':row.get('error_count'),
-                    'upload_timestamp':(
-                        row.get('upload_timestamp')
-                        or batch_started.get(bid)
-                    ),
-                    'upload_timestamp_source':(
-                        'INGEST_FILE'
-                        if row.get('upload_timestamp') is not None
-                        else 'BATCH_UPLOAD_STARTED_AT'
-                    ),
-                    'duplicate_of_file_id':row.get('duplicate_of_file_id'),
-                    'coverage_start_date':row.get('coverage_start_date'),
-                    'coverage_end_date':row.get('coverage_end_date'),
-                })
 
-            # Read detail_json raw and parse in Python for the same reason:
-            # malformed legacy detail_json must not cause MySQL JSON errors.
-            cur.execute(
-                f"""SELECT pipeline_run_id,batch_id,stage_name,processing_status,
-                           detail_json,started_at,completed_at,error_count
-                    FROM pipeline_run
-                    WHERE batch_id IN ({ph})
-                      AND pipeline_name=%s
-                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                    ORDER BY pipeline_run_id DESC""",
-                tuple(ids)+(API_PIPELINE,),
-            )
-            for row in cur.fetchall():
-                bid=int(row['batch_id'])
-                if bid in pipeline_map:
-                    continue
-                detail={}
-                try:
-                    parsed=json.loads(row.get('detail_json') or '{}')
-                    if isinstance(parsed,dict):
-                        detail=parsed
-                except Exception:
-                    detail={}
-                pipeline_map[bid]={
-                    'pipeline_run_id':row.get('pipeline_run_id'),
-                    'stage_name':row.get('stage_name'),
-                    'processing_status':row.get('processing_status'),
-                    'phase3_stage':detail.get('phase3_stage'),
-                    'started_at':row.get('started_at'),
-                    'completed_at':row.get('completed_at'),
-                    'error_count':row.get('error_count'),
+            # Core file history deliberately avoids optional upload_timestamp.
+            # Historical batch upload_started_at is the guaranteed timestamp
+            # fallback and keeps the panel compatible with older schemas.
+            try:
+                cur.execute(
+                    f"""SELECT batch_id,file_id,original_filename,source_type,
+                               processing_status,source_row_count,error_count,
+                               duplicate_of_file_id,coverage_start_date,coverage_end_date
+                        FROM ingest_file
+                        WHERE batch_id IN ({ph})
+                        ORDER BY batch_id DESC,file_id""",
+                    tuple(ids),
+                )
+                batch_started={
+                    int(x['batch_id']):x.get('upload_started_at')
+                    for x in batches
                 }
+                for row in cur.fetchall():
+                    bid=int(row['batch_id'])
+                    file_map.setdefault(bid,[]).append({
+                        'file_id':row.get('file_id'),
+                        'original_filename':row.get('original_filename'),
+                        'source_type':row.get('source_type'),
+                        'processing_status':row.get('processing_status'),
+                        'source_row_count':row.get('source_row_count'),
+                        'error_count':row.get('error_count'),
+                        'upload_timestamp':batch_started.get(bid),
+                        'upload_timestamp_source':'BATCH_UPLOAD_STARTED_AT',
+                        'duplicate_of_file_id':row.get('duplicate_of_file_id'),
+                        'coverage_start_date':row.get('coverage_start_date'),
+                        'coverage_end_date':row.get('coverage_end_date'),
+                    })
+            except Exception as exc:
+                warnings.append('FILES_ENRICHMENT_FAILED: '+str(exc))
+
+            # Phase 2C is optional enrichment for history display.
+            try:
+                cur.execute(
+                    f"""SELECT batch_id,result_status,blocking_issue_count
+                        FROM phase2c_batch_result
+                        WHERE batch_id IN ({ph})""",
+                    tuple(ids),
+                )
+                for row in cur.fetchall():
+                    bid=int(row['batch_id'])
+                    if bid in by_id:
+                        by_id[bid]['phase2c_status']=row.get('result_status')
+                        by_id[bid]['phase2c_blockers']=row.get('blocking_issue_count')
+            except Exception as exc:
+                warnings.append('PHASE2C_ENRICHMENT_FAILED: '+str(exc))
+
+            # Phase 3 / Quick Check is optional enrichment for history display.
+            try:
+                cur.execute(
+                    f"""SELECT batch_id,result_status,blocking_issue_count,
+                               quick_check_rows,quick_check_ready_rows,quick_check_hold_rows
+                        FROM phase3_batch_result
+                        WHERE batch_id IN ({ph})""",
+                    tuple(ids),
+                )
+                for row in cur.fetchall():
+                    bid=int(row['batch_id'])
+                    if bid in by_id:
+                        by_id[bid]['phase3_status']=row.get('result_status')
+                        by_id[bid]['phase3_blockers']=row.get('blocking_issue_count')
+                        by_id[bid]['quick_check_rows']=row.get('quick_check_rows')
+                        by_id[bid]['quick_check_ready_rows']=row.get('quick_check_ready_rows')
+                        by_id[bid]['quick_check_hold_rows']=row.get('quick_check_hold_rows')
+            except Exception as exc:
+                warnings.append('PHASE3_ENRICHMENT_FAILED: '+str(exc))
+
+            # Pipeline stage is also best-effort. Malformed legacy JSON is
+            # tolerated per row rather than failing the endpoint.
+            try:
+                cur.execute(
+                    f"""SELECT pipeline_run_id,batch_id,stage_name,processing_status,
+                               detail_json,started_at,completed_at,error_count
+                        FROM pipeline_run
+                        WHERE batch_id IN ({ph})
+                          AND pipeline_name=%s
+                          AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                        ORDER BY pipeline_run_id DESC""",
+                    tuple(ids)+(API_PIPELINE,),
+                )
+                for row in cur.fetchall():
+                    bid=int(row['batch_id'])
+                    if bid in pipeline_map:
+                        continue
+                    detail={}
+                    try:
+                        parsed=json.loads(row.get('detail_json') or '{}')
+                        if isinstance(parsed,dict):
+                            detail=parsed
+                    except Exception:
+                        detail={}
+                    pipeline_map[bid]={
+                        'pipeline_run_id':row.get('pipeline_run_id'),
+                        'stage_name':row.get('stage_name'),
+                        'processing_status':row.get('processing_status'),
+                        'phase3_stage':detail.get('phase3_stage'),
+                        'started_at':row.get('started_at'),
+                        'completed_at':row.get('completed_at'),
+                        'error_count':row.get('error_count'),
+                    }
+            except Exception as exc:
+                warnings.append('PIPELINE_ENRICHMENT_FAILED: '+str(exc))
+
         cur.close()
 
     for batch in batches:
@@ -647,7 +677,13 @@ def web_upload_recent(request:Request,limit:int=8):
         batch['pipeline_run']=pipeline_map.get(bid)
 
     return json.loads(json.dumps(
-        {'count':len(batches),'batches':batches},
+        {
+            'count':len(batches),
+            'batches':batches,
+            'degraded':bool(warnings),
+            'warnings':warnings,
+            'contract_version':'WEB_UPLOAD_RECENT_V2',
+        },
         default=j,
     ))
 
