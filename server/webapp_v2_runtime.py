@@ -832,6 +832,11 @@ def family_info(family_key: str) -> dict[str,Any]:
         categories=sorted({str(x.get("product_class")) for x in upcs if x.get("product_class")})
         category=categories[0] if len(categories)==1 else ("MIXED" if categories else None)
         effective_oh=_family_effective_oh(cur,upcs)
+        effective_oh["reason"]=_oh_display_reason(
+            effective_oh.get("status"),
+            effective_oh.get("blockers"),
+            effective_oh.get("owners"),
+        )
         family_sales_7d=_family_sales_series(cur,upcs,7)
         family_sales_28d=_family_sales_series(cur,upcs,28)
 
@@ -899,6 +904,7 @@ def family_info(family_key: str) -> dict[str,Any]:
                 "current_price":row.get("current_price"),
                 "current_price_type":row.get("current_price_type"),
                 "selling_uom":row.get("selling_uom"),
+                "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
                 "upc_role":_upc_role(row),
                 "qty_7d":m7["sold_quantity"],
                 "supported_days_7d":m7["supported_day_count"],
@@ -955,6 +961,12 @@ def upc_info(upc: str) -> dict[str,Any]:
         m7=_sales_metric(cur,int(row["upc_id"]),7)
         m28=_sales_metric(cur,int(row["upc_id"]),28)
         effective_oh=_selling_equivalent_effective_oh(cur,row)
+        if not effective_oh.get("reason"):
+            effective_oh["reason"]=_oh_display_reason(
+                effective_oh.get("status"),
+                effective_oh.get("blockers"),
+                effective_oh.get("owners"),
+            )
         cur.close()
     return {
         "contract_version":"WEBAPP_V2_UPC_V4",
@@ -963,6 +975,7 @@ def upc_info(upc: str) -> dict[str,Any]:
         "category":row.get("product_class"),
         "readiness":row.get("quick_check_status"),
         "selling_uom":row.get("selling_uom"),
+        "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
         "upc_role":_upc_role(row),
         "family_article_number":row.get("main_article_number"),
         "family_article_name":row.get("family_description"),
@@ -973,6 +986,95 @@ def upc_info(upc: str) -> dict[str,Any]:
         "qty_28d":m28,
         "actions":["FAMILY_ARTICLE","PRICE","ORDERING"],
     }
+
+
+def _historical_cost_per_selling_as_of(
+    cur,
+    row: dict[str,Any],
+    day: date,
+) -> dict[str,Any]|None:
+    family_id=row.get("family_id")
+    if family_id is None:
+        return None
+    selling=str(row.get("selling_uom") or "").strip().upper()
+    base=str(row.get("base_uom") or "").strip().upper()
+    factor=(
+        Decimal(str(row["base_qty_per_selling_unit"]))
+        if row.get("base_qty_per_selling_unit") is not None else None
+    )
+    source_groups=[
+        ("MOVEMENT_RECEIPT_VALUATION",),
+        ("ON_HAND_EXPLICIT_COST_FALLBACK",),
+        ("FROZEN_INVENTORY_OFFICIAL_COST","LIVE_FRESH_SUGGESTION_OFFICIAL_COST"),
+        ("USER_CONFIRMED_FAMILY_COST",),
+    ]
+    for sources in source_groups:
+        ph=",".join(["%s"]*len(sources))
+        cur.execute(
+            f"""SELECT COALESCE(co.cost_per_base_uom,co.cost_amount) AS cost_value,
+                       co.business_date,co.source_type,
+                       COALESCE(bu.uom_code,cu.uom_code) AS cost_uom
+                FROM article_cost_observation co
+                LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
+                LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+                WHERE co.family_id=%s
+                  AND co.business_date<=%s
+                  AND co.source_type IN ({ph})
+                  AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+                  AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
+                ORDER BY co.business_date DESC,co.cost_observation_id DESC
+                LIMIT 1""",
+            (int(family_id),day,*sources),
+        )
+        x=cur.fetchone()
+        if not x:
+            continue
+        cost=_d(x.get("cost_value"))
+        cuom=str(x.get("cost_uom") or "").strip().upper()
+        if selling and cuom==selling:
+            sell_cost=cost
+        elif base and cuom==base and factor is not None and factor>0:
+            sell_cost=cost*factor
+        elif base and selling and base==selling and cuom==base:
+            sell_cost=cost
+        else:
+            continue
+        return {
+            "cost_per_selling_unit":sell_cost,
+            "cost_date":x.get("business_date"),
+            "cost_source":x.get("source_type"),
+            "cost_uom":selling or cuom or None,
+        }
+    return None
+
+
+def _historical_gp_trend(
+    cur,
+    row: dict[str,Any],
+    trend: dict[str,Any],
+) -> dict[str,Any]:
+    qty_uom=_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom"))
+    for x in trend.get("rows",[]):
+        x["qty_uom"]=qty_uom
+        cost=_historical_cost_per_selling_as_of(cur,row,x["date"])
+        if cost is None:
+            x["gp_dollars"]=None
+            x["gp_cost_basis"]="HISTORICAL_COST_UNAVAILABLE"
+            x["cost_per_selling_unit"]=None
+            x["cost_date"]=None
+            x["cost_source"]=None
+            continue
+        qty=_d(x.get("sold_quantity"))
+        sales=_d(x.get("sales_amount"))
+        x["cost_per_selling_unit"]=cost["cost_per_selling_unit"]
+        x["cost_date"]=cost["cost_date"]
+        x["cost_source"]=cost["cost_source"]
+        x["gp_dollars"]=sales-(qty*_d(cost["cost_per_selling_unit"]))
+        x["gp_cost_basis"]="HISTORICAL_APPLICABLE_COST"
+    trend["qty_uom"]=qty_uom
+    trend["gp_curve_cost_basis"]="HISTORICAL_APPLICABLE_COST_AS_OF_EACH_SUPPORTED_DATE"
+    trend["missing_gp_cost_dates_are_zero"]=False
+    return trend
 
 
 def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
@@ -1029,15 +1131,17 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
                 "company_b":row.get("company_price_b"),
                 "company_c":row.get("company_price_c"),
             },
-            "price_vs_sales_trend":_price_sales_trend(
-                cur,upc_id,min(max(int(trend_supported_days or 7),1),7),
-                cost_per_selling_unit=current_cost,
-                qty_uom=qty_uom,
+            "price_vs_sales_trend":_historical_gp_trend(
+                cur,row,_price_sales_trend(
+                    cur,upc_id,min(max(int(trend_supported_days or 7),1),7),
+                    qty_uom=qty_uom,
+                )
             ),
-            "sales_history_14d":_price_sales_trend(
-                cur,upc_id,14,
-                cost_per_selling_unit=current_cost,
-                qty_uom=qty_uom,
+            "sales_history_14d":_historical_gp_trend(
+                cur,row,_price_sales_trend(
+                    cur,upc_id,14,
+                    qty_uom=qty_uom,
+                )
             ),
             "historical_promotions":_historical_sale_periods(cur,upc_id),
             "promotion_definition":{
