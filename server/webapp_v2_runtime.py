@@ -3082,6 +3082,78 @@ def _gp_day_price_suggestion(
         "cost_date":row.get("cost_date"),
     }
 
+def performance_supported_dates(limit: int=180) -> dict[str,Any]:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        days=_canonical_sales_days(
+            cur,
+            limit=max(1,min(int(limit or 180),365)),
+        )
+        cur.close()
+    ordered=sorted(days,key=lambda x:x["date"],reverse=True)
+    return {
+        "count":len(ordered),
+        "dates":[
+            {
+                "date":x["date"],
+                "weekday":WEEKDAY_NAMES[x["date"].weekday()],
+                "source_file_id":x.get("file_id"),
+                "coverage_kind":x.get("coverage_kind"),
+            }
+            for x in ordered
+        ],
+        "data_day_definition":"COMPLETED_CANONICAL_SALES_DATA_DAY",
+    }
+
+
+def _canonical_report_date_sales(
+    cur,
+    day_entry: dict[str,Any],
+) -> dict[str,Any]:
+    """Direct canonical Seafood POS total for one supported report date."""
+    day=day_entry["date"]
+    file_id=int(day_entry["file_id"])
+    coverage=str(day_entry.get("coverage_kind") or "")
+    if coverage!="DERIVED_PERIOD_RESIDUAL":
+        cur.execute(
+            """SELECT COALESCE(SUM(sales_amount),0) AS sales_amount,
+                      COALESCE(SUM(sold_quantity),0) AS sold_quantity,
+                      COUNT(DISTINCT ean_upc) AS source_upc_count,
+                      COUNT(*) AS source_price_rows
+               FROM sales_period_observation
+               WHERE file_id=%s
+                 AND period_start_date=%s
+                 AND period_end_date=%s
+                 AND temporal_grain='SINGLE_DATE'""",
+            (file_id,day,day),
+        )
+        row=cur.fetchone() or {}
+        basis="DIRECT_SINGLE_DATE_CANONICAL_POS"
+    else:
+        cur.execute(
+            """SELECT COALESCE(SUM(sales_amount),0) AS sales_amount,
+                      COALESCE(SUM(sold_quantity),0) AS sold_quantity,
+                      COUNT(DISTINCT ean_upc) AS source_upc_count,
+                      COUNT(*) AS source_price_rows
+               FROM pos_daily_backfill_observation
+               WHERE source_file_id=%s
+                 AND business_date=%s""",
+            (file_id,day),
+        )
+        row=cur.fetchone() or {}
+        basis="DERIVED_PERIOD_RESIDUAL_CANONICAL_POS"
+    return {
+        "date":day,
+        "source_file_id":file_id,
+        "coverage_kind":coverage,
+        "basis":basis,
+        "sales_amount":_d(row.get("sales_amount")),
+        "sold_quantity":_d(row.get("sold_quantity")),
+        "source_upc_count":int(row.get("source_upc_count") or 0),
+        "source_price_rows":int(row.get("source_price_rows") or 0),
+    }
+
+
 def latest_performance_date() -> dict[str,Any]:
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
@@ -3139,6 +3211,10 @@ def performance_report(
         rows=cur.fetchall()
 
         anchor_day_entry=[x for x in latest_days if x["date"]==anchor]
+        canonical_day_sales=(
+            _canonical_report_date_sales(cur,anchor_day_entry[0])
+            if anchor_day_entry else None
+        )
         summary={
             "report_date":anchor,
             "active_upcs_28d":0,
@@ -3347,6 +3423,27 @@ def performance_report(
                     "reasons":reasons,
                 })
 
+        mapped_report_sales=_d(summary["report_date_sales_dollars"])
+        canonical_report_sales=(
+            _d(canonical_day_sales.get("sales_amount"))
+            if canonical_day_sales else None
+        )
+        report_date_reconciliation={
+            "canonical_source_sales":canonical_report_sales,
+            "mapped_report_sales":mapped_report_sales,
+            "difference":(
+                mapped_report_sales-canonical_report_sales
+                if canonical_report_sales is not None else None
+            ),
+            "matches_to_cent":(
+                abs(mapped_report_sales-canonical_report_sales)<Decimal("0.005")
+                if canonical_report_sales is not None else None
+            ),
+            "canonical_source":canonical_day_sales,
+            "mapped_basis":"SUM_OF_V2_MAPPED_UPCS_IN_REPORT_SCOPE",
+            "audit_rule":"CANONICAL_SOURCE_TOTAL_IS_REPORT_DATE_SALES_AUTHORITY",
+        }
+
         suggestions.sort(
             key=lambda x:(
                 -float(x.get("gp_per_day_opportunity") or Decimal("-999999")),
@@ -3414,12 +3511,20 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V3",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V4",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
         "supported_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
-        "summary":summary,
+        "summary":{
+            **summary,
+            "report_date_sales_dollars":(
+                canonical_report_sales
+                if cat=="ALL" and canonical_report_sales is not None
+                else summary["report_date_sales_dollars"]
+            ),
+        },
+        "report_date_reconciliation":report_date_reconciliation,
         "analysis":analysis,
         "report_date_top_sellers":day_items[:25],
         "top_urgent_price_suggestions":suggestions,
