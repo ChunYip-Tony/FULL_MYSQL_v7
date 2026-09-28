@@ -1,24 +1,20 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.117 Single-Service Edition
+Version: 7.0.118 Single-Service Edition
 
-Canonical runtime version: 7.0.117-single-service
+Canonical runtime version: 7.0.118-single-service
 Web App V2 route: /app/v2
-Canonical V2 module: server/webapp_v2_runtime.py
 
 V2 main functions:
 - CORE
 - PI
 - PERFORMANCE
 
-v7.0.117:
-- PERFORMANCE Report Date is now a dropdown of supported completed POS dates only.
-- ALL Performance means the full Seafood department, including QA/OTHER.
-- Report Date Sales is reconciled directly against canonical Seafood POS source.
-- UI shows Canonical POS, mapped total, difference, source file and audit status.
-- 09/21 validation benchmark is $3,501.11 Seafood Sales.
-- CORE search has Clear.
-- PI search has Clear.
-- Family Article results are highlighted.
-- UPC number is enlarged in search results.
-- UI styling/readability further improved for elder-friendly mobile use.
-- CORE Ordering delivery fallbacks from v7.0.116 remain active.
+v7.0.118:
+- Fixed whole-page horizontal scrolling on phones.
+- Family/UPC metrics are grouped into colorful semantic blocks.
+- Family Related UPCs changed from wide table to mobile cards.
+- Top 100 Urgent Price Reviews always acts as a review queue for active items.
+- Specific price is shown only for ACTIONABLE evidence-backed cases.
+- REVIEW ONLY items show the blocker instead of inventing a new price.
+- Company Price C floor and GP$/day priority remain active.
+- Elder-friendly typography, tap targets, Family highlighting, larger UPC numbers and Clear buttons remain active.
