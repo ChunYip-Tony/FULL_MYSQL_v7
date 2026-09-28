@@ -67,6 +67,17 @@ def verify_current_work(
         {"duplicate_owner_keys": duplicate_owner_keys},
     )
 
+    missing_action_rows = [
+        str(r.get("inventory_owner_key") or "UNKNOWN")
+        for r in (neg.get("rows") or [])
+        if not r.get("action_upc") or not r.get("action_endpoint")
+    ]
+    check(
+        "NEGATIVE_QUEUE_ACTIONS_COMPLETE",
+        not missing_action_rows,
+        {"missing_action_owner_keys": missing_action_rows},
+    )
+
     blocked_owner_count = int(neg.get("blocked_owner_count") or 0)
     unresolved_owner_upc_count = int(neg.get("unresolved_owner_upc_count") or 0)
     check(
@@ -187,6 +198,41 @@ def verify_current_work(
                 (int(batch["batch_id"]),),
             )
             phase3 = cur.fetchone()
+            check(
+                "PHASE3_RESULT_PRESENT",
+                phase3 is not None,
+                {"batch_id": int(batch["batch_id"])},
+            )
+            if phase3:
+                check(
+                    "PHASE3_BLOCKING_ISSUES_ZERO",
+                    int(phase3.get("blocking_issue_count") or 0) == 0,
+                    {"blocking_issue_count": phase3.get("blocking_issue_count")},
+                )
+                phase3_scope_match = (
+                    int(phase3.get("quick_check_rows") or 0)
+                    == int(qc_scope.get("current_active_rows") or 0)
+                    and int(phase3.get("quick_check_ready_rows") or 0)
+                    == int(qc_scope.get("current_ready_rows") or 0)
+                    and int(phase3.get("quick_check_hold_rows") or 0)
+                    == int(qc_scope.get("current_hold_rows") or 0)
+                )
+                check(
+                    "PHASE3_QUICK_CHECK_SCOPE_PARITY",
+                    phase3_scope_match,
+                    {
+                        "phase3": {
+                            "active": phase3.get("quick_check_rows"),
+                            "ready": phase3.get("quick_check_ready_rows"),
+                            "hold": phase3.get("quick_check_hold_rows"),
+                        },
+                        "serving": {
+                            "active": qc_scope.get("current_active_rows"),
+                            "ready": qc_scope.get("current_ready_rows"),
+                            "hold": qc_scope.get("current_hold_rows"),
+                        },
+                    },
+                )
 
         cur.close()
 
