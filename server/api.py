@@ -16,7 +16,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard, add_order_recommendation_to_draft, update_order_draft_line, order_draft_history, transition_order_draft
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard, add_order_recommendation_to_draft, update_order_draft_line, order_draft_history, transition_order_draft, order_delivery_reconciliation, update_order_external_reference
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
@@ -25,7 +25,7 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 
-VERSION='7.0.107-single-service'
+VERSION='7.0.108-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -220,6 +220,10 @@ class OrderDraftLineUpdateRequest(BaseModel):
 class OrderDraftTransitionRequest(BaseModel):
     action: str
     note: str|None=None
+    external_order_reference: str|None=None
+
+class OrderDraftReferenceRequest(BaseModel):
+    external_order_reference: str|None=None
 
 class PriceChangeProposalCreateRequest(BaseModel):
     upc: str
@@ -1812,6 +1816,7 @@ def admin_transition_order_draft(
             order_draft_id,
             action=body.action,
             note=body.note,
+            external_order_reference=body.external_order_reference,
             device=device,
         )
     except KeyError:
@@ -1822,6 +1827,43 @@ def admin_transition_order_draft(
         raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Order draft transition failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/admin/ordering/drafts/{order_draft_id}/reconciliation')
+def admin_order_delivery_reconciliation(
+    order_draft_id:int,
+    request:Request,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    admin_device_from_request(request,authorization)
+    try:
+        result=order_delivery_reconciliation(order_draft_id)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'ORDER_DRAFT_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'Delivery reconciliation failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/admin/ordering/drafts/{order_draft_id}/reference')
+def admin_update_order_external_reference(
+    order_draft_id:int,
+    body:OrderDraftReferenceRequest,
+    request:Request,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=admin_device_from_request(request,authorization,write=True)
+    try:
+        result=update_order_external_reference(
+            order_draft_id,
+            external_order_reference=body.external_order_reference,
+            device=device,
+        )
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Order reference update failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
