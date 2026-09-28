@@ -34,7 +34,7 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.106</div></div>
+    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.107</div></div>
     <div class="row" style="justify-content:space-between">
       <div id="globalStatus" class="msg">Public operational app</div>
       <a href="/admin" style="font-size:11px;color:var(--muted);text-decoration:none">Admin</a>
