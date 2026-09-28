@@ -2016,6 +2016,59 @@ def pi_item(upc:str,history_limit:int=20) -> dict[str,Any]:
 
 # ---- V2 latest overrides ----
 
+def _family_system_oh_anchor(
+    cur,
+    rows: list[dict[str,Any]],
+) -> dict[str,Any] | None:
+    """Resolve an OH upload row owned by the Family Article itself.
+
+    Inventory uploads can resolve their main family article into article_id,
+    so requiring article_id IS NULL incorrectly hides valid Family OH.
+    Prefer the main_article_number row, then a true family-scope row.
+    """
+    if not rows:
+        return None
+    family_id=next(
+        (int(x["family_id"]) for x in rows if x.get("family_id") is not None),
+        None,
+    )
+    main_article=next(
+        (str(x.get("main_article_number")) for x in rows if x.get("main_article_number")),
+        None,
+    )
+    if family_id is None:
+        return None
+
+    cur.execute(
+        """SELECT batch_id,file_id,sheet_id,raw_id,source_row_number,
+                  observation_date,article_id,article_number,family_id,
+                  ean_upc,upc_id,on_hand_quantity,uom_code,source_type
+           FROM inventory_observation
+           WHERE family_id=%s
+             AND upc_id IS NULL
+             AND on_hand_quantity IS NOT NULL
+             AND (
+                  article_id IS NULL
+                  OR article_number=%s
+             )
+           ORDER BY observation_date DESC,file_id DESC,
+                    CASE WHEN article_number=%s THEN 0 ELSE 1 END,
+                    raw_id DESC
+           LIMIT 1""",
+        (family_id,main_article,main_article),
+    )
+    r=cur.fetchone()
+    if not r:
+        return None
+
+    # The uploaded row represents the Family Article OH baseline. Roll it
+    # forward at FAMILY scope so all compatible family movements are applied.
+    r["scope_type"]="FAMILY"
+    r["article_id"]=None
+    r["upc_id"]=None
+    return r
+
+
 def _family_owner_positions(cur, rows: list[dict[str,Any]], *, use_child_true_stock: bool) -> dict[str,Any]:
     owners: dict[tuple[str,int],dict[str,Any]] = {}
     for row in rows:
@@ -2139,8 +2192,42 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
                 "blockers":pos.get("blockers") if pos else ["TRUE_STOCK_POSITION_NOT_AVAILABLE"],
             }
 
-    # Until a Family PI count exists, retain any valid legacy child-level
-    # True Stock overrides so existing operational corrections are not lost.
+    family_anchor=_family_system_oh_anchor(cur,rows)
+    if family_anchor:
+        pos=_system_position(cur,family_anchor)
+        if pos and pos.get("analysis_usable") and pos.get("quantity") is not None:
+            return {
+                "status":"READY",
+                "quantity":pos.get("quantity"),
+                "uom":pos.get("uom"),
+                "source":"FAMILY_SYSTEM_OH",
+                "anchor_on_hand_file_id":family_anchor.get("file_id"),
+                "anchor_date":family_anchor.get("observation_date"),
+                "movement_through_date":pos.get("movement_through_date"),
+                "owners":[{
+                    "scope_type":"FAMILY",
+                    "owner_id":family_id,
+                    "quantity":pos.get("quantity"),
+                    "uom":pos.get("uom"),
+                    "source":"FAMILY_SYSTEM_OH",
+                    "analysis_usable":True,
+                    "blockers":[],
+                    "anchor_on_hand_file_id":family_anchor.get("file_id"),
+                    "anchor_date":family_anchor.get("observation_date"),
+                }],
+            }
+        return {
+            "status":"FAMILY_SYSTEM_OH_ROLLFORWARD_BLOCKED",
+            "quantity":None,
+            "uom":family_anchor.get("uom_code"),
+            "source":"FAMILY_SYSTEM_OH",
+            "anchor_on_hand_file_id":family_anchor.get("file_id"),
+            "anchor_date":family_anchor.get("observation_date"),
+            "owners":[],
+            "blockers":pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+        }
+
+    # Legacy fallback for families whose OH is genuinely child-owned.
     return _family_owner_positions(cur,rows,use_child_true_stock=True)
 
 def bulk_ordering_suggestions(
