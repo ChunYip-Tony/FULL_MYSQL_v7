@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.156 Single-Service Edition
+Version: 7.0.157 Single-Service Edition
+
+v7.0.157 Global Version Visibility:
+- App version is now shown in a fixed badge above the bottom navigation on every screen.
+- The badge remains visible even though the Fish Market theme hides the legacy top brand bar.
+- The badge checks /healthz with cache disabled.
+- If UI and API runtime versions differ, the badge shows both versions and changes to a warning state.
+- Uploads keeps its dedicated runtime badge as well.
+
 
 v7.0.156 Upload Runtime Visibility + Resilient Recent History:
 - Uploads screen now shows both static UI version and live runtime version from /healthz.
