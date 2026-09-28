@@ -489,13 +489,6 @@ def _classify_missing_cost(
             "proposed_action": "RELINK_OR_BACKFILL_RECEIPT_VALUATION",
         }
 
-    if int(official.get("repairable_official_rows") or 0) > 0:
-        return {
-            "classification": "SAFE_OFFICIAL_COST_REPAIR_CANDIDATE",
-            "safe_to_auto_resolve": True,
-            "proposed_action": "RELINK_OR_BACKFILL_OFFICIAL_REPORT_COST",
-        }
-
     if int(oh.get("explicit_supported_uom_candidates") or 0) > 0:
         return {
             "classification": "SAFE_OH_COST_FALLBACK_REPAIR_CANDIDATE",
@@ -503,11 +496,25 @@ def _classify_missing_cost(
             "proposed_action": "BACKFILL_EXPLICIT_OH_COST_FALLBACK",
         }
 
+    if int(official.get("repairable_official_rows") or 0) > 0:
+        return {
+            "classification": "SAFE_OFFICIAL_COST_REPAIR_CANDIDATE",
+            "safe_to_auto_resolve": True,
+            "proposed_action": "RELINK_OR_BACKFILL_OFFICIAL_REPORT_COST",
+        }
+
     if int(receipt.get("receipt_rows") or 0) > 0:
         return {
             "classification": "RECEIPT_ROWS_WITHOUT_VALID_VALUATION",
             "safe_to_auto_resolve": False,
             "proposed_action": "REVIEW_RECEIPT_VALUATION_FIELDS",
+        }
+
+    if int(oh.get("positive_cost_candidates") or 0) > 0:
+        return {
+            "classification": "OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM",
+            "safe_to_auto_resolve": False,
+            "proposed_action": "REVIEW_OH_COST_UOM",
         }
 
     if int(official.get("positive_cost_rows") or 0) > 0:
@@ -527,13 +534,6 @@ def _classify_missing_cost(
             "classification": "OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED",
             "safe_to_auto_resolve": False,
             "proposed_action": "REVIEW_OFFICIAL_COST_IDENTITY_ANCHOR",
-        }
-
-    if int(oh.get("positive_cost_candidates") or 0) > 0:
-        return {
-            "classification": "OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "REVIEW_OH_COST_UOM",
         }
 
     if (
