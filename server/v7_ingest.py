@@ -197,7 +197,14 @@ def session_status(session_id: str) -> dict[str,Any]:
         if not b: raise KeyError('Upload session not found')
         bid=int(b['batch_id'])
         cur.execute("SELECT file_id,original_filename,source_type,processing_status,source_row_count,error_count,duplicate_of_file_id,coverage_start_date,coverage_end_date FROM ingest_file WHERE batch_id=%s ORDER BY file_id",(bid,)); files=cur.fetchall()
-        cur.execute("SELECT pipeline_run_id,stage_name,processing_status,started_at,completed_at,error_count,detail_json FROM pipeline_run WHERE batch_id=%s AND pipeline_name=%s ORDER BY pipeline_run_id",(bid,API_PIPELINE)); runs=cur.fetchall()
+        cur.execute(
+            """SELECT pipeline_run_id,stage_name,processing_status,started_at,completed_at,
+                      error_count,CHAR_LENGTH(COALESCE(detail_json,'')) AS detail_json_bytes
+               FROM pipeline_run
+               WHERE batch_id=%s AND pipeline_name=%s
+               ORDER BY pipeline_run_id""",
+            (bid,API_PIPELINE),
+        ); runs=cur.fetchall()
         cur.execute("SELECT result_status,blocking_issue_count,updated_at FROM phase2c_batch_result WHERE batch_id=%s",(bid,)); p2=cur.fetchone()
         cur.execute("SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,quick_check_hold_rows,updated_at FROM phase3_batch_result WHERE batch_id=%s",(bid,)); p3=cur.fetchone()
         cur.close()
