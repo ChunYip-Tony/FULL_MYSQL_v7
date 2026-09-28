@@ -1,27 +1,26 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.110 Single-Service Edition
+Version: 7.0.111 Single-Service Edition
 
 Current runtime:
-- Existing public Web App remains available during transition.
-- Web App V2 data/API contracts are isolated under /v1/app/v2.
-- V2 UI has not yet replaced the current Web App.
-- V2 top-level target functions: CORE, ORDERING, PI.
+- Existing public Web App remains available at /app during V2 transition.
+- Web App V2 test UI is available at /app/v2.
+- V2 top-level functions: CORE, ORDERING, PI.
+- V2 data/API contracts remain under /v1/app/v2.
 
-Web App V2 data rules:
-- 7D / 28D use latest completed canonical data-supported POS dates.
-- Missing source dates are ignored and never counted as zero.
-- A supported POS date with no UPC sale is a genuine zero-sale day.
-- Promotion = Price Type SALE only.
-- TPR is not Promotion.
-- Weekend Promotion = Friday through Sunday.
-- Weekly Promotion = Thursday through following Friday.
-- Price vs Sales trend uses completed supported data days only.
-- All ordering functions treat negative Effective OH as zero for calculation while preserving the real negative OH for display.
-- Main ORDERING only suggests actively-selling families with DOS < 7 days.
-- FRESH ordering scans FRESH only; FROZEN ordering scans FROZEN only.
-- Suggested order covers forecast usage through the day before next-next delivery.
-- No Web App price save/approval or order save/submit workflow.
-- PI is the operational write path for True Stock and inventory discrepancy lineage.
+Web App V2 rules:
+- CORE: Search -> Family/UPC -> Price / Ordering.
+- CORE Ordering is Family Article level even when entered from a UPC.
+- Price includes Price vs Sales trend using completed canonical supported dates only.
+- Missing source dates are ignored, never zero-filled.
+- Promotion = SALE only; TPR is not Promotion.
+- Historical SALE periods identify Weekend / Weekly / Other patterns.
+- Main ORDERING scans FRESH only or FROZEN only.
+- Main ORDERING eligibility: active selling in latest 28 supported completed POS dates AND DOS < 7.
+- Negative Effective OH is displayed but ordering calculations use max(OH,0).
+- Suggested quantity covers demand through the day before next-next delivery.
+- Price and Ordering are analysis-only; no save/submit workflow.
+- PI is inventory-owner-aware and writes authoritative True Stock.
+- True Stock stays active until superseded by a later accepted OH upload.
 
 V2 endpoints:
 - GET /v1/app/v2/search
@@ -35,4 +34,4 @@ V2 endpoints:
 - GET /v1/app/v2/pi/{upc}
 - POST /v1/app/v2/pi/{upc}/true-stock
 
-Legacy Admin remains in source during transition but is not part of the Web App V2 target architecture.
+Legacy Admin remains in source during transition but is not part of the V2 target architecture.
