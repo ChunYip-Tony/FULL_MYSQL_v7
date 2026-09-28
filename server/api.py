@@ -27,7 +27,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.125-single-service'
+VERSION='7.0.126-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -266,12 +266,8 @@ class V2PITrueStockRequest(BaseModel):
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/quick-check',response_class=HTMLResponse,include_in_schema=False)
-def quick_check_web():
-    return HTMLResponse(quick_check_web_html())
-
-
 @app.get('/app/v2',response_class=HTMLResponse,include_in_schema=False)
-def webapp_v2_web():
+def public_web_app():
     return HTMLResponse(webapp_v2_html())
 
 
