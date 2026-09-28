@@ -1814,6 +1814,38 @@ def _historical_sweet_spot(cur, upc_id: int, family_id: int, factor: Decimal | N
     return max(buckets.items(), key=lambda kv: sum(kv[1], Decimal('0')) / Decimal(len(kv[1])))[0]
 
 
+
+def _days_of_supply(
+    inv: dict[str, Any] | None,
+    inv_position: dict[str, Any] | None,
+    selling_uom: str | None,
+    base_uom: str | None,
+    factor: Decimal | None,
+    velocity7: Decimal,
+) -> Decimal | None:
+    """Return non-negative DOS from a usable inventory roll-forward.
+
+    Negative/zero OH means there are zero days of stock available, not negative
+    days of supply. Positive OH still requires positive velocity and compatible
+    inventory/selling units. Blocked/unusable inventory remains NULL.
+    """
+    if not inv or not inv_position or not inv_position.get('analysis_usable'):
+        return None
+
+    iq = Decimal(str(inv_position['quantity']))
+    if iq <= 0:
+        return Decimal('0')
+
+    if velocity7 <= 0:
+        return None
+
+    iu = (inv_position.get('uom') or '').upper()
+    if iu and selling_uom and iu == str(selling_uom).upper():
+        return iq / velocity7
+    if iu and base_uom and iu == str(base_uom).upper() and factor and factor > 0:
+        return (iq / factor) / velocity7
+    return None
+
 def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     calendar_today = business_today()
     completed_through = completed_through_date()
@@ -1922,14 +1954,14 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
             gp_pct = (Decimal(price['price']) - cost_sell) / Decimal(price['price'])
             gp7 = Decimal(m7['sales']) - Decimal(m7['qty']) * cost_sell
             gpday = (gp7 / Decimal(m7['days'])) if m7['days'] > 0 else None
-        dos = None
-        if inv and inv_position and inv_position.get('analysis_usable') and velocity7 > 0:
-            iq = Decimal(str(inv_position['quantity']))
-            iu = (inv_position.get('uom') or '').upper()
-            if iu and selling_uom and iu == str(selling_uom).upper():
-                dos = iq / velocity7
-            elif iu and base_uom and iu == str(base_uom).upper() and factor and factor > 0:
-                dos = (iq / factor) / velocity7
+        dos = _days_of_supply(
+            inv,
+            inv_position,
+            selling_uom,
+            base_uom,
+            factor,
+            velocity7,
+        )
 
         # DOH is physical/calendar age, not a rolling-data-day metric.
         doh = (calendar_today - last_receipt).days if pclass in {'FRESH', 'LIVE'} and last_receipt else None
@@ -2186,14 +2218,14 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
             gp_pct = (Decimal(price['price']) - cost_sell) / Decimal(price['price'])
             gp7 = Decimal(m7['sales']) - Decimal(m7['qty']) * cost_sell
             gpday = (gp7 / Decimal(m7['days'])) if m7['days'] > 0 else None
-        dos = None
-        if inv and inv_position and inv_position.get('analysis_usable') and velocity7 > 0:
-            iq = Decimal(str(inv_position['quantity']))
-            iu = (inv_position.get('uom') or '').upper()
-            if iu and selling_uom and iu == str(selling_uom).upper():
-                dos = iq / velocity7
-            elif iu and base_uom and iu == str(base_uom).upper() and factor and factor > 0:
-                dos = (iq / factor) / velocity7
+        dos = _days_of_supply(
+            inv,
+            inv_position,
+            selling_uom,
+            base_uom,
+            factor,
+            velocity7,
+        )
 
         # DOH is physical/calendar age, not a rolling-data-day metric.
         doh = (calendar_today - last_receipt).days if pclass in {'FRESH', 'LIVE'} and last_receipt else None
