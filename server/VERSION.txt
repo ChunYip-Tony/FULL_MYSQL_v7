@@ -1,13 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.127 Single-Service Edition
+Version: 7.0.128 Single-Service Edition
 
 Canonical public app:
 - /, /app, /app/quick-check and /app/v2 render the same Fish Market V2 shell.
 - Public modules: Quick Check / PI / OH Discrepancy / Reports.
 
-v7.0.127 Quick Check refinements:
-- Search selection rows use light green.
-- Family Article search options override the list color with light yellow for immediate visual distinction.
-- 7D / 28D labels now stand alone; completed canonical data-day semantics are assumed and are no longer repeated in user-facing labels.
-- UPC role/type text such as "Catch Weighted UPC" is hidden from Quick Check search, Family related-UPC cards, and Price analysis headers.
-- Quick Check-linked Price Analysis uses simplified 7D / 28D language while preserving the same canonical data logic.
+v7.0.128 Quick Check search:
+- Added typo-tolerant fuzzy item-name matching using bounded token similarity.
+- Example: SALMOM resolves to SALMON candidates.
+- Multi-word searches require every query token to match a candidate token, which limits unrelated fuzzy results.
+- Exact numeric UPC / Article / Family matching remains strict and unchanged.
+- Search ranking is now relevance first, then 28D Qty, then readiness.
+- Search falls back to the active Quick Check / confirmed Article identity corpus only when strict text matching does not provide enough candidates.
+- UI now labels the ordering as "best match first".
