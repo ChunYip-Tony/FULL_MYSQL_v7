@@ -933,12 +933,14 @@ def _quick_check_family_relationships(
 
 def _quick_check_promotion(row: dict[str, Any]) -> dict[str, Any]:
     price_type = str(row.get("current_price_type") or "").strip().upper()
-    active = price_type in {"SALE", "TPR", "IN STORE", "INSTORE"}
+    active = price_type == "SALE"
     return {
         "is_on_promotion": active,
         "price_type": row.get("current_price_type"),
         "current_price": row.get("current_price"),
         "classification": "PROMOTION" if active else "REGULAR",
+        "promotion_definition": "PRICE_TYPE_SALE_ONLY",
+        "tpr_is_promotion": False,
     }
 
 
