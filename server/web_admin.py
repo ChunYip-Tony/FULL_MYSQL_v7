@@ -26,7 +26,7 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 <div class="wrap">
   <div class="top">
     <div class="row" style="justify-content:space-between">
-      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.104 · secure browser session</div></div>
+      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.105 · secure browser session</div></div>
       <div class="toplinks"><a href="/app">Open App</a><button id="logout" class="smallbtn hidden">Logout</button></div>
     </div>
     <div id="sessionMsg" class="msg">Checking admin session…</div>
@@ -77,7 +77,17 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 
     <div class="section">🧾 Proposal Queue</div>
     <div class="card">
-      <div class="actions"><button id="refreshProposals">Refresh</button></div>
+      <div class="actions">
+        <select id="adminProposalFilter" style="width:auto">
+          <option value="">All Statuses</option>
+          <option value="PENDING_REVIEW">Pending Review</option>
+          <option value="APPROVED_FOR_EXECUTION">Approved</option>
+          <option value="MARKED_EXECUTED">Marked Executed</option>
+          <option value="REJECTED">Rejected</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+        <button id="refreshProposals">Refresh</button>
+      </div>
       <div id="proposalList"></div>
     </div>
   </div>
@@ -195,7 +205,9 @@ async function markExecuted(id){
   catch(e){alert(e.message)}
 }
 async function loadProposals(){
-  const d=await api('/v1/app/price-change/proposals?limit=100');
+  const status=$('adminProposalFilter').value;
+  const path='/v1/app/price-change/proposals?limit=100'+(status?'&status='+encodeURIComponent(status):'');
+  const d=await api(path);
   $('proposalList').innerHTML=(d.rows||[]).map(r=>{
     const s=String(r.proposal_status||'');
     let actions='';
@@ -215,6 +227,7 @@ $('loadProposalUpc').addEventListener('click',loadProposalUpc);
 $('proposalUpc').addEventListener('keydown',e=>{if(e.key==='Enter')loadProposalUpc()});
 $('proposalBasis').addEventListener('change',applyBasisPrice);
 $('createProposal').addEventListener('click',createProposal);$('refreshProposals').addEventListener('click',loadProposals);
+$('adminProposalFilter').addEventListener('change',loadProposals);
 $('scopeType').addEventListener('change',()=>{if($('scopeType').value==='GLOBAL')$('scopeKey').value='*'});
 checkSession();
 </script>
