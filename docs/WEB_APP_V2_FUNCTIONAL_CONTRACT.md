@@ -485,3 +485,36 @@ The V2 UI must prioritize readability and low cognitive load:
 - status conveyed using text/icons in addition to color
 - mobile/system Back remains inside the V2 navigation flow
 - top-level navigation contains only CORE / PI / PERFORMANCE
+
+
+## Performance Report Date contract
+
+PERFORMANCE is anchored to a selected completed canonical supported POS date.
+
+- Report Date defaults to the latest completed supported sales date.
+- A manually selected Report Date must itself be a supported canonical sales date; unsupported dates are rejected rather than silently shifted.
+- The report shows that date's sales performance separately from rolling trends.
+- 7D / 14D / 28D metrics mean the latest 7 / 14 / 28 completed supported sales dates ending on or before Report Date.
+- Missing source dates are ignored and never inserted as zero.
+- Report Date Top Sellers are ranked from that date's actual sales.
+- Performance analysis compares Report Date sales against supported-day rolling baselines.
+- Top 100 urgent price suggestions use sales evidence only through Report Date.
+- Price suggestions retain Company Price C as a hard floor when applicable.
+- Price suggestion priority is positive observed GP$/day opportunity.
+- Current authoritative cost is used until historical daily cost lineage is available in the V2 serving layer; this limitation must be disclosed in the report.
+
+
+## Core Ordering delivery fallback
+
+CORE -> UPC -> Ordering remains a Family Article decision.
+
+Expected Delivery priority:
+1. user-entered Expected Delivery Date
+2. stable observed delivery pattern
+3. FRESH fallback = following Friday
+4. FROZEN fallback = following Tuesday
+5. other categories remain unresolved unless observed/user-entered
+
+When FRESH/FROZEN delivery is resolved but the next observed delivery cannot be inferred, Next Next Delivery uses a transparent weekly fallback of Expected Delivery + 7 days.
+
+This fallback prevents Core Ordering from failing solely because receipt cadence history is sparse or irregular.
