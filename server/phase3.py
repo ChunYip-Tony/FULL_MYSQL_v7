@@ -60,6 +60,18 @@ FAMILY_SALE_MOVEMENTS = {'251', '252'}
 SEAFOOD_DEPT_CODE = '400'
 SEAFOOD_PRICE_SUBDEPT_CODES = {'400', '401'}
 
+def _department_from_price_subdept(code: str | None) -> str | None:
+    if not code:
+        return None
+    s = str(code).strip()
+    if s in SEAFOOD_PRICE_SUBDEPT_CODES:
+        return '400'
+    if len(s) == 3 and s.startswith('3'):
+        return '300'
+    if len(s) == 3 and s.startswith('5'):
+        return '500'
+    return None
+
 
 def _j(v: Any) -> dict[str, Any]:
     if isinstance(v, dict):
@@ -369,9 +381,9 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
             p = _j(rr['raw_payload'])
             a_txt = (_text(p.get('A')) or '')
             if 'SUBDEPT' in a_txt.upper():
-                current_dept = _id(p.get('B'))
+                current_dept = _department_from_price_subdept(_id(p.get('B')))
                 continue
-            if current_dept not in SEAFOOD_PRICE_SUBDEPT_CODES:
+            if current_dept not in DEPARTMENT_REGISTRY:
                 continue
             ean = _id(p.get('A'))
             desc = _text(p.get('B'))
@@ -385,6 +397,21 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
             normalized_ptype = 'IN STORE' if ptype in {'INSTORE', 'STOR'} else ptype
             since = _date(p.get('Q'))
             upc_id = _find_upc_id(cur, ean)
+            cur.execute(
+                """INSERT INTO upc_department_observation
+                   (upc_id,ean_upc,department_code,department_name,source_type,
+                    business_date,batch_id,file_id,sheet_id,source_row_number)
+                   VALUES (%s,%s,%s,%s,'PRICE_LIST',%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE
+                     upc_id=VALUES(upc_id),
+                     department_name=VALUES(department_name),
+                     business_date=VALUES(business_date),
+                     batch_id=VALUES(batch_id)""",
+                (
+                    upc_id, ean, current_dept, DEPARTMENT_REGISTRY[current_dept],
+                    snapshot.date(), batch_id, f['file_id'], sh['sheet_id'], rr['source_row_number'],
+                ),
+            )
             cur.execute(
                 """INSERT INTO price_list_observation
                    (batch_id,file_id,sheet_id,raw_id,source_row_number,ean_upc,upc_id,description,
