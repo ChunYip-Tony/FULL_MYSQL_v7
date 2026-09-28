@@ -590,7 +590,7 @@ body{
 #upload .delete-qa-msg{margin-top:5px;font-size:9px}
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.144</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.145</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -729,7 +729,7 @@ body{
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(v,d=2)=>{if(v===null||v===undefined||v==='')return '—';let n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):String(v)},money=v=>v===null||v===undefined?'—':'$'+fmt(v,2);
 const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new Date(s+'T12:00:00'),x=(t-d.getDay()+7)%7;if(!x)x=7;d.setDate(d.getDate()+x);return d.toLocaleDateString('en-CA')};const dayName=s=>{if(!s)return '—';return new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date(s+'T12:00:00'))};const promoRange=p=>p.weekday_range||((p.start_weekday||dayName(p.start_date))+' → '+(p.end_weekday||dayName(p.end_date)));
-let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
+let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null,deletedUploadBatchIds=new Set();
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(['pid','ohreport'].includes(id))return 'pi';if(['upload','pricechange'].includes(id))return 'performance';return id}
 function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload'){loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent();}scrollTo({top:0,behavior:'smooth'})}
@@ -948,7 +948,7 @@ async function loadWebUploadCalendar(){
 function renderWebUploadRecentBatch(b){
   let files=b.files||[];
   let qc=b.quick_check_rows==null?'Pending':(fmt(b.quick_check_ready_rows,0)+' / '+fmt(b.quick_check_rows,0)+' READY · '+fmt(b.quick_check_hold_rows,0)+' HOLD');
-  return '<div class="card">'+
+  return '<div class="card" data-upload-batch-card="'+esc(b.batch_id)+'">'+
     '<div class="row" style="justify-content:space-between"><div><div class="name">Batch '+esc(b.batch_id??'—')+'</div><div class="meta">'+esc(b.batch_label||'')+'</div>'+
       '<div class="meta" style="margin-top:3px"><b>Uploaded:</b> '+esc(uploadDateTime(b.upload_started_at))+
       (b.completed_at?' · <b>Completed:</b> '+esc(uploadDateTime(b.completed_at)):'')+
@@ -1007,6 +1007,9 @@ async function deleteQAHoldBatch(batchId,button){
     let done=mode==='HIDDEN_PRESERVE_LINEAGE'
       ? 'Batch '+id+' removed from Upload History. Underlying lineage was preserved because later data references it.'
       : 'Batch '+id+' deleted · '+fmt(d.file_count,0)+' file(s) removed.';
+    deletedUploadBatchIds.add(id);
+    let card=document.querySelector('#uploadRecent [data-upload-batch-card="'+id+'"]');
+    if(card)card.remove();
     if(msg)msg.textContent=done;
     $('uploadMsg').textContent=done;
     await loadWebUploadRecent();
@@ -1032,8 +1035,9 @@ async function loadWebUploadRecent(){
   $('uploadRecentMsg').textContent='Loading recent upload status…';
   try{
     let d=await api('/v1/web-upload/recent?limit=8');
-    $('uploadRecentMsg').textContent=(d.count||0)+' recent batch(es)';
-    $('uploadRecent').innerHTML=(d.batches||[]).map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
+    let batches=(d.batches||[]).filter(b=>!deletedUploadBatchIds.has(Number(b.batch_id)));
+    $('uploadRecentMsg').textContent=batches.length+' recent batch(es)';
+    $('uploadRecent').innerHTML=batches.map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
     document.querySelectorAll('#uploadRecent [data-delete-batch]').forEach(
       b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch,b)
     );
