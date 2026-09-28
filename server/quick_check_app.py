@@ -1706,11 +1706,12 @@ def quick_check_lineage(upc: str) -> dict[str, Any] | None:
 
 
 def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
-    """Return actionable current-active negative-stock items using effective OH.
+    """Return actionable negative-stock items at inventory-owner grain.
 
-    A row is included only when its effective position is analytically usable and
-    still negative after any active True Stock override. This keeps inventory
-    exceptions separate from Quick Check QA status (READY/QA_HOLD).
+    Selling UPCs that resolve to the same System OH owner are grouped into one
+    physical-count action. Effective OH still honors any active True Stock
+    override. READY/QA_HOLD remains a data-quality status and is not rewritten
+    by this business-exception queue.
     """
     limit = max(1, min(int(limit or 100), 500))
     with db_conn() as conn:
@@ -1726,33 +1727,95 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
                WHERE quick_check_status IN ('READY','QA_HOLD')
                  AND current_oh IS NOT NULL
                  AND current_oh < 0
-               ORDER BY current_oh ASC,upc_velocity_7d DESC,ean_upc
-               LIMIT %s""",
-            (limit * 4,),
+               ORDER BY current_oh ASC,upc_velocity_7d DESC,ean_upc"""
         )
         candidates = cur.fetchall()
 
-        rows = []
+        owner_groups: dict[tuple[str, int], dict[str, Any]] = {}
+        unresolved_owner_rows = 0
         for row in candidates:
             system_oh = _system_oh_context(cur, row)
+            if not system_oh:
+                unresolved_owner_rows += 1
+                continue
+
+            scope = str(system_oh.get("scope_type") or "").upper()
+            if scope == "UPC":
+                owner_id = system_oh.get("upc_id")
+            elif scope == "ARTICLE":
+                owner_id = system_oh.get("article_id")
+            elif scope == "FAMILY":
+                owner_id = system_oh.get("family_id")
+            else:
+                owner_id = None
+            if owner_id is None:
+                unresolved_owner_rows += 1
+                continue
+
+            key = (scope, int(owner_id))
+            group = owner_groups.setdefault(
+                key,
+                {
+                    "scope_type": scope,
+                    "owner_id": int(owner_id),
+                    "system_oh": system_oh,
+                    "upc_rows": [],
+                },
+            )
+            group["upc_rows"].append(row)
+
+        actions: list[dict[str, Any]] = []
+        suppressed_by_true_stock = 0
+        blocked_owner_count = 0
+        for (_, _), group in owner_groups.items():
+            system_oh = group["system_oh"]
             system_position = _system_position(cur, system_oh)
             if not system_position or not system_position.get("analysis_usable"):
+                blocked_owner_count += 1
                 continue
 
             true_stock = _active_true_stock(cur, system_oh)
             actual_position = _actual_position(cur, true_stock)
             effective_position = actual_position if true_stock else system_position
             if not effective_position or not effective_position.get("analysis_usable"):
+                blocked_owner_count += 1
                 continue
 
             quantity = effective_position.get("quantity")
             if quantity is None:
+                blocked_owner_count += 1
                 continue
             effective_qty = Decimal(str(quantity))
             if effective_qty >= 0:
+                suppressed_by_true_stock += 1
                 continue
 
+            upc_rows = group["upc_rows"]
+            representative = max(
+                upc_rows,
+                key=lambda r: (
+                    Decimal(str(r.get("upc_velocity_7d") or 0)),
+                    Decimal(str(r.get("pos_qty_7d") or 0)),
+                    1 if str(r.get("quick_check_status") or "") == "READY" else 0,
+                    str(r.get("ean_upc") or ""),
+                ),
+            )
+            related_upcs = sorted({str(r.get("ean_upc")) for r in upc_rows if r.get("ean_upc")})
+            related_statuses = sorted({str(r.get("quick_check_status")) for r in upc_rows if r.get("quick_check_status")})
+
+            row = dict(representative)
             row.update(_stock_state(effective_qty))
+            row["inventory_owner_scope"] = group["scope_type"]
+            row["inventory_owner_id"] = group["owner_id"]
+            row["inventory_owner_key"] = f"{group['scope_type']}:{group['owner_id']}"
+            row["inventory_owner_upc_id"] = system_oh.get("upc_id")
+            row["inventory_owner_article_id"] = system_oh.get("article_id")
+            row["inventory_owner_article_number"] = system_oh.get("article_number")
+            row["inventory_owner_family_id"] = system_oh.get("family_id")
+            row["representative_upc"] = representative.get("ean_upc")
+            row["related_upcs"] = related_upcs
+            row["related_upc_count"] = len(related_upcs)
+            row["related_quick_check_statuses"] = related_statuses
             row["system_oh"] = system_position.get("quantity")
             row["system_oh_uom"] = system_position.get("uom")
             row["effective_oh"] = effective_qty
@@ -1761,22 +1824,35 @@ def negative_stock_queue(limit: int = 100) -> dict[str, Any]:
             row["active_true_stock"] = true_stock.get("true_stock_quantity") if true_stock else None
             row["active_true_stock_uom"] = true_stock.get("uom_code") if true_stock else None
             row["true_stock_required_uom"] = system_position.get("uom")
+            row["action_upc"] = representative.get("ean_upc")
             row["action_code"] = "COUNT_AND_SUBMIT_TRUE_STOCK"
             row["action_reason"] = "EFFECTIVE_OH_NEGATIVE"
             row["latest_on_hand_file_id"] = latest_oh_file_id
-            rows.append(row)
-            if len(rows) >= limit:
-                break
+            actions.append(row)
+
+        actions.sort(
+            key=lambda r: (
+                Decimal(str(r.get("effective_oh") or 0)),
+                -Decimal(str(r.get("upc_velocity_7d") or 0)),
+                str(r.get("representative_upc") or ""),
+            )
+        )
+        rows = actions[:limit]
 
         conn.commit()
         cur.close()
         return {
             "count": len(rows),
             "queue_type": "NEGATIVE_STOCK_ACTION_QUEUE",
+            "queue_grain": "INVENTORY_OWNER",
             "action_code": "COUNT_AND_SUBMIT_TRUE_STOCK",
+            "candidate_upc_count": len(candidates),
+            "inventory_owner_count": len(owner_groups),
+            "suppressed_by_true_stock_count": suppressed_by_true_stock,
+            "blocked_owner_count": blocked_owner_count,
+            "unresolved_owner_upc_count": unresolved_owner_rows,
             "rows": rows,
         }
-
 
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
     with db_conn() as conn:
