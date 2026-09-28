@@ -2565,6 +2565,388 @@ def submit_negative_stock_true_stock(
 
 
 
+def ensure_order_workflow_tables(cur) -> None:
+    if not _table_exists(cur, "order_draft"):
+        cur.execute(
+            """
+            CREATE TABLE order_draft (
+                order_draft_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                order_date DATE NOT NULL,
+                delivery_date DATE NOT NULL,
+                workflow_status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
+                notes VARCHAR(255) NULL,
+                created_by VARCHAR(128) NOT NULL,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                           ON UPDATE CURRENT_TIMESTAMP(6),
+                confirmed_by VARCHAR(128) NULL,
+                confirmed_at DATETIME(6) NULL,
+                submitted_by VARCHAR(128) NULL,
+                submitted_at DATETIME(6) NULL,
+                cancelled_by VARCHAR(128) NULL,
+                cancelled_at DATETIME(6) NULL,
+                PRIMARY KEY (order_draft_id),
+                KEY ix_order_draft_status_dates (workflow_status,order_date,delivery_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+    if not _table_exists(cur, "order_draft_line"):
+        cur.execute(
+            """
+            CREATE TABLE order_draft_line (
+                order_draft_line_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+                order_draft_id BIGINT UNSIGNED NOT NULL,
+                upc_id BIGINT UNSIGNED NULL,
+                ean_upc VARCHAR(32) NOT NULL,
+                article_number VARCHAR(64) NULL,
+                family_id BIGINT UNSIGNED NULL,
+                main_article_number VARCHAR(64) NULL,
+                selling_description VARCHAR(255) NULL,
+                selling_uom VARCHAR(32) NULL,
+                suggested_qty DECIMAL(24,8) NOT NULL,
+                final_qty DECIMAL(24,8) NOT NULL,
+                effective_oh DECIMAL(24,8) NULL,
+                effective_oh_uom VARCHAR(32) NULL,
+                velocity_7d DECIMAL(24,8) NULL,
+                days_supply DECIMAL(24,8) NULL,
+                current_price DECIMAL(24,8) NULL,
+                current_price_type VARCHAR(32) NULL,
+                ordering_policy_id BIGINT UNSIGNED NULL,
+                ordering_policy_scope_type VARCHAR(24) NULL,
+                ordering_policy_scope_key VARCHAR(64) NULL,
+                source_publish_batch_id BIGINT UNSIGNED NULL,
+                source_published_at DATETIME(6) NULL,
+                adjustment_note VARCHAR(255) NULL,
+                created_by VARCHAR(128) NOT NULL,
+                created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+                updated_by VARCHAR(128) NULL,
+                updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                           ON UPDATE CURRENT_TIMESTAMP(6),
+                PRIMARY KEY (order_draft_line_id),
+                UNIQUE KEY uq_order_draft_upc (order_draft_id,ean_upc),
+                KEY ix_order_draft_line_upc (ean_upc),
+                CONSTRAINT fk_order_draft_line_draft
+                  FOREIGN KEY (order_draft_id) REFERENCES order_draft(order_draft_id)
+                  ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+            """
+        )
+
+
+def _ordering_recommendation_for_upc(upc: str) -> dict[str, Any]:
+    detail = get_quick_check_detail(upc)
+    if not detail:
+        raise KeyError("ORDERING_UPC_NOT_FOUND")
+    item = detail.get("item") or {}
+    ordering = detail.get("ordering") or {}
+    effective = detail.get("effective_oh") or {}
+    if ordering.get("status") != "ORDER_RECOMMENDATION_READY":
+        raise ValueError("ORDER_RECOMMENDATION_NOT_READY")
+    suggested = _qc_decimal(ordering.get("suggested_order_qty"))
+    if suggested is None or suggested <= 0:
+        raise ValueError("NO_POSITIVE_ORDER_RECOMMENDATION")
+    if not ordering.get("next_order_date") or not ordering.get("next_delivery_date"):
+        raise ValueError("ORDERING_DATES_NOT_AVAILABLE")
+    return {
+        "item": item,
+        "ordering": ordering,
+        "effective_oh": effective,
+    }
+
+
+def add_order_recommendation_to_draft(
+    upc: str,
+    *,
+    device: str,
+) -> dict[str, Any]:
+    snap = _ordering_recommendation_for_upc(upc)
+    item = snap["item"]
+    ordering = snap["ordering"]
+    effective = snap["effective_oh"]
+    order_date = ordering["next_order_date"]
+    delivery_date = ordering["next_delivery_date"]
+    policy = ordering.get("policy") or {}
+    suggested = Decimal(str(ordering["suggested_order_qty"]))
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_order_workflow_tables(cur)
+        conn.commit()
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """SELECT order_draft_id,workflow_status
+                   FROM order_draft
+                   WHERE order_date=%s
+                     AND delivery_date=%s
+                     AND workflow_status='DRAFT'
+                   ORDER BY order_draft_id DESC
+                   LIMIT 1
+                   FOR UPDATE""",
+                (order_date,delivery_date),
+            )
+            draft = cur.fetchone()
+            if draft:
+                draft_id = int(draft["order_draft_id"])
+            else:
+                cur.execute(
+                    """INSERT INTO order_draft
+                       (order_date,delivery_date,workflow_status,created_by)
+                       VALUES (%s,%s,'DRAFT',%s)""",
+                    (order_date,delivery_date,device),
+                )
+                draft_id = int(cur.lastrowid)
+
+            cur.execute(
+                """INSERT INTO order_draft_line
+                   (order_draft_id,upc_id,ean_upc,article_number,family_id,
+                    main_article_number,selling_description,selling_uom,
+                    suggested_qty,final_qty,effective_oh,effective_oh_uom,
+                    velocity_7d,days_supply,current_price,current_price_type,
+                    ordering_policy_id,ordering_policy_scope_type,
+                    ordering_policy_scope_key,source_publish_batch_id,
+                    source_published_at,created_by,updated_by)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+                           %s,%s,%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE
+                     suggested_qty=VALUES(suggested_qty),
+                     effective_oh=VALUES(effective_oh),
+                     effective_oh_uom=VALUES(effective_oh_uom),
+                     velocity_7d=VALUES(velocity_7d),
+                     days_supply=VALUES(days_supply),
+                     current_price=VALUES(current_price),
+                     current_price_type=VALUES(current_price_type),
+                     ordering_policy_id=VALUES(ordering_policy_id),
+                     ordering_policy_scope_type=VALUES(ordering_policy_scope_type),
+                     ordering_policy_scope_key=VALUES(ordering_policy_scope_key),
+                     source_publish_batch_id=VALUES(source_publish_batch_id),
+                     source_published_at=VALUES(source_published_at),
+                     updated_by=VALUES(updated_by),
+                     updated_at=CURRENT_TIMESTAMP(6)""",
+                (
+                    draft_id,item.get("upc_id"),item.get("ean_upc"),
+                    item.get("article_number"),item.get("family_id"),
+                    item.get("main_article_number"),item.get("selling_description"),
+                    item.get("selling_uom"),suggested,suggested,
+                    effective.get("quantity"),effective.get("uom"),
+                    ordering.get("velocity_7d"),ordering.get("days_supply"),
+                    item.get("current_price"),item.get("current_price_type"),
+                    policy.get("ordering_policy_id"),policy.get("scope_type"),
+                    policy.get("scope_key"),item.get("publish_batch_id"),
+                    item.get("published_at"),device,device,
+                ),
+            )
+            conn.commit()
+            return {
+                "status":"ADDED_TO_DRAFT",
+                "order_draft_id":draft_id,
+                "ean_upc":item.get("ean_upc"),
+                "suggested_qty":suggested,
+                "final_qty":suggested,
+                "order_date":order_date,
+                "delivery_date":delivery_date,
+                "live_order_submitted":False,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
+def update_order_draft_line(
+    order_draft_line_id: int,
+    *,
+    final_qty: Decimal,
+    adjustment_note: str | None,
+    device: str,
+) -> dict[str, Any]:
+    qty = Decimal(str(final_qty))
+    if qty < 0:
+        raise ValueError("FINAL_ORDER_QTY_NEGATIVE")
+    note = str(adjustment_note or "").strip()[:255] or None
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_order_workflow_tables(cur)
+        conn.commit()
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """SELECT l.order_draft_line_id,l.order_draft_id,d.workflow_status
+                   FROM order_draft_line l
+                   JOIN order_draft d ON d.order_draft_id=l.order_draft_id
+                   WHERE l.order_draft_line_id=%s
+                   FOR UPDATE""",
+                (int(order_draft_line_id),),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise KeyError("ORDER_DRAFT_LINE_NOT_FOUND")
+            if row.get("workflow_status") != "DRAFT":
+                raise ValueError("ORDER_DRAFT_NOT_EDITABLE")
+            cur.execute(
+                """UPDATE order_draft_line
+                   SET final_qty=%s,adjustment_note=%s,updated_by=%s,
+                       updated_at=CURRENT_TIMESTAMP(6)
+                   WHERE order_draft_line_id=%s""",
+                (qty,note,device,int(order_draft_line_id)),
+            )
+            conn.commit()
+            return {
+                "status":"UPDATED",
+                "order_draft_line_id":int(order_draft_line_id),
+                "final_qty":qty,
+                "adjustment_note":note,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
+def order_draft_history(
+    status: str | None = None,
+    limit: int = 60,
+) -> dict[str, Any]:
+    limit = max(1,min(int(limit or 60),200))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_order_workflow_tables(cur)
+        conn.commit()
+        params: list[Any] = []
+        where = ""
+        if status:
+            where = "WHERE d.workflow_status=%s"
+            params.append(str(status).strip().upper())
+        params.append(limit)
+        cur.execute(
+            f"""SELECT d.order_draft_id,d.order_date,d.delivery_date,d.workflow_status,
+                       d.notes,d.created_by,d.created_at,d.updated_at,
+                       d.confirmed_by,d.confirmed_at,d.submitted_by,d.submitted_at,
+                       d.cancelled_by,d.cancelled_at,
+                       COUNT(l.order_draft_line_id) AS line_count,
+                       COALESCE(SUM(l.final_qty),0) AS total_final_qty
+                FROM order_draft d
+                LEFT JOIN order_draft_line l
+                  ON l.order_draft_id=d.order_draft_id
+                {where}
+                GROUP BY d.order_draft_id
+                ORDER BY d.order_date DESC,d.order_draft_id DESC
+                LIMIT %s""",
+            tuple(params),
+        )
+        drafts = cur.fetchall()
+        for draft in drafts:
+            cur.execute(
+                """SELECT order_draft_line_id,ean_upc,article_number,family_id,
+                          main_article_number,selling_description,selling_uom,
+                          suggested_qty,final_qty,effective_oh,effective_oh_uom,
+                          velocity_7d,days_supply,current_price,current_price_type,
+                          ordering_policy_id,ordering_policy_scope_type,
+                          ordering_policy_scope_key,source_publish_batch_id,
+                          source_published_at,adjustment_note,created_by,created_at,
+                          updated_by,updated_at
+                   FROM order_draft_line
+                   WHERE order_draft_id=%s
+                   ORDER BY selling_description,ean_upc""",
+                (draft["order_draft_id"],),
+            )
+            draft["lines"] = cur.fetchall()
+        cur.close()
+    return {
+        "count":len(drafts),
+        "rows":drafts,
+        "contract_version":"ORDER_WORKFLOW_V1",
+    }
+
+
+def transition_order_draft(
+    order_draft_id: int,
+    *,
+    action: str,
+    note: str | None,
+    device: str,
+) -> dict[str, Any]:
+    action_key = str(action or "").strip().upper()
+    transitions = {
+        "CONFIRM":("DRAFT","CONFIRMED"),
+        "MARK_SUBMITTED":("CONFIRMED","MARKED_SUBMITTED"),
+        "CANCEL_DRAFT":("DRAFT","CANCELLED"),
+        "CANCEL_CONFIRMED":("CONFIRMED","CANCELLED"),
+    }
+    if action_key not in transitions:
+        raise ValueError("ORDER_WORKFLOW_ACTION_INVALID")
+    expected,next_status = transitions[action_key]
+    clean_note = str(note or "").strip()[:255] or None
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_order_workflow_tables(cur)
+        conn.commit()
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """SELECT order_draft_id,workflow_status
+                   FROM order_draft
+                   WHERE order_draft_id=%s
+                   FOR UPDATE""",
+                (int(order_draft_id),),
+            )
+            draft = cur.fetchone()
+            if not draft:
+                raise KeyError("ORDER_DRAFT_NOT_FOUND")
+            if draft.get("workflow_status") != expected:
+                raise ValueError("ORDER_WORKFLOW_STATUS_CONFLICT")
+
+            if action_key == "CONFIRM":
+                cur.execute(
+                    """SELECT COUNT(*) AS cnt
+                       FROM order_draft_line
+                       WHERE order_draft_id=%s AND final_qty>0""",
+                    (int(order_draft_id),),
+                )
+                if int((cur.fetchone() or {}).get("cnt") or 0) <= 0:
+                    raise ValueError("ORDER_DRAFT_HAS_NO_POSITIVE_LINES")
+                cur.execute(
+                    """UPDATE order_draft
+                       SET workflow_status='CONFIRMED',notes=COALESCE(%s,notes),
+                           confirmed_by=%s,confirmed_at=CURRENT_TIMESTAMP(6)
+                       WHERE order_draft_id=%s AND workflow_status='DRAFT'""",
+                    (clean_note,device,int(order_draft_id)),
+                )
+            elif action_key == "MARK_SUBMITTED":
+                cur.execute(
+                    """UPDATE order_draft
+                       SET workflow_status='MARKED_SUBMITTED',notes=COALESCE(%s,notes),
+                           submitted_by=%s,submitted_at=CURRENT_TIMESTAMP(6)
+                       WHERE order_draft_id=%s AND workflow_status='CONFIRMED'""",
+                    (clean_note,device,int(order_draft_id)),
+                )
+            else:
+                cur.execute(
+                    """UPDATE order_draft
+                       SET workflow_status='CANCELLED',notes=COALESCE(%s,notes),
+                           cancelled_by=%s,cancelled_at=CURRENT_TIMESTAMP(6)
+                       WHERE order_draft_id=%s AND workflow_status=%s""",
+                    (clean_note,device,int(order_draft_id),expected),
+                )
+            if int(cur.rowcount or 0) != 1:
+                raise RuntimeError("ORDER_WORKFLOW_TRANSITION_CONFLICT")
+            conn.commit()
+            return {
+                "status":next_status,
+                "order_draft_id":int(order_draft_id),
+                "live_order_submitted":False,
+                "submission_mark_is_audit_only": next_status=="MARKED_SUBMITTED",
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+
 def ordering_queue(limit: int = 80) -> dict[str, Any]:
     """Operational ordering review queue for the public Web App.
 
