@@ -16,6 +16,8 @@ from current_active_cost_repair import (
     _pick,
     _uom_id,
     _upc_family,
+    _oh_cost_columns,
+    _oh_cost_candidate,
 )
 from normalize import _numeric_key
 
@@ -317,14 +319,18 @@ def _scan_oh_evidence(
     cur,
     target_family_ids: set[int],
 ) -> dict[int, dict[str, Any]]:
-    """Read-only scan of explicit OH cost evidence for target families only."""
+    """Read-only scan of explicit or derived OH cost evidence for target families."""
 
     result: dict[int, dict[str, Any]] = {
         int(fid): {
             "positive_cost_candidates": 0,
+            "supported_cost_candidates": 0,
             "explicit_supported_uom_candidates": 0,
+            "derived_total_value_candidates": 0,
+            "derived_supported_uom_candidates": 0,
             "missing_explicit_cost_uom_candidates": 0,
             "unsupported_cost_uom_candidates": 0,
+            "unsupported_currency_candidates": 0,
             "recent_candidates": [],
         }
         for fid in target_family_ids
@@ -367,29 +373,15 @@ def _scan_oh_evidence(
             if not hr:
                 continue
 
-            hmap = _header_map(_j(hr["raw_payload"]))
-            c_article = _pick(
-                hmap,
-                ["Article", "Article Number", "Material", "Material Number"],
+            cols = _oh_cost_columns(_header_map(_j(hr["raw_payload"])))
+            identity_ok = bool(cols.get("article") or cols.get("upc"))
+            explicit_mode_available = bool(cols.get("explicit_cost"))
+            derived_mode_available = bool(
+                cols.get("total_value")
+                and cols.get("unrestricted_qty")
+                and cols.get("base_uom")
             )
-            c_upc = _pick(hmap, ["UPC", "EAN", "Barcode", "Sales Set"])
-            c_cost = _pick(
-                hmap,
-                [
-                    "Cost", "Unit Cost", "Current Cost", "Average Cost", "Avg Cost",
-                    "Moving Average Price", "Moving Price", "MAP",
-                ],
-            )
-            c_cost_uom = _pick(
-                hmap,
-                ["Cost UOM", "Cost Unit", "Price UOM", "Price Unit", "Cost Base UOM"],
-            )
-            c_date = _pick(
-                hmap,
-                ["Date", "Inventory Date", "Count Date", "Snapshot Date"],
-            )
-
-            if not c_cost or (not c_article and not c_upc):
+            if not identity_ok or not (explicit_mode_available or derived_mode_available):
                 continue
 
             cur.execute(
@@ -401,12 +393,12 @@ def _scan_oh_evidence(
             )
             for rr in cur.fetchall():
                 p = _j(rr["raw_payload"])
-                cost = _num(p.get(c_cost))
-                if cost is None or cost <= 0:
+                candidate = _oh_cost_candidate(p, cols)
+                if not candidate.get("candidate_present"):
                     continue
 
-                article_num = _id(p.get(c_article)) if c_article else None
-                ean = _id(p.get(c_upc)) if c_upc else None
+                article_num = _id(p.get(cols["article"])) if cols.get("article") else None
+                ean = _id(p.get(cols["upc"])) if cols.get("upc") else None
 
                 if article_num not in article_cache:
                     article_cache[article_num or ""] = _article_family(cur, article_num)
@@ -428,24 +420,38 @@ def _scan_oh_evidence(
                     continue
 
                 item = result[family_id]
-                item["positive_cost_candidates"] += 1
+                cost = candidate.get("cost")
+                cost_uom = str(candidate.get("cost_uom") or "").upper()
+                currency = str(candidate.get("currency") or "USD").upper()
+                mode = candidate.get("derivation_mode")
 
-                cost_uom = (
-                    str(p.get(c_cost_uom) or "").strip().upper()
-                    if c_cost_uom else ""
-                )
+                if cost is None:
+                    if candidate.get("candidate_present") and not cost_uom:
+                        item["missing_explicit_cost_uom_candidates"] += 1
+                    continue
+
+                item["positive_cost_candidates"] += 1
+                if mode == "TOTAL_VALUE_DIV_UNRESTRICTED":
+                    item["derived_total_value_candidates"] += 1
+
                 supported = False
-                if not cost_uom:
+                if currency != "USD":
+                    item["unsupported_currency_candidates"] += 1
+                elif not cost_uom:
                     item["missing_explicit_cost_uom_candidates"] += 1
                 else:
                     supported = _uom_id(cur, cost_uom) is not None
                     if supported:
-                        item["explicit_supported_uom_candidates"] += 1
+                        item["supported_cost_candidates"] += 1
+                        if mode == "EXPLICIT_UNIT_COST":
+                            item["explicit_supported_uom_candidates"] += 1
+                        elif mode == "TOTAL_VALUE_DIV_UNRESTRICTED":
+                            item["derived_supported_uom_candidates"] += 1
                     else:
                         item["unsupported_cost_uom_candidates"] += 1
 
                 obs_date = (
-                    _date(p.get(c_date)) if c_date else None
+                    _date(p.get(cols["date"])) if cols.get("date") else None
                 ) or f.get("coverage_end_date") or f.get("filename_date_candidate")
                 if obs_date is None and f.get("upload_timestamp"):
                     obs_date = f["upload_timestamp"].date()
@@ -455,7 +461,11 @@ def _scan_oh_evidence(
                     {
                         "cost": cost,
                         "cost_uom": cost_uom or None,
+                        "currency": currency,
                         "supported_cost_uom": supported,
+                        "derivation_mode": mode,
+                        "unrestricted_qty": candidate.get("unrestricted_qty"),
+                        "total_value": candidate.get("total_value"),
                         "article_number": article_num,
                         "ean_upc": ean,
                         "observation_date": obs_date,
@@ -475,157 +485,6 @@ def _scan_oh_evidence(
                 del candidates[8:]
 
     return result
-
-
-def _classify_missing_cost(
-    receipt: dict[str, Any],
-    official: dict[str, Any],
-    oh: dict[str, Any],
-) -> dict[str, Any]:
-    if int(receipt.get("valid_valuation_rows") or 0) > 0:
-        return {
-            "classification": "SAFE_RECEIPT_VALUATION_REPAIR_CANDIDATE",
-            "safe_to_auto_resolve": True,
-            "proposed_action": "RELINK_OR_BACKFILL_RECEIPT_VALUATION",
-        }
-
-    if int(oh.get("explicit_supported_uom_candidates") or 0) > 0:
-        return {
-            "classification": "SAFE_OH_COST_FALLBACK_REPAIR_CANDIDATE",
-            "safe_to_auto_resolve": True,
-            "proposed_action": "BACKFILL_EXPLICIT_OH_COST_FALLBACK",
-        }
-
-    if int(official.get("repairable_official_rows") or 0) > 0:
-        return {
-            "classification": "SAFE_OFFICIAL_COST_REPAIR_CANDIDATE",
-            "safe_to_auto_resolve": True,
-            "proposed_action": "RELINK_OR_BACKFILL_OFFICIAL_REPORT_COST",
-        }
-
-    if int(receipt.get("receipt_rows") or 0) > 0:
-        return {
-            "classification": "RECEIPT_ROWS_WITHOUT_VALID_VALUATION",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "REVIEW_RECEIPT_VALUATION_FIELDS",
-        }
-
-    if int(oh.get("positive_cost_candidates") or 0) > 0:
-        return {
-            "classification": "OH_COST_WITHOUT_EXPLICIT_SUPPORTED_UOM",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "REVIEW_OH_COST_UOM",
-        }
-
-    if int(official.get("positive_cost_rows") or 0) > 0:
-        if int(official.get("positive_with_uom_rows") or 0) == 0:
-            return {
-                "classification": "OFFICIAL_COST_WITHOUT_EXPLICIT_UOM",
-                "safe_to_auto_resolve": False,
-                "proposed_action": "REVIEW_OFFICIAL_COST_UOM",
-            }
-        if int(official.get("positive_with_supported_uom_rows") or 0) == 0:
-            return {
-                "classification": "OFFICIAL_COST_UOM_UNSUPPORTED",
-                "safe_to_auto_resolve": False,
-                "proposed_action": "REVIEW_AND_MAP_OFFICIAL_COST_UOM_TOKEN",
-            }
-        return {
-            "classification": "OFFICIAL_COST_IDENTITY_ANCHOR_UNRESOLVED",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "REVIEW_OFFICIAL_COST_IDENTITY_ANCHOR",
-        }
-
-    if (
-        int(receipt.get("receipt_rows") or 0) == 0
-        and int(official.get("positive_cost_rows") or 0) == 0
-        and int(oh.get("positive_cost_candidates") or 0) == 0
-    ):
-        return {
-            "classification": "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "ASK_USER_ONLY_AFTER_RECEIPT_OH_OFFICIAL_EXHAUSTED",
-        }
-
-    return {
-        "classification": "NO_AUTHORITATIVE_COST_EVIDENCE",
-        "safe_to_auto_resolve": False,
-        "proposed_action": "REQUIRES_NEW_AUTHORITATIVE_COST_EVIDENCE",
-    }
-
-
-def _classify_conversion(
-    row: dict[str, Any],
-    best_cost: dict[str, Any] | None,
-) -> dict[str, Any]:
-    selling = _norm_uom(row.get("selling_uom"))
-    base = _norm_uom(row.get("base_uom"))
-    factor = row.get("base_qty_per_selling_unit")
-    cost_uom = _norm_uom(best_cost.get("uom")) if best_cost else None
-
-    if not best_cost:
-        return {
-            "classification": "AUTHORITATIVE_COST_NOT_FOUND_DURING_CONVERSION_CHECK",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "DIAGNOSE_COST_LINEAGE_FIRST",
-            "selling_uom": selling,
-            "cost_uom": cost_uom,
-        }
-
-    if selling and cost_uom and selling == cost_uom:
-        return {
-            "classification": "DIRECT_COST_UOM_EQUALS_SELLING_UOM",
-            "safe_to_auto_resolve": True,
-            "proposed_action": (
-                "CALCULATE_COST_PER_SELLING_UNIT_DIRECTLY_WITH_FACTOR_1_"
-                "WITHOUT_ASSERTING_BASE_INVENTORY_UOM"
-            ),
-            "selling_uom": selling,
-            "cost_uom": cost_uom,
-        }
-
-    if base and factor is not None and cost_uom and base == cost_uom:
-        return {
-            "classification": "SERVING_CONVERSION_REBUILD_CANDIDATE",
-            "safe_to_auto_resolve": True,
-            "proposed_action": "REBUILD_COST_TO_SELLING_FROM_EXISTING_BASE_CONVERSION",
-            "selling_uom": selling,
-            "cost_uom": cost_uom,
-            "base_uom": base,
-            "factor": factor,
-        }
-
-    if selling == "PACK":
-        return {
-            "classification": "PACK_CONVERSION_EVIDENCE_NEEDED",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "REQUIRE_EXPLICIT_PACK_TO_COST_UOM_CONVERSION",
-            "selling_uom": selling,
-            "cost_uom": cost_uom,
-            "base_uom": base,
-            "factor": factor,
-        }
-
-    if not cost_uom:
-        return {
-            "classification": "AUTHORITATIVE_COST_UOM_MISSING",
-            "safe_to_auto_resolve": False,
-            "proposed_action": "REQUIRE_EXPLICIT_COST_UOM",
-            "selling_uom": selling,
-            "cost_uom": None,
-            "base_uom": base,
-            "factor": factor,
-        }
-
-    return {
-        "classification": "COST_UOM_SELLING_UOM_MISMATCH",
-        "safe_to_auto_resolve": False,
-        "proposed_action": "REQUIRE_EXPLICIT_CONVERSION_EVIDENCE",
-        "selling_uom": selling,
-        "cost_uom": cost_uom,
-        "base_uom": base,
-        "factor": factor,
-    }
 
 
 def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, Any]:
