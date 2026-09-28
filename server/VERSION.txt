@@ -1,5 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.142 Single-Service Edition
+Version: 7.0.143 Single-Service Edition
+
+v7.0.143 QA HOLD Batch Deletion:
+- Recent Uploads now shows Delete QA HOLD Batch only for raw-stage QA_HOLD batches.
+- Deletion is blocked if Phase 2C, Phase 3, or any downstream pipeline stage exists.
+- READY / successful batches cannot be deleted through this path.
+- Browser confirmation plus an exact backend confirmation token is required.
+- Eligible deletion removes raw rows, ingest errors, ingest columns/sheets/files, RAW_INGEST pipeline history, and the batch record.
+- This is intended for failed upload batches such as an unclassified source that never entered downstream processing.
+
 
 v7.0.142 OH Upload Classification Repair:
 - Standalone OH filename tokens are recognized as on_hand, including OH-*, OH_*, and OH <date> naming.
