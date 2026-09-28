@@ -27,7 +27,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item
 
-VERSION='7.0.111-single-service'
+VERSION='7.0.112-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -246,9 +246,8 @@ class AdminLoginRequest(BaseModel):
     password: str
 
 class V2PromotionItem(BaseModel):
-    family_article_number: str|None=None
-    family_id: int|None=None
-    promotion_price: Decimal|None=None
+    upc: str
+    promotion_price: Decimal
 
 class V2BulkOrderingRequest(BaseModel):
     order_type: str
