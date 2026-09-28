@@ -6,7 +6,7 @@ from typing import Any
 
 from db import db_conn
 from data_coverage import source_data_days
-from business_clock import business_today
+from business_clock import business_today, completed_through_date
 from inventory_position import latest_canonical_movement_day, rollforward_position, UNRESTRICTED_APPLY_AS_SIGNED, UNRESTRICTED_NO_EFFECT
 
 
@@ -820,6 +820,323 @@ def _qc_decimal(value: Any) -> Decimal | None:
         return None
 
 
+
+def _quick_check_daily_sales(
+    cur,
+    row: dict[str, Any],
+    limit: int = 28,
+) -> list[dict[str, Any]]:
+    """Canonical completed POS data-day series for GP$ + average selling price.
+
+    Direct single-day files and approved one-gap residual backfills use the same
+    canonical data-day rules as Quick Check velocity. Multi-gap period reports
+    remain source-period evidence and are not expanded into invented daily rows.
+    """
+    upc_id = int(row["upc_id"])
+    family_id = int(row["family_id"])
+    data_days = source_data_days(
+        cur,
+        "sales_by_price_type",
+        limit=max(1, min(int(limit or 28), 60)),
+        up_to=completed_through_date(),
+    )
+    if not data_days:
+        return []
+
+    daily: dict[date, dict[str, Decimal]] = {}
+    direct_days = [
+        d for d in data_days
+        if d.get("coverage_kind") != "DERIVED_PERIOD_RESIDUAL"
+    ]
+    if direct_days:
+        clauses: list[str] = []
+        args: list[Any] = []
+        for d in direct_days:
+            clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
+            args.extend([int(d["file_id"]), d["date"], d["date"]])
+        cur.execute(
+            f"""SELECT period_end_date AS business_date,
+                       COALESCE(SUM(sales_amount),0) AS sales_amount,
+                       COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND ({' OR '.join(clauses)})
+                  AND upc_id=%s
+                GROUP BY period_end_date""",
+            tuple(args) + (upc_id,),
+        )
+        for r in cur.fetchall():
+            daily[r["business_date"]] = {
+                "sales": Decimal(str(r.get("sales_amount") or 0)),
+                "qty": Decimal(str(r.get("sold_quantity") or 0)),
+            }
+
+    derived_days = [
+        d for d in data_days
+        if d.get("coverage_kind") == "DERIVED_PERIOD_RESIDUAL"
+    ]
+    if derived_days and _table_exists(cur, "pos_daily_backfill_observation"):
+        clauses = []
+        args = []
+        for d in derived_days:
+            clauses.append("(source_file_id=%s AND business_date=%s)")
+            args.extend([int(d["file_id"]), d["date"]])
+        cur.execute(
+            f"""SELECT business_date,
+                       COALESCE(SUM(sales_amount),0) AS sales_amount,
+                       COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                FROM pos_daily_backfill_observation
+                WHERE ({' OR '.join(clauses)})
+                  AND upc_id=%s
+                GROUP BY business_date""",
+            tuple(args) + (upc_id,),
+        )
+        for r in cur.fetchall():
+            d = r["business_date"]
+            prev = daily.get(d, {"sales": Decimal("0"), "qty": Decimal("0")})
+            daily[d] = {
+                "sales": prev["sales"] + Decimal(str(r.get("sales_amount") or 0)),
+                "qty": prev["qty"] + Decimal(str(r.get("sold_quantity") or 0)),
+            }
+
+    factor = _qc_decimal(row.get("base_qty_per_selling_unit"))
+    selling_uom = str(row.get("selling_uom") or "").strip().upper()
+    base_uom = str(row.get("base_uom") or "").strip().upper()
+    if factor is None and selling_uom and base_uom and selling_uom == base_uom:
+        factor = Decimal("1")
+
+    max_day = max(d["date"] for d in data_days)
+    cur.execute(
+        """SELECT business_date,cost_observation_id,source_type,
+                  COALESCE(cost_per_base_uom,cost_amount) AS c,
+                  CASE
+                    WHEN source_type='MOVEMENT_RECEIPT_VALUATION' THEN 1
+                    WHEN source_type='ON_HAND_EXPLICIT_COST_FALLBACK' THEN 2
+                    WHEN source_type IN (
+                        'FROZEN_INVENTORY_OFFICIAL_COST',
+                        'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+                    ) THEN 3
+                    WHEN source_type='USER_CONFIRMED_FAMILY_COST' THEN 4
+                    ELSE 9
+                  END AS source_priority
+           FROM article_cost_observation
+           WHERE family_id=%s
+             AND business_date<=%s
+             AND cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND COALESCE(cost_per_base_uom,cost_amount)>0
+           ORDER BY source_priority ASC,business_date DESC,cost_observation_id DESC""",
+        (family_id, max_day),
+    )
+    cost_rows = cur.fetchall()
+
+    out: list[dict[str, Any]] = []
+    for data_day in sorted(data_days, key=lambda x: x["date"]):
+        d = data_day["date"]
+        obs = daily.get(d, {"sales": Decimal("0"), "qty": Decimal("0")})
+        sales = obs["sales"]
+        qty = obs["qty"]
+        avg_price = (sales / qty) if qty != 0 else None
+
+        applicable_cost = None
+        cost_source = None
+        cost_date = None
+        if factor is not None:
+            for cr in cost_rows:
+                if cr.get("business_date") is not None and cr["business_date"] <= d:
+                    applicable_cost = Decimal(str(cr["c"])) * factor
+                    cost_source = cr.get("source_type")
+                    cost_date = cr.get("business_date")
+                    break
+
+        gp_dollars = (
+            sales - (qty * applicable_cost)
+            if applicable_cost is not None
+            else None
+        )
+        out.append(
+            {
+                "business_date": d,
+                "sales_amount": sales,
+                "sold_quantity": qty,
+                "avg_sold_price": avg_price,
+                "applicable_cost_per_selling_unit": applicable_cost,
+                "applicable_cost_source": cost_source,
+                "applicable_cost_date": cost_date,
+                "gp_dollars": gp_dollars,
+                "selling_uom": row.get("selling_uom"),
+                "coverage_kind": data_day.get("coverage_kind"),
+            }
+        )
+    return out
+
+
+def _quick_check_price_velocity_history(
+    daily_sales: list[dict[str, Any]],
+    max_points: int = 8,
+) -> list[dict[str, Any]]:
+    buckets: dict[Decimal, dict[str, Any]] = {}
+    for r in daily_sales:
+        qty = _qc_decimal(r.get("sold_quantity")) or Decimal("0")
+        price = _qc_decimal(r.get("avg_sold_price"))
+        if price is None or qty <= 0:
+            continue
+        price_key = price.quantize(Decimal("0.01"))
+        bucket = buckets.setdefault(
+            price_key,
+            {
+                "price": price_key,
+                "sold_quantity": Decimal("0"),
+                "data_days": 0,
+                "gp_dollars": Decimal("0"),
+                "gp_days": 0,
+                "last_date": None,
+            },
+        )
+        bucket["sold_quantity"] += qty
+        bucket["data_days"] += 1
+        gp = _qc_decimal(r.get("gp_dollars"))
+        if gp is not None:
+            bucket["gp_dollars"] += gp
+            bucket["gp_days"] += 1
+        d = r.get("business_date")
+        if d is not None and (bucket["last_date"] is None or d > bucket["last_date"]):
+            bucket["last_date"] = d
+
+    rows: list[dict[str, Any]] = []
+    for b in buckets.values():
+        days = int(b["data_days"])
+        rows.append(
+            {
+                "price": b["price"],
+                "velocity": (b["sold_quantity"] / Decimal(days)) if days else None,
+                "sold_quantity": b["sold_quantity"],
+                "data_days": days,
+                "gp_per_day": (
+                    b["gp_dollars"] / Decimal(b["gp_days"])
+                    if b["gp_days"] == days and days > 0
+                    else None
+                ),
+                "last_date": b["last_date"],
+            }
+        )
+    rows.sort(key=lambda x: (x.get("last_date") or date.min, x.get("price") or Decimal("0")), reverse=True)
+    return rows[: max(1, min(int(max_points or 8), 20))]
+
+
+def _quick_check_metric_trends(
+    row: dict[str, Any],
+    daily_sales: list[dict[str, Any]],
+) -> dict[str, Any]:
+    ordered = sorted(daily_sales, key=lambda x: x["business_date"])
+    current = ordered[-7:]
+    previous = ordered[-14:-7] if len(ordered) >= 14 else []
+
+    def _sum(block: list[dict[str, Any]], key: str) -> Decimal | None:
+        vals = [_qc_decimal(x.get(key)) for x in block]
+        if not vals:
+            return None
+        return sum((v or Decimal("0") for v in vals), Decimal("0"))
+
+    def _weighted_price(block: list[dict[str, Any]]) -> Decimal | None:
+        sales = _sum(block, "sales_amount")
+        qty = _sum(block, "sold_quantity")
+        if sales is None or qty is None or qty == 0:
+            return None
+        return sales / qty
+
+    def _gp_per_day(block: list[dict[str, Any]]) -> Decimal | None:
+        if not block or any(_qc_decimal(x.get("gp_dollars")) is None for x in block):
+            return None
+        total = sum((_qc_decimal(x.get("gp_dollars")) or Decimal("0") for x in block), Decimal("0"))
+        return total / Decimal(len(block))
+
+    def _latest_cost(block: list[dict[str, Any]]) -> Decimal | None:
+        for x in reversed(block):
+            v = _qc_decimal(x.get("applicable_cost_per_selling_unit"))
+            if v is not None:
+                return v
+        return None
+
+    def _trend(current_value: Decimal | None, previous_value: Decimal | None, unit: str) -> dict[str, Any]:
+        if current_value is None or previous_value is None:
+            return {
+                "direction": "NA",
+                "current": current_value,
+                "previous": previous_value,
+                "delta": None,
+                "unit": unit,
+            }
+        delta = current_value - previous_value
+        return {
+            "direction": "UP" if delta > 0 else ("DOWN" if delta < 0 else "FLAT"),
+            "current": current_value,
+            "previous": previous_value,
+            "delta": delta,
+            "unit": unit,
+        }
+
+    current_qty = _sum(current, "sold_quantity")
+    previous_qty = _sum(previous, "sold_quantity")
+    current_velocity = (
+        current_qty / Decimal(len(current))
+        if current_qty is not None and current
+        else None
+    )
+    previous_velocity = (
+        previous_qty / Decimal(len(previous))
+        if previous_qty is not None and previous
+        else None
+    )
+    current_avg_price = _weighted_price(current)
+    previous_avg_price = _weighted_price(previous)
+
+    configured_price = _qc_decimal(row.get("current_price"))
+    previous_distinct_price = None
+    if configured_price is not None:
+        for x in reversed(ordered):
+            p = _qc_decimal(x.get("avg_sold_price"))
+            if p is not None and abs(p - configured_price) >= Decimal("0.005"):
+                previous_distinct_price = p
+                break
+    if previous_distinct_price is None:
+        previous_distinct_price = previous_avg_price
+
+    current_cost = _qc_decimal(row.get("current_cost_per_selling_unit"))
+    previous_cost = _latest_cost(previous)
+    current_gp_pct = _qc_decimal(row.get("gp_pct_current"))
+    previous_gp_pct = None
+    if previous_avg_price is not None and previous_avg_price > 0 and previous_cost is not None:
+        previous_gp_pct = (previous_avg_price - previous_cost) / previous_avg_price
+
+    current_gp_day = _qc_decimal(row.get("gp_per_day_7d"))
+    calculated_current_gp_day = _gp_per_day(current)
+    if current_gp_day is None:
+        current_gp_day = calculated_current_gp_day
+    previous_gp_day = _gp_per_day(previous)
+
+    current_gp_total = _qc_decimal(row.get("gp_dollars_7d"))
+    if current_gp_total is None and current:
+        current_gp_total = _sum(current, "gp_dollars")
+    previous_gp_total = _sum(previous, "gp_dollars") if previous and all(
+        _qc_decimal(x.get("gp_dollars")) is not None for x in previous
+    ) else None
+
+    selling_uom = str(row.get("selling_uom") or "").strip() or "unit"
+    result = {
+        "basis": "CURRENT_7_COMPLETED_POS_DATA_DAYS_VS_PREVIOUS_7_COMPLETED_POS_DATA_DAYS",
+        "current_data_days": len(current),
+        "previous_data_days": len(previous),
+        "price": _trend(configured_price, previous_distinct_price, f"$/{selling_uom}"),
+        "cost": _trend(current_cost, previous_cost, f"$/{selling_uom}"),
+        "gp_pct": _trend(current_gp_pct, previous_gp_pct, "ratio"),
+        "gp_dollars_7d": _trend(current_gp_total, previous_gp_total, "$/7D"),
+        "gp_per_day": _trend(current_gp_day, previous_gp_day, "$/day"),
+        "qty_7d": _trend(current_qty, previous_qty, f"{selling_uom}/7D"),
+        "velocity": _trend(current_velocity, previous_velocity, f"{selling_uom}/day"),
+    }
+    return result
+
+
 def _quick_check_sales_trend(
     cur,
     upc_id: int,
@@ -1169,6 +1486,9 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
         actual_position = _actual_position(cur, true_stock)
         true_stock_history = _true_stock_history(cur, system_oh)
         sales_trend = _quick_check_sales_trend(cur, int(row["upc_id"]))
+        daily_sales_trend = _quick_check_daily_sales(cur, row, limit=28)
+        price_velocity_history = _quick_check_price_velocity_history(daily_sales_trend)
+        metric_trends = _quick_check_metric_trends(row, daily_sales_trend)
         cost_trend = _quick_check_cost_trend(cur, family_id)
 
         cur.execute(
@@ -1283,6 +1603,15 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             "latest_on_hand_file_id": latest_oh_file_id,
             "promotion": promotion,
             "sales_trend": sales_trend,
+            "daily_sales_trend": daily_sales_trend,
+            "price_velocity_history": price_velocity_history,
+            "metric_trends": metric_trends,
+            "sweet_spot": {
+                "price": row.get("sweet_spot_price"),
+                "basis": "HISTORICAL_MAX_AVG_GP_DOLLARS_PER_COMPLETED_POS_DATA_DAY",
+                "window": "LATEST_30_COMPLETED_POS_DATA_DAYS",
+                "selling_uom": row.get("selling_uom"),
+            },
             "cost_trend": cost_trend,
             "highlights": highlights,
             "family_relationships": family_relationships,
