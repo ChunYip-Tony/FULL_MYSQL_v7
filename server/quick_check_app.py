@@ -2575,6 +2575,7 @@ def ensure_order_workflow_tables(cur) -> None:
                 delivery_date DATE NOT NULL,
                 workflow_status VARCHAR(32) NOT NULL DEFAULT 'DRAFT',
                 notes VARCHAR(255) NULL,
+                external_order_reference VARCHAR(128) NULL,
                 created_by VARCHAR(128) NOT NULL,
                 created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
                 updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
@@ -2598,11 +2599,14 @@ def ensure_order_workflow_tables(cur) -> None:
                 order_draft_id BIGINT UNSIGNED NOT NULL,
                 upc_id BIGINT UNSIGNED NULL,
                 ean_upc VARCHAR(32) NOT NULL,
+                article_id BIGINT UNSIGNED NULL,
                 article_number VARCHAR(64) NULL,
                 family_id BIGINT UNSIGNED NULL,
                 main_article_number VARCHAR(64) NULL,
                 selling_description VARCHAR(255) NULL,
                 selling_uom VARCHAR(32) NULL,
+                base_uom VARCHAR(32) NULL,
+                base_qty_per_selling_unit DECIMAL(24,8) NULL,
                 suggested_qty DECIMAL(24,8) NOT NULL,
                 final_qty DECIMAL(24,8) NOT NULL,
                 effective_oh DECIMAL(24,8) NULL,
@@ -2630,6 +2634,46 @@ def ensure_order_workflow_tables(cur) -> None:
                   ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
             """
+        )
+
+
+    if not _column_exists(cur, "order_draft", "external_order_reference"):
+        cur.execute(
+            """ALTER TABLE order_draft
+               ADD COLUMN external_order_reference VARCHAR(128) NULL
+               AFTER notes"""
+        )
+    added_identity_column = False
+    if not _column_exists(cur, "order_draft_line", "article_id"):
+        cur.execute(
+            """ALTER TABLE order_draft_line
+               ADD COLUMN article_id BIGINT UNSIGNED NULL
+               AFTER ean_upc"""
+        )
+        added_identity_column = True
+    if not _column_exists(cur, "order_draft_line", "base_uom"):
+        cur.execute(
+            """ALTER TABLE order_draft_line
+               ADD COLUMN base_uom VARCHAR(32) NULL
+               AFTER selling_uom"""
+        )
+        added_identity_column = True
+    if not _column_exists(cur, "order_draft_line", "base_qty_per_selling_unit"):
+        cur.execute(
+            """ALTER TABLE order_draft_line
+               ADD COLUMN base_qty_per_selling_unit DECIMAL(24,8) NULL
+               AFTER base_uom"""
+        )
+        added_identity_column = True
+    if added_identity_column and _table_exists(cur, "quick_check_current"):
+        cur.execute(
+            """UPDATE order_draft_line l
+               JOIN quick_check_current q ON q.ean_upc=l.ean_upc
+               SET l.article_id=COALESCE(l.article_id,q.article_id),
+                   l.base_uom=COALESCE(l.base_uom,q.base_uom),
+                   l.base_qty_per_selling_unit=COALESCE(
+                     l.base_qty_per_selling_unit,q.base_qty_per_selling_unit
+                   )"""
         )
 
 
@@ -2699,15 +2743,15 @@ def add_order_recommendation_to_draft(
 
             cur.execute(
                 """INSERT INTO order_draft_line
-                   (order_draft_id,upc_id,ean_upc,article_number,family_id,
-                    main_article_number,selling_description,selling_uom,
-                    suggested_qty,final_qty,effective_oh,effective_oh_uom,
+                   (order_draft_id,upc_id,ean_upc,article_id,article_number,family_id,
+                    main_article_number,selling_description,selling_uom,base_uom,
+                    base_qty_per_selling_unit,suggested_qty,final_qty,effective_oh,effective_oh_uom,
                     velocity_7d,days_supply,current_price,current_price_type,
                     ordering_policy_id,ordering_policy_scope_type,
                     ordering_policy_scope_key,source_publish_batch_id,
                     source_published_at,created_by,updated_by)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                           %s,%s,%s,%s,%s,%s,%s)
+                           %s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                    ON DUPLICATE KEY UPDATE
                      suggested_qty=VALUES(suggested_qty),
                      effective_oh=VALUES(effective_oh),
@@ -2725,9 +2769,10 @@ def add_order_recommendation_to_draft(
                      updated_at=CURRENT_TIMESTAMP(6)""",
                 (
                     draft_id,item.get("upc_id"),item.get("ean_upc"),
-                    item.get("article_number"),item.get("family_id"),
+                    item.get("article_id"),item.get("article_number"),item.get("family_id"),
                     item.get("main_article_number"),item.get("selling_description"),
-                    item.get("selling_uom"),suggested,suggested,
+                    item.get("selling_uom"),item.get("base_uom"),
+                    item.get("base_qty_per_selling_unit"),suggested,suggested,
                     effective.get("quantity"),effective.get("uom"),
                     ordering.get("velocity_7d"),ordering.get("days_supply"),
                     item.get("current_price"),item.get("current_price_type"),
@@ -2822,7 +2867,7 @@ def order_draft_history(
         params.append(limit)
         cur.execute(
             f"""SELECT d.order_draft_id,d.order_date,d.delivery_date,d.workflow_status,
-                       d.notes,d.created_by,d.created_at,d.updated_at,
+                       d.notes,d.external_order_reference,d.created_by,d.created_at,d.updated_at,
                        d.confirmed_by,d.confirmed_at,d.submitted_by,d.submitted_at,
                        d.cancelled_by,d.cancelled_at,
                        COUNT(l.order_draft_line_id) AS line_count,
@@ -2839,8 +2884,9 @@ def order_draft_history(
         drafts = cur.fetchall()
         for draft in drafts:
             cur.execute(
-                """SELECT order_draft_line_id,ean_upc,article_number,family_id,
+                """SELECT order_draft_line_id,ean_upc,article_id,article_number,family_id,
                           main_article_number,selling_description,selling_uom,
+                          base_uom,base_qty_per_selling_unit,
                           suggested_qty,final_qty,effective_oh,effective_oh_uom,
                           velocity_7d,days_supply,current_price,current_price_type,
                           ordering_policy_id,ordering_policy_scope_type,
@@ -2861,11 +2907,364 @@ def order_draft_history(
     }
 
 
+def _norm_external_reference(value: Any) -> str | None:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return None
+    compact = "".join(ch for ch in raw if ch.isalnum())
+    if compact.isdigit():
+        compact = compact.lstrip("0") or "0"
+    return compact or None
+
+
+def _norm_order_uom(value: Any) -> str | None:
+    raw = str(value or "").strip().upper()
+    aliases = {
+        "PAC":"PACK",
+        "PK":"PACK",
+        "PKG":"PACK",
+        "EACH":"EA",
+        "EACHES":"EA",
+        "PCS":"EA",
+        "PC":"EA",
+        "LBS":"LB",
+    }
+    return aliases.get(raw, raw or None)
+
+
+def _receipt_qty_in_selling_uom(
+    row: dict[str, Any],
+    line: dict[str, Any],
+) -> tuple[Decimal | None,str|None,str|None]:
+    selling_uom = _norm_order_uom(line.get("selling_uom"))
+    base_uom = _norm_order_uom(line.get("base_uom"))
+    row_base_uom = _norm_order_uom(row.get("base_uom_code"))
+    row_entry_uom = _norm_order_uom(row.get("entry_uom_code"))
+    base_qty = _qc_decimal(row.get("base_quantity"))
+    entry_qty = _qc_decimal(row.get("entry_quantity"))
+    factor = _qc_decimal(line.get("base_qty_per_selling_unit"))
+
+    if selling_uom and row_entry_uom == selling_uom and entry_qty is not None:
+        return entry_qty, selling_uom, "ENTRY_UOM_DIRECT"
+    if selling_uom and row_base_uom == selling_uom and base_qty is not None:
+        return base_qty, selling_uom, "BASE_UOM_DIRECT"
+    if (
+        selling_uom and base_uom and row_base_uom == base_uom
+        and base_qty is not None and factor is not None and factor > 0
+    ):
+        return base_qty / factor, selling_uom, "BASE_TO_SELLING_FACTOR"
+    return None, selling_uom, "UOM_CONVERSION_UNRESOLVED"
+
+
+def _canonical_receipt_rows_for_line(
+    cur,
+    *,
+    line: dict[str, Any],
+    order_date: date,
+    end_exclusive: date,
+    external_reference: str | None,
+) -> dict[str, Any]:
+    days = source_data_days(cur,"movement",up_to=end_exclusive-timedelta(days=1))
+    canonical_by_date = {
+        d["date"]: int(d["file_id"])
+        for d in days
+        if d["date"] >= order_date and d["date"] < end_exclusive
+    }
+    if not canonical_by_date:
+        return {
+            "rows":[],
+            "all_identity_rows":[],
+            "data_through":None,
+            "match_basis":"NO_CANONICAL_MOVEMENT_DAYS",
+            "identity_basis":None,
+        }
+
+    article_id = line.get("article_id")
+    family_id = line.get("family_id")
+    if article_id is not None:
+        identity_sql = "article_id=%s"
+        identity_arg = int(article_id)
+        identity_basis = "ARTICLE"
+    elif family_id is not None:
+        identity_sql = "family_id=%s"
+        identity_arg = int(family_id)
+        identity_basis = "FAMILY_FALLBACK"
+    else:
+        return {
+            "rows":[],
+            "all_identity_rows":[],
+            "data_through":max(canonical_by_date),
+            "match_basis":"IDENTITY_UNRESOLVED",
+            "identity_basis":None,
+        }
+
+    file_ids=sorted(set(canonical_by_date.values()))
+    placeholders=",".join(["%s"]*len(file_ids))
+    cur.execute(
+        f"""SELECT file_id,raw_id,source_row_number,article_id,article_number,family_id,
+                   movement_type,posting_date,entry_quantity,entry_uom_code,
+                   base_quantity,base_uom_code,amount_local_currency,
+                   article_document,purchase_order,vendor_code
+            FROM movement_history
+            WHERE file_id IN ({placeholders})
+              AND {identity_sql}
+              AND movement_type IN ('101','102','107','108','109','110')
+              AND posting_date>=%s AND posting_date<%s
+            ORDER BY posting_date,file_id,raw_id,source_row_number""",
+        (*file_ids,identity_arg,order_date,end_exclusive),
+    )
+    identity_rows=[]
+    for row in cur.fetchall():
+        posting=row.get("posting_date")
+        fid=int(row.get("file_id"))
+        if posting is None or canonical_by_date.get(posting)!=fid:
+            continue
+        identity_rows.append(row)
+
+    normalized_ref=_norm_external_reference(external_reference)
+    if normalized_ref:
+        matched=[]
+        for row in identity_rows:
+            po=_norm_external_reference(row.get("purchase_order"))
+            doc=_norm_external_reference(row.get("article_document"))
+            if normalized_ref in {po,doc}:
+                row=dict(row)
+                row["reference_match_field"]=(
+                    "PURCHASE_ORDER" if normalized_ref==po else "ARTICLE_DOCUMENT"
+                )
+                matched.append(row)
+        match_basis="EXTERNAL_REFERENCE_EXACT"
+    else:
+        matched=[dict(x) for x in identity_rows]
+        match_basis="ORDER_WINDOW_FALLBACK"
+
+    return {
+        "rows":matched,
+        "all_identity_rows":identity_rows,
+        "data_through":max(canonical_by_date),
+        "match_basis":match_basis,
+        "identity_basis":identity_basis,
+    }
+
+
+def order_delivery_reconciliation(order_draft_id: int) -> dict[str, Any]:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        ensure_order_workflow_tables(cur)
+        conn.commit()
+        cur.execute(
+            """SELECT order_draft_id,order_date,delivery_date,workflow_status,
+                      external_order_reference,created_by,created_at,
+                      confirmed_at,submitted_at
+               FROM order_draft
+               WHERE order_draft_id=%s""",
+            (int(order_draft_id),),
+        )
+        draft=cur.fetchone()
+        if not draft:
+            cur.close()
+            raise KeyError("ORDER_DRAFT_NOT_FOUND")
+
+        cur.execute(
+            """SELECT order_draft_line_id,ean_upc,article_id,article_number,
+                      family_id,main_article_number,selling_description,
+                      selling_uom,base_uom,base_qty_per_selling_unit,
+                      suggested_qty,final_qty,effective_oh,effective_oh_uom,
+                      velocity_7d,days_supply,current_price,current_price_type
+               FROM order_draft_line
+               WHERE order_draft_id=%s
+               ORDER BY selling_description,ean_upc""",
+            (int(order_draft_id),),
+        )
+        lines=cur.fetchall()
+        today=business_today()
+        output_lines=[]
+
+        for line in lines:
+            cur.execute(
+                """SELECT MIN(d2.order_date) AS next_order_date
+                   FROM order_draft_line l2
+                   JOIN order_draft d2 ON d2.order_draft_id=l2.order_draft_id
+                   WHERE l2.ean_upc=%s
+                     AND d2.order_date>%s
+                     AND d2.workflow_status IN ('CONFIRMED','MARKED_SUBMITTED')""",
+                (line.get("ean_upc"),draft["order_date"]),
+            )
+            next_row=cur.fetchone() or {}
+            next_order_date=next_row.get("next_order_date")
+            natural_end=today+timedelta(days=1)
+            end_exclusive=(
+                min(natural_end,next_order_date)
+                if next_order_date else natural_end
+            )
+            evidence=_canonical_receipt_rows_for_line(
+                cur,
+                line=line,
+                order_date=draft["order_date"],
+                end_exclusive=end_exclusive,
+                external_reference=draft.get("external_order_reference"),
+            )
+            rows=evidence["rows"]
+            compatible=[]
+            incompatible=[]
+            for row in rows:
+                qty,uom,conversion=_receipt_qty_in_selling_uom(row,line)
+                enriched=dict(row)
+                enriched["selling_equivalent_quantity"]=qty
+                enriched["selling_equivalent_uom"]=uom
+                enriched["conversion_basis"]=conversion
+                if qty is None:
+                    incompatible.append(enriched)
+                else:
+                    compatible.append(enriched)
+
+            direct_rows=[r for r in compatible if str(r.get("movement_type")) in {"101","102"}]
+            blocked_rows=[r for r in compatible if str(r.get("movement_type")) in {"107","108"}]
+            release_rows=[r for r in compatible if str(r.get("movement_type")) in {"109","110"}]
+
+            def _sum(rows_: list[dict[str,Any]]) -> Decimal:
+                return sum(
+                    (Decimal(str(r["selling_equivalent_quantity"])) for r in rows_),
+                    Decimal("0"),
+                )
+
+            if direct_rows or blocked_rows:
+                received=_sum(direct_rows)+_sum(blocked_rows)
+                receipt_basis="PHYSICAL_RECEIPT_101_107_NET_REVERSALS"
+                ignored_release_count=len(release_rows)
+            elif release_rows:
+                received=_sum(release_rows)
+                receipt_basis="109_RELEASE_ONLY_FALLBACK"
+                ignored_release_count=0
+            else:
+                received=Decimal("0")
+                receipt_basis="NO_COMPATIBLE_RECEIPT_EVIDENCE"
+                ignored_release_count=0
+
+            ordered=_qc_decimal(line.get("final_qty")) or Decimal("0")
+            variance=received-ordered
+            has_reversal=any(str(r.get("movement_type")) in {"102","108","110"} for r in compatible)
+            family_fallback=evidence.get("identity_basis")=="FAMILY_FALLBACK"
+            reference_unmatched=bool(
+                draft.get("external_order_reference")
+                and not rows
+                and evidence.get("all_identity_rows")
+            )
+
+            if draft.get("workflow_status") not in {"CONFIRMED","MARKED_SUBMITTED"}:
+                status="ORDER_NOT_READY_FOR_RECONCILIATION"
+            elif reference_unmatched:
+                status="REVIEW_REFERENCE_NOT_MATCHED"
+            elif incompatible:
+                status="REVIEW_UOM_CONVERSION"
+            elif family_fallback and rows:
+                status="REVIEW_FAMILY_IDENTITY"
+            elif has_reversal:
+                status="REVIEW_REVERSAL_PRESENT"
+            elif received == ordered:
+                status="MATCHED_COMPLETE"
+            elif received <= 0:
+                status=(
+                    "AWAITING_RECEIPT"
+                    if today <= draft["delivery_date"] else "NO_RECEIPT_MATCHED"
+                )
+            elif received < ordered:
+                status="PARTIAL_RECEIPT"
+            else:
+                status="OVER_RECEIVED"
+
+            output_lines.append({
+                **line,
+                "ordered_qty":ordered,
+                "received_qty":received,
+                "variance_qty":variance,
+                "reconciliation_status":status,
+                "receipt_basis":receipt_basis,
+                "match_basis":evidence.get("match_basis"),
+                "identity_basis":evidence.get("identity_basis"),
+                "window_start":draft["order_date"],
+                "window_end_exclusive":end_exclusive,
+                "next_order_date":next_order_date,
+                "movement_data_through":evidence.get("data_through"),
+                "receipt_row_count":len(rows),
+                "compatible_receipt_row_count":len(compatible),
+                "incompatible_receipt_row_count":len(incompatible),
+                "ignored_109_110_row_count":ignored_release_count,
+                "receipt_evidence":compatible,
+                "uom_blocked_evidence":incompatible,
+            })
+
+        statuses=[str(x.get("reconciliation_status") or "") for x in output_lines]
+        if not output_lines:
+            overall="NO_LINES"
+        elif any(s.startswith("REVIEW_") for s in statuses):
+            overall="REVIEW_REQUIRED"
+        elif all(s=="MATCHED_COMPLETE" for s in statuses):
+            overall="COMPLETE"
+        elif any(s in {"PARTIAL_RECEIPT","OVER_RECEIVED","NO_RECEIPT_MATCHED"} for s in statuses):
+            overall="EXCEPTION"
+        else:
+            overall="OPEN"
+
+        cur.close()
+    return {
+        "contract_version":"DELIVERY_RECONCILIATION_V1",
+        "order_draft_id":int(order_draft_id),
+        "order_date":draft.get("order_date"),
+        "delivery_date":draft.get("delivery_date"),
+        "workflow_status":draft.get("workflow_status"),
+        "external_order_reference":draft.get("external_order_reference"),
+        "overall_status":overall,
+        "line_count":len(output_lines),
+        "lines":output_lines,
+        "receipt_policy":{
+            "canonical_movement_files_only":True,
+            "physical_receipt_types":["101","107"],
+            "receipt_reversal_types":["102","108"],
+            "release_fallback_types":["109","110"],
+            "rule_109_110":"Ignored when 101/102 or 107/108 receipt-stage evidence exists; otherwise used as release-only fallback.",
+            "movement_107_inventory_effect":"NO_UNRESTRICTED_EFFECT; used here only as receiving evidence.",
+        },
+    }
+
+
+def update_order_external_reference(
+    order_draft_id: int,
+    *,
+    external_order_reference: str | None,
+    device: str,
+) -> dict[str, Any]:
+    ref=str(external_order_reference or "").strip()[:128] or None
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        ensure_order_workflow_tables(cur)
+        conn.commit()
+        cur.execute(
+            """UPDATE order_draft
+               SET external_order_reference=%s,updated_at=CURRENT_TIMESTAMP(6)
+               WHERE order_draft_id=%s
+                 AND workflow_status IN ('DRAFT','CONFIRMED','MARKED_SUBMITTED')""",
+            (ref,int(order_draft_id)),
+        )
+        if int(cur.rowcount or 0)!=1:
+            cur.close()
+            raise ValueError("ORDER_DRAFT_REFERENCE_UPDATE_BLOCKED")
+        conn.commit()
+        cur.close()
+    return {
+        "status":"UPDATED",
+        "order_draft_id":int(order_draft_id),
+        "external_order_reference":ref,
+        "updated_by":device,
+    }
+
+
 def transition_order_draft(
     order_draft_id: int,
     *,
     action: str,
     note: str | None,
+    external_order_reference: str | None = None,
     device: str,
 ) -> dict[str, Any]:
     action_key = str(action or "").strip().upper()
@@ -2916,12 +3315,15 @@ def transition_order_draft(
                     (clean_note,device,int(order_draft_id)),
                 )
             elif action_key == "MARK_SUBMITTED":
+                ref=str(external_order_reference or "").strip()[:128] or None
                 cur.execute(
                     """UPDATE order_draft
-                       SET workflow_status='MARKED_SUBMITTED',notes=COALESCE(%s,notes),
+                       SET workflow_status='MARKED_SUBMITTED',
+                           notes=COALESCE(%s,notes),
+                           external_order_reference=COALESCE(%s,external_order_reference),
                            submitted_by=%s,submitted_at=CURRENT_TIMESTAMP(6)
                        WHERE order_draft_id=%s AND workflow_status='CONFIRMED'""",
-                    (clean_note,device,int(order_draft_id)),
+                    (clean_note,ref,device,int(order_draft_id)),
                 )
             else:
                 cur.execute(
