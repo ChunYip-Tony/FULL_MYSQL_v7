@@ -32,3 +32,10 @@ Deployment sequence:
 7. Keep FULLMYSQL_CHATGPT_BRIDGE_ACTIVE_SOURCE=HYBRID_SQLITE until FULL MYSQL analysis parity is approved; then change it to FULL_MYSQL.
 
 Never commit the service-account JSON to GitHub.
+
+
+# v7.0.104 Admin Console browser sessions
+# Optional but recommended encrypted secret. If omitted, the server derives a
+# signing key from the configured API tokens, so rotating API tokens also
+# invalidates all browser admin sessions.
+FULLMYSQL_ADMIN_SESSION_SECRET=<ENCRYPTED_RANDOM_SECRET>
