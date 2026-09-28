@@ -1003,8 +1003,12 @@ async function deleteQAHoldBatch(batchId,button){
     if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
     webUploadSession=null;
     $('uploadStatusCard').classList.add('hide');
-    if(msg)msg.textContent='Batch '+id+' deleted · '+fmt(d.file_count,0)+' file(s) removed.';
-    $('uploadMsg').textContent='Batch '+id+' deleted.';
+    let mode=String(d.delete_mode||'HARD_DELETE');
+    let done=mode==='HIDDEN_PRESERVE_LINEAGE'
+      ? 'Batch '+id+' removed from Upload History. Underlying lineage was preserved because later data references it.'
+      : 'Batch '+id+' deleted · '+fmt(d.file_count,0)+' file(s) removed.';
+    if(msg)msg.textContent=done;
+    $('uploadMsg').textContent=done;
     await loadWebUploadRecent();
     await loadWebUploadCalendar();
     await loadLatestReferenceUploads();
