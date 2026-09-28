@@ -25,9 +25,9 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
-from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report
+from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report
 
-VERSION='7.0.114-single-service'
+VERSION='7.0.115-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1879,25 +1879,6 @@ def app_v2_family_promotions(family_key:str):
         raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_FAMILY_NOT_FOUND'})
     except Exception as exc:
         raise HTTPException(500,f'V2 family promotion history failed: {exc}')
-    return json.loads(json.dumps(result,default=j))
-
-
-@app.post('/v1/app/v2/ordering/suggestions')
-def app_v2_bulk_ordering(body:V2BulkOrderingRequest):
-    try:
-        result=v2_bulk_ordering_suggestions(
-            body.order_type,
-            ordering_date=body.ordering_date,
-            expected_delivery_date=body.expected_delivery_date,
-            promotion_involved=body.promotion_involved,
-            promotion_start_date=body.promotion_start_date,
-            promotion_end_date=body.promotion_end_date,
-            promotion_items=[x.model_dump() for x in body.promotion_items],
-        )
-    except ValueError as exc:
-        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
-    except Exception as exc:
-        raise HTTPException(500,f'V2 bulk ordering failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
