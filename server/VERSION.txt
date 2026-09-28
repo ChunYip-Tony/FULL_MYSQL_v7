@@ -1,4 +1,17 @@
 FULL MYSQL Secure API Architecture
+Version: 7.0.132 Single-Service Edition
+
+v7.0.132 All-department OH routing:
+- Treat ON_HAND snapshots as multi-department sources instead of Seafood-only context.
+- SAP Mdse Cat. department lineage from the verified 2026-09-28 OH layout:
+  201... = Meat (300), 301.../302... = Produce (500), 401... = Seafood (400).
+- Preserve raw Unrestr. quantity and BUn exactly; department routing does not alter OH quantity or UOM.
+- Adds Article-level department observations so OH-only/historical items can enter the correct department analysis layer before POS/Price activity exists.
+- Department analysis membership can resolve from latest UPC POS/Price lineage or latest Article OH lineage.
+- Unknown merchandise categories remain unresolved rather than guessed.
+- Produce OH remains supporting evidence only for decisions.
+
+FULL MYSQL Secure API Architecture
 Version: 7.0.131 Single-Service Edition
 
 v7.0.131 Multi-department analysis enablement:
