@@ -211,12 +211,211 @@ body.detail-open .top{display:none}
   .qc-family-table{font-size:8.8px}.qc-family-table th,.qc-family-table td{padding:5px 4px}
 }
 
+
+/* v7.0.126 global fish-market design system */
+:root{
+  --fm-navy:#043a59;--fm-navy2:#075d7b;--fm-blue:#0b67a5;--fm-blue2:#07558c;
+  --fm-ice:#f7fcff;--fm-ice2:#e3f2f8;--fm-ink:#0c2941;--fm-sub:#49677a;
+  --fm-border:rgba(102,157,182,.32);--fm-shadow:0 5px 15px rgba(0,39,59,.18);
+  --fm-green:#15723b;--fm-red:#c92a2f;--fm-orange:#f28a22
+}
+body{
+  min-height:100vh;
+  background:
+    linear-gradient(rgba(2,50,74,.69),rgba(3,62,82,.74)),
+    radial-gradient(circle at 15% 10%,rgba(178,237,246,.30),transparent 28%),
+    radial-gradient(circle at 83% 48%,rgba(20,126,151,.27),transparent 28%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='170' viewBox='0 0 280 170'%3E%3Cg fill='none' stroke='%23d6f2f7' stroke-opacity='.13' stroke-width='2'%3E%3Cpath d='M12 37c25-19 55-19 80 0-25 20-55 20-80 0zm80 0 22-14v28z'/%3E%3Cpath d='M156 109c31-23 67-22 97 1-30 23-67 23-97-1zm97 1 25-16v32z'/%3E%3Cpath d='M46 145c13-10 29-10 42 0-13 11-29 11-42 0zm42 0 12-8v16z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:auto,auto,auto,280px 170px;
+  background-attachment:fixed;
+  color:var(--fm-ink)
+}
+.top{display:none!important}
+.w{max-width:980px;padding:8px 8px 18px}
+.screen{background:transparent!important;border-radius:0!important;padding:0 0 8px!important;backdrop-filter:none!important}
+
+/* Shared page header */
+.screen:not(#upc)>.head{
+  position:relative;overflow:hidden;min-height:64px;margin:0 -1px 8px;padding:9px 12px;
+  display:flex;align-items:center;gap:10px;border-radius:0 0 16px 16px;
+  background:
+    linear-gradient(180deg,rgba(3,55,82,.97),rgba(3,74,99,.93)),
+    radial-gradient(circle at 85% 20%,rgba(186,237,246,.18),transparent 30%);
+  border:1px solid rgba(214,242,249,.18);border-top:0;
+  box-shadow:0 5px 16px rgba(0,35,54,.23);color:#fff
+}
+.screen:not(#upc)>.head:before{
+  content:"🐟";position:absolute;right:20px;bottom:-15px;font-size:64px;opacity:.09;transform:rotate(-8deg);pointer-events:none
+}
+.screen:not(#upc)>.head .title{color:#fff;font-size:22px;font-weight:950;line-height:1.08}
+.screen:not(#upc)>.head .meta{color:#d6ecf4;font-size:11px;line-height:1.3;margin-top:3px}
+.screen:not(#upc)>.head .back{
+  position:relative;z-index:2;border:0!important;background:rgba(255,255,255,.08)!important;color:#fff!important;
+  width:42px;min-width:42px;height:42px;min-height:42px;padding:0;border-radius:50%!important;box-shadow:none!important
+}
+#ohreport>.head #ohrefresh{position:relative;z-index:2;background:rgba(255,255,255,.13)!important;border:1px solid rgba(255,255,255,.28)!important;color:#fff!important}
+
+/* Shared ice cards */
+.screen:not(#upc) .card,
+.screen:not(#upc) .metric-section,
+.screen:not(#upc) .group-block,
+.screen:not(#upc) .promo,
+.screen:not(#upc) .related-card,
+.screen:not(#upc) .order,
+.screen:not(#upc) .report-item{
+  background:linear-gradient(135deg,rgba(249,254,255,.97),rgba(226,243,249,.95))!important;
+  color:var(--fm-ink)!important;border:1px solid rgba(255,255,255,.72)!important;
+  border-radius:15px!important;padding:10px 11px!important;margin:8px 0!important;
+  box-shadow:var(--fm-shadow)!important
+}
+.screen:not(#upc) .metric-section{overflow:hidden}
+.screen:not(#upc) .metric-section-title,
+.screen:not(#upc) .group-title,
+.screen:not(#upc) .section{
+  color:#123c5a!important;font-size:14px!important;font-weight:950!important;
+  letter-spacing:.01em!important;text-transform:none!important;border:0!important;
+  padding:1px 0 7px!important;margin:0!important
+}
+.screen:not(#upc) .metric-section-title:before,
+.screen:not(#upc) .section:before{content:"▰ ";color:#1b6d9f;font-size:.8em}
+.screen:not(#upc) .metric-row{
+  padding:7px 0!important;border-bottom:1px solid rgba(82,129,153,.18)!important;gap:10px
+}
+.screen:not(#upc) .metric-row:last-child{border-bottom:0!important}
+.screen:not(#upc) .metric-key{font-size:11px!important;color:#456579!important;min-width:105px!important}
+.screen:not(#upc) .metric-value{font-size:14px!important;color:#0d2a42!important;font-weight:900!important}
+.screen:not(#upc) .metric-note{font-size:9px!important;color:#658092!important}
+.screen:not(#upc) .m{
+  background:rgba(255,255,255,.54)!important;border:1px solid rgba(105,157,181,.22)!important;
+  border-radius:10px!important;padding:8px!important;min-height:58px!important
+}
+.screen:not(#upc) .m .k{font-size:10px!important;color:#4b6b7d!important}
+.screen:not(#upc) .m .v{font-size:15px!important;color:#0d2941!important}
+
+/* Search bars + controls */
+.screen:not(#upc) .search-bar{
+  background:linear-gradient(135deg,rgba(248,253,255,.96),rgba(227,244,249,.94));
+  border:1px solid rgba(255,255,255,.72);border-radius:14px;padding:7px;margin:7px 0;
+  box-shadow:var(--fm-shadow);gap:6px
+}
+.screen:not(#upc) input,
+.screen:not(#upc) select{
+  background:rgba(255,255,255,.94)!important;color:#102c43!important;border:1px solid #b7d3e0!important;
+  border-radius:9px!important;min-height:42px!important;padding:8px 10px!important;font-size:14px!important;
+  box-shadow:inset 0 1px 2px rgba(0,46,69,.05)
+}
+.screen:not(#upc) input:focus,.screen:not(#upc) select:focus{
+  outline:2px solid rgba(14,107,166,.17)!important;border-color:#5b9fc3!important
+}
+.screen:not(#upc) label{font-size:11px!important;color:#42647b!important;margin-bottom:3px!important}
+.screen:not(#upc) button.primary{
+  background:linear-gradient(180deg,var(--fm-blue),var(--fm-blue2))!important;color:#fff!important;
+  border:0!important;border-radius:9px!important;min-height:42px!important;padding:8px 12px!important;
+  box-shadow:0 3px 8px rgba(0,75,119,.20)!important;font-size:13px!important
+}
+.screen:not(#upc) .clear-btn{
+  background:rgba(255,255,255,.70)!important;color:#49697e!important;border:1px solid #b9d2df!important;
+  border-radius:9px!important;min-height:42px!important;font-size:12px!important
+}
+.screen:not(#upc) button:not(.primary):not(.back):not(.clear-btn){
+  border-radius:9px;border-color:#b6d1de;background:rgba(248,253,255,.91);color:#164f73
+}
+
+/* Results and related entities */
+.screen:not(#upc) .result,
+.screen:not(#upc) .related-card{
+  position:relative;background:linear-gradient(135deg,rgba(249,254,255,.97),rgba(228,244,249,.95))!important;
+  border:1px solid rgba(255,255,255,.72)!important;border-radius:14px!important;
+  padding:10px 34px 10px 11px!important;margin:7px 0!important;box-shadow:var(--fm-shadow)!important
+}
+.screen:not(#upc) .result:after{color:#22658c!important}
+.screen:not(#upc) .family-result{
+  border-left:4px solid #0c70ad!important;background:linear-gradient(90deg,rgba(216,239,249,.98),rgba(246,252,255,.96))!important
+}
+.screen:not(#upc) .name,.screen:not(#upc) .related-upc,.screen:not(#upc) .result-upc,.screen:not(#upc) .result-number{color:#0d2941!important}
+.screen:not(#upc) .meta,.screen:not(#upc) .msg,.screen:not(#upc) .small{color:#526f81!important}
+.screen:not(#upc) .family-badge,.screen:not(#upc) .upc-type{
+  background:#dbeef9!important;color:#155c87!important;border:0!important;border-radius:999px!important
+}
+
+/* Pills */
+.screen:not(#upc) .pill{background:rgba(244,251,254,.86)!important;font-size:10px!important;padding:2px 7px!important}
+.screen:not(#upc) .pill.ok{color:var(--fm-green)!important}.screen:not(#upc) .pill.bad{color:var(--fm-red)!important}
+.screen:not(#upc) .pill.warn{color:#9d5b05!important}.screen:not(#upc) .pill.sale{color:#ad2f6f!important}
+
+/* Tables */
+.screen:not(#upc) .scroll{border-radius:10px;overflow:auto}
+.screen:not(#upc) table{font-size:11px!important;background:rgba(255,255,255,.28)}
+.screen:not(#upc) th{
+  background:rgba(185,220,235,.48)!important;color:#264d66!important;font-size:10px!important;
+  text-transform:none!important;letter-spacing:0!important;padding:7px 6px!important
+}
+.screen:not(#upc) td{padding:7px 6px!important;color:#14324a!important;border-bottom-color:rgba(80,127,151,.16)!important}
+
+/* Hints / promo / warnings */
+.screen:not(#upc) .hint{
+  background:rgba(221,241,249,.66)!important;border:1px solid rgba(126,176,198,.22)!important;border-left:4px solid #2f83ae!important;
+  border-radius:9px!important;padding:7px 9px!important;color:#4b687a!important;font-size:10px!important
+}
+.screen:not(#upc) .promo{border-left:4px solid #2d7fa9!important}
+.screen:not(#upc) .audit-ok,.screen:not(#upc) .review-actionable{border-left:4px solid var(--fm-green)!important}
+.screen:not(#upc) .audit-warn,.screen:not(#upc) .review-only,.screen:not(#upc) .report-item{border-left:4px solid var(--fm-orange)!important}
+.screen:not(#upc) .review-hold{border-left:4px solid var(--fm-red)!important}
+
+/* Charts and report areas */
+#price .chart{
+  background:rgba(255,255,255,.30)!important;border:1px solid rgba(95,148,173,.18)!important;border-radius:10px!important
+}
+#price .price-duo{gap:7px}
+#performance #persummary .grid,#performance #peranalysis .grid{gap:7px}
+#performance .hero-number,#performance .big{color:#0b2940!important}
+#ohreport>#ohmsg,#ohreport>#ohhmsg,#pi>#pim,#core>#cmsg{padding:0 4px;color:#d9eef5!important}
+#ohreport>.section{color:#fff!important;padding:8px 4px 3px!important}
+#ohreport>#ohfilter{max-width:220px;margin-left:4px}
+
+/* PI detail */
+#pid #pisum>.metric-section:first-child{border-top:4px solid #d58b18!important}
+#pid .card b{color:#123c5a}
+#pid #pamsg{margin-top:5px}
+
+/* Ordering */
+#corder .card:first-of-type{border-top:4px solid #176f9e!important}
+#corder #coout .order{border-left:4px solid #176f9e!important}
+#corder .form{gap:8px}
+
+/* Bottom navigation */
+.nav{
+  background:linear-gradient(180deg,rgba(3,54,79,.97),rgba(2,42,64,.99))!important;
+  border-top:1px solid rgba(212,242,250,.22)!important;box-shadow:0 -5px 16px rgba(0,30,47,.24)!important;
+  backdrop-filter:blur(14px)!important
+}
+.navin{gap:4px}
+.nav button{
+  color:#c7e3ee!important;background:transparent!important;border:0!important;min-height:55px!important;
+  font-size:9px!important;line-height:1.05!important;border-radius:10px!important;padding:5px 2px!important
+}
+.nav button.on{background:rgba(116,202,239,.15)!important;color:#fff!important}
+.nav button::first-line{font-size:18px}
+
+/* Compact phone layout across all modules */
+@media(max-width:560px){
+  body{padding-bottom:72px!important}.w{padding:0 6px 10px!important}
+  .screen:not(#upc)>.head{min-height:58px;margin:0 -1px 7px;padding:8px 9px}.screen:not(#upc)>.head .title{font-size:19px}.screen:not(#upc)>.head .meta{font-size:9.5px}
+  .screen:not(#upc) .card,.screen:not(#upc) .metric-section,.screen:not(#upc) .group-block,.screen:not(#upc) .promo,.screen:not(#upc) .related-card{padding:8px 9px!important;margin:6px 0!important;border-radius:12px!important}
+  .screen:not(#upc) .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:6px!important}
+  .screen:not(#upc) .form{gap:7px!important}
+  .screen:not(#upc) .metric-row{padding:6px 0!important}.screen:not(#upc) .metric-key{font-size:10px!important;min-width:92px!important}.screen:not(#upc) .metric-value{font-size:13px!important}
+  .screen:not(#upc) .search-bar{margin:6px 0;padding:6px}
+  .screen:not(#upc) table{font-size:10px!important}.screen:not(#upc) th,.screen:not(#upc) td{padding:6px 4px!important}
+  .nav button{min-height:52px!important}
+}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.125</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.126</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
-<section id="family" class="screen"><div class="head"><button class="back" data-go="core">←</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="metric-section blue"><div class="metric-section-title">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
+<section id="family" class="screen"><div class="head"><button class="back" data-go="core">‹</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="metric-section blue"><div class="metric-section-title">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
 
 <section id="upc" class="screen qc-screen">
 <div class="qc-shell">
@@ -252,19 +451,19 @@ body.detail-open .top{display:none}
 <div id="ut" class="hide"></div><div id="us" class="hide"></div><div id="usum" class="hide"></div><button id="uf" class="hide"></button><button id="upr" class="hide"></button><button id="uo" class="hide"></button>
 </section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="price-duo"><div class="metric-section pink"><div class="metric-section-title">Price vs Velocity History</div><div id="pvh"></div></div><div class="metric-section green"><div class="metric-section-title">Suggested Sweet Spot</div><div id="psweet"></div></div></div><div class="card"><div class="section">28 Supported-Day Sales Trend</div><div class="chart-scroll"><canvas id="chart" class="chart"></canvas></div><div class="row" style="margin-top:7px"><span class="pill" style="color:var(--gpbar)">▮ GP$</span><span class="pill" style="color:var(--pricecurve)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:6px">GP$ is shown as columns and Avg Selling Price as a curve. Every plotted value is labeled. Missing supported dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">‹</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="price-duo"><div class="metric-section pink"><div class="metric-section-title">Price vs Velocity History</div><div id="pvh"></div></div><div class="metric-section green"><div class="metric-section-title">Suggested Sweet Spot</div><div id="psweet"></div></div></div><div class="card"><div class="section">28 Supported-Day Sales Trend</div><div class="chart-scroll"><canvas id="chart" class="chart"></canvas></div><div class="row" style="margin-top:7px"><span class="pill" style="color:var(--gpbar)">▮ GP$</span><span class="pill" style="color:var(--pricecurve)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:6px">GP$ is shown as columns and Avg Selling Price as a curve. Every plotted value is labeled. Missing supported dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
-<section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
+<section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">‹</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
 <section id="ordering" class="screen hide" aria-hidden="true"><div class="head"><div><div class="title">📦 ORDERING</div><div class="meta">Family-level Fresh / Frozen ordering suggestions.</div></div></div><div class="card"><div class="form"><div><label>Fresh or Frozen</label><select id="ot"><option>FRESH</option><option>FROZEN</option></select></div><div><label>Ordering Date</label><input id="od" type="date"></div><div><label>Expected Delivery</label><input id="dd" type="date"></div><div><label>Context</label><select id="op"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="opa" class="hide"><div class="form" style="margin-top:8px"><div><label>Promotion Start</label><input id="ops" type="date"></div><div><label>Promotion End</label><input id="ope" type="date"></div></div><div class="row" style="margin-top:8px"><input id="oiq" class="grow" placeholder="Search promotion UPC or item name"><button id="ois">Search</button></div><div id="oim" class="msg"></div><div id="oir"></div><div id="oil"></div><div id="ohist"></div></div><button id="ogen" class="primary" style="margin-top:10px">Generate Suggestions</button><div id="omsg" class="msg"></div></div><div id="ores"></div></section>
 
-<section id="pi" class="screen"><div class="head"><div><div class="title">🧮 PI</div><div class="meta">Physical Inventory · Family Article True Stock.</div></div></div><div class="search-bar"><input id="piq" placeholder="Search Family, item, article, or UPC" autocomplete="off"><button id="pic" class="clear-btn" type="button">Clear</button><button id="pis" class="primary">Search</button></div><div id="pim" class="msg"></div><div id="pir"></div></section>
+<section id="pi" class="screen"><div class="head"><div><div class="title">🧮 Physical Inventory</div><div class="meta">Family Article True Stock and inventory verification.</div></div></div><div class="search-bar"><input id="piq" placeholder="Search Family, item, article, or UPC" autocomplete="off"><button id="pic" class="clear-btn" type="button">Clear</button><button id="pis" class="primary">Search</button></div><div id="pim" class="msg"></div><div id="pir"></div></section>
 
-<section id="performance" class="screen"><div class="head"><div><div class="title">📊 PERFORMANCE</div><div class="meta">Analyze one completed sales date and generate price suggestions using history through that date.</div></div></div><div class="card"><div class="form"><div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div><div><label>Category</label><select id="percat"><option>ALL</option><option>LIVE</option><option>FRESH</option><option>FROZEN</option></select></div></div><div class="hint" style="margin-top:10px">Report Date must have completed canonical sales data. The app defaults to the latest supported date.</div><button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Performance Report</button><div id="permsg" class="msg" style="margin-top:8px"></div></div><div id="persummary"></div><div id="peranalysis"></div><div class="card"><div class="section">Report Date Top Sellers</div><div id="pertop"></div></div><div class="card"><div class="section">Top 100 Urgent Price Reviews</div><div class="hint">Suggestions are analysis only. Sales evidence stops at the selected Report Date. Company C is the bottom line when applicable. Current authoritative cost is used until historical daily cost lineage is exposed.</div><div id="peritems"></div></div></section>
+<section id="performance" class="screen"><div class="head"><div><div class="title">📊 Reports</div><div class="meta">Performance, pricing opportunities and completed-day sales analysis.</div></div></div><div class="card"><div class="form"><div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div><div><label>Category</label><select id="percat"><option>ALL</option><option>LIVE</option><option>FRESH</option><option>FROZEN</option></select></div></div><div class="hint" style="margin-top:10px">Report Date must have completed canonical sales data. The app defaults to the latest supported date.</div><button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Performance Report</button><div id="permsg" class="msg" style="margin-top:8px"></div></div><div id="persummary"></div><div id="peranalysis"></div><div class="card"><div class="section">Report Date Top Sellers</div><div id="pertop"></div></div><div class="card"><div class="section">Top 100 Urgent Price Reviews</div><div class="hint">Suggestions are analysis only. Sales evidence stops at the selected Report Date. Company C is the bottom line when applicable. Current authoritative cost is used until historical daily cost lineage is exposed.</div><div id="peritems"></div></div></section>
 
-<section id="ohreport" class="screen"><div class="head"><div><div class="title">📋 OH Discrepancy</div><div class="meta">Report & Clear · clearing the report does not change inventory.</div></div><button id="ohrefresh" class="primary" style="margin-left:auto;min-height:44px;padding:8px 12px">Refresh</button></div><div id="ohmsg" class="msg"></div><div id="ohlist"></div><div class="section" style="margin-top:12px">Recent Cleared / Superseded</div><select id="ohfilter" style="margin-bottom:7px"><option value="">All history</option><option value="RESOLVED">Cleared</option><option value="SUPERSEDED">Superseded</option></select><div id="ohhmsg" class="msg"></div><div id="ohhist"></div></section>
+<section id="ohreport" class="screen"><div class="head"><div><div class="title">📋 OH Discrepancy</div><div class="meta">Review and clear inventory discrepancies without changing stock.</div></div><button id="ohrefresh" class="primary" style="margin-left:auto;min-height:44px;padding:8px 12px">Refresh</button></div><div id="ohmsg" class="msg"></div><div id="ohlist"></div><div class="section" style="margin-top:12px">Recent Cleared / Superseded</div><select id="ohfilter" style="margin-bottom:7px"><option value="">All history</option><option value="RESOLVED">Cleared</option><option value="SUPERSEDED">Superseded</option></select><div id="ohhmsg" class="msg"></div><div id="ohhist"></div></section>
 
-<section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">←</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
+<section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 </div>
 
 <nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="ohreport">📋<br>OH Report</button><button data-main="performance">📊<br>Reports</button></div></nav>
