@@ -16,7 +16,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
@@ -24,7 +24,7 @@ from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 
-VERSION='7.0.101-single-service'
+VERSION='7.0.102-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -67,6 +67,18 @@ class TrueStockCancelRequest(BaseModel):
 class DumpingResolveRequest(BaseModel):
     confirm: str
     note: str|None=None
+
+class OrderingPolicyUpsertRequest(BaseModel):
+    scope_type: str
+    scope_key: str='*'
+    order_weekday: int
+    delivery_weekday: int
+    coverage_days_after_delivery: Decimal
+    safety_days: Decimal=Decimal('0')
+    min_order_qty: Decimal|None=None
+    order_multiple: Decimal|None=None
+    enabled: bool=True
+    notes: str|None=None
 
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
@@ -1458,6 +1470,41 @@ def app_cancel_true_stock(
 @app.get('/v1/app/ordering')
 def app_ordering(limit:int=80):
     return json.loads(json.dumps(ordering_queue(limit),default=j))
+
+
+@app.get('/v1/app/ordering/policies')
+def app_ordering_policies():
+    return json.loads(json.dumps(list_ordering_policies(),default=j))
+
+
+@app.post('/v1/admin/ordering/policy')
+def admin_upsert_ordering_policy(
+    body:OrderingPolicyUpsertRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    settings=get_settings()
+    if device not in settings.admin_devices:
+        raise HTTPException(403,'Admin device required')
+    try:
+        result=upsert_ordering_policy(
+            scope_type=body.scope_type,
+            scope_key=body.scope_key,
+            order_weekday=body.order_weekday,
+            delivery_weekday=body.delivery_weekday,
+            coverage_days_after_delivery=body.coverage_days_after_delivery,
+            safety_days=body.safety_days,
+            min_order_qty=body.min_order_qty,
+            order_multiple=body.order_multiple,
+            enabled=body.enabled,
+            notes=body.notes,
+            device=device,
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Ordering policy save failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/app/price-change')
