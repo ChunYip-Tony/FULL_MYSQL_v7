@@ -1965,7 +1965,12 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     }
 
 
-def process_phase3(batch_id: int) -> dict[str, Any]:
+def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
+    def report(stage: str, **payload):
+        if progress:
+            progress(stage, payload)
+
+    report('PHASE3_CONNECT')
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         try:
@@ -1978,6 +1983,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             ensure_family_cost_table(cur)
             ensure_coverage_backfill_tables(cur)
             conn.commit()
+            report('PHASE3_SCHEMA_READY')
             conn.start_transaction()
 
             cur.execute('SELECT processing_status FROM ingest_batch WHERE batch_id=%s', (batch_id,))
@@ -2011,6 +2017,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                     + str(family_subarticle_result.get('held'))
                 )
             retired_recomputed_issues = retire_recomputed_phase3_issues(cur, batch_id)
+            report('PHASE3_MANUAL_AUTHORITY_READY')
 
             cur.execute(
                 """INSERT INTO pipeline_run (batch_id,pipeline_name,stage_name,run_number,processing_status,code_version)
@@ -2031,6 +2038,8 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 elif st == 'tx_seafood_abc_price': counts['company'] += _process_company(cur, batch_id, f, 'raw_tx_seafood_abc_price')
                 elif st == 'live_fresh_suggestion': counts['company'] += _process_company(cur, batch_id, f, 'raw_live_fresh_suggestion')
 
+            report('PHASE3_HISTORY_INGESTED', counts=counts)
+
             # Coverage-aware multi-date resolver:
             # - POS range file with exactly one missing daily date -> solve by
             #   period minus known canonical days at EAN + price-type grain.
@@ -2039,6 +2048,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             #   movement_history.posting_date in source_data_days().
             pos_period_backfill = resolve_pos_period_backfill(cur, batch_id)
             pos_backfill_relinked_pre = relink_pos_backfill(cur)
+            report('PHASE3_COVERAGE_BACKFILL_READY')
 
             # Multi-tab Article Manual repair:
             #  - recognizes formatted barcodes such as `0 6139190220 5`
@@ -2058,6 +2068,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # A target UPC must have positive POS sales in the latest up-to-28
             # valid completed POS data days. Historical-only UPCs are untouched.
             active_28d_uom_repair = repair_active_28d_uom(cur, batch_id)
+            report('PHASE3_IDENTITY_UOM_REPAIR_READY')
 
             relink_history(cur)
             pos_backfill_relinked = relink_pos_backfill(cur)
@@ -2074,6 +2085,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             #   3) explicit OH cost + explicit supported cost UOM
             # Historical-only UPCs are not targeted.
             current_active_cost_repair = repair_current_active_cost(cur, batch_id)
+            report('PHASE3_COST_REPAIR_READY')
 
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
@@ -2106,7 +2118,9 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
             # identity blocker rolls back only that candidate snapshot so the
             # previously published Quick Check remains intact.
             cur.execute('SAVEPOINT before_quick_check_publish')
+            report('PHASE3_QUICK_CHECK_REBUILD')
             qc_attempt = rebuild_quick_check(cur, batch_id)
+            report('PHASE3_IDENTITY_AUDIT')
             identity_audit = audit_product_identity(cur)
             identity_guard_pass = bool(identity_audit.get('pass'))
             identity_guard_blockers = list(identity_audit.get('blockers') or [])
@@ -2162,6 +2176,7 @@ def process_phase3(batch_id: int) -> dict[str, Any]:
                 status = 'QUICK_CHECK_READY_WITH_HOLDS'
             else:
                 status = 'QUICK_CHECK_READY'
+            report('PHASE3_FINALIZE', blocking=blocking, status=status)
             cur.execute(
                 """INSERT INTO phase3_batch_result
                    (batch_id,sales_rows,price_rows,movement_rows,inventory_rows,company_price_rows,
