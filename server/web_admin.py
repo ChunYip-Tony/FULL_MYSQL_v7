@@ -26,7 +26,7 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 <div class="wrap">
   <div class="top">
     <div class="row" style="justify-content:space-between">
-      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.110 · ID/password secure session</div></div>
+      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.111 · ID/password secure session</div></div>
       <div class="toplinks"><a href="/app">Open App</a><button id="logout" class="smallbtn hidden">Logout</button></div>
     </div>
     <div id="sessionMsg" class="msg">Checking admin session…</div>
