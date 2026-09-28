@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.135-single-service'
+VERSION='7.0.136-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -643,6 +643,66 @@ def web_upload_calendar(request:Request,days:int=14):
             'note':'Price, OH, ABC, Article Manual and other periodic sources do not determine daily calendar completeness.',
         },
     },default=j))
+
+
+@app.get('/v1/web-upload/latest-reference-uploads')
+def web_upload_latest_reference_uploads(request:Request):
+    _browser_upload_guard(request)
+    wanted=[
+        ('OH','on_hand'),
+        ('LIVE / FRESH','live_fresh_suggestion'),
+        ('FROZEN','frozen_inventory'),
+    ]
+    out=[]
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            for label,source_type in wanted:
+                cur.execute(
+                    """SELECT file_id,batch_id,original_filename,source_type,
+                              processing_status,source_row_count,error_count,
+                              upload_timestamp,coverage_type,
+                              coverage_start_date,coverage_end_date,
+                              header_period_start_date,header_period_end_date,
+                              report_generated_at,filename_date_candidate
+                       FROM ingest_file
+                       WHERE source_type=%s
+                         AND processing_status='INGESTED'
+                         AND COALESCE(error_count,0)=0
+                         AND duplicate_of_file_id IS NULL
+                       ORDER BY upload_timestamp DESC,file_id DESC
+                       LIMIT 1""",
+                    (source_type,),
+                )
+                row=cur.fetchone()
+                if row:
+                    coverage_start=row.get('coverage_start_date') or row.get('header_period_start_date')
+                    coverage_end=row.get('coverage_end_date') or row.get('header_period_end_date')
+                    out.append({
+                        'label':label,
+                        'source_type':source_type,
+                        'available':True,
+                        'file_id':row.get('file_id'),
+                        'batch_id':row.get('batch_id'),
+                        'filename':row.get('original_filename'),
+                        'uploaded_at':row.get('upload_timestamp'),
+                        'coverage_type':row.get('coverage_type'),
+                        'coverage_start':coverage_start,
+                        'coverage_end':coverage_end,
+                        'report_generated_at':row.get('report_generated_at'),
+                        'filename_date_candidate':row.get('filename_date_candidate'),
+                        'rows':row.get('source_row_count'),
+                        'status':row.get('processing_status'),
+                    })
+                else:
+                    out.append({
+                        'label':label,
+                        'source_type':source_type,
+                        'available':False,
+                    })
+        finally:
+            cur.close()
+    return json.loads(json.dumps({'sources':out},default=j))
 
 
 @app.post('/v1/batches')
