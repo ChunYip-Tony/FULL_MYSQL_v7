@@ -26,7 +26,7 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 <div class="wrap">
   <div class="top">
     <div class="row" style="justify-content:space-between">
-      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.105 · secure browser session</div></div>
+      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.106 · ID/password secure session</div></div>
       <div class="toplinks"><a href="/app">Open App</a><button id="logout" class="smallbtn hidden">Logout</button></div>
     </div>
     <div id="sessionMsg" class="msg">Checking admin session…</div>
@@ -34,11 +34,12 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 
   <div id="loginCard" class="card hidden">
     <div class="section" style="margin-top:0">Admin Sign In</div>
-    <div class="sub">Use an existing FULL MYSQL admin access key once. It is exchanged for an HttpOnly browser session and is not stored in page storage.</div>
-    <div class="row" style="margin-top:10px">
-      <input id="adminKey" type="password" placeholder="Admin access key" autocomplete="current-password">
-      <button id="login" class="primary">Sign In</button>
+    <div class="sub">Sign in with Admin ID and Password. Credentials are sent only to the server and are not stored in browser page storage.</div>
+    <div class="grid" style="margin-top:10px">
+      <div class="field"><label>Admin ID</label><input id="adminId" value="admin" autocomplete="username"></div>
+      <div class="field"><label>Password</label><input id="adminPassword" type="password" placeholder="Password" autocomplete="current-password"></div>
     </div>
+    <div class="actions"><button id="login" class="primary">Sign In</button></div>
     <div id="loginMsg" class="msg"></div>
   </div>
 
@@ -113,15 +114,16 @@ function setSession(ok,txt){
   $('sessionMsg').textContent=txt;$('sessionMsg').className='msg '+(ok?'ok':'warn');
 }
 async function checkSession(){
-  try{const d=await api('/v1/admin/session');setSession(true,'Signed in as '+(d.device||'admin')+' · expires '+(d.expires_at||''));await Promise.all([loadPolicies(),loadProposals()])}
+  try{const d=await api('/v1/admin/session');setSession(true,'Signed in as '+(d.login_id||d.device||'admin')+' · expires '+(d.expires_at||''));await Promise.all([loadPolicies(),loadProposals()])}
   catch{setSession(false,'Admin sign-in required.')}
 }
 async function login(){
-  const key=$('adminKey').value.trim();if(!key)return;
+  const loginId=$('adminId').value.trim(), password=$('adminPassword').value;
+  if(!loginId||!password)return;
   $('loginMsg').textContent='Signing in…';
   try{
-    const d=await api('/v1/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({access_key:key})});
-    $('adminKey').value='';$('loginMsg').textContent='';setSession(true,'Signed in as '+d.device);await Promise.all([loadPolicies(),loadProposals()]);
+    const d=await api('/v1/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login_id:loginId,password})});
+    $('adminPassword').value='';$('loginMsg').textContent='';setSession(true,'Signed in as '+(d.login_id||loginId));await Promise.all([loadPolicies(),loadProposals()]);
   }catch(e){$('loginMsg').textContent=e.message;$('loginMsg').className='msg danger'}
 }
 async function logout(){
@@ -221,7 +223,7 @@ async function loadProposals(){
       '<div class="meta">'+esc(r.reason||r.review_note||r.execution_note||'')+'</div>'+actions+'</div>';
   }).join('')||'<div class="msg">No proposals.</div>';
 }
-$('login').addEventListener('click',login);$('adminKey').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('logout').addEventListener('click',logout);
+$('login').addEventListener('click',login);$('adminPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('logout').addEventListener('click',logout);
 $('savePolicy').addEventListener('click',savePolicy);$('refreshPolicies').addEventListener('click',loadPolicies);
 $('loadProposalUpc').addEventListener('click',loadProposalUpc);
 $('proposalUpc').addEventListener('keydown',e=>{if(e.key==='Enter')loadProposalUpc()});
