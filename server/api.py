@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.140-single-service'
+VERSION='7.0.141-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -528,7 +528,7 @@ def web_upload_recent(request:Request,limit:int=8):
             cur.execute(
                 f"""SELECT batch_id,file_id,original_filename,source_type,
                            processing_status,source_row_count,error_count,
-                           duplicate_of_file_id,coverage_start_date,coverage_end_date
+                           upload_timestamp,duplicate_of_file_id,coverage_start_date,coverage_end_date
                     FROM ingest_file
                     WHERE batch_id IN ({ph})
                     ORDER BY batch_id DESC,file_id""",
@@ -542,6 +542,7 @@ def web_upload_recent(request:Request,limit:int=8):
                     'processing_status':row.get('processing_status'),
                     'source_row_count':row.get('source_row_count'),
                     'error_count':row.get('error_count'),
+                    'upload_timestamp':row.get('upload_timestamp'),
                     'duplicate_of_file_id':row.get('duplicate_of_file_id'),
                     'coverage_start_date':row.get('coverage_start_date'),
                     'coverage_end_date':row.get('coverage_end_date'),
