@@ -103,13 +103,16 @@ def add_file(session_id: str, device_id: str, filename: str, data: bytes) -> dic
             # true duplicate only when the same bytes were already successfully
             # ingested under the same resolved source type.
             cur.execute(
-                """SELECT file_id
-                   FROM ingest_file
-                   WHERE file_sha256=%s
-                     AND source_type=%s
-                     AND processing_status='INGESTED'
-                     AND COALESCE(error_count,0)=0
-                   ORDER BY file_id
+                """SELECT f.file_id
+                   FROM ingest_file f
+                   JOIN ingest_batch b ON b.batch_id=f.batch_id
+                   JOIN phase3_batch_result p3 ON p3.batch_id=f.batch_id
+                   WHERE f.file_sha256=%s
+                     AND f.source_type=%s
+                     AND f.processing_status='INGESTED'
+                     AND COALESCE(f.error_count,0)=0
+                     AND b.processing_status IN ('QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS')
+                   ORDER BY f.file_id
                    LIMIT 1""",
                 (p.sha256,p.source_type),
             )
@@ -236,11 +239,11 @@ def session_status(session_id: str) -> dict[str,Any]:
 
 
 def delete_raw_stage_qa_hold_batch(batch_id: int, actor: str='WEBAPP-PUBLIC') -> dict[str,Any]:
-    """Hard-delete a QA_HOLD batch only when downstream processing never began.
+    """Remove a raw-stage QA_HOLD batch from user history safely.
 
-    This is intentionally narrower than a generic batch delete. READY batches,
-    Phase2C/Phase3 holds, and any batch with downstream pipeline evidence are
-    not eligible.
+    Hard delete is used only when no later ingest_file references any file from
+    this batch. If downstream duplicate references exist, preserve lineage and
+    mark the batch hidden from Upload History instead of breaking provenance.
     """
     bid=int(batch_id)
     if bid < 1:
@@ -251,7 +254,7 @@ def delete_raw_stage_qa_hold_batch(batch_id: int, actor: str='WEBAPP-PUBLIC') ->
         try:
             cur.execute(
                 """SELECT batch_id,batch_key,batch_label,processing_status,
-                          upload_started_at,completed_at,file_count,source_row_count,error_count
+                          upload_started_at,completed_at,file_count,source_row_count,error_count,notes
                    FROM ingest_batch
                    WHERE batch_id=%s
                    FOR UPDATE""",
@@ -300,8 +303,53 @@ def delete_raw_stage_qa_hold_batch(batch_id: int, actor: str='WEBAPP-PUBLIC') ->
                 (bid,),
             )
             files=cur.fetchall()
+            file_ids=[int(x['file_id']) for x in files if x.get('file_id') is not None]
 
-            # Remove immutable raw rows first, then ingest metadata.
+            reference_count=0
+            if file_ids:
+                ph=','.join(['%s']*len(file_ids))
+                cur.execute(
+                    f"""SELECT COUNT(*) AS c
+                        FROM ingest_file
+                        WHERE duplicate_of_file_id IN ({ph})
+                          AND batch_id<>%s""",
+                    tuple(file_ids+[bid]),
+                )
+                reference_count=int((cur.fetchone() or {}).get('c') or 0)
+
+            if reference_count:
+                notes={}
+                try:
+                    notes=json.loads(batch.get('notes') or '{}')
+                    if not isinstance(notes,dict):
+                        notes={}
+                except Exception:
+                    notes={}
+                notes.update({
+                    'history_hidden':True,
+                    'history_hidden_at':datetime.utcnow().isoformat(),
+                    'history_hidden_by':actor,
+                    'history_hidden_reason':'QA_HOLD_DELETE_WITH_REFERENCES',
+                    'referencing_file_count':reference_count,
+                })
+                cur.execute(
+                    "UPDATE ingest_batch SET notes=%s WHERE batch_id=%s",
+                    (_json_dump(notes),bid),
+                )
+                conn.commit()
+                return {
+                    'deleted':True,
+                    'delete_mode':'HIDDEN_PRESERVE_LINEAGE',
+                    'batch_id':bid,
+                    'batch_key':batch.get('batch_key'),
+                    'batch_label':batch.get('batch_label'),
+                    'previous_status':status,
+                    'file_count':len(files),
+                    'referencing_file_count':reference_count,
+                    'deleted_by':actor,
+                    'scope':'RAW_STAGE_QA_HOLD_ONLY',
+                }
+
             for table in sorted(set(RAW_TABLE_BY_SOURCE.values())):
                 cur.execute(f"DELETE FROM {table} WHERE batch_id=%s",(bid,))
 
@@ -328,6 +376,7 @@ def delete_raw_stage_qa_hold_batch(batch_id: int, actor: str='WEBAPP-PUBLIC') ->
 
             return {
                 'deleted':True,
+                'delete_mode':'HARD_DELETE',
                 'batch_id':bid,
                 'batch_key':batch.get('batch_key'),
                 'batch_label':batch.get('batch_label'),
