@@ -2330,6 +2330,7 @@ def ordering_queue(limit: int = 80) -> dict[str, Any]:
         cur.execute(
             """SELECT upc_id,ean_upc,article_id,article_number,family_id,main_article_number,
                       selling_description,family_description,product_class,selling_uom,
+                      base_uom,base_qty_per_selling_unit,
                       current_price,current_price_type,current_cost_per_selling_unit,
                       current_oh,current_oh_uom,oh_date,dos,doh,
                       pos_qty_7d,pos_qty_30d,upc_velocity_7d,upc_velocity_30d,
@@ -2372,6 +2373,7 @@ def ordering_queue(limit: int = 80) -> dict[str, Any]:
             out["effective_oh_through"] = effective_oh.get("movement_through_date")
             out["ordering"] = ordering
             rows.append(out)
+        conn.commit()
         cur.close()
     return {
         "count": len(rows),
