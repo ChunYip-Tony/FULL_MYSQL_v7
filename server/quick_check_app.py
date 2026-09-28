@@ -79,7 +79,6 @@ def _ordering_scope_candidates(row: dict[str, Any]) -> list[tuple[str, str]]:
 
 
 def _resolve_ordering_policy(cur, row: dict[str, Any]) -> dict[str, Any] | None:
-    ensure_ordering_policy_table(cur)
     for scope_type, scope_key in _ordering_scope_candidates(row):
         cur.execute(
             """SELECT ordering_policy_id,scope_type,scope_key,order_weekday,
@@ -1152,6 +1151,7 @@ def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
             return None
 
         latest_oh_file_id = _refresh_expired_true_stock(cur)
+        ensure_ordering_policy_table(cur)
         family_id = int(row["family_id"])
         system_oh = _system_oh_context(cur, row)
         system_position = _system_position(cur, system_oh)
@@ -2576,6 +2576,7 @@ def ordering_queue(limit: int = 80) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         _refresh_expired_true_stock(cur)
+        ensure_ordering_policy_table(cur)
         cur.execute(
             """SELECT upc_id,ean_upc,article_id,article_number,family_id,main_article_number,
                       selling_description,family_description,product_class,selling_uom,
