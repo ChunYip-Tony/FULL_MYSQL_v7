@@ -578,7 +578,7 @@ body{
 }
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.140</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.141</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -937,7 +937,10 @@ function renderWebUploadRecentBatch(b){
   let files=b.files||[];
   let qc=b.quick_check_rows==null?'Pending':(fmt(b.quick_check_ready_rows,0)+' / '+fmt(b.quick_check_rows,0)+' READY · '+fmt(b.quick_check_hold_rows,0)+' HOLD');
   return '<div class="card">'+
-    '<div class="row" style="justify-content:space-between"><div><div class="name">Batch '+esc(b.batch_id??'—')+'</div><div class="meta">'+esc(b.batch_label||'')+'</div></div>'+pill(b.processing_status||'UNKNOWN')+'</div>'+
+    '<div class="row" style="justify-content:space-between"><div><div class="name">Batch '+esc(b.batch_id??'—')+'</div><div class="meta">'+esc(b.batch_label||'')+'</div>'+
+      '<div class="meta" style="margin-top:3px"><b>Uploaded:</b> '+esc(uploadDateTime(b.upload_started_at))+
+      (b.completed_at?' · <b>Completed:</b> '+esc(uploadDateTime(b.completed_at)):'')+
+      '</div></div>'+pill(b.processing_status||'UNKNOWN')+'</div>'+
     '<div id="uploadRecentStages" style="margin-top:6px">'+
       uploadStage('📄','Files',String(b.file_count??files.length))+
       uploadStage('🧩','Phase 2C',b.phase2c_status||'Pending',String(b.phase2c_status||'').includes('READY')?'ok':'')+
