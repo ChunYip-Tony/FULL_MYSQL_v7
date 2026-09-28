@@ -1,35 +1,32 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.108 Single-Service Edition
+Version: 7.0.109 Single-Service Edition
 
 Current runtime:
-- Public 4-module Web App: Quick Check, Ordering, Dumping, Price Change
-- Operations Overview dashboard with order workflow counts
-- Admin Console with Admin ID + Password and signed HttpOnly browser session
-- Config-driven Ordering Policy engine and Suggested Order Qty
-- Final Order workflow: Recommendation -> Draft -> Confirmed -> Marked Submitted -> History
-- Delivery / Receiving Reconciliation against canonical movement evidence
-- API and background worker aligned to 7.0.108-single-service
+- Existing public Web App remains available.
+- Isolated Web App V2 read-only data contracts are now available under /v1/app/v2.
+- V2 Search, Family Article, UPC, Price Analysis, and Ordering Analysis contracts implemented.
+- V2 UI has not yet replaced the current Web App.
 
-Delivery / Receiving reconciliation:
-- Optional supplier PO / external order reference can be saved per order.
-- Exact external-reference match is preferred when available.
-- Without a reference, receipt evidence is partitioned from this order date to the next later confirmed/submitted order for the same UPC.
-- Only canonical movement file/date snapshots are used.
-- MVT 101 and 107 are physical receipt-stage evidence.
-- MVT 102 and 108 are receipt reversals and force review when present.
-- MVT 109/110 are ignored when 101/102 or 107/108 evidence exists; otherwise they are release-only fallback evidence.
-- MVT 107 remains NO UNRESTRICTED STOCK EFFECT and is never added again to System OH.
-- Receipt quantity must convert explicitly into the ordered Selling UOM; unresolved UOM conversion fails to REVIEW.
-- Article identity is preferred; family-level identity is review-only.
-- Reconciliation reports Ordered, Received, Variance, receipt docs/PO, match basis, and canonical source lineage.
+Web App V2 data rules:
+- 7D / 28D use latest completed canonical data-supported POS dates.
+- Missing source dates are ignored and never counted as zero.
+- Velocity denominator = supported day count only.
+- Promotion = Price Type SALE only.
+- TPR is not Promotion.
+- Weekend Promotion = Friday through Sunday.
+- Weekly Promotion = Thursday through following Friday.
+- Price vs Sales trend uses completed supported data days.
+- Ordering analysis is read-only; nothing is saved or submitted.
+- Ordering default date = current business date.
+- Expected delivery default = observed receipt pattern when sufficiently stable.
+- Suggested order covers forecast usage through next-next delivery minus Effective OH.
+- No invented promotion uplift when matching SALE history is unavailable.
 
-Final Order safety:
-- Only positive ORDER_RECOMMENDATION_READY items can be added to a Draft.
-- Final quantity is editable only while DRAFT.
-- MARKED_SUBMITTED is audit-only and does not transmit an order to a supplier.
-- No RAW mutation.
+V2 endpoints:
+- GET /v1/app/v2/search
+- GET /v1/app/v2/family/{family_key}
+- GET /v1/app/v2/upc/{upc}
+- GET /v1/app/v2/upc/{upc}/price
+- GET /v1/app/v2/upc/{upc}/ordering
 
-Admin authentication:
-- Browser login: FULLMYSQL_ADMIN_LOGIN_ID + FULLMYSQL_ADMIN_PASSWORD or FULLMYSQL_ADMIN_PASSWORD_HASH.
-- Browser session is HttpOnly, Secure, SameSite=Lax and same-origin protected for writes.
-- Legacy admin API Bearer tokens remain supported for PowerShell / API clients.
+Legacy Admin remains in source during transition but is not part of the Web App V2 target architecture.
