@@ -121,8 +121,34 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
   .nav button{min-height:56px;font-size:11px}.search-bar .primary{grid-column:auto}
 }
 
+
+/* v7.0.124 fish-market compact mobile layer */
+:root{--sea:#063b59;--sea2:#075a78;--ice:#dff4fa;--gpbar:#2563eb;--pricecurve:#f07b16}
+body{
+  background:
+    linear-gradient(rgba(3,43,66,.77),rgba(4,57,77,.78)),
+    radial-gradient(circle at 16% 12%,rgba(139,224,242,.28),transparent 31%),
+    radial-gradient(circle at 84% 58%,rgba(16,132,159,.25),transparent 28%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='150' viewBox='0 0 260 150'%3E%3Cg fill='none' stroke='%23c8edf4' stroke-opacity='.15' stroke-width='2'%3E%3Cpath d='M16 28c18-14 39-12 57 0-18 14-39 14-57 0zm57 0 16-10v20z'/%3E%3Cpath d='M154 95c22-15 46-13 66 1-20 16-45 16-66-1zm66 1 18-12v24z'/%3E%3Cpath d='M38 118c10-7 22-7 32 0-10 8-22 8-32 0zm32 0 9-6v12z'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:auto,auto,auto,260px 150px;background-attachment:fixed
+}
+.top{margin:0 -16px;padding-left:16px;padding-right:16px;background:linear-gradient(90deg,rgba(4,49,74,.97),rgba(6,87,112,.94));border-bottom-color:rgba(206,239,249,.24);color:#f5fcff}
+.top .ver,.top .msg{color:#c9e7f2}.brand h1:before{content:"🐟 ";font-size:.9em}
+.screen{background:color-mix(in srgb,var(--bg) 91%,transparent);border-radius:15px;padding:0 11px 8px;backdrop-filter:blur(8px)}
+.metric-section,.card{background:color-mix(in srgb,var(--card) 94%,transparent);border-radius:11px!important;padding:10px 11px!important;margin:7px 0!important;border:1px solid color-mix(in srgb,var(--line) 82%,transparent)!important}
+.metric-section-title{padding-top:3px}
+.nav{background:rgba(4,45,69,.97);border-top-color:rgba(205,239,249,.22)}.nav button{color:#bcdbe8}.nav button.on{color:#fff;background:rgba(108,197,237,.16)}
+.navin{grid-template-columns:repeat(4,1fr)}
+.price-duo{display:grid;grid-template-columns:1fr;gap:7px}.sweet-hero{font-size:28px;font-weight:950;color:var(--ok);line-height:1.05;margin:5px 0}
+.price-history{width:100%;border-collapse:collapse;font-size:13px}.price-history th,.price-history td{padding:6px 5px}
+.trend-up{color:var(--ok);font-weight:850}.trend-down{color:var(--bad);font-weight:850}.trend-flat{color:var(--muted);font-weight:750}
+.chart-scroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--line)}.chart-scroll .chart{width:920px;min-width:920px;height:285px;border:0;margin:0}
+.oh-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:7px}.oh-cell{border-right:1px solid var(--line);padding-right:5px}.oh-cell:last-child{border:0}.oh-cell .k{font-size:11px;color:var(--muted)}.oh-cell .v{font-size:15px;font-weight:850}
+@media(min-width:760px){.price-duo{grid-template-columns:1.15fr .85fr}.screen{padding-left:16px;padding-right:16px}.chart-scroll .chart{width:100%;min-width:900px}}
+@media(max-width:560px){.w{padding:8px}.top{margin:0 -8px;padding-left:10px;padding-right:10px}.screen{border-radius:11px;padding:0 8px 7px}.metric-section,.card{padding:8px 9px!important}.metric-row{padding:7px 0}.metric-section-title{font-size:12px}.nav button{font-size:9px;line-height:1.05}.oh-row{grid-template-columns:1fr 1fr 1fr}}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.123</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.124</div></div><div class="msg">CORE · PI · OH DISCREPANCY · PERFORMANCE</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -130,7 +156,7 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 
 <section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day GP$ vs Avg Selling Price</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● GP$</span><span class="pill" style="color:var(--a)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each GP$ and Avg Selling Price point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="price-duo"><div class="metric-section pink"><div class="metric-section-title">Price vs Velocity History</div><div id="pvh"></div></div><div class="metric-section green"><div class="metric-section-title">Suggested Sweet Spot</div><div id="psweet"></div></div></div><div class="card"><div class="section">28 Supported-Day Sales Trend</div><div class="chart-scroll"><canvas id="chart" class="chart"></canvas></div><div class="row" style="margin-top:7px"><span class="pill" style="color:var(--gpbar)">▮ GP$</span><span class="pill" style="color:var(--pricecurve)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:6px">GP$ is shown as columns and Avg Selling Price as a curve. Every plotted value is labeled. Missing supported dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
 <section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
@@ -140,10 +166,12 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 
 <section id="performance" class="screen"><div class="head"><div><div class="title">📊 PERFORMANCE</div><div class="meta">Analyze one completed sales date and generate price suggestions using history through that date.</div></div></div><div class="card"><div class="form"><div><label>Report Date</label><select id="perdate"><option value="">Loading supported dates…</option></select></div><div><label>Category</label><select id="percat"><option>ALL</option><option>LIVE</option><option>FRESH</option><option>FROZEN</option></select></div></div><div class="hint" style="margin-top:10px">Report Date must have completed canonical sales data. The app defaults to the latest supported date.</div><button id="perrun" class="primary" style="margin-top:12px;width:100%">Generate Performance Report</button><div id="permsg" class="msg" style="margin-top:8px"></div></div><div id="persummary"></div><div id="peranalysis"></div><div class="card"><div class="section">Report Date Top Sellers</div><div id="pertop"></div></div><div class="card"><div class="section">Top 100 Urgent Price Reviews</div><div class="hint">Suggestions are analysis only. Sales evidence stops at the selected Report Date. Company C is the bottom line when applicable. Current authoritative cost is used until historical daily cost lineage is exposed.</div><div id="peritems"></div></div></section>
 
+<section id="ohreport" class="screen"><div class="head"><div><div class="title">📋 OH Discrepancy</div><div class="meta">Report & Clear · clearing the report does not change inventory.</div></div><button id="ohrefresh" class="primary" style="margin-left:auto;min-height:44px;padding:8px 12px">Refresh</button></div><div id="ohmsg" class="msg"></div><div id="ohlist"></div><div class="section" style="margin-top:12px">Recent Cleared / Superseded</div><select id="ohfilter" style="margin-bottom:7px"><option value="">All history</option><option value="RESOLVED">Cleared</option><option value="SUPERSEDED">Superseded</option></select><div id="ohhmsg" class="msg"></div><div id="ohhist"></div></section>
+
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">←</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 </div>
 
-<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>CORE</button><button data-main="pi">🧮<br>PI</button><button data-main="performance">📊<br>PERFORMANCE</button></div></nav>
+<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>CORE</button><button data-main="pi">🧮<br>PI</button><button data-main="ohreport">📋<br>OH REPORT</button><button data-main="performance">📊<br>PERFORMANCE</button></div></nav>
 
 <script>
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
