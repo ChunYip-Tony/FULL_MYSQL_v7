@@ -1217,6 +1217,19 @@ def diagnostic_inventory_position(
     return json.loads(json.dumps(result,default=j))
 
 
+@app.get('/v1/app/cost/backfill-queue')
+def app_cost_backfill_queue(
+    lookback_days:int=90,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    try:
+        result=cost_backfill_queue(lookback_days)
+    except Exception as exc:
+        raise HTTPException(500,f'Cost backfill queue failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
 @app.get('/v1/app/inventory/negative-stock')
 def app_negative_stock_queue(
     limit:int=100,
