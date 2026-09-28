@@ -3358,8 +3358,40 @@ def family_ordering_analysis(
         family_oh=_family_effective_oh(cur,rows)
         events=_family_receipt_events(cur,fid)
         pattern=_delivery_pattern(events,after_date=order_day)
-        delivery=expected_delivery_date or pattern.get("next_expected_delivery_date")
-        next_next=_next_delivery_after(pattern,delivery) if delivery is not None else None
+        observed_delivery=pattern.get("next_expected_delivery_date")
+        fallback_weekday=(
+            4 if category=="FRESH"
+            else (1 if category=="FROZEN" else None)
+        )
+        fallback_delivery=(
+            _strict_next_weekday(order_day,fallback_weekday)
+            if fallback_weekday is not None else None
+        )
+        delivery=expected_delivery_date or observed_delivery or fallback_delivery
+        delivery_source=(
+            "USER_INPUT" if expected_delivery_date is not None
+            else (
+                "OBSERVED_DELIVERY_PATTERN"
+                if observed_delivery is not None
+                else (
+                    "FOLLOWING_FRIDAY_FALLBACK"
+                    if category=="FRESH"
+                    else (
+                        "FOLLOWING_TUESDAY_FALLBACK"
+                        if category=="FROZEN"
+                        else "UNRESOLVED"
+                    )
+                )
+            )
+        )
+        next_next=(
+            _next_delivery_after(pattern,delivery)
+            if delivery is not None else None
+        )
+        next_next_source="OBSERVED_DELIVERY_PATTERN" if next_next is not None else None
+        if delivery is not None and next_next is None and category in {"FRESH","FROZEN"}:
+            next_next=delivery+timedelta(days=7)
+            next_next_source="WEEKLY_FALLBACK_PLUS_7_DAYS"
 
         blockers=[]
         if m28.get("status")!="READY" or m7.get("status")!="READY":
@@ -3472,7 +3504,7 @@ def family_ordering_analysis(
         )
 
         result={
-            "contract_version":"WEBAPP_V2_FAMILY_ORDERING_V2",
+            "contract_version":"WEBAPP_V2_FAMILY_ORDERING_V3",
             "family_id":fid,
             "family_article_number":fam.get("main_article_number"),
             "family_article_name":fam.get("family_description"),
@@ -3486,10 +3518,7 @@ def family_ordering_analysis(
             "inputs":{
                 "ordering_date":order_day,
                 "expected_delivery_date":delivery,
-                "expected_delivery_default_source":(
-                    "USER_INPUT" if expected_delivery_date is not None
-                    else "OBSERVED_DELIVERY_PATTERN"
-                ),
+                "expected_delivery_default_source":delivery_source,
                 "promotion_involved":bool(promotion_involved),
                 "promotion_start_date":promotion_start_date,
                 "promotion_end_date":promotion_end_date,
@@ -3510,6 +3539,7 @@ def family_ordering_analysis(
             },
             "observed_delivery":pattern,
             "next_next_delivery_date":next_next,
+            "next_next_delivery_source":next_next_source,
             "regular_baseline":regular,
             "promotion_baseline":promo_baseline,
             "historical_promotions":promo_history,
