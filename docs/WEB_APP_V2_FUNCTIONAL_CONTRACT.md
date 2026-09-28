@@ -524,10 +524,13 @@ The report may generate up to 100 urgent price-review suggestions.
 Price-review suggestion rules:
 - READY items only
 - active SALE items excluded
-- minimum 3% difference from the selected price reference
-- price reference priority: Sweet Spot -> WGPM -> Company A -> Company B -> Company C
-- urgency uses transparent evidence: reference-price gap, 7D vs 28D velocity, and GP vs category reference
-- projected GP/day assumes current 7D velocity and does not model elasticity
+- minimum 3% difference from current price
+- primary objective: maximize observed GP dollars per day using actual historical demand observed at historical price points
+- use current cost for candidate comparability
+- Company C is a hard bottom-line price floor when available
+- urgency list is primarily sorted by estimated GP$/day opportunity
+- 7D vs 28D velocity and GP vs category reference remain secondary urgency evidence
+- do not invent demand elasticity beyond observed price/demand history
 - suggestions are analysis only; there is no Save/Approve/Execute action in Web App V2
 
 ## 14. Elder-friendly UI and navigation
