@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.151-single-service'
+VERSION='7.0.152-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -510,12 +510,17 @@ def web_upload_active(request:Request):
 def web_upload_recent(request:Request,limit:int=8):
     _browser_upload_guard(request)
     limit=max(1,min(int(limit or 8),20))
+    scan_limit=max(limit,min(limit*4,80))
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
+
+        # Read notes as plain text and filter hidden history in Python.
+        # Historical rows may contain non-JSON text; SQL JSON_EXTRACT on one
+        # malformed row must never take down the whole Recent Uploads panel.
         cur.execute(
             """SELECT b.batch_id,b.batch_label,b.processing_status,
                       b.upload_started_at,b.completed_at,b.file_count,
-                      b.source_row_count,b.error_count,
+                      b.source_row_count,b.error_count,b.notes,
                       p2.result_status AS phase2c_status,
                       p2.blocking_issue_count AS phase2c_blockers,
                       p3.result_status AS phase3_status,
@@ -525,32 +530,38 @@ def web_upload_recent(request:Request,limit:int=8):
                FROM ingest_batch b
                LEFT JOIN phase2c_batch_result p2 ON p2.batch_id=b.batch_id
                LEFT JOIN phase3_batch_result p3 ON p3.batch_id=b.batch_id
-               WHERE COALESCE(
-                   JSON_UNQUOTE(
-                       JSON_EXTRACT(
-                           CASE
-                               WHEN JSON_VALID(b.notes)=1 THEN b.notes
-                               ELSE '{}'
-                           END,
-                           '$.history_hidden'
-                       )
-                   ),
-                   'false'
-               ) <> 'true'
                ORDER BY b.batch_id DESC
                LIMIT %s""",
-            (limit,),
+            (scan_limit,),
         )
-        batches=cur.fetchall()
+
+        batches=[]
+        for row in cur.fetchall():
+            notes={}
+            try:
+                parsed=json.loads(row.get('notes') or '{}')
+                if isinstance(parsed,dict):
+                    notes=parsed
+            except Exception:
+                notes={}
+            if notes.get('history_hidden') is True:
+                continue
+            row.pop('notes',None)
+            batches.append(row)
+            if len(batches)>=limit:
+                break
+
         ids=[int(x['batch_id']) for x in batches]
         file_map={bid:[] for bid in ids}
         pipeline_map={}
+
         if ids:
             ph=','.join(['%s']*len(ids))
             cur.execute(
                 f"""SELECT batch_id,file_id,original_filename,source_type,
                            processing_status,source_row_count,error_count,
-                           upload_timestamp,duplicate_of_file_id,coverage_start_date,coverage_end_date
+                           upload_timestamp,duplicate_of_file_id,
+                           coverage_start_date,coverage_end_date
                     FROM ingest_file
                     WHERE batch_id IN ({ph})
                     ORDER BY batch_id DESC,file_id""",
@@ -570,10 +581,11 @@ def web_upload_recent(request:Request,limit:int=8):
                     'coverage_end_date':row.get('coverage_end_date'),
                 })
 
+            # Read detail_json raw and parse in Python for the same reason:
+            # malformed legacy detail_json must not cause MySQL JSON errors.
             cur.execute(
                 f"""SELECT pipeline_run_id,batch_id,stage_name,processing_status,
-                           JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.phase3_stage')) AS phase3_stage,
-                           started_at,completed_at,error_count
+                           detail_json,started_at,completed_at,error_count
                     FROM pipeline_run
                     WHERE batch_id IN ({ph})
                       AND pipeline_name=%s
@@ -583,23 +595,35 @@ def web_upload_recent(request:Request,limit:int=8):
             )
             for row in cur.fetchall():
                 bid=int(row['batch_id'])
-                if bid not in pipeline_map:
-                    pipeline_map[bid]={
-                        'pipeline_run_id':row.get('pipeline_run_id'),
-                        'stage_name':row.get('stage_name'),
-                        'processing_status':row.get('processing_status'),
-                        'phase3_stage':row.get('phase3_stage'),
-                        'started_at':row.get('started_at'),
-                        'completed_at':row.get('completed_at'),
-                        'error_count':row.get('error_count'),
-                    }
+                if bid in pipeline_map:
+                    continue
+                detail={}
+                try:
+                    parsed=json.loads(row.get('detail_json') or '{}')
+                    if isinstance(parsed,dict):
+                        detail=parsed
+                except Exception:
+                    detail={}
+                pipeline_map[bid]={
+                    'pipeline_run_id':row.get('pipeline_run_id'),
+                    'stage_name':row.get('stage_name'),
+                    'processing_status':row.get('processing_status'),
+                    'phase3_stage':detail.get('phase3_stage'),
+                    'started_at':row.get('started_at'),
+                    'completed_at':row.get('completed_at'),
+                    'error_count':row.get('error_count'),
+                }
         cur.close()
+
     for batch in batches:
         bid=int(batch['batch_id'])
         batch['files']=file_map.get(bid,[])
         batch['pipeline_run']=pipeline_map.get(bid)
-    return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
 
+    return json.loads(json.dumps(
+        {'count':len(batches),'batches':batches},
+        default=j,
+    ))
 
 @app.post('/v1/web-upload/batches/{batch_id}/delete')
 def web_upload_delete_qa_hold_batch(
