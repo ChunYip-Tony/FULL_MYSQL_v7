@@ -549,6 +549,23 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
 
         negative_queue = negative_stock_queue(limit=500)
         cost_backfill = cost_backfill_queue(lookback_days=90)
+
+        # Fail closed for readers while a new snapshot is being replaced.
+        publishing_matrix = _bridge_status(
+            batch_id=batch_id,
+            row_count=len(rows),
+            publisher_identity="GOOGLE_APPS_SCRIPT_WEB_APP" if transport == "APPS_SCRIPT" else "GOOGLE_SERVICE_ACCOUNT",
+            transport=transport,
+            status="PUBLISHING",
+            detail="Snapshot replacement in progress; do not serve as current until PASS.",
+        )
+        if transport == "APPS_SCRIPT":
+            _apps_script_write_matrix(spreadsheet_id, MYSQL_TABS["bridge"], publishing_matrix)
+        else:
+            publishing_session, publishing_identity = _session()
+            _ensure_tabs(publishing_session, spreadsheet_id, [MYSQL_TABS["bridge"]])
+            _write_matrix(publishing_session, spreadsheet_id, MYSQL_TABS["bridge"], publishing_matrix)
+
         matrices = {
             MYSQL_TABS["source"]:_source_status(batch,phase3,len(rows)),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
