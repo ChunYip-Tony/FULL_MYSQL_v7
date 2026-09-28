@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.144 Single-Service Edition
+Version: 7.0.145 Single-Service Edition
+
+v7.0.145 Deleted QA Batch Visibility Fix:
+- Fixed Recent Uploads filtering for history_hidden batches using explicit JSON string comparison.
+- After successful delete/hide, the batch card is removed immediately from the current page.
+- A client-side deleted-batch set prevents the same batch from reappearing during subsequent refreshes in the same session.
+- Backend history filtering remains authoritative across page reloads.
+- Existing two-click delete confirmation and lineage-preserving delete behavior remain unchanged.
+
 
 v7.0.144 QA HOLD Delete Reliability:
 - Replaced browser-native confirm popup with a visible two-click confirmation inside the batch card.
