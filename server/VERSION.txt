@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.145 Single-Service Edition
+Version: 7.0.146 Single-Service Edition
+
+v7.0.146 QA HOLD Delete 422 Fix:
+- Replaced the delete endpoint's implicit dict body with an explicit Pydantic request model.
+- Eliminated the unresolved Any annotation from api.py.
+- Delete confirmation body is now validated as {confirm: string}.
+- Frontend API error handling now displays FastAPI validation details instead of only HTTP 422.
+- Existing two-click delete confirmation, hard-delete, and lineage-preserving hide behavior remain unchanged.
+
 
 v7.0.145 Deleted QA Batch Visibility Fix:
 - Fixed Recent Uploads filtering for history_hidden batches using explicit JSON string comparison.
