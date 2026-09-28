@@ -1,4 +1,17 @@
 FULL MYSQL Secure API Architecture
+Version: 7.0.131 Single-Service Edition
+
+v7.0.131 Multi-department analysis enablement:
+- Preserves POS department lineage for Meat 300, Seafood 400, and Produce 500.
+- Normalized POS history now ingests all three perishable departments instead of Seafood-only.
+- Meat and Produce unresolved sold UPCs are department-local MEDIUM QA and do not block Seafood READY.
+- Price List routing now supports Seafood 400/401 plus 3xx Meat and 5xx Produce subdepartments.
+- Analysis snapshots are department-scoped and use the latest observed department ownership for each UPC.
+- Seafood remains the primary READY gate; Meat and Produce maintain independent department-local analysis status.
+- Produce inventory remains supporting evidence only and must not drive decisions by itself.
+- Department POS-vs-251/252 comparisons remain UOM-guarded.
+
+FULL MYSQL Secure API Architecture
 Version: 7.0.130 Single-Service Edition
 
 v7.0.130 Seafood-first analysis layer:
