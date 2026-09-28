@@ -2020,8 +2020,19 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             report('PHASE3_MANUAL_AUTHORITY_READY')
 
             cur.execute(
+                """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name='FULL_MYSQL_SEAFOOD'
+                     AND stage_name='PHASE3_HISTORY_PRECOMPUTE'""",
+                (batch_id,),
+            )
+            phase3_run_number=int((cur.fetchone() or {}).get('next_run') or 1)
+            cur.execute(
                 """INSERT INTO pipeline_run (batch_id,pipeline_name,stage_name,run_number,processing_status,code_version)
-                   VALUES (%s,'FULL_MYSQL_SEAFOOD','PHASE3_HISTORY_PRECOMPUTE',1,'STARTED','local-agent-v6.6.0')""", (batch_id,))
+                   VALUES (%s,'FULL_MYSQL_SEAFOOD','PHASE3_HISTORY_PRECOMPUTE',%s,'STARTED','local-agent-v6.6.0')""",
+                (batch_id,phase3_run_number),
+            )
             run_id = int(cur.lastrowid)
             counts = {'sales': 0, 'price': 0, 'movement': 0, 'inventory': 0, 'company': 0}
             cur.execute(
