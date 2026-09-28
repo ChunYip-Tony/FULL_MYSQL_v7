@@ -426,8 +426,31 @@ body{
   color:#6e5710!important;
 }
 
+
+/* v7.0.133 no-client web raw upload */
+.navin{grid-template-columns:repeat(5,1fr)!important}
+#upload .upload-drop{
+  border:2px dashed #75abc5!important;border-radius:14px!important;padding:22px 12px!important;
+  text-align:center;background:linear-gradient(135deg,rgba(244,253,255,.97),rgba(222,242,248,.94))!important;
+  cursor:pointer
+}
+#upload .upload-drop.drag{border-color:#1670aa!important;background:#e3f5fb!important}
+#upload .upload-icon{font-size:38px;line-height:1;margin-bottom:7px}
+#upload .upload-title{font-size:17px;font-weight:950;color:#123c5a}
+#upload .upload-sub{font-size:10px;color:#537083;margin-top:4px}
+#upload .upload-file{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(82,129,153,.18)}
+#upload .upload-file:last-child{border-bottom:0}
+#upload .upload-file-name{font-size:12px;font-weight:850;color:#12344c;overflow-wrap:anywhere}
+#upload .upload-file-meta{font-size:9px;color:#60798a;margin-top:2px}
+#upload .upload-stage{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:7px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(82,129,153,.18)}
+#upload .upload-stage:last-child{border-bottom:0}
+#upload .upload-stage .ok{color:#15723b}.upload-stage .warn{color:#b46c08}.upload-stage .bad{color:#c92a2f}
+#upload .upload-progress{height:8px;background:#d8eaf2;border-radius:999px;overflow:hidden;margin:8px 0}
+#upload .upload-progress>div{height:100%;background:linear-gradient(90deg,#0b67a5,#27a2c7);width:0%;transition:width .25s ease}
+@media(max-width:560px){.nav button{font-size:8px!important}.nav button:first-line{font-size:16px}}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.129</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.133</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -480,18 +503,44 @@ body{
 <section id="ohreport" class="screen"><div class="head"><div><div class="title">📋 OH Discrepancy</div><div class="meta">Review and clear inventory discrepancies without changing stock.</div></div><button id="ohrefresh" class="primary" style="margin-left:auto;min-height:44px;padding:8px 12px">Refresh</button></div><div id="ohmsg" class="msg"></div><div id="ohlist"></div><div class="section" style="margin-top:12px">Recent Cleared / Superseded</div><select id="ohfilter" style="margin-bottom:7px"><option value="">All history</option><option value="RESOLVED">Cleared</option><option value="SUPERSEDED">Superseded</option></select><div id="ohhmsg" class="msg"></div><div id="ohhist"></div></section>
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
+<section id="upload" class="screen">
+  <div class="head"><div><div class="title">⬆ Raw File Upload</div><div class="meta">Upload directly from the Web App — Windows client is not required.</div></div></div>
+  <div id="uploadDrop" class="card upload-drop">
+    <div class="upload-icon">📂</div>
+    <div class="upload-title">Choose raw files</div>
+    <div class="upload-sub">Select multiple XLSX / XLS / XLSM / CSV / TXT / TSV files for one batch.</div>
+    <input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv" class="hide">
+  </div>
+  <div id="uploadSelected" class="card hide">
+    <div class="section">Selected Files</div>
+    <div id="uploadSelectedList"></div>
+    <div class="row" style="justify-content:space-between;margin-top:8px">
+      <button id="uploadClear" type="button">Clear</button>
+      <button id="uploadStart" class="primary" type="button">Upload Batch</button>
+    </div>
+  </div>
+  <div id="uploadStatusCard" class="card hide">
+    <div class="section">Batch Status</div>
+    <div id="uploadBatchMeta" class="meta"></div>
+    <div class="upload-progress"><div id="uploadProgressBar"></div></div>
+    <div id="uploadStatus"></div>
+    <div id="uploadServerFiles" style="margin-top:8px"></div>
+  </div>
+  <div id="uploadMsg" class="msg"></div>
+</section>
+
 </div>
 
-<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="ohreport">📋<br>OH Report</button><button data-main="performance">📊<br>Reports</button></div></nav>
+<nav class="nav"><div class="navin"><button data-main="core" class="on">🔎<br>Quick Check</button><button data-main="pi">🧮<br>PI</button><button data-main="ohreport">📋<br>OH Report</button><button data-main="performance">📊<br>Reports</button><button data-main="upload">⬆<br>Upload</button></div></nav>
 
 <script>
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(v,d=2)=>{if(v===null||v===undefined||v==='')return '—';let n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):String(v)},money=v=>v===null||v===undefined?'—':'$'+fmt(v,2);
 const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new Date(s+'T12:00:00'),x=(t-d.getDay()+7)%7;if(!x)x=7;d.setDate(d.getDate()+x);return d.toLocaleDateString('en-CA')};const dayName=s=>{if(!s)return '—';return new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date(s+'T12:00:00'))};const promoRange=p=>p.weekday_range||((p.start_weekday||dayName(p.start_date))+' → '+(p.end_weekday||dayName(p.end_date)));
-let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false;
+let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null;
 async function api(p,o={}){let r=await fetch(p,o),b=null;try{b=await r.json()}catch{}if(!r.ok){let d=b?.detail;throw new Error(typeof d==='string'?d:(d?.reason||'HTTP '+r.status))}return b}
 function mainForScreen(id){if(['family','upc','price','corder'].includes(id))return 'core';if(id==='pid')return 'pi';return id}
-function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();scrollTo({top:0,behavior:'smooth'})}
+function showScreen(id){document.querySelectorAll('.screen').forEach(x=>x.classList.remove('on'));$(id).classList.add('on');document.body.classList.toggle('detail-open',id==='upc');let main=mainForScreen(id);document.querySelectorAll('[data-main]').forEach(x=>x.classList.toggle('on',x.dataset.main===main));if(id==='ohreport'&&!ohLoaded)loadOHReport();if(id==='upload')loadWebUploadActive();scrollTo({top:0,behavior:'smooth'})}
 function go(id){let cur=document.querySelector('.screen.on')?.id;if(cur===id)return;showScreen(id);history.pushState({fullmysqlV2:true,screen:id},'',location.pathname+location.search+'#'+id)}
 history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+location.search+'#core');history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
@@ -591,6 +640,101 @@ async function resolveOHReport(id,b){
 $('ohrefresh').onclick=()=>{ohLoaded=false;loadOHReport(true)};
 $('ohfilter').onchange=()=>{ohLoaded=false;loadOHReport(true)};
 
+
+
+function uploadSize(n){
+  n=Number(n||0);if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB'
+}
+function setWebUploadFiles(files){
+  webUploadFiles=[...(files||[])];
+  $('uploadSelected').classList.toggle('hide',webUploadFiles.length===0);
+  $('uploadSelectedList').innerHTML=webUploadFiles.map((f,i)=>
+    '<div class="upload-file"><div><div class="upload-file-name">'+esc(f.name)+'</div><div class="upload-file-meta">'+esc(uploadSize(f.size))+'</div></div><button type="button" data-rm="'+i+'">×</button></div>'
+  ).join('');
+  $('uploadSelectedList').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{webUploadFiles.splice(Number(b.dataset.rm),1);setWebUploadFiles(webUploadFiles)});
+}
+function uploadStage(icon,label,value,cls=''){
+  return '<div class="upload-stage"><div>'+icon+'</div><div>'+esc(label)+'</div><div class="'+cls+'"><b>'+esc(value??'—')+'</b></div></div>'
+}
+function terminalUploadStatus(s){
+  s=String(s||'').toUpperCase();
+  return s.includes('QUICK_CHECK_READY')||s.includes('QA_HOLD')||s.includes('FAILED')||s.includes('ABORTED');
+}
+function renderWebUploadStatus(d){
+  let b=d?.batch||{},files=d?.files||[],p2=d?.phase2c||{},p3=d?.phase3||{};
+  $('uploadStatusCard').classList.remove('hide');
+  $('uploadBatchMeta').textContent='Batch '+(b.batch_id??'—')+' · '+(b.batch_label||'Web upload');
+  let status=String(b.processing_status||'—'),pct=0;
+  if(status==='API_UPLOADING')pct=15;
+  else if(status==='INGESTED_PENDING_QA')pct=35;
+  else if(status.includes('PHASE2'))pct=55;
+  else if(status.includes('PHASE3'))pct=75;
+  else if(status.includes('QUICK_CHECK_READY'))pct=100;
+  else if(status.includes('QA_HOLD'))pct=100;
+  $('uploadProgressBar').style.width=pct+'%';
+  $('uploadStatus').innerHTML=[
+    uploadStage(status.includes('READY')?'✅':'⏳','Pipeline',status,status.includes('READY')?'ok':(status.includes('HOLD')||status.includes('FAIL')?'bad':'warn')),
+    uploadStage('📄','Files',String(files.length)),
+    uploadStage('🧩','Phase 2C',p2.result_status||'Pending',String(p2.result_status||'').includes('READY')?'ok':''),
+    uploadStage('⚙️','Phase 3',p3.result_status||'Pending',String(p3.result_status||'').includes('READY')?'ok':'')
+  ].join('');
+  $('uploadServerFiles').innerHTML=files.map(x=>
+    '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
+  ).join('');
+  return status;
+}
+async function pollWebUpload(session){
+  if(!session)return;
+  webUploadSession=session;
+  if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
+  try{
+    let d=await api('/v1/web-upload/batches/'+encodeURIComponent(session));
+    let status=renderWebUploadStatus(d);
+    $('uploadMsg').textContent=terminalUploadStatus(status)
+      ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
+      : 'Server is processing this batch…';
+    if(!terminalUploadStatus(status))webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
+  }catch(e){$('uploadMsg').textContent=e.message}
+}
+async function loadWebUploadActive(){
+  if(webUploadSession){pollWebUpload(webUploadSession);return}
+  try{
+    let d=await api('/v1/web-upload/active'),a=d.active_batch;
+    if(a?.batch_key){webUploadSession=a.batch_key;pollWebUpload(a.batch_key)}
+  }catch(e){$('uploadMsg').textContent=e.message}
+}
+async function startWebUpload(){
+  if(!webUploadFiles.length){$('uploadMsg').textContent='Choose at least one raw file.';return}
+  $('uploadStart').disabled=true;$('uploadClear').disabled=true;$('uploadMsg').textContent='Creating upload batch…';
+  try{
+    let create=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Web raw upload '+new Date().toLocaleString()})});
+    webUploadSession=create.session_id;
+    $('uploadStatusCard').classList.remove('hide');
+    for(let i=0;i<webUploadFiles.length;i++){
+      let f=webUploadFiles[i];
+      $('uploadMsg').textContent='Uploading '+(i+1)+'/'+webUploadFiles.length+' · '+f.name;
+      $('uploadProgressBar').style.width=Math.round(((i+.3)/webUploadFiles.length)*30)+'%';
+      let fd=new FormData();fd.append('file',f,f.name);
+      await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/files',{method:'POST',body:fd});
+    }
+    $('uploadMsg').textContent='Files uploaded. Committing batch…';
+    await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/commit',{method:'POST'});
+    setWebUploadFiles([]);
+    await pollWebUpload(webUploadSession);
+  }catch(e){
+    $('uploadMsg').textContent=e.message;
+    if(webUploadSession)pollWebUpload(webUploadSession);
+  }finally{
+    $('uploadStart').disabled=false;$('uploadClear').disabled=false;
+  }
+}
+$('uploadDrop').onclick=()=>$('uploadFiles').click();
+$('uploadFiles').onchange=e=>setWebUploadFiles(e.target.files);
+$('uploadClear').onclick=()=>{setWebUploadFiles([]);$('uploadFiles').value=''};
+$('uploadStart').onclick=startWebUpload;
+['dragenter','dragover'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.add('drag')}));
+['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
+$('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
 
 async function csearch(){
   let q=$('cq').value.trim();
