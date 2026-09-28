@@ -792,27 +792,17 @@ def _quick_check_ordering(
             "effective_dos": dos,
         }
 
-    if days_supply < Decimal("3"):
-        action = "REORDER_REVIEW_NOW"
-        status = "LOW_COVERAGE"
-    elif days_supply <= Decimal("7"):
-        action = "WATCH_NEXT_ORDER"
-        status = "WATCH"
-    else:
-        action = "NO_IMMEDIATE_ORDER_ACTION"
-        status = "SUFFICIENT_COVERAGE"
-
     return {
-        "status": status,
-        "action": action,
+        "status": "COVERAGE_AVAILABLE",
+        "action": "REVIEW_AGAINST_ORDER_CALENDAR",
         "suggested_order_qty": None,
         "days_supply": days_supply,
         "effective_dos": dos,
         "ordering_calendar_required_for_quantity": True,
         "reason": (
-            "Coverage status uses effective OH and current 7D UPC velocity. "
-            "Exact order quantity/date remains unset until an ordering calendar "
-            "and target coverage policy are configured."
+            "Effective DOS is calculated from effective OH and current 7D UPC velocity. "
+            "No reorder threshold, order date, or order quantity is inferred until an "
+            "authoritative ordering calendar and target coverage policy are configured."
         ),
     }
 
@@ -893,11 +883,11 @@ def _quick_check_highlights(
                 }
             )
 
-    if ordering.get("status") in {"LOW_COVERAGE", "COUNT_REQUIRED", "BLOCKED"}:
+    if ordering.get("status") in {"COUNT_REQUIRED", "BLOCKED"}:
         highlights.append(
             {
                 "code": "ORDERING_ATTENTION",
-                "severity": "HIGH" if ordering.get("status") != "LOW_COVERAGE" else "MEDIUM",
+                "severity": "HIGH",
                 "text": str(ordering.get("reason") or ordering.get("action")),
             }
         )
