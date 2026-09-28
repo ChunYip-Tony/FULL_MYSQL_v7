@@ -647,6 +647,11 @@ def _family_receipt_events(cur, family_id: int, data_day_limit: int = 180) -> li
             "receipt_uom":uom,
             "quantity_basis":qty_basis,
             "receipt_stage_basis":basis,
+            "receipt_status":(
+                "POSITIVE_RECEIPT"
+                if qty is not None and qty > 0
+                else "NON_POSITIVE_OR_UNRESOLVED"
+            ),
             "source_rows":len(chosen),
         })
 
@@ -655,7 +660,13 @@ def _family_receipt_events(cur, family_id: int, data_day_limit: int = 180) -> li
 
 
 def _delivery_pattern(receipt_events: list[dict[str,Any]], after_date: date | None = None) -> dict[str,Any]:
-    dates=sorted({x["posting_date"] for x in receipt_events if x.get("posting_date")})
+    dates=sorted({
+        x["posting_date"]
+        for x in receipt_events
+        if x.get("posting_date")
+        and x.get("receipt_quantity") is not None
+        and Decimal(str(x.get("receipt_quantity"))) > 0
+    })
     if not dates:
         return {
             "observed_delivery_days":[],
@@ -744,8 +755,13 @@ def family_info(family_key: str) -> dict[str,Any]:
 
         events=_family_receipt_events(cur,fid)
         pattern=_delivery_pattern(events)
-        last_date=max((x["posting_date"] for x in events),default=None)
-        last_events=[x for x in events if x.get("posting_date")==last_date]
+        positive_events=[
+            x for x in events
+            if x.get("receipt_quantity") is not None
+            and Decimal(str(x.get("receipt_quantity"))) > 0
+        ]
+        last_date=max((x["posting_date"] for x in positive_events),default=None)
+        last_events=[x for x in positive_events if x.get("posting_date")==last_date]
         receipt_uoms={x.get("receipt_uom") for x in last_events if x.get("receipt_uom")}
         receipt_qty=(
             sum((_d(x.get("receipt_quantity")) for x in last_events),Decimal("0"))
