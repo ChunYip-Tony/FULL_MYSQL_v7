@@ -926,3 +926,313 @@ def price_analysis(upc: str, trend_supported_days: int = 90) -> dict[str,Any]:
         }
         cur.close()
     return result
+
+
+def _selling_equivalent_effective_oh(cur, row: dict[str,Any]) -> dict[str,Any]:
+    ctx=_system_oh_context(cur,row)
+    if not ctx:
+        return {"status":"OH_NOT_AVAILABLE","quantity":None,"uom":row.get("selling_uom")}
+    system=_system_position(cur,ctx)
+    true_stock=_active_true_stock(cur,ctx)
+    actual=_actual_position(cur,true_stock)
+    pos=actual if true_stock else system
+    if not pos or not pos.get("analysis_usable") or pos.get("quantity") is None:
+        return {
+            "status":"OH_NOT_ANALYSIS_USABLE",
+            "quantity":None,
+            "uom":row.get("selling_uom"),
+            "source":"TRUE_STOCK" if true_stock else "SYSTEM_OH",
+            "blockers":pos.get("blockers") if pos else ["OH_POSITION_NOT_AVAILABLE"],
+        }
+
+    qty=_d(pos.get("quantity"))
+    oh_uom=str(pos.get("uom") or "").strip().upper()
+    selling=str(row.get("selling_uom") or "").strip().upper()
+    base=str(row.get("base_uom") or "").strip().upper()
+    factor=(Decimal(str(row["base_qty_per_selling_unit"])) if row.get("base_qty_per_selling_unit") is not None else None)
+
+    if oh_uom and selling and oh_uom==selling:
+        selling_qty=qty
+        basis="DIRECT_SELLING_UOM"
+    elif oh_uom and base and selling and oh_uom==base and factor is not None and factor>0:
+        selling_qty=qty/factor
+        basis="BASE_TO_SELLING_FACTOR"
+    else:
+        return {
+            "status":"OH_UOM_CONVERSION_UNRESOLVED",
+            "quantity":None,
+            "uom":row.get("selling_uom"),
+            "source":"TRUE_STOCK" if true_stock else "SYSTEM_OH",
+            "source_quantity":qty,
+            "source_uom":oh_uom or None,
+            "base_uom":row.get("base_uom"),
+            "base_qty_per_selling_unit":factor,
+        }
+    return {
+        "status":"READY",
+        "quantity":selling_qty,
+        "uom":row.get("selling_uom"),
+        "source":"TRUE_STOCK" if true_stock else "SYSTEM_OH",
+        "source_quantity":qty,
+        "source_uom":oh_uom,
+        "conversion_basis":basis,
+    }
+
+
+def _regular_baseline(cur, upc_id: int, supported_day_limit: int = 28) -> dict[str,Any]:
+    days=_canonical_sales_days(cur,limit=max(1,min(int(supported_day_limit),90)))
+    daily=_daily_sales_by_price_type(cur,upc_id,days)
+    regular_days=[]
+    qty=Decimal("0")
+    for day in sorted(daily):
+        x=daily[day]
+        # Any SALE evidence makes the whole supported day promotional.
+        # TPR remains regular by explicit business rule.
+        if "SALE" in x["price_types"]:
+            continue
+        regular_days.append(day)
+        qty+=_d(x.get("sold_quantity"))
+    n=len(regular_days)
+    return {
+        "requested_supported_days":supported_day_limit,
+        "regular_supported_day_count":n,
+        "regular_sold_quantity":qty,
+        "regular_velocity_per_supported_day":(qty/Decimal(n) if n else None),
+        "start_date":min(regular_days) if regular_days else None,
+        "end_date":max(regular_days) if regular_days else None,
+        "sale_days_excluded":len(days)-n,
+        "tpr_treated_as_regular":True,
+        "missing_calendar_dates_are_zero":False,
+    }
+
+
+def _promotion_forecast_baseline(
+    cur,
+    upc_id: int,
+    start_date: date,
+    end_date: date,
+    promotion_price: Decimal,
+) -> dict[str,Any]:
+    requested_type=_promotion_type(start_date,end_date)
+    history=_historical_sale_periods(cur,upc_id,365)
+    same=[x for x in history if x.get("promotion_type")==requested_type and x.get("sale_velocity_per_supported_day") is not None]
+    def price_distance(x: dict[str,Any]) -> Decimal:
+        p=x.get("sale_price")
+        return abs(Decimal(str(p))-promotion_price) if p is not None else Decimal("999999")
+    same.sort(key=lambda x:(price_distance(x),-x["end_date"].toordinal()))
+    selected=same[:3]
+    if not selected:
+        return {
+            "status":"NO_MATCHING_PROMOTION_HISTORY",
+            "promotion_type":requested_type,
+            "promotion_velocity_per_day":None,
+            "selected_history":[],
+            "confidence":"LOW",
+        }
+    weighted_qty=sum((_d(x.get("sale_quantity")) for x in selected),Decimal("0"))
+    weighted_days=sum((int(x.get("supported_sales_day_count") or 0) for x in selected),0)
+    velocity=(weighted_qty/Decimal(weighted_days) if weighted_days else None)
+    coverage_complete=all(x.get("coverage_status")=="COMPLETE" for x in selected)
+    return {
+        "status":"READY",
+        "promotion_type":requested_type,
+        "promotion_velocity_per_day":velocity,
+        "selected_history":selected,
+        "selected_period_count":len(selected),
+        "confidence":"HIGH" if coverage_complete and len(selected)>=2 else "MEDIUM",
+        "selection_basis":"SAME_PROMOTION_TYPE_THEN_CLOSEST_SALE_PRICE_THEN_RECENCY",
+    }
+
+
+def _next_delivery_after(pattern: dict[str,Any], after_date: date) -> date | None:
+    weekdays=[int(x) for x in (pattern.get("expected_weekdays") or [])]
+    if not weekdays:
+        return None
+    candidates=[]
+    for wd in weekdays:
+        delta=(wd-after_date.weekday())%7
+        if delta==0:
+            delta=7
+        candidates.append(after_date+timedelta(days=delta))
+    return min(candidates) if candidates else None
+
+
+def ordering_analysis(
+    upc: str,
+    *,
+    ordering_date: date | None = None,
+    expected_delivery_date: date | None = None,
+    promotion_involved: bool = False,
+    promotion_start_date: date | None = None,
+    promotion_end_date: date | None = None,
+    promotion_price: Decimal | None = None,
+) -> dict[str,Any]:
+    raw=str(upc or "").strip()
+    nk=_numeric_key(raw)
+    order_day=ordering_date or business_today()
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT * FROM quick_check_current
+               WHERE ean_upc=%s
+                  OR (ean_upc REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM ean_upc)=%s)
+               ORDER BY CASE quick_check_status WHEN 'READY' THEN 0 WHEN 'QA_HOLD' THEN 1 ELSE 2 END
+               LIMIT 1""",
+            (raw,nk),
+        )
+        row=cur.fetchone()
+        if not row:
+            cur.close()
+            raise KeyError("V2_UPC_NOT_FOUND")
+
+        upc_id=int(row["upc_id"])
+        family_id=int(row["family_id"])
+        events=_family_receipt_events(cur,family_id)
+        pattern=_delivery_pattern(events,after_date=order_day)
+        delivery=expected_delivery_date or pattern.get("next_expected_delivery_date")
+        effective_oh=_selling_equivalent_effective_oh(cur,row)
+        regular=_regular_baseline(cur,upc_id,28)
+        historical_promotions=_historical_sale_periods(cur,upc_id,365)
+
+        blockers=[]
+        if delivery is None:
+            blockers.append("EXPECTED_DELIVERY_DATE_REQUIRED")
+        elif delivery < order_day:
+            blockers.append("EXPECTED_DELIVERY_BEFORE_ORDER_DATE")
+        if effective_oh.get("status")!="READY":
+            blockers.append(str(effective_oh.get("status")))
+        if regular.get("regular_velocity_per_supported_day") is None:
+            blockers.append("REGULAR_BASELINE_UNAVAILABLE")
+
+        promo_baseline=None
+        if promotion_involved:
+            if promotion_start_date is None or promotion_end_date is None or promotion_price is None:
+                blockers.append("PROMOTION_INPUTS_REQUIRED")
+            elif promotion_end_date < promotion_start_date:
+                blockers.append("PROMOTION_END_BEFORE_START")
+            else:
+                promo_baseline=_promotion_forecast_baseline(
+                    cur,upc_id,promotion_start_date,promotion_end_date,Decimal(str(promotion_price))
+                )
+
+        next_next=_next_delivery_after(pattern,delivery) if delivery is not None else None
+        if delivery is not None and next_next is None:
+            blockers.append("NEXT_NEXT_DELIVERY_UNRESOLVED")
+
+        regular_velocity=regular.get("regular_velocity_per_supported_day")
+        promotion_velocity=(
+            promo_baseline.get("promotion_velocity_per_day")
+            if promo_baseline and promo_baseline.get("status")=="READY"
+            else None
+        )
+
+        # No invented promotion uplift. If matching SALE history is unavailable,
+        # use the regular baseline for those future dates and expose LOW confidence.
+        promo_forecast_fallback=False
+        if promotion_involved and promo_baseline and promotion_velocity is None and regular_velocity is not None:
+            promotion_velocity=regular_velocity
+            promo_forecast_fallback=True
+
+        forecast_rows=[]
+        total_usage=Decimal("0")
+        before_delivery_usage=Decimal("0")
+        if not blockers or (
+            set(blockers) <= {"PROMOTION_INPUTS_REQUIRED"} and not promotion_involved
+        ):
+            if next_next is not None and regular_velocity is not None:
+                day=order_day
+                while day < next_next:
+                    is_promo=bool(
+                        promotion_involved
+                        and promotion_start_date is not None
+                        and promotion_end_date is not None
+                        and promotion_start_date <= day <= promotion_end_date
+                    )
+                    velocity=promotion_velocity if is_promo else regular_velocity
+                    basis=(
+                        "HISTORICAL_SALE_PROMOTION"
+                        if is_promo and promo_baseline and promo_baseline.get("status")=="READY"
+                        else ("REGULAR_FALLBACK_NO_MATCHING_SALE_HISTORY" if is_promo else "REGULAR_BASELINE")
+                    )
+                    usage=_d(velocity)
+                    total_usage+=usage
+                    if delivery is not None and day < delivery:
+                        before_delivery_usage+=usage
+                    forecast_rows.append({
+                        "date":day,
+                        "demand_type":"PROMOTION" if is_promo else "REGULAR",
+                        "forecast_usage":usage,
+                        "uom":row.get("selling_uom"),
+                        "basis":basis,
+                    })
+                    day+=timedelta(days=1)
+
+        oh_qty=(
+            Decimal(str(effective_oh["quantity"]))
+            if effective_oh.get("quantity") is not None else None
+        )
+        projected_oh_at_delivery=(
+            oh_qty-before_delivery_usage
+            if oh_qty is not None and delivery is not None else None
+        )
+        raw_suggested=(
+            max(Decimal("0"),total_usage-oh_qty)
+            if oh_qty is not None and next_next is not None else None
+        )
+
+        result={
+            "contract_version":"WEBAPP_V2_ORDERING_V1",
+            "upc":row.get("ean_upc"),
+            "name":row.get("selling_description"),
+            "category":row.get("product_class"),
+            "readiness":row.get("quick_check_status"),
+            "inputs":{
+                "ordering_date":order_day,
+                "expected_delivery_date":delivery,
+                "expected_delivery_default_source":(
+                    "USER_INPUT" if expected_delivery_date is not None else "OBSERVED_DELIVERY_PATTERN"
+                ),
+                "promotion_involved":bool(promotion_involved),
+                "promotion_start_date":promotion_start_date,
+                "promotion_end_date":promotion_end_date,
+                "promotion_price":promotion_price,
+                "promotion_price_type":"SALE" if promotion_involved else None,
+            },
+            "inventory":{
+                "effective_oh":effective_oh,
+                "last_receipt_date":row.get("last_receipt_date"),
+                "dos":row.get("dos"),
+                "doh":row.get("doh"),
+            },
+            "observed_delivery":pattern,
+            "next_next_delivery_date":next_next,
+            "regular_baseline":regular,
+            "promotion_baseline":promo_baseline,
+            "historical_promotions":historical_promotions,
+            "forecast":{
+                "horizon_start":order_day,
+                "horizon_end_exclusive":next_next,
+                "regular_or_sale_by_calendar_date":forecast_rows,
+                "forecast_usage_until_next_next_delivery":total_usage if forecast_rows else None,
+                "forecast_usage_before_expected_delivery":before_delivery_usage if forecast_rows else None,
+                "projected_oh_at_expected_delivery":projected_oh_at_delivery,
+                "suggested_order_qty":raw_suggested,
+                "suggested_order_uom":row.get("selling_uom"),
+                "promotion_fallback_to_regular":promo_forecast_fallback,
+                "rounding_applied":False,
+            },
+            "status":"READY" if not blockers else "BLOCKED",
+            "blockers":blockers,
+            "rules":{
+                "sales_history":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
+                "missing_source_dates_count_as_zero":False,
+                "promotion_definition":"PRICE_TYPE_SALE_ONLY",
+                "tpr_is_promotion":False,
+                "coverage_target":"USAGE_UNTIL_NEXT_NEXT_DELIVERY_DATE",
+                "saved":False,
+                "submitted":False,
+            },
+        }
+        cur.close()
+    return result
