@@ -1,6 +1,7 @@
 from __future__ import annotations
-import hmac, json
+import hmac, json, os, time
 from datetime import date, datetime
+from pathlib import Path
 from decimal import Decimal
 from typing import Annotated
 from fastapi import FastAPI, UploadFile, File, Header, HTTPException
@@ -19,7 +20,7 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.76-single-service'
+VERSION='7.0.77-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -49,6 +50,40 @@ class TrueStockCancelRequest(BaseModel):
 
 @app.get('/healthz')
 def healthz(): return {'ok':True,'version':VERSION}
+
+@app.get('/v1/worker-health')
+def worker_health(authorization: Annotated[str|None,Header()]=None):
+    device_from_auth(authorization)
+    path=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
+    if not path.exists():
+        return {
+            'healthy':False,
+            'reason':'WORKER_HEARTBEAT_FILE_MISSING',
+            'path':str(path),
+        }
+    try:
+        payload=json.loads(path.read_text(encoding='utf-8'))
+    except Exception as exc:
+        return {
+            'healthy':False,
+            'reason':'WORKER_HEARTBEAT_FILE_UNREADABLE',
+            'error':str(exc),
+            'path':str(path),
+        }
+    epoch=payload.get('heartbeat_epoch')
+    age_seconds=None
+    try:
+        age_seconds=max(0,int(time.time())-int(epoch))
+    except Exception:
+        pass
+    healthy=age_seconds is not None and age_seconds <= 30
+    return {
+        **payload,
+        'healthy':healthy,
+        'heartbeat_age_seconds':age_seconds,
+        'reason':None if healthy else 'WORKER_HEARTBEAT_STALE',
+    }
+
 
 @app.get('/v1/status')
 def status(authorization: Annotated[str|None,Header()]=None):

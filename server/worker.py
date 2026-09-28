@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, os, socket, threading, time, traceback
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from db import db_conn, test_database
 from ingest import audit_batch, release_batch
 from normalize import normalize_batch, audit_phase2c
@@ -11,6 +12,9 @@ POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
 STALE_STARTED_SECONDS=max(90,int(os.environ.get('FULLMYSQL_WORKER_STALE_STARTED_SECONDS','180')))
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
+RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
+_RUNTIME_LOCK=threading.Lock()
+_RUNTIME_STATE={'state':'STARTING','run_id':None,'stage':None}
 
 def _touch_run(run_id:int, *, stage:str|None=None) -> None:
     payload={
@@ -43,47 +47,98 @@ def _heartbeat_loop(run_id:int, stop_event:threading.Event) -> None:
             pass
 
 
+def _set_runtime_state(state:str, run_id:int|None=None, stage:str|None=None) -> None:
+    with _RUNTIME_LOCK:
+        _RUNTIME_STATE['state']=state
+        _RUNTIME_STATE['run_id']=run_id
+        _RUNTIME_STATE['stage']=stage
+
+
+def _write_runtime_health(state:str|None=None, run_id:int|None=None, stage:str|None=None) -> None:
+    if state is not None:
+        _set_runtime_state(state,run_id,stage)
+    with _RUNTIME_LOCK:
+        current=dict(_RUNTIME_STATE)
+    payload={
+        'worker':WORKER,
+        'pid':os.getpid(),
+        'state':current.get('state'),
+        'run_id':current.get('run_id'),
+        'stage':current.get('stage'),
+        'heartbeat_at':datetime.now(timezone.utc).isoformat(),
+        'heartbeat_epoch':int(time.time()),
+        'code_version':API_VERSION,
+    }
+    try:
+        RUNTIME_HEALTH_PATH.parent.mkdir(parents=True,exist_ok=True)
+        tmp=RUNTIME_HEALTH_PATH.with_suffix('.tmp')
+        tmp.write_text(json.dumps(payload,ensure_ascii=False),encoding='utf-8')
+        tmp.replace(RUNTIME_HEALTH_PATH)
+    except Exception:
+        pass
+
+
+def _runtime_heartbeat_loop(stop_event:threading.Event) -> None:
+    while not stop_event.is_set():
+        _write_runtime_health()
+        stop_event.wait(10)
+
+
 def _recover_stale_started(cur) -> int:
-    # A healthy in-process job receives a heartbeat every HEARTBEAT_SECONDS.
-    # If the worker/container dies, the outer run can otherwise remain STARTED
-    # forever and block every later queue claim. Requeue only demonstrably stale
-    # runs; Phase 3 itself commits atomically, so an interrupted business
-    # transaction is rolled back by MySQL before this retry.
+    # Inspect only the tiny set of currently STARTED outer API jobs. Parse the
+    # heartbeat in Python instead of JSON_EXTRACT/JSON_SET so recovery does not
+    # depend on MySQL JSON execution or large sort buffers.
     cur.execute(
-        """UPDATE pipeline_run
-           SET processing_status='QUEUED',
-               started_at=NULL,
-               completed_at=NULL,
-               error_count=0,
-               detail_json=JSON_SET(
-                   COALESCE(detail_json,JSON_OBJECT()),
-                   '$.recovered_stale_started',TRUE,
-                   '$.recovered_at',%s,
-                   '$.recovery_reason','WORKER_HEARTBEAT_STALE'
-               )
+        """SELECT pipeline_run_id,started_at,code_version,detail_json
+           FROM pipeline_run
            WHERE pipeline_name=%s
              AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-             AND processing_status='STARTED'
-             AND (
-                 (
-                   JSON_EXTRACT(detail_json,'$.heartbeat_epoch') IS NOT NULL
-                   AND CAST(JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.heartbeat_epoch')) AS UNSIGNED)
-                       < UNIX_TIMESTAMP()- %s
-                 )
-                 OR
-                 (
-                   JSON_EXTRACT(detail_json,'$.heartbeat_epoch') IS NULL
-                   AND TIMESTAMPDIFF(SECOND,started_at,CURRENT_TIMESTAMP(6)) > %s
-                 )
-             )""",
-        (
-            datetime.utcnow().isoformat()+'Z',
-            API_PIPELINE,
-            STALE_STARTED_SECONDS,
-            STALE_STARTED_SECONDS,
-        ),
+             AND processing_status='STARTED'""",
+        (API_PIPELINE,),
     )
-    return int(cur.rowcount or 0)
+    now=time.time()
+    recovered=0
+    for row in cur.fetchall():
+        detail={}
+        try:
+            detail=json.loads(row.get('detail_json') or '{}')
+        except Exception:
+            detail={}
+        heartbeat_epoch=detail.get('heartbeat_epoch')
+        started_at=row.get('started_at')
+        stale=False
+        if heartbeat_epoch is not None:
+            try:
+                stale=(now-float(heartbeat_epoch)) > STALE_STARTED_SECONDS
+            except Exception:
+                stale=False
+        elif started_at is not None:
+            try:
+                stale=(datetime.utcnow()-started_at).total_seconds() > STALE_STARTED_SECONDS
+            except Exception:
+                stale=False
+        if not stale:
+            continue
+        recovery_detail={
+            'recovered_stale_started':True,
+            'recovered_at':datetime.now(timezone.utc).isoformat(),
+            'recovery_reason':'WORKER_HEARTBEAT_STALE',
+            'previous_worker':detail.get('worker'),
+            'previous_code_version':row.get('code_version'),
+        }
+        cur.execute(
+            """UPDATE pipeline_run
+               SET processing_status='QUEUED',
+                   started_at=NULL,
+                   completed_at=NULL,
+                   error_count=0,
+                   detail_json=%s
+               WHERE pipeline_run_id=%s
+                 AND processing_status='STARTED'""",
+            (json.dumps(recovery_detail,ensure_ascii=False,default=str),row['pipeline_run_id']),
+        )
+        recovered += int(cur.rowcount or 0)
+    return recovered
 
 
 def claim_job():
@@ -116,14 +171,24 @@ def claim_job():
                 return None
 
             cur.execute(
-                """SELECT pipeline_run_id,batch_id,stage_name FROM pipeline_run
+                """SELECT MIN(pipeline_run_id) AS pipeline_run_id
+                   FROM pipeline_run
                    WHERE pipeline_name=%s
                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                     AND processing_status='QUEUED'
-                   ORDER BY pipeline_run_id
-                   LIMIT 1
-                   FOR UPDATE""",
+                     AND processing_status='QUEUED'""",
                 (API_PIPELINE,),
+            )
+            queued=cur.fetchone() or {}
+            queued_id=queued.get('pipeline_run_id')
+            if queued_id is None:
+                return None
+            cur.execute(
+                """SELECT pipeline_run_id,batch_id,stage_name
+                   FROM pipeline_run
+                   WHERE pipeline_run_id=%s
+                     AND processing_status='QUEUED'
+                   FOR UPDATE""",
+                (queued_id,),
             )
             row=cur.fetchone()
             if not row:
@@ -180,12 +245,14 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     heartbeat.start()
 
     def progress(stage:str, payload:dict|None=None):
+        _write_runtime_health('BUSY',run_id,stage)
         try:
             _touch_run(run_id,stage=stage)
         except Exception:
             pass
 
     try:
+        _write_runtime_health('BUSY',run_id,'STARTING')
         progress('STARTING')
         if stage_name == 'PHASE3_RERUN':
             p3=process_phase3(batch_id,progress=progress)
@@ -219,13 +286,31 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     finally:
         stop_event.set()
         heartbeat.join(timeout=2)
+        _write_runtime_health('IDLE')
 
 def main():
+    _write_runtime_health('STARTING')
     db=test_database(); print('FULL MYSQL v7 worker DB:',db,flush=True)
-    while True:
-        job=claim_job()
-        if job:
-            print('Processing',job,flush=True); process(*job)
-        else: time.sleep(max(2,POLL))
+    runtime_stop=threading.Event()
+    runtime_thread=threading.Thread(target=_runtime_heartbeat_loop,args=(runtime_stop,),daemon=True)
+    runtime_thread.start()
+    try:
+        while True:
+            try:
+                job=claim_job()
+            except Exception as exc:
+                _write_runtime_health('ERROR',stage=f'CLAIM_ERROR:{type(exc).__name__}')
+                print('Worker claim error:',repr(exc),flush=True)
+                time.sleep(max(2,POLL))
+                continue
+            if job:
+                print('Processing',job,flush=True); process(*job)
+            else:
+                _write_runtime_health('IDLE')
+                time.sleep(max(2,POLL))
+    finally:
+        runtime_stop.set()
+        runtime_thread.join(timeout=2)
+        _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
