@@ -1,3 +1,7 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.25 Single-Service Edition
-Fix: Family 291 final user-authority lock; retire nonexistent 26510500000; preserve 81223402610 PACK->EA x1
+Version: 7.0.105 Single-Service Edition
+
+Canonical runtime version: 7.0.105-single-service
+Web App: v7.0.105
+Admin Console: v7.0.105
+Deployment model: Single-Service API + background worker
