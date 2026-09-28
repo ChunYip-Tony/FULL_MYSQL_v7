@@ -15,12 +15,12 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.86-single-service'
+VERSION='7.0.87-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1193,6 +1193,15 @@ def diagnostic_inventory_position(
     except Exception as exc:
         raise HTTPException(500,f'Inventory position diagnostic failed: {exc}')
     return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/inventory/negative-stock')
+def app_negative_stock_queue(
+    limit:int=100,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device_from_auth(authorization)
+    return json.loads(json.dumps(negative_stock_queue(limit),default=j))
 
 
 @app.get('/v1/app/quick-check/with-oh')
