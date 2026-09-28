@@ -114,6 +114,19 @@ def ensure_true_stock_tables(cur) -> None:
                AFTER anchor_movement_date"""
         )
 
+    if not _column_exists(cur, "dumping_discrepancy_queue", "resolved_by"):
+        cur.execute(
+            """ALTER TABLE dumping_discrepancy_queue
+               ADD COLUMN resolved_by VARCHAR(128) NULL
+               AFTER resolved_at"""
+        )
+    if not _column_exists(cur, "dumping_discrepancy_queue", "resolution_note"):
+        cur.execute(
+            """ALTER TABLE dumping_discrepancy_queue
+               ADD COLUMN resolution_note VARCHAR(255) NULL
+               AFTER resolved_by"""
+        )
+
     if not _column_exists(cur, "manual_true_stock", "cancelled_at"):
         cur.execute(
             """ALTER TABLE manual_true_stock
@@ -2440,6 +2453,64 @@ def price_change_queue(limit: int = 120) -> dict[str, Any]:
         "mode": "READ_ONLY_REVIEW",
         "rows": rows,
     }
+
+
+def resolve_dumping_discrepancy(
+    discrepancy_id: int,
+    device: str,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Mark a pending dumping discrepancy handled without mutating inventory."""
+    did = int(discrepancy_id)
+    clean_note = str(note or "").strip()[:255] or None
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            ensure_true_stock_tables(cur)
+            conn.commit()
+            conn.start_transaction()
+            cur.execute(
+                """SELECT discrepancy_id,queue_status,source_true_stock_id,
+                          family_id,main_article_number,article_number,ean_upc,
+                          system_oh_quantity,true_stock_quantity,discrepancy_quantity,uom_code
+                   FROM dumping_discrepancy_queue
+                   WHERE discrepancy_id=%s
+                   FOR UPDATE""",
+                (did,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise KeyError("DUMPING_DISCREPANCY_NOT_FOUND")
+            if str(row.get("queue_status") or "").upper() != "PENDING":
+                raise ValueError("DUMPING_DISCREPANCY_NOT_PENDING")
+            cur.execute(
+                """UPDATE dumping_discrepancy_queue
+                   SET queue_status='RESOLVED',
+                       resolved_at=CURRENT_TIMESTAMP(6),
+                       resolved_by=%s,
+                       resolution_note=%s
+                   WHERE discrepancy_id=%s
+                     AND queue_status='PENDING'""",
+                (device, clean_note, did),
+            )
+            if int(cur.rowcount or 0) != 1:
+                raise RuntimeError("DUMPING_RESOLVE_CONFLICT")
+            conn.commit()
+            return {
+                "status": "RESOLVED",
+                "discrepancy_id": did,
+                "resolved_by": device,
+                "resolution_note": clean_note,
+                "inventory_mutated": False,
+                "true_stock_mutated": False,
+                "queue_only_action": True,
+                "row": row,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
 
 
 def pending_dumping_discrepancies() -> list[dict[str, Any]]:
