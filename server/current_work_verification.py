@@ -181,7 +181,7 @@ def verify_current_work(
 
         cur.execute(
             """SELECT ean_upc,family_id,main_article_number,cost_source,
-                      quick_check_status
+                      cost_date,current_cost_per_base_uom,quick_check_status
                FROM quick_check_current
                WHERE quick_check_status IN ('READY','QA_HOLD')
                  AND family_id IS NOT NULL
@@ -196,7 +196,18 @@ def verify_current_work(
                 expected_cost_by_family[fid] = _latest_cost(cur, fid)
             expected = expected_cost_by_family[fid]
             expected_source = expected.get("source") if expected else None
-            if row.get("cost_source") != expected_source:
+            expected_amount = (
+                _decimal(expected.get("cost_per_base"))
+                if expected else None
+            )
+            expected_date = expected.get("date") if expected else None
+            actual_amount = _decimal(row.get("current_cost_per_base_uom"))
+            mismatch = (
+                row.get("cost_source") != expected_source
+                or actual_amount != expected_amount
+                or row.get("cost_date") != expected_date
+            )
+            if mismatch:
                 cost_authority_mismatches.append(
                     {
                         "ean_upc": str(row["ean_upc"]),
@@ -204,6 +215,10 @@ def verify_current_work(
                         "main_article_number": row.get("main_article_number"),
                         "actual_cost_source": row.get("cost_source"),
                         "expected_cost_source": expected_source,
+                        "actual_cost_amount": actual_amount,
+                        "expected_cost_amount": expected_amount,
+                        "actual_cost_date": row.get("cost_date"),
+                        "expected_cost_date": expected_date,
                     }
                 )
 
