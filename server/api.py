@@ -20,8 +20,9 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
+from cost_backfill_queue import cost_backfill_queue
 
-VERSION='7.0.90-single-service'
+VERSION='7.0.91-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
