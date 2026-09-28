@@ -36,15 +36,44 @@ table{width:100%;border-collapse:separate;border-spacing:0;font-size:16px}th,td{
 .result-type{font-size:14px;font-weight:850;color:var(--muted)}
 .audit-ok{border-left:6px solid var(--ok)}
 .audit-warn{border-left:6px solid var(--warn)}
+html,body{max-width:100%;overflow-x:hidden}
+.w,.screen,.card,.head,.head>div,.row,.row>*{min-width:0;max-width:100%}
+.meta,.msg,.small,.name,.title,.result-upc,.result-number,.result-type{overflow-wrap:anywhere;word-break:break-word}
+.grid,.actions,.form,.search-bar,.navin{min-width:0;max-width:100%}
+.group-block{border:1.5px solid var(--line);border-radius:20px;padding:15px;margin:12px 0;box-shadow:var(--shadow)}
+.group-title{font-size:18px;font-weight:950;margin-bottom:10px}
+.group-identity{background:linear-gradient(135deg,color-mix(in srgb,#4f7cff 15%,var(--card)),var(--card));border-color:color-mix(in srgb,#4f7cff 38%,var(--line))}
+.group-sales{background:linear-gradient(135deg,color-mix(in srgb,#16a36a 14%,var(--card)),var(--card));border-color:color-mix(in srgb,#16a36a 36%,var(--line))}
+.group-inventory{background:linear-gradient(135deg,color-mix(in srgb,#f59e0b 16%,var(--card)),var(--card));border-color:color-mix(in srgb,#f59e0b 40%,var(--line))}
+.group-delivery{background:linear-gradient(135deg,color-mix(in srgb,#8b5cf6 14%,var(--card)),var(--card));border-color:color-mix(in srgb,#8b5cf6 36%,var(--line))}
+.group-price{background:linear-gradient(135deg,color-mix(in srgb,#ec4899 13%,var(--card)),var(--card));border-color:color-mix(in srgb,#ec4899 34%,var(--line))}
+.group-block .m{background:color-mix(in srgb,var(--card) 82%,transparent);box-shadow:none}
+.related-list{display:grid;gap:10px;margin-top:10px}
+.related-card{border:1.5px solid var(--line);border-radius:17px;padding:13px;background:var(--card);box-shadow:var(--shadow);cursor:pointer}
+.related-upc{font-size:22px;font-weight:950;letter-spacing:.02em;overflow-wrap:anywhere}
+.review-actionable{border-left:7px solid var(--ok)}
+.review-only{border-left:7px solid var(--warn)}
+.review-hold{border-left:7px solid var(--bad)}
+.review-badge{font-weight:950;font-size:13px}
+@media(max-width:560px){
+  .grid{grid-template-columns:1fr}
+  .m{min-height:78px}
+  .card,.group-block{width:100%;max-width:100%}
+  table{font-size:14px}
+  .result{padding-right:34px}
+  .result:after{right:10px}
+  .hero-number{font-size:28px}
+}
+
 @media(max-width:560px){.search-bar{grid-template-columns:minmax(0,1fr) auto}.search-bar .primary{grid-column:1/-1}.clear-btn{min-width:76px}}
 @media(min-width:760px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.form{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){body{font-size:18px}.w{padding:11px}.card{padding:15px}.m .v{font-size:21px}.m .k{font-size:13px}.title{font-size:26px}.actions{grid-template-columns:1fr}.actions button{font-size:19px;min-height:72px}.nav button{font-size:13px;min-height:68px}.scroll{margin-left:-4px;margin-right:-4px}}
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.117</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.118</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
-<section id="family" class="screen"><div class="head"><button class="back" data-go="core">←</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="card"><b>Related UPCs</b><div class="scroll"><table><thead><tr><th>Item</th><th>Status</th><th>Price</th><th>Type</th><th>7D</th><th>28D</th></tr></thead><tbody id="fu"></tbody></table></div></div></section>
+<section id="family" class="screen"><div class="head"><button class="back" data-go="core">←</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="card"><div class="section">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
 
 <section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum" class="card"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
@@ -109,9 +138,73 @@ $('cc').onclick=()=>{$('cq').value='';$('cres').innerHTML='';$('cmsg').textConte
 $('cq').onkeydown=e=>{if(e.key==='Enter')csearch()};
 
 
-async function family(k){try{let d=await api('/v1/app/v2/family/'+encodeURIComponent(k)),o=d.current_effective_oh||{},z=d.observed_delivery||{},r=d.last_receipt||{};$('ft').textContent=d.family_article_name;$('fs').textContent='Family '+(d.family_article_number||'—')+' · '+(d.category||'—');$('fsummary').innerHTML='<div class="card"><div class="grid">'+m('Family Article',d.family_article_number||'—')+m('Category',d.category||'—')+m('Family 7D Sold',fmt(d.family_sales_7d?.sold_quantity)+' '+(d.family_sales_7d?.uom||'')+' / '+fmt(d.family_sales_7d?.supported_day_count,0)+' days')+m('Family 28D Sold',fmt(d.family_sales_28d?.sold_quantity)+' '+(d.family_sales_28d?.uom||'')+' / '+fmt(d.family_sales_28d?.supported_day_count,0)+' days')+m('Effective OH',fmt(o.quantity)+' '+(o.uom||''))+m('Next Expected Delivery',d.next_expected_delivery_date||'Uncertain')+m('Observed Days',(z.observed_delivery_days||[]).map(x=>x.weekday).join(', ')||'—')+m('Frequency',z.frequency||'—')+m('Last Receipt',r.date||'—')+m('Receipt Qty',fmt(r.quantity)+' '+(r.uom||''))+m('Receipt Cost',money(r.cost)+' '+(r.cost_uom||''))+'</div></div>';$('fu').innerHTML=(d.related_upcs||[]).map((x,i)=>'<tr data-i="'+i+'" class="result"><td><b>'+esc(x.name)+'</b><div class="meta">'+esc(x.upc)+'</div></td><td>'+pill(x.readiness)+'</td><td>'+money(x.current_price)+'</td><td>'+esc(x.current_price_type||'—')+'</td><td>'+fmt(x.qty_7d)+'</td><td>'+fmt(x.qty_28d)+'</td></tr>').join('');document.querySelectorAll('#fu tr').forEach(e=>e.onclick=()=>upc(d.related_upcs[+e.dataset.i].upc,'family'));go('family')}catch(e){alert(e.message)}}
+async function family(k){try{
+  let d=await api('/v1/app/v2/family/'+encodeURIComponent(k)),o=d.current_effective_oh||{},z=d.observed_delivery||{},r=d.last_receipt||{};
+  $('ft').textContent=d.family_article_name;
+  $('fs').textContent='Family '+(d.family_article_number||'—')+' · '+(d.category||'—');
+  let articleText=(d.receiving_ordering_articles||[]).map(a=>esc(a.article_number)+(a.article_description?' · '+esc(a.article_description):'')).join('<br>')||'—';
+  $('fsummary').innerHTML=
+    '<div class="group-block group-identity"><div class="group-title">🪪 Identity</div><div class="grid">'+
+      m('Family Article',d.family_article_number||'—')+
+      m('Category',d.category||'—')+
+      m('Receiving / Ordering',articleText)+
+    '</div></div>'+
+    '<div class="group-block group-sales"><div class="group-title">📈 Sales</div><div class="grid">'+
+      m('Family 7D Sold',fmt(d.family_sales_7d?.sold_quantity)+' '+(d.family_sales_7d?.uom||'')+' / '+fmt(d.family_sales_7d?.supported_day_count,0)+' days')+
+      m('Family 28D Sold',fmt(d.family_sales_28d?.sold_quantity)+' '+(d.family_sales_28d?.uom||'')+' / '+fmt(d.family_sales_28d?.supported_day_count,0)+' days')+
+    '</div></div>'+
+    '<div class="group-block group-inventory"><div class="group-title">📦 Inventory</div><div class="grid">'+
+      m('Effective OH',fmt(o.quantity)+' '+(o.uom||''))+
+    '</div></div>'+
+    '<div class="group-block group-delivery"><div class="group-title">🚚 Delivery & Receipt</div><div class="grid">'+
+      m('Next Expected Delivery',d.next_expected_delivery_date||'Uncertain')+
+      m('Observed Days',(z.observed_delivery_days||[]).map(x=>x.weekday).join(', ')||'—')+
+      m('Frequency',z.frequency||'—')+
+      m('Last Receipt',r.date||'—')+
+      m('Receipt Qty',fmt(r.quantity)+' '+(r.uom||''))+
+      m('Receipt Cost',money(r.cost)+' '+(r.cost_uom||''))+
+    '</div></div>';
+  $('fu').innerHTML=(d.related_upcs||[]).map((x,i)=>
+    '<div class="related-card" data-i="'+i+'">'+
+      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div></div>'+pill(x.readiness)+'</div>'+
+      '<div class="grid" style="margin-top:10px">'+
+        m('Price',money(x.current_price)+' '+esc(x.current_price_type||''))+
+        m('7D Qty',fmt(x.qty_7d))+
+        m('28D Qty',fmt(x.qty_28d))+
+      '</div>'+
+    '</div>'
+  ).join('')||'<div class="small">No related UPCs.</div>';
+  document.querySelectorAll('#fu [data-i]').forEach(e=>e.onclick=()=>upc(d.related_upcs[+e.dataset.i].upc,'family'));
+  go('family')
+}catch(e){alert(e.message)}}
 
-async function upc(u,b='core'){try{let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u));cupc=d.upc;uback=b;$('ut').textContent=d.upc_name;$('us').textContent='UPC '+d.upc+' · '+(d.category||'—');$('usum').innerHTML='<div class="grid">'+m('UPC',d.upc)+m('Category',d.category||'—')+m('Price',money(d.current_price)+' '+(d.current_price_type||''))+m('7D Qty',fmt(d.qty_7d?.sold_quantity))+m('28D Qty',fmt(d.qty_28d?.sold_quantity))+m('Family',d.family_article_number||'—')+'</div>';$('uf').onclick=()=>family(d.family_article_number);$('upr').onclick=()=>price(d.upc);$('uo').onclick=()=>corder(d.upc);go('upc')}catch(e){alert(e.message)}}$('ub').onclick=()=>history.back();
+
+async function upc(u,b='core'){try{
+  let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u));cupc=d.upc;uback=b;
+  $('ut').textContent=d.upc_name;
+  $('us').textContent='UPC '+d.upc+' · '+(d.category||'—');
+  $('usum').innerHTML=
+    '<div class="group-block group-identity"><div class="group-title">🪪 Identity</div><div class="grid">'+
+      m('UPC',d.upc)+
+      m('Family Article',d.family_article_number||'—')+
+      m('Category',d.category||'—')+
+      m('Status',d.readiness||'—')+
+    '</div></div>'+
+    '<div class="group-block group-sales"><div class="group-title">📈 Sales</div><div class="grid">'+
+      m('7D Qty',fmt(d.qty_7d?.sold_quantity)+' / '+fmt(d.qty_7d?.supported_day_count,0)+' days')+
+      m('28D Qty',fmt(d.qty_28d?.sold_quantity)+' / '+fmt(d.qty_28d?.supported_day_count,0)+' days')+
+    '</div></div>'+
+    '<div class="group-block group-price"><div class="group-title">💲 Price</div><div class="grid">'+
+      m('Current Price',money(d.current_price))+
+      m('Price Type',d.current_price_type||'—')+
+    '</div></div>';
+  $('uf').onclick=()=>family(d.family_article_number);
+  $('upr').onclick=()=>price(d.upc);
+  $('uo').onclick=()=>corder(d.upc);
+  go('upc')
+}catch(e){alert(e.message)}}
+$('ub').onclick=()=>history.back();
+
 
 async function price(u){try{let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=7'),c=d.current||{},r=d.references||{},s=d.sales||{};$('pt').textContent=d.name;$('ps').textContent='UPC '+d.upc+' · '+(d.category||'—');$('pc').innerHTML='<div class="card"><div class="grid">'+m('Current Price',money(c.price)+' '+(c.price_type||''))+m('Cost',money(c.cost)+' '+(c.cost_uom||''))+m('GP%',c.gp_pct==null?'—':fmt(Number(c.gp_pct)*100,1)+'%')+m('GP$/Day',money(c.gp_per_day_7d))+m('7D Qty',fmt(s['7d']?.sold_quantity))+m('28D Qty',fmt(s['28d']?.sold_quantity))+m('Sweet Spot',money(r.sweet_spot))+m('WGPM',money(r.wgpm))+m('Company A',money(r.company_a))+m('Company B',money(r.company_b))+m('Company C',money(r.company_c))+'</div></div>';chart(d.price_vs_sales_trend?.rows||[]);$('p14').innerHTML=(d.sales_history_14d?.rows||[]).slice().reverse().map(x=>'<div class="promo"><div class="row" style="justify-content:space-between"><b>'+esc(dayName(x.date))+' · '+esc(x.date)+'</b><b>'+fmt(x.sold_quantity)+' sold</b></div><div class="meta">Sales '+money(x.sales_amount)+' · Avg price '+money(x.avg_sold_price)+' · '+((x.price_types||[]).map(p=>esc(p.price_type)).join(', ')||'No item sale')+'</div></div>').join('')||'<div class="small">No 14-day supported sales history.</div>';$('ph').innerHTML=(d.historical_promotions||[]).map(p=>'<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b><div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+'</div><div class="meta">'+fmt(p.sale_quantity)+' sold · '+fmt(p.sale_velocity_per_supported_day)+'/supported day · coverage '+fmt(p.supported_sales_day_count,0)+'/'+fmt(p.calendar_duration_days,0)+'</div></div>').join('')||'<div class="small">No historical SALE periods.</div>';go('price')}catch(e){alert(e.message)}}
 function chart(rows){let c=$('chart'),x=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=290;c.width=w*R;c.height=h*R;x.setTransform(R,0,0,R,0,0);x.clearRect(0,0,w,h);let a=rows.slice(-7),p={l:42,r:42,t:18,b:38};if(!a.length){x.fillText('No trend data',20,30);return}let ps=a.map(z=>Number(z.avg_sold_price)).filter(Number.isFinite),qs=a.map(z=>Number(z.sold_quantity)||0),pm=Math.max(...ps,1),qm=Math.max(...qs,1),pw=w-p.l-p.r,ph=h-p.t-p.b,xx=i=>p.l+(a.length===1?0:pw*i/(a.length-1)),yp=v=>p.t+ph*(1-v/pm),yq=v=>p.t+ph*(1-v/qm);x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--line');for(let i=0;i<5;i++){let y=p.t+ph*i/4;x.beginPath();x.moveTo(p.l,y);x.lineTo(w-p.r,y);x.stroke()}x.lineWidth=2;x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--ok');x.beginPath();a.forEach((z,i)=>i?x.lineTo(xx(i),yq(Number(z.sold_quantity)||0)):x.moveTo(xx(i),yq(Number(z.sold_quantity)||0)));x.stroke();x.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--a');x.beginPath();let on=false;a.forEach((z,i)=>{let v=Number(z.avg_sold_price);if(!Number.isFinite(v)){on=false;return}if(!on){x.moveTo(xx(i),yp(v));on=true}else x.lineTo(xx(i),yp(v))});x.stroke();x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--sale');a.forEach((z,i)=>{if((z.price_types||[]).some(v=>v.price_type==='SALE'))x.fillRect(xx(i)-2,h-p.b+6,4,9)})}
@@ -130,18 +223,25 @@ async function pid(k){try{let d=await api('/v1/app/v2/pi/'+encodeURIComponent(k)
 async function initPerformanceDate(){try{let d=await api('/v1/app/v2/performance/dates?limit=180'),rows=d.dates||[];$('perdate').innerHTML=rows.map(x=>'<option value="'+esc(x.date)+'">'+esc(x.weekday)+' · '+esc(x.date)+'</option>').join('');if(!rows.length)$('perdate').innerHTML='<option value="">No supported dates</option>'}catch(e){$('perdate').innerHTML='<option value="">Date list unavailable</option>';$('permsg').textContent=e.message}}
 async function performance(){
   let cat=$('percat').value,rd=$('perdate').value;
-  $('permsg').textContent='Generating report…';$('persummary').innerHTML='';$('peranalysis').innerHTML='';$('pertop').innerHTML='';$('peritems').innerHTML='';
-  try{
-    let q='/v1/app/v2/performance?category='+encodeURIComponent(cat)+'&limit=100'+(rd?'&report_date='+encodeURIComponent(rd):'');
-    let d=await api(q),s=d.summary||{};
-    if(d.report_date)$('perdate').value=d.report_date;
-    $('permsg').textContent=esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+' · '+(d.top_urgent_price_suggestions||[]).length+' urgent price review item(s)';
-    let rec=d.report_date_reconciliation||null;
-    $('persummary').innerHTML='<div class="card"><div class="section">'+esc(cat)+' · '+esc(d.report_date_weekday||'')+' '+esc(d.report_date||'')+'</div><div class="grid">'+m('Report Date Sales',money(s.report_date_sales_dollars))+m('UPCs Sold That Day',fmt(s.upcs_sold_report_date,0))+m('Active UPCs 28D',fmt(s.active_upcs_28d,0))+m('7D Sales',money(s.sales_dollars_7d))+m('14D Sales',money(s.sales_dollars_14d))+m('28D Sales',money(s.sales_dollars_28d))+m('Slowing Items',fmt(s.slowing_items,0))+m('Price Reviews',fmt(s.price_review_candidates,0))+'</div></div>'
-      +(cat==='ALL'&&rec?'<div class="card '+(rec.matches_to_cent?'audit-ok':'audit-warn')+'"><div class="section">Sales Audit</div><div class="grid">'+m('Canonical POS',money(rec.canonical_source_sales))+m('Mapped UPC Total',money(rec.mapped_report_sales))+m('Difference',money(rec.difference))+m('Source File',rec.canonical_source?.source_file_id??'—')+'</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+esc(rec.canonical_source?.coverage_kind||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div></div>':'');
-    $('peranalysis').innerHTML='<div class="card"><div class="section">Analysis for '+esc(d.report_date||'')+'</div>'+(d.analysis||[]).map(x=>'<div class="promo"><b>'+esc(x.type.replaceAll('_',' '))+'</b><div class="meta">'+esc(x.message)+'</div>'+(x.value_pct!=null?'<div class="'+(Number(x.value_pct)>=0?'ok':'warn')+'">'+fmt(Number(x.value_pct)*100,1)+'%</div>':'')+'</div>').join('')+'</div>';
-    $('pertop').innerHTML=(d.report_date_top_sellers||[]).map((x,i)=>'<div class="promo clickable" data-upc="'+esc(x.upc)+'"><div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="meta">UPC '+esc(x.upc)+' · '+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div>'+pill(x.readiness)+'</div><div class="grid" style="margin-top:10px">'+m('Day Sales',money(x.sales_amount))+m('Day Qty',fmt(x.sold_quantity))+m('Avg Sold Price',money(x.avg_sold_price))+m('7D Velocity',fmt(x.velocity_7d))+'</div><div class="meta">'+(x.price_types||[]).map(esc).join(' · ')+'</div></div>').join('')||'<div class="small">No sales for this category on the selected report date.</div>';
-    $('peritems').innerHTML=(d.top_urgent_price_suggestions||[]).map((x,i)=>'<div class="promo report-item clickable" data-upc="'+esc(x.upc)+'"><div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="meta">UPC '+esc(x.upc)+' · '+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill warn">GP$/day opportunity '+money(x.gp_per_day_opportunity)+'</span></div><div class="row" style="margin-top:10px"><div><div class="small">Price Used</div><div class="hero-number">'+money(x.current_price)+'</div></div><div class="price-arrow">→</div><div><div class="small">Suggested</div><div class="hero-number">'+money(x.suggested_price)+'</div></div></div><div class="meta">Sales evidence through '+esc(x.report_date)+' · Price basis '+esc(x.current_price_basis||'—')+(x.current_price_observed_date?' · observed '+esc(x.current_price_observed_date):'')+'</div><div class="meta">Basis '+esc(x.suggestion_basis)+' · '+esc(x.direction)+' · Urgency '+fmt(x.urgency_score,1)+(x.company_price_c_floor!=null?' · Company C floor '+money(x.company_price_c_floor):'')+'</div><div class="meta">Report day Qty '+fmt(x.qty_report_date)+' · 7D '+fmt(x.qty_7d)+' · 14D '+fmt(x.qty_14d)+' · 28D '+fmt(x.qty_28d)+'</div><div class="meta">Current GP$/day '+money(x.current_gp_per_day_7d)+' · Expected '+money(x.expected_gp_per_day_observed_price_demand)+' · Cost basis '+esc(x.cost_basis||'—')+(x.cost_date?' '+esc(x.cost_date):'')+'</div><div class="meta">'+(x.reasons||[]).map(r=>esc(r.replaceAll('_',' '))).join(' · ')+'</div></div>').join('')||'<div class="small">No positive GP$/day price opportunity meets the rules for this report date.</div>';
+  $('permsg').textContent='Generating report…';$('persummary').innerHTML='';$('peranalysis').innerHTML='';$('pertop').innerHTML='';$('peritems').innerHTML=(d.top_urgent_price_suggestions||[]).map((x,i)=>{
+      let cls=x.actionable?'review-actionable':(x.review_status==='QA_HOLD'?'review-hold':'review-only');
+      let badge=x.actionable?'ACTIONABLE':(x.review_status||'REVIEW ONLY').replaceAll('_',' ');
+      let suggestion=x.suggested_price!=null?money(x.suggested_price):'Review Only';
+      let gpopp=x.gp_per_day_opportunity!=null?money(x.gp_per_day_opportunity):'Unproven';
+      return '<div class="promo report-item clickable '+cls+'" data-upc="'+esc(x.upc)+'">'+
+        '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="meta">UPC '+esc(x.upc)+' · '+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill '+(x.actionable?'ok':'warn')+' review-badge">'+esc(badge)+'</span></div>'+
+        '<div class="row" style="margin-top:10px"><div><div class="small">Price Used</div><div class="hero-number">'+money(x.current_price)+'</div></div><div class="price-arrow">→</div><div><div class="small">'+(x.actionable?'Suggested':'Review Status')+'</div><div class="hero-number">'+suggestion+'</div></div></div>'+
+        '<div class="grid" style="margin-top:10px">'+
+          m('GP$/day Opportunity',gpopp)+
+          m('Urgency',fmt(x.urgency_score,1))+
+          m('7D Qty',fmt(x.qty_7d))+
+          m('28D Qty',fmt(x.qty_28d))+
+        '</div>'+
+        '<div class="meta">Sales evidence through '+esc(x.report_date)+' · '+(x.review_blocker?'Review reason '+esc(x.review_blocker.replaceAll('_',' ')):'Price evidence supports action')+'</div>'+
+        '<div class="meta">Company C floor '+money(x.company_price_c_floor)+' · Basis '+esc(x.suggestion_basis||'—')+'</div>'+
+        '<div class="meta">'+(x.reasons||[]).map(r=>esc(r.replaceAll('_',' '))).join(' · ')+'</div>'+
+      '</div>';
+    }).join('')||'<div class="small">No active items available for review.</div>';
     document.querySelectorAll('#pertop [data-upc],#peritems [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
   }catch(e){$('permsg').textContent=e.message}
 }
