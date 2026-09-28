@@ -1010,7 +1010,11 @@ def _family_diagnostics(
     positive_official = int(official.get("positive_cost_rows") or 0)
     positive_official_uom = int(official.get("positive_with_uom_rows") or 0)
     oh_positive = int(oh.get("positive") or 0)
-    oh_supported = int(oh.get("explicit_supported_uom") or 0)
+    oh_supported = int(
+        oh.get("supported_uom")
+        or oh.get("explicit_supported_uom")
+        or 0
+    )
 
     if receipt_rows > 0 and valid_receipt_rows == 0:
         reason = "RECEIPT_ROWS_WITHOUT_VALID_VALUATION"
