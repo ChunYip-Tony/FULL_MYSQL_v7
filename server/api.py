@@ -25,9 +25,9 @@ from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
-from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock
+from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report
 
-VERSION='7.0.112-single-service'
+VERSION='7.0.113-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1826,6 +1826,17 @@ def app_v2_pi_submit_true_stock(
         'overage_quantity':max(Decimal('0'),signed),
         'pi':detail,
     },default=j))
+
+@app.get('/v1/app/v2/performance')
+def app_v2_performance(category:str='ALL',limit:int=100):
+    try:
+        result=v2_performance_report(category,limit)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 performance report failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
 
 @app.get('/v1/app/v2/family/{family_key}')
 def app_v2_family(family_key:str):
