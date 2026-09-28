@@ -1,7 +1,7 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.116 Single-Service Edition
+Version: 7.0.117 Single-Service Edition
 
-Canonical runtime version: 7.0.116-single-service
+Canonical runtime version: 7.0.117-single-service
 Web App V2 route: /app/v2
 Canonical V2 module: server/webapp_v2_runtime.py
 
@@ -10,19 +10,15 @@ V2 main functions:
 - PI
 - PERFORMANCE
 
-Main ORDERING is cancelled.
-CORE Ordering remains available from UPC and calculates at Family Article level.
-
-v7.0.116:
-- Fixed CORE Ordering when observed receipt cadence is sparse/irregular.
-- FRESH delivery fallback: following Friday.
-- FROZEN delivery fallback: following Tuesday.
-- Fresh/Frozen next-next fallback: expected delivery + 7 days.
-- PERFORMANCE is now selected by Report Date.
-- Report Date defaults to latest completed supported POS date.
-- Report shows selected-day performance, Top Sellers, and as-of 7D/14D/28D analysis.
-- Top 100 price suggestions use sales evidence only through Report Date.
-- Company Price C remains the bottom line when applicable.
-- GP$/day opportunity remains the primary price-suggestion objective.
-- Family Info shows Family 7D Sold + Family 28D Sold.
-- Elder-friendly UI and in-app phone Back navigation remain active.
+v7.0.117:
+- PERFORMANCE Report Date is now a dropdown of supported completed POS dates only.
+- ALL Performance means the full Seafood department, including QA/OTHER.
+- Report Date Sales is reconciled directly against canonical Seafood POS source.
+- UI shows Canonical POS, mapped total, difference, source file and audit status.
+- 09/21 validation benchmark is $3,501.11 Seafood Sales.
+- CORE search has Clear.
+- PI search has Clear.
+- Family Article results are highlighted.
+- UPC number is enlarged in search results.
+- UI styling/readability further improved for elder-friendly mobile use.
+- CORE Ordering delivery fallbacks from v7.0.116 remain active.
