@@ -1,11 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.109 Single-Service Edition
+Version: 7.0.110 Single-Service Edition
 
-Canonical runtime version: 7.0.109-single-service
-Web App runtime badge: v7.0.109
-Web App V2: isolated read-only contracts implemented; UI redesign pending
-V2 core: Search -> Family/UPC -> Price or Ordering
+Canonical runtime version: 7.0.110-single-service
+Web App runtime badge: v7.0.110
+Web App V2: isolated data/API contracts implemented; redesigned UI pending
+V2 main functions: CORE / ORDERING / PI
+CORE: Search -> Family/UPC -> Price or Ordering Analysis
+ORDERING: Fresh/Frozen family-level suggestion simulator; active in latest 28 supported days + DOS < 7
+PI: inventory-owner-aware True Stock adjustment and discrepancy history
 Sales metrics: completed canonical data-supported dates only
 Promotion: SALE only; TPR excluded
-Ordering: read-only simulation; no save or submit
+Ordering negative OH rule: max(Effective OH, 0)
+Ordering and Price are analysis-only; no save or submit
 Deployment model: Single-Service API + background worker
