@@ -41,7 +41,8 @@ def find_active_batch() -> dict[str,Any]|None:
                OR EXISTS (
                     SELECT 1 FROM pipeline_run pr
                     WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
-                      AND pr.stage_name='POST_RAW_PIPELINE' AND pr.processing_status IN ('QUEUED','STARTED')
+                      AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                      AND pr.processing_status IN ('QUEUED','STARTED')
                )
             ORDER BY ib.batch_id DESC LIMIT 1
         """,(API_PIPELINE,))
