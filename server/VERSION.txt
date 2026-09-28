@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.153 Single-Service Edition
+Version: 7.0.155 Single-Service Edition
+
+v7.0.155 Upload History Schema Compatibility:
+- Recent Uploads now detects whether ingest_file.upload_timestamp exists before querying it.
+- If the column is absent in the production schema, per-file upload time falls back to the parent batch upload_started_at.
+- Latest Reference Uploads uses the same schema-aware fallback.
+- This prevents optional upload timestamp metadata from causing HTTP 500 on otherwise healthy upload/calendar pages.
+
 
 v7.0.153 Faster App Platform Startup:
 - Removed the blocking runtime import-smoke subprocess before Uvicorn startup.
