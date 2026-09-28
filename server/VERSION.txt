@@ -1,36 +1,19 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.65 Single-Service Edition
+Version: 7.0.105 Single-Service Edition
 
-Adds user-confirmed Family/Main-Article cost fallback authority for 13 families:
-1341156 3.82/LB
-1341521 2.19/LB
-1342316 4.26/LB
-1351700 4.36/LB
-1354803 5.09/LB
-1361120 9.00/LB
-1361660 5.09/LB
-1361689 1.79/LB
-1361697 1.99/LB
-1361760 2.69/LB
-1361999 2.09/LB
-1363514 6.59/LB
-1366580 0.82/EA
+Current runtime:
+- Public 4-module Web App: Quick Check, Ordering, Dumping, Price Change
+- Public Operations Overview dashboard
+- Dumping Pending + resolved/superseded history
+- Price Change what-if analysis + proposal audit history
+- Secure /admin console with HttpOnly signed admin session
+- Config-driven Ordering Policy engine and Suggested Order Qty
+- API and background worker version aligned to 7.0.105-single-service
 
-Cost priority remains:
-1) valid 101/107/109 receipt valuation
-2) authoritative Frozen / Live-Fresh report cost
-3) explicit OH fallback
-4) explicit user-confirmed Family cost fallback
-
-Also records confirmed Lobster sub-articles:
-- Main 1361120 -> SUB 2011726 -> UPC 24063300000 (LIVE MAINE LOBSTER-S)
-- Main 1361120 -> SUB 2011727 -> UPC 24063400000 (LIVE MAINE LOBSTER-M)
-
-The canonical serving UPC identity remains anchored to the Main/Family Article.
-SUB relationships are non-primary supporting identity and do not replace the
-canonical Main anchor. A missing UPC is not manufactured as an active product;
-the SUB->Family authority remains and the UPC link can attach once a real source
-creates that UPC.
-
-No RAW mutation.
-No description-derived cost or conversion.
+Safety / authority:
+- Public App does not require an API token.
+- Admin writes require an authenticated admin session or admin Bearer credential.
+- Admin browser session is HttpOnly, Secure, SameSite=Lax and same-origin protected for writes.
+- Price proposal execution marking does not directly mutate authoritative live retail price.
+- Missing Ordering policy remains POLICY_NOT_CONFIGURED; order quantity is not guessed.
+- No RAW mutation.
