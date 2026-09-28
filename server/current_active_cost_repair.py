@@ -12,7 +12,7 @@ from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
-VERSION = "7.0.93-current-active-cost-authority-order"
+VERSION = "7.0.96-current-active-cost-authority-order"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -132,6 +132,139 @@ def _uom_id(cur, token: str | None) -> int | None:
     )
     r = cur.fetchone()
     return int(r["uom_id"]) if r else None
+
+
+
+def _oh_cost_columns(hmap: dict[str, str]) -> dict[str, str | None]:
+    return {
+        "article": _pick(
+            hmap,
+            ["Article", "Article Number", "Material", "Material Number"],
+        ),
+        "upc": _pick(hmap, ["UPC", "EAN", "Barcode", "Sales Set"]),
+        "explicit_cost": _pick(
+            hmap,
+            [
+                "Cost", "Unit Cost", "Current Cost", "Average Cost", "Avg Cost",
+                "Moving Average Price", "Moving Price", "MAP",
+            ],
+        ),
+        "explicit_cost_uom": _pick(
+            hmap,
+            ["Cost UOM", "Cost Unit", "Price UOM", "Price Unit", "Cost Base UOM"],
+        ),
+        "unrestricted_qty": _pick(
+            hmap,
+            [
+                "Unrestr.", "Unrestr", "Unrestricted", "Unrestricted Stock",
+                "Unrestricted Qty", "Unrestricted Quantity",
+            ],
+        ),
+        "base_uom": _pick(
+            hmap,
+            ["BUn", "Base Unit", "Base UOM", "Base Unit of Measure"],
+        ),
+        "total_value": _pick(
+            hmap,
+            [
+                "Total Value", "Inventory Value", "Stock Value",
+                "Total Stock Value", "Unrestricted Value",
+            ],
+        ),
+        "currency": _pick(hmap, ["Crcy", "Currency", "Curr."]),
+        "date": _pick(
+            hmap,
+            ["Date", "Inventory Date", "Count Date", "Snapshot Date"],
+        ),
+    }
+
+
+def _oh_cost_candidate(payload: dict[str, Any], cols: dict[str, str | None]) -> dict[str, Any]:
+    explicit_cost = (
+        _num(payload.get(cols["explicit_cost"]))
+        if cols.get("explicit_cost") else None
+    )
+    explicit_uom = (
+        (_text(payload.get(cols["explicit_cost_uom"])) or "").upper()
+        if cols.get("explicit_cost_uom") else ""
+    )
+
+    unrestricted_qty = (
+        _num(payload.get(cols["unrestricted_qty"]))
+        if cols.get("unrestricted_qty") else None
+    )
+    total_value = (
+        _num(payload.get(cols["total_value"]))
+        if cols.get("total_value") else None
+    )
+    base_uom = (
+        (_text(payload.get(cols["base_uom"])) or "").upper()
+        if cols.get("base_uom") else ""
+    )
+    currency = (
+        (_text(payload.get(cols["currency"])) or "USD").upper()
+        if cols.get("currency") else "USD"
+    )
+
+    # Prefer an explicit unit cost when it is complete enough to be authoritative.
+    if explicit_cost is not None and explicit_cost > 0 and explicit_uom:
+        return {
+            "candidate_present": True,
+            "cost": explicit_cost,
+            "cost_uom": explicit_uom,
+            "currency": currency,
+            "derivation_mode": "EXPLICIT_UNIT_COST",
+            "explicit_cost": explicit_cost,
+            "explicit_cost_uom": explicit_uom,
+            "unrestricted_qty": unrestricted_qty,
+            "total_value": total_value,
+            "base_uom": base_uom or None,
+        }
+
+    # Otherwise derive unit cost from the OH valuation itself:
+    #   Total Value / Unrestricted Quantity, stated in BUn.
+    if (
+        total_value is not None
+        and total_value != 0
+        and unrestricted_qty is not None
+        and unrestricted_qty != 0
+        and base_uom
+    ):
+        derived = total_value / unrestricted_qty
+        if derived > 0:
+            return {
+                "candidate_present": True,
+                "cost": derived,
+                "cost_uom": base_uom,
+                "currency": currency,
+                "derivation_mode": "TOTAL_VALUE_DIV_UNRESTRICTED",
+                "explicit_cost": explicit_cost,
+                "explicit_cost_uom": explicit_uom or None,
+                "unrestricted_qty": unrestricted_qty,
+                "total_value": total_value,
+                "base_uom": base_uom,
+            }
+
+    return {
+        "candidate_present": bool(
+            (explicit_cost is not None and explicit_cost > 0)
+            or (
+                total_value is not None
+                and total_value != 0
+                and unrestricted_qty is not None
+                and unrestricted_qty != 0
+            )
+        ),
+        "cost": None,
+        "cost_uom": explicit_uom or base_uom or None,
+        "currency": currency,
+        "derivation_mode": None,
+        "explicit_cost": explicit_cost,
+        "explicit_cost_uom": explicit_uom or None,
+        "unrestricted_qty": unrestricted_qty,
+        "total_value": total_value,
+        "base_uom": base_uom or None,
+    }
 
 
 def _source_type_supported(cur, value: str) -> bool:
@@ -643,15 +776,21 @@ def _scan_and_backfill_oh_cost(
         "sheets_scanned": 0,
         "rows_scanned": 0,
         "positive_cost_candidates": 0,
+        "explicit_unit_cost_candidates": 0,
+        "derived_total_value_candidates": 0,
         "candidates_missing_explicit_cost_uom": 0,
         "candidates_unsupported_cost_uom": 0,
+        "candidates_unsupported_currency": 0,
         "family_conflicts": 0,
         "rows_backfilled": 0,
         "candidate_counts_by_family": defaultdict(lambda: {
             "positive": 0,
+            "supported_uom": 0,
             "explicit_supported_uom": 0,
+            "derived_supported_uom": 0,
             "missing_uom": 0,
             "unsupported_uom": 0,
+            "unsupported_currency": 0,
         }),
     }
     targets = set(int(x) for x in target_family_ids)
@@ -690,26 +829,16 @@ def _scan_and_backfill_oh_cost(
             hr = cur.fetchone()
             if not hr:
                 continue
-            hmap = _header_map(_j(hr["raw_payload"]))
 
-            c_article = _pick(hmap, ["Article", "Article Number", "Material", "Material Number"])
-            c_upc = _pick(hmap, ["UPC", "EAN", "Barcode", "Sales Set"])
-            c_cost = _pick(
-                hmap,
-                [
-                    "Cost", "Unit Cost", "Current Cost", "Average Cost", "Avg Cost",
-                    "Moving Average Price", "Moving Price", "MAP",
-                ],
+            cols = _oh_cost_columns(_header_map(_j(hr["raw_payload"])))
+            identity_ok = bool(cols.get("article") or cols.get("upc"))
+            explicit_mode_available = bool(cols.get("explicit_cost"))
+            derived_mode_available = bool(
+                cols.get("total_value")
+                and cols.get("unrestricted_qty")
+                and cols.get("base_uom")
             )
-            # Deliberately require a cost-specific UOM field. Generic inventory
-            # UOM is NOT silently assumed to be cost UOM.
-            c_cost_uom = _pick(
-                hmap,
-                ["Cost UOM", "Cost Unit", "Price UOM", "Price Unit", "Cost Base UOM"],
-            )
-            c_date = _pick(hmap, ["Date", "Inventory Date", "Count Date", "Snapshot Date"])
-
-            if not c_cost or (not c_article and not c_upc):
+            if not identity_ok or not (explicit_mode_available or derived_mode_available):
                 continue
 
             result["sheets_scanned"] += 1
@@ -723,16 +852,18 @@ def _scan_and_backfill_oh_cost(
             for rr in cur.fetchall():
                 result["rows_scanned"] += 1
                 p = _j(rr["raw_payload"])
-                cost = _num(p.get(c_cost))
-                if cost is None or cost <= 0:
+                candidate = _oh_cost_candidate(p, cols)
+                if not candidate.get("candidate_present"):
                     continue
 
-                article_num = _id(p.get(c_article)) if c_article else None
-                ean = _id(p.get(c_upc)) if c_upc else None
+                article_num = _id(p.get(cols["article"])) if cols.get("article") else None
+                ean = _id(p.get(cols["upc"])) if cols.get("upc") else None
                 article_id, article_family = _article_family(cur, article_num)
                 _, upc_article_id, upc_family = _upc_family(cur, ean)
 
-                family_candidates = {x for x in (article_family, upc_family) if x is not None}
+                family_candidates = {
+                    x for x in (article_family, upc_family) if x is not None
+                }
                 if len(family_candidates) > 1:
                     result["family_conflicts"] += 1
                     continue
@@ -743,11 +874,30 @@ def _scan_and_backfill_oh_cost(
                 if family_id not in targets:
                     continue
 
-                result["positive_cost_candidates"] += 1
                 fam_stats = result["candidate_counts_by_family"][family_id]
-                fam_stats["positive"] += 1
+                cost = candidate.get("cost")
+                cost_uom = str(candidate.get("cost_uom") or "").upper()
+                currency = str(candidate.get("currency") or "USD").upper()
+                mode = candidate.get("derivation_mode")
 
-                cost_uom = (_text(p.get(c_cost_uom)) or "").upper() if c_cost_uom else ""
+                if cost is None or Decimal(str(cost)) <= 0:
+                    if not cost_uom:
+                        result["candidates_missing_explicit_cost_uom"] += 1
+                        fam_stats["missing_uom"] += 1
+                    continue
+
+                result["positive_cost_candidates"] += 1
+                fam_stats["positive"] += 1
+                if mode == "EXPLICIT_UNIT_COST":
+                    result["explicit_unit_cost_candidates"] += 1
+                elif mode == "TOTAL_VALUE_DIV_UNRESTRICTED":
+                    result["derived_total_value_candidates"] += 1
+
+                if currency not in {"USD"}:
+                    result["candidates_unsupported_currency"] += 1
+                    fam_stats["unsupported_currency"] += 1
+                    continue
+
                 if not cost_uom:
                     result["candidates_missing_explicit_cost_uom"] += 1
                     fam_stats["missing_uom"] += 1
@@ -759,16 +909,23 @@ def _scan_and_backfill_oh_cost(
                     fam_stats["unsupported_uom"] += 1
                     continue
 
-                fam_stats["explicit_supported_uom"] += 1
+                fam_stats["supported_uom"] += 1
+                if mode == "EXPLICIT_UNIT_COST":
+                    fam_stats["explicit_supported_uom"] += 1
+                elif mode == "TOTAL_VALUE_DIV_UNRESTRICTED":
+                    fam_stats["derived_supported_uom"] += 1
+
                 if not result["source_type_supported"]:
                     continue
 
-                anchor_article_id = article_id or upc_article_id or _main_article_id(cur, family_id)
+                anchor_article_id = (
+                    article_id or upc_article_id or _main_article_id(cur, family_id)
+                )
                 if anchor_article_id is None:
                     continue
 
                 obs_date = (
-                    _date(p.get(c_date)) if c_date else None
+                    _date(p.get(cols["date"])) if cols.get("date") else None
                 ) or f.get("coverage_end_date") or f.get("filename_date_candidate")
                 if obs_date is None and f.get("upload_timestamp"):
                     obs_date = f["upload_timestamp"].date()
@@ -788,12 +945,21 @@ def _scan_and_backfill_oh_cost(
                        (article_id,family_id,cost_amount,currency_code,cost_uom_id,source_type,
                         business_date,cost_status,confidence,batch_id,file_id,sheet_id,
                         raw_table_name,raw_id,source_row_number)
-                       VALUES (%s,%s,%s,'USD',%s,%s,%s,'OBSERVED',1.0,%s,%s,%s,
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,'OBSERVED',1.0,%s,%s,%s,
                                'raw_on_hand',%s,%s)""",
                     (
-                        anchor_article_id, family_id, cost, uid, OH_FALLBACK_SOURCE_TYPE,
-                        obs_date, None, f["file_id"], sh["sheet_id"],
-                        rr["raw_id"], rr["source_row_number"],
+                        anchor_article_id,
+                        family_id,
+                        cost,
+                        currency,
+                        uid,
+                        OH_FALLBACK_SOURCE_TYPE,
+                        obs_date,
+                        None,
+                        f["file_id"],
+                        sh["sheet_id"],
+                        rr["raw_id"],
+                        rr["source_row_number"],
                     ),
                 )
                 result["rows_backfilled"] += 1
