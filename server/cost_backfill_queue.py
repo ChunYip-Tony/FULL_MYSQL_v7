@@ -7,6 +7,7 @@ from typing import Any
 from business_clock import completed_through_date
 from db import db_conn
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
+from data_coverage import source_data_days
 
 
 def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
@@ -23,6 +24,29 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         diagnostic = diagnose_global_cost_holds(cur)
+
+        movement_days = source_data_days(cur, "movement", up_to=through)
+        valid_movement_dates = {
+            row["date"]
+            for row in movement_days
+            if row.get("date") is not None
+               and requested_start <= row["date"] <= through
+        }
+        expected_dates = []
+        d = requested_start
+        while d <= through:
+            expected_dates.append(d)
+            d += timedelta(days=1)
+        missing_source_dates = [
+            d for d in expected_dates if d not in valid_movement_dates
+        ]
+        source_coverage_complete = not missing_source_dates
+        source_first_missing_date = (
+            min(missing_source_dates) if missing_source_dates else None
+        )
+        source_last_missing_date = (
+            max(missing_source_dates) if missing_source_dates else None
+        )
 
         missing_items = [
             item for item in (diagnostic.get("items") or [])
@@ -122,14 +146,8 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                 missing_class.get("proposed_action") or ""
             )
 
-            if earliest_movement is None:
-                coverage_status = "NO_MOVEMENT_HISTORY"
-                backfill_needed = True
-                backfill_mode = "INITIAL_LOOKBACK"
-                required_upload_scope = "FULL_MVT_HISTORY_NOT_FILTERED"
-                action_code = "UPLOAD_FULL_MVT_BACKFILL"
-            elif earliest_movement > requested_start:
-                coverage_status = "PARTIAL_HISTORY_NEEDS_BACKFILL"
+            if not source_coverage_complete:
+                coverage_status = "SOURCE_MVT_LOOKBACK_INCOMPLETE"
                 backfill_needed = True
                 backfill_mode = "INITIAL_LOOKBACK"
                 required_upload_scope = "FULL_MVT_HISTORY_NOT_FILTERED"
@@ -138,7 +156,7 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                 diagnostic_classification
                 == "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST"
             ):
-                coverage_status = "LOOKBACK_COVERED_NO_RECEIVING_HISTORY"
+                coverage_status = "SOURCE_LOOKBACK_COMPLETE_NO_RECEIVING_HISTORY"
                 backfill_needed = True
                 backfill_mode = "EXTEND_BEYOND_LOOKBACK"
                 required_upload_scope = (
@@ -146,7 +164,7 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                 )
                 action_code = "EXTEND_MVT_BACKFILL_BEYOND_LOOKBACK"
             elif diagnostic_classification == "RECEIPT_ROWS_WITHOUT_VALID_VALUATION":
-                coverage_status = "LOOKBACK_COVERED_RECEIPT_VALUATION_INVALID"
+                coverage_status = "SOURCE_LOOKBACK_COMPLETE_RECEIPT_VALUATION_INVALID"
                 backfill_needed = False
                 backfill_mode = "NONE"
                 required_upload_scope = (
@@ -154,7 +172,7 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                 )
                 action_code = "REVIEW_RECEIPT_VALUATION_FIELDS"
             elif valid_receipts > 0:
-                coverage_status = "VALID_RECEIPT_PRESENT_REVIEW_HOLD"
+                coverage_status = "SOURCE_LOOKBACK_COMPLETE_VALID_RECEIPT_REVIEW_HOLD"
                 backfill_needed = False
                 backfill_mode = "NONE"
                 required_upload_scope = (
@@ -164,7 +182,7 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     diagnostic_action or "REVIEW_EXISTING_COST_EVIDENCE"
                 )
             else:
-                coverage_status = "LOOKBACK_COVERED_DIAGNOSTIC_REVIEW_REQUIRED"
+                coverage_status = "SOURCE_LOOKBACK_COMPLETE_DIAGNOSTIC_REVIEW_REQUIRED"
                 backfill_needed = False
                 backfill_mode = "NONE"
                 required_upload_scope = (
@@ -173,15 +191,6 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                 action_code = (
                     diagnostic_action or "REVIEW_EXISTING_COST_EVIDENCE"
                 )
-
-            if earliest_movement is None:
-                missing_days_before_loaded_history = lookback_days
-            elif earliest_movement > requested_start:
-                missing_days_before_loaded_history = (
-                    earliest_movement - requested_start
-                ).days
-            else:
-                missing_days_before_loaded_history = 0
 
             actions.append(
                 {
@@ -205,7 +214,10 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     "earliest_loaded_movement_date": earliest_movement,
                     "latest_loaded_movement_date": latest_movement,
                     "loaded_movement_row_count": int(movement.get("movement_row_count") or 0),
-                    "missing_days_before_loaded_history": missing_days_before_loaded_history,
+                    "source_valid_days_in_window": len(valid_movement_dates),
+                    "source_missing_day_count": len(missing_source_dates),
+                    "source_first_missing_date": source_first_missing_date,
+                    "source_last_missing_date": source_last_missing_date,
                     "earliest_loaded_receipt_date": earliest_receipt,
                     "latest_loaded_receipt_date": latest_receipt,
                     "loaded_receipt_row_count": int(receipt.get("receipt_row_count") or 0),
@@ -224,7 +236,6 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
         actions.sort(
             key=lambda r: (
                 0 if r.get("backfill_needed") else 1,
-                -int(r.get("missing_days_before_loaded_history") or 0),
                 str(r.get("main_article_number") or ""),
             )
         )
@@ -240,6 +251,15 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
         "lookback_days": lookback_days,
         "requested_backfill_start": requested_start,
         "requested_backfill_end": through,
+        "source_coverage": {
+            "source_type": "movement",
+            "coverage_complete": source_coverage_complete,
+            "valid_days_in_window": len(valid_movement_dates),
+            "missing_day_count": len(missing_source_dates),
+            "first_missing_date": source_first_missing_date,
+            "last_missing_date": source_last_missing_date,
+            "missing_dates": missing_source_dates,
+        },
         "current_cost_missing_upc_count": len(missing_items),
         "family_action_count": len(actions),
         "backfill_needed_family_count": sum(1 for x in actions if x.get("backfill_needed")),
