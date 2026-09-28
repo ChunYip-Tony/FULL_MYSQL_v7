@@ -3364,64 +3364,96 @@ def performance_report(
             elif gp_day_gain<=0:
                 blocked_reason="NO_POSITIVE_GP_DAY_OPPORTUNITY"
 
-            if blocked_reason is None:
+            # Top 100 is a REVIEW queue, not only the subset with an immediately
+            # executable price.  This prevents an empty report when price
+            # evidence is incomplete while still refusing to fabricate a price.
+            actionable=blocked_reason is None
+            if actionable:
                 summary["price_review_candidates"]+=1
-                if gp_day_gain is not None and gp_day_gain>0:
-                    score+=min(Decimal("70"),gp_day_gain*Decimal("2"))
-                    reasons.append("POSITIVE_OBSERVED_GP_DAY_OPPORTUNITY")
-                if gp_day_gain_pct is not None and gp_day_gain_pct>0:
-                    score+=min(Decimal("20"),gp_day_gain_pct*Decimal("20"))
-                if trend_ratio is not None and trend_ratio<Decimal("0.80"):
-                    score+=min(Decimal("7"),(Decimal("1")-trend_ratio)*Decimal("12"))
-                if gp is not None and target_gp is not None and gp<target_gp:
-                    score+=min(Decimal("3"),(target_gp-gp)*Decimal("12"))
 
-                suggested_gp=(
-                    (_d(suggested)-cost)/_d(suggested)
-                    if cost is not None and _d(suggested)>0 else None
+            if gp_day_gain is not None and gp_day_gain>0:
+                score+=min(Decimal("70"),gp_day_gain*Decimal("2"))
+                reasons.append("POSITIVE_OBSERVED_GP_DAY_OPPORTUNITY")
+            if gp_day_gain_pct is not None and gp_day_gain_pct>0:
+                score+=min(Decimal("20"),gp_day_gain_pct*Decimal("20"))
+            if trend_ratio is not None and trend_ratio<Decimal("0.80"):
+                score+=min(Decimal("15"),(Decimal("1")-trend_ratio)*Decimal("25"))
+            if gp is not None and target_gp is not None and gp<target_gp:
+                score+=min(Decimal("10"),(target_gp-gp)*Decimal("35"))
+            # Active movement matters for urgency, but cannot dominate the
+            # GP$/day objective.
+            score+=min(Decimal("5"),_d(q28)/Decimal("20"))
+
+            review_status=(
+                "ACTIONABLE" if actionable
+                else (
+                    "WAIT_ACTIVE_SALE" if blocked_reason=="REPORT_DATE_ACTIVE_SALE"
+                    else ("QA_HOLD" if blocked_reason=="NOT_READY" else "REVIEW_ONLY")
                 )
-                suggestions.append({
-                    "urgency_score":score.quantize(Decimal("0.01")),
-                    "report_date":anchor,
-                    "upc":row.get("ean_upc"),
-                    "name":row.get("selling_description"),
-                    "family_article_number":row.get("main_article_number"),
-                    "family_name":row.get("family_description"),
-                    "category":pclass,
-                    "readiness":status,
-                    "current_price":current,
-                    "current_price_basis":price_opt.get("current_price_basis"),
-                    "current_price_observed_date":price_opt.get("current_price_observed_date"),
-                    "suggested_price":suggested,
-                    "suggestion_basis":basis,
-                    "company_price_c_floor":company_c_floor,
-                    "company_c_applied":price_opt.get("company_c_applied"),
-                    "company_c_floor_constrained":price_opt.get("floor_constrained"),
-                    "direction":(
-                        "INCREASE" if _d(suggested)>_d(current)
-                        else ("DECREASE" if _d(suggested)<_d(current) else "KEEP")
-                    ),
-                    "price_gap_pct":price_gap_pct,
-                    "current_gp_pct_reference":gp,
-                    "suggested_gp_pct_at_current_cost":suggested_gp,
-                    "current_gp_per_day_7d":current_gp_day,
-                    "expected_gp_per_day_observed_price_demand":expected_gp_day,
-                    "gp_per_day_opportunity":gp_day_gain,
-                    "gp_per_day_opportunity_pct":gp_day_gain_pct,
-                    "observed_velocity_at_suggested_price":price_opt.get("expected_velocity_from_observed_price_days"),
-                    "qty_report_date":day_qty,
-                    "sales_report_date":day_sales,
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_14d":m14.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
-                    "velocity_7d":v7,
-                    "velocity_14d":v14,
-                    "velocity_28d":v28,
-                    "velocity_7d_vs_28d_ratio":trend_ratio,
-                    "cost_basis":price_opt.get("cost_basis"),
-                    "cost_date":price_opt.get("cost_date"),
-                    "reasons":reasons,
-                })
+            )
+            suggested_gp=(
+                (_d(suggested)-cost)/_d(suggested)
+                if actionable and cost is not None and suggested is not None and _d(suggested)>0
+                else None
+            )
+            actionable_price=suggested if actionable else None
+            suggestions.append({
+                "urgency_score":score.quantize(Decimal("0.01")),
+                "review_status":review_status,
+                "review_blocker":blocked_reason,
+                "actionable":actionable,
+                "report_date":anchor,
+                "upc":row.get("ean_upc"),
+                "name":row.get("selling_description"),
+                "family_article_number":row.get("main_article_number"),
+                "family_name":row.get("family_description"),
+                "category":pclass,
+                "readiness":status,
+                "current_price":current,
+                "current_price_basis":price_opt.get("current_price_basis"),
+                "current_price_observed_date":price_opt.get("current_price_observed_date"),
+                "suggested_price":actionable_price,
+                "candidate_price":suggested,
+                "suggestion_basis":basis,
+                "company_price_c_floor":company_c_floor,
+                "company_c_applied":price_opt.get("company_c_applied"),
+                "company_c_floor_constrained":price_opt.get("floor_constrained"),
+                "direction":(
+                    (
+                        "INCREASE" if _d(actionable_price)>_d(current)
+                        else ("DECREASE" if _d(actionable_price)<_d(current) else "KEEP")
+                    )
+                    if actionable_price is not None and current is not None
+                    else "REVIEW"
+                ),
+                "price_gap_pct":price_gap_pct,
+                "current_gp_pct_reference":gp,
+                "suggested_gp_pct_at_current_cost":suggested_gp,
+                "current_gp_per_day_7d":current_gp_day,
+                "expected_gp_per_day_observed_price_demand":(
+                    expected_gp_day if actionable else None
+                ),
+                "candidate_expected_gp_per_day":expected_gp_day,
+                "gp_per_day_opportunity":(
+                    gp_day_gain if gp_day_gain is not None and gp_day_gain>0 else None
+                ),
+                "gp_per_day_opportunity_pct":(
+                    gp_day_gain_pct if gp_day_gain_pct is not None and gp_day_gain_pct>0 else None
+                ),
+                "observed_velocity_at_suggested_price":price_opt.get("expected_velocity_from_observed_price_days"),
+                "qty_report_date":day_qty,
+                "sales_report_date":day_sales,
+                "qty_7d":m7.get("sold_quantity"),
+                "qty_14d":m14.get("sold_quantity"),
+                "qty_28d":m28.get("sold_quantity"),
+                "velocity_7d":v7,
+                "velocity_14d":v14,
+                "velocity_28d":v28,
+                "velocity_7d_vs_28d_ratio":trend_ratio,
+                "cost_basis":price_opt.get("cost_basis"),
+                "cost_date":price_opt.get("cost_date"),
+                "reasons":reasons,
+            })
 
         mapped_report_sales=_d(summary["report_date_sales_dollars"])
         canonical_report_sales=(
@@ -3446,7 +3478,8 @@ def performance_report(
 
         suggestions.sort(
             key=lambda x:(
-                -float(x.get("gp_per_day_opportunity") or Decimal("-999999")),
+                0 if x.get("actionable") else 1,
+                -float(x.get("gp_per_day_opportunity") or 0),
                 -float(x.get("urgency_score") or 0),
                 -float(x.get("qty_28d") or 0),
                 str(x.get("name") or ""),
@@ -3511,7 +3544,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V4",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V5",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
@@ -3540,7 +3573,8 @@ def performance_report(
             "minimum_price_gap_pct":Decimal("0.03"),
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
-            "urgency_primary_sort":"GP_DOLLARS_PER_DAY_OPPORTUNITY_DESC",
+            "review_queue":"TOP_ACTIVE_ITEMS_ALWAYS_VISIBLE; SPECIFIC_PRICE_ONLY_WHEN_EVIDENCE_SUPPORTS_IT",
+            "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_GP_DOLLARS_PER_DAY_OPPORTUNITY_THEN_REVIEW_SCORE",
         },
     }
 
