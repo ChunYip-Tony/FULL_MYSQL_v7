@@ -7,6 +7,7 @@ from db import db_conn
 from manual_overrides import (
     USER_CONFIRMED_UOM_REVIEW_20260926,
     USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926,
+    USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927,
     USER_CONFIRMED_FAMILY_COSTS_20260926,
     USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927,
     ensure_override_table,
@@ -24,6 +25,12 @@ from current_active_cost_repair import repair_current_active_cost, _scan_and_bac
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from normalize import _preload_article_manual_authority
 from phase3 import rebuild_quick_check, refresh_quick_check_subset, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history, resolve_late_identity_issues
+
+
+ALL_CONFIRMED_COST_SELLING_CONVERSIONS = (
+    USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926
+    + USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927
+)
 
 
 def _retirement_ok(row: dict[str, Any]) -> bool:
@@ -1544,7 +1551,7 @@ def _confirmed_cost_conversion_target_checks(
     before_base_state: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     checks: list[dict[str, Any]] = []
-    for expected in USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926:
+    for expected in ALL_CONFIRMED_COST_SELLING_CONVERSIONS:
         ean = str(expected["ean_upc"])
         cur.execute(
             """SELECT ean_upc,family_id,selling_uom,base_uom,
@@ -1686,7 +1693,7 @@ def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
             before_cost_summary = before_diag.get("summary") or {}
 
             before_base_state: dict[str, dict[str, Any]] = {}
-            for expected in USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926:
+            for expected in ALL_CONFIRMED_COST_SELLING_CONVERSIONS:
                 ean = str(expected["ean_upc"])
                 cur.execute(
                     """SELECT base_uom,base_qty_per_selling_unit
@@ -1820,7 +1827,7 @@ def run_confirmed_cost_conversion_refresh(device: str) -> dict[str, Any]:
                 "device": device,
                 "mode": "SERVER_SIDE_CONFIRMED_COST_TO_SELLING_CONVERSION_V7041",
                 "publish_batch_id": batch_id,
-                "target_count": len(USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926),
+                "target_count": len(ALL_CONFIRMED_COST_SELLING_CONVERSIONS),
                 "verified_target_count": len(target_checks),
                 "manual_conversions": conversions,
                 "manual_family_costs": family_costs,
