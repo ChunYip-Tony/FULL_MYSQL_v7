@@ -285,15 +285,25 @@ def _build_qa(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 def _build_negative_stock(rows: list[dict[str, Any]]) -> list[list[Any]]:
     columns = [
-        "ean_upc","main_article_number","article_number","selling_description",
-        "family_id","selling_uom","system_oh","system_oh_uom",
-        "effective_oh","effective_oh_uom","effective_oh_source",
+        "inventory_owner_scope","inventory_owner_id","inventory_owner_key",
+        "inventory_owner_article_number","inventory_owner_family_id",
+        "representative_upc","related_upcs","related_upc_count",
+        "main_article_number","selling_description","selling_uom",
+        "system_oh","system_oh_uom","effective_oh","effective_oh_uom","effective_oh_source",
         "active_true_stock","active_true_stock_uom","true_stock_required_uom",
-        "pos_qty_7d","upc_velocity_7d","dos","quick_check_status","blocking_reason",
-        "stock_status","negative_stock","action_code","action_reason",
+        "pos_qty_7d","upc_velocity_7d","dos",
+        "related_quick_check_statuses","quick_check_status","blocking_reason",
+        "stock_status","negative_stock","action_upc","action_code","action_reason",
         "publish_batch_id","published_at",
     ]
-    return [columns] + [[row.get(col) for col in columns] for row in rows]
+
+    def value(row: dict[str, Any], col: str) -> Any:
+        v = row.get(col)
+        if col in {"related_upcs","related_quick_check_statuses"} and isinstance(v, list):
+            return ",".join(str(x) for x in v)
+        return v
+
+    return [columns] + [[value(row, col) for col in columns] for row in rows]
 
 
 
