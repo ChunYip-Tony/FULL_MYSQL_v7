@@ -628,6 +628,232 @@ def _classify_conversion(
     }
 
 
+def diagnose_oh_cost_schema(cur, *, candidate_row_limit: int = 20) -> dict[str, Any]:
+    """Read-only explanation of why raw On-Hand sheets are or are not cost-scannable."""
+
+    candidate_row_limit = max(5, min(int(candidate_row_limit or 20), 100))
+    cur.execute(
+        """SELECT *
+           FROM ingest_file
+           WHERE source_type='on_hand'
+           ORDER BY file_id"""
+    )
+    files = cur.fetchall()
+
+    file_results: list[dict[str, Any]] = []
+    total_sheets = 0
+    scannable_sheets = 0
+    skip_reason_counts: dict[str, int] = {}
+
+    for file_row in files:
+        file_id = int(file_row["file_id"])
+        cur.execute(
+            """SELECT *
+               FROM ingest_sheet
+               WHERE file_id=%s
+               ORDER BY sheet_index,sheet_id""",
+            (file_id,),
+        )
+        sheets = cur.fetchall()
+        sheet_results: list[dict[str, Any]] = []
+
+        for sh in sheets:
+            total_sheets += 1
+            sheet_id = int(sh["sheet_id"])
+            header_row = sh.get("header_row_number")
+
+            cur.execute(
+                """SELECT COUNT(*) AS c,
+                          MIN(source_row_number) AS first_row,
+                          MAX(source_row_number) AS last_row
+                   FROM raw_on_hand
+                   WHERE sheet_id=%s""",
+                (sheet_id,),
+            )
+            row_stats = cur.fetchone() or {}
+
+            configured_header_payload = None
+            configured_header_values: list[str] = []
+            configured_matches: dict[str, Any] = {
+                "article_column": None,
+                "upc_column": None,
+                "cost_column": None,
+                "cost_uom_column": None,
+                "date_column": None,
+            }
+
+            if header_row:
+                cur.execute(
+                    """SELECT raw_payload
+                       FROM raw_on_hand
+                       WHERE sheet_id=%s AND source_row_number=%s
+                       LIMIT 1""",
+                    (sheet_id, header_row),
+                )
+                hr = cur.fetchone()
+                if hr:
+                    configured_header_payload = _j(hr["raw_payload"])
+                    hmap = _header_map(configured_header_payload)
+                    configured_header_values = [
+                        str(v) for v in configured_header_payload.values()
+                        if v is not None and str(v).strip()
+                    ][:40]
+                    configured_matches = {
+                        "article_column": _pick(
+                            hmap,
+                            ["Article", "Article Number", "Material", "Material Number"],
+                        ),
+                        "upc_column": _pick(
+                            hmap,
+                            ["UPC", "EAN", "Barcode", "Sales Set"],
+                        ),
+                        "cost_column": _pick(
+                            hmap,
+                            [
+                                "Cost", "Unit Cost", "Current Cost", "Average Cost",
+                                "Avg Cost", "Moving Average Price", "Moving Price", "MAP",
+                            ],
+                        ),
+                        "cost_uom_column": _pick(
+                            hmap,
+                            [
+                                "Cost UOM", "Cost Unit", "Price UOM", "Price Unit",
+                                "Cost Base UOM",
+                            ],
+                        ),
+                        "date_column": _pick(
+                            hmap,
+                            ["Date", "Inventory Date", "Count Date", "Snapshot Date"],
+                        ),
+                    }
+
+            if not header_row:
+                skip_reason = "HEADER_ROW_NUMBER_MISSING"
+            elif configured_header_payload is None:
+                skip_reason = "CONFIGURED_HEADER_RAW_ROW_MISSING"
+            elif not configured_matches["cost_column"]:
+                skip_reason = "COST_COLUMN_NOT_MATCHED"
+            elif not (
+                configured_matches["article_column"]
+                or configured_matches["upc_column"]
+            ):
+                skip_reason = "ARTICLE_OR_UPC_COLUMN_NOT_MATCHED"
+            else:
+                skip_reason = None
+                scannable_sheets += 1
+
+            if skip_reason:
+                skip_reason_counts[skip_reason] = (
+                    skip_reason_counts.get(skip_reason, 0) + 1
+                )
+
+            cur.execute(
+                """SELECT source_row_number,raw_payload
+                   FROM raw_on_hand
+                   WHERE sheet_id=%s
+                   ORDER BY source_row_number
+                   LIMIT %s""",
+                (sheet_id, candidate_row_limit),
+            )
+            candidate_headers: list[dict[str, Any]] = []
+            for rr in cur.fetchall():
+                payload = _j(rr["raw_payload"])
+                hmap = _header_map(payload)
+                article_col = _pick(
+                    hmap,
+                    ["Article", "Article Number", "Material", "Material Number"],
+                )
+                upc_col = _pick(
+                    hmap,
+                    ["UPC", "EAN", "Barcode", "Sales Set"],
+                )
+                cost_col = _pick(
+                    hmap,
+                    [
+                        "Cost", "Unit Cost", "Current Cost", "Average Cost",
+                        "Avg Cost", "Moving Average Price", "Moving Price", "MAP",
+                    ],
+                )
+                cost_uom_col = _pick(
+                    hmap,
+                    [
+                        "Cost UOM", "Cost Unit", "Price UOM", "Price Unit",
+                        "Cost Base UOM",
+                    ],
+                )
+                date_col = _pick(
+                    hmap,
+                    ["Date", "Inventory Date", "Count Date", "Snapshot Date"],
+                )
+                score = (
+                    (1 if article_col or upc_col else 0)
+                    + (1 if cost_col else 0)
+                    + (1 if cost_uom_col else 0)
+                    + (1 if date_col else 0)
+                )
+                if score >= 1:
+                    candidate_headers.append(
+                        {
+                            "source_row_number": rr["source_row_number"],
+                            "score": score,
+                            "article_column": article_col,
+                            "upc_column": upc_col,
+                            "cost_column": cost_col,
+                            "cost_uom_column": cost_uom_col,
+                            "date_column": date_col,
+                            "values": [
+                                str(v) for v in payload.values()
+                                if v is not None and str(v).strip()
+                            ][:40],
+                        }
+                    )
+            candidate_headers.sort(
+                key=lambda x: (int(x["score"]), -int(x["source_row_number"])),
+                reverse=True,
+            )
+
+            sheet_results.append(
+                {
+                    "sheet_id": sheet_id,
+                    "sheet_index": sh.get("sheet_index"),
+                    "sheet_name": sh.get("sheet_name"),
+                    "configured_header_row_number": header_row,
+                    "raw_row_count": int(row_stats.get("c") or 0),
+                    "first_raw_row": row_stats.get("first_row"),
+                    "last_raw_row": row_stats.get("last_row"),
+                    "scannable_by_current_oh_cost_rule": skip_reason is None,
+                    "skip_reason": skip_reason,
+                    "configured_header_values": configured_header_values,
+                    "configured_matches": configured_matches,
+                    "candidate_headers": candidate_headers[:8],
+                }
+            )
+
+        file_results.append(
+            {
+                "file_id": file_id,
+                "coverage_start_date": file_row.get("coverage_start_date"),
+                "coverage_end_date": file_row.get("coverage_end_date"),
+                "filename_date_candidate": file_row.get("filename_date_candidate"),
+                "upload_timestamp": file_row.get("upload_timestamp"),
+                "sheet_count": len(sheets),
+                "sheets": sheet_results,
+            }
+        )
+
+    return {
+        "status": "OK",
+        "source_type": "on_hand",
+        "file_count": len(files),
+        "sheet_count": total_sheets,
+        "scannable_sheet_count": scannable_sheets,
+        "skipped_sheet_count": total_sheets - scannable_sheets,
+        "skip_reason_counts": skip_reason_counts,
+        "files": file_results,
+    }
+
+
+
 def diagnose_global_cost_holds(
     cur,
     upc: str | None = None,
