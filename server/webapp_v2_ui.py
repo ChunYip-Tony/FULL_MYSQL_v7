@@ -69,7 +69,7 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(min-width:760px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.form{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){body{font-size:18px}.w{padding:11px}.card{padding:15px}.m .v{font-size:21px}.m .k{font-size:13px}.title{font-size:26px}.actions{grid-template-columns:1fr}.actions button{font-size:19px;min-height:72px}.nav button{font-size:13px;min-height:68px}.scroll{margin-left:-4px;margin-right:-4px}}
 
-/* v7.0.120 modern flat UI */
+/* v7.0.121 modern flat UI */
 :root{--gp:#7c3aed;--section-blue:#2563eb;--section-green:#059669;--section-amber:#d97706;--section-purple:#7c3aed;--section-pink:#db2777}
 body{font-size:17px;line-height:1.5;padding-bottom:86px;background:var(--bg)}
 .w{max-width:980px;padding:12px 16px}
@@ -122,7 +122,7 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 }
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.120</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.121</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -130,7 +130,7 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 
 <section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day Sales Trend</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day Sales Trend</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill" style="color:var(--gp)">● GP$</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
 <section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
@@ -273,64 +273,90 @@ async function upc(u,b='core'){try{
 $('ub').onclick=()=>history.back();
 
 
-async function price(u){try{let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=7'),c=d.current||{},r=d.references||{},s=d.sales||{};$('pt').textContent=d.name;$('ps').textContent='UPC '+d.upc+' · '+(d.category||'—');$('pc').innerHTML='<div class="card"><div class="grid">'+m('Current Price',money(c.price)+' '+(c.price_type||''))+m('Cost',money(c.cost)+' '+(c.cost_uom||''))+m('GP%',c.gp_pct==null?'—':fmt(Number(c.gp_pct)*100,1)+'%')+m('GP$/Day',money(c.gp_per_day_7d))+m('7D Qty',fmt(s['7d']?.sold_quantity))+m('28D Qty',fmt(s['28d']?.sold_quantity))+m('Sweet Spot',money(r.sweet_spot))+m('WGPM',money(r.wgpm))+m('Company A',money(r.company_a))+m('Company B',money(r.company_b))+m('Company C',money(r.company_c))+'</div></div>';chart(d.price_vs_sales_trend?.rows||[]);$('p14').innerHTML=(d.sales_history_14d?.rows||[]).slice().reverse().map(x=>'<div class="promo"><div class="row" style="justify-content:space-between"><b>'+esc(dayName(x.date))+' · '+esc(x.date)+'</b><b>'+fmt(x.sold_quantity)+' sold</b></div><div class="meta">Sales '+money(x.sales_amount)+' · Avg price '+money(x.avg_sold_price)+' · '+((x.price_types||[]).map(p=>esc(p.price_type)).join(', ')||'No item sale')+'</div></div>').join('')||'<div class="small">No 14-day supported sales history.</div>';$('ph').innerHTML=(d.historical_promotions||[]).map(p=>'<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b><div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+'</div><div class="meta">'+fmt(p.sale_quantity)+' sold · '+fmt(p.sale_velocity_per_supported_day)+'/supported day · coverage '+fmt(p.supported_sales_day_count,0)+'/'+fmt(p.calendar_duration_days,0)+'</div></div>').join('')||'<div class="small">No historical SALE periods.</div>';go('price')}catch(e){alert(e.message)}}
+async function price(u){try{
+  let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/price?trend_supported_days=7'),c0=d.current||{},r=d.references||{},s=d.sales||{},uom=d.qty_uom||d.selling_uom||'—';
+  $('pt').textContent=d.name;
+  $('ps').textContent='UPC '+d.upc+' · '+(d.category||'—')+' · '+(d.upc_role||'OTHER UPC');
+  $('pc').innerHTML=
+    ms('Current Price & Margin','pink',[
+      mr('Current Price',money(c0.price)+' '+(c0.price_type||'—')),
+      mr('Cost',money(c0.cost)+' '+(c0.cost_uom||'—')),
+      mr('GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+'%'),
+      mr('GP$/Day',money(c0.gp_per_day_7d))
+    ])+
+    ms('Sales','green',[
+      mr('7D Qty',qv(s['7d']?.sold_quantity,uom),fmt(s['7d']?.supported_day_count,0)+' supported days'),
+      mr('28D Qty',qv(s['28d']?.sold_quantity,uom),fmt(s['28d']?.supported_day_count,0)+' supported days')
+    ])+
+    ms('Price References','purple',[
+      mr('Sweet Spot',money(r.sweet_spot)),
+      mr('WGPM',money(r.wgpm)),
+      mr('Company A',money(r.company_a)),
+      mr('Company B',money(r.company_b)),
+      mr('Company C',money(r.company_c))
+    ]);
+  chart(d.price_vs_sales_trend?.rows||[]);
+  $('p14').innerHTML=(d.sales_history_14d?.rows||[]).slice().reverse().map(x=>
+    '<div class="promo"><div class="row" style="justify-content:space-between"><b>'+esc(dayName(x.date))+' · '+esc(x.date)+'</b><b>'+qv(x.sold_quantity,x.qty_uom||uom)+' sold</b></div>'+
+    '<div class="meta">Sales '+money(x.sales_amount)+' · Avg price '+money(x.avg_sold_price)+' · GP$ '+money(x.gp_dollars)+' · '+((x.price_types||[]).map(p=>esc(p.price_type)).join(', ')||'No item sale')+'</div></div>'
+  ).join('')||'<div class="small">No 14-day supported sales history.</div>';
+  $('ph').innerHTML=(d.historical_promotions||[]).map(p=>
+    '<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b>'+
+    '<div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+'</div>'+
+    '<div class="meta">'+qv(p.sale_quantity,uom)+' sold · '+qv(p.sale_velocity_per_supported_day,uom)+'/supported day · coverage '+fmt(p.supported_sales_day_count,0)+'/'+fmt(p.calendar_duration_days,0)+'</div></div>'
+  ).join('')||'<div class="small">No historical SALE periods.</div>';
+  go('price')
+}catch(e){alert(e.message)}}
+
 function chart(rows){
-  let c=$('chart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=310;
+  let c=$('chart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=Math.max(300,c.clientWidth),h=320;
   c.width=w*R;c.height=h*R;ctx.setTransform(R,0,0,R,0,0);ctx.clearRect(0,0,w,h);
-  let a=rows.slice(-7),p={l:34,r:24,t:42,b:54};
-  if(!a.length){ctx.fillStyle=getComputedStyle(document.body).color;ctx.font='16px system-ui';ctx.fillText('No trend data',20,30);return}
+  let a=rows.slice(-7),p={l:38,r:28,t:48,b:58};
+  if(!a.length){ctx.fillStyle=getComputedStyle(document.body).color;ctx.font='15px system-ui';ctx.fillText('No trend data',20,30);return}
   let prices=a.map(z=>Number(z.avg_sold_price)).filter(Number.isFinite);
-  let qtys=a.map(z=>Number(z.sold_quantity)||0);
-  let pmax=Math.max(...prices,1),qmax=Math.max(...qtys,1),pw=w-p.l-p.r,ph=h-p.t-p.b;
+  let qtys=a.map(z=>Number(z.sold_quantity)).filter(Number.isFinite);
+  let gps=a.map(z=>Number(z.gp_dollars)).filter(Number.isFinite);
+  let pmax=Math.max(...prices,1),qmax=Math.max(...qtys,1),gpmin=gps.length?Math.min(...gps):0,gpmax=gps.length?Math.max(...gps):1;
+  if(gpmax===gpmin){gpmax=gpmin+1}
+  let pw=w-p.l-p.r,ph=h-p.t-p.b;
   let xx=i=>p.l+(a.length===1?pw/2:pw*i/(a.length-1));
-  let yp=v=>p.t+ph*(1-v/pmax),yq=v=>p.t+ph*(1-v/qmax);
+  let yp=v=>p.t+ph*(1-v/pmax),yq=v=>p.t+ph*(1-v/qmax),yg=v=>p.t+ph*(1-(v-gpmin)/(gpmax-gpmin));
   let line=getComputedStyle(document.documentElement).getPropertyValue('--line');
   let qtyColor=getComputedStyle(document.documentElement).getPropertyValue('--ok');
   let priceColor=getComputedStyle(document.documentElement).getPropertyValue('--a');
+  let gpColor=getComputedStyle(document.documentElement).getPropertyValue('--gp');
   let saleColor=getComputedStyle(document.documentElement).getPropertyValue('--sale');
   let muted=getComputedStyle(document.documentElement).getPropertyValue('--muted');
   let textColor=getComputedStyle(document.documentElement).getPropertyValue('--text');
+  let uom=a.find(z=>z.qty_uom)?.qty_uom||'—';
 
   ctx.strokeStyle=line;ctx.lineWidth=1;
   for(let i=0;i<5;i++){let y=p.t+ph*i/4;ctx.beginPath();ctx.moveTo(p.l,y);ctx.lineTo(w-p.r,y);ctx.stroke()}
 
-  ctx.strokeStyle=qtyColor;ctx.lineWidth=3;ctx.beginPath();
-  a.forEach((z,i)=>{let x=xx(i),y=yq(Number(z.sold_quantity)||0);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});
-  ctx.stroke();
-  a.forEach((z,i)=>{
-    let v=Number(z.sold_quantity)||0,x=xx(i),y=yq(v);
-    ctx.fillStyle=qtyColor;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
-    ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillStyle=qtyColor;
-    ctx.fillText(fmt(v,1),x,Math.min(h-p.b-8,y+19));
-  });
+  function curve(getVal,yFn,color,labelFn,labelOffset){
+    ctx.strokeStyle=color;ctx.lineWidth=2.6;ctx.beginPath();let started=false;
+    a.forEach((z,i)=>{let v=Number(getVal(z));if(!Number.isFinite(v)){started=false;return}let x=xx(i),y=yFn(v);if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)});
+    ctx.stroke();
+    a.forEach((z,i)=>{let v=Number(getVal(z));if(!Number.isFinite(v))return;let x=xx(i),y=yFn(v);ctx.fillStyle=color;ctx.beginPath();ctx.arc(x,y,4.5,0,Math.PI*2);ctx.fill();ctx.font='800 10px system-ui';ctx.textAlign='center';ctx.fillStyle=color;ctx.fillText(labelFn(v),x,Math.max(12,Math.min(h-p.b-7,y+labelOffset)))});
+  }
+  curve(z=>z.sold_quantity,yq,qtyColor,v=>fmt(v,1)+' '+uom,18);
+  curve(z=>z.avg_sold_price,yp,priceColor,v=>'$'+fmt(v,2),-10);
+  curve(z=>z.gp_dollars,yg,gpColor,v=>'GP $'+fmt(v,0),31);
 
-  ctx.strokeStyle=priceColor;ctx.lineWidth=3;ctx.beginPath();let on=false;
-  a.forEach((z,i)=>{
-    let v=Number(z.avg_sold_price);if(!Number.isFinite(v)){on=false;return}
-    let x=xx(i),y=yp(v);if(!on){ctx.moveTo(x,y);on=true}else ctx.lineTo(x,y)
-  });
-  ctx.stroke();
-  a.forEach((z,i)=>{
-    let v=Number(z.avg_sold_price);if(!Number.isFinite(v))return;
-    let x=xx(i),y=yp(v);
-    ctx.fillStyle=priceColor;ctx.beginPath();ctx.arc(x,y,5,0,Math.PI*2);ctx.fill();
-    ctx.font='800 12px system-ui';ctx.textAlign='center';ctx.fillStyle=priceColor;
-    ctx.fillText('$'+fmt(v,2),x,Math.max(14,y-10));
-  });
-
-  ctx.font='11px system-ui';ctx.textAlign='center';
+  ctx.font='10px system-ui';ctx.textAlign='center';
   a.forEach((z,i)=>{
     let x=xx(i);
-    if((z.price_types||[]).some(v=>v.price_type==='SALE')){ctx.fillStyle=saleColor;ctx.fillRect(x-4,h-p.b+5,8,11)}
+    if((z.price_types||[]).some(v=>v.price_type==='SALE')){ctx.fillStyle=saleColor;ctx.fillRect(x-4,h-p.b+5,8,10)}
     ctx.fillStyle=muted;ctx.fillText(dayName(z.date).slice(0,3),x,h-23);ctx.fillText(String(z.date).slice(5),x,h-8);
   });
-  ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillStyle=textColor;ctx.fillText('Qty '+fmt(qmax,1),4,p.t+3);
-  ctx.textAlign='right';ctx.fillText('$'+fmt(pmax,2),w-4,p.t+3);
+  ctx.font='10px system-ui';ctx.textAlign='left';ctx.fillStyle=textColor;ctx.fillText('Qty '+fmt(qmax,1)+' '+uom,4,p.t+3);
+  ctx.textAlign='right';ctx.fillText('Price $'+fmt(pmax,2),w-4,p.t+3);
+  if(gps.length){ctx.textAlign='center';ctx.fillStyle=gpColor;ctx.fillText('GP$ uses current authoritative cost',w/2,14)}
 }
 
 
 async function corder(u){cupc=u;$('cod').value=today();$('cop').value='0';$('cpf').classList.add('hide');try{let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u)+'/ordering');$('cot').textContent=d.family_article_name||d.name;$('cos').textContent='Family '+(d.family_article_number||'—')+' · '+(d.category||'—')+' · from UPC '+(d.source_upc||u);$('cdd').value=d.inputs?.expected_delivery_date||'';corender(d);go('corder')}catch(e){$('coout').innerHTML='<div class="card bad">'+esc(e.message)+'</div>';go('corder')}}$('cop').onchange=()=> $('cpf').classList.toggle('hide',$('cop').value!=='1');$('coa').onclick=async()=>{let q=new URLSearchParams();q.set('ordering_date',$('cod').value);q.set('expected_delivery_date',$('cdd').value);let p=$('cop').value==='1';q.set('promotion_involved',p);if(p){q.set('promotion_start_date',$('cps').value);q.set('promotion_end_date',$('cpe').value);q.set('promotion_price',$('cpp').value)}try{corender(await api('/v1/app/v2/upc/'+encodeURIComponent(cupc)+'/ordering?'+q))}catch(e){$('coout').innerHTML='<div class="card bad">'+esc(e.message)+'</div>'}};
-function corender(d){let i=d.inventory||{},f=d.forecast||{},r=d.regular_baseline||{};$('cohist').innerHTML=(d.historical_promotions||[]).slice(0,5).map(p=>'<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b><div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+' · '+fmt(p.sale_quantity)+' sold</div></div>').join('');$('coout').innerHTML='<div class="card order"><div class="grid">'+m('Effective OH',fmt(i.raw_effective_oh_qty)+' '+(f.suggested_order_uom||''))+m('OH Used',fmt(i.ordering_oh_qty)+' '+(f.suggested_order_uom||''))+m('Regular Velocity',fmt(r.regular_velocity_per_supported_day))+m('Next Next Delivery',d.next_next_delivery_date||'—')+m('Forecast Usage',fmt(f.forecast_usage_until_next_next_delivery))+m('Projected OH @ Delivery',fmt(f.projected_oh_at_expected_delivery))+'</div><div class="small">Suggested Order Qty</div><div class="big">'+fmt(f.suggested_order_qty)+' '+esc(f.suggested_order_uom||'')+'</div>'+(i.negative_oh_treated_as_zero?'<div class="warn">Negative OH treated as 0 for ordering.</div>':'')+'</div>'}
+function corender(d){let i=d.inventory||{},f=d.forecast||{},r=d.regular_baseline||{};$('cohist').innerHTML=(d.historical_promotions||[]).slice(0,5).map(p=>'<div class="promo"><b>'+esc(p.promotion_type)+' Promotion · '+esc(promoRange(p))+'</b><div class="meta">'+esc(p.start_date)+' → '+esc(p.end_date)+' · '+money(p.sale_price)+' · '+qv(p.sale_quantity,f.suggested_order_uom)+' sold</div></div>').join('');$('coout').innerHTML='<div class="card order"><div class="grid">'+m('Effective OH',fmt(i.raw_effective_oh_qty)+' '+(f.suggested_order_uom||''))+m('OH Used',fmt(i.ordering_oh_qty)+' '+(f.suggested_order_uom||''))+m('Regular Velocity',qv(r.regular_velocity_per_supported_day,f.suggested_order_uom)+'/day')+m('Next Next Delivery',d.next_next_delivery_date||'—')+m('Forecast Usage',qv(f.forecast_usage_until_next_next_delivery,f.suggested_order_uom))+m('Projected OH @ Delivery',qv(f.projected_oh_at_expected_delivery,f.suggested_order_uom))+'</div><div class="small">Suggested Order Qty</div><div class="big">'+fmt(f.suggested_order_qty)+' '+esc(f.suggested_order_uom||'')+'</div>'+(i.negative_oh_treated_as_zero?'<div class="warn">Negative OH treated as 0 for ordering.</div>':'')+'</div>'}
 
 function orderDefaults(){let t=today();$('od').value=t;$('dd').value=nextwd(t,5)}orderDefaults();$('ot').onchange=()=>{$('dd').value=nextwd($('od').value||today(),$('ot').value==='FRESH'?5:2)};$('od').onchange=()=>$('ot').onchange();$('op').onchange=()=> $('opa').classList.toggle('hide',$('op').value!=='1');
 $('ois').onclick=async()=>{let q=$('oiq').value.trim();if(!q)return;$('oim').textContent='Searching UPCs…';try{let d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=30'),u=(d.results||[]).filter(r=>r.result_type==='UPC'&&String(r.category||'').toUpperCase()===$('ot').value);$('oim').textContent=u.length+' UPC match(es) · sorted by 28D Qty, then readiness';$('oir').innerHTML=u.slice(0,12).map((z,i)=>'<div class="card result" data-i="'+i+'"><div class="row" style="justify-content:space-between"><div><div class="name">'+esc(z.name)+'</div><div class="meta">UPC '+esc(z.number)+' · Family '+esc(z.family_article_number||'—')+'</div></div>'+pill(z.readiness)+'</div><div class="meta">28D Qty '+fmt(z.qty_28d)+' '+esc(z.qty_28d_uom||'')+'</div></div>').join('');document.querySelectorAll('#oir .result').forEach(e=>e.onclick=()=>addPromoUPC(u[+e.dataset.i]))}catch(e){$('oim').textContent=e.message}};
@@ -372,7 +398,7 @@ async function performance(){
             m('Mapped UPC Total',money(rec.mapped_report_sales))+
             m('Difference',money(rec.difference))+
             m('Unmapped POS',money(rec.unmapped_source_sales))+
-            m('Unmapped Qty',fmt(rec.unmapped_source_qty))+
+            m('Unmapped Qty',rec.unmapped_source_qty==null?(rec.unmapped_qty_mixed_or_unknown?'Mixed / unknown UOM':'—'):qv(rec.unmapped_source_qty,rec.unmapped_source_qty_uom))+
             m('Unmapped UPCs',fmt(rec.unmapped_upc_count,0))+
             m('Source File',rec.canonical_source?.source_file_id??'—')+
           '</div><div class="meta">'+esc(rec.canonical_source?.basis||'')+' · '+esc(rec.canonical_source?.coverage_kind||'')+' · '+(rec.matches_to_cent?'MATCH':'REVIEW REQUIRED')+'</div>'+
@@ -400,9 +426,9 @@ async function performance(){
         '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div>'+pill(x.readiness)+'</div>'+
         '<div class="grid" style="margin-top:10px">'+
           m('Day Sales',money(x.sales_amount))+
-          m('Day Qty',fmt(x.sold_quantity))+
+          m('Day Qty',qv(x.sold_quantity,x.qty_uom))+
           m('Avg Sold Price',money(x.avg_sold_price))+
-          m('7D Velocity',fmt(x.velocity_7d))+
+          m('7D Velocity',qv(x.velocity_7d,x.qty_uom)+'/day')+
         '</div>'+
         '<div class="meta">'+(x.price_types||[]).map(esc).join(' · ')+'</div>'+
       '</div>'
@@ -419,8 +445,8 @@ async function performance(){
         '<div class="grid" style="margin-top:10px">'+
           m('GP$/day Opportunity',gpopp)+
           m('Urgency',fmt(x.urgency_score,1))+
-          m('7D Qty',fmt(x.qty_7d))+
-          m('28D Qty',fmt(x.qty_28d))+
+          m('7D Qty',qv(x.qty_7d,x.qty_uom))+
+          m('28D Qty',qv(x.qty_28d,x.qty_uom))+
         '</div>'+
         '<div class="meta">Sales evidence through '+esc(x.report_date)+' · '+(x.review_blocker?'Review reason '+esc(x.review_blocker.replaceAll('_',' ')):'Price evidence supports action')+'</div>'+
         '<div class="meta">Company C floor '+money(x.company_price_c_floor)+' · Basis '+esc(x.suggestion_basis||'—')+'</div>'+
