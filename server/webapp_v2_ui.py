@@ -68,14 +68,67 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(max-width:560px){.search-bar{grid-template-columns:minmax(0,1fr) auto}.search-bar .primary{grid-column:1/-1}.clear-btn{min-width:76px}}
 @media(min-width:760px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.form{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){body{font-size:18px}.w{padding:11px}.card{padding:15px}.m .v{font-size:21px}.m .k{font-size:13px}.title{font-size:26px}.actions{grid-template-columns:1fr}.actions button{font-size:19px;min-height:72px}.nav button{font-size:13px;min-height:68px}.scroll{margin-left:-4px;margin-right:-4px}}
+
+/* v7.0.120 modern flat UI */
+:root{--gp:#7c3aed;--section-blue:#2563eb;--section-green:#059669;--section-amber:#d97706;--section-purple:#7c3aed;--section-pink:#db2777}
+body{font-size:17px;line-height:1.5;padding-bottom:86px;background:var(--bg)}
+.w{max-width:980px;padding:12px 16px}
+.brand h1{font-size:24px}.ver,.meta,.msg,.small{font-size:14px}
+button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radius:12px;border-width:1.5px}
+.head{margin:14px 0;gap:10px}.title{font-size:24px}.back{width:48px;min-width:48px;height:48px;font-size:22px}
+.nav{box-shadow:none;border-top:1px solid var(--line);padding-top:5px}.nav button{min-height:58px;font-size:12px;border-radius:10px}
+.card{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:16px 0;margin:0;box-shadow:none}
+.promo{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:12px 0;margin:0}
+.hint{background:transparent;border-left:3px solid var(--a);border-radius:0;padding:6px 10px;font-size:14px}
+.section{font-size:18px;margin:6px 0 10px}
+.group-block{background:transparent!important;border:0!important;border-radius:0;padding:0;margin:0 0 18px;box-shadow:none!important}
+.group-title{font-size:15px;text-transform:uppercase;letter-spacing:.055em;padding:8px 0;margin:0;border-bottom:2px solid var(--line)}
+.group-identity .group-title{color:var(--section-blue);border-color:color-mix(in srgb,var(--section-blue) 35%,var(--line))}
+.group-sales .group-title{color:var(--section-green);border-color:color-mix(in srgb,var(--section-green) 35%,var(--line))}
+.group-inventory .group-title{color:var(--section-amber);border-color:color-mix(in srgb,var(--section-amber) 38%,var(--line))}
+.group-delivery .group-title{color:var(--section-purple);border-color:color-mix(in srgb,var(--section-purple) 35%,var(--line))}
+.group-price .group-title{color:var(--section-pink);border-color:color-mix(in srgb,var(--section-pink) 35%,var(--line))}
+.group-block .grid{display:block}
+.group-block .m{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;background:transparent;border:0;border-bottom:1px solid color-mix(in srgb,var(--line) 75%,transparent);border-radius:0;padding:11px 0;min-height:0}
+.group-block .m .k{font-size:13px;min-width:120px;text-transform:none}
+.group-block .m .v{font-size:17px;text-align:right;margin:0}
+.metric-section{margin:0 0 19px}
+.metric-section-title{font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.065em;padding:8px 0;border-bottom:2px solid var(--line)}
+.metric-section.blue .metric-section-title{color:var(--section-blue);border-color:color-mix(in srgb,var(--section-blue) 38%,var(--line))}
+.metric-section.green .metric-section-title{color:var(--section-green);border-color:color-mix(in srgb,var(--section-green) 38%,var(--line))}
+.metric-section.amber .metric-section-title{color:var(--section-amber);border-color:color-mix(in srgb,var(--section-amber) 40%,var(--line))}
+.metric-section.purple .metric-section-title{color:var(--section-purple);border-color:color-mix(in srgb,var(--section-purple) 38%,var(--line))}
+.metric-section.pink .metric-section-title{color:var(--section-pink);border-color:color-mix(in srgb,var(--section-pink) 38%,var(--line))}
+.metric-row{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 72%,transparent)}
+.metric-row:last-child{border-bottom:0}.metric-key{font-size:13px;color:var(--muted);font-weight:750;min-width:120px}.metric-value{font-size:16px;font-weight:800;text-align:right;overflow-wrap:anywhere}
+.metric-note{font-size:12px;color:var(--muted);margin-top:2px;text-align:right}
+.related-list{gap:0}.related-card{background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:13px 0;box-shadow:none}
+.result{background:transparent!important;border:0!important;border-bottom:1px solid var(--line)!important;border-radius:0!important;box-shadow:none!important;margin:0!important;padding:13px 36px 13px 0!important}
+.result:hover{background:color-mix(in srgb,var(--soft) 42%,transparent)!important}
+.family-result{background:linear-gradient(90deg,color-mix(in srgb,var(--a) 10%,transparent),transparent 78%)!important;border-left:4px solid var(--a)!important;padding-left:10px!important}
+.family-badge{font-size:11px;padding:3px 7px;border-radius:6px;margin-bottom:4px}
+.result-upc{font-size:21px}.result-number{font-size:18px}.name{font-size:18px}
+.upc-type{display:inline-flex;margin-top:5px;padding:3px 7px;border-radius:999px;background:color-mix(in srgb,var(--a) 9%,transparent);color:var(--a);font-size:11px;font-weight:850}
+.actions{gap:8px;margin-top:12px}.actions button{min-height:54px;font-size:15px;border-radius:11px;box-shadow:none}
+.chart{height:285px;border:0;border-bottom:1px solid var(--line);border-radius:0;background:transparent}
+.big,.hero-number{font-size:27px}
+.search-bar{gap:8px}
+@media(max-width:560px){
+  body{font-size:16px}.w{padding:10px 13px}.title{font-size:22px}.brand h1{font-size:22px}
+  .metric-row{gap:12px}.metric-key{min-width:105px}.metric-value{font-size:15px}
+  .actions{grid-template-columns:repeat(3,1fr)}.actions button{font-size:14px;min-height:52px;padding:8px 5px}
+  .grid{grid-template-columns:1fr 1fr}.m{min-height:0}.m .v{font-size:16px}.m .k{font-size:12px}
+  .nav button{min-height:56px;font-size:11px}.search-bar .primary{grid-column:auto}
+}
+
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.119</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.120</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
-<section id="family" class="screen"><div class="head"><button class="back" data-go="core">←</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="card"><div class="section">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
+<section id="family" class="screen"><div class="head"><button class="back" data-go="core">←</button><div><div id="ft" class="title"></div><div id="fs" class="meta"></div></div></div><div id="fsummary"></div><div class="metric-section blue"><div class="metric-section-title">Related UPCs</div><div class="hint">Sorted by 28D Qty Sold, then readiness.</div><div id="fu" class="related-list"></div></div></section>
 
-<section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum" class="card"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
+<section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
 <section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day Sales Trend</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
@@ -105,6 +158,9 @@ history.replaceState({fullmysqlV2:true,screen:'guard'},'',location.pathname+loca
 window.addEventListener('popstate',e=>{let s=e.state;if(s&&s.fullmysqlV2&&s.screen&&s.screen!=='guard'){showScreen(s.screen);return}history.pushState({fullmysqlV2:true,screen:'core'},'',location.pathname+location.search+'#core');showScreen('core')})
 function pill(s){s=String(s||'UNKNOWN');let c=s==='READY'?'ok':(s.includes('BLOCK')||s==='QA_HOLD'?'bad':'warn');return '<span class="pill '+c+'">'+esc(s)+'</span>'}
 function m(k,v){return '<div class="m"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'</div></div>'}
+function qv(v,u){return fmt(v)+' '+esc(u||'—')}
+function mr(k,v,note=''){return '<div class="metric-row"><div class="metric-key">'+esc(k)+'</div><div><div class="metric-value">'+esc(v)+'</div>'+(note?'<div class="metric-note">'+esc(note)+'</div>':'')+'</div></div>'}
+function ms(title,tone,rows){return '<div class="metric-section '+tone+'"><div class="metric-section-title">'+esc(title)+'</div>'+rows.join('')+'</div>'}
 document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>history.back());document.querySelectorAll('[data-main]').forEach(b=>b.onclick=()=>go(b.dataset.main));
 
 async function csearch(){
@@ -124,7 +180,8 @@ async function csearch(){
         +'<div class="row" style="justify-content:space-between"><div class="name">'+esc(r.name)+'</div>'+pill(r.readiness)+'</div>'
         +numberHtml
         +'<div class="result-type">'+esc(r.result_type)+' · '+esc(r.category||'—')+'</div>'
-        +'<div class="meta">28 supported-day Qty '+fmt(r.qty_28d)+' '+esc(r.qty_28d_uom||'')+'</div>'
+        +(isUpc?'<span class="upc-type">'+esc(r.upc_role||'OTHER UPC')+'</span>':'')
+        +'<div class="meta">28 supported-day Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
         +'</div>';
     }).join('')||'<div class="card small">No match found.</div>';
     document.querySelectorAll('#cres .result').forEach(e=>e.onclick=()=>{
@@ -143,35 +200,38 @@ async function family(k){try{
   $('ft').textContent=d.family_article_name;
   $('fs').textContent='Family '+(d.family_article_number||'—')+' · '+(d.category||'—');
   let articleText=(d.receiving_ordering_articles||[]).map(a=>String(a.article_number||'')+(a.article_description?' · '+String(a.article_description):'')).join(' | ')||'—';
+  let ohText=o.quantity==null?'No OH':qv(o.quantity,o.uom);
+  let ohReason=o.quantity==null?(o.reason||o.status||'OH unavailable'):(o.source||o.status||'READY');
   $('fsummary').innerHTML=
-    '<div class="group-block group-identity"><div class="group-title">🪪 Identity</div><div class="grid">'+
-      m('Family Article',d.family_article_number||'—')+
-      m('Category',d.category||'—')+
-      m('Receiving / Ordering',articleText)+
-    '</div></div>'+
-    '<div class="group-block group-sales"><div class="group-title">📈 Sales</div><div class="grid">'+
-      m('Family 7D Sold',fmt(d.family_sales_7d?.sold_quantity)+' '+(d.family_sales_7d?.uom||'')+' / '+fmt(d.family_sales_7d?.supported_day_count,0)+' days')+
-      m('Family 28D Sold',fmt(d.family_sales_28d?.sold_quantity)+' '+(d.family_sales_28d?.uom||'')+' / '+fmt(d.family_sales_28d?.supported_day_count,0)+' days')+
-    '</div></div>'+
-    '<div class="group-block group-inventory"><div class="group-title">📦 Inventory</div><div class="grid">'+
-      m('Effective OH',fmt(o.quantity)+' '+(o.uom||''))+
-    '</div></div>'+
-    '<div class="group-block group-delivery"><div class="group-title">🚚 Delivery & Receipt</div><div class="grid">'+
-      m('Next Expected Delivery',d.next_expected_delivery_date||'Uncertain')+
-      m('Observed Days',(z.observed_delivery_days||[]).map(x=>x.weekday).join(', ')||'—')+
-      m('Frequency',z.frequency||'—')+
-      m('Last Receipt',r.date||'—')+
-      m('Receipt Qty',fmt(r.quantity)+' '+(r.uom||''))+
-      m('Receipt Cost',money(r.cost)+' '+(r.cost_uom||''))+
-    '</div></div>';
+    ms('Identity','blue',[
+      mr('Family Article',d.family_article_number||'—'),
+      mr('Category',d.category||'—'),
+      mr('Receiving / Ordering',articleText)
+    ])+
+    ms('Sales','green',[
+      mr('7D Sold',qv(d.family_sales_7d?.sold_quantity,d.family_sales_7d?.uom),fmt(d.family_sales_7d?.supported_day_count,0)+' supported days'),
+      mr('28D Sold',qv(d.family_sales_28d?.sold_quantity,d.family_sales_28d?.uom),fmt(d.family_sales_28d?.supported_day_count,0)+' supported days')
+    ])+
+    ms('Inventory','amber',[
+      mr('Effective OH',ohText,ohReason),
+      mr('OH Status',o.status||'—'),
+      mr('OH Source',o.source||'—'),
+      mr('OH Anchor',o.anchor_date||o.submitted_at||'—')
+    ])+
+    ms('Delivery & Receipt','purple',[
+      mr('Next Expected Delivery',d.next_expected_delivery_date||'Uncertain'),
+      mr('Observed Days',(z.observed_delivery_days||[]).map(x=>x.weekday).join(', ')||'—'),
+      mr('Frequency',z.frequency||'—'),
+      mr('Last Receipt',r.date||'—'),
+      mr('Receipt Qty',qv(r.quantity,r.uom)),
+      mr('Receipt Cost',money(r.cost)+' '+(r.cost_uom||'—'))
+    ]);
   $('fu').innerHTML=(d.related_upcs||[]).map((x,i)=>
     '<div class="related-card" data-i="'+i+'">'+
-      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div></div>'+pill(x.readiness)+'</div>'+
-      '<div class="grid" style="margin-top:10px">'+
-        m('Price',money(x.current_price)+' '+esc(x.current_price_type||''))+
-        m('7D Qty',fmt(x.qty_7d))+
-        m('28D Qty',fmt(x.qty_28d))+
-      '</div>'+
+      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div><span class="upc-type">'+esc(x.upc_role||'OTHER UPC')+'</span></div>'+pill(x.readiness)+'</div>'+
+      mr('Price',money(x.current_price)+' '+esc(x.current_price_type||'—'))+
+      mr('7D Qty',qv(x.qty_7d,x.selling_uom),fmt(x.supported_days_7d,0)+' supported days')+
+      mr('28D Qty',qv(x.qty_28d,x.selling_uom),fmt(x.supported_days_28d,0)+' supported days')+
     '</div>'
   ).join('')||'<div class="small">No related UPCs.</div>';
   document.querySelectorAll('#fu [data-i]').forEach(e=>e.onclick=()=>upc(d.related_upcs[+e.dataset.i].upc,'family'));
@@ -181,23 +241,30 @@ async function family(k){try{
 
 async function upc(u,b='core'){try{
   let d=await api('/v1/app/v2/upc/'+encodeURIComponent(u));cupc=d.upc;uback=b;
+  let o=d.effective_oh||{};
   $('ut').textContent=d.upc_name;
-  $('us').textContent='UPC '+d.upc+' · '+(d.category||'—');
+  $('us').textContent='UPC '+d.upc+' · '+(d.category||'—')+' · '+(d.upc_role||'OTHER UPC');
   $('usum').innerHTML=
-    '<div class="group-block group-identity"><div class="group-title">🪪 Identity</div><div class="grid">'+
-      m('UPC',d.upc)+
-      m('Family Article',d.family_article_number||'—')+
-      m('Category',d.category||'—')+
-      m('Status',d.readiness||'—')+
-    '</div></div>'+
-    '<div class="group-block group-sales"><div class="group-title">📈 Sales</div><div class="grid">'+
-      m('7D Qty',fmt(d.qty_7d?.sold_quantity)+' / '+fmt(d.qty_7d?.supported_day_count,0)+' days')+
-      m('28D Qty',fmt(d.qty_28d?.sold_quantity)+' / '+fmt(d.qty_28d?.supported_day_count,0)+' days')+
-    '</div></div>'+
-    '<div class="group-block group-price"><div class="group-title">💲 Price</div><div class="grid">'+
-      m('Current Price',money(d.current_price))+
-      m('Price Type',d.current_price_type||'—')+
-    '</div></div>';
+    ms('Identity','blue',[
+      mr('UPC',d.upc),
+      mr('UPC Type',d.upc_role||'OTHER UPC'),
+      mr('Family Article',d.family_article_number||'—'),
+      mr('Category',d.category||'—'),
+      mr('Status',d.readiness||'—'),
+      mr('Selling UOM',d.selling_uom||'—')
+    ])+
+    ms('Sales','green',[
+      mr('7D Qty',qv(d.qty_7d?.sold_quantity,d.selling_uom),fmt(d.qty_7d?.supported_day_count,0)+' supported days'),
+      mr('28D Qty',qv(d.qty_28d?.sold_quantity,d.selling_uom),fmt(d.qty_28d?.supported_day_count,0)+' supported days')
+    ])+
+    ms('Inventory','amber',[
+      mr('Effective OH',o.quantity==null?'No OH':qv(o.quantity,o.uom),o.quantity==null?(o.reason||o.status||'OH unavailable'):(o.source||o.status||'READY')),
+      mr('OH Status',o.status||'—')
+    ])+
+    ms('Price','pink',[
+      mr('Current Price',money(d.current_price)),
+      mr('Price Type',d.current_price_type||'—')
+    ]);
   $('uf').onclick=()=>family(d.family_article_number);
   $('upr').onclick=()=>price(d.upc);
   $('uo').onclick=()=>corder(d.upc);
