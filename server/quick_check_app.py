@@ -3240,15 +3240,23 @@ def update_order_external_reference(
         ensure_order_workflow_tables(cur)
         conn.commit()
         cur.execute(
-            """UPDATE order_draft
-               SET external_order_reference=%s,updated_at=CURRENT_TIMESTAMP(6)
-               WHERE order_draft_id=%s
-                 AND workflow_status IN ('DRAFT','CONFIRMED','MARKED_SUBMITTED')""",
-            (ref,int(order_draft_id)),
+            """SELECT workflow_status
+               FROM order_draft
+               WHERE order_draft_id=%s""",
+            (int(order_draft_id),),
         )
-        if int(cur.rowcount or 0)!=1:
+        existing=cur.fetchone()
+        if not existing or existing.get("workflow_status") not in {
+            "DRAFT","CONFIRMED","MARKED_SUBMITTED"
+        }:
             cur.close()
             raise ValueError("ORDER_DRAFT_REFERENCE_UPDATE_BLOCKED")
+        cur.execute(
+            """UPDATE order_draft
+               SET external_order_reference=%s,updated_at=CURRENT_TIMESTAMP(6)
+               WHERE order_draft_id=%s""",
+            (ref,int(order_draft_id)),
+        )
         conn.commit()
         cur.close()
     return {
@@ -3985,6 +3993,33 @@ def operational_dashboard() -> dict[str, Any]:
                 else:
                     dumping["other"] += n
 
+        order_workflow = {
+            "draft": 0,
+            "confirmed": 0,
+            "marked_submitted": 0,
+            "cancelled": 0,
+            "other": 0,
+        }
+        if _table_exists(cur, "order_draft"):
+            cur.execute(
+                """SELECT workflow_status,COUNT(*) AS cnt
+                   FROM order_draft
+                   GROUP BY workflow_status"""
+            )
+            for row in cur.fetchall():
+                status = str(row.get("workflow_status") or "").upper()
+                n = int(row.get("cnt") or 0)
+                key = {
+                    "DRAFT":"draft",
+                    "CONFIRMED":"confirmed",
+                    "MARKED_SUBMITTED":"marked_submitted",
+                    "CANCELLED":"cancelled",
+                }.get(status)
+                if key:
+                    order_workflow[key] = n
+                else:
+                    order_workflow["other"] += n
+
         pricing = {
             "pending_review": 0,
             "approved_for_execution": 0,
@@ -4030,6 +4065,7 @@ def operational_dashboard() -> dict[str, Any]:
         "contract_version": "OPERATIONS_DASHBOARD_V1",
         "quick_check": quick,
         "ordering": ordering,
+        "order_workflow": order_workflow,
         "dumping": dumping,
         "price_change": pricing,
         "true_stock": true_stock,
