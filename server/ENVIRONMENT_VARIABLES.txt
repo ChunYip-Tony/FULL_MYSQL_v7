@@ -14,3 +14,21 @@ Do not wrap the token values in JSON, quotes, braces, or angle brackets.
 FULLMYSQL_API_TOKENS_JSON remains supported only as a backward-compatible fallback.
 If private VPC is not enabled yet, DATABASE_URL may be used temporarily instead of DATABASE_PRIVATE_URL.
 Do not create a separate App Platform Worker component for this edition.
+
+Optional ChatGPT Google Sheet bridge (v7.0.84):
+FULLMYSQL_CHATGPT_SHEET_ENABLED=0
+FULLMYSQL_CHATGPT_SHEET_REQUIRED=0
+FULLMYSQL_CHATGPT_SHEET_ID=1kZQg_dQ79Jagg7hkBKs4YX33QBy9ByrDvq5KActCgwI
+FULLMYSQL_CHATGPT_BRIDGE_ACTIVE_SOURCE=HYBRID_SQLITE
+FULLMYSQL_GOOGLE_SERVICE_ACCOUNT_JSON=<encrypted Google service-account JSON>
+
+Deployment sequence:
+1. Share FULL_MYSQL_CHATGPT_ANALYSIS with the service account as Editor.
+2. Add FULLMYSQL_GOOGLE_SERVICE_ACCOUNT_JSON as an ENCRYPTED runtime secret.
+3. Set FULLMYSQL_CHATGPT_SHEET_ENABLED=1.
+4. Keep FULLMYSQL_CHATGPT_SHEET_REQUIRED=0 for the first smoke-test publish.
+5. Verify BRIDGE_STATUS=PASS and MYSQL_SOURCE_STATUS batch/readback parity.
+6. Then set FULLMYSQL_CHATGPT_SHEET_REQUIRED=1 so every future READY batch must publish/read back before the outer pipeline can complete.
+7. Keep FULLMYSQL_CHATGPT_BRIDGE_ACTIVE_SOURCE=HYBRID_SQLITE until FULL MYSQL analysis parity is approved; then change it to FULL_MYSQL.
+
+Never commit the service-account JSON to GitHub.
