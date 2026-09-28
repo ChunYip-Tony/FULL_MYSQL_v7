@@ -217,7 +217,7 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
 
             # Materialize in the same order as cost authority:
             # 1) receipt 101/107/109
-            # 2) OH explicit supported cost
+            # 2) OH cost: explicit unit cost or Total Value / Unrestricted Qty
             # 3) Live/Fresh/Frozen official cost
             receipt_backfill_rows = _backfill_receipt_cost(
                 cur, active_family_ids
@@ -233,7 +233,7 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
             cur.execute(
                 f"""SELECT ean_upc,family_id,main_article_number,cost_source,cost_date,
                            current_cost_per_base_uom,current_cost_per_selling_unit,
-                           quick_check_status,blocking_reason
+                           base_uom,quick_check_status,blocking_reason
                     FROM quick_check_current
                     WHERE family_id IN ({ph})
                       AND quick_check_status IN ('READY','QA_HOLD')
@@ -251,8 +251,35 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                     expected_by_family[fid] = _latest_cost(cur, fid)
                 expected = expected_by_family[fid]
                 expected_source = expected.get("source") if expected else None
+                expected_amount = (
+                    Decimal(str(expected.get("cost_per_base")))
+                    if expected and expected.get("cost_per_base") is not None
+                    else None
+                )
+                expected_date = expected.get("date") if expected else None
+                expected_uom = (
+                    str(expected.get("base_uom") or "").upper()
+                    if expected else ""
+                )
                 actual_source = row.get("cost_source")
-                if expected_source != actual_source:
+                actual_amount = (
+                    Decimal(str(row.get("current_cost_per_base_uom")))
+                    if row.get("current_cost_per_base_uom") is not None
+                    else None
+                )
+                actual_date = row.get("cost_date")
+                actual_uom = str(row.get("base_uom") or "").upper()
+                mismatch = (
+                    expected_source != actual_source
+                    or expected_amount != actual_amount
+                    or expected_date != actual_date
+                    or (
+                        expected_uom
+                        and actual_uom
+                        and expected_uom != actual_uom
+                    )
+                )
+                if mismatch:
                     affected_family_ids.add(fid)
                     before_mismatches.append(
                         {
@@ -261,6 +288,12 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                             "main_article_number": row.get("main_article_number"),
                             "before_cost_source": actual_source,
                             "expected_cost_source": expected_source,
+                            "before_cost_amount": actual_amount,
+                            "expected_cost_amount": expected_amount,
+                            "before_cost_date": actual_date,
+                            "expected_cost_date": expected_date,
+                            "before_cost_uom": actual_uom or None,
+                            "expected_cost_uom": expected_uom or None,
                         }
                     )
 
@@ -279,7 +312,7 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                 cur.execute(
                     f"""SELECT ean_upc,family_id,main_article_number,cost_source,cost_date,
                                current_cost_per_base_uom,current_cost_per_selling_unit,
-                               quick_check_status,blocking_reason
+                               base_uom,quick_check_status,blocking_reason
                         FROM quick_check_current
                         WHERE family_id IN ({tph})
                           AND quick_check_status IN ('READY','QA_HOLD')
@@ -290,7 +323,33 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                     fid = int(row["family_id"])
                     expected = _latest_cost(cur, fid)
                     expected_source = expected.get("source") if expected else None
-                    if row.get("cost_source") != expected_source:
+                    expected_amount = (
+                        Decimal(str(expected.get("cost_per_base")))
+                        if expected and expected.get("cost_per_base") is not None
+                        else None
+                    )
+                    expected_date = expected.get("date") if expected else None
+                    expected_uom = (
+                        str(expected.get("base_uom") or "").upper()
+                        if expected else ""
+                    )
+                    actual_amount = (
+                        Decimal(str(row.get("current_cost_per_base_uom")))
+                        if row.get("current_cost_per_base_uom") is not None
+                        else None
+                    )
+                    actual_uom = str(row.get("base_uom") or "").upper()
+                    mismatch = (
+                        row.get("cost_source") != expected_source
+                        or actual_amount != expected_amount
+                        or row.get("cost_date") != expected_date
+                        or (
+                            expected_uom
+                            and actual_uom
+                            and expected_uom != actual_uom
+                        )
+                    )
+                    if mismatch:
                         after_mismatches.append(
                             {
                                 "ean_upc": str(row["ean_upc"]),
@@ -298,6 +357,12 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                                 "main_article_number": row.get("main_article_number"),
                                 "actual_cost_source": row.get("cost_source"),
                                 "expected_cost_source": expected_source,
+                                "actual_cost_amount": actual_amount,
+                                "expected_cost_amount": expected_amount,
+                                "actual_cost_date": row.get("cost_date"),
+                                "expected_cost_date": expected_date,
+                                "actual_cost_uom": actual_uom or None,
+                                "expected_cost_uom": expected_uom or None,
                             }
                         )
 
@@ -392,7 +457,7 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
                 "source_exhaustion_order": [
                     "RELINK_IDENTITY",
                     "MATERIALIZE_RECEIPT_101_107_109",
-                    "MATERIALIZE_ON_HAND_EXPLICIT_COST",
+                    "MATERIALIZE_ON_HAND_COST_EXPLICIT_OR_TOTAL_VALUE_DERIVED",
                     "MATERIALIZE_LIVE_FRESH_FROZEN_OFFICIAL_COST",
                     "REFRESH_AFFECTED_QUICK_CHECK_FAMILIES",
                 ],
