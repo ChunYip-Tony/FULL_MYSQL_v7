@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.140 Single-Service Edition
+Version: 7.0.141 Single-Service Edition
+
+v7.0.141 Upload History Timestamps:
+- Recent Uploads now shows each batch Uploaded date/time.
+- Completed batches also show Completed date/time.
+- Each raw file in upload history shows its own actual upload_timestamp.
+- Existing source type, row count, coverage range, duplicate status and ingest status remain visible.
+
 
 v7.0.140 Reports + Search:
 - Reports now has three tools: Report, Price Change, and Uploads.
