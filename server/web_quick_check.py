@@ -34,7 +34,7 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.102</div></div>
+    <div class="brand"><h1>FULL MYSQL</h1><div class="version">Web App · v7.0.103</div></div>
     <div id="globalStatus" class="msg">Public operational app</div>
   </div>
 
@@ -100,9 +100,12 @@ input{min-width:0;flex:1}button{cursor:pointer;font-weight:700}button.primary{ba
 
   <section id="mod-price" class="module hidden">
     <div class="module-head"><h2>💲 Price Change</h2><button class="smallbtn" id="refreshPrice">Refresh</button></div>
-    <div class="small">Review view only. Current price is shown against precomputed Sweet Spot, WGPM, and Company A/B/C references; this page does not auto-submit retail changes.</div>
+    <div class="small">Public users can review and run what-if price impact. Proposal creation, approval, rejection, and execution marking remain admin-only. No action here directly changes live retail.</div>
     <div id="priceStatus" class="msg">Open this tab to load.</div>
     <div id="priceList" class="grid list-grid"></div>
+    <div class="module-head" style="margin-top:18px"><h2 style="font-size:16px">Proposal Queue</h2></div>
+    <div id="proposalStatus" class="msg">Loading with Price Change.</div>
+    <div id="proposalList" class="grid list-grid"></div>
   </section>
 </div>
 
@@ -301,13 +304,48 @@ async function resolveDumping(id,btn){
   }
 }
 
-async function loadPrice(){
-  $('priceStatus').textContent='Loading price review…'; $('priceList').innerHTML='';
+async function previewPrice(upc,inputId,outputId){
+  const input=$(inputId), out=$(outputId);
+  const raw=input?.value?.trim();
+  if(!raw){out.textContent='Enter a proposed price.';out.className='msg error';return}
+  out.textContent='Calculating…';out.className='msg';
   try{
-    const d=await api('/v1/app/price-change?limit=160'); loadedPrice=true;
+    const d=await api('/v1/app/price-change/'+encodeURIComponent(upc)+'/preview?proposed_price='+encodeURIComponent(raw));
+    const x=d.impact||{};
+    out.className='card notice';
+    out.innerHTML='<div class="section-title">What-if Impact</div>'+
+      '<div class="kv">'+
+      '<div class="k">Proposed Price</div><div class="v">'+money(x.proposed_price)+'</div>'+
+      '<div class="k">Proposed GP%</div><div class="v">'+pct(x.proposed_gp_pct)+'</div>'+
+      '<div class="k">Projected GP$/day</div><div class="v">'+money(x.projected_gp_per_day_7d)+'</div>'+
+      '<div class="k">GP$/day Delta</div><div class="v">'+money(x.projected_gp_per_day_delta)+'</div>'+
+      '</div><div class="small" style="margin-top:8px">'+esc(x.caveat||'')+'</div>'+
+      '<div class="small">Related UPC sync: '+esc(d.related_upc_sync_policy||'NOT_INFERRED')+' · Live price changed: No</div>';
+  }catch(e){out.textContent=e.message;out.className='msg error'}
+}
+
+async function loadPrice(){
+  $('priceStatus').textContent='Loading price review…';
+  $('proposalStatus').textContent='Loading proposal queue…';
+  $('priceList').innerHTML=''; $('proposalList').innerHTML='';
+  try{
+    const [d,p]=await Promise.all([
+      api('/v1/app/price-change?limit=160'),
+      api('/v1/app/price-change/proposals?limit=60')
+    ]);
+    loadedPrice=true;
     $('priceStatus').textContent=d.count+' item(s) · '+esc(d.mode||'');
-    $('priceList').innerHTML=(d.rows||[]).map(r=>`
-      <div class="card module-card" data-open-upc="${esc(r.ean_upc)}">
+    $('proposalStatus').textContent=p.count+' proposal(s) in audit history';
+
+    $('priceList').innerHTML=(d.rows||[]).map((r,idx)=>{
+      const inputId='priceInput_'+idx, outputId='pricePreview_'+idx;
+      const refButtons=[
+        ['Sweet',r.sweet_spot_price],['WGPM',r.wgpm_price],
+        ['A',r.company_price_a],['B',r.company_price_b],['C',r.company_price_c]
+      ].filter(x=>x[1]!==null&&x[1]!==undefined&&x[1]!=='').map(x=>
+        '<button class="smallbtn refPrice" data-input="'+inputId+'" data-value="'+esc(x[1])+'">'+esc(x[0])+' '+money(x[1])+'</button>'
+      ).join('');
+      return `<div class="card module-card" data-open-upc="${esc(r.ean_upc)}">
         <div class="row" style="justify-content:space-between"><div class="name">${esc(r.selling_description||r.ean_upc)}</div>${pill(r.quick_check_status)}</div>
         <div class="meta">UPC ${esc(r.ean_upc)} · Article ${esc(r.article_number||'—')} · ${esc(r.current_price_type||'')}</div>
         <div class="kv">
@@ -321,9 +359,45 @@ async function loadPrice(){
           <div class="k">Company A / B / C</div><div class="v">${money(r.company_price_a)} / ${money(r.company_price_b)} / ${money(r.company_price_c)}</div>
         </div>
         ${flags(r.review_flags)}
-      </div>`).join('')||'<div class="empty">No active price review rows.</div>';
+        <div class="row" style="margin-top:10px">${refButtons}</div>
+        <div class="row" style="margin-top:8px">
+          <input id="${inputId}" class="priceInput" inputmode="decimal" placeholder="What-if price" value="${esc(r.current_price??'')}">
+          <button class="smallbtn previewPriceBtn" data-upc="${esc(r.ean_upc)}" data-input="${inputId}" data-output="${outputId}">Preview</button>
+        </div>
+        <div id="${outputId}" class="msg"></div>
+      </div>`;
+    }).join('')||'<div class="empty">No active price review rows.</div>';
+
+    $('proposalList').innerHTML=(p.rows||[]).map(r=>`
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div class="name">${esc(r.selling_description||r.ean_upc)}</div>
+          <span class="pill ${String(r.proposal_status||'').includes('APPROVED')?'ok':(String(r.proposal_status||'').includes('REJECT')?'bad':'warn')}">${esc(r.proposal_status||'')}</span>
+        </div>
+        <div class="meta">Proposal #${esc(r.proposal_id)} · UPC ${esc(r.ean_upc)} · Basis ${esc(r.proposal_basis||'')}</div>
+        <div class="kv">
+          <div class="k">Current → Proposed</div><div class="v">${money(r.current_price)} → ${money(r.proposed_price)}</div>
+          <div class="k">GP%</div><div class="v">${pct(r.current_gp_pct)} → ${pct(r.proposed_gp_pct)}</div>
+          <div class="k">Projected GP$/day</div><div class="v">${money(r.projected_gp_per_day_7d)}</div>
+          <div class="k">GP$/day Delta</div><div class="v">${money(r.projected_gp_per_day_delta)}</div>
+          <div class="k">Proposed By</div><div class="v">${esc(r.proposed_by||'—')}</div>
+          <div class="k">Proposed At</div><div class="v">${esc(r.proposed_at||'—')}</div>
+        </div>
+        <div class="small" style="margin-top:8px">${esc(r.reason||r.review_note||'')}</div>
+      </div>`).join('')||'<div class="empty">No price-change proposals yet.</div>';
+
     bindOpenCards('priceList');
-  }catch(e){$('priceStatus').textContent=e.message;$('priceStatus').className='msg error'}
+    $('priceList').querySelectorAll('.refPrice').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation(); const input=$(btn.dataset.input); if(input)input.value=btn.dataset.value;
+    }));
+    $('priceList').querySelectorAll('.previewPriceBtn').forEach(btn=>btn.addEventListener('click',e=>{
+      e.stopPropagation(); previewPrice(btn.dataset.upc,btn.dataset.input,btn.dataset.output);
+    }));
+    $('priceList').querySelectorAll('.priceInput').forEach(input=>input.addEventListener('click',e=>e.stopPropagation()));
+  }catch(e){
+    $('priceStatus').textContent=e.message;$('priceStatus').className='msg error';
+    $('proposalStatus').textContent=e.message;$('proposalStatus').className='msg error';
+  }
 }
 
 function bindOpenCards(containerId){
