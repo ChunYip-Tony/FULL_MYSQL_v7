@@ -1,7 +1,7 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.115 Single-Service Edition
+Version: 7.0.116 Single-Service Edition
 
-Canonical runtime version: 7.0.115-single-service
+Canonical runtime version: 7.0.116-single-service
 Web App V2 route: /app/v2
 Canonical V2 module: server/webapp_v2_runtime.py
 
@@ -11,22 +11,18 @@ V2 main functions:
 - PERFORMANCE
 
 Main ORDERING is cancelled.
-CORE -> UPC -> Ordering Analysis remains available at Family Article decision level.
+CORE Ordering remains available from UPC and calculates at Family Article level.
 
-Latest UI:
-- Elder-friendly larger text
-- larger buttons and Back control
-- high-contrast cards
-- simplified three-tab navigation
-- mobile/system Back remains inside V2 flow
-
-Latest data rules:
-- Search sort: 28D Qty Sold descending -> readiness.
+v7.0.116:
+- Fixed CORE Ordering when observed receipt cadence is sparse/irregular.
+- FRESH delivery fallback: following Friday.
+- FROZEN delivery fallback: following Tuesday.
+- Fresh/Frozen next-next fallback: expected delivery + 7 days.
+- PERFORMANCE is now selected by Report Date.
+- Report Date defaults to latest completed supported POS date.
+- Report shows selected-day performance, Top Sellers, and as-of 7D/14D/28D analysis.
+- Top 100 price suggestions use sales evidence only through Report Date.
+- Company Price C remains the bottom line when applicable.
+- GP$/day opportunity remains the primary price-suggestion objective.
 - Family Info shows Family 7D Sold + Family 28D Sold.
-- 7D/14D/28D use completed canonical supported dates only.
-- Price chart = latest 7 supported days.
-- Detailed price/sales history = latest 14 supported days.
-- Historical SALE displays weekday range plus dates.
-- PI writes Family Article True Stock.
-- Performance Top 100 prioritizes positive observed GP$/day opportunity.
-- Company Price C is the hard bottom line when applicable.
+- Elder-friendly UI and in-app phone Back navigation remain active.
