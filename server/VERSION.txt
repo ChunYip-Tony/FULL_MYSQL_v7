@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.148 Single-Service Edition
+Version: 7.0.149 Single-Service Edition
+
+v7.0.149 DigitalOcean Deploy Fix:
+- Removed api/worker import smoke from Docker image build because App Platform runtime secrets are not guaranteed during build.
+- Docker build now performs syntax-only compileall validation.
+- Import-time api/worker smoke test now runs from single_service.py after runtime environment and secrets are available.
+- Runtime import failures now emit the actual traceback in runtime logs before the container exits.
+- This prevents the deployment image build itself from failing due to runtime-only configuration.
+
 
 v7.0.147 QA HOLD Delete No-Body Fix:
 - QA HOLD delete endpoint no longer accepts or validates a JSON request body.
