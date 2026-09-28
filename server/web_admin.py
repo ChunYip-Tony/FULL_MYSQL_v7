@@ -26,7 +26,7 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
 <div class="wrap">
   <div class="top">
     <div class="row" style="justify-content:space-between">
-      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.106 · ID/password secure session</div></div>
+      <div><h1>FULL MYSQL · Admin Console</h1><div class="sub">v7.0.107 · ID/password secure session</div></div>
       <div class="toplinks"><a href="/app">Open App</a><button id="logout" class="smallbtn hidden">Logout</button></div>
     </div>
     <div id="sessionMsg" class="msg">Checking admin session…</div>
@@ -61,6 +61,24 @@ input,select,textarea{width:100%}textarea{min-height:72px;resize:vertical}button
       <div id="policyMsg" class="msg"></div>
     </div>
     <div id="policyList" class="card"></div>
+
+    <div class="section">📋 Final Order Workflow</div>
+    <div class="card">
+      <div class="actions">
+        <button id="refreshOrderWorkflow">Refresh</button>
+        <select id="orderDraftFilter" style="width:auto">
+          <option value="">All Draft Statuses</option>
+          <option value="DRAFT">Draft</option>
+          <option value="CONFIRMED">Confirmed</option>
+          <option value="MARKED_SUBMITTED">Marked Submitted</option>
+          <option value="CANCELLED">Cancelled</option>
+        </select>
+      </div>
+      <div class="sub">Only items with a valid ordering policy and positive Suggested Order Qty can be added. Mark Submitted is audit-only; it does not transmit an order to a supplier.</div>
+      <div id="orderRecommendationStatus" class="msg"></div>
+      <div id="orderRecommendationList"></div>
+    </div>
+    <div id="orderDraftList" class="card"></div>
 
     <div class="section">💲 Create Price Proposal</div>
     <div class="card">
@@ -114,7 +132,7 @@ function setSession(ok,txt){
   $('sessionMsg').textContent=txt;$('sessionMsg').className='msg '+(ok?'ok':'warn');
 }
 async function checkSession(){
-  try{const d=await api('/v1/admin/session');setSession(true,'Signed in as '+(d.login_id||d.device||'admin')+' · expires '+(d.expires_at||''));await Promise.all([loadPolicies(),loadProposals()])}
+  try{const d=await api('/v1/admin/session');setSession(true,'Signed in as '+(d.login_id||d.device||'admin')+' · expires '+(d.expires_at||''));await Promise.all([loadPolicies(),loadOrderWorkflow(),loadProposals()])}
   catch{setSession(false,'Admin sign-in required.')}
 }
 async function login(){
@@ -123,7 +141,7 @@ async function login(){
   $('loginMsg').textContent='Signing in…';
   try{
     const d=await api('/v1/admin/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login_id:loginId,password})});
-    $('adminPassword').value='';$('loginMsg').textContent='';setSession(true,'Signed in as '+(d.login_id||loginId));await Promise.all([loadPolicies(),loadProposals()]);
+    $('adminPassword').value='';$('loginMsg').textContent='';setSession(true,'Signed in as '+(d.login_id||loginId));await Promise.all([loadPolicies(),loadOrderWorkflow(),loadProposals()]);
   }catch(e){$('loginMsg').textContent=e.message;$('loginMsg').className='msg danger'}
 }
 async function logout(){
@@ -158,6 +176,109 @@ async function savePolicy(){
   try{await api('/v1/admin/ordering/policy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});$('policyMsg').textContent='Saved.';$('policyMsg').className='msg ok';await loadPolicies()}
   catch(e){$('policyMsg').textContent=e.message;$('policyMsg').className='msg danger'}
 }
+async function addOrderRecommendation(upc){
+  try{
+    const d=await api('/v1/admin/ordering/drafts/add-recommendation',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({upc})
+    });
+    $('orderRecommendationStatus').textContent='Added '+upc+' to Draft #'+d.order_draft_id+'.';
+    $('orderRecommendationStatus').className='msg ok';
+    await loadOrderWorkflow();
+  }catch(e){
+    $('orderRecommendationStatus').textContent=e.message;
+    $('orderRecommendationStatus').className='msg danger';
+  }
+}
+
+async function saveOrderLine(lineId){
+  const input=$('orderQty_'+lineId);
+  if(!input)return;
+  const note=window.prompt('Adjustment note (optional):','');
+  try{
+    await api('/v1/admin/ordering/drafts/lines/'+lineId,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({final_qty:input.value,adjustment_note:note||null})
+    });
+    await loadOrderWorkflow();
+  }catch(e){alert(e.message)}
+}
+
+async function transitionOrderDraft(id,action){
+  const labels={
+    CONFIRM:'Confirm this order draft?',
+    MARK_SUBMITTED:'Mark this order as submitted? This is audit-only and does not transmit to a supplier.',
+    CANCEL_DRAFT:'Cancel this draft?',
+    CANCEL_CONFIRMED:'Cancel this confirmed order?'
+  };
+  if(!window.confirm(labels[action]||'Continue?'))return;
+  const note=window.prompt('Workflow note (optional):','');
+  try{
+    await api('/v1/admin/ordering/drafts/'+id+'/transition',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action,note:note||null})
+    });
+    await loadOrderWorkflow();
+  }catch(e){alert(e.message)}
+}
+
+async function loadOrderWorkflow(){
+  $('orderRecommendationStatus').textContent='Loading ordering recommendations…';
+  const status=$('orderDraftFilter').value;
+  const draftPath='/v1/admin/ordering/drafts?limit=60'+(status?'&status='+encodeURIComponent(status):'');
+  try{
+    const [rec,drafts]=await Promise.all([
+      api('/v1/app/ordering?limit=160'),
+      api(draftPath)
+    ]);
+    const ready=(rec.rows||[]).filter(r=>{
+      const o=r.ordering||{};
+      return o.status==='ORDER_RECOMMENDATION_READY' && Number(o.suggested_order_qty||0)>0;
+    });
+    $('orderRecommendationStatus').textContent=ready.length+' positive recommendation(s) ready for Draft.';
+    $('orderRecommendationList').innerHTML=ready.map(r=>{
+      const o=r.ordering||{};
+      return '<div class="item"><div class="row" style="justify-content:space-between"><div class="name">'+esc(r.selling_description||r.ean_upc)+'</div><span class="pill">'+esc(o.action||'ORDER')+'</span></div>'+
+        '<div class="meta">UPC '+esc(r.ean_upc)+' · Article '+esc(r.article_number||'—')+'</div>'+
+        '<div class="kv"><div class="k">Suggested</div><div class="v">'+fmt(o.suggested_order_qty)+' '+esc(o.suggested_order_uom||'')+'</div>'+
+        '<div class="k">Order → Delivery</div><div class="v">'+esc(o.next_order_date||'—')+' → '+esc(o.next_delivery_date||'—')+'</div>'+
+        '<div class="k">Effective OH</div><div class="v">'+fmt(r.effective_oh)+' '+esc(r.effective_oh_uom||'')+'</div>'+
+        '<div class="k">Velocity / DOS</div><div class="v">'+fmt(r.upc_velocity_7d,2)+' / '+fmt(o.days_supply,1)+'</div>'+
+        '<div class="k">Policy</div><div class="v">'+esc(o.policy?.scope_type||'—')+' '+esc(o.policy?.scope_key||'')+'</div></div>'+
+        '<div class="actions"><button class="smallbtn addOrderRec" data-upc="'+esc(r.ean_upc)+'">Add to Draft</button></div></div>';
+    }).join('')||'<div class="msg">No positive order recommendations are ready. Items without authoritative policy remain excluded.</div>';
+
+    $('orderRecommendationList').querySelectorAll('.addOrderRec').forEach(btn=>btn.addEventListener('click',()=>addOrderRecommendation(btn.dataset.upc)));
+
+    $('orderDraftList').innerHTML='<div class="name">'+drafts.count+' order workflow record(s)</div>'+
+      (drafts.rows||[]).map(d=>{
+        const s=String(d.workflow_status||'');
+        const lines=(d.lines||[]).map(l=>{
+          const editable=s==='DRAFT';
+          const qty=editable
+            ? '<div class="row"><input id="orderQty_'+l.order_draft_line_id+'" inputmode="decimal" value="'+esc(l.final_qty)+'" style="max-width:110px"><button class="smallbtn" onclick="saveOrderLine('+l.order_draft_line_id+')">Save Qty</button></div>'
+            : fmt(l.final_qty)+' '+esc(l.selling_uom||'');
+          return '<div class="item"><div class="name">'+esc(l.selling_description||l.ean_upc)+'</div>'+
+            '<div class="meta">UPC '+esc(l.ean_upc)+' · '+esc(l.article_number||'—')+'</div>'+
+            '<div class="kv"><div class="k">Suggested</div><div class="v">'+fmt(l.suggested_qty)+' '+esc(l.selling_uom||'')+'</div>'+
+            '<div class="k">Final Qty</div><div class="v">'+qty+'</div>'+
+            '<div class="k">OH / Velocity / DOS</div><div class="v">'+fmt(l.effective_oh)+' / '+fmt(l.velocity_7d,2)+' / '+fmt(l.days_supply,1)+'</div>'+
+            '<div class="k">Policy</div><div class="v">'+esc(l.ordering_policy_scope_type||'—')+' '+esc(l.ordering_policy_scope_key||'')+'</div></div>'+
+            '<div class="meta">'+esc(l.adjustment_note||'')+'</div></div>';
+        }).join('');
+        let actions='';
+        if(s==='DRAFT')actions='<div class="actions"><button class="smallbtn primary" onclick="transitionOrderDraft('+d.order_draft_id+',\'CONFIRM\')">Confirm</button><button class="smallbtn" onclick="transitionOrderDraft('+d.order_draft_id+',\'CANCEL_DRAFT\')">Cancel</button></div>';
+        if(s==='CONFIRMED')actions='<div class="actions"><button class="smallbtn primary" onclick="transitionOrderDraft('+d.order_draft_id+',\'MARK_SUBMITTED\')">Mark Submitted</button><button class="smallbtn" onclick="transitionOrderDraft('+d.order_draft_id+',\'CANCEL_CONFIRMED\')">Cancel</button></div>';
+        return '<div class="item"><div class="row" style="justify-content:space-between"><div class="name">Order #'+esc(d.order_draft_id)+' · '+esc(d.order_date)+' → '+esc(d.delivery_date)+'</div><span class="pill">'+esc(s)+'</span></div>'+
+          '<div class="meta">'+fmt(d.line_count,0)+' line(s) · total final qty '+fmt(d.total_final_qty)+'</div>'+lines+actions+'</div>';
+      }).join('');
+  }catch(e){
+    $('orderRecommendationStatus').textContent=e.message;
+    $('orderRecommendationStatus').className='msg danger';
+    $('orderDraftList').innerHTML='<div class="msg danger">'+esc(e.message)+'</div>';
+  }
+}
+
 let loadedProposalItem=null;
 async function loadProposalUpc(){
   const upc=$('proposalUpc').value.trim(); if(!upc)return;
@@ -225,6 +346,8 @@ async function loadProposals(){
 }
 $('login').addEventListener('click',login);$('adminPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login()});$('logout').addEventListener('click',logout);
 $('savePolicy').addEventListener('click',savePolicy);$('refreshPolicies').addEventListener('click',loadPolicies);
+$('refreshOrderWorkflow').addEventListener('click',loadOrderWorkflow);
+$('orderDraftFilter').addEventListener('change',loadOrderWorkflow);
 $('loadProposalUpc').addEventListener('click',loadProposalUpc);
 $('proposalUpc').addEventListener('keydown',e=>{if(e.key==='Enter')loadProposalUpc()});
 $('proposalBasis').addEventListener('change',applyBasisPrice);
