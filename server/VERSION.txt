@@ -1,5 +1,17 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.139 Single-Service Edition
+Version: 7.0.140 Single-Service Edition
+
+v7.0.140 Reports + Search:
+- Reports now has three tools: Report, Price Change, and Uploads.
+- Performance Report no longer exposes a category selector; it runs on the full Seafood scope.
+- Report Date Top Sellers is capped at 20 and rendered as a compact sales list with Sales$, Qty, and Avg Sold Price.
+- Performance response includes an approximately 200-word narrative analysis anchored to the selected report date.
+- Price Change Suggestions moved to a separate Reports subpage.
+- Uploads remains a separate Reports subpage with all existing no-login upload/readiness tools.
+- Bottom main navigation icons, labels, and touch targets were enlarged for mobile readability.
+- Fixed MySQL 8 fuzzy-search fallback failure caused by DISTINCT with ORDER BY a.article_id; fallback now orders by selected fields.
+- Typo-tolerant item search remains enabled, including SALMOM -> SALMON style matching.
+
 
 v7.0.139 Google Apps Script analysis bridge:
 - Preferred FULL MYSQL -> FULL_MYSQL_CHATGPT_ANALYSIS transport is now APPS_SCRIPT.
