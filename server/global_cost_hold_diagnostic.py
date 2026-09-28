@@ -544,7 +544,7 @@ def _classify_missing_cost(
         return {
             "classification": "NO_RECEIVING_HISTORY_OR_AUTHORITATIVE_REPORT_COST",
             "safe_to_auto_resolve": False,
-            "proposed_action": "ASK_USER_FOR_COST_IF_NO_RECEIVING_HISTORY",
+            "proposed_action": "ASK_USER_ONLY_AFTER_RECEIPT_OH_OFFICIAL_EXHAUSTED",
         }
 
     return {

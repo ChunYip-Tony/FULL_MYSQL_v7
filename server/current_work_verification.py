@@ -239,6 +239,42 @@ def verify_current_work(
             for reason in reasons:
                 reason_counts[reason] = reason_counts.get(reason, 0) + 1
 
+        cur.execute(
+            """SELECT DISTINCT family_id
+               FROM quick_check_current
+               WHERE quick_check_status='QA_HOLD'
+                 AND FIND_IN_SET(
+                       'CURRENT_COST_MISSING',
+                       REPLACE(COALESCE(blocking_reason,''),' ','')
+                     ) > 0
+                 AND family_id IS NOT NULL
+               ORDER BY family_id"""
+        )
+        missing_cost_family_ids = [
+            int(row["family_id"]) for row in cur.fetchall()
+            if row.get("family_id") is not None
+        ]
+        missing_with_available_authority = []
+        for fid in missing_cost_family_ids:
+            available = _latest_cost(cur, fid)
+            if available is not None:
+                missing_with_available_authority.append(
+                    {
+                        "family_id": fid,
+                        "available_source": available.get("source"),
+                        "available_date": available.get("date"),
+                    }
+                )
+        check(
+            "CURRENT_COST_MISSING_ONLY_AFTER_AUTHORITY_EXHAUSTED",
+            not missing_with_available_authority,
+            {
+                "missing_cost_family_count": len(missing_cost_family_ids),
+                "families_with_available_authority":
+                    missing_with_available_authority[:20],
+            },
+        )
+
         hold_count = int(qc_scope.get("current_hold_rows") or 0)
         current_cost_missing_count = int(reason_counts.get("CURRENT_COST_MISSING") or 0)
         check(
