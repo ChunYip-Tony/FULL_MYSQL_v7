@@ -3621,12 +3621,21 @@ def _canonical_report_date_mapping_breakdown(
             str(x.get("ean_upc") or ""),
         )
     )
+    unmapped_uoms={
+        str(x.get("qty_uom") or "").upper()
+        for x in unmapped
+        if x.get("qty_uom")
+    }
+    safe_unmapped_qty=unmapped_qty if len(unmapped_uoms)==1 and len(unmapped)==sum(1 for x in unmapped if x.get("qty_uom")) else None
+    safe_unmapped_uom=next(iter(unmapped_uoms)) if safe_unmapped_qty is not None else None
     return {
         "source_row_count":len(source_rows),
         "mapped_source_sales":mapped_sales,
         "mapped_source_qty":mapped_qty,
         "unmapped_source_sales":unmapped_sales,
-        "unmapped_source_qty":unmapped_qty,
+        "unmapped_source_qty":safe_unmapped_qty,
+        "unmapped_source_qty_uom":safe_unmapped_uom,
+        "unmapped_qty_mixed_or_unknown":safe_unmapped_qty is None and bool(unmapped),
         "unmapped_upc_count":len(unmapped),
         "top_unmapped_upcs":unmapped[:25],
         "explanation":"UNMAPPED = canonical POS row not represented by the current V2 Quick Check serving set.",
@@ -3979,6 +3988,14 @@ def performance_report(
                 mapping_breakdown.get("unmapped_source_qty")
                 if mapping_breakdown else None
             ),
+            "unmapped_source_qty_uom":(
+                mapping_breakdown.get("unmapped_source_qty_uom")
+                if mapping_breakdown else None
+            ),
+            "unmapped_qty_mixed_or_unknown":(
+                mapping_breakdown.get("unmapped_qty_mixed_or_unknown")
+                if mapping_breakdown else None
+            ),
             "unmapped_upc_count":(
                 mapping_breakdown.get("unmapped_upc_count")
                 if mapping_breakdown else None
@@ -4071,7 +4088,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V7",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V8",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
