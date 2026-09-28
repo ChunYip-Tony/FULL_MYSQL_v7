@@ -12,7 +12,7 @@ from db import db_conn, test_database
 from business_clock import completed_through_date
 from data_coverage import required_daily_coverage, source_data_days
 from ingest import recent_batches
-from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
+from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch, delete_raw_stage_qa_hold_batch
 from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
@@ -551,6 +551,43 @@ def web_upload_recent(request:Request,limit:int=8):
     for batch in batches:
         batch['files']=file_map.get(int(batch['batch_id']),[])
     return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
+
+
+@app.post('/v1/web-upload/batches/{batch_id}/delete')
+def web_upload_delete_qa_hold_batch(
+    batch_id:int,
+    request:Request,
+    body:dict[str,Any],
+):
+    _browser_upload_guard(request)
+    expected=f'DELETE_QA_HOLD_BATCH:{int(batch_id)}'
+    if str((body or {}).get('confirm') or '') != expected:
+        raise HTTPException(
+            422,
+            detail={
+                'status':'INVALID',
+                'reason':'CONFIRMATION_REQUIRED',
+                'expected':expected,
+            },
+        )
+    try:
+        return delete_raw_stage_qa_hold_batch(
+            int(batch_id),
+            actor=WEB_UPLOAD_DEVICE,
+        )
+    except KeyError as exc:
+        raise HTTPException(404,str(exc))
+    except (ValueError,RuntimeError) as exc:
+        raise HTTPException(
+            409,
+            detail={
+                'status':'BLOCKED',
+                'reason':str(exc),
+                'batch_id':int(batch_id),
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(500,f'QA HOLD batch delete failed: {exc}')
 
 
 @app.get('/v1/web-upload/calendar')
