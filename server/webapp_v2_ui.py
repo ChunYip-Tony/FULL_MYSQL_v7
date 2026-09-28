@@ -69,7 +69,7 @@ html,body{max-width:100%;overflow-x:hidden}
 @media(min-width:760px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.form{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){body{font-size:18px}.w{padding:11px}.card{padding:15px}.m .v{font-size:21px}.m .k{font-size:13px}.title{font-size:26px}.actions{grid-template-columns:1fr}.actions button{font-size:19px;min-height:72px}.nav button{font-size:13px;min-height:68px}.scroll{margin-left:-4px;margin-right:-4px}}
 
-/* v7.0.122 modern flat UI */
+/* v7.0.123 modern flat UI */
 :root{--gp:#7c3aed;--section-blue:#2563eb;--section-green:#059669;--section-amber:#d97706;--section-purple:#7c3aed;--section-pink:#db2777}
 body{font-size:17px;line-height:1.5;padding-bottom:86px;background:var(--bg)}
 .w{max-width:980px;padding:12px 16px}
@@ -122,7 +122,7 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 }
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.122</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Web App V2 · v7.0.123</div></div><div class="msg">CORE · PI · PERFORMANCE</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 CORE</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -130,7 +130,7 @@ button,input,select{min-height:50px;font-size:16px;padding:11px 13px;border-radi
 
 <section id="upc" class="screen"><div class="head"><button class="back" id="ub">←</button><div><div id="ut" class="title"></div><div id="us" class="meta"></div></div></div><div id="usum"></div><div class="actions"><button id="uf">Family Article</button><button id="upr">Price</button><button id="uo">Ordering</button></div></section>
 
-<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day GP$ vs Avg Selling Price</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● Qty Sold</span><span class="pill" style="color:var(--a)">● Avg Price</span><span class="pill" style="color:var(--gp)">● GP$ (current cost)</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
+<section id="price" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="pt" class="title"></div><div id="ps" class="meta"></div></div></div><div id="pc"></div><div class="card"><div class="section">7 Supported-Day GP$ vs Avg Selling Price</div><canvas id="chart" class="chart"></canvas><div class="row" style="margin-top:9px"><span class="pill ok">● GP$</span><span class="pill" style="color:var(--a)">● Avg Selling Price</span><span class="pill sale">▮ SALE</span></div><div class="hint" style="margin-top:8px">Each GP$ and Avg Selling Price point is labeled. Only the latest 7 completed supported sales dates are graphed. Missing source dates are skipped, not counted as zero.</div></div><div class="card"><div class="section">Past 14 Supported-Day Sales History</div><div id="p14"></div></div><div class="card"><div class="section">Historical SALE Promotions</div><div id="ph"></div></div></section>
 
 <section id="corder" class="screen"><div class="head"><button class="back" data-go="upc">←</button><div><div id="cot" class="title"></div><div id="cos" class="meta"></div></div></div><div class="card"><div class="form"><div><label>Ordering Date</label><input id="cod" type="date"></div><div><label>Expected Delivery Date</label><input id="cdd" type="date"></div><div><label>Context</label><select id="cop"><option value="0">Regular</option><option value="1">Promotion Involved</option></select></div></div><div id="cpf" class="form hide" style="margin-top:8px"><div><label>Promotion Start</label><input id="cps" type="date"></div><div><label>Promotion End</label><input id="cpe" type="date"></div><div><label>Promotion Price</label><input id="cpp"></div></div><div id="cohist"></div><button id="coa" class="primary" style="margin-top:9px">Analyze</button></div><div id="coout"></div></section>
 
