@@ -1298,6 +1298,7 @@ def _family_sales_series(
             "date":x["date"],
             "sold_quantity":Decimal("0"),
             "sale_quantity":Decimal("0"),
+            "sale_sales_amount":Decimal("0"),
             "has_sale":False,
             "supported":True,
         }
@@ -1311,6 +1312,7 @@ def _family_sales_series(
             if sale:
                 series[d]["has_sale"]=True
                 series[d]["sale_quantity"]+=_d(sale.get("sold_quantity"))
+                series[d]["sale_sales_amount"]+=_d(sale.get("sales_amount"))
     qty=sum((_d(x["sold_quantity"]) for x in series.values()),Decimal("0"))
     n=len(days)
     return {
@@ -1388,6 +1390,7 @@ def _family_historical_sale_periods(
     for start,end in periods:
         span=[d for d in ordered if start<=d<=end]
         sale_qty=sum((_d(rows[d].get("sale_quantity")) for d in span),Decimal("0"))
+        sale_sales=sum((_d(rows[d].get("sale_sales_amount")) for d in span),Decimal("0"))
         sale_days=sum(1 for d in span if rows[d].get("has_sale"))
         calendar=(end-start).days+1
         out.append({
@@ -1398,6 +1401,7 @@ def _family_historical_sale_periods(
             "supported_sales_day_count":len(span),
             "sale_observed_day_count":sale_days,
             "coverage_ratio":Decimal(len(span))/Decimal(calendar) if calendar else None,
+            "sale_price":(sale_sales/sale_qty if sale_qty!=0 else None),
             "sale_quantity":sale_qty,
             "sale_velocity_per_supported_day":(
                 sale_qty/Decimal(len(span)) if span else None
@@ -1459,6 +1463,7 @@ def _family_promotion_baseline(
     history: list[dict[str,Any]],
     start_date: date,
     end_date: date,
+    promotion_price: Decimal|None=None,
 ) -> dict[str,Any]:
     requested=_promotion_type(start_date,end_date)
     same=[
@@ -1466,7 +1471,12 @@ def _family_promotion_baseline(
         if x.get("promotion_type")==requested
         and x.get("sale_velocity_per_supported_day") is not None
     ]
-    same.sort(key=lambda x:x["end_date"],reverse=True)
+    target_price=Decimal(str(promotion_price)) if promotion_price is not None else None
+    def promo_sort_key(x: dict[str,Any]):
+        p=x.get("sale_price")
+        distance=(abs(_d(p)-target_price) if target_price is not None and p is not None else Decimal("999999"))
+        return (distance,-x["end_date"].toordinal())
+    same.sort(key=promo_sort_key)
     selected=same[:3]
     if not selected:
         return {
@@ -1485,7 +1495,7 @@ def _family_promotion_baseline(
         "promotion_velocity_per_day":vel,
         "selected_history":selected,
         "confidence":"HIGH" if len(selected)>=2 and all(x.get("coverage_status")=="COMPLETE" for x in selected) else "MEDIUM",
-        "selection_basis":"SAME_PROMOTION_TYPE_RECENT_HISTORY",
+        "selection_basis":"SAME_PROMOTION_TYPE_THEN_CLOSEST_SALE_PRICE_THEN_RECENCY",
     }
 
 
@@ -1609,7 +1619,10 @@ def bulk_ordering_suggestions(
             promo_fallback=False
             if promotion_involved and promo_item:
                 promo_baseline=_family_promotion_baseline(
-                    promo_history,promotion_start_date,promotion_end_date
+                    promo_history,
+                    promotion_start_date,
+                    promotion_end_date,
+                    promo_item.get("promotion_price"),
                 )
                 promo_vel=promo_baseline.get("promotion_velocity_per_day")
                 if promo_vel is None:
