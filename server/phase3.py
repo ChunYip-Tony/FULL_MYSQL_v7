@@ -57,6 +57,7 @@ SALES_COLS = {
 RECEIPT_MOVEMENTS = {'101', '107', '109'}
 FAMILY_SALE_MOVEMENTS = {'251', '252'}
 SEAFOOD_DEPT_CODE = '400'
+SEAFOOD_PRICE_SUBDEPT_CODES = {'400', '401'}
 
 
 def _j(v: Any) -> dict[str, Any]:
@@ -347,7 +348,7 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
             if 'SUBDEPT' in a_txt.upper():
                 current_dept = _id(p.get('B'))
                 continue
-            if current_dept != SEAFOOD_DEPT_CODE:
+            if current_dept not in SEAFOOD_PRICE_SUBDEPT_CODES:
                 continue
             ean = _id(p.get('A'))
             desc = _text(p.get('B'))
