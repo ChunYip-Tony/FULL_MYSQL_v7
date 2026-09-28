@@ -1084,7 +1084,7 @@ def _historical_gp_trend(
     return trend
 
 
-def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
+def price_analysis(upc: str, trend_supported_days: int = 28) -> dict[str,Any]:
     raw=str(upc or "").strip()
     nk=_numeric_key(raw)
     with db_conn() as conn:
