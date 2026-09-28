@@ -12,7 +12,7 @@ from data_coverage import required_daily_coverage
 from ingest import recent_batches
 from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
-from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair
+from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, cancel_true_stock, pending_dumping_discrepancies, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates
@@ -20,7 +20,7 @@ from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 
-VERSION='7.0.82-single-service'
+VERSION='7.0.83-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -514,6 +514,28 @@ def batch_qa_summary(session_id:str,authorization: Annotated[str|None,Header()]=
             'phase3':p3,
         }
         cur.close()
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/maintenance/operational-uom-quick-check-refresh')
+def operational_uom_quick_check_refresh(
+    body: ManualAuthorityRefreshRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    device=device_from_auth(authorization)
+    if body.confirm!='REFRESH_OPERATIONAL_UOM_QUICK_CHECK_TARGETS':
+        raise HTTPException(
+            400,
+            "confirm must be REFRESH_OPERATIONAL_UOM_QUICK_CHECK_TARGETS",
+        )
+    try:
+        result=run_operational_uom_quick_check_refresh(device)
+    except RuntimeError as exc:
+        raise HTTPException(409,str(exc))
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Operational-UOM targeted Quick Check refresh failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
