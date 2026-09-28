@@ -155,8 +155,8 @@ def _recover_stale_started(cur) -> int:
 def _queue_orphaned_phase2c_ready(cur) -> int:
     # A deployment can terminate the worker after Phase 2C committed but before
     # Phase 3 started. If no active outer job and no prior Phase3 rerun exists,
-    # enqueue exactly one recovery run. This is intentionally one-shot to avoid
-    # retry loops when Phase 3 has a real blocking error.
+    # enqueue at most one recovery run per deployed code version. Old-version
+    # interrupted/failed reruns must not permanently strand a Phase2C-ready batch.
     cur.execute(
         """SELECT ib.batch_id
            FROM ingest_batch ib
@@ -177,9 +177,10 @@ def _queue_orphaned_phase2c_ready(cur) -> int:
                  WHERE prior.batch_id=ib.batch_id
                    AND prior.pipeline_name=%s
                    AND prior.stage_name='PHASE3_RERUN'
+                   AND prior.code_version=%s
              )
            ORDER BY ib.batch_id""",
-        (API_PIPELINE,API_PIPELINE),
+        (API_PIPELINE,API_PIPELINE,API_VERSION),
     )
     queued=0
     for row in cur.fetchall():
