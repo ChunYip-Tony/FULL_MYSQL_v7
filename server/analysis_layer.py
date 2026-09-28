@@ -4,7 +4,7 @@ import json
 from decimal import Decimal
 from typing import Any
 
-ANALYSIS_LAYER_VERSION = "1.1.0-seafood-meat"
+ANALYSIS_LAYER_VERSION = "1.2.0-all-perishable"
 SEAFOOD_DEPT_CODE = "400"
 
 DEPARTMENT_REGISTRY = {
@@ -236,6 +236,18 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
               FROM upc_department_observation d
               WHERE d.ean_upc=q.ean_upc
                 AND d.department_code=%s
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM upc_department_observation newer
+                    WHERE newer.ean_upc=d.ean_upc
+                      AND (
+                          COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                          OR (
+                              COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                              AND newer.observation_id > d.observation_id
+                          )
+                      )
+                )
           )
         GROUP BY family_id
         """,
@@ -256,6 +268,18 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
             FROM upc_department_observation d
             WHERE d.ean_upc=q.ean_upc
               AND d.department_code=%s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM upc_department_observation newer
+                  WHERE newer.ean_upc=d.ean_upc
+                    AND (
+                        COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                        OR (
+                            COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                            AND newer.observation_id > d.observation_id
+                        )
+                    )
+              )
         )
         ORDER BY q.upc_id
         """,
@@ -452,8 +476,7 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
         ],
         "price_authority": "MOST_RECENT_PRICE_LIST_VS_POS; SAME_DATE_PRICE_LIST_WINS",
         "price_list_priority": ["IN STORE", "SALE", "TPR", "REG"],
-        "department_contract": "SEAFOOD_MEAT_ENABLED",
-        "produce_status": "PENDING_PIPELINE_ENABLEMENT",
+        "department_contract": "SEAFOOD_MEAT_PRODUCE_ENABLED",
     }
     cur.execute(
         """
@@ -514,6 +537,18 @@ def audit_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DEPT
             FROM upc_department_observation d
             WHERE d.ean_upc=q.ean_upc
               AND d.department_code=%s
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM upc_department_observation newer
+                  WHERE newer.ean_upc=d.ean_upc
+                    AND (
+                        COALESCE(newer.business_date,'1000-01-01') > COALESCE(d.business_date,'1000-01-01')
+                        OR (
+                            COALESCE(newer.business_date,'1000-01-01') = COALESCE(d.business_date,'1000-01-01')
+                            AND newer.observation_id > d.observation_id
+                        )
+                    )
+              )
         )
         """,
         (department_code,),
