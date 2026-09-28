@@ -356,20 +356,42 @@ def _upc_role(row: dict[str,Any]) -> str:
     upc=_numeric_key(row.get("ean_upc"))
     prefix=int(upc[:3]) if len(upc)>=3 and upc[:3].isdigit() else None
 
-    if any(token in desc for token in ("FRIED SERVICE","COOK SERVICE","COOK/SERVICE","(FRIED SERVICE)")):
+    service_tokens=(
+        "FRIED SERVICE","COOK SERVICE","COOKED SERVICE","STEAM SERVICE",
+        "COOK/SERVICE","(FRIED SERVICE)","(COOKED SERVICE)","(STEAM SERVICE)",
+    )
+    # 249 is the Seafood service selling prefix.  Description evidence is kept
+    # as a second path for service UPCs whose source label is explicit.
+    if prefix==249 or any(token in desc for token in service_tokens):
         return "COOK / SERVICE UPC"
     if uom in {"PACK","PAC","PK","PKG","BAG","CASE","TRAY","EA","EACH","PCS","PC"}:
         return "PACKAGED UPC"
     weighted_prefix=(
         prefix is not None and (
             230<=prefix<=240
-            or prefix in {242,245,247,249}
+            or prefix in {242,245,247}
             or 250<=prefix<=269
         )
     )
     if uom in {"LB","LBS"} or weighted_prefix:
-        return "WEIGHED UPC"
-    return "OTHER / UNCLASSIFIED"
+        return "CATCH-WEIGHT UPC"
+    return "OTHER UPC"
+
+
+def _safe_qty_uom(ean_upc: Any, selling_uom: Any=None) -> str|None:
+    """Return a display-safe sales quantity UOM without guessing non-prefix UPCs."""
+    uom=str(selling_uom or "").strip().upper()
+    if uom:
+        return "PACK" if uom in {"PAC","PK","PKG"} else ("EA" if uom in {"EACH","PCS","PC"} else uom)
+    upc=_numeric_key(ean_upc)
+    prefix=int(upc[:3]) if len(upc)>=3 and upc[:3].isdigit() else None
+    if prefix is not None and (
+        230<=prefix<=240
+        or prefix in {242,245,247,249}
+        or 250<=prefix<=269
+    ):
+        return "LB"
+    return None
 
 
 def search_items(query: str, limit: int = 30) -> dict[str, Any]:
@@ -609,10 +631,12 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
         return {"status":"UNAVAILABLE","quantity":None,"uom":None,"owners":list(owners.values())}
     if len(uoms)!=1:
         return {"status":"BLOCKED_MIXED_UOM","quantity":None,"uom":None,"owners":list(owners.values())}
+    owner_sources=sorted({str(x.get("source") or "") for x in usable if x.get("source")})
     return {
         "status":"READY",
         "quantity":sum((_d(x["quantity"]) for x in usable),Decimal("0")),
         "uom":next(iter(uoms)),
+        "source":" + ".join(owner_sources) if owner_sources else "SYSTEM_OH",
         "owners":list(owners.values()),
     }
 
@@ -869,7 +893,7 @@ def family_info(family_key: str) -> dict[str,Any]:
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_FAMILY_V2",
+        "contract_version":"WEBAPP_V2_FAMILY_V3",
         "family_article_number":family.get("main_article_number"),
         "family_article_name":family.get("family_description"),
         "family_id":fid,
@@ -916,7 +940,7 @@ def upc_info(upc: str) -> dict[str,Any]:
         m28=_sales_metric(cur,int(row["upc_id"]),28)
         cur.close()
     return {
-        "contract_version":"WEBAPP_V2_UPC_V2",
+        "contract_version":"WEBAPP_V2_UPC_V3",
         "upc":row.get("ean_upc"),
         "upc_name":row.get("selling_description"),
         "category":row.get("product_class"),
@@ -952,7 +976,7 @@ def price_analysis(upc: str, trend_supported_days: int = 7) -> dict[str,Any]:
             raise KeyError("V2_UPC_NOT_FOUND")
         upc_id=int(row["upc_id"])
         result={
-            "contract_version":"WEBAPP_V2_PRICE_V2",
+            "contract_version":"WEBAPP_V2_PRICE_V3",
             "upc":row.get("ean_upc"),
             "name":row.get("selling_description"),
             "category":row.get("product_class"),
@@ -3385,6 +3409,7 @@ def _canonical_report_date_mapping_breakdown(
             "description":r.get("description"),
             "sales_amount":sales,
             "sold_quantity":qty,
+            "qty_uom":_safe_qty_uom(r.get("ean_upc"),None),
             "mapping_status":"MAPPED_TO_CURRENT_V2" if is_mapped else (
                 "SOURCE_UPC_ID_UNRESOLVED" if upc_id is None
                 else "NOT_IN_CURRENT_QUICK_CHECK_SERVING"
@@ -3571,6 +3596,7 @@ def performance_report(
                     "selling_uom":row.get("selling_uom"),
                     "upc_role":_upc_role(row),
                     "sold_quantity":day_qty,
+                    "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
                     "sales_amount":day_sales,
                     "avg_sold_price":day_sales/day_qty if day_qty else None,
                     "price_types":sorted(str(k).upper() for k in (day_obs.get("price_types") or {}).keys()),
@@ -3724,6 +3750,7 @@ def performance_report(
                 "observed_velocity_at_suggested_price":price_opt.get("expected_velocity_from_observed_price_days"),
                 "qty_report_date":day_qty,
                 "sales_report_date":day_sales,
+                "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
                 "qty_7d":m7.get("sold_quantity"),
                 "qty_14d":m14.get("sold_quantity"),
                 "qty_28d":m28.get("sold_quantity"),
@@ -3854,7 +3881,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V6",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V7",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
