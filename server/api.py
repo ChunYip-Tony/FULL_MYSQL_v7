@@ -24,7 +24,7 @@ from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
-from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis
+from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, bulk_ordering_suggestions as v2_bulk_ordering_suggestions
 
 VERSION='7.0.109-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
@@ -243,6 +243,20 @@ class PriceChangeExecutionRequest(BaseModel):
 class AdminLoginRequest(BaseModel):
     login_id: str
     password: str
+
+class V2PromotionItem(BaseModel):
+    family_article_number: str|None=None
+    family_id: int|None=None
+    promotion_price: Decimal|None=None
+
+class V2BulkOrderingRequest(BaseModel):
+    order_type: str
+    ordering_date: date|None=None
+    expected_delivery_date: date|None=None
+    promotion_involved: bool=False
+    promotion_start_date: date|None=None
+    promotion_end_date: date|None=None
+    promotion_items: list[V2PromotionItem]=[]
 
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
@@ -1748,6 +1762,36 @@ def app_v2_price(upc:str,trend_supported_days:int=90):
         raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_UPC_NOT_FOUND'})
     except Exception as exc:
         raise HTTPException(500,f'V2 price analysis failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/v2/family/{family_key}/promotions')
+def app_v2_family_promotions(family_key:str):
+    try:
+        result=v2_family_promotion_history(family_key)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_FAMILY_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 family promotion history failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/app/v2/ordering/suggestions')
+def app_v2_bulk_ordering(body:V2BulkOrderingRequest):
+    try:
+        result=v2_bulk_ordering_suggestions(
+            body.order_type,
+            ordering_date=body.ordering_date,
+            expected_delivery_date=body.expected_delivery_date,
+            promotion_involved=body.promotion_involved,
+            promotion_start_date=body.promotion_start_date,
+            promotion_end_date=body.promotion_end_date,
+            promotion_items=[x.model_dump() for x in body.promotion_items],
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 bulk ordering failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
