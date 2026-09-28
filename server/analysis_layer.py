@@ -4,7 +4,7 @@ import json
 from decimal import Decimal
 from typing import Any
 
-ANALYSIS_LAYER_VERSION = "1.0.0-seafood-first"
+ANALYSIS_LAYER_VERSION = "1.1.0-seafood-meat"
 SEAFOOD_DEPT_CODE = "400"
 
 DEPARTMENT_REGISTRY = {
@@ -452,7 +452,8 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
         ],
         "price_authority": "MOST_RECENT_PRICE_LIST_VS_POS; SAME_DATE_PRICE_LIST_WINS",
         "price_list_priority": ["IN STORE", "SALE", "TPR", "REG"],
-        "seafood_first": True,
+        "department_contract": "SEAFOOD_MEAT_ENABLED",
+        "produce_status": "PENDING_PIPELINE_ENABLEMENT",
     }
     cur.execute(
         """
@@ -504,7 +505,19 @@ def audit_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DEPT
     )
     status = cur.fetchone()
 
-    cur.execute("SELECT COUNT(*) AS c FROM quick_check_current")
+    cur.execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM quick_check_current q
+        WHERE EXISTS (
+            SELECT 1
+            FROM upc_department_observation d
+            WHERE d.ean_upc=q.ean_upc
+              AND d.department_code=%s
+        )
+        """,
+        (department_code,),
+    )
     qc_count = int((cur.fetchone() or {}).get("c") or 0)
     cur.execute(
         "SELECT COUNT(*) AS c FROM analysis_item_current WHERE department_code=%s",
