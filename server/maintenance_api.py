@@ -20,7 +20,7 @@ from manual_overrides import (
     apply_manual_family_subarticles,
 )
 from product_identity_audit import audit_product_identity
-from current_active_cost_repair import repair_current_active_cost
+from current_active_cost_repair import repair_current_active_cost, _scan_and_backfill_oh_cost
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from normalize import _preload_article_manual_authority
 from phase3 import rebuild_quick_check, refresh_quick_check_subset, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history, resolve_late_identity_issues
@@ -158,6 +158,226 @@ def _latest_serving_batch_id(cur) -> int:
         raise RuntimeError("No published Phase 3 batch is available for a targeted Quick Check rebuild.")
     return int(row["batch_id"])
 
+
+
+def run_cost_authority_refresh(device: str) -> dict[str, Any]:
+    """Materialize OH cost evidence and refresh only families affected by authority order.
+
+    Authority:
+      1) valid 101/107/109 receipt valuation
+      2) explicit supported OH-report cost
+      3) Live/Fresh/Frozen official report cost
+      4) explicit user-confirmed fallback
+    """
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status IN ('QUEUED','STARTED')"""
+            )
+            if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
+                raise RuntimeError(
+                    "Server pipeline is currently processing; cost-authority refresh "
+                    "is blocked to prevent concurrent serving writes."
+                )
+
+            conn.commit()
+            conn.start_transaction()
+            batch_id = _latest_serving_batch_id(cur)
+
+            cur.execute(
+                """SELECT DISTINCT family_id
+                   FROM quick_check_current
+                   WHERE quick_check_status IN ('READY','QA_HOLD')
+                     AND family_id IS NOT NULL
+                   ORDER BY family_id"""
+            )
+            active_family_ids = [
+                int(row["family_id"]) for row in cur.fetchall()
+                if row.get("family_id") is not None
+            ]
+            if not active_family_ids:
+                raise RuntimeError("No current-active families are available.")
+
+            # Old priority could prevent OH raw evidence from ever being materialized
+            # when an official report cost already existed. Re-scan current-active
+            # families before comparing expected source authority.
+            oh_backfill = _scan_and_backfill_oh_cost(cur, active_family_ids)
+
+            ph = ",".join(["%s"] * len(active_family_ids))
+            cur.execute(
+                f"""SELECT ean_upc,family_id,main_article_number,cost_source,cost_date,
+                           current_cost_per_base_uom,current_cost_per_selling_unit,
+                           quick_check_status,blocking_reason
+                    FROM quick_check_current
+                    WHERE family_id IN ({ph})
+                      AND quick_check_status IN ('READY','QA_HOLD')
+                    ORDER BY family_id,ean_upc""",
+                tuple(active_family_ids),
+            )
+            before_rows = cur.fetchall()
+
+            expected_by_family: dict[int, dict[str, Any] | None] = {}
+            affected_family_ids: set[int] = set()
+            before_mismatches: list[dict[str, Any]] = []
+            for row in before_rows:
+                fid = int(row["family_id"])
+                if fid not in expected_by_family:
+                    expected_by_family[fid] = _latest_cost(cur, fid)
+                expected = expected_by_family[fid]
+                expected_source = expected.get("source") if expected else None
+                actual_source = row.get("cost_source")
+                if expected_source != actual_source:
+                    affected_family_ids.add(fid)
+                    before_mismatches.append(
+                        {
+                            "ean_upc": str(row["ean_upc"]),
+                            "family_id": fid,
+                            "main_article_number": row.get("main_article_number"),
+                            "before_cost_source": actual_source,
+                            "expected_cost_source": expected_source,
+                        }
+                    )
+
+            targeted = None
+            if affected_family_ids:
+                targeted = refresh_quick_check_subset(
+                    cur,
+                    batch_id,
+                    family_ids=sorted(affected_family_ids),
+                )
+
+            after_mismatches: list[dict[str, Any]] = []
+            if affected_family_ids:
+                target_ids = sorted(affected_family_ids)
+                tph = ",".join(["%s"] * len(target_ids))
+                cur.execute(
+                    f"""SELECT ean_upc,family_id,main_article_number,cost_source,cost_date,
+                               current_cost_per_base_uom,current_cost_per_selling_unit,
+                               quick_check_status,blocking_reason
+                        FROM quick_check_current
+                        WHERE family_id IN ({tph})
+                          AND quick_check_status IN ('READY','QA_HOLD')
+                        ORDER BY family_id,ean_upc""",
+                    tuple(target_ids),
+                )
+                for row in cur.fetchall():
+                    fid = int(row["family_id"])
+                    expected = _latest_cost(cur, fid)
+                    expected_source = expected.get("source") if expected else None
+                    if row.get("cost_source") != expected_source:
+                        after_mismatches.append(
+                            {
+                                "ean_upc": str(row["ean_upc"]),
+                                "family_id": fid,
+                                "main_article_number": row.get("main_article_number"),
+                                "actual_cost_source": row.get("cost_source"),
+                                "expected_cost_source": expected_source,
+                            }
+                        )
+
+            if after_mismatches:
+                raise RuntimeError(
+                    "Cost-authority targeted refresh verification failed; "
+                    "transaction rolled back. mismatches=" + str(after_mismatches[:20])
+                )
+
+            cur.execute(
+                """SELECT COUNT(*) AS serving_rows_total,
+                          SUM(CASE WHEN quick_check_status='HISTORICAL_ONLY' THEN 1 ELSE 0 END) AS historical_rows,
+                          SUM(CASE WHEN quick_check_status IN ('READY','QA_HOLD') THEN 1 ELSE 0 END) AS current_active_rows,
+                          SUM(CASE WHEN quick_check_status='READY' THEN 1 ELSE 0 END) AS current_ready_rows,
+                          SUM(CASE WHEN quick_check_status='QA_HOLD' THEN 1 ELSE 0 END) AS current_hold_rows
+                   FROM quick_check_current"""
+            )
+            raw_scope = cur.fetchone() or {}
+            scope = {
+                k: int(raw_scope.get(k) or 0)
+                for k in (
+                    "serving_rows_total",
+                    "historical_rows",
+                    "current_active_rows",
+                    "current_ready_rows",
+                    "current_hold_rows",
+                )
+            }
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND UPPER(severity) IN ('HIGH','CRITICAL')
+                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (batch_id,),
+            )
+            blocking = int((cur.fetchone() or {}).get("c") or 0)
+
+            if blocking > 0 or scope["current_active_rows"] == 0:
+                status = "PHASE3_QA_HOLD"
+            elif scope["current_hold_rows"] > 0:
+                status = "QUICK_CHECK_READY_WITH_HOLDS"
+            else:
+                status = "QUICK_CHECK_READY"
+
+            cur.execute(
+                """UPDATE phase3_batch_result
+                   SET quick_check_rows=%s,
+                       quick_check_ready_rows=%s,
+                       quick_check_hold_rows=%s,
+                       blocking_issue_count=%s,
+                       result_status=%s,
+                       updated_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (
+                    scope["current_active_rows"],
+                    scope["current_ready_rows"],
+                    scope["current_hold_rows"],
+                    blocking,
+                    status,
+                    batch_id,
+                ),
+            )
+            cur.execute(
+                """UPDATE ingest_batch
+                   SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (status, batch_id),
+            )
+
+            conn.commit()
+            return {
+                "status": "COMMITTED",
+                "device": device,
+                "mode": "TARGETED_COST_AUTHORITY_REFRESH",
+                "authority_order": [
+                    "MOVEMENT_RECEIPT_VALUATION_101_107_109",
+                    "ON_HAND_EXPLICIT_COST_FALLBACK",
+                    "LIVE_FRESH_FROZEN_OFFICIAL_COST",
+                    "USER_CONFIRMED_FAMILY_COST",
+                ],
+                "publish_batch_id": batch_id,
+                "active_family_count": len(active_family_ids),
+                "oh_backfill": oh_backfill,
+                "affected_family_count": len(affected_family_ids),
+                "affected_family_ids": sorted(affected_family_ids),
+                "before_mismatch_count": len(before_mismatches),
+                "before_mismatches": before_mismatches,
+                "targeted_refresh": targeted,
+                "after_mismatch_count": len(after_mismatches),
+                "quick_check_scope": scope,
+                "phase3_status": status,
+                "blocking_issue_count": blocking,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
 
 
 def run_operational_uom_quick_check_refresh(device: str) -> dict[str, Any]:
