@@ -1,7 +1,7 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.122 Single-Service Edition
+Version: 7.0.123 Single-Service Edition
 
-Canonical runtime version: 7.0.122-single-service
+Canonical runtime version: 7.0.123-single-service
 Web App V2 route: /app/v2
 
 V2 main functions:
@@ -9,7 +9,7 @@ V2 main functions:
 - PI
 - PERFORMANCE
 
-v7.0.122:
+v7.0.123:
 - Compact flat modern UI.
 - Family/UPC metrics separated into Identity / Sales / Inventory / Delivery or Price sections.
 - Search labels UPC type and highlights Family Article options.
@@ -18,3 +18,6 @@ v7.0.122:
 - Family OH owner resolution covers main/receiving-article baselines such as 1342107.
 - Price trend shows Qty, Avg Price and GP$ curves.
 - GP$ uses historical applicable cost by supported date.
+
+Price trend curves: GP$ + Avg Selling Price only.
+Qty Sold is not plotted on the 7 supported-day chart.
