@@ -15,21 +15,6 @@ def log(message: str) -> None:
     print(f"[single-service] {message}", flush=True)
 
 
-def runtime_import_smoke() -> bool:
-    """Validate import-time startup only after runtime env/secrets exist."""
-    cmd = [
-        sys.executable,
-        "-c",
-        "import api; import worker; print('FULL MYSQL runtime import smoke PASS', flush=True)",
-    ]
-    log("running runtime import smoke")
-    result = subprocess.run(cmd, cwd=BASE)
-    if result.returncode != 0:
-        log(f"runtime import smoke failed with code {result.returncode}")
-        return False
-    return True
-
-
 def start_api() -> subprocess.Popen:
     cmd = [
         sys.executable,
@@ -67,9 +52,9 @@ def stop_process(proc: subprocess.Popen | None, name: str, timeout: int = 10) ->
 
 
 def main() -> int:
-    if not runtime_import_smoke():
-        return 1
-
+    # Start the HTTP service immediately so App Platform can reach /healthz.
+    # Syntax is already checked at image build with compileall; uvicorn itself
+    # provides the authoritative import-time traceback if api:app cannot load.
     api = start_api()
     worker = start_worker()
     stopping = False
