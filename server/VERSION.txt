@@ -1,26 +1,27 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.109 Single-Service Edition
+Version: 7.0.110 Single-Service Edition
 
 Current runtime:
-- Existing public Web App remains available.
-- Isolated Web App V2 read-only data contracts are now available under /v1/app/v2.
-- V2 Search, Family Article, UPC, Price Analysis, and Ordering Analysis contracts implemented.
+- Existing public Web App remains available during transition.
+- Web App V2 data/API contracts are isolated under /v1/app/v2.
 - V2 UI has not yet replaced the current Web App.
+- V2 top-level target functions: CORE, ORDERING, PI.
 
 Web App V2 data rules:
 - 7D / 28D use latest completed canonical data-supported POS dates.
 - Missing source dates are ignored and never counted as zero.
-- Velocity denominator = supported day count only.
+- A supported POS date with no UPC sale is a genuine zero-sale day.
 - Promotion = Price Type SALE only.
 - TPR is not Promotion.
 - Weekend Promotion = Friday through Sunday.
 - Weekly Promotion = Thursday through following Friday.
-- Price vs Sales trend uses completed supported data days.
-- Ordering analysis is read-only; nothing is saved or submitted.
-- Ordering default date = current business date.
-- Expected delivery default = observed receipt pattern when sufficiently stable.
-- Suggested order covers forecast usage through next-next delivery minus Effective OH.
-- No invented promotion uplift when matching SALE history is unavailable.
+- Price vs Sales trend uses completed supported data days only.
+- All ordering functions treat negative Effective OH as zero for calculation while preserving the real negative OH for display.
+- Main ORDERING only suggests actively-selling families with DOS < 7 days.
+- FRESH ordering scans FRESH only; FROZEN ordering scans FROZEN only.
+- Suggested order covers forecast usage through the day before next-next delivery.
+- No Web App price save/approval or order save/submit workflow.
+- PI is the operational write path for True Stock and inventory discrepancy lineage.
 
 V2 endpoints:
 - GET /v1/app/v2/search
@@ -28,5 +29,10 @@ V2 endpoints:
 - GET /v1/app/v2/upc/{upc}
 - GET /v1/app/v2/upc/{upc}/price
 - GET /v1/app/v2/upc/{upc}/ordering
+- GET /v1/app/v2/family/{family_key}/promotions
+- POST /v1/app/v2/ordering/suggestions
+- GET /v1/app/v2/pi/search
+- GET /v1/app/v2/pi/{upc}
+- POST /v1/app/v2/pi/{upc}/true-stock
 
 Legacy Admin remains in source during transition but is not part of the Web App V2 target architecture.
