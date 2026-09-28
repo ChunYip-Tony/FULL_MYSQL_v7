@@ -687,8 +687,9 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
 
         results.sort(
             key=lambda x:(
-                -int(x.get("relevance") or 0),
+                0 if str(x.get("result_type") or "").upper()=="FAMILY" else 1,
                 -float(x.get("qty_28d") or 0),
+                -int(x.get("relevance") or 0),
                 _readiness_rank(x.get("readiness")),
                 str(x.get("name") or ""),
             )
@@ -699,7 +700,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         "query":q,
         "count":min(len(results),limit),
         "results":results[:limit],
-        "sort_contract":["RELEVANCE_DESC","QTY_28D_DESC","READINESS"],
+        "sort_contract":["FAMILY_FIRST","QTY_28D_DESC","RELEVANCE_TIEBREAK","READINESS"],
         "sales_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
     }
 
