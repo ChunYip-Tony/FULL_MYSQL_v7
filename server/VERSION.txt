@@ -1,16 +1,18 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.134 Single-Service Edition
+Version: 7.0.135 Single-Service Edition
 
-v7.0.134 No-login Web Upload Status:
-- Public Fish Market Web App includes Upload as a fifth main tab.
-- No Admin login, browser session, or API token is required for raw file upload.
-- No login is required to view active upload or readiness status.
-- Users can select or drag/drop multiple raw files into one ingest batch.
-- Supported browser upload extensions: XLSX, XLS, XLSM, CSV, TXT, TSV.
-- Browser upload reuses the same canonical begin_batch -> add_file -> commit_batch -> worker -> Phase2C -> Phase3 -> Quick Check pipeline used by the Windows client.
-- Current Batch shows each file's filename, detected source type, raw row count, date coverage and ingest status.
-- Batch readiness shows Phase2C, Phase3, and Quick Check READY/HOLD counts.
-- Recent Uploads shows recent batches and per-file ingest/readiness information without login.
-- Failed pre-commit Web uploads automatically abort the incomplete batch to prevent an API_UPLOADING lock.
-- Browser guardrails remain: same-origin/cross-site protection, existing file-size limit, 40-file batch limit, supported-extension allowlist, and one-active-batch serialization.
-- Existing Bearer-token Windows client endpoints remain available but are optional.
+Public Web App:
+- Quick Check / PI / Upload / OH Discrepancy / Reports
+- Raw upload and upload/readiness status do not require login.
+- Windows client remains optional.
+
+v7.0.135 Upload Coverage Calendar:
+- Upload page now includes a rolling calendar for the past 14 completed calendar days.
+- Daily completeness uses the existing canonical FULL MYSQL daily coverage rule.
+- A day is UPDATED only when both canonical POS Sales and MVT daily coverage are present.
+- PARTIAL means one required daily source is present and the calendar explicitly shows whether POS or MVT is still needed.
+- NEEDS UPLOAD means both required daily sources are missing.
+- Price, OH, ABC, Article Manual and other periodic/non-daily sources do not determine daily calendar completeness.
+- Calendar excludes the current incomplete business day and runs through the latest completed business date.
+- Calendar refreshes when Upload opens, on manual Refresh, and when an upload batch reaches a terminal processing state.
+- Current Batch and Recent Uploads continue to show per-file ingest status plus Phase2C, Phase3 and Quick Check READY/HOLD readiness.
