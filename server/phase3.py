@@ -42,6 +42,7 @@ from coverage_backfill import (
     relink_pos_backfill,
 )
 from analysis_layer import (
+    DEPARTMENT_REGISTRY,
     ensure_analysis_layer_tables,
     refresh_analysis_layer,
     audit_analysis_layer,
@@ -299,7 +300,7 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
             if a and len(a) == 3 and b and not _num(p.get('M')) and not _num(p.get('N')):
                 current_dept = a
                 continue
-            if current_dept != SEAFOOD_DEPT_CODE:
+            if current_dept not in DEPARTMENT_REGISTRY:
                 continue
             ean = a
             if not ean or not b:
@@ -308,6 +309,21 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
             if not any(_num(p.get(c)) is not None for pair in SALES_COLS.values() for c in pair):
                 continue
             upc_id = _find_upc_id(cur, ean)
+            cur.execute(
+                """INSERT INTO upc_department_observation
+                   (upc_id,ean_upc,department_code,department_name,source_type,
+                    business_date,batch_id,file_id,sheet_id,source_row_number)
+                   VALUES (%s,%s,%s,%s,'POS',%s,%s,%s,%s,%s)
+                   ON DUPLICATE KEY UPDATE
+                     upc_id=VALUES(upc_id),
+                     department_name=VALUES(department_name),
+                     business_date=VALUES(business_date),
+                     batch_id=VALUES(batch_id)""",
+                (
+                    upc_id, ean, current_dept, DEPARTMENT_REGISTRY[current_dept],
+                    end, batch_id, f['file_id'], sh['sheet_id'], rr['source_row_number'],
+                ),
+            )
             total_qty = Decimal('0')
             for price_type, (sales_col, qty_col) in SALES_COLS.items():
                 sales = _num(p.get(sales_col)) or Decimal('0')
@@ -328,9 +344,16 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
                 inserted += 1
                 total_qty += qty
             if total_qty > 0 and upc_id is None:
-                _issue(cur, batch_id, 'SOLD_UPC_UNMAPPED', 'UPC', ean,
-                       f'POS sold quantity exists for Seafood UPC {ean}, but no confirmed UPC identity mapping exists.',
-                       'HIGH', f['file_id'], sh['sheet_id'], 'raw_sales_by_price_type', rr['raw_id'], {'description': b})
+                if current_dept == SEAFOOD_DEPT_CODE:
+                    _issue(cur, batch_id, 'SOLD_UPC_UNMAPPED', 'UPC', ean,
+                           f'POS sold quantity exists for Seafood UPC {ean}, but no confirmed UPC identity mapping exists.',
+                           'HIGH', f['file_id'], sh['sheet_id'], 'raw_sales_by_price_type', rr['raw_id'],
+                           {'description': b, 'department_code': current_dept})
+                else:
+                    _issue(cur, batch_id, f'{DEPARTMENT_REGISTRY[current_dept]}_SOLD_UPC_UNMAPPED', 'UPC', ean,
+                           f'POS sold quantity exists for {DEPARTMENT_REGISTRY[current_dept]} UPC {ean}, but no confirmed UPC identity mapping exists.',
+                           'MEDIUM', f['file_id'], sh['sheet_id'], 'raw_sales_by_price_type', rr['raw_id'],
+                           {'description': b, 'department_code': current_dept, 'scope': 'DEPARTMENT_LOCAL_HOLD'})
     return inserted
 
 
@@ -2526,13 +2549,16 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             report('PHASE3_QUICK_CHECK_REBUILD')
             qc_attempt = rebuild_quick_check(cur, batch_id)
             report('PHASE3_ANALYSIS_LAYER_REFRESH')
-            analysis_attempt = refresh_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
-            analysis_audit = audit_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
+            seafood_analysis_attempt = refresh_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
+            seafood_analysis_audit = audit_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
+            meat_analysis_attempt = refresh_analysis_layer(cur, batch_id, '300')
+            meat_analysis_audit = audit_analysis_layer(cur, batch_id, '300')
             report('PHASE3_IDENTITY_AUDIT')
             identity_audit = audit_product_identity(cur)
             identity_guard_pass = bool(identity_audit.get('pass'))
             identity_guard_blockers = list(identity_audit.get('blockers') or [])
-            analysis_guard_pass = bool(analysis_audit.get('pass'))
+            analysis_guard_pass = bool(seafood_analysis_audit.get('pass'))
+            meat_analysis_pass = bool(meat_analysis_audit.get('pass'))
             serving_preserved = False
 
             if identity_guard_pass and analysis_guard_pass:
@@ -2555,9 +2581,18 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                 }
 
             analysis_layer = {
-                'refresh': analysis_attempt,
-                'audit': analysis_audit,
-                'pass': analysis_guard_pass,
+                'seafood': {
+                    'refresh': seafood_analysis_attempt,
+                    'audit': seafood_analysis_audit,
+                    'pass': analysis_guard_pass,
+                    'gate_role': 'PRIMARY_READY_GATE',
+                },
+                'meat': {
+                    'refresh': meat_analysis_attempt,
+                    'audit': meat_analysis_audit,
+                    'pass': meat_analysis_pass,
+                    'gate_role': 'DEPARTMENT_LOCAL_STATUS',
+                },
                 'policy': 'FAIL_CLOSED_PRESERVE_PREVIOUS_SERVING',
                 'previous_serving_preserved': serving_preserved,
             }
