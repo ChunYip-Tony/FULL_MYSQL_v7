@@ -1,6 +1,6 @@
 from __future__ import annotations
 import base64, hashlib, hmac, json, os, time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from decimal import Decimal
 from typing import Annotated
@@ -9,7 +9,8 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from config import get_settings
 from db import db_conn, test_database
-from data_coverage import required_daily_coverage
+from business_clock import completed_through_date
+from data_coverage import required_daily_coverage, source_data_days
 from ingest import recent_batches
 from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch
 from product_identity_audit import audit_product_identity
@@ -27,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.134-single-service'
+VERSION='7.0.135-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -549,6 +550,99 @@ def web_upload_recent(request:Request,limit:int=8):
     for batch in batches:
         batch['files']=file_map.get(int(batch['batch_id']),[])
     return json.loads(json.dumps({'count':len(batches),'batches':batches},default=j))
+
+
+@app.get('/v1/web-upload/calendar')
+def web_upload_calendar(request:Request,days:int=14):
+    _browser_upload_guard(request)
+    days=max(1,min(int(days or 14),31))
+    through=completed_through_date()
+    start=through-timedelta(days=days-1)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            pos_rows=source_data_days(
+                cur,
+                'sales_by_price_type',
+                up_to=through,
+            )
+            mvt_rows=source_data_days(
+                cur,
+                'movement',
+                up_to=through,
+            )
+        finally:
+            cur.close()
+
+    pos_by_date={
+        x['date']:x
+        for x in pos_rows
+        if x.get('date') is not None and start<=x['date']<=through
+    }
+    mvt_by_date={
+        x['date']:x
+        for x in mvt_rows
+        if x.get('date') is not None and start<=x['date']<=through
+    }
+
+    rows=[]
+    updated=partial=missing=0
+    d=start
+    while d<=through:
+        pos=pos_by_date.get(d)
+        mvt=mvt_by_date.get(d)
+        has_pos=pos is not None
+        has_mvt=mvt is not None
+        if has_pos and has_mvt:
+            status='UPDATED'
+            updated+=1
+        elif has_pos or has_mvt:
+            status='PARTIAL'
+            partial+=1
+        else:
+            status='NEEDS_UPLOAD'
+            missing+=1
+        missing_sources=[]
+        if not has_pos:
+            missing_sources.append('POS')
+        if not has_mvt:
+            missing_sources.append('MVT')
+        rows.append({
+            'date':d,
+            'weekday':d.strftime('%a'),
+            'status':status,
+            'missing_sources':missing_sources,
+            'pos':{
+                'updated':has_pos,
+                'file_id':pos.get('file_id') if pos else None,
+                'batch_id':pos.get('batch_id') if pos else None,
+                'coverage_kind':pos.get('coverage_kind') if pos else None,
+            },
+            'mvt':{
+                'updated':has_mvt,
+                'file_id':mvt.get('file_id') if mvt else None,
+                'batch_id':mvt.get('batch_id') if mvt else None,
+                'coverage_kind':mvt.get('coverage_kind') if mvt else None,
+            },
+        })
+        d+=timedelta(days=1)
+
+    return json.loads(json.dumps({
+        'window_start':start,
+        'completed_through':through,
+        'days':rows,
+        'summary':{
+            'total_days':len(rows),
+            'updated_days':updated,
+            'partial_days':partial,
+            'needs_upload_days':missing,
+        },
+        'completion_rule':{
+            'required_daily_sources':['POS','MVT'],
+            'updated_when':'BOTH_POS_AND_MVT_CANONICAL_DAILY_COVERAGE',
+            'note':'Price, OH, ABC, Article Manual and other periodic sources do not determine daily calendar completeness.',
+        },
+    },default=j))
 
 
 @app.post('/v1/batches')
