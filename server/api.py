@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.158-single-service'
+VERSION='7.0.159-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -686,6 +686,124 @@ def web_upload_recent(request:Request,limit:int=8):
         },
         default=j,
     ))
+
+@app.post('/v1/web-upload/batches/{batch_id}/resume-phase3')
+def web_upload_resume_phase3(batch_id:int,request:Request):
+    _browser_upload_guard(request)
+    bid=int(batch_id)
+    if bid<1:
+        raise HTTPException(422,'INVALID_BATCH_ID')
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,batch_key,processing_status
+                   FROM ingest_batch
+                   WHERE batch_id=%s
+                   FOR UPDATE""",
+                (bid,),
+            )
+            batch=cur.fetchone()
+            if not batch:
+                raise HTTPException(404,'Batch not found')
+
+            status=str(batch.get('processing_status') or '').upper()
+            if status!='PHASE2C_READY':
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'BATCH_NOT_PHASE2C_READY',
+                        'batch_status':status,
+                    },
+                )
+
+            cur.execute(
+                "SELECT result_status FROM phase3_batch_result WHERE batch_id=%s",
+                (bid,),
+            )
+            p3=cur.fetchone()
+            if p3:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE3_RESULT_ALREADY_EXISTS',
+                        'phase3_status':p3.get('result_status'),
+                    },
+                )
+
+            cur.execute(
+                """SELECT pipeline_run_id,stage_name,processing_status,code_version
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status IN ('QUEUED','STARTED')
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1""",
+                (bid,API_PIPELINE),
+            )
+            active=cur.fetchone()
+            if active:
+                conn.commit()
+                return {
+                    'queued':active.get('processing_status')=='QUEUED',
+                    'already_active':True,
+                    'batch_id':bid,
+                    'pipeline_run_id':active.get('pipeline_run_id'),
+                    'stage_name':active.get('stage_name'),
+                    'status':active.get('processing_status'),
+                    'code_version':active.get('code_version'),
+                }
+
+            cur.execute(
+                """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='PHASE3_RERUN'""",
+                (bid,API_PIPELINE),
+            )
+            run_number=int((cur.fetchone() or {}).get('next_run') or 1)
+
+            cur.execute(
+                """INSERT INTO pipeline_run
+                   (batch_id,pipeline_name,stage_name,run_number,
+                    processing_status,code_version,detail_json)
+                   VALUES (%s,%s,'PHASE3_RERUN',%s,'QUEUED',%s,%s)""",
+                (
+                    bid,
+                    API_PIPELINE,
+                    run_number,
+                    VERSION,
+                    json.dumps({
+                        'requested_by':WEB_UPLOAD_DEVICE,
+                        'reason':'MANUAL_WEB_RESUME_PHASE3',
+                    }),
+                ),
+            )
+            run_id=int(cur.lastrowid)
+            conn.commit()
+            return {
+                'queued':True,
+                'already_active':False,
+                'batch_id':bid,
+                'pipeline_run_id':run_id,
+                'stage_name':'PHASE3_RERUN',
+                'status':'QUEUED',
+                'code_version':VERSION,
+            }
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(500,f'Phase 3 resume failed: {exc}')
+        finally:
+            cur.close()
+
 
 @app.post('/v1/web-upload/batches/{batch_id}/delete')
 def web_upload_delete_qa_hold_batch(
