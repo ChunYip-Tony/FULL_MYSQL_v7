@@ -427,7 +427,7 @@ body{
 }
 
 </style></head><body><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.128</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.129</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -598,7 +598,7 @@ async function csearch(){
   $('cmsg').textContent='Searching…';$('cres').innerHTML='';
   try{
     let d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=30');
-    $('cmsg').textContent=d.count+' result(s) · best match first';
+    $('cmsg').textContent=d.count+' result(s) · Family Article first · sorted by 28D Qty';
     $('cres').innerHTML=(d.results||[]).map((r,i)=>{
       let isFamily=r.result_type==='FAMILY',isUpc=r.result_type==='UPC';
       let numberHtml=isUpc
