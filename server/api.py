@@ -24,8 +24,9 @@ from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
+from webapp_v2 import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis
 
-VERSION='7.0.108-single-service'
+VERSION='7.0.109-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -1705,6 +1706,48 @@ def app_dashboard():
         result=operational_dashboard()
     except Exception as exc:
         raise HTTPException(500,f'Operations dashboard failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/v2/search')
+def app_v2_search(q:str,limit:int=30):
+    try:
+        result=v2_search_items(q,limit)
+    except Exception as exc:
+        raise HTTPException(500,f'V2 search failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/v2/family/{family_key}')
+def app_v2_family(family_key:str):
+    try:
+        result=v2_family_info(family_key)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_FAMILY_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 family info failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/v2/upc/{upc}')
+def app_v2_upc(upc:str):
+    try:
+        result=v2_upc_info(upc)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_UPC_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 UPC info failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/app/v2/upc/{upc}/price')
+def app_v2_price(upc:str,trend_supported_days:int=90):
+    try:
+        result=v2_price_analysis(upc,trend_supported_days)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'V2_UPC_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'V2 price analysis failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
