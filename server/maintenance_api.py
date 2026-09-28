@@ -8,6 +8,7 @@ from manual_overrides import (
     USER_CONFIRMED_UOM_REVIEW_20260926,
     USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926,
     USER_CONFIRMED_FAMILY_COSTS_20260926,
+    USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927,
     ensure_override_table,
     ensure_retirement_table,
     ensure_cost_conversion_table,
@@ -22,7 +23,7 @@ from product_identity_audit import audit_product_identity
 from current_active_cost_repair import repair_current_active_cost
 from global_cost_hold_diagnostic import diagnose_global_cost_holds
 from normalize import _preload_article_manual_authority
-from phase3 import rebuild_quick_check, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history, resolve_late_identity_issues
+from phase3 import rebuild_quick_check, refresh_quick_check_subset, repair_company_cost_uom_observations, _latest_cost, _norm_cost_serving_uom, _process_on_hand, relink_history, resolve_late_identity_issues
 
 
 def _retirement_ok(row: dict[str, Any]) -> bool:
@@ -156,6 +157,227 @@ def _latest_serving_batch_id(cur) -> int:
     if not row:
         raise RuntimeError("No published Phase 3 batch is available for a targeted Quick Check rebuild.")
     return int(row["batch_id"])
+
+
+
+def run_operational_uom_quick_check_refresh(device: str) -> dict[str, Any]:
+    """Refresh only Quick Check rows affected by code-reviewed operational-UOM authority.
+
+    This is a serving-layer refresh only. It does not re-ingest RAW files, replay
+    Phase 3 history, or clean-replace the global Quick Check snapshot.
+    """
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status='STARTED'"""
+            )
+            if int((cur.fetchone() or {}).get("c") or 0) > 0:
+                conn.rollback()
+                raise RuntimeError(
+                    "Server pipeline is currently processing; targeted Quick Check "
+                    "refresh is blocked to prevent concurrent serving writes."
+                )
+
+            conn.commit()
+            conn.start_transaction()
+            batch_id = _latest_serving_batch_id(cur)
+
+            main_articles = sorted({
+                str(x["main_article_number"])
+                for x in USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927
+            })
+            if not main_articles:
+                raise RuntimeError("No code-reviewed operational-UOM targets are configured.")
+
+            ph = ",".join(["%s"] * len(main_articles))
+            cur.execute(
+                f"""SELECT family_id,main_article_number
+                    FROM product_family
+                    WHERE main_article_number IN ({ph})
+                    ORDER BY family_id""",
+                tuple(main_articles),
+            )
+            family_rows = cur.fetchall()
+            found_main = {str(x["main_article_number"]) for x in family_rows}
+            missing_main = [x for x in main_articles if x not in found_main]
+            if missing_main:
+                raise RuntimeError(
+                    "Operational-UOM target family identity is unresolved: "
+                    + ",".join(missing_main)
+                )
+
+            family_ids = sorted({int(x["family_id"]) for x in family_rows})
+
+            before_rows = {}
+            cur.execute(
+                f"""SELECT ean_upc,family_id,main_article_number,current_oh,current_oh_uom,
+                           family_movement_7d,family_movement_uom,quick_check_status,blocking_reason,
+                           published_at
+                    FROM quick_check_current
+                    WHERE family_id IN ({','.join(['%s'] * len(family_ids))})
+                    ORDER BY ean_upc""",
+                tuple(family_ids),
+            )
+            for row in cur.fetchall():
+                before_rows[str(row["ean_upc"])] = row
+
+            targeted = refresh_quick_check_subset(
+                cur,
+                batch_id,
+                family_ids=family_ids,
+            )
+
+            cur.execute(
+                f"""SELECT ean_upc,family_id,main_article_number,current_oh,current_oh_uom,
+                           family_movement_7d,family_movement_uom,quick_check_status,blocking_reason,
+                           published_at
+                    FROM quick_check_current
+                    WHERE family_id IN ({','.join(['%s'] * len(family_ids))})
+                    ORDER BY ean_upc""",
+                tuple(family_ids),
+            )
+            after_rows = cur.fetchall()
+
+            authority_by_main = {
+                str(x["main_article_number"]): x
+                for x in USER_CONFIRMED_OPERATIONAL_UOM_BASIS_20260927
+            }
+            target_checks = []
+            failed = []
+            for row in after_rows:
+                authority = authority_by_main.get(str(row.get("main_article_number") or ""))
+                expected_uom = (
+                    str(authority.get("operational_uom_code") or "").upper()
+                    if authority else None
+                )
+                reasons = {
+                    x.strip()
+                    for x in str(row.get("blocking_reason") or "").split(",")
+                    if x and x.strip()
+                }
+                active = str(row.get("quick_check_status") or "") in {"READY", "QA_HOLD"}
+                oh_uom_ok = (
+                    (not active)
+                    or row.get("current_oh") is None
+                    or str(row.get("current_oh_uom") or "").upper() == expected_uom
+                )
+                movement_uom_ok = (
+                    row.get("family_movement_7d") is None
+                    or str(row.get("family_movement_uom") or "").upper() == expected_uom
+                )
+                rollforward_hold_cleared = "OH_MOVEMENT_ROLLFORWARD_BLOCKED" not in reasons
+                passed = bool(authority and oh_uom_ok and movement_uom_ok and rollforward_hold_cleared)
+                check = {
+                    "ean_upc": str(row["ean_upc"]),
+                    "family_id": int(row["family_id"]),
+                    "main_article_number": str(row["main_article_number"]),
+                    "expected_operational_uom": expected_uom,
+                    "current_oh": row.get("current_oh"),
+                    "current_oh_uom": row.get("current_oh_uom"),
+                    "family_movement_7d": row.get("family_movement_7d"),
+                    "family_movement_uom": row.get("family_movement_uom"),
+                    "quick_check_status": row.get("quick_check_status"),
+                    "blocking_reason": row.get("blocking_reason"),
+                    "pass": passed,
+                }
+                target_checks.append(check)
+                if not passed:
+                    failed.append(check)
+
+            if failed:
+                raise RuntimeError(
+                    "Targeted operational-UOM Quick Check verification failed; "
+                    "transaction rolled back. failed=" + str(failed)
+                )
+
+            cur.execute(
+                """SELECT COUNT(*) AS serving_rows_total,
+                          SUM(CASE WHEN quick_check_status='HISTORICAL_ONLY' THEN 1 ELSE 0 END) AS historical_rows,
+                          SUM(CASE WHEN quick_check_status IN ('READY','QA_HOLD') THEN 1 ELSE 0 END) AS current_active_rows,
+                          SUM(CASE WHEN quick_check_status='READY' THEN 1 ELSE 0 END) AS current_ready_rows,
+                          SUM(CASE WHEN quick_check_status='QA_HOLD' THEN 1 ELSE 0 END) AS current_hold_rows
+                   FROM quick_check_current"""
+            )
+            scope = cur.fetchone() or {}
+            scope = {
+                k: int(scope.get(k) or 0)
+                for k in (
+                    "serving_rows_total",
+                    "historical_rows",
+                    "current_active_rows",
+                    "current_ready_rows",
+                    "current_hold_rows",
+                )
+            }
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                     AND UPPER(severity) IN ('HIGH','CRITICAL')
+                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'""",
+                (batch_id,),
+            )
+            blocking = int((cur.fetchone() or {}).get("c") or 0)
+
+            if blocking > 0 or scope["current_active_rows"] == 0:
+                status = "PHASE3_QA_HOLD"
+            elif scope["current_hold_rows"] > 0:
+                status = "QUICK_CHECK_READY_WITH_HOLDS"
+            else:
+                status = "QUICK_CHECK_READY"
+
+            cur.execute(
+                """UPDATE phase3_batch_result
+                   SET quick_check_rows=%s,
+                       quick_check_ready_rows=%s,
+                       quick_check_hold_rows=%s,
+                       blocking_issue_count=%s,
+                       result_status=%s,
+                       updated_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (
+                    scope["current_active_rows"],
+                    scope["current_ready_rows"],
+                    scope["current_hold_rows"],
+                    blocking,
+                    status,
+                    batch_id,
+                ),
+            )
+            cur.execute(
+                """UPDATE ingest_batch
+                   SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6)
+                   WHERE batch_id=%s""",
+                (status, batch_id),
+            )
+
+            conn.commit()
+            return {
+                "status": "COMMITTED",
+                "device": device,
+                "mode": "TARGETED_OPERATIONAL_UOM_QUICK_CHECK_REFRESH",
+                "publish_batch_id": batch_id,
+                "target_family_ids": family_ids,
+                "target_main_articles": main_articles,
+                "targeted_refresh": targeted,
+                "target_checks": target_checks,
+                "before": before_rows,
+                "quick_check_scope": scope,
+                "phase3_status": status,
+                "blocking_issue_count": blocking,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
 
 
 def _target_uom_verification(cur) -> list[dict[str, Any]]:
