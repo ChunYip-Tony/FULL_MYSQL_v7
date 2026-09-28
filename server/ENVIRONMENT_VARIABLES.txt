@@ -39,3 +39,25 @@ Never commit the service-account JSON to GitHub.
 # signing key from the configured API tokens, so rotating API tokens also
 # invalidates all browser admin sessions.
 FULLMYSQL_ADMIN_SESSION_SECRET=<ENCRYPTED_RANDOM_SECRET>
+
+
+# v7.0.106 Admin Console ID/password login
+# Login ID is not secret; defaults to "admin" when omitted.
+FULLMYSQL_ADMIN_LOGIN_ID=admin
+
+# Recommended: store as an ENCRYPTED runtime secret in DigitalOcean.
+# When configured, browser Admin login uses this password and no longer accepts
+# the legacy API token as a browser password.
+FULLMYSQL_ADMIN_PASSWORD=<ENCRYPTED_ADMIN_PASSWORD>
+
+# Optional stronger alternative to FULLMYSQL_ADMIN_PASSWORD.
+# Format: pbkdf2_sha256$iterations$salt_b64$digest_b64
+# If FULLMYSQL_ADMIN_PASSWORD_HASH is set, it takes priority over the plaintext
+# encrypted secret above.
+FULLMYSQL_ADMIN_PASSWORD_HASH=<OPTIONAL_PBKDF2_HASH>
+
+# Migration behavior:
+# If neither FULLMYSQL_ADMIN_PASSWORD nor FULLMYSQL_ADMIN_PASSWORD_HASH is set,
+# Admin ID "admin" (or FULLMYSQL_ADMIN_LOGIN_ID) can temporarily use an existing
+# admin API token as the browser password. This fallback is disabled
+# automatically as soon as a dedicated password or password hash is configured.
