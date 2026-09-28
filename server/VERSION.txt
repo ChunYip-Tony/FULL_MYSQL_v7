@@ -1,21 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.125 Single-Service Edition
+Version: 7.0.126 Single-Service Edition
 
-Canonical V2 runtime:
-- server/webapp_v2_runtime.py
-- Web App V2 route: /app/v2
-- Root Quick Check routes: /, /app, /app/quick-check
-- Top-level V2 functions: Quick Check / PI / OH Discrepancy / Reports
+Canonical public app:
+- /, /app, /app/quick-check and /app/v2 all render the same Fish Market V2 application shell.
+- Public modules: Quick Check / PI / OH Discrepancy / Reports.
+- Admin remains a separate administrative interface.
 - Standalone Main ORDERING remains cancelled; item-level Ordering analysis remains available.
 
-v7.0.125:
-- Rebuilt the UPC Quick Check detail page against the approved Seafood Quick Check Dashboard mockup.
-- Dedicated ocean/fish-market dashboard composition: Quick Check header, product hero, 8-metric strip, Inventory + Ordering row, 28-day Sales Trend, family/related UPC table, Highlights / QA, fixed bottom navigation.
-- Product hero shows Family, Article, UPC, category and price-type badges.
-- Key metrics retain explicit units and latest-7-vs-prior-7 supported-data-day trend arrows.
-- Price vs Velocity and canonical Sweet Spot remain directly under the key metrics while using the same mockup card language.
-- Inventory shows System OH, current rolled True Stock, Effective OH and signed Difference, with direct True Stock update.
-- Ordering summary is embedded in the Quick Check page with next order, delivery, suggested quantity and coverage.
-- Sales Trend uses GP$ columns plus Avg Selling Price curve across the latest 28 completed supported sales dates.
-- Related UPCs use a compact mockup-style table; Highlights / QA is hidden when there are no current items.
-- Bottom navigation visually follows the mockup while preserving the latest functional scope: Quick Check, PI, OH Report, Reports.
+v7.0.126:
+- Promoted the approved seafood/fish-market mockup styling into one global public-app design system.
+- All public modules and detail/sub-analysis screens now use the same ocean background, deep-sea headers, ice-white cards, blue controls, rounded tables, badges, shadows, spacing and bottom navigation.
+- Unified styling covers Quick Check search/results, Family detail, UPC dashboard, Price analysis, item Ordering analysis, PI search/detail, OH Discrepancy report/clear, and Reports/Performance.
+- Quick Check UPC dashboard remains the visual reference implementation.
+- All public entry routes now open the same V2 application to prevent old and new themes from appearing depending on URL.
