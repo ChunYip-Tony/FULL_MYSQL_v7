@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.152 Single-Service Edition
+Version: 7.0.153 Single-Service Edition
+
+v7.0.153 Faster App Platform Startup:
+- Removed the blocking runtime import-smoke subprocess before Uvicorn startup.
+- single_service.py now starts the HTTP API immediately so /healthz can become reachable as early as possible.
+- Docker compileall remains the build-time syntax guard.
+- If api:app has an import-time failure, Uvicorn remains the authoritative runtime traceback source.
+- Worker supervision behavior is unchanged.
+
 
 v7.0.152 Recent Uploads HTTP 500 Repair:
 - Recent Uploads no longer runs MySQL JSON_EXTRACT against historical ingest_batch.notes.
