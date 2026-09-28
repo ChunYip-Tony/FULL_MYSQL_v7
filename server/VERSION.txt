@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.138 Single-Service Edition
+Version: 7.0.139 Single-Service Edition
+
+v7.0.139 Google Apps Script analysis bridge:
+- Preferred FULL MYSQL -> FULL_MYSQL_CHATGPT_ANALYSIS transport is now APPS_SCRIPT.
+- No Google service-account JSON is required for the preferred path.
+- DigitalOcean authenticates with an encrypted shared webhook secret.
+- Apps Script restricts writes/reads to the configured spreadsheet and approved bridge tabs.
+- BRIDGE_STATUS becomes PUBLISHING before replacement and PASS only after batch/row/lookup read-back parity.
+- SERVICE_ACCOUNT remains available as an optional legacy transport.
 
 Public Web App main navigation:
 - Quick Check
