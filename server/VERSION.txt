@@ -1,5 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.158 Single-Service Edition
+Version: 7.0.159 Single-Service Edition
+
+v7.0.159 Phase 3 Resume Controls:
+- Orphaned PHASE2C_READY auto-recovery is now limited once per current code version, not once across all historical reruns.
+- Old failed/interrupted PHASE3_RERUN records no longer permanently block recovery.
+- Recent Uploads shows Resume Phase 3 only when a batch is PHASE2C_READY with no Phase 3 result.
+- Resume Phase 3 queues a new PHASE3_RERUN through the guarded no-login Web upload API.
+- Existing active QUEUED/STARTED runs are reused instead of duplicated.
+- No re-upload is required for a stuck Phase 2C batch.
+
 
 v7.0.158 Phase 2C -> Phase 3 Recovery:
 - STARTED worker jobs left by an older deployment are recovered immediately instead of waiting for the 180-second stale heartbeat window.
