@@ -1,51 +1,54 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.114 Single-Service Edition
+Version: 7.0.115 Single-Service Edition
 
 Canonical V2 runtime:
 - server/webapp_v2_runtime.py
 - server/webapp_v2.py is a compatibility shim only.
-- Existing /app remains available as fallback.
-- Web App V2 test route: /app/v2.
-- V2 top-level functions: CORE / ORDERING / PI / PERFORMANCE.
+- Web App V2 route: /app/v2.
+- V2 top-level functions: CORE / PI / PERFORMANCE.
+- Standalone Main ORDERING is cancelled.
 
-Core data rules:
-- 7D / 14D / 28D use completed canonical data-supported dates only.
-- Missing source dates are ignored, never zero-filled.
+CORE:
+- Search -> Family / UPC -> Price / Ordering Analysis.
+- CORE Ordering remains available and is a Family Article decision.
 - Family page shows Family 7D Sold and Family 28D Sold with supported-day count and UOM.
-- All searches sort by 28D Qty Sold descending, then readiness.
-- Historical SALE promotion cards show both dates and weekday range.
-- Promotion = SALE only; TPR is not Promotion.
+- All search result lists sort by 28D Qty Sold descending, then readiness.
 
-Ordering:
-- CORE Ordering decision level is Family Article.
-- Main Ordering scans FRESH only or FROZEN only.
-- Eligibility: active selling in latest 28 supported completed POS dates AND DOS < 7.
-- Negative Effective OH is displayed but ordering calculations use max(OH,0).
-- Promotion items are selected by exact UPC and use that UPC's own historical SALE response.
-- Final order suggestion remains Family Article level and covers through the day before next-next delivery.
-- No Web App order save/submit workflow.
-
-PI:
-- PI target is always Family Article.
-- Search may start from name / Family Article / Article / UPC.
-- Family True Stock becomes authoritative Effective OH until superseded by a later accepted OH upload.
-- Family PI supersedes active child-level True Stock for that family.
-- No negative physical count.
+Data-day rule:
+- 7D / 14D / 28D use completed canonical data-supported dates only.
+- Missing source dates are ignored and never treated as zero.
 
 Price:
 - Price vs Sales chart shows latest 7 completed supported sales days.
-- Price page also shows latest 14 completed supported days as detailed sales history.
-- Historical promotion includes weekday range.
+- Detailed sales history shows latest 14 completed supported days.
+- Historical SALE promotions show dates plus weekday range.
+
+Promotion:
+- Promotion = SALE only.
+- TPR is not Promotion.
+- Historical promotion references are UPC-specific when selecting a promoted UPC.
+
+PI:
+- PI target is Family Article.
+- Search may begin from name / Family Article / Article / UPC.
+- Family True Stock becomes authoritative Effective OH until superseded by a later accepted OH upload.
 
 PERFORMANCE:
 - Read-only performance report for ALL / LIVE / FRESH / FROZEN.
 - Top 100 urgent price suggestions are analysis-only.
-- Company Price C is a hard bottom line when available.
-- Primary objective is higher observed GP$/day.
-- Candidate demand response comes from actual historical supported-day sales at observed prices.
-- Only positive GP$/day opportunities qualify for automatic suggestion.
-- Active SALE and QA HOLD items are excluded from automatic price suggestions.
+- Company Price C is the hard bottom line when available.
+- Primary objective is positive observed GP$/day opportunity.
 
-Mobile UI:
-- Android/system Back navigates to the previous V2 screen instead of leaving the app flow.
-- Elder-friendly presentation: larger type, larger tap targets, high contrast, clearer cards and simplified page hierarchy.
+Elder-friendly UI:
+- larger text and numeric values
+- larger touch targets
+- high contrast
+- clear page hierarchy
+- large Back controls
+- simplified mobile actions
+- three persistent top-level tabs only: CORE / PI / PERFORMANCE
+- phone/system Back stays inside the app flow
+
+Public V2 Ordering boundary:
+- POST /v1/app/v2/ordering/suggestions removed.
+- GET /v1/app/v2/upc/{upc}/ordering retained for CORE Ordering Analysis.
