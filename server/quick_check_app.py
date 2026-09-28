@@ -559,6 +559,352 @@ def _true_stock_history(
     return cur.fetchall()
 
 
+
+def _qc_decimal(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _quick_check_sales_trend(
+    cur,
+    upc_id: int,
+    limit: int = 40,
+) -> list[dict[str, Any]]:
+    """Return source-period sales observations without inventing daily grain."""
+    cur.execute(
+        """SELECT period_start_date,period_end_date,temporal_grain,price_type,
+                  sales_amount,sold_quantity,avg_sold_price,
+                  batch_id,file_id,sheet_id,raw_id,source_row_number
+           FROM sales_period_observation
+           WHERE upc_id=%s
+           ORDER BY period_end_date DESC,period_start_date DESC,
+                    file_id DESC,raw_id DESC
+           LIMIT %s""",
+        (upc_id, max(1, min(int(limit or 40), 120))),
+    )
+    rows = cur.fetchall()
+    for row in rows:
+        start = row.get("period_start_date")
+        end = row.get("period_end_date")
+        row["period_days"] = (
+            (end - start).days + 1
+            if isinstance(start, date) and isinstance(end, date) and end >= start
+            else None
+        )
+    return rows
+
+
+def _quick_check_cost_trend(
+    cur,
+    family_id: int,
+    limit: int = 40,
+) -> list[dict[str, Any]]:
+    """Return authoritative/observed family cost history with source lineage."""
+    cur.execute(
+        """SELECT co.cost_observation_id,co.business_date,
+                  a.article_number,
+                  co.source_type,co.movement_type,
+                  co.cost_amount,co.cost_per_base_uom,
+                  cu.uom_code AS cost_uom,
+                  bu.uom_code AS base_uom,
+                  co.currency_code,co.cost_status,co.confidence,
+                  co.batch_id,co.file_id,co.sheet_id,
+                  co.raw_table_name,co.raw_id,co.source_row_number
+           FROM article_cost_observation co
+           LEFT JOIN article a ON a.article_id=co.article_id
+           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+           LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
+           WHERE co.family_id=%s
+             AND (co.cost_per_base_uom IS NOT NULL OR co.cost_amount IS NOT NULL)
+           ORDER BY co.business_date DESC,
+                    co.cost_observation_id DESC
+           LIMIT %s""",
+        (family_id, max(1, min(int(limit or 40), 120))),
+    )
+    return cur.fetchall()
+
+
+def _quick_check_family_relationships(
+    cur,
+    family_id: int,
+    related_upcs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    cur.execute(
+        """SELECT pf.family_id,pf.main_article_number,pf.family_description
+           FROM product_family pf
+           WHERE pf.family_id=%s
+           LIMIT 1""",
+        (family_id,),
+    )
+    family = cur.fetchone() or {
+        "family_id": family_id,
+        "main_article_number": None,
+        "family_description": None,
+    }
+
+    cur.execute(
+        """SELECT a.article_id,a.article_number,a.article_description,
+                  baf.relationship_type,baf.is_primary,
+                  baf.mapping_status,baf.confidence
+           FROM bridge_article_family baf
+           JOIN article a ON a.article_id=baf.article_id
+           WHERE baf.family_id=%s
+             AND baf.mapping_status='CONFIRMED'
+             AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           ORDER BY
+             CASE baf.relationship_type WHEN 'MAIN' THEN 0 ELSE 1 END,
+             a.article_number""",
+        (family_id,),
+    )
+    articles = cur.fetchall()
+
+    cur.execute(
+        """SELECT article_number,
+                  MAX(posting_date) AS latest_receipt_date,
+                  GROUP_CONCAT(DISTINCT entry_uom_code ORDER BY entry_uom_code) AS receiving_uoms,
+                  GROUP_CONCAT(DISTINCT base_uom_code ORDER BY base_uom_code) AS base_uoms
+           FROM movement_history
+           WHERE family_id=%s
+             AND movement_type IN ('101','107','109')
+             AND article_number IS NOT NULL
+           GROUP BY article_number
+           ORDER BY latest_receipt_date DESC,article_number""",
+        (family_id,),
+    )
+    receiving_articles = cur.fetchall()
+
+    return {
+        "family": family,
+        "articles": articles,
+        "selling_upcs": related_upcs,
+        "receiving_articles_observed": receiving_articles,
+        "receiving_relationship_note": (
+            "receiving_articles_observed is source history, not an inferred ordering master"
+        ),
+    }
+
+
+def _quick_check_promotion(row: dict[str, Any]) -> dict[str, Any]:
+    price_type = str(row.get("current_price_type") or "").strip().upper()
+    active = price_type in {"SALE", "TPR", "IN STORE", "INSTORE"}
+    return {
+        "is_on_promotion": active,
+        "price_type": row.get("current_price_type"),
+        "current_price": row.get("current_price"),
+        "classification": "PROMOTION" if active else "REGULAR",
+    }
+
+
+def _quick_check_effective_dos(
+    row: dict[str, Any],
+    effective_oh: dict[str, Any],
+) -> dict[str, Any]:
+    qty = _qc_decimal(effective_oh.get("quantity"))
+    velocity = _qc_decimal(row.get("upc_velocity_7d"))
+    if qty is None:
+        return {
+            "days_supply": None,
+            "status": "OH_NOT_AVAILABLE",
+            "calculation_uom": None,
+        }
+    if velocity is None or velocity <= 0:
+        return {
+            "days_supply": None,
+            "status": "NO_POSITIVE_7D_VELOCITY",
+            "calculation_uom": None,
+        }
+
+    oh_uom = str(effective_oh.get("uom") or "").strip().upper()
+    selling_uom = str(row.get("selling_uom") or "").strip().upper()
+    base_uom = str(row.get("base_uom") or "").strip().upper()
+    factor = _qc_decimal(row.get("base_qty_per_selling_unit"))
+
+    selling_qty = None
+    calculation_uom = None
+    if oh_uom and selling_uom and oh_uom == selling_uom:
+        selling_qty = qty
+        calculation_uom = selling_uom
+    elif (
+        oh_uom
+        and base_uom
+        and oh_uom == base_uom
+        and factor is not None
+        and factor > 0
+    ):
+        selling_qty = qty / factor
+        calculation_uom = selling_uom or base_uom
+
+    if selling_qty is None:
+        return {
+            "days_supply": None,
+            "status": "OH_TO_SELLING_UOM_CONVERSION_UNRESOLVED",
+            "calculation_uom": None,
+        }
+
+    return {
+        "days_supply": selling_qty / velocity,
+        "status": "CALCULATED",
+        "calculation_uom": calculation_uom,
+        "selling_equivalent_oh": selling_qty,
+        "velocity_7d": velocity,
+    }
+
+
+def _quick_check_ordering(
+    row: dict[str, Any],
+    effective_oh: dict[str, Any],
+) -> dict[str, Any]:
+    if not effective_oh.get("analysis_usable"):
+        return {
+            "status": "BLOCKED",
+            "action": "VERIFY_INVENTORY_POSITION",
+            "suggested_order_qty": None,
+            "reason": "Effective OH roll-forward is not analysis-usable.",
+            "ordering_calendar_required_for_quantity": True,
+        }
+
+    qty = _qc_decimal(effective_oh.get("quantity"))
+    if qty is not None and qty < 0:
+        return {
+            "status": "COUNT_REQUIRED",
+            "action": "SUBMIT_TRUE_STOCK",
+            "suggested_order_qty": None,
+            "reason": "Effective OH is negative; physical count takes precedence.",
+            "ordering_calendar_required_for_quantity": True,
+        }
+
+    dos = _quick_check_effective_dos(row, effective_oh)
+    days_supply = _qc_decimal(dos.get("days_supply"))
+    if days_supply is None:
+        return {
+            "status": dos.get("status"),
+            "action": "MONITOR",
+            "suggested_order_qty": None,
+            "reason": (
+                "A safe order quantity cannot be calculated without compatible "
+                "OH/velocity UOM evidence and an ordering coverage calendar."
+            ),
+            "ordering_calendar_required_for_quantity": True,
+            "effective_dos": dos,
+        }
+
+    if days_supply < Decimal("3"):
+        action = "REORDER_REVIEW_NOW"
+        status = "LOW_COVERAGE"
+    elif days_supply <= Decimal("7"):
+        action = "WATCH_NEXT_ORDER"
+        status = "WATCH"
+    else:
+        action = "NO_IMMEDIATE_ORDER_ACTION"
+        status = "SUFFICIENT_COVERAGE"
+
+    return {
+        "status": status,
+        "action": action,
+        "suggested_order_qty": None,
+        "days_supply": days_supply,
+        "effective_dos": dos,
+        "ordering_calendar_required_for_quantity": True,
+        "reason": (
+            "Coverage status uses effective OH and current 7D UPC velocity. "
+            "Exact order quantity/date remains unset until an ordering calendar "
+            "and target coverage policy are configured."
+        ),
+    }
+
+
+def _quick_check_highlights(
+    row: dict[str, Any],
+    effective_oh: dict[str, Any],
+    active_true_stock: dict[str, Any] | None,
+    promotion: dict[str, Any],
+    ordering: dict[str, Any],
+) -> list[dict[str, Any]]:
+    highlights: list[dict[str, Any]] = []
+
+    if row.get("quick_check_status") == "QA_HOLD":
+        highlights.append(
+            {
+                "code": "QA_HOLD",
+                "severity": "HIGH",
+                "text": str(row.get("blocking_reason") or "Quick Check row is on QA hold."),
+            }
+        )
+
+    if active_true_stock:
+        highlights.append(
+            {
+                "code": "TRUE_STOCK_ACTIVE",
+                "severity": "INFO",
+                "text": "Active True Stock is the effective inventory reference until the next OH upload.",
+            }
+        )
+
+    stock = _stock_state(effective_oh.get("quantity"))
+    if stock.get("negative_stock"):
+        highlights.append(
+            {
+                "code": "NEGATIVE_EFFECTIVE_OH",
+                "severity": "HIGH",
+                "text": "Effective OH is negative; physical count is required.",
+            }
+        )
+
+    if promotion.get("is_on_promotion"):
+        highlights.append(
+            {
+                "code": "PROMOTION_ACTIVE",
+                "severity": "INFO",
+                "text": f'Current price type is {promotion.get("price_type")}.',
+            }
+        )
+
+    v7 = _qc_decimal(row.get("upc_velocity_7d"))
+    v30 = _qc_decimal(row.get("upc_velocity_30d"))
+    if v7 is not None and v30 is not None:
+        if v30 > 0:
+            ratio = v7 / v30
+            if ratio >= Decimal("1.20"):
+                highlights.append(
+                    {
+                        "code": "VELOCITY_UP",
+                        "severity": "INFO",
+                        "text": "7D UPC velocity is at least 20% above 30D velocity.",
+                    }
+                )
+            elif ratio <= Decimal("0.80"):
+                highlights.append(
+                    {
+                        "code": "VELOCITY_DOWN",
+                        "severity": "INFO",
+                        "text": "7D UPC velocity is at least 20% below 30D velocity.",
+                    }
+                )
+        elif v7 > 0:
+            highlights.append(
+                {
+                    "code": "RECENT_VELOCITY_WITH_ZERO_30D_BASE",
+                    "severity": "INFO",
+                    "text": "Recent 7D velocity is positive while the 30D baseline is zero.",
+                }
+            )
+
+    if ordering.get("status") in {"LOW_COVERAGE", "COUNT_REQUIRED", "BLOCKED"}:
+        highlights.append(
+            {
+                "code": "ORDERING_ATTENTION",
+                "severity": "HIGH" if ordering.get("status") != "LOW_COVERAGE" else "MEDIUM",
+                "text": str(ordering.get("reason") or ordering.get("action")),
+            }
+        )
+
+    return highlights
+
+
 def get_quick_check_detail(upc: str) -> dict[str, Any] | None:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
