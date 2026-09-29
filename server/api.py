@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.172-single-service'
+VERSION='7.0.173-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -579,7 +579,14 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
              AND UPPER(severity) IN ('HIGH','CRITICAL')
              AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'
            GROUP BY issue_code,UPPER(severity)
-           ORDER BY FIELD(UPPER(severity),'CRITICAL','HIGH'),issue_count DESC,issue_code""",
+           ORDER BY
+             CASE UPPER(MIN(severity))
+               WHEN 'CRITICAL' THEN 1
+               WHEN 'HIGH' THEN 2
+               ELSE 3
+             END,
+             issue_count DESC,
+             issue_code""",
         (bid,),
     )
     batch_blockers=cur.fetchall()
@@ -894,22 +901,24 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
             except Exception as exc:
                 warnings.append('PHASE3_ENRICHMENT_FAILED: '+str(exc))
 
-            # Pipeline stage is also best-effort. Malformed legacy JSON is
-            # tolerated per row rather than failing the endpoint.
-            try:
-                cur.execute(
-                    f"""SELECT pipeline_run_id,batch_id,stage_name,processing_status,
-                               detail_json,started_at,completed_at,error_count
-                        FROM pipeline_run
-                        WHERE batch_id IN ({ph})
-                          AND pipeline_name=%s
-                          AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                        ORDER BY pipeline_run_id DESC""",
-                    tuple(ids)+(API_PIPELINE,),
-                )
-                for row in cur.fetchall():
-                    bid=int(row['batch_id'])
-                    if bid in pipeline_map:
+            # Pipeline stage is best-effort. Query the latest run per batch
+            # separately instead of sorting all historical runs for all batches
+            # at once; this avoids DigitalOcean MySQL sort-buffer exhaustion.
+            for pipeline_bid in ids:
+                try:
+                    cur.execute(
+                        """SELECT pipeline_run_id,batch_id,stage_name,processing_status,
+                                  detail_json,started_at,completed_at,error_count
+                           FROM pipeline_run
+                           WHERE batch_id=%s
+                             AND pipeline_name=%s
+                             AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                           ORDER BY pipeline_run_id DESC
+                           LIMIT 1""",
+                        (pipeline_bid,API_PIPELINE),
+                    )
+                    row=cur.fetchone()
+                    if not row:
                         continue
                     detail={}
                     try:
@@ -920,7 +929,7 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
                         detail={}
                     run_status=str(row.get('processing_status') or '').upper()
                     last_stage=detail.get('phase3_stage')
-                    pipeline_map[bid]={
+                    pipeline_map[int(pipeline_bid)]={
                         'pipeline_run_id':row.get('pipeline_run_id'),
                         'stage_name':row.get('stage_name'),
                         'processing_status':row.get('processing_status'),
@@ -937,8 +946,10 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
                         'completed_at':row.get('completed_at'),
                         'error_count':row.get('error_count'),
                     }
-            except Exception as exc:
-                warnings.append('PIPELINE_ENRICHMENT_FAILED: '+str(exc))
+                except Exception as exc:
+                    warnings.append(
+                        f'PIPELINE_ENRICHMENT_FAILED_BATCH_{pipeline_bid}: '+str(exc)
+                    )
 
             # Embed QA breakdown in the same Recent Batches response so the
             # browser never depends on a second route being deployed in sync.

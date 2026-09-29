@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.172-single-service'
+API_VERSION='7.0.173-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 STATUS_HEARTBEAT_FRESH_SECONDS=max(30,min(120,int(os.environ.get('FULLMYSQL_STATUS_HEARTBEAT_FRESH_SECONDS','45'))))
 
@@ -361,9 +361,11 @@ def session_status(session_id: str) -> dict[str,Any]:
         'heartbeat_age_seconds':heartbeat_age_seconds,
         'heartbeat_fresh':heartbeat_fresh,
         'heartbeat_fresh_seconds':STATUS_HEARTBEAT_FRESH_SECONDS,
-        'failure_error':(latest_phase3_run or {}).get('failure_error'),
-        'failure_stage':(latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage'),
-        'recovery_reason':(latest_phase3_run or {}).get('recovery_reason'),
+        # A committed Phase 3 result is authoritative final state. Historical
+        # failed/recovery run metadata must not pollute a successful final batch.
+        'failure_error':None if p3 else (latest_phase3_run or {}).get('failure_error'),
+        'failure_stage':None if p3 else ((latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage')),
+        'recovery_reason':None if p3 else (latest_phase3_run or {}).get('recovery_reason'),
         'run_completed_at':(latest_phase3_run or {}).get('completed_at'),
     }
 
