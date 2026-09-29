@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.164-single-service'
+API_VERSION='7.0.165-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 
@@ -236,7 +236,19 @@ def session_status(session_id: str) -> dict[str,Any]:
                 detail=json.loads(run.get('detail_json') or '{}')
             except Exception:
                 detail={}
-            run['phase3_stage']=detail.get('phase3_stage')
+            run_status=str(run.get('processing_status') or '').upper()
+            last_stage=detail.get('phase3_stage')
+            # A checkpoint from a stopped/completed run is historical evidence,
+            # not proof that Phase 3 is currently executing.
+            run['phase3_stage']=(
+                last_stage
+                if run_status in {'STARTED','PAUSE_REQUESTED'}
+                else None
+            )
+            run['last_phase3_stage']=last_stage
+            run['phase3_stage_live']=bool(
+                last_stage and run_status in {'STARTED','PAUSE_REQUESTED'}
+            )
             run.pop('detail_json',None)
         runs.sort(key=lambda x: int(x.get('pipeline_run_id') or 0))
         cur.execute("SELECT result_status,blocking_issue_count,updated_at FROM phase2c_batch_result WHERE batch_id=%s",(bid,)); p2=cur.fetchone()
