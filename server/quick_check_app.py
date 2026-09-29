@@ -509,6 +509,8 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                 SELECT ean_upc,article_number,family_id,main_article_number,
                        selling_description,family_description,selling_uom,
                        quick_check_status,blocking_reason,current_price,current_price_type,
+                       current_price_source,current_price_asof_date,
+                       sales_dollars_7d,pos_qty_7d,sales_days_7d,
                        current_oh,current_oh_uom,publish_batch_id,published_at,
                        CASE
                          WHEN ean_upc=%s THEN 1000
@@ -560,6 +562,8 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                 SELECT ean_upc,article_number,family_id,main_article_number,
                        selling_description,family_description,selling_uom,
                        quick_check_status,blocking_reason,current_price,current_price_type,
+                       current_price_source,current_price_asof_date,
+                       sales_dollars_7d,pos_qty_7d,sales_days_7d,
                        current_oh,current_oh_uom,publish_batch_id,published_at,
                        CASE
                          WHEN UPPER(COALESCE(selling_description,''))=%s THEN 950
