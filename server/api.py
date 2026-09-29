@@ -2574,6 +2574,7 @@ def cost_lineage_diagnostic(
                       q.current_cost_per_selling_unit,
                       q.cost_source,q.cost_date,
                       q.current_price,q.current_price_type,
+                      q.current_price_source,q.current_price_asof_date,
                       q.pos_qty_7d,q.pos_qty_30d,
                       q.quick_check_status,q.blocking_reason,
                       CASE
