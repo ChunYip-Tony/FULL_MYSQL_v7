@@ -1,0 +1,48 @@
+name: Diagnose Batch 13 live Phase 3
+
+on:
+  push:
+    branches:
+      - diag/batch13-live-20260928
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Read production Batch 13 live status
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          session="9b49379e-6632-44f5-a77f-553847989190"
+
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 20 "$base/healthz"
+          echo
+
+          echo "=== BATCH SESSION STATUS ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/$session" -o /tmp/status.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/status.json', encoding='utf-8'))
+          print(json.dumps({
+              'batch': p.get('batch'),
+              'phase3': p.get('phase3'),
+              'authoritative_status': p.get('authoritative_status'),
+              'latest_api_runs': (p.get('api_runs') or [])[-4:],
+          }, indent=2, default=str))
+          PY
+
+          echo "=== QA SUMMARY ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/qa.json', encoding='utf-8'))
+          print(json.dumps({
+              'processing_status': p.get('processing_status'),
+              'phase3': p.get('phase3'),
+              'batch_blockers': p.get('batch_blockers'),
+              'current_active_unmapped_guard': p.get('current_active_unmapped_guard'),
+          }, indent=2, default=str))
+          PY
