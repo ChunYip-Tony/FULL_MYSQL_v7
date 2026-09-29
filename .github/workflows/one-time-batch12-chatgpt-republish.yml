@@ -28,6 +28,14 @@ jobs:
           done
           test "$ready" = "1"
 
+      - name: Read Batch 13 QA summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -sS --max-time 60 "$base/v1/web-upload/batches/13/qa-summary" | tee /tmp/qa-summary.json
+          echo
+
       - name: Republish current Batch 13 ChatGPT analysis snapshot
         shell: bash
         run: |
