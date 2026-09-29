@@ -9,7 +9,7 @@ jobs:
   republish:
     if: github.event.head_commit.message == 'Trigger Batch 13 ChatGPT republish'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - name: Wait for patched FULL MYSQL deployment
         shell: bash
@@ -33,6 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
+
           curl -sS --max-time 60 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-before.json
           before="$(python - <<'PY'
           import json
@@ -42,32 +43,42 @@ jobs:
           )"
           echo "BEFORE_PHASE3_UPDATED_AT=$before"
 
-          http_code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' \
-            -X POST "$base/v1/web-upload/batches/13/rebuild-phase3")"
-          cat /tmp/rebuild.json
-          echo
+          set +e
+          http_code="$(curl -sS --max-time 360 -o /tmp/rebuild.json -w '%{http_code}'             -X POST "$base/v1/web-upload/batches/13/rebuild-phase3")"
+          curl_rc=$?
+          set -e
+
+          echo "REBUILD_CURL_RC=$curl_rc"
           echo "REBUILD_HTTP_STATUS=$http_code"
-          test "$http_code" = "200"
+          if [ -s /tmp/rebuild.json ]; then
+            cat /tmp/rebuild.json
+            echo
+          fi
 
           complete=0
-          for i in $(seq 1 90); do
-            curl -sS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-now.json
-            state="$(python - <<'PY'
+          for i in $(seq 1 120); do
+            if curl -sS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-now.json; then
+              state="$(python - <<'PY'
           import json
           p=json.load(open('/tmp/qa-now.json', encoding='utf-8'))
           ph=p.get('phase3') or {}
           print((ph.get('updated_at') or '')+'|'+str(ph.get('result_status') or ''))
           PY
-            )"
-            echo "$state"
-            updated="${state%%|*}"
-            if [ -n "$updated" ] && [ "$updated" != "$before" ]; then
-              complete=1
-              break
+              )"
+              echo "$state"
+              updated="${state%%|*}"
+              if [ -n "$updated" ] && [ "$updated" != "$before" ]; then
+                complete=1
+                break
+              fi
             fi
             sleep 5
           done
-          test "$complete" = "1"
+
+          if [ "$complete" != "1" ]; then
+            echo "Phase 3 updated_at did not advance."
+            exit 1
+          fi
 
       - name: Read Batch 13 QA summary after rebuild
         shell: bash
@@ -82,10 +93,7 @@ jobs:
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          http_code="$(curl -sS --max-time 240 \
-            -o /tmp/republish.json \
-            -w '%{http_code}' \
-            -X POST "$base/v1/web-upload/batches/13/republish-chatgpt-analysis")"
+          http_code="$(curl -sS --max-time 360             -o /tmp/republish.json             -w '%{http_code}'             -X POST "$base/v1/web-upload/batches/13/republish-chatgpt-analysis")"
           cat /tmp/republish.json
           echo
           echo "HTTP_STATUS=$http_code"
@@ -96,4 +104,37 @@ jobs:
           assert p.get('status') == 'PASS', p
           assert int(p.get('batch_id') or 0) == 13, p
           print(json.dumps(p, indent=2))
+          PY
+
+      - name: Verify 249450 fried/service Quick Check sales
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -sS --max-time 60 "$base/v1/app/quick-check/24945000000" -o /tmp/qc-249450.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/qc-249450.json', encoding='utf-8'))
+          item=p.get('item') or p
+          related=p.get('related_upcs') or []
+          target={
+              'ean_upc': item.get('ean_upc'),
+              'selling_description': item.get('selling_description'),
+              'pos_qty_7d': item.get('pos_qty_7d'),
+              'pos_qty_28d': item.get('pos_qty_28d'),
+              'pos_qty_30d': item.get('pos_qty_30d'),
+              'current_price': item.get('current_price'),
+              'quick_check_status': item.get('quick_check_status'),
+              'data_through': item.get('pos_data_through') or item.get('sales_data_through'),
+          }
+          print(json.dumps(target, indent=2))
+          print('RELATED_249450_ROWS=')
+          print(json.dumps([r for r in related if str(r.get('ean_upc') or '') == '24945000000'], indent=2))
+          if str(target.get('ean_upc') or '') != '24945000000':
+              raise SystemExit('Quick Check response did not resolve 24945000000')
+          qty=target.get('pos_qty_7d')
+          if qty is None:
+              raise SystemExit('249450 pos_qty_7d is missing')
+          if float(qty) == 0:
+              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.183 rebuild')
           PY
