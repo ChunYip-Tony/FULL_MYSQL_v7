@@ -1,0 +1,45 @@
+name: One-time Batch 12 ChatGPT republish
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  republish:
+    if: github.event.head_commit.message == 'Trigger Batch 12 ChatGPT republish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Wait for patched FULL MYSQL deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          ready=0
+          for i in $(seq 1 72); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            if echo "$body" | grep -q '"version":"7.0.179-single-service"'; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" = "1"
+
+      - name: Republish current Batch 12 ChatGPT analysis snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 240 --retry 3 --retry-delay 5 --retry-all-errors \
+            -X POST "$base/v1/web-upload/batches/12/republish-chatgpt-analysis" \
+            | tee /tmp/republish.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/republish.json', encoding='utf-8'))
+          assert p.get('status') == 'PASS', p
+          assert int(p.get('batch_id') or 0) == 12, p
+          print(json.dumps(p, indent=2))
+          PY
