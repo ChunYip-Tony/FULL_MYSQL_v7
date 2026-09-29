@@ -106,6 +106,23 @@ def _find_upc(cur, ean: str) -> dict[str, Any] | None:
     return None
 
 
+def _existing_upca_canonical(cur, raw: str) -> str | None:
+    """Return an exact existing canonical UPC-A candidate for a short POS spelling."""
+    for candidate in _upca_alias_candidates(raw):
+        cur.execute(
+            """SELECT ean_upc
+               FROM selling_upc
+               WHERE ean_upc=%s
+                 AND record_status='ACTIVE'
+               LIMIT 1""",
+            (candidate,),
+        )
+        row=cur.fetchone()
+        if row:
+            return str(row['ean_upc'])
+    return None
+
+
 def _is_manual_retired_upc(cur, ean: str) -> bool:
     # The table is seeded by Phase 3 before automatic repair in v7.0.25.
     # Fail open only for legacy maintenance paths where the table does not exist yet;
@@ -573,8 +590,9 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
 
     target_keys = {_numeric_key(x['ean_upc']) for x in issues}
     for item in issues:
-        for candidate in _upca_alias_candidates(item['ean_upc']):
-            key=_numeric_key(candidate)
+        canonical=_existing_upca_canonical(cur, item['ean_upc'])
+        if canonical:
+            key=_numeric_key(canonical)
             if key:
                 target_keys.add(key)
     target_keys.discard(None)
@@ -598,16 +616,21 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
             continue
 
         key = _numeric_key(ean)
+        canonical_alias=_existing_upca_canonical(cur, ean)
         candidate_keys=[key] if key else []
-        candidate_keys.extend(
-            _numeric_key(x) for x in _upca_alias_candidates(ean)
-            if _numeric_key(x)
-        )
+        if canonical_alias:
+            ckey=_numeric_key(canonical_alias)
+            if ckey:
+                candidate_keys.append(ckey)
         mcands=[]
         for ckey in dict.fromkeys(candidate_keys):
             mcands.extend(manual.get(ckey or '', []))
         if mcands:
-            ok, detail = _apply_article_manual_candidate(cur, ean, mcands)
+            ok, detail = _apply_article_manual_candidate(
+                cur,
+                canonical_alias or ean,
+                mcands,
+            )
             if ok:
                 result['repaired_article_manual'] += 1
                 continue
@@ -615,14 +638,14 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         else:
             candidate_detail = {'source': 'ARTICLE_MANUAL', 'reason': 'NO_EXACT_UPC_EVIDENCE'}
 
-        ocands = _official_report_candidates(cur, ean)
+        ocands = _official_report_candidates(cur, canonical_alias or ean)
         families = sorted({int(x['family_id']) for x in ocands if x.get('family_id') is not None})
         if len(families) == 1:
             ok, why = _confirm_unique_family_link(
                 cur,
-                ean,
+                canonical_alias or ean,
                 families[0],
-                'ACTIVE_IDENTITY_REPAIR_OFFICIAL_REPORT_UNIQUE_FAMILY_V711',
+                'ACTIVE_IDENTITY_REPAIR_OFFICIAL_REPORT_UNIQUE_FAMILY_V7182',
                 {
                     'source': 'OFFICIAL_COMPANY_REPORT',
                     'observation_ids': [int(x['company_price_observation_id']) for x in ocands[:50]],
