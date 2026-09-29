@@ -1,4 +1,4 @@
-name: Inspect v7.0.193 QA holds
+name: Inspect UOM and cost hold Quick Check rows
 
 on:
   push:
@@ -8,38 +8,35 @@ on:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     steps:
-      - name: Wait for v7.0.193 and read QA
+      - name: Read hold rows
         shell: bash
         run: |
           set -euo pipefail
-          base="https://seal-app-tkkkd.ondigitalocean.app"
-          for i in $(seq 1 120); do
-            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
-            echo "$body"
-            version="$(BODY="$body" python - <<'PY'
-          import json, os
-          try:
-              p=json.loads(os.environ.get('BODY') or '{}')
-          except Exception:
-              p={}
-          print(p.get('version') or '')
-          PY
-          )"
-            if [ "$version" = "7.0.193-single-service" ]; then break; fi
-            sleep 5
-          done
-          test "$version" = "7.0.193-single-service"
-
-          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa.json
           python - <<'PY'
-          import json
-          p=json.load(open('/tmp/qa.json',encoding='utf-8'))
-          q=p.get('quick_check') or {}
-          print(json.dumps({
-            'phase3':p.get('phase3'),
-            'reason_counts':q.get('reason_counts'),
-            'reason_upcs':q.get('reason_upcs'),
-          },indent=2))
+          import json, urllib.request
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          groups={
+            "SELLING_UOM_MISSING": ["4711061630780","471351093053","654156851865","654156918025","695892380546","695892380548","6970206320964","7004121200","702868696387","75339325301","75339325329","81009389133","82994409246","87866500194","878665005568"],
+            "CURRENT_COST_MISSING": ["24513600000","24576100000"],
+            "COST_CONVERSION_SAMPLE": ["24503200000","4029549308","4029549384","4029550430","4029550566","4029550744","4029550918","4029550932","4029551059","4714163666558","66718100001","75339302070","823180600","8231806001","84323700815","85903390602"]
+          }
+          for label,upcs in groups.items():
+              print("===",label,"===")
+              for upc in upcs:
+                  try:
+                      with urllib.request.urlopen(base+"/v1/app/quick-check/"+upc,timeout=20) as r:
+                          p=json.load(r)
+                      item=p.get("item") or p
+                      keep={k:item.get(k) for k in [
+                          "ean_upc","article_number","main_article_number","family_id",
+                          "selling_description","article_description","selling_uom","base_uom",
+                          "base_qty_per_selling_unit","current_cost","current_cost_uom",
+                          "cost_source","cost_date","quick_check_status","blocking_reason",
+                          "current_price","pos_qty_7d","pos_qty_28d"
+                      ]}
+                      print(json.dumps(keep,ensure_ascii=False))
+                  except Exception as e:
+                      print(json.dumps({"ean_upc":upc,"error":repr(e)}))
           PY
