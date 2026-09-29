@@ -1,6 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.164 Single-Service Edition
+Version: 7.0.165 Single-Service Edition
 
+
+v7.0.165 Phase 3 Live-State Integrity:
+- Historical Phase 3 checkpoints are no longer presented as live execution stages.
+- Backend session/recent status exposes phase3_stage only for STARTED or PAUSE_REQUESTED runs; historical checkpoint evidence is retained separately as last_phase3_stage.
+- Current Batch shows PHASE3_STOPPED when the latest Phase 3 run ended without a Phase 3 result while the batch remains PHASE2C_READY.
+- Phase 3 detail shows STOPPED · RESUME REQUIRED instead of a stale checkpoint such as PHASE3_COVERAGE_BACKFILL_READY.
+- Resume remains available for stopped/paused runs; Pause is shown only while Phase 3 is actually QUEUED or STARTED.
+- Polling text no longer says the server is processing when Phase 3 is stopped or paused.
 
 v7.0.164 Phase 3 Current-Stage Display:
 - Current Batch Pipeline status now follows the active Phase 3 pipeline_run once Resume Phase 3 has been queued or started.
