@@ -450,9 +450,56 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         heartbeat.join(timeout=2)
         _write_runtime_health('IDLE')
 
+def _recover_chatgpt_bridge_on_startup() -> None:
+    """Best-effort recovery for an interrupted ChatGPT Sheet publish.
+
+    The publish operation is idempotent and already fail-closed. Re-running it
+    for the one batch currently bound to quick_check_current lets a worker
+    restart converge a stale PUBLISHING bridge state to PASS or a terminal
+    FAILED state instead of leaving readers blocked indefinitely.
+    """
+    if not bridge_enabled():
+        return
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            try:
+                cur.execute(
+                    """SELECT COUNT(*) AS c,
+                              MIN(publish_batch_id) AS min_batch,
+                              MAX(publish_batch_id) AS max_batch
+                       FROM quick_check_current"""
+                )
+                serving=cur.fetchone() or {}
+            finally:
+                cur.close()
+        if int(serving.get('c') or 0) <= 0:
+            return
+        min_batch=int(serving.get('min_batch') or 0)
+        max_batch=int(serving.get('max_batch') or 0)
+        if min_batch <= 0 or min_batch != max_batch:
+            print(
+                'ChatGPT bridge startup recovery skipped: serving snapshot spans batches',
+                serving,
+                flush=True,
+            )
+            return
+        result=publish_chatgpt_snapshot(max_batch)
+        print(
+            'ChatGPT bridge startup recovery:',
+            json.dumps(result,ensure_ascii=False,default=str),
+            flush=True,
+        )
+    except Exception as exc:
+        # Recovery must never prevent the worker from starting. The publisher
+        # itself writes a terminal FAILED bridge status when possible.
+        print('ChatGPT bridge startup recovery error:',repr(exc),flush=True)
+
+
 def main():
     _write_runtime_health('STARTING')
     db=test_database(); print('FULL MYSQL v7 worker DB:',db,flush=True)
+    _recover_chatgpt_bridge_on_startup()
     runtime_stop=threading.Event()
     runtime_thread=threading.Thread(target=_runtime_heartbeat_loop,args=(runtime_stop,),daemon=True)
     runtime_thread.start()
