@@ -50,31 +50,12 @@ jobs:
           echo "API_WORKER_VERSION_GATE=TIMEOUT"
           exit 1
 
-      - name: Decide whether Batch 13 needs another Phase 3 rebuild
+      - name: Force Batch 13 Phase 3 rebuild for v7.0.194 serving recalculation
         shell: bash
         run: |
           set -euo pipefail
-          base="https://seal-app-tkkkd.ondigitalocean.app"
-          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/pre-qa.json
-          cat /tmp/pre-qa.json
-          echo
-          need="$(python - <<'PY'
-          import json
-          p=json.load(open('/tmp/pre-qa.json', encoding='utf-8'))
-          p3=p.get('phase3') or {}
-          guard=p.get('current_active_unmapped_guard') or {}
-          ready=(
-              str(p3.get('result_status') or '').upper() in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}
-              and int(p3.get('blocking_issue_count') or 0) == 0
-              and int(guard.get('active_unmapped_count') or 0) == 0
-          )
-          print('0' if ready else '1')
-          PY
-          )"
-          echo "NEED_REBUILD=$need" | tee -a "$GITHUB_ENV"
-          if [ "$need" = "0" ]; then
-            echo "BATCH13_ALREADY_PUBLISHABLE=PASS"
-          fi
+          echo "NEED_REBUILD=1" | tee -a "$GITHUB_ENV"
+          echo "Reason: v7.0.183+ repaired 249 fried/service POS lineage, but the prior publish reused an already-READY pre-repair Quick Check snapshot. A fresh Phase 3 rebuild is required to recalculate UPC-level sales and canonical current prices."
 
       - name: Rebuild Batch 13 Phase 3 with version-fenced worker
         if: ${{ env.NEED_REBUILD == '1' }}
@@ -226,8 +207,7 @@ jobs:
           print('CANONICAL_POS_2026_09_27=PASS')
           PY
 
-      - name: Inspect 249450 fried/service Quick Check sales (non-blocking regression diagnostic)
-        continue-on-error: true
+      - name: Verify 249450 fried/service Quick Check sales regression
         shell: bash
         run: |
           set -euo pipefail
