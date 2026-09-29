@@ -536,7 +536,7 @@ def web_upload_recent(request:Request,limit:int=8):
                      WHERE active.batch_id=ib.batch_id
                        AND active.pipeline_name=%s
                        AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                       AND active.processing_status IN ('QUEUED','STARTED')
+                       AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                  )
                ORDER BY ib.batch_id DESC
                LIMIT %s""",
