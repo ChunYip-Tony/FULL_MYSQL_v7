@@ -1,2 +1,2 @@
-check=8
-reason=diagnose_v7189_extended_phase3_runtime
+check=9
+reason=verify_v7190_async_bridge_deployment
