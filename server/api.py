@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.171-single-service'
+VERSION='7.0.172-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -509,7 +509,39 @@ def web_upload_active(request:Request,response:Response):
     response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma']='no-cache'
     response.headers['Expires']='0'
-    return {'active_batch':find_active_batch()}
+
+    active=find_active_batch()
+    latest=None
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,batch_key,batch_label,processing_status,
+                          upload_started_at,completed_at,notes
+                   FROM ingest_batch
+                   ORDER BY batch_id DESC
+                   LIMIT 20"""
+            )
+            for row in cur.fetchall():
+                notes={}
+                try:
+                    parsed=json.loads(row.get('notes') or '{}')
+                    if isinstance(parsed,dict):
+                        notes=parsed
+                except Exception:
+                    notes={}
+                if notes.get('history_hidden') is True:
+                    continue
+                row.pop('notes',None)
+                latest=row
+                break
+        finally:
+            cur.close()
+
+    return json.loads(json.dumps({
+        'active_batch':active,
+        'latest_batch':latest,
+    },default=j))
 
 
 def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
