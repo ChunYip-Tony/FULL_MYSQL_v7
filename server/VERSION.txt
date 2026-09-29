@@ -333,3 +333,10 @@ v7.0.138 Reports information architecture:
 - Upload includes a back control to Reports.
 - All existing upload functionality is unchanged: no-login upload, Latest Reference Uploads, Current Batch status, 14-day POS/MVT coverage calendar, Recent Uploads, Phase2C, Phase3, and Quick Check READY/HOLD status.
 - PI continues to contain OH Discrepancy Report as a nested module.
+
+
+v7.0.179 ChatGPT Apps Script Bridge Hardening:
+- Apps Script bridge requests now retry transient failures with exponential backoff.
+- Snapshot chunk sizing is dynamic and remains below the Apps Script 50,000-cell request limit while reducing HTTP request count.
+- A failed ChatGPT snapshot publish now writes BRIDGE_STATUS=FAILED instead of leaving the serving gate stuck at PUBLISHING.
+- Batch republish remains fail-closed and still requires Phase 3 READY/READY_WITH_HOLDS with zero global blockers plus readback parity.
