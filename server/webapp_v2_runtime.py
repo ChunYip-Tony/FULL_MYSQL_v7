@@ -713,7 +713,10 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
 
         # Family remains first, but cannot consume the entire selectable list.
         # Reserve the majority of slots for actual selling UPCs / Articles.
-        family_cap=min(8,max(1,limit//3))
+        # Keep Family first without letting Family consume the first
+        # screenful of selectable results. Three Family choices are enough to
+        # expose the major family-level matches before showing selling UPCs.
+        family_cap=min(3,limit)
         selected_families=family_results[:family_cap]
         remaining=max(0,limit-len(selected_families))
 
@@ -754,7 +757,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         "count":len(selected),
         "results":selected,
         "sort_contract":[
-            "FAMILY_FIRST_CAPPED",
+            "FAMILY_FIRST_MAX_3",
             "UPC_THEN_ARTICLE",
             "QTY_28D_DESC",
             "RELEVANCE_TIEBREAK",
