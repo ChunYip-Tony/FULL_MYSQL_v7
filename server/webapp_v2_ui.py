@@ -627,8 +627,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.167</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.167</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.168</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.168</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -713,7 +713,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.167</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.168</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -789,13 +789,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.167';
+  el.textContent='App v7.0.168';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.167'){
-      el.textContent='UI 7.0.167 · API '+rv;
+    if(rv&&rv!=='7.0.168'){
+      el.textContent='UI 7.0.168 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -1029,7 +1029,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.167')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.168')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1227,7 +1227,7 @@ async function pollWebUpload(session){
   webUploadSession=session;
   if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
   try{
-    let d=await api('/v1/web-upload/batches/'+encodeURIComponent(session));
+    let d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{cache:'no-store'});
     let status=renderWebUploadStatus(d);
     $('uploadMsg').textContent=terminalUploadStatus(status)
       ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
@@ -1246,12 +1246,19 @@ async function pollWebUpload(session){
     }else{
       webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
     }
-  }catch(e){$('uploadMsg').textContent=e.message}
+  }catch(e){
+    $('uploadMsg').textContent='Status refresh failed · retrying… '+(e?.message||String(e));
+    // A transient mobile/network error must never freeze the last displayed
+    // backend state. Keep polling the same active batch until a fresh response arrives.
+    if(webUploadSession===session){
+      webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
+    }
+  }
 }
 async function loadWebUploadActive(){
   if(webUploadSession){pollWebUpload(webUploadSession);return}
   try{
-    let d=await api('/v1/web-upload/active'),a=d.active_batch;
+    let d=await api('/v1/web-upload/active',{cache:'no-store'}),a=d.active_batch;
     if(a?.batch_key){
       webUploadSession=a.batch_key;
       pollWebUpload(a.batch_key);
@@ -1300,6 +1307,18 @@ $('uploadFiles').onchange=e=>setWebUploadFiles(e.target.files);
 $('uploadClear').onclick=()=>{setWebUploadFiles([]);$('uploadFiles').value=''};
 $('uploadStart').onclick=startWebUpload;
 $('uploadRefresh').onclick=()=>{loadUploadRuntimeVersion();loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent()};
+
+function refreshUploadStatusAfterResume(){
+  if(!document.querySelector('#upload.screen.on'))return;
+  if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
+  loadUploadRuntimeVersion();
+  loadWebUploadActive();
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible')refreshUploadStatusAfterResume();
+});
+window.addEventListener('pageshow',refreshUploadStatusAfterResume);
+window.addEventListener('online',refreshUploadStatusAfterResume);
 ['dragenter','dragover'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.add('drag')}));
 ['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
 $('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
