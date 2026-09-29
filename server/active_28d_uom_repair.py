@@ -25,17 +25,41 @@ from normalize import (
     _source_token,
 )
 
-VERSION = "7.0.16-active-28d-uom-repair"
+VERSION = "7.0.175-active-28d-uom-repair"
 
-# User-confirmed FULL MYSQL Seafood rule.
-# IMPORTANT:
-# - Prefix alone is NOT enough.
-# - Target UPC must have positive POS sold qty in the latest up-to-28 VALID
-#   completed POS data days.
-# - Target must be in this eligible prefix set.
-# - Same confirmed Main/Family must contain a DIFFERENT related eligible prefix.
-# - Historical/non-current targets are intentionally left untouched.
-RELATED_LB_PREFIXES = {"240", "242", "245", "247", "249"}
+# Latest user-confirmed FULL MYSQL Seafood Selling-UOM authority.
+# Applies only to CURRENT-ACTIVE Seafood UPCs. Historical rows remain untouched.
+# Prefix ranges:
+#   230-239, 240, 242, 245, 247, 249, 250-259, 260-269 => LB
+# Non-prefix UPCs still require explicit Article Manual/user authority.
+def _authoritative_seafood_lb_prefix(upc: str) -> bool:
+    s = re.sub(r"\D", "", str(upc or ""))
+    if len(s) < 3:
+        return False
+    try:
+        p = int(s[:3])
+    except Exception:
+        return False
+    return (
+        230 <= p <= 239
+        or p in {240, 242, 245, 247, 249}
+        or 250 <= p <= 259
+        or 260 <= p <= 269
+    )
+
+
+def _is_current_seafood_upc(cur, upc_id: int) -> bool:
+    cur.execute(
+        """SELECT 1
+           FROM upc_department_observation
+           WHERE upc_id=%s
+             AND source_type='POS'
+             AND department_code='400'
+           ORDER BY business_date DESC,observation_id DESC
+           LIMIT 1""",
+        (upc_id,),
+    )
+    return bool(cur.fetchone())
 
 # Structured Article Manual article-level unit declarations considered safe.
 # PAC is intentionally NOT treated as PACK.
@@ -278,7 +302,7 @@ def _prefix(upc: str) -> str | None:
 def _related_prefix_evidence(cur, target: dict[str, Any]) -> dict[str, Any] | None:
     target_upc = str(target["ean_upc"])
     target_prefix = _prefix(target_upc)
-    if target_prefix not in RELATED_LB_PREFIXES:
+    if not _authoritative_seafood_lb_prefix(target_upc):
         return None
 
     cur.execute(
@@ -303,7 +327,7 @@ def _related_prefix_evidence(cur, target: dict[str, Any]) -> dict[str, Any] | No
     peers = [str(r["ean_upc"]) for r in cur.fetchall()]
     qualifying = [
         p for p in peers
-        if _prefix(p) in RELATED_LB_PREFIXES
+        if _authoritative_seafood_lb_prefix(p)
         and _prefix(p) != target_prefix
     ]
     if not qualifying:
@@ -335,6 +359,7 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
         "article_manual": manual_stats,
         "active_upcs_examined": len(active),
         "already_has_current_uom": 0,
+        "repaired_authoritative_prefix_lb": 0,
         "repaired_source_supported": 0,
         "repaired_related_prefix_lb": 0,
         "held_historical_uom_conflict": 0,
@@ -346,6 +371,25 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
     for target in active:
         upc_id = int(target["upc_id"])
         upc = str(target["ean_upc"])
+
+        # 0) Latest user-confirmed Seafood prefix authority. This outranks stale
+        # historical/current UOM observations for CURRENT-ACTIVE Seafood UPCs.
+        if _authoritative_seafood_lb_prefix(upc) and _is_current_seafood_upc(cur, upc_id):
+            if _apply_uom(
+                cur,
+                upc_id,
+                "LB",
+                "USER_CONFIRMED_SEAFOOD_PREFIX_LB_V7175",
+            ):
+                result["repaired_authoritative_prefix_lb"] += 1
+                result["repaired"].append({
+                    "upc": upc,
+                    "uom": "LB",
+                    "method": "USER_CONFIRMED_SEAFOOD_PREFIX_LB_V7175",
+                    "authority": "SEAFOOD_PREFIX_RULE",
+                })
+                continue
+
         if _has_current_uom(cur, upc_id):
             result["already_has_current_uom"] += 1
             continue
