@@ -202,6 +202,16 @@ body.detail-open .top{display:none}
 .qc-order-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}.qc-order-cell{padding:7px 7px;border-right:1px solid rgba(68,115,141,.15);border-bottom:1px solid rgba(68,115,141,.15);min-height:55px}.qc-order-cell:nth-child(2n){border-right:0}.qc-order-cell:nth-child(n+3){border-bottom:0}.qc-order-cell .k{font-size:10px;color:#3f6079}.qc-order-cell .v{font-size:13px;font-weight:950;margin-top:2px}.qc-order-open{border:0;background:transparent;color:#0b66a2;min-height:24px;padding:2px 0;font-size:10px;text-align:left}
 .qc-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 0}.qc-section-title{font-size:15px;font-weight:950;display:flex;gap:6px;align-items:center}.qc-legend{display:flex;gap:9px;font-size:9px;color:#31556d;align-items:center}.qc-legend i{display:inline-block;vertical-align:middle;margin-right:3px}.qc-legend .gp{width:18px;height:5px;background:#154a9f;border-radius:4px}.qc-legend .pr{width:18px;height:4px;background:#f27c1a;border-radius:4px}
 .qc-chart-scroll{overflow-x:auto;overflow-y:hidden;padding:0 5px 5px}.qc-chart{display:block;height:235px;min-width:760px;width:760px;background:transparent}
+.qc-sales14-wrap{padding:0 10px 10px}
+.qc-sales14-open{width:100%;min-height:38px;border:1px solid rgba(30,103,145,.24);border-radius:9px;background:rgba(227,243,249,.66);color:#0b5f95;font-size:11px;font-weight:900;text-align:center}
+.qc-sales14-open.open{background:#d9edf6}
+.qc-sales14-panel{margin-top:8px;border:1px solid rgba(72,122,149,.20);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.72)}
+.qc-sales14-table{width:100%;border-collapse:collapse;font-size:9px}
+.qc-sales14-table th,.qc-sales14-table td{padding:6px 5px;border-bottom:1px solid rgba(77,120,144,.14);text-align:right;white-space:nowrap}
+.qc-sales14-table th:first-child,.qc-sales14-table td:first-child{text-align:left}
+.qc-sales14-table th{background:rgba(209,233,243,.66);color:#244c66;font-size:8px;text-transform:uppercase;letter-spacing:.02em}
+.qc-sales14-table tr:last-child td{border-bottom:0}
+.qc-sales14-note{padding:7px 8px;font-size:8.5px;color:#557080;background:rgba(238,248,251,.72)}
 .qc-family-head{display:flex;align-items:center;justify-content:space-between;padding:9px 10px 4px}.qc-viewall{border:0;background:transparent;color:#154f77;min-height:28px;padding:2px 0;font-size:10px;box-shadow:none}.qc-family-table{width:100%;font-size:9.5px}.qc-family-table th,.qc-family-table td{padding:5px 6px;border-bottom:1px solid rgba(76,121,146,.17)}.qc-family-table th{background:rgba(196,225,237,.44);color:#244a64}.qc-rel{display:inline-flex;padding:2px 7px;border-radius:999px;background:#d5ebfb;color:#164d73;font-size:9px;white-space:nowrap}.qc-rel.same{background:#e4edf3}.qc-rel.related{background:#fae7c8}
 .qc-highlights{padding:8px 10px}.qc-highlights-head{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:950}.qc-count{background:#f7a623;color:#182535;border-radius:999px;padding:2px 7px;font-size:9px}.qc-alert{display:grid;grid-template-columns:22px 1fr 16px;gap:5px;align-items:center;padding:6px 0;border-top:1px solid rgba(75,119,145,.18);font-size:10.5px}.qc-alert:first-of-type{margin-top:5px}.qc-alert-ico{font-size:14px}.qc-chevron{font-size:18px;color:#164e72}
 .qc-inline-msg{font-size:9px;color:#49687a;margin-top:5px}
@@ -603,6 +613,12 @@ body{
   background:#e9f6fc!important;color:#0f5578!important;font-weight:900!important
 }
 #upload .resume-phase3:disabled{opacity:.65;cursor:wait}
+#upload .publish-analysis{
+  width:100%;margin-top:8px;min-height:38px;border:1px solid #80b99a!important;
+  background:#eaf8ef!important;color:#17643a!important;font-weight:900!important
+}
+#upload .publish-analysis:disabled{opacity:.65;cursor:wait}
+#upload .publish-analysis-msg{margin-top:5px;font-size:9px}
 #upload .pause-phase3{
   width:100%;margin-top:8px;min-height:38px;border:1px solid #d7a0a0!important;
   background:#fff1f1!important;color:#9b252b!important;font-weight:900!important
@@ -611,7 +627,7 @@ body{
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
-/* v7.0.176 completed-batch QA breakdown */
+/* v7.0.177 completed-batch QA breakdown */
 #upload .qa-breakdown{
   margin:8px 0 3px;padding:9px;border:1px solid #e2b0aa;border-radius:10px;
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
@@ -648,8 +664,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.176</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.176</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.177</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.177</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -678,6 +694,10 @@ body{
     <div class="qc-card">
       <div class="qc-section-head"><div class="qc-section-title">📊 Sales Trend <span class="small">(Last 28 Days)</span></div><div class="qc-legend"><span><i class="gp"></i>GP$</span><span><i class="pr"></i>Avg Selling Price</span></div></div>
       <div class="qc-chart-scroll"><canvas id="qcChart" class="qc-chart"></canvas></div>
+      <div class="qc-sales14-wrap">
+        <button id="qcSales14Open" class="qc-sales14-open" type="button">View Past 14D Sales Performance ▾</button>
+        <div id="qcSales14Panel" class="qc-sales14-panel hide"></div>
+      </div>
     </div>
     <div class="qc-card">
       <div class="qc-family-head"><div class="qc-section-title">👥 Family / Ordering Article / Related UPC</div><button id="qcFamilyView" class="qc-viewall">View All ›</button></div>
@@ -734,7 +754,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.176</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.177</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -811,13 +831,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.176';
+  el.textContent='App v7.0.177';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.176'){
-      el.textContent='UI 7.0.176 · API '+rv;
+    if(rv&&rv!=='7.0.177'){
+      el.textContent='UI 7.0.177 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -1052,11 +1072,20 @@ function renderWebUploadStatus(d){
       '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button>'+
       '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Phase 3 is not running · Resume required.</div>';
   }else{
-    $('uploadCurrentActions').innerHTML=failureHtml;
+    let p3Status=String(p3.result_status||'').toUpperCase();
+    let publishable=p3Status==='QUICK_CHECK_READY'||p3Status==='QUICK_CHECK_READY_WITH_HOLDS';
+    $('uploadCurrentActions').innerHTML=
+      failureHtml+
+      (publishable
+        ? '<button class="publish-analysis" data-publish-analysis="'+esc(b.batch_id)+'" type="button">Republish ChatGPT Analysis</button>'+
+          '<div class="msg publish-analysis-msg" data-publish-msg="'+esc(b.batch_id)+'">Publishes READY rows only; HOLD rows stay isolated in QA.</div>'
+        : '');
   }
 
   let resumeBtn=$('uploadCurrentActions').querySelector('[data-current-resume-phase3]');
   if(resumeBtn)resumeBtn.onclick=()=>resumePhase3Batch(resumeBtn.dataset.currentResumePhase3,resumeBtn);
+  let publishBtn=$('uploadCurrentActions').querySelector('[data-publish-analysis]');
+  if(publishBtn)publishBtn.onclick=()=>republishChatGPTAnalysis(publishBtn.dataset.publishAnalysis,publishBtn);
   return displayStatus;
 }
 
@@ -1073,7 +1102,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.176')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.177')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1174,10 +1203,49 @@ function renderWebUploadRecentBatch(b){
       (x.duplicate_of_file_id?' · duplicate of file '+esc(x.duplicate_of_file_id):'')+
       '</div></div><span class="pill '+(Number(x.error_count||0)>0?'bad':'ok')+'">'+esc(x.processing_status||'UNKNOWN')+'</span></div>'
     ).join('')+'</div>'+
+    ((p3Status==='QUICK_CHECK_READY'||p3Status==='QUICK_CHECK_READY_WITH_HOLDS')
+      ? '<button class="publish-analysis" data-publish-analysis="'+esc(b.batch_id)+'" type="button">Republish ChatGPT Analysis</button>'+
+        '<div class="msg publish-analysis-msg" data-publish-msg="'+esc(b.batch_id)+'">READY rows only · HOLD rows excluded from analysis.</div>'
+      : '')+
     ((String(b.processing_status||'').toUpperCase()==='QA_HOLD'&&!b.phase2c_status&&!b.phase3_status)
       ? '<button class="delete-qa-batch" data-delete-batch="'+esc(b.batch_id)+'" data-confirmed="0" type="button">Delete QA HOLD Batch</button><div class="msg delete-qa-msg" data-delete-msg="'+esc(b.batch_id)+'"></div>'
       : '')+
   '</div>';
+}
+
+async function republishChatGPTAnalysis(batchId,button){
+  let id=Number(batchId);
+  if(!Number.isInteger(id)||id<1)return;
+  let card=button?.closest('.card')||$('uploadStatusCard');
+  let msg=card?.querySelector('[data-publish-msg="'+id+'"]')||document.querySelector('[data-publish-msg="'+id+'"]');
+  if(button){
+    button.disabled=true;
+    button.textContent='Publishing READY Analysis…';
+  }
+  if(msg)msg.textContent='Writing READY-only analysis snapshot to Google Sheet…';
+  try{
+    let d=await api('/v1/web-upload/batches/'+id+'/republish-chatgpt-analysis',{method:'POST'});
+    let ready=fmt(d.analysis_ready_row_count,0),held=fmt(d.excluded_hold_row_count,0);
+    if(msg){
+      msg.className='msg ok publish-analysis-msg';
+      msg.textContent='Published '+ready+' READY rows · '+held+' HOLD rows excluded to QA.';
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Republish ChatGPT Analysis';
+    }
+    $('uploadMsg').textContent='ChatGPT analysis snapshot published from Batch '+id+' · '+ready+' READY rows.';
+  }catch(e){
+    let reason=e?.message||String(e);
+    if(msg){
+      msg.className='msg bad publish-analysis-msg';
+      msg.textContent='Publish failed: '+reason;
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Republish ChatGPT Analysis';
+    }
+  }
 }
 
 async function resumePhase3Batch(batchId,button){
@@ -1331,6 +1399,9 @@ async function loadWebUploadRecent(){
     $('uploadRecent').innerHTML=batches.map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
     document.querySelectorAll('#uploadRecent [data-delete-batch]').forEach(
       b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch,b)
+    );
+    document.querySelectorAll('#uploadRecent [data-publish-analysis]').forEach(
+      b=>b.onclick=()=>republishChatGPTAnalysis(b.dataset.publishAnalysis,b)
     );
 
   }catch(e){$('uploadRecentMsg').textContent=e.message}
@@ -1625,6 +1696,11 @@ async function upc(u,b='core'){try{
   ].join('');
 
   quickChart(p.price_vs_sales_trend?.rows||[]);
+  $('qcSales14Panel').classList.add('hide');
+  $('qcSales14Panel').innerHTML='';
+  $('qcSales14Panel').dataset.loadedUpc='';
+  $('qcSales14Open').classList.remove('open');
+  $('qcSales14Open').textContent='View Past 14D Sales Performance ▾';
 
   let related=q.related_upcs||[];
   $('qcFamilyRows').innerHTML=related.slice(0,4).map(r=>{
@@ -1639,6 +1715,7 @@ async function upc(u,b='core'){try{
   $('qcHighlightsCard').classList.toggle('hide',highs.length===0);
 
   $('qcPriceOpen').onclick=()=>price(d.upc);
+  $('qcSales14Open').onclick=()=>toggleQc14Sales(d.upc,uom,$('qcSales14Open'));
   $('qcOrderOpen').onclick=()=>corder(d.upc);
   $('qcFamilyView').onclick=()=>family(d.family_article_number);
   $('qcTrueUpdate').onclick=()=>submitQcTrueStock(d.upc,q.true_stock_input?.required_uom||invUom||uom);
@@ -1706,6 +1783,49 @@ async function submitQcTrueStock(upc,uom){
     ohLoaded=false;$('qcTrueMsg').textContent='Saved. Refreshing current OH…';await upc(upc,uback)
   }catch(e){$('qcTrueMsg').textContent=e.message}
 }
+function renderQc14Sales(rows,uom){
+  let a=(rows||[]).slice().reverse();
+  if(!a.length)return '<div class="qc-sales14-note">No supported sales history in the past 14 days.</div>';
+  return '<div class="scroll"><table class="qc-sales14-table"><thead><tr>'+
+    '<th>Date</th><th>Qty Sold</th><th>Sales</th><th>Avg Price</th><th>GP$</th><th>Price Type</th>'+
+    '</tr></thead><tbody>'+
+    a.map(x=>'<tr>'+
+      '<td><b>'+esc(dayName(x.date))+'</b><br>'+esc(x.date||'—')+'</td>'+
+      '<td>'+qv(x.sold_quantity,x.qty_uom||uom)+'</td>'+
+      '<td>'+money(x.sales_amount)+'</td>'+
+      '<td>'+esc(priceText(x.avg_sold_price,uom))+'</td>'+
+      '<td>'+money(x.gp_dollars)+'</td>'+
+      '<td>'+esc(((x.price_types||[]).map(p=>p.price_type).filter(Boolean).join(', '))||'—')+'</td>'+
+    '</tr>').join('')+
+    '</tbody></table></div>'+
+    '<div class="qc-sales14-note">Past 14D sales performance uses supported completed sales history. Missing unsupported dates are not treated as zero.</div>';
+}
+
+async function toggleQc14Sales(upc,uom,button){
+  let panel=$('qcSales14Panel');
+  if(!panel)return;
+  if(!panel.classList.contains('hide')){
+    panel.classList.add('hide');
+    button?.classList.remove('open');
+    if(button)button.textContent='View Past 14D Sales Performance ▾';
+    return;
+  }
+  panel.classList.remove('hide');
+  button?.classList.add('open');
+  if(button)button.textContent='Hide Past 14D Sales Performance ▴';
+  if(panel.dataset.loadedUpc===String(upc))return;
+  panel.innerHTML='<div class="qc-sales14-note">Loading past 14D sales performance…</div>';
+  try{
+    let d=await api('/v1/app/v2/upc/'+encodeURIComponent(upc)+'/price?trend_supported_days=14');
+    let resolvedUom=d.qty_uom||d.selling_uom||uom||'UOM UNKNOWN';
+    panel.innerHTML=renderQc14Sales(d.sales_history_14d?.rows||[],resolvedUom);
+    panel.dataset.loadedUpc=String(upc);
+  }catch(e){
+    panel.innerHTML='<div class="qc-sales14-note" style="color:#b3262e">14D sales history failed: '+esc(e?.message||String(e))+'</div>';
+    panel.dataset.loadedUpc='';
+  }
+}
+
 function quickChart(rows){
   let c=$('qcChart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=760,h=235;
   c.width=w*R;c.height=h*R;ctx.setTransform(R,0,0,R,0,0);ctx.clearRect(0,0,w,h);
