@@ -1,6 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.167 Single-Service Edition
+Version: 7.0.168 Single-Service Edition
 
+
+v7.0.168 Analysis SQL + Mobile Status Polling Fix:
+- Fixes Phase 3 failure at PHASE3_ANALYSIS_LAYER_REFRESH: analysis_item_current has 62 columns with analyzed_at supplied by CURRENT_TIMESTAMP, so the INSERT must use exactly 61 SQL placeholders. The prior statement had 62 placeholders but only 61 bound parameters, causing mysql.connector ProgrammingError: Not enough parameters for the SQL statement.
+- Upload status endpoints now return no-store/no-cache headers.
+- Current Batch polling explicitly uses cache:'no-store'.
+- A transient mobile/network polling failure now retries after 3 seconds instead of permanently freezing the last displayed state.
+- Returning the app/browser tab to the foreground, pageshow, or network-online state immediately refreshes Current Batch from backend authority.
 
 v7.0.167 Phase 3 Failure Visibility:
 - Current Batch status now exposes the actual backend exception summary for failed Phase 3 runs instead of only STOPPED · RESUME REQUIRED.
