@@ -633,7 +633,7 @@ body{
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
-/* v7.0.199 completed-batch QA breakdown */
+/* v7.0.200 completed-batch QA breakdown */
 #upload .qa-breakdown{
   margin:8px 0 3px;padding:9px;border:1px solid #e2b0aa;border-radius:10px;
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
@@ -670,8 +670,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.199</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.199</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.200</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.200</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -760,7 +760,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.199</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.200</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -837,13 +837,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.199';
+  el.textContent='App v7.0.200';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.199'){
-      el.textContent='UI 7.0.199 · API '+rv;
+    if(rv&&rv!=='7.0.200'){
+      el.textContent='UI 7.0.200 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -996,6 +996,7 @@ function renderWebUploadStatus(d){
   let b=d?.batch||{},files=d?.files||[],p2=d?.phase2c||{},p3=d?.phase3||{},auth=d?.authoritative_status||{};
   let rawStatus=String(b.processing_status||'—').toUpperCase();
   let displayStatus=String(auth.pipeline||rawStatus||'—').toUpperCase();
+  let persistedUploadError=String(b.last_upload_error||'').trim();
   let phase3Text=auth.phase3||'Pending';
   let quickCheckText=String(auth.quick_check||'PENDING').toUpperCase();
 
@@ -1045,6 +1046,14 @@ function renderWebUploadStatus(d){
   $('uploadServerFiles').innerHTML=files.map(x=>
     '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
   ).join('');
+  if(persistedUploadError){
+    $('uploadMsg').textContent='Upload failed'+(b.last_upload_error_file?' · '+b.last_upload_error_file:'')+': '+persistedUploadError;
+    $('uploadCurrentActions').innerHTML=
+      '<div class="msg bad" style="margin-top:8px"><b>Upload error:</b> '+esc(persistedUploadError)+
+      (b.last_upload_error_file?' · <b>File:</b> '+esc(b.last_upload_error_file):'')+
+      (b.last_upload_error_at?' · <b>Time:</b> '+esc(b.last_upload_error_at):'')+
+      '</div>';
+  }
 
   let qaHtml=d?.qa_summary?renderWebUploadQASummary(d.qa_summary):'';
   $('uploadCurrentQA').innerHTML=auth.rebuild_active
@@ -1129,7 +1138,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.199')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.200')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1484,15 +1493,17 @@ async function pollWebUpload(session){
   try{
     let d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{cache:'no-store'});
     let status=renderWebUploadStatus(d);
-    $('uploadMsg').textContent=terminalUploadStatus(status)
-      ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
-      : (status==='PHASE3_STOPPED'
-          ? 'Phase 3 is not running. Resume Phase 3 to continue.'
-          : (status==='PHASE3_RECOVERING'
-              ? 'Worker restart detected. Phase 3 will resume automatically.'
-              : (status==='PHASE2C_READY'
-                  ? 'Phase 2C is ready. Resume Phase 3 to continue.'
-                  : 'Server is processing this batch…')));
+    if(!(d?.batch?.last_upload_error)){
+      $('uploadMsg').textContent=terminalUploadStatus(status)
+        ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
+        : (status==='PHASE3_STOPPED'
+            ? 'Phase 3 is not running. Resume Phase 3 to continue.'
+            : (status==='PHASE3_RECOVERING'
+                ? 'Worker restart detected. Phase 3 will resume automatically.'
+                : (status==='PHASE2C_READY'
+                    ? 'Phase 2C is ready. Resume Phase 3 to continue.'
+                    : 'Server is processing this batch…')));
+    }
     await loadWebUploadRecent();
     if(terminalUploadStatus(status)){
       await loadLatestReferenceUploads();
