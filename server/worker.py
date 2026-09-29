@@ -17,6 +17,26 @@ RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/ful
 _RUNTIME_LOCK=threading.Lock()
 _RUNTIME_STATE={'state':'STARTING','run_id':None,'stage':None}
 
+class Phase3PauseRequested(RuntimeError):
+    def __init__(self, stage:str|None=None):
+        self.stage=stage
+        super().__init__('PHASE3_PAUSE_REQUESTED')
+
+
+def _run_pause_requested(run_id:int) -> bool:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                "SELECT processing_status FROM pipeline_run WHERE pipeline_run_id=%s",
+                (run_id,),
+            )
+            row=cur.fetchone() or {}
+            return str(row.get('processing_status') or '').upper()=='PAUSE_REQUESTED'
+        finally:
+            cur.close()
+
+
 def _touch_run(run_id:int, *, stage:str|None=None) -> None:
     payload={
         'worker':WORKER,
@@ -334,6 +354,9 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     heartbeat.start()
 
     def progress(stage:str, payload:dict|None=None):
+        if _run_pause_requested(run_id):
+            _write_runtime_health('PAUSING',run_id,stage)
+            raise Phase3PauseRequested(stage)
         _write_runtime_health('BUSY',run_id,stage)
         try:
             _touch_run(run_id,stage=stage)
@@ -390,6 +413,15 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         if not _publish_chatgpt_bridge(batch_id,detail,progress):
             finish(run_id,'FAILED',detail,1); return
         finish(run_id,'COMPLETED',detail,0)
+    except Phase3PauseRequested as exc:
+        # process_phase3 rolls its transaction back before propagating this
+        # cooperative stop. Keep the batch at PHASE2C_READY so Resume can
+        # restart Phase 3 cleanly from canonical Phase 2C state.
+        detail['paused']=True
+        detail['paused_at']=datetime.now(timezone.utc).isoformat()
+        detail['paused_stage']=exc.stage
+        finish(run_id,'PAUSED',detail,0)
+        _write_runtime_health('PAUSED',run_id,exc.stage)
     except Exception as exc:
         detail['error']=repr(exc); detail['traceback']=traceback.format_exc(); finish(run_id,'FAILED',detail,1)
     finally:
