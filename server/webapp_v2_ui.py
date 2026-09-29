@@ -31,6 +31,8 @@ table{width:100%;border-collapse:separate;border-spacing:0;font-size:16px}th,td{
 .result:active{transform:scale(.992)}
 .family-result{border:2px solid color-mix(in srgb,var(--a) 62%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,var(--a) 10%,var(--card)),var(--card))}
 .family-badge{display:inline-block;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,var(--a) 16%,transparent);color:var(--a);font-size:14px;font-weight:950;letter-spacing:.02em;margin-bottom:7px}
+.article-result{border:2px solid color-mix(in srgb,#8b5cf6 42%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,#8b5cf6 8%,var(--card)),var(--card))}
+.article-badge{display:inline-block;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,#8b5cf6 14%,transparent);color:#6d3fd1;font-size:13px;font-weight:950;letter-spacing:.02em;margin-bottom:7px}
 .result-upc{font-size:25px;font-weight:950;letter-spacing:.025em;margin-top:4px;color:var(--text)}
 .result-number{font-size:21px;font-weight:900;margin-top:4px}
 .result-type{font-size:14px;font-weight:850;color:var(--muted)}
@@ -612,8 +614,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.160</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.160</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.161</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.161</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -698,7 +700,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.160</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.161</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div class="card latest-ref-card">
     <div class="section">Latest Reference Uploads</div>
     <div id="latestRefMsg" class="msg"></div>
@@ -769,13 +771,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.160';
+  el.textContent='App v7.0.161';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.160'){
-      el.textContent='UI 7.0.160 · API '+rv;
+    if(rv&&rv!=='7.0.161'){
+      el.textContent='UI 7.0.161 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -964,7 +966,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.160')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.161')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1241,24 +1243,33 @@ async function csearch(){
   $('cmsg').textContent='Searching…';$('cres').innerHTML='';
   try{
     let d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=30');
-    $('cmsg').textContent=d.count+' result(s) · Family Article first · sorted by 28D Qty';
+    $('cmsg').textContent=d.count+' result(s) · Family first · UPC and Article shown separately · sorted by 28D Qty';
     $('cres').innerHTML=(d.results||[]).map((r,i)=>{
-      let isFamily=r.result_type==='FAMILY',isUpc=r.result_type==='UPC';
+      let type=String(r.result_type||'').toUpperCase();
+      let isFamily=type==='FAMILY',isUpc=type==='UPC',isArticle=type==='ARTICLE';
       let numberHtml=isUpc
         ? '<div class="result-upc">UPC '+esc(r.number||'—')+'</div>'
-        : '<div class="result-number">'+esc(r.number||'—')+'</div>';
-      return '<div class="card result '+(isFamily?'family-result':'')+'" data-i="'+i+'">'
-        +(isFamily?'<div class="family-badge">★ FAMILY ARTICLE</div>':'')
+        : (isArticle
+            ? '<div class="result-number">Article '+esc(r.number||'—')+'</div>'
+            : '<div class="result-number">Family '+esc(r.number||'—')+'</div>');
+      let cls=isFamily?'family-result':(isArticle?'article-result':'');
+      let badge=isFamily
+        ? '<div class="family-badge">★ FAMILY ARTICLE</div>'
+        : (isArticle?'<div class="article-badge">ARTICLE</div>':'');
+      return '<div class="card result '+cls+'" data-i="'+i+'">'
+        +badge
         +'<div class="row" style="justify-content:space-between"><div class="name">'+esc(r.name)+'</div>'+pill(r.readiness)+'</div>'
         +numberHtml
-        +'<div class="result-type">'+esc(r.result_type)+' · '+esc(r.category||'—')+'</div>'
-        
+        +'<div class="result-type">'+esc(type||'UNKNOWN')+' · '+esc(r.category||'—')+'</div>'
+        +(isArticle&&r.family_article_number?'<div class="meta">Family '+esc(r.family_article_number)+' · '+esc(r.family_name||'')+'</div>':'')
         +'<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
         +'</div>';
     }).join('')||'<div class="card small">No match found.</div>';
     document.querySelectorAll('#cres .result').forEach(e=>e.onclick=()=>{
-      let r=d.results[+e.dataset.i];
-      r.result_type==='FAMILY'?family(r.family_id||r.number):upc(r.number,'core');
+      let r=d.results[+e.dataset.i],type=String(r.result_type||'').toUpperCase();
+      if(type==='FAMILY')family(r.family_id||r.number);
+      else if(type==='ARTICLE')family(r.family_id||r.family_article_number);
+      else if(type==='UPC')upc(r.number,'core');
     });
   }catch(e){$('cmsg').textContent=e.message}
 }
