@@ -55,7 +55,7 @@ def _is_current_seafood_upc(cur, upc_id: int) -> bool:
            WHERE upc_id=%s
              AND source_type='POS'
              AND department_code='400'
-           ORDER BY business_date DESC,observation_id DESC
+           ORDER BY business_date DESC,file_id DESC,source_row_number DESC
            LIMIT 1""",
         (upc_id,),
     )
