@@ -141,17 +141,30 @@ def _upca_check_digit(body11: str) -> str | None:
     return str((10-(total % 10)) % 10)
 
 
+def _ean13_check_digit(body12: str) -> str | None:
+    if not re.fullmatch(r'\d{12}', str(body12 or '')):
+        return None
+    digits=[int(x) for x in body12]
+    total=sum(digits[0::2]) + sum(digits[1::2])*3
+    return str((10-(total % 10)) % 10)
+
+
 def _upca_alias_candidates(raw: str | None) -> list[str]:
-    """Deterministic POS-short UPC-A candidates.
+    """Deterministic shortened retail-barcode candidates.
 
     Only generates candidates; callers must require an exact authoritative hit.
-    - 11 digits may be UPC-A body missing its check digit.
+    - 12 digits may be an EAN-13 body missing its check digit.
+    - 11 digits may be a UPC-A body missing its check digit.
     - 10 digits may be a leading-zero UPC-A body missing its check digit.
     Leading-zero-only variants are already handled by numeric equivalence.
     """
     s=str(raw or '').strip()
     out=[]
-    if re.fullmatch(r'\d{11}',s):
+    if re.fullmatch(r'\d{12}',s):
+        cd=_ean13_check_digit(s)
+        if cd is not None:
+            out.append(s+cd)
+    elif re.fullmatch(r'\d{11}',s):
         cd=_upca_check_digit(s)
         if cd is not None:
             out.append(s+cd)
