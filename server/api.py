@@ -732,26 +732,30 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
             core_rows=cur.fetchall()
         except Exception as exc:
             warnings.append('CORE_HISTORY_PRIMARY_FAILED: '+str(exc))
-            cur.execute(
-                """SELECT batch_id,batch_label,processing_status,
-                          upload_started_at,completed_at,file_count,
-                          source_row_count,error_count
-                   FROM ingest_batch
-                   WHERE processing_status NOT IN (
-                         'API_UPLOADING',
-                         'INGESTED_PENDING_QA',
-                         'RAW_RELEASED',
-                         'RELEASED',
-                         'PHASE2C_READY'
-                   )
-                   ORDER BY batch_id DESC
-                   LIMIT %s""",
-                (scan_limit,),
-            )
-            core_rows=cur.fetchall()
-            for row in core_rows:
-                row['notes']=None
-            warnings.append('CORE_HISTORY_FALLBACK_USED')
+            try:
+                cur.execute(
+                    """SELECT batch_id,batch_label,processing_status,
+                              upload_started_at,completed_at,file_count,
+                              source_row_count,error_count
+                       FROM ingest_batch
+                       WHERE processing_status NOT IN (
+                             'API_UPLOADING',
+                             'INGESTED_PENDING_QA',
+                             'RAW_RELEASED',
+                             'RELEASED',
+                             'PHASE2C_READY'
+                       )
+                       ORDER BY batch_id DESC
+                       LIMIT %s""",
+                    (scan_limit,),
+                )
+                core_rows=cur.fetchall()
+                for row in core_rows:
+                    row['notes']=None
+                warnings.append('CORE_HISTORY_FALLBACK_USED')
+            except Exception as fallback_exc:
+                core_rows=[]
+                warnings.append('CORE_HISTORY_FALLBACK_FAILED: '+str(fallback_exc))
 
         batches=[]
         for row in core_rows:
