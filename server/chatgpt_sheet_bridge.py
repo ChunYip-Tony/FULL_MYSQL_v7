@@ -40,6 +40,140 @@ def bridge_enabled() -> bool:
     return _truthy(os.environ.get("FULLMYSQL_CHATGPT_SHEET_ENABLED"))
 
 
+def enqueue_chatgpt_publish(
+    batch_id: int,
+    *,
+    pipeline_name: str,
+    code_version: str,
+    requested_by: str,
+    source_pipeline_run_id: int | None = None,
+    reason: str = "ASYNC_CHATGPT_SHEET_PUBLISH",
+) -> dict[str, Any]:
+    """Queue a durable, non-blocking Sheet publish job.
+
+    Phase 3 and Quick Check serving are deliberately independent of this queue.
+    A slow or failed Google/Apps Script transport must never roll back or hold a
+    committed MySQL serving snapshot.
+    """
+    bid=int(batch_id)
+    if not bridge_enabled():
+        return {
+            "status":"DISABLED",
+            "batch_id":bid,
+            "reason":"FULLMYSQL_CHATGPT_SHEET_ENABLED is not enabled.",
+        }
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True, buffered=True)
+        try:
+            cur.execute(
+                """SELECT pipeline_run_id,processing_status,code_version
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='CHATGPT_SHEET_PUBLISH'
+                     AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                     AND code_version=%s
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1""",
+                (bid,pipeline_name,code_version),
+            )
+            active=cur.fetchone()
+            if active:
+                conn.commit()
+                return {
+                    "status":"ALREADY_QUEUED" if str(active.get("processing_status") or "").upper()=="QUEUED" else "ALREADY_ACTIVE",
+                    "batch_id":bid,
+                    "publish_run_id":int(active["pipeline_run_id"]),
+                    "processing_status":active.get("processing_status"),
+                    "code_version":active.get("code_version"),
+                }
+
+            cur.execute(
+                """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='CHATGPT_SHEET_PUBLISH'""",
+                (bid,pipeline_name),
+            )
+            run_number=int((cur.fetchone() or {}).get("next_run") or 1)
+            detail={
+                "requested_by":requested_by,
+                "reason":reason,
+                "queued_at":datetime.now(timezone.utc).isoformat(),
+                "source_pipeline_run_id":source_pipeline_run_id,
+                "async_nonblocking":True,
+            }
+            cur.execute(
+                """INSERT INTO pipeline_run
+                   (batch_id,pipeline_name,stage_name,run_number,
+                    processing_status,code_version,detail_json)
+                   VALUES (%s,%s,'CHATGPT_SHEET_PUBLISH',%s,'QUEUED',%s,%s)""",
+                (
+                    bid,
+                    pipeline_name,
+                    run_number,
+                    code_version,
+                    json.dumps(detail,ensure_ascii=False,default=str),
+                ),
+            )
+            publish_run_id=int(cur.lastrowid)
+            conn.commit()
+            return {
+                "status":"QUEUED",
+                "batch_id":bid,
+                "publish_run_id":publish_run_id,
+                "processing_status":"QUEUED",
+                "code_version":code_version,
+                "source_pipeline_run_id":source_pipeline_run_id,
+            }
+        finally:
+            cur.close()
+
+
+def chatgpt_publish_status(batch_id: int, *, pipeline_name: str) -> dict[str, Any]:
+    bid=int(batch_id)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT pipeline_run_id,processing_status,code_version,
+                          started_at,completed_at,error_count,detail_json
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='CHATGPT_SHEET_PUBLISH'
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1""",
+                (bid,pipeline_name),
+            )
+            row=cur.fetchone()
+        finally:
+            cur.close()
+    if not row:
+        return {"status":"NONE","batch_id":bid}
+    detail={}
+    try:
+        detail=json.loads(row.get("detail_json") or "{}")
+    except Exception:
+        detail={}
+    return {
+        "status":str(row.get("processing_status") or "").upper(),
+        "batch_id":bid,
+        "publish_run_id":int(row.get("pipeline_run_id") or 0),
+        "code_version":row.get("code_version"),
+        "started_at":row.get("started_at"),
+        "completed_at":row.get("completed_at"),
+        "error_count":int(row.get("error_count") or 0),
+        "publish_result":detail.get("publish_result"),
+        "failure_error":detail.get("error"),
+        "worker":detail.get("worker"),
+        "heartbeat_at":detail.get("heartbeat_at"),
+        "async_nonblocking":True,
+    }
+
+
 def _bridge_transport() -> str:
     explicit = os.environ.get("FULLMYSQL_CHATGPT_SHEET_TRANSPORT", "").strip().upper()
     if explicit:
