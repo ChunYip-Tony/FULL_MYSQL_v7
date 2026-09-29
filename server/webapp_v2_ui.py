@@ -633,7 +633,7 @@ body{
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
-/* v7.0.195 completed-batch QA breakdown */
+/* v7.0.197 completed-batch QA breakdown */
 #upload .qa-breakdown{
   margin:8px 0 3px;padding:9px;border:1px solid #e2b0aa;border-radius:10px;
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
@@ -670,8 +670,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.195</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.195</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.197</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.197</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -760,7 +760,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.195</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.197</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -837,13 +837,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.195';
+  el.textContent='App v7.0.197';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.195'){
-      el.textContent='UI 7.0.195 · API '+rv;
+    if(rv&&rv!=='7.0.197'){
+      el.textContent='UI 7.0.197 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -1129,7 +1129,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.195')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.197')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1570,19 +1570,38 @@ async function loadWebUploadActive(){
 }
 async function startWebUpload(){
   if(!webUploadFiles.length){$('uploadMsg').textContent='Choose at least one raw file.';return}
-  $('uploadStart').disabled=true;$('uploadClear').disabled=true;$('uploadMsg').textContent='Creating upload batch…';
-  let committed=false;
+  $('uploadStart').disabled=true;$('uploadClear').disabled=true;
+  let committed=false,currentFile='';
   try{
-    let create=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Web raw upload '+new Date().toLocaleString()})});
-    webUploadSession=create.session_id;
+    // Reuse an open API_UPLOADING batch after a transport/parser failure.
+    // add_file is idempotent by SHA inside the batch, so retrying the selected
+    // files cannot duplicate files that were already accepted.
+    if(webUploadSession){
+      try{
+        let existing=await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession),{cache:'no-store'});
+        let st=String(existing?.batch?.processing_status||'').toUpperCase();
+        if(st!=='API_UPLOADING')webUploadSession=null;
+        else{
+          renderWebUploadStatus(existing);
+          $('uploadMsg').textContent='Retrying open upload batch…';
+        }
+      }catch(_stale){
+        webUploadSession=null;
+      }
+    }
+    if(!webUploadSession){
+      $('uploadMsg').textContent='Creating upload batch…';
+      let create=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:'Web raw upload '+new Date().toLocaleString()})});
+      webUploadSession=create.session_id;
+    }
     $('uploadStatusCard').classList.remove('hide');
     for(let i=0;i<webUploadFiles.length;i++){
-      let f=webUploadFiles[i];
+      let f=webUploadFiles[i];currentFile=f.name;
       $('uploadMsg').textContent='Uploading '+(i+1)+'/'+webUploadFiles.length+' · '+f.name;
       $('uploadProgressBar').style.width=Math.round(((i+.3)/webUploadFiles.length)*30)+'%';
       let fd=new FormData();fd.append('file',f,f.name);
       await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/files',{method:'POST',body:fd});
-      let current=await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession));
+      let current=await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession),{cache:'no-store'});
       renderWebUploadStatus(current);
     }
     $('uploadMsg').textContent='Files uploaded. Committing batch…';
@@ -1592,9 +1611,16 @@ async function startWebUpload(){
     await loadWebUploadRecent();
     await pollWebUpload(webUploadSession);
   }catch(e){
-    $('uploadMsg').textContent=e.message;
+    // Do NOT auto-abort a new batch when one file upload fails. Keeping the
+    // API_UPLOADING session open lets the user retry the same selected MVT
+    // file and preserves any files already accepted into the batch.
+    let msg=(e?.message||String(e));
+    $('uploadMsg').textContent='Upload failed'+(currentFile?' · '+currentFile:'')+': '+msg+' · Batch kept open; press Upload Batch to retry.';
     if(webUploadSession&&!committed){
-      try{await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession)+'/abort',{method:'POST'})}catch{}
+      try{
+        let current=await api('/v1/web-upload/batches/'+encodeURIComponent(webUploadSession),{cache:'no-store'});
+        renderWebUploadStatus(current);
+      }catch{}
     }
     await loadWebUploadRecent();
   }finally{
