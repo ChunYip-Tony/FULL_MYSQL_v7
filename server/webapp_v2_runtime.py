@@ -672,6 +672,13 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                     "readiness":row.get("quick_check_status"),
                     "upc_role":_upc_role(row),
                     "selling_uom":row.get("selling_uom"),
+                    "current_price":row.get("current_price"),
+                    "current_price_type":row.get("current_price_type"),
+                    "current_price_source":row.get("current_price_source"),
+                    "current_price_asof_date":row.get("current_price_asof_date"),
+                    "sales_dollars_7d":row.get("sales_dollars_7d"),
+                    "pos_qty_7d":row.get("pos_qty_7d"),
+                    "sales_days_7d":row.get("sales_days_7d"),
                     "relevance":rel,
                     "qty_28d":m28["sold_quantity"],
                     "qty_28d_uom":row.get("selling_uom"),
@@ -828,6 +835,13 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                         else ("COOK / SERVICE" if prefix=="249" else "RELATED")
                     ),
                     "selling_uom":child.get("selling_uom"),
+                    "current_price":child.get("current_price"),
+                    "current_price_type":child.get("current_price_type"),
+                    "current_price_source":child.get("current_price_source"),
+                    "current_price_asof_date":child.get("current_price_asof_date"),
+                    "sales_dollars_7d":child.get("sales_dollars_7d"),
+                    "pos_qty_7d":child.get("pos_qty_7d"),
+                    "sales_days_7d":child.get("sales_days_7d"),
                     "qty_28d":m28.get("sold_quantity"),
                     "qty_28d_uom":display_uom,
                     "supported_days_28d":m28.get("supported_day_count"),
@@ -856,6 +870,24 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                 "family_article_number":anchor.get("main_article_number"),
                 "family_name":anchor.get("family_description"),
                 "category":anchor.get("product_class"),
+                "current_price":anchor.get("current_price"),
+                "current_price_type":anchor.get("current_price_type"),
+                "current_price_source":anchor.get("current_price_source"),
+                "current_price_asof_date":anchor.get("current_price_asof_date"),
+                "current_price_basis":"CANONICAL_240_GROUP_ANCHOR",
+                "sales_dollars_7d":sum(
+                    (_d(x.get("sales_dollars_7d")) for x in group_rows),
+                    Decimal("0"),
+                ),
+                "pos_qty_7d":(
+                    sum((_d(x.get("pos_qty_7d")) for x in group_rows),Decimal("0"))
+                    if len({
+                        _safe_qty_uom(x.get("ean_upc"),x.get("selling_uom"))
+                        for x in group_rows
+                        if _safe_qty_uom(x.get("ean_upc"),x.get("selling_uom"))
+                    })==1
+                    else None
+                ),
                 "readiness":(
                     "READY" if "READY" in statuses
                     else ("QA_HOLD" if "QA_HOLD" in statuses else "HISTORICAL_ONLY")
