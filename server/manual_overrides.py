@@ -203,6 +203,30 @@ SEED_OVERRIDES = (
         "base_qty_per_selling_unit": None,
         "source_note": "BATCH13_OH_IDENTITY_RULE_20260928: User confirmed that the correct article for an ambiguous selling UPC is the candidate present in the OH report. Seafood_Master_Inventory_OH and sf-oh-091826-1230 lineage contain Article 3480186 with description COOKED PDTO SHRIMP RING WITH SAUCE and positive OH, matching POS UPC 7004121200 description COOKED PDTO SHRIMP RING WITH SAUCE 12/10OZ. Identity only; Selling UOM is not inferred by this OH rule.",
     },
+    {
+        "ean_upc": "75339325301",
+        "article_number": None,
+        "selling_uom_code": "PACK",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("2"),
+        "source_note": "USER_CONFIRMED_UOM_20260929: exact UPC authority; sold by PACK and 1 PACK = 2 LB. This supersedes stale conflicting current/manual UOM rows without changing product identity.",
+    },
+    {
+        "ean_upc": "4029549384",
+        "article_number": "1341159",
+        "selling_uom_code": "PACK",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("2"),
+        "source_note": "USER_CONFIRMED_UOM_20260929: ALL NATURE INDIAN MACKEREL HASA HASA 20/2LB; exact UPC authority; sold by PACK and 1 PACK = 2 LB. Supersedes stale EA/manual UOM state.",
+    },
+    {
+        "ean_upc": "4029550430",
+        "article_number": "1348044",
+        "selling_uom_code": "PACK",
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "USER_CONFIRMED_UOM_20260929: COOKED CLAM MEAT 30/12OZ; exact UPC authority; sold by PACK. No weight/base conversion is inferred.",
+    },
  ) + USER_CONFIRMED_UOM_REVIEW_20260926 + USER_CONFIRMED_UOM_REVIEW_20260927
 
 
