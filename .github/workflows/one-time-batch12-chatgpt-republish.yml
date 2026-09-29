@@ -21,19 +21,19 @@ jobs:
             body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
             echo "$body"
             pass="$(BODY="$body" python - <<'PY'
-import json, os
-try:
-    p=json.loads(os.environ.get('BODY') or '{}')
-except Exception:
-    p={}
-ok=(
-    p.get('ok') is True
-    and p.get('version') == '7.0.188-single-service'
-    and p.get('worker_version') == '7.0.188-single-service'
-    and p.get('worker_healthy') is True
-)
-print('1' if ok else '0')
-PY
+          import json, os
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          ok=(
+              p.get('ok') is True
+              and p.get('version') == '7.0.188-single-service'
+              and p.get('worker_version') == '7.0.188-single-service'
+              and p.get('worker_healthy') is True
+          )
+          print('1' if ok else '0')
+          PY
 )"
             if [ "$pass" = "1" ]; then
               consecutive=$((consecutive+1))
@@ -73,11 +73,11 @@ PY
 
             if [ "$curl_rc" = "0" ] && [ "$http_code" = "200" ]; then
               read -r version_ok run_id session_id < <(python - <<'PY'
-import json
-p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
-version_ok='1' if p.get('code_version') == '7.0.188-single-service' and p.get('version_fence_pass') is True else '0'
-print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
-PY
+          import json
+          p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          version_ok='1' if p.get('code_version') == '7.0.188-single-service' and p.get('version_fence_pass') is True else '0'
+          print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
+          PY
 )
               if [ "$version_ok" = "1" ] && [ -n "$run_id" ] && [ -n "$session_id" ]; then
                 accepted=1
@@ -87,14 +87,14 @@ PY
 
             if [ "$http_code" = "409" ]; then
               reason="$(python - <<'PY'
-import json
-try:
-    p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
-except Exception:
-    p={}
-d=p.get('detail') or {}
-print(d.get('reason') or '')
-PY
+          import json
+          try:
+              p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          except Exception:
+              p={}
+          d=p.get('detail') or {}
+          print(d.get('reason') or '')
+          PY
 )"
               echo "REBUILD_BLOCK_REASON=$reason"
               if [ "$reason" = "ACTIVE_RUN_VERSION_MISMATCH" ]; then
@@ -118,15 +118,15 @@ PY
           for i in $(seq 1 180); do
             curl -fsS --max-time 30 "$base/v1/web-upload/batches/$session_id" -o /tmp/session.json
             state="$(RUN_ID="$run_id" python - <<'PY'
-import json, os
-rid=int(os.environ['RUN_ID'])
-p=json.load(open('/tmp/session.json', encoding='utf-8'))
-run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid), None)
-if not run:
-    print('MISSING||')
-else:
-    print(str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
-PY
+          import json, os
+          rid=int(os.environ['RUN_ID'])
+          p=json.load(open('/tmp/session.json', encoding='utf-8'))
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid), None)
+          if not run:
+              print('MISSING||')
+          else:
+              print(str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
+          PY
 )"
             echo "$state"
             status="${state%%|*}"
