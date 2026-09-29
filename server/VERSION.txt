@@ -1,5 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.182 Single-Service Edition
+Version: 7.0.183 Single-Service Edition
+
+
+v7.0.183 Service/Fried UPC Sales Lineage Repair:
+- Fixes 249 COOK / SERVICE (fried/service) UPC sales appearing as zero when raw POS EAN/UPC is present but the derived upc_id is NULL or stale.
+- Phase 3 7D/28D/30D metrics now read canonical upc_id OR exact/numeric-equivalent raw POS ean_upc for the selected selling UPC.
+- Current POS price and historical sweet-spot calculations use the same dual-lineage rule.
+- relink_history repairs stale/wrong derived upc_id values, not only NULL links, while preserving immutable RAW EAN/UPC provenance.
+- Web/mobile search quantities, family/group member quantities, price/sales trend, and promotion history read through the same raw-EAN fallback.
+- Quick Check daily sales, 14D performance, and source-period Sales Trend use the same service-UPC lineage rule.
+- POS daily backfill/residual tables repair stale exact-EAN links during Phase 3.
+- 240/245/247/249 grouping remains display-only; each member's sales stay UPC-specific and are never merged into the 240 metric.
 
 
 v7.0.182 QA HOLD Root-Cause Repair:
