@@ -1,5 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.178 Single-Service Edition
+Version: 7.0.182 Single-Service Edition
+
+
+v7.0.182 QA HOLD Root-Cause Repair:
+- Fixes ON_HAND snapshot dating: file coverage/filename/report snapshot date is authoritative; row-level Date is fallback only. This prevents false MOVEMENT_DAILY_COVERAGE_GAP blockers when a current OH snapshot contains older row-level dates.
+- Adds conservative UPC-A short-code resolution for 10/11-digit POS spellings. A checksum-derived alias is accepted only when the exact canonical UPC already exists; no duplicate selling UPC is created.
+- Active product identity repair can use existing canonical UPC-A aliases with Article Manual / official-report evidence while preserving canonical identity.
+- Adds exact confirmed Seafood Selling UOM authorities: 75339325301=PACK, 4029549384=PACK, 4029550430=PACK.
+- Adds confirmed cost conversions: 75339325301 1 PACK=2 LB; 4029549384 1 PACK=2 LB.
+- 4029550430 remains PACK-only with no guessed weight conversion.
+- Runtime/API/pipeline/UI version aligned to 7.0.182.
 
 
 v7.0.178 Current-Snapshot Phase 3 QA Rebuild:

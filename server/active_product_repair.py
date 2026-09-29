@@ -42,6 +42,29 @@ TRUSTED_UOM_RESOLUTION_METHODS = {
 }
 
 
+def _upca_check_digit(body11: str) -> str | None:
+    if not re.fullmatch(r'\d{11}', str(body11 or '')):
+        return None
+    digits=[int(x) for x in body11]
+    total=sum(digits[0::2])*3 + sum(digits[1::2])
+    return str((10-(total % 10)) % 10)
+
+
+def _upca_alias_candidates(raw: str | None) -> list[str]:
+    s=str(raw or '').strip()
+    out=[]
+    if re.fullmatch(r'\d{11}',s):
+        cd=_upca_check_digit(s)
+        if cd is not None:
+            out.append(s+cd)
+    elif re.fullmatch(r'\d{10}',s):
+        body='0'+s
+        cd=_upca_check_digit(body)
+        if cd is not None:
+            out.append(body+cd)
+    return out
+
+
 def _numeric_equiv_pred(column: str, value: str) -> tuple[str, tuple[Any, ...]]:
     key = _numeric_key(value)
     if key is None:
@@ -65,7 +88,39 @@ def _find_upc(cur, ean: str) -> dict[str, Any] | None:
             LIMIT 1""",
         (*params, ean),
     )
-    return cur.fetchone()
+    hit=cur.fetchone()
+    if hit:
+        return hit
+    for candidate in _upca_alias_candidates(ean):
+        cur.execute(
+            """SELECT upc_id,ean_upc,selling_description,record_status
+               FROM selling_upc
+               WHERE ean_upc=%s
+                 AND record_status='ACTIVE'
+               LIMIT 1""",
+            (candidate,),
+        )
+        hit=cur.fetchone()
+        if hit:
+            return hit
+    return None
+
+
+def _existing_upca_canonical(cur, raw: str) -> str | None:
+    """Return an exact existing canonical UPC-A candidate for a short POS spelling."""
+    for candidate in _upca_alias_candidates(raw):
+        cur.execute(
+            """SELECT ean_upc
+               FROM selling_upc
+               WHERE ean_upc=%s
+                 AND record_status='ACTIVE'
+               LIMIT 1""",
+            (candidate,),
+        )
+        row=cur.fetchone()
+        if row:
+            return str(row['ean_upc'])
+    return None
 
 
 def _is_manual_retired_upc(cur, ean: str) -> bool:
@@ -534,6 +589,12 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
     issues = list(by_key.values())
 
     target_keys = {_numeric_key(x['ean_upc']) for x in issues}
+    for item in issues:
+        canonical=_existing_upca_canonical(cur, item['ean_upc'])
+        if canonical:
+            key=_numeric_key(canonical)
+            if key:
+                target_keys.add(key)
     target_keys.discard(None)
     manual = _article_manual_candidates(cur, target_keys)
 
@@ -555,9 +616,21 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
             continue
 
         key = _numeric_key(ean)
-        mcands = manual.get(key or '', [])
+        canonical_alias=_existing_upca_canonical(cur, ean)
+        candidate_keys=[key] if key else []
+        if canonical_alias:
+            ckey=_numeric_key(canonical_alias)
+            if ckey:
+                candidate_keys.append(ckey)
+        mcands=[]
+        for ckey in dict.fromkeys(candidate_keys):
+            mcands.extend(manual.get(ckey or '', []))
         if mcands:
-            ok, detail = _apply_article_manual_candidate(cur, ean, mcands)
+            ok, detail = _apply_article_manual_candidate(
+                cur,
+                canonical_alias or ean,
+                mcands,
+            )
             if ok:
                 result['repaired_article_manual'] += 1
                 continue
@@ -565,14 +638,14 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         else:
             candidate_detail = {'source': 'ARTICLE_MANUAL', 'reason': 'NO_EXACT_UPC_EVIDENCE'}
 
-        ocands = _official_report_candidates(cur, ean)
+        ocands = _official_report_candidates(cur, canonical_alias or ean)
         families = sorted({int(x['family_id']) for x in ocands if x.get('family_id') is not None})
         if len(families) == 1:
             ok, why = _confirm_unique_family_link(
                 cur,
-                ean,
+                canonical_alias or ean,
                 families[0],
-                'ACTIVE_IDENTITY_REPAIR_OFFICIAL_REPORT_UNIQUE_FAMILY_V711',
+                'ACTIVE_IDENTITY_REPAIR_OFFICIAL_REPORT_UNIQUE_FAMILY_V7182',
                 {
                     'source': 'OFFICIAL_COMPANY_REPORT',
                     'observation_ids': [int(x['company_price_observation_id']) for x in ocands[:50]],

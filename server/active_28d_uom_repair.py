@@ -25,7 +25,7 @@ from normalize import (
     _source_token,
 )
 
-VERSION = "7.0.175-active-28d-uom-repair"
+VERSION = "7.0.182-active-28d-uom-repair"
 
 # Latest user-confirmed FULL MYSQL Seafood Selling-UOM authority.
 # Applies only to CURRENT-ACTIVE Seafood UPCs. Historical rows remain untouched.
@@ -64,6 +64,15 @@ def _is_current_seafood_upc(cur, upc_id: int) -> bool:
 # Structured Article Manual article-level unit declarations considered safe.
 # PAC is intentionally NOT treated as PACK.
 PURE_ARTICLE_UOMS = {"LB", "EA", "PACK"}
+
+# Exact user-confirmed non-prefix Seafood Selling UOM authorities.
+# These do not infer identity; they apply only after the UPC already exists in
+# current active Seafood product identity.
+USER_CONFIRMED_EXACT_SEAFOOD_UOM = {
+    "75339325301": "PACK",
+    "4029549384": "PACK",
+    "4029550430": "PACK",
+}
 
 
 def _active_selling_upcs(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str | None]:
@@ -371,7 +380,25 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
         upc_id = int(target["upc_id"])
         upc = str(target["ean_upc"])
 
-        # 0) Latest user-confirmed Seafood prefix authority. This outranks stale
+        # 0a) Exact user-confirmed non-prefix Seafood UOM authority.
+        exact_uom=USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
+        if exact_uom and _is_current_seafood_upc(cur, upc_id):
+            if _apply_uom(
+                cur,
+                upc_id,
+                exact_uom,
+                "USER_CONFIRMED_EXACT_SEAFOOD_UOM_V7182",
+            ):
+                result["repaired_source_supported"] += 1
+                result["repaired"].append({
+                    "upc": upc,
+                    "uom": exact_uom,
+                    "method": "USER_CONFIRMED_EXACT_SEAFOOD_UOM_V7182",
+                    "authority": "EXACT_USER_CONFIRMATION",
+                })
+                continue
+
+        # 0b) Latest user-confirmed Seafood prefix authority. This outranks stale
         # historical/current UOM observations for CURRENT-ACTIVE Seafood UPCs.
         if _authoritative_seafood_lb_prefix(upc) and _is_current_seafood_upc(cur, upc_id):
             if _apply_uom(
