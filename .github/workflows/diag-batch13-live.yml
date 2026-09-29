@@ -52,3 +52,10 @@ jobs:
               'files': p.get('files'),
           }, indent=2, default=str))
           PY
+
+          echo "=== RECENT ==="
+          curl -sS --max-time 30 "$base/v1/web-upload/recent?limit=12"
+          echo
+
+          echo "=== BATCH 14 QA ==="
+          curl -sS --max-time 30 -w "\nHTTP_STATUS=%{http_code}\n" "$base/v1/web-upload/batches/14/qa-summary"
