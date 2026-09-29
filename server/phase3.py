@@ -873,7 +873,9 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
     for sh in cur.fetchall():
         hmap = _sheet_header_map(cur, 'raw_on_hand', sh['sheet_id'], sh['header_row_number'])
         c_article = _pick_exact(hmap, ['Article', 'Article Number'])
-        c_upc = _pick_exact(hmap, ['UPC', 'EAN', 'Barcode', 'Sales Set'])
+        # FULL MYSQL identity rule: Sales Set # is not a UPC join key.
+        # Only explicit UPC/EAN/Barcode headers may populate selling identity.
+        c_upc = _pick_exact(hmap, ['UPC', 'EAN', 'Barcode'])
         c_merch = _pick_exact(hmap, ['Mdse Cat.', 'Mdse Cat', 'Merch. Cat.', 'Merch Cat', 'Merchandise Category'])
         # SAP stock/OH extracts use Unrestr. as the actual unrestricted stock.
         # Do NOT substring-match generic "Stock": that can select "Stock in Transit",
@@ -925,8 +927,15 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
                    (batch_id,file_id,sheet_id,raw_id,source_row_number,observation_date,article_number,article_id,family_id,
                     ean_upc,upc_id,on_hand_quantity,uom_code,source_type)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ON_HAND')
-                   ON DUPLICATE KEY UPDATE article_id=VALUES(article_id),family_id=VALUES(family_id),upc_id=VALUES(upc_id),
-                    on_hand_quantity=VALUES(on_hand_quantity),uom_code=VALUES(uom_code),observation_date=VALUES(observation_date)""",
+                   ON DUPLICATE KEY UPDATE
+                    article_number=VALUES(article_number),
+                    article_id=VALUES(article_id),
+                    family_id=VALUES(family_id),
+                    ean_upc=VALUES(ean_upc),
+                    upc_id=VALUES(upc_id),
+                    on_hand_quantity=VALUES(on_hand_quantity),
+                    uom_code=VALUES(uom_code),
+                    observation_date=VALUES(observation_date)""",
                 (batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number'], obs_date, article_num, article_id,
                  family_id, ean, upc_id, qty, uom),
             )
@@ -1949,28 +1958,16 @@ def _latest_inventory(
     article_id: int | None,
     family_id: int | None,
 ) -> dict[str, Any] | None:
-    # Prefer the most specific inventory owner. An article-level SAP OH row must
-    # not be borrowed from a sibling/sub-article merely because both share a family.
-    cur.execute(
-        """SELECT file_id,on_hand_quantity,uom_code,observation_date,
-                  article_id,article_number,family_id,upc_id,ean_upc
-           FROM inventory_observation
-           WHERE upc_id=%s AND on_hand_quantity IS NOT NULL
-           ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
-        (upc_id,),
-    )
-    r = cur.fetchone()
-    if r:
-        r['scope_type'] = 'UPC'
-        return r
-
+    # SAP OH is owned by Article when Article identity is present. A source row
+    # may also carry UPC-like metadata, but movement_history rolls inventory by
+    # Article/Family, not UPC. Treating an Article-owned OH row as UPC scope
+    # creates a false UPC_SCOPE_HAS_NO_EXACT_MOVEMENT_KEY blocker.
     if article_id is not None:
         cur.execute(
             """SELECT file_id,on_hand_quantity,uom_code,observation_date,
                       article_id,article_number,family_id,upc_id,ean_upc
                FROM inventory_observation
                WHERE article_id=%s
-                 AND upc_id IS NULL
                  AND on_hand_quantity IS NOT NULL
                ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
             (article_id,),
@@ -1979,6 +1976,24 @@ def _latest_inventory(
         if r:
             r['scope_type'] = 'ARTICLE'
             return r
+
+    # UPC scope is only a fallback for a truly UPC-owned inventory row with no
+    # Article owner. Such rows still fail closed for post-anchor movement because
+    # movement_history has no exact UPC key.
+    cur.execute(
+        """SELECT file_id,on_hand_quantity,uom_code,observation_date,
+                  article_id,article_number,family_id,upc_id,ean_upc
+           FROM inventory_observation
+           WHERE upc_id=%s
+             AND article_id IS NULL
+             AND on_hand_quantity IS NOT NULL
+           ORDER BY observation_date DESC, inventory_observation_id DESC LIMIT 1""",
+        (upc_id,),
+    )
+    r = cur.fetchone()
+    if r:
+        r['scope_type'] = 'UPC'
+        return r
 
     # Family-only fallback is reserved for rows that truly have no article owner.
     if family_id is not None:
@@ -2233,6 +2248,16 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
                            'activity_basis': activity_basis,
                            'recent_pos_qty_28_valid_days': str(m28['qty']),
                            'recent_pos_valid_day_count': m28['days'],
+                           'selling_uom': selling_uom,
+                           'base_uom': base_uom,
+                           'base_qty_per_selling_unit': str(factor) if factor is not None else None,
+                           'cost_source': cost.get('source') if cost else None,
+                           'cost_uom': cost.get('base_uom') if cost else None,
+                           'inventory_scope_type': inv.get('scope_type') if inv else None,
+                           'inventory_article_number': inv.get('article_number') if inv else None,
+                           'inventory_rollforward_blockers': inv_position.get('blockers') if inv_position else None,
+                           'inventory_missing_movement_days': inv_position.get('missing_movement_days') if inv_position else None,
+                           'inventory_uom_mismatches': inv_position.get('uom_mismatches') if inv_position else None,
                        })
         else:
             historical_rows += 1
