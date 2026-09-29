@@ -633,7 +633,7 @@ body{
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
-/* v7.0.198 completed-batch QA breakdown */
+/* v7.0.199 completed-batch QA breakdown */
 #upload .qa-breakdown{
   margin:8px 0 3px;padding:9px;border:1px solid #e2b0aa;border-radius:10px;
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
@@ -670,8 +670,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.198</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.198</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.199</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.199</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -760,7 +760,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.198</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.199</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -821,7 +821,7 @@ body{
 const $=x=>document.getElementById(x),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=(v,d=2)=>{if(v===null||v===undefined||v==='')return '—';let n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):String(v)},money=v=>v===null||v===undefined?'—':'$'+fmt(v,2);
 const today=()=>new Date().toLocaleDateString('en-CA'),nextwd=(s,t)=>{let d=new Date(s+'T12:00:00'),x=(t-d.getDay()+7)%7;if(!x)x=7;d.setDate(d.getDate()+x);return d.toLocaleDateString('en-CA')};const dayName=s=>{if(!s)return '—';return new Intl.DateTimeFormat('en-US',{weekday:'long'}).format(new Date(s+'T12:00:00'))};const promoRange=p=>p.weekday_range||((p.start_weekday||dayName(p.start_date))+' → '+(p.end_weekday||dayName(p.end_date)));
-let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null,deletedUploadBatchIds=new Set();
+let cupc=null,uback='core',pifamily=null,pitems=[],ohLoaded=false,webUploadFiles=[],webUploadSession=null,webUploadPoll=null,webUploadBusy=false,webUploadStartedAt=0,webUploadTicker=null,deletedUploadBatchIds=new Set();
 async function api(p,o={}){
   let r=await fetch(p,o),b=null;
   try{b=await r.json()}catch{}
@@ -837,13 +837,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.198';
+  el.textContent='App v7.0.199';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.198'){
-      el.textContent='UI 7.0.198 · API '+rv;
+    if(rv&&rv!=='7.0.199'){
+      el.textContent='UI 7.0.199 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -1129,7 +1129,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.198')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.199')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1472,6 +1472,13 @@ async function loadWebUploadRecent(){
 }
 async function pollWebUpload(session){
   if(!session)return;
+  // Never overwrite the local PROCESSING state while the browser's file POST
+  // is still outstanding. Backend session_status cannot expose a file until
+  // add_file commits, so polling during the POST falsely redraws Files=0.
+  if(webUploadBusy){
+    webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
+    return;
+  }
   webUploadSession=session;
   if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
   try{
@@ -1571,6 +1578,14 @@ async function loadWebUploadActive(){
 async function startWebUpload(){
   if(!webUploadFiles.length){$('uploadMsg').textContent='Choose at least one raw file.';return}
   $('uploadStart').disabled=true;$('uploadClear').disabled=true;
+  webUploadBusy=true;webUploadStartedAt=Date.now();
+  if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
+  if(webUploadTicker){clearInterval(webUploadTicker);webUploadTicker=null}
+  webUploadTicker=setInterval(()=>{
+    if(!webUploadBusy)return;
+    let sec=Math.max(0,Math.floor((Date.now()-webUploadStartedAt)/1000));
+    $('uploadMsg').textContent='Uploading / parsing '+(currentFile||'file')+' · '+sec+'s elapsed · keep this page open';
+  },1000);
   let committed=false,currentFile='';
   try{
     // Reuse an open API_UPLOADING batch after a transport/parser failure.
@@ -1638,6 +1653,8 @@ async function startWebUpload(){
     }
     await loadWebUploadRecent();
   }finally{
+    webUploadBusy=false;
+    if(webUploadTicker){clearInterval(webUploadTicker);webUploadTicker=null}
     $('uploadStart').disabled=false;$('uploadClear').disabled=false;
   }
 }
@@ -1648,7 +1665,7 @@ $('uploadStart').onclick=startWebUpload;
 $('uploadRefresh').onclick=()=>{loadUploadRuntimeVersion();loadWebUploadActive();loadLatestReferenceUploads();loadWebUploadCalendar();loadWebUploadRecent()};
 
 function refreshUploadStatusAfterResume(){
-  if(!document.querySelector('#upload.screen.on'))return;
+  if(!document.querySelector('#upload.screen.on')||webUploadBusy)return;
   if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
   loadUploadRuntimeVersion();
   loadWebUploadActive();
