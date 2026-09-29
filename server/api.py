@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.159-single-service'
+VERSION='7.0.160-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -519,13 +519,28 @@ def web_upload_recent(request:Request,limit:int=8):
         # workflow. Optional Phase2C/Phase3/pipeline data is enriched later and
         # must never prevent basic upload history from rendering.
         cur.execute(
-            """SELECT batch_id,batch_label,processing_status,
-                      upload_started_at,completed_at,file_count,
-                      source_row_count,error_count,notes
-               FROM ingest_batch
-               ORDER BY batch_id DESC
+            """SELECT ib.batch_id,ib.batch_label,ib.processing_status,
+                      ib.upload_started_at,ib.completed_at,ib.file_count,
+                      ib.source_row_count,ib.error_count,ib.notes
+               FROM ingest_batch ib
+               WHERE ib.processing_status NOT IN (
+                         'API_UPLOADING',
+                         'INGESTED_PENDING_QA',
+                         'RAW_RELEASED',
+                         'RELEASED',
+                         'PHASE2C_READY'
+                     )
+                 AND NOT EXISTS (
+                     SELECT 1
+                     FROM pipeline_run active
+                     WHERE active.batch_id=ib.batch_id
+                       AND active.pipeline_name=%s
+                       AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                       AND active.processing_status IN ('QUEUED','STARTED')
+                 )
+               ORDER BY ib.batch_id DESC
                LIMIT %s""",
-            (scan_limit,),
+            (API_PIPELINE,scan_limit),
         )
 
         batches=[]
