@@ -1,5 +1,5 @@
 from __future__ import annotations
-import hashlib, json, uuid
+import hashlib, json, os, time, uuid
 from datetime import date, datetime
 from typing import Any
 
@@ -7,8 +7,9 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.167-single-service'
+API_VERSION='7.0.168-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
+STATUS_HEARTBEAT_FRESH_SECONDS=max(30,min(120,int(os.environ.get('FULLMYSQL_STATUS_HEARTBEAT_FRESH_SECONDS','45'))))
 
 
 def _json_dump(v):
@@ -225,7 +226,7 @@ def session_status(session_id: str) -> dict[str,Any]:
         files.sort(key=lambda x: int(x.get('file_id') or 0))
         cur.execute(
             """SELECT pipeline_run_id,stage_name,processing_status,started_at,completed_at,
-                      error_count,detail_json
+                      error_count,code_version,detail_json
                FROM pipeline_run
                WHERE batch_id=%s AND pipeline_name=%s""",
             (bid,API_PIPELINE),
@@ -238,16 +239,40 @@ def session_status(session_id: str) -> dict[str,Any]:
                 detail={}
             run_status=str(run.get('processing_status') or '').upper()
             last_stage=detail.get('phase3_stage')
-            # A checkpoint from a stopped/completed run is historical evidence,
-            # not proof that Phase 3 is currently executing.
+            heartbeat_epoch=detail.get('heartbeat_epoch')
+            heartbeat_age_seconds=None
+            try:
+                if heartbeat_epoch is not None:
+                    heartbeat_age_seconds=max(0,int(time.time())-int(heartbeat_epoch))
+            except Exception:
+                heartbeat_age_seconds=None
+            code_version=str(run.get('code_version') or '')
+            code_version_matches=(not code_version) or code_version==API_VERSION
+            heartbeat_fresh=(
+                heartbeat_age_seconds is not None
+                and heartbeat_age_seconds <= STATUS_HEARTBEAT_FRESH_SECONDS
+            )
+            run['heartbeat_at']=detail.get('heartbeat_at')
+            run['heartbeat_epoch']=heartbeat_epoch
+            run['heartbeat_age_seconds']=heartbeat_age_seconds
+            run['heartbeat_fresh']=heartbeat_fresh
+            run['worker']=detail.get('worker')
+            run['code_version_matches_runtime']=code_version_matches
+            # STARTED alone is not proof of execution. Expose a live Phase 3
+            # stage only when the current-version worker heartbeat is fresh.
             run['phase3_stage']=(
                 last_stage
                 if run_status in {'STARTED','PAUSE_REQUESTED'}
+                and heartbeat_fresh
+                and code_version_matches
                 else None
             )
             run['last_phase3_stage']=last_stage or detail.get('last_phase3_stage')
             run['phase3_stage_live']=bool(
-                last_stage and run_status in {'STARTED','PAUSE_REQUESTED'}
+                last_stage
+                and run_status in {'STARTED','PAUSE_REQUESTED'}
+                and heartbeat_fresh
+                and code_version_matches
             )
             run['failure_error']=detail.get('error') if run_status in {'FAILED','FAILED_QA','QA_HOLD','ABORTED'} else None
             run['failure_stage']=detail.get('failure_stage') or detail.get('last_phase3_stage')
@@ -272,29 +297,36 @@ def session_status(session_id: str) -> dict[str,Any]:
         None,
     )
     run_status=str((latest_phase3_run or {}).get('processing_status') or '').upper()
-    live_stage=(
-        (latest_phase3_run or {}).get('phase3_stage')
-        if run_status in {'STARTED','PAUSE_REQUESTED'}
-        else None
-    )
+    heartbeat_age_seconds=(latest_phase3_run or {}).get('heartbeat_age_seconds')
+    heartbeat_fresh=bool((latest_phase3_run or {}).get('heartbeat_fresh'))
+    code_version_matches=bool((latest_phase3_run or {}).get('code_version_matches_runtime',True))
+    live_stage=(latest_phase3_run or {}).get('phase3_stage')
 
-    phase3_running=run_status=='STARTED'
+    phase3_running=(
+        run_status=='STARTED'
+        and heartbeat_fresh
+        and code_version_matches
+    )
     resume_allowed=False
     pipeline_display=batch_status
     phase3_display=(p3 or {}).get('result_status') if p3 else None
 
     if not p3 and batch_status=='PHASE2C_READY':
         if run_status=='QUEUED':
-            pipeline_display='PHASE3_QUEUED'
-            phase3_display='QUEUED'
-        elif run_status=='STARTED':
+            pipeline_display='PHASE3_RECOVERING' if (latest_phase3_run or {}).get('recovery_reason') else 'PHASE3_QUEUED'
+            phase3_display='AUTO-RESUME QUEUED' if (latest_phase3_run or {}).get('recovery_reason') else 'QUEUED'
+        elif run_status=='STARTED' and phase3_running:
             pipeline_display='PHASE3_RUNNING'
             phase3_display=live_stage or 'RUNNING'
+        elif run_status=='STARTED':
+            # A STARTED row with a stale/missing heartbeat or a different code
+            # version is an orphaned execution record. The worker recovery loop
+            # will requeue it automatically; do not ask the user to Resume.
+            pipeline_display='PHASE3_RECOVERING'
+            phase3_display='WORKER RESTART DETECTED · AUTO-RESUME'
         elif run_status=='PAUSE_REQUESTED':
-            # Pause is no longer a user-supported action. Treat any legacy
-            # in-flight pause request as stopped/recovery state in the UI.
-            pipeline_display='PHASE3_STOPPED'
-            phase3_display='STOPPING · RESUME WHEN STOPPED'
+            pipeline_display='PHASE3_RECOVERING'
+            phase3_display='LEGACY PAUSE STATE · AUTO-RESUME'
         elif run_status in {'PAUSED','FAILED','FAILED_QA','QA_HOLD','ABORTED','COMPLETED'}:
             pipeline_display='PHASE3_STOPPED'
             phase3_display='STOPPED · RESUME REQUIRED'
@@ -322,6 +354,13 @@ def session_status(session_id: str) -> dict[str,Any]:
         'resume_allowed':resume_allowed,
         'user_action':'RESUME_PHASE3' if resume_allowed else 'NONE',
         'pipeline_run_id':(latest_phase3_run or {}).get('pipeline_run_id'),
+        'worker':(latest_phase3_run or {}).get('worker'),
+        'run_code_version':(latest_phase3_run or {}).get('code_version'),
+        'code_version_matches_runtime':code_version_matches,
+        'heartbeat_at':(latest_phase3_run or {}).get('heartbeat_at'),
+        'heartbeat_age_seconds':heartbeat_age_seconds,
+        'heartbeat_fresh':heartbeat_fresh,
+        'heartbeat_fresh_seconds':STATUS_HEARTBEAT_FRESH_SECONDS,
         'failure_error':(latest_phase3_run or {}).get('failure_error'),
         'failure_stage':(latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage'),
         'recovery_reason':(latest_phase3_run or {}).get('recovery_reason'),
