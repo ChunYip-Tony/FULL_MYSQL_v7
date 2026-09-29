@@ -646,6 +646,7 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
 
     reason_counts={}
     reason_samples={}
+    reason_upcs={}
     diagnostic_counts={}
     hold_samples=[]
     hold_source='QUICK_CHECK_CURRENT'
@@ -669,7 +670,10 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             for reason in reasons:
                 reason_counts[reason]=reason_counts.get(reason,0)+1
                 samples=reason_samples.setdefault(reason,[])
+                all_upcs=reason_upcs.setdefault(reason,[])
                 upc=str(row.get('ean_upc') or '')
+                if upc and upc not in all_upcs:
+                    all_upcs.append(upc)
                 if upc and upc not in samples and len(samples)<8:
                     samples.append(upc)
             if len(hold_samples)<12:
@@ -704,7 +708,10 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             for reason in reasons:
                 reason_counts[reason]=reason_counts.get(reason,0)+1
                 samples=reason_samples.setdefault(reason,[])
+                all_upcs=reason_upcs.setdefault(reason,[])
                 upc=str(row.get('entity_key') or '')
+                if upc and upc not in all_upcs:
+                    all_upcs.append(upc)
                 if upc and upc not in samples and len(samples)<8:
                     samples.append(upc)
             if len(hold_samples)<12:
@@ -761,6 +768,7 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
         'quick_check':{
             'reason_counts':reason_counts,
             'reason_samples':reason_samples,
+            'reason_upcs':reason_upcs,
             'diagnostic_counts':diagnostic_counts,
             'hold_samples':hold_samples,
             'reason_source':hold_source,
