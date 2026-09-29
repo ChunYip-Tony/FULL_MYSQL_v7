@@ -1245,6 +1245,8 @@ def family_info(family_key: str) -> dict[str,Any]:
                 "readiness":row.get("quick_check_status"),
                 "current_price":row.get("current_price"),
                 "current_price_type":row.get("current_price_type"),
+                "current_price_source":row.get("current_price_source"),
+                "current_price_asof_date":row.get("current_price_asof_date"),
                 "selling_uom":row.get("selling_uom"),
                 "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
                 "upc_role":_upc_role(row),
@@ -1323,6 +1325,8 @@ def upc_info(upc: str) -> dict[str,Any]:
         "family_article_name":row.get("family_description"),
         "current_price":row.get("current_price"),
         "current_price_type":row.get("current_price_type"),
+        "current_price_source":row.get("current_price_source"),
+        "current_price_asof_date":row.get("current_price_asof_date"),
         "current_cost_per_selling_unit":row.get("current_cost_per_selling_unit"),
         "gp_pct_current":row.get("gp_pct_current"),
         "gp_dollars_7d":row.get("gp_dollars_7d"),
@@ -1461,6 +1465,7 @@ def price_analysis(upc: str, trend_supported_days: int = 28) -> dict[str,Any]:
             "current":{
                 "price":row.get("current_price"),
                 "price_type":row.get("current_price_type"),
+                "price_source":row.get("current_price_source"),
                 "price_as_of":row.get("current_price_asof_date"),
                 "cost":row.get("current_cost_per_selling_unit"),
                 "cost_uom":row.get("selling_uom"),
@@ -3735,13 +3740,12 @@ def _gp_day_price_suggestion(
         _observed_price_as_of(cur,upc_id,as_of_date)
         if as_of_date is not None else None
     )
+    # "Current Price" is global/current-state data, never a report-date
+    # historical reconstruction. Phase 3 resolves quick_check_current using
+    # newest valid Price List snapshot vs newest valid sold POS evidence.
     current=(
-        _d(observed_asof.get("price"))
-        if observed_asof and observed_asof.get("price") is not None
-        else (
-            Decimal(str(row["current_price"]))
-            if row.get("current_price") is not None else None
-        )
+        Decimal(str(row["current_price"]))
+        if row.get("current_price") is not None else None
     )
     company_c=(
         Decimal(str(row["company_price_c"]))
@@ -3813,13 +3817,14 @@ def _gp_day_price_suggestion(
         "candidate_count":len(candidates),
         "top_observed_candidates":candidates[:5],
         "current_price_used":current,
-        "current_price_basis":(
-            observed_asof.get("basis")
-            if observed_asof else "CURRENT_QUICK_CHECK_PRICE"
+        "current_price_basis":"CANONICAL_QUICK_CHECK_CURRENT",
+        "current_price_source":row.get("current_price_source"),
+        "current_price_observed_date":row.get("current_price_asof_date"),
+        "historical_observed_price_asof_report_date":(
+            observed_asof.get("price") if observed_asof else None
         ),
-        "current_price_observed_date":(
-            observed_asof.get("date")
-            if observed_asof else row.get("current_price_asof_date")
+        "historical_observed_price_date":(
+            observed_asof.get("date") if observed_asof else None
         ),
         "cost_basis":"CURRENT_AUTHORITATIVE_COST",
         "cost_date":row.get("cost_date"),
@@ -4081,13 +4086,10 @@ def _gp_day_price_suggestion_from_batch(
     observed_asof=_batch_observed_price_as_of(
         daily_by_upc,data_days,upc_id,lookback_supported_days=28
     )
+    # Same global Current Price authority as every other serving page.
     current=(
-        _d(observed_asof.get("price"))
-        if observed_asof.get("price") is not None
-        else (
-            Decimal(str(row["current_price"]))
-            if row.get("current_price") is not None else None
-        )
+        Decimal(str(row["current_price"]))
+        if row.get("current_price") is not None else None
     )
     company_c=(
         Decimal(str(row["company_price_c"]))
@@ -4156,8 +4158,11 @@ def _gp_day_price_suggestion_from_batch(
         "candidate_count":len(candidates),
         "top_observed_candidates":candidates[:5],
         "current_price_used":current,
-        "current_price_basis":observed_asof.get("basis"),
-        "current_price_observed_date":observed_asof.get("date") or row.get("current_price_asof_date"),
+        "current_price_basis":"CANONICAL_QUICK_CHECK_CURRENT",
+        "current_price_source":row.get("current_price_source"),
+        "current_price_observed_date":row.get("current_price_asof_date"),
+        "historical_observed_price_asof_report_date":observed_asof.get("price"),
+        "historical_observed_price_date":observed_asof.get("date"),
         "cost_basis":"CURRENT_AUTHORITATIVE_COST",
         "cost_date":row.get("cost_date"),
     }
@@ -4658,7 +4663,10 @@ def performance_report(
                 "upc_role":_upc_role(row),
                 "current_price":current,
                 "current_price_basis":price_opt.get("current_price_basis"),
+                "current_price_source":price_opt.get("current_price_source"),
                 "current_price_observed_date":price_opt.get("current_price_observed_date"),
+                "historical_observed_price_asof_report_date":price_opt.get("historical_observed_price_asof_report_date"),
+                "historical_observed_price_date":price_opt.get("historical_observed_price_date"),
                 "suggested_price":actionable_price,
                 "candidate_price":suggested,
                 "suggestion_basis":basis,
