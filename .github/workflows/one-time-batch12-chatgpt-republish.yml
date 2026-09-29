@@ -20,7 +20,7 @@ jobs:
           for i in $(seq 1 72); do
             body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
             echo "$body"
-            if echo "$body" | grep -q '"version":"7.0.181-single-service"'; then
+            if echo "$body" | grep -q '"version":"7.0.183-single-service"'; then
               ready=1
               break
             fi
@@ -28,7 +28,7 @@ jobs:
           done
           test "$ready" = "1"
 
-      - name: Rebuild Batch 13 Phase 3 with global current identity repair
+      - name: Rebuild Batch 13 Phase 3 with fried/service POS lineage repair
         shell: bash
         run: |
           set -euo pipefail
