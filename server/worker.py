@@ -113,11 +113,11 @@ def _recover_stale_started(cur) -> int:
     # current worker, so recover them immediately. Same-version jobs continue
     # to use heartbeat age as the stale guard.
     cur.execute(
-        """SELECT pipeline_run_id,batch_id,started_at,code_version,detail_json
+        """SELECT pipeline_run_id,batch_id,processing_status,started_at,code_version,detail_json
            FROM pipeline_run
            WHERE pipeline_name=%s
              AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-             AND processing_status='STARTED'""",
+             AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
         (API_PIPELINE,),
     )
     now=time.time()
@@ -158,15 +158,25 @@ def _recover_stale_started(cur) -> int:
             'recovered_by_code_version':API_VERSION,
             'batch_id':row.get('batch_id'),
         }
+        previous_status=str(row.get('processing_status') or '').upper()
+        recovered_status='PAUSED' if previous_status=='PAUSE_REQUESTED' else 'QUEUED'
+        recovery_detail['previous_processing_status']=previous_status
+        recovery_detail['recovered_processing_status']=recovered_status
         cur.execute(
             """UPDATE pipeline_run
-               SET processing_status='QUEUED',
-                   completed_at=NULL,
+               SET processing_status=%s,
+                   completed_at=CASE WHEN %s='PAUSED' THEN CURRENT_TIMESTAMP(6) ELSE NULL END,
                    error_count=0,
                    detail_json=%s
                WHERE pipeline_run_id=%s
-                 AND processing_status='STARTED'""",
-            (json.dumps(recovery_detail,ensure_ascii=False,default=str),row['pipeline_run_id']),
+                 AND processing_status=%s""",
+            (
+                recovered_status,
+                recovered_status,
+                json.dumps(recovery_detail,ensure_ascii=False,default=str),
+                row['pipeline_run_id'],
+                previous_status,
+            ),
         )
         recovered += int(cur.rowcount or 0)
     return recovered
@@ -189,7 +199,7 @@ def _queue_orphaned_phase2c_ready(cur) -> int:
                  WHERE active.batch_id=ib.batch_id
                    AND active.pipeline_name=%s
                    AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                   AND active.processing_status IN ('QUEUED','STARTED')
+                   AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
              )
              AND NOT EXISTS (
                  SELECT 1
@@ -259,7 +269,7 @@ def claim_job():
                 "SELECT COUNT(*) c FROM pipeline_run "
                 "WHERE pipeline_name=%s "
                 "AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN') "
-                "AND processing_status='STARTED'",
+                "AND processing_status IN ('STARTED','PAUSE_REQUESTED')",
                 (API_PIPELINE,),
             )
             if int((cur.fetchone() or {}).get('c') or 0) > 0:
