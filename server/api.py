@@ -837,6 +837,118 @@ def web_upload_qa_summary(batch_id:int,request:Request,response:Response):
             cur.close()
 
 
+@app.get('/v1/web-upload/diagnostics/249-source-evidence')
+def web_upload_249_source_evidence(request:Request,upc:str='24945000000'):
+    _browser_upload_guard(request)
+    raw=str(upc or '').strip()
+    if not raw.isdigit() or not raw.startswith('249'):
+        raise HTTPException(422,'Diagnostic supports numeric 249 service UPCs only')
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT upc_id,ean_upc,selling_description,family_id,main_article_number
+               FROM quick_check_current
+               WHERE ean_upc=%s
+               LIMIT 1""",
+            (raw,),
+        )
+        qc=cur.fetchone()
+        if not qc:
+            cur.close()
+            raise HTTPException(404,'249 canonical UPC not found')
+        desc=str(qc.get('selling_description') or '').upper()
+        stop={'FRIED','SERVICE','COOK','COOKED','FRESH','LIVE','WHOLE','FISH','SEAFOOD','THE','WITH'}
+        tokens=[t for t in re.findall(r'[A-Z0-9]+',desc) if len(t)>=4 and t not in stop]
+        tokens=list(dict.fromkeys(tokens))[:4]
+        if not tokens:
+            cur.close()
+            raise HTTPException(422,'No diagnostic description tokens available')
+
+        def raw_matches(table_name:str,source_type:str,limit:int=120):
+            ors=' OR '.join(["UPPER(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.B'))) LIKE %s"]*len(tokens))
+            args=tuple('%'+t+'%' for t in tokens)
+            cur.execute(
+                f"""SELECT r.raw_id,r.source_row_number,r.raw_payload,
+                           s.sheet_id,s.sheet_name,f.file_id,f.original_filename,
+                           f.coverage_start_date,f.coverage_end_date,f.report_generated_at
+                    FROM {table_name} r
+                    JOIN ingest_sheet s ON s.sheet_id=r.sheet_id
+                    JOIN ingest_file f ON f.file_id=s.file_id
+                    WHERE f.source_type=%s
+                      AND ({ors})
+                    ORDER BY f.file_id DESC,r.source_row_number
+                    LIMIT %s""",
+                (source_type,*args,int(limit)),
+            )
+            rows=[]
+            for x in cur.fetchall():
+                payload=x.get('raw_payload')
+                if isinstance(payload,(bytes,bytearray)):
+                    payload=payload.decode('utf-8',errors='replace')
+                if isinstance(payload,str):
+                    try: payload=json.loads(payload)
+                    except Exception: payload={}
+                if not isinstance(payload,dict): payload={}
+                d=str(payload.get('B') or '').upper()
+                score=sum(1 for t in tokens if t in d)
+                if score<min(2,len(tokens)):
+                    continue
+                rows.append({
+                    'file_id':x.get('file_id'),
+                    'filename':x.get('original_filename'),
+                    'coverage_start':x.get('coverage_start_date'),
+                    'coverage_end':x.get('coverage_end_date'),
+                    'sheet_id':x.get('sheet_id'),
+                    'sheet_name':x.get('sheet_name'),
+                    'source_row_number':x.get('source_row_number'),
+                    'A':payload.get('A'),'B':payload.get('B'),
+                    'E':payload.get('E'),'F':payload.get('F'),
+                    'G':payload.get('G'),'H':payload.get('H'),
+                    'I':payload.get('I'),'J':payload.get('J'),
+                    'K':payload.get('K'),'L':payload.get('L'),
+                    'M':payload.get('M'),'N':payload.get('N'),
+                    'P':payload.get('P'),'Q':payload.get('Q'),
+                    'token_score':score,
+                })
+            return rows[:30]
+
+        sales=raw_matches('raw_sales_by_price_type','sales_by_price_type')
+        price=raw_matches('raw_price_list','price_list')
+
+        def context(table_name:str,rows:list[dict]):
+            out=[]
+            for x in rows[:8]:
+                cur.execute(
+                    f"""SELECT source_row_number,raw_payload
+                        FROM {table_name}
+                        WHERE sheet_id=%s
+                          AND source_row_number BETWEEN %s AND %s
+                        ORDER BY source_row_number""",
+                    (int(x['sheet_id']),max(1,int(x['source_row_number'])-4),int(x['source_row_number'])),
+                )
+                ctx=[]
+                for rr in cur.fetchall():
+                    p=rr.get('raw_payload')
+                    if isinstance(p,(bytes,bytearray)): p=p.decode('utf-8',errors='replace')
+                    if isinstance(p,str):
+                        try: p=json.loads(p)
+                        except Exception: p={}
+                    if not isinstance(p,dict): p={}
+                    ctx.append({'row':rr.get('source_row_number'),'A':p.get('A'),'B':p.get('B'),'J':p.get('J'),'P':p.get('P')})
+                out.append({'match_row':x['source_row_number'],'file':x['filename'],'context':ctx})
+            return out
+
+        result={
+            'canonical':qc,
+            'description_tokens':tokens,
+            'raw_sales_matches':sales,
+            'raw_price_matches':price,
+            'raw_sales_context':context('raw_sales_by_price_type',sales),
+            'raw_price_context':context('raw_price_list',price),
+        }
+        cur.close()
+        return json.loads(json.dumps(result,default=j))
+
 @app.get('/v1/web-upload/recent')
 def web_upload_recent(request:Request,response:Response,limit:int=8):
     _browser_upload_guard(request)
