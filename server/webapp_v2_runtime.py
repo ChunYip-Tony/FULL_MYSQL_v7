@@ -463,6 +463,32 @@ def _safe_qty_uom(ean_upc: Any, selling_uom: Any=None) -> str|None:
     return None
 
 
+def _seafood_upc_group_signature(family_id: Any, ean_upc: Any) -> tuple[int,str] | None:
+    """Return a confirmed-family Seafood selling-form group key.
+
+    The numeric 240/245/247/249 form code is never sufficient by itself.
+    Grouping is allowed only inside the same resolved Family and only when the
+    three-digit Seafood product code immediately after the prefix also matches.
+    A valid group is emitted later only when a 240 anchor exists.
+    """
+    if family_id is None:
+        return None
+    upc=_numeric_key(ean_upc)
+    if len(upc)<6:
+        return None
+    prefix=upc[:3]
+    if prefix not in {"240","245","247","249"}:
+        return None
+    return int(family_id),upc[3:6]
+
+
+def _seafood_upc_group_member_order(ean_upc: Any) -> tuple[int,str]:
+    upc=_numeric_key(ean_upc)
+    prefix=upc[:3] if len(upc)>=3 else ""
+    rank={"240":0,"245":1,"247":2,"249":3}.get(prefix,9)
+    return rank,str(ean_upc or "")
+
+
 def search_items(query: str, limit: int = 30) -> dict[str, Any]:
     q = str(query or "").strip()
     if not q:
@@ -696,8 +722,137 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
             })
 
         family_results=[x for x in results if str(x.get("result_type") or "").upper()=="FAMILY"]
-        upc_results=[x for x in results if str(x.get("result_type") or "").upper()=="UPC"]
+        raw_upc_results=[x for x in results if str(x.get("result_type") or "").upper()=="UPC"]
         article_results=[x for x in results if str(x.get("result_type") or "").upper()=="ARTICLE"]
+
+        # Search-selection grouping for Seafood selling forms.
+        #
+        # 240 is the main anchor. 245 / 247 / 249 are folded into the same
+        # selectable card only when they resolve to the same confirmed Family
+        # and carry the same Seafood product code. This deliberately prevents
+        # unrelated UPCs from being grouped merely because a numeric suffix
+        # happens to look similar. UPC-level POS quantities remain independent.
+        family_child_cache: dict[int,list[dict[str,Any]]] = {}
+        def _group_family_children(fid:int) -> list[dict[str,Any]]:
+            if fid not in family_child_cache:
+                cur.execute(
+                    "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                    (fid,),
+                )
+                family_child_cache[fid]=cur.fetchall()
+            return family_child_cache[fid]
+
+        upc_results: list[dict[str,Any]] = []
+        processed_group_keys:set[tuple[int,str]]=set()
+        for item in raw_upc_results:
+            signature=_seafood_upc_group_signature(item.get("family_id"),item.get("number"))
+            if signature is None:
+                upc_results.append(item)
+                continue
+            if signature in processed_group_keys:
+                continue
+
+            matched_members=[
+                x for x in raw_upc_results
+                if _seafood_upc_group_signature(x.get("family_id"),x.get("number"))==signature
+            ]
+            fid,product_code=signature
+            all_children=_group_family_children(fid)
+            group_by_upc:dict[str,dict[str,Any]]={}
+            for child in all_children:
+                if _seafood_upc_group_signature(child.get("family_id"),child.get("ean_upc"))!=signature:
+                    continue
+                ean=str(child.get("ean_upc") or "").strip()
+                if ean:
+                    group_by_upc.setdefault(ean,child)
+            group_rows=sorted(
+                group_by_upc.values(),
+                key=lambda x:_seafood_upc_group_member_order(x.get("ean_upc")),
+            )
+            anchor=next(
+                (
+                    x for x in group_rows
+                    if _numeric_key(x.get("ean_upc")).startswith("240")
+                ),
+                None,
+            )
+
+            # Require the canonical 240 anchor plus at least one related form.
+            # Otherwise retain the original individual UPC choices.
+            if anchor is None or len(group_rows)<2:
+                upc_results.extend(matched_members)
+                processed_group_keys.add(signature)
+                continue
+
+            members=[]
+            member_uoms:set[str]=set()
+            group_qty=Decimal("0")
+            for child in group_rows:
+                m28=metric28(int(child["upc_id"]))
+                display_uom=_safe_qty_uom(child.get("ean_upc"),child.get("selling_uom"))
+                if display_uom:
+                    member_uoms.add(display_uom)
+                group_qty+=_d(m28.get("sold_quantity"))
+                prefix=_numeric_key(child.get("ean_upc"))[:3]
+                members.append({
+                    "upc_id":child.get("upc_id"),
+                    "upc":child.get("ean_upc"),
+                    "article_number":child.get("article_number"),
+                    "name":child.get("selling_description"),
+                    "readiness":child.get("quick_check_status"),
+                    "upc_role":_upc_role(child),
+                    "group_role":(
+                        "MAIN" if prefix=="240"
+                        else ("COOK / SERVICE" if prefix=="249" else "RELATED")
+                    ),
+                    "selling_uom":child.get("selling_uom"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "qty_28d_uom":display_uom,
+                    "supported_days_28d":m28.get("supported_day_count"),
+                })
+
+            aggregate_uom=next(iter(member_uoms)) if len(member_uoms)==1 else None
+            statuses=[str(x.get("quick_check_status") or "").upper() for x in group_rows]
+            matched_exact=next(
+                (
+                    x for x in matched_members
+                    if q.isdigit() and _numeric_key(q)==_numeric_key(x.get("number"))
+                ),
+                None,
+            )
+            matched_choice=matched_exact or (
+                max(matched_members,key=lambda x:int(x.get("relevance") or 0))
+                if matched_members else None
+            )
+            upc_results.append({
+                "result_type":"UPC_GROUP",
+                "family_id":fid,
+                "number":anchor.get("ean_upc"),
+                "group_anchor_upc":anchor.get("ean_upc"),
+                "group_product_code":product_code,
+                "name":anchor.get("selling_description") or item.get("name"),
+                "family_article_number":anchor.get("main_article_number"),
+                "family_name":anchor.get("family_description"),
+                "category":anchor.get("product_class"),
+                "readiness":(
+                    "READY" if "READY" in statuses
+                    else ("QA_HOLD" if "QA_HOLD" in statuses else "HISTORICAL_ONLY")
+                ),
+                "relevance":max((int(x.get("relevance") or 0) for x in matched_members),default=0),
+                "matched_as":"UPC_GROUP",
+                "matched_upc":matched_choice.get("number") if matched_choice else None,
+                "group_member_count":len(members),
+                "group_members":members,
+                "qty_28d":group_qty if aggregate_uom is not None else None,
+                "qty_28d_uom":aggregate_uom,
+                "qty_28d_status":"READY" if aggregate_uom is not None else "MIXED_UOM",
+                "supported_days_28d":max(
+                    (int(x.get("supported_days_28d") or 0) for x in members),
+                    default=0,
+                ),
+                "grouping_basis":"CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE",
+            })
+            processed_group_keys.add(signature)
 
         def _result_sort_key(x:dict[str,Any]):
             return (
@@ -758,7 +913,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         "results":selected,
         "sort_contract":[
             "FAMILY_FIRST_MAX_3",
-            "UPC_THEN_ARTICLE",
+            "UPC_GROUP_OR_UPC_THEN_ARTICLE",
             "QTY_28D_DESC",
             "RELEVANCE_TIEBREAK",
             "READINESS",

@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.162-single-service'
+VERSION='7.0.163-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -536,7 +536,7 @@ def web_upload_recent(request:Request,limit:int=8):
                      WHERE active.batch_id=ib.batch_id
                        AND active.pipeline_name=%s
                        AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                       AND active.processing_status IN ('QUEUED','STARTED')
+                       AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                  )
                ORDER BY ib.batch_id DESC
                LIMIT %s""",
@@ -755,7 +755,7 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
                    WHERE batch_id=%s
                      AND pipeline_name=%s
                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                     AND processing_status IN ('QUEUED','STARTED')
+                     AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                    ORDER BY pipeline_run_id DESC
                    LIMIT 1""",
                 (bid,API_PIPELINE),
@@ -816,6 +816,144 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
         except Exception as exc:
             conn.rollback()
             raise HTTPException(500,f'Phase 3 resume failed: {exc}')
+        finally:
+            cur.close()
+
+
+@app.post('/v1/web-upload/batches/{batch_id}/pause-phase3')
+def web_upload_pause_phase3(batch_id:int,request:Request):
+    """Cooperatively pause Phase 3 at the next safe progress boundary.
+
+    Phase 3 business writes run inside one transaction, so the worker rolls
+    them back before acknowledging PAUSED. A QUEUED run can be paused
+    immediately because it has not started business work yet.
+    """
+    _browser_upload_guard(request)
+    bid=int(batch_id)
+    if bid<1:
+        raise HTTPException(422,'INVALID_BATCH_ID')
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,processing_status
+                   FROM ingest_batch
+                   WHERE batch_id=%s
+                   FOR UPDATE""",
+                (bid,),
+            )
+            batch=cur.fetchone()
+            if not batch:
+                raise HTTPException(404,'Batch not found')
+
+            batch_status=str(batch.get('processing_status') or '').upper()
+            if batch_status!='PHASE2C_READY':
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'BATCH_NOT_PHASE2C_READY',
+                        'batch_status':batch_status,
+                    },
+                )
+
+            cur.execute(
+                "SELECT result_status FROM phase3_batch_result WHERE batch_id=%s",
+                (bid,),
+            )
+            p3=cur.fetchone()
+            if p3:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE3_ALREADY_FINISHED',
+                        'phase3_status':p3.get('result_status'),
+                    },
+                )
+
+            cur.execute(
+                """SELECT pipeline_run_id,stage_name,processing_status,detail_json
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1
+                   FOR UPDATE""",
+                (bid,API_PIPELINE),
+            )
+            run=cur.fetchone()
+            if not run:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'NO_ACTIVE_PHASE3_RUN',
+                        'batch_status':batch_status,
+                    },
+                )
+
+            run_status=str(run.get('processing_status') or '').upper()
+            run_id=int(run['pipeline_run_id'])
+            stage_name=str(run.get('stage_name') or '')
+            detail={}
+            try:
+                parsed=json.loads(run.get('detail_json') or '{}')
+                if isinstance(parsed,dict):
+                    detail=parsed
+            except Exception:
+                detail={}
+            detail.update({
+                'pause_requested':True,
+                'pause_requested_at':datetime.utcnow().isoformat()+'Z',
+                'pause_requested_by':WEB_UPLOAD_DEVICE,
+            })
+
+            if run_status=='QUEUED':
+                cur.execute(
+                    """UPDATE pipeline_run
+                       SET processing_status='PAUSED',
+                           completed_at=CURRENT_TIMESTAMP(6),
+                           detail_json=%s
+                       WHERE pipeline_run_id=%s
+                         AND processing_status='QUEUED'""",
+                    (json.dumps(detail,ensure_ascii=False,default=str),run_id),
+                )
+                status='PAUSED'
+            elif run_status=='STARTED':
+                cur.execute(
+                    """UPDATE pipeline_run
+                       SET processing_status='PAUSE_REQUESTED',
+                           detail_json=%s
+                       WHERE pipeline_run_id=%s
+                         AND processing_status='STARTED'""",
+                    (json.dumps(detail,ensure_ascii=False,default=str),run_id),
+                )
+                status='PAUSE_REQUESTED'
+            else:
+                status='PAUSE_REQUESTED'
+
+            conn.commit()
+            return {
+                'batch_id':bid,
+                'pipeline_run_id':run_id,
+                'stage_name':stage_name,
+                'status':status,
+                'pause_mode':(
+                    'IMMEDIATE_BEFORE_START'
+                    if status=='PAUSED'
+                    else 'COOPERATIVE_SAFE_BOUNDARY'
+                ),
+            }
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(500,f'Phase 3 pause failed: {exc}')
         finally:
             cur.close()
 

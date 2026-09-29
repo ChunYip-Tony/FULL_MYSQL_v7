@@ -33,6 +33,14 @@ table{width:100%;border-collapse:separate;border-spacing:0;font-size:16px}th,td{
 .family-badge{display:inline-block;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,var(--a) 16%,transparent);color:var(--a);font-size:14px;font-weight:950;letter-spacing:.02em;margin-bottom:7px}
 .article-result{border:2px solid color-mix(in srgb,#8b5cf6 42%,var(--line));background:linear-gradient(135deg,color-mix(in srgb,#8b5cf6 8%,var(--card)),var(--card))}
 .article-badge{display:inline-block;padding:5px 10px;border-radius:999px;background:color-mix(in srgb,#8b5cf6 14%,transparent);color:#6d3fd1;font-size:13px;font-weight:950;letter-spacing:.02em;margin-bottom:7px}
+.upc-group-result{border-left:4px solid #0f8aa6}
+.upc-group-badge{display:inline-block;padding:4px 9px;border-radius:999px;background:color-mix(in srgb,#0f8aa6 14%,transparent);color:#0b7189;font-size:12px;font-weight:950;letter-spacing:.03em;margin-bottom:6px}
+.upc-group-members{margin-top:8px;border-top:1px solid var(--line)}
+.upc-group-member{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:6px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 72%,transparent)}
+.upc-group-member:last-child{border-bottom:0}
+.upc-group-member .u{font-weight:900;overflow-wrap:anywhere}
+.upc-group-member .r{font-size:12px;color:var(--muted);font-weight:800}
+.upc-group-member .q{text-align:right;font-weight:850;white-space:nowrap}
 .result-upc{font-size:25px;font-weight:950;letter-spacing:.025em;margin-top:4px;color:var(--text)}
 .result-number{font-size:21px;font-weight:900;margin-top:4px}
 .result-type{font-size:14px;font-weight:850;color:var(--muted)}
@@ -595,6 +603,11 @@ body{
   background:#e9f6fc!important;color:#0f5578!important;font-weight:900!important
 }
 #upload .resume-phase3:disabled{opacity:.65;cursor:wait}
+#upload .pause-phase3{
+  width:100%;margin-top:8px;min-height:38px;border:1px solid #d7a0a0!important;
+  background:#fff1f1!important;color:#9b252b!important;font-weight:900!important
+}
+#upload .pause-phase3:disabled{opacity:.65;cursor:wait}
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
@@ -614,8 +627,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.162</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.162</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.163</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.163</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -700,7 +713,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.162</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.163</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div class="card latest-ref-card">
     <div class="section">Latest Reference Uploads</div>
     <div id="latestRefMsg" class="msg"></div>
@@ -771,13 +784,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.162';
+  el.textContent='App v7.0.163';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.162'){
-      el.textContent='UI 7.0.162 · API '+rv;
+    if(rv&&rv!=='7.0.163'){
+      el.textContent='UI 7.0.163 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -943,12 +956,31 @@ function renderWebUploadStatus(d){
   $('uploadServerFiles').innerHTML=files.map(x=>
     '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
   ).join('');
-  $('uploadCurrentActions').innerHTML=
-    (status.toUpperCase()==='PHASE2C_READY'&&!p3.result_status)
-      ? '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button><div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'"></div>'
-      : '';
+  let controlRun=[...runs].sort((a,b)=>Number(b.pipeline_run_id||0)-Number(a.pipeline_run_id||0)).find(x=>
+    ['POST_RAW_PIPELINE','PHASE3_RERUN'].includes(String(x.stage_name||'').toUpperCase()) &&
+    ['QUEUED','STARTED','PAUSE_REQUESTED','PAUSED'].includes(String(x.processing_status||'').toUpperCase())
+  )||{};
+  let controlStatus=String(controlRun.processing_status||'').toUpperCase();
+  let canControl=status.toUpperCase()==='PHASE2C_READY'&&!p3.result_status;
+  if(canControl&&['QUEUED','STARTED'].includes(controlStatus)){
+    $('uploadCurrentActions').innerHTML=
+      '<button class="pause-phase3" data-current-pause-phase3="'+esc(b.batch_id)+'" type="button">Pause Phase 3</button>'+
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Phase 3 '+esc(controlStatus)+'.</div>';
+  }else if(canControl&&controlStatus==='PAUSE_REQUESTED'){
+    $('uploadCurrentActions').innerHTML=
+      '<button class="pause-phase3" type="button" disabled>Pausing Phase 3…</button>'+
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Pause requested · waiting for the next safe Phase 3 boundary.</div>';
+  }else if(canControl){
+    $('uploadCurrentActions').innerHTML=
+      '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button>'+
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">'+(controlStatus==='PAUSED'?'Phase 3 is paused.':'')+'</div>';
+  }else{
+    $('uploadCurrentActions').innerHTML='';
+  }
   let resumeBtn=$('uploadCurrentActions').querySelector('[data-current-resume-phase3]');
   if(resumeBtn)resumeBtn.onclick=()=>resumePhase3Batch(resumeBtn.dataset.currentResumePhase3,resumeBtn);
+  let pauseBtn=$('uploadCurrentActions').querySelector('[data-current-pause-phase3]');
+  if(pauseBtn)pauseBtn.onclick=()=>pausePhase3Batch(pauseBtn.dataset.currentPausePhase3,pauseBtn);
   return status;
 }
 
@@ -966,7 +998,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.162')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.163')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1087,6 +1119,36 @@ async function resumePhase3Batch(batchId,button){
     if(button){
       button.disabled=false;
       button.textContent='Resume Phase 3';
+    }
+  }
+}
+
+async function pausePhase3Batch(batchId,button){
+  let id=Number(batchId);
+  if(!Number.isInteger(id)||id<1)return;
+  let msg=document.querySelector('[data-resume-msg="'+id+'"]');
+  if(button){
+    button.disabled=true;
+    button.textContent='Pausing Phase 3…';
+  }
+  if(msg)msg.textContent='Requesting a safe Phase 3 pause…';
+  try{
+    let d=await api('/v1/web-upload/batches/'+id+'/pause-phase3',{method:'POST'});
+    let status=String(d.status||'PAUSE_REQUESTED');
+    $('uploadMsg').textContent='Batch '+id+' Phase 3 '+status+'.';
+    if(msg)msg.textContent=status==='PAUSED'
+      ? 'Phase 3 paused.'
+      : 'Pause requested · waiting for the next safe Phase 3 boundary.';
+    await loadWebUploadActive();
+  }catch(e){
+    let reason=e?.message||String(e);
+    if(msg){
+      msg.className='msg bad resume-phase3-msg';
+      msg.textContent='Pause failed: '+reason;
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Pause Phase 3';
     }
   }
 }
@@ -1243,32 +1305,46 @@ async function csearch(){
   $('cmsg').textContent='Searching…';$('cres').innerHTML='';
   try{
     let d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=30');
-    $('cmsg').textContent=d.count+' result(s) · Top 3 Family matches · then UPC · Article shown separately';
+    $('cmsg').textContent=d.count+' result(s) · Top 3 Family matches · then UPC groups / UPC · Article shown separately';
     $('cres').innerHTML=(d.results||[]).map((r,i)=>{
       let type=String(r.result_type||'').toUpperCase();
-      let isFamily=type==='FAMILY',isUpc=type==='UPC',isArticle=type==='ARTICLE';
-      let numberHtml=isUpc
-        ? '<div class="result-upc">UPC '+esc(r.number||'—')+'</div>'
-        : (isArticle
-            ? '<div class="result-number">Article '+esc(r.number||'—')+'</div>'
-            : '<div class="result-number">Family '+esc(r.number||'—')+'</div>');
-      let cls=isFamily?'family-result':(isArticle?'article-result':'');
+      let isFamily=type==='FAMILY',isGroup=type==='UPC_GROUP',isUpc=type==='UPC',isArticle=type==='ARTICLE';
+      let numberHtml=isGroup
+        ? '<div class="result-upc">Main UPC '+esc(r.group_anchor_upc||r.number||'—')+'</div>'
+        : (isUpc
+            ? '<div class="result-upc">UPC '+esc(r.number||'—')+'</div>'
+            : (isArticle
+                ? '<div class="result-number">Article '+esc(r.number||'—')+'</div>'
+                : '<div class="result-number">Family '+esc(r.number||'—')+'</div>'));
+      let cls=isFamily?'family-result':(isArticle?'article-result':(isGroup?'upc-group-result':''));
       let badge=isFamily
         ? '<div class="family-badge">★ FAMILY ARTICLE</div>'
-        : (isArticle?'<div class="article-badge">ARTICLE</div>':'');
+        : (isArticle
+            ? '<div class="article-badge">ARTICLE</div>'
+            : (isGroup?'<div class="upc-group-badge">UPC GROUP</div>':''));
+      let members=isGroup
+        ? '<div class="upc-group-members">'+(r.group_members||[]).map(x=>
+            '<div class="upc-group-member"><div><div class="u">'+esc(x.upc||'—')+'</div><div class="r">'+esc(x.group_role||x.upc_role||'RELATED')+'</div></div><div class="q">'+qv(x.qty_28d,x.qty_28d_uom)+'</div></div>'
+          ).join('')+'</div>'
+        : '';
+      let qtyLine=isGroup
+        ? '<div class="meta">Group 28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+(r.qty_28d_status==='MIXED_UOM'?' · mixed UOM, see UPC rows':'')+'</div>'
+        : '<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>';
       return '<div class="card result '+cls+'" data-i="'+i+'">'
         +badge
         +'<div class="row" style="justify-content:space-between"><div class="name">'+esc(r.name)+'</div>'+pill(r.readiness)+'</div>'
         +numberHtml
         +'<div class="result-type">'+esc(type||'UNKNOWN')+' · '+esc(r.category||'—')+'</div>'
         +(isArticle&&r.family_article_number?'<div class="meta">Family '+esc(r.family_article_number)+' · '+esc(r.family_name||'')+'</div>':'')
-        +'<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
+        +qtyLine
+        +members
         +'</div>';
     }).join('')||'<div class="card small">No match found.</div>';
     document.querySelectorAll('#cres .result').forEach(e=>e.onclick=()=>{
       let r=d.results[+e.dataset.i],type=String(r.result_type||'').toUpperCase();
       if(type==='FAMILY')family(r.family_id||r.number);
       else if(type==='ARTICLE')family(r.family_id||r.family_article_number);
+      else if(type==='UPC_GROUP')upc(r.group_anchor_upc||r.number,'core');
       else if(type==='UPC')upc(r.number,'core');
     });
   }catch(e){$('cmsg').textContent=e.message}
