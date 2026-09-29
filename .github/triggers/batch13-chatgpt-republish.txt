@@ -1,4 +1,4 @@
-Batch 13 ChatGPT republish trigger for v7.0.187
-source_merge=fd6ba8914de1b9a87d68e1b2fb6100d3975dbfc6
-attempt=5
-reason=resolve_final_active_unmapped_upc_from_oh_authority
+Batch 13 ChatGPT republish trigger for v7.0.188
+source_merge=11e797cf5a11068d06a474c6ae9e98b63563a6a0
+attempt=6
+reason=worker_version_fence_recovery_and_final_identity_rebuild
