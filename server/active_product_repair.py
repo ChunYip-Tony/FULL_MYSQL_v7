@@ -50,10 +50,22 @@ def _upca_check_digit(body11: str) -> str | None:
     return str((10-(total % 10)) % 10)
 
 
+def _ean13_check_digit(body12: str) -> str | None:
+    if not re.fullmatch(r'\d{12}', str(body12 or '')):
+        return None
+    digits=[int(x) for x in body12]
+    total=sum(digits[0::2]) + sum(digits[1::2])*3
+    return str((10-(total % 10)) % 10)
+
+
 def _upca_alias_candidates(raw: str | None) -> list[str]:
     s=str(raw or '').strip()
     out=[]
-    if re.fullmatch(r'\d{11}',s):
+    if re.fullmatch(r'\d{12}',s):
+        cd=_ean13_check_digit(s)
+        if cd is not None:
+            out.append(s+cd)
+    elif re.fullmatch(r'\d{11}',s):
         cd=_upca_check_digit(s)
         if cd is not None:
             out.append(s+cd)
