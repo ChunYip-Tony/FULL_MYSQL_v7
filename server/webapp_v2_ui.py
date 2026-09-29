@@ -603,6 +603,11 @@ body{
   background:#e9f6fc!important;color:#0f5578!important;font-weight:900!important
 }
 #upload .resume-phase3:disabled{opacity:.65;cursor:wait}
+#upload .pause-phase3{
+  width:100%;margin-top:8px;min-height:38px;border:1px solid #d7a0a0!important;
+  background:#fff1f1!important;color:#9b252b!important;font-weight:900!important
+}
+#upload .pause-phase3:disabled{opacity:.65;cursor:wait}
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
@@ -951,12 +956,31 @@ function renderWebUploadStatus(d){
   $('uploadServerFiles').innerHTML=files.map(x=>
     '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
   ).join('');
-  $('uploadCurrentActions').innerHTML=
-    (status.toUpperCase()==='PHASE2C_READY'&&!p3.result_status)
-      ? '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button><div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'"></div>'
-      : '';
+  let controlRun=[...runs].sort((a,b)=>Number(b.pipeline_run_id||0)-Number(a.pipeline_run_id||0)).find(x=>
+    ['POST_RAW_PIPELINE','PHASE3_RERUN'].includes(String(x.stage_name||'').toUpperCase()) &&
+    ['QUEUED','STARTED','PAUSE_REQUESTED','PAUSED'].includes(String(x.processing_status||'').toUpperCase())
+  )||{};
+  let controlStatus=String(controlRun.processing_status||'').toUpperCase();
+  let canControl=status.toUpperCase()==='PHASE2C_READY'&&!p3.result_status;
+  if(canControl&&['QUEUED','STARTED'].includes(controlStatus)){
+    $('uploadCurrentActions').innerHTML=
+      '<button class="pause-phase3" data-current-pause-phase3="'+esc(b.batch_id)+'" type="button">Pause Phase 3</button>'+
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Phase 3 '+esc(controlStatus)+'.</div>';
+  }else if(canControl&&controlStatus==='PAUSE_REQUESTED'){
+    $('uploadCurrentActions').innerHTML=
+      '<button class="pause-phase3" type="button" disabled>Pausing Phase 3…</button>'+
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Pause requested · waiting for the next safe Phase 3 boundary.</div>';
+  }else if(canControl){
+    $('uploadCurrentActions').innerHTML=
+      '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button>'+
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">'+(controlStatus==='PAUSED'?'Phase 3 is paused.':'')+'</div>';
+  }else{
+    $('uploadCurrentActions').innerHTML='';
+  }
   let resumeBtn=$('uploadCurrentActions').querySelector('[data-current-resume-phase3]');
   if(resumeBtn)resumeBtn.onclick=()=>resumePhase3Batch(resumeBtn.dataset.currentResumePhase3,resumeBtn);
+  let pauseBtn=$('uploadCurrentActions').querySelector('[data-current-pause-phase3]');
+  if(pauseBtn)pauseBtn.onclick=()=>pausePhase3Batch(pauseBtn.dataset.currentPausePhase3,pauseBtn);
   return status;
 }
 
@@ -1095,6 +1119,36 @@ async function resumePhase3Batch(batchId,button){
     if(button){
       button.disabled=false;
       button.textContent='Resume Phase 3';
+    }
+  }
+}
+
+async function pausePhase3Batch(batchId,button){
+  let id=Number(batchId);
+  if(!Number.isInteger(id)||id<1)return;
+  let msg=document.querySelector('[data-resume-msg="'+id+'"]');
+  if(button){
+    button.disabled=true;
+    button.textContent='Pausing Phase 3…';
+  }
+  if(msg)msg.textContent='Requesting a safe Phase 3 pause…';
+  try{
+    let d=await api('/v1/web-upload/batches/'+id+'/pause-phase3',{method:'POST'});
+    let status=String(d.status||'PAUSE_REQUESTED');
+    $('uploadMsg').textContent='Batch '+id+' Phase 3 '+status+'.';
+    if(msg)msg.textContent=status==='PAUSED'
+      ? 'Phase 3 paused.'
+      : 'Pause requested · waiting for the next safe Phase 3 boundary.';
+    await loadWebUploadActive();
+  }catch(e){
+    let reason=e?.message||String(e);
+    if(msg){
+      msg.className='msg bad resume-phase3-msg';
+      msg.textContent='Pause failed: '+reason;
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Pause Phase 3';
     }
   }
 }
