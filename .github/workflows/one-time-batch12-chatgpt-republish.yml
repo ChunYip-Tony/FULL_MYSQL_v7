@@ -20,7 +20,7 @@ jobs:
           for i in $(seq 1 72); do
             body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
             echo "$body"
-            if echo "$body" | grep -q '"version":"7.0.180-single-service"'; then
+            if echo "$body" | grep -q '"version":"7.0.181-single-service"'; then
               ready=1
               break
             fi
@@ -28,7 +28,48 @@ jobs:
           done
           test "$ready" = "1"
 
-      - name: Read Batch 13 QA summary
+      - name: Rebuild Batch 13 Phase 3 with global current identity repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -sS --max-time 60 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-before.json
+          before="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/qa-before.json', encoding='utf-8'))
+          print((p.get('phase3') or {}).get('updated_at') or '')
+          PY
+          )"
+          echo "BEFORE_PHASE3_UPDATED_AT=$before"
+
+          http_code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' \
+            -X POST "$base/v1/web-upload/batches/13/rebuild-phase3")"
+          cat /tmp/rebuild.json
+          echo
+          echo "REBUILD_HTTP_STATUS=$http_code"
+          test "$http_code" = "200"
+
+          complete=0
+          for i in $(seq 1 90); do
+            curl -sS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-now.json
+            state="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/qa-now.json', encoding='utf-8'))
+          ph=p.get('phase3') or {}
+          print((ph.get('updated_at') or '')+'|'+str(ph.get('result_status') or ''))
+          PY
+            )"
+            echo "$state"
+            updated="${state%%|*}"
+            if [ -n "$updated" ] && [ "$updated" != "$before" ]; then
+              complete=1
+              break
+            fi
+            sleep 5
+          done
+          test "$complete" = "1"
+
+      - name: Read Batch 13 QA summary after rebuild
         shell: bash
         run: |
           set -euo pipefail
