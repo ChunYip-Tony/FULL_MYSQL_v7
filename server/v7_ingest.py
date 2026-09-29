@@ -96,7 +96,12 @@ def add_file(session_id: str, device_id: str, filename: str, data: bytes) -> dic
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         try:
-            b=_session(cur,session_id,lock=True)
+            # Do not hold a FOR UPDATE lock on the batch row for the entire
+            # workbook ingest. A timed-out/retried browser request can otherwise
+            # leave the next retry waiting on the same batch-row lock while RAW
+            # rows are still being written. The client commits only after all
+            # add_file calls return, so a read check is sufficient here.
+            b=_session(cur,session_id,lock=False)
             if b['processing_status']!='API_UPLOADING': raise RuntimeError(f"Session is not accepting files: {b['processing_status']}")
             owner=_device_from_notes(b.get('notes'))
             if owner and owner!=device_id: raise PermissionError('This upload session belongs to another device.')
@@ -236,6 +241,15 @@ def session_status(session_id: str) -> dict[str,Any]:
         cur.execute("SELECT batch_id,batch_key,batch_label,processing_status,upload_started_at,completed_at,file_count,source_row_count,error_count,notes FROM ingest_batch WHERE batch_key=%s",(session_id,)); b=cur.fetchone()
         if not b: raise KeyError('Upload session not found')
         bid=int(b['batch_id'])
+        batch_notes={}
+        try:
+            parsed_notes=json.loads(b.get('notes') or '{}')
+            if isinstance(parsed_notes,dict): batch_notes=parsed_notes
+        except Exception:
+            batch_notes={}
+        b['last_upload_error']=batch_notes.get('last_upload_error')
+        b['last_upload_error_file']=batch_notes.get('last_upload_error_file')
+        b['last_upload_error_at']=batch_notes.get('last_upload_error_at')
         cur.execute("SELECT file_id,original_filename,source_type,processing_status,source_row_count,error_count,duplicate_of_file_id,coverage_start_date,coverage_end_date FROM ingest_file WHERE batch_id=%s",(bid,)); files=cur.fetchall()
         files.sort(key=lambda x: int(x.get('file_id') or 0))
         cur.execute(
