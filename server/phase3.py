@@ -1951,53 +1951,144 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
 
 
 def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] | None:
-    # Latest point-in-time Price List vs latest period-level POS evidence.
-    cur.execute(
-        """SELECT snapshot_at FROM price_list_observation WHERE upc_id=%s AND configured_price>0
-           ORDER BY snapshot_at DESC LIMIT 1""", (upc_id,))
-    pr = cur.fetchone()
-    price_snapshot = pr['snapshot_at'] if pr else None
-    config = None
-    if price_snapshot:
-        cur.execute(
-            """SELECT configured_price,price_type,snapshot_at FROM price_list_observation
-               WHERE upc_id=%s AND snapshot_at=%s AND configured_price>0""", (upc_id, price_snapshot))
-        rows = cur.fetchall()
-        if rows:
-            rows.sort(key=lambda x: PRICE_TYPE_PRIORITY.get(str(x['price_type']).upper(), 0), reverse=True)
-            config = rows[0]
+    """Resolve the one authoritative CURRENT price for every serving surface.
+
+    Rule:
+      1) Latest valid Price List snapshot for the UPC.  Within that snapshot,
+         use configured price-type priority: IN STORE > SALE > TPR > REG.
+      2) Latest valid POS sold-price evidence (Sales$ / sold qty) for the UPC.
+      3) Compare evidence dates.  The newer evidence wins.
+      4) Same calendar date => Price List wins because it is a point-in-time
+         snapshot while POS evidence is period/day aggregate evidence.
+
+    Only accepted, non-duplicate, resolved source files are eligible.  Historical
+    observations remain stored but cannot become CURRENT merely because their
+    row exists in an observation table.
+    """
     if ean:
-        ean_pred, ean_args = _upc_match_sql('ean_upc', str(ean))
-        sales_pred = f'(upc_id=%s OR {ean_pred})'
-        sales_args = (upc_id, *ean_args)
+        ean_pred_price, ean_args_price = _upc_match_sql('p.ean_upc', str(ean))
+        price_pred = f'(p.upc_id=%s OR {ean_pred_price})'
+        price_args = (int(upc_id), *ean_args_price)
+        ean_pred_sales, ean_args_sales = _upc_match_sql('s.ean_upc', str(ean))
+        sales_pred = f'(s.upc_id=%s OR {ean_pred_sales})'
+        sales_args = (int(upc_id), *ean_args_sales)
     else:
-        sales_pred = 'upc_id=%s'
-        sales_args = (upc_id,)
+        price_pred = 'p.upc_id=%s'
+        price_args = (int(upc_id),)
+        sales_pred = 's.upc_id=%s'
+        sales_args = (int(upc_id),)
+
+    # Latest eligible Price List point-in-time snapshot.
     cur.execute(
-        f'SELECT MAX(period_end_date) AS d FROM sales_period_observation WHERE {sales_pred} AND sold_quantity<>0',
+        f"""SELECT MAX(p.snapshot_at) AS snapshot_at
+            FROM price_list_observation p
+            JOIN ingest_file f ON f.file_id=p.file_id
+            WHERE {price_pred}
+              AND p.configured_price>0
+              AND f.source_type='price_list'
+              AND f.processing_status='INGESTED'
+              AND f.error_count=0
+              AND f.duplicate_of_file_id IS NULL
+              AND f.date_semantics_status='RESOLVED'""",
+        price_args,
+    )
+    pr=cur.fetchone() or {}
+    price_snapshot=pr.get('snapshot_at')
+    config=None
+    if price_snapshot is not None:
+        cur.execute(
+            f"""SELECT p.configured_price,p.price_type,p.snapshot_at,p.file_id
+                FROM price_list_observation p
+                JOIN ingest_file f ON f.file_id=p.file_id
+                WHERE {price_pred}
+                  AND p.snapshot_at=%s
+                  AND p.configured_price>0
+                  AND f.source_type='price_list'
+                  AND f.processing_status='INGESTED'
+                  AND f.error_count=0
+                  AND f.duplicate_of_file_id IS NULL
+                  AND f.date_semantics_status='RESOLVED'""",
+            (*price_args, price_snapshot),
+        )
+        price_rows=cur.fetchall()
+        if price_rows:
+            price_rows.sort(
+                key=lambda x: PRICE_TYPE_PRIORITY.get(
+                    str(x.get('price_type') or '').upper(),0
+                ),
+                reverse=True,
+            )
+            config=price_rows[0]
+
+    # Latest eligible POS evidence with real sold quantity.  POS reports may be
+    # SINGLE_DATE or a period; for CURRENT-price recency their period_end_date is
+    # the evidence-through date.  The price itself is always actual Sales$/Qty.
+    cur.execute(
+        f"""SELECT MAX(s.period_end_date) AS business_date
+            FROM sales_period_observation s
+            JOIN ingest_file f ON f.file_id=s.file_id
+            WHERE {sales_pred}
+              AND s.sold_quantity<>0
+              AND f.source_type='sales_by_price_type'
+              AND f.processing_status='INGESTED'
+              AND f.error_count=0
+              AND f.duplicate_of_file_id IS NULL
+              AND f.date_semantics_status='RESOLVED'""",
         sales_args,
     )
-    sr = cur.fetchone(); sales_date = sr['d'] if sr else None
-    pos = None
-    if sales_date:
+    sr=cur.fetchone() or {}
+    sales_date=sr.get('business_date')
+    pos=None
+    if sales_date is not None:
         cur.execute(
-            f"""SELECT SUM(sales_amount) AS s,SUM(sold_quantity) AS q,COUNT(DISTINCT price_type) AS types,
-                      GROUP_CONCAT(DISTINCT price_type ORDER BY price_type SEPARATOR '+') AS price_types
-               FROM sales_period_observation
-               WHERE {sales_pred} AND period_end_date=%s""",
+            f"""SELECT SUM(s.sales_amount) AS sales_amount,
+                       SUM(s.sold_quantity) AS sold_quantity,
+                       COUNT(DISTINCT UPPER(TRIM(s.price_type))) AS price_type_count,
+                       GROUP_CONCAT(
+                         DISTINCT UPPER(TRIM(s.price_type))
+                         ORDER BY UPPER(TRIM(s.price_type)) SEPARATOR '+'
+                       ) AS price_types
+                FROM sales_period_observation s
+                JOIN ingest_file f ON f.file_id=s.file_id
+                WHERE {sales_pred}
+                  AND s.period_end_date=%s
+                  AND s.sold_quantity<>0
+                  AND f.source_type='sales_by_price_type'
+                  AND f.processing_status='INGESTED'
+                  AND f.error_count=0
+                  AND f.duplicate_of_file_id IS NULL
+                  AND f.date_semantics_status='RESOLVED'""",
             (*sales_args, sales_date),
         )
-        r = cur.fetchone()
-        if r and r['q'] not in (None, 0):
-            pos = {'price': r['s'] / r['q'], 'type': r['price_types'] if r['types'] == 1 else 'MIXED', 'date': sales_date}
-    price_date = price_snapshot.date() if price_snapshot else None
-    # If same date, Price List is a point-in-time snapshot and outranks period average sold price.
-    if config and (not pos or price_date >= pos['date']):
-        return {'price': config['configured_price'], 'type': config['price_type'], 'source': 'PRICE_LIST', 'date': price_date}
-    if pos:
-        return {'price': pos['price'], 'type': pos['type'], 'source': 'POS_PERIOD_AVG', 'date': pos['date']}
-    return None
+        r=cur.fetchone() or {}
+        qty=r.get('sold_quantity')
+        if qty not in (None,0):
+            pos={
+                'price': Decimal(str(r.get('sales_amount') or 0)) / Decimal(str(qty)),
+                'type': (
+                    r.get('price_types')
+                    if int(r.get('price_type_count') or 0)==1
+                    else 'MIXED'
+                ),
+                'date': sales_date,
+            }
 
+    price_date=price_snapshot.date() if price_snapshot is not None else None
+    if config is not None and (pos is None or price_date >= pos['date']):
+        return {
+            'price':config['configured_price'],
+            'type':config['price_type'],
+            'source':'PRICE_LIST',
+            'date':price_date,
+        }
+    if pos is not None:
+        return {
+            'price':pos['price'],
+            'type':pos['type'],
+            'source':'POS_SOLD_AVG',
+            'date':pos['date'],
+        }
+    return None
 
 def _sales_metrics(
     cur,
