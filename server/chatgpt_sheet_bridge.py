@@ -360,9 +360,21 @@ ANALYSIS_COLUMNS = [
 
 
 def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    """ChatGPT analytical input: READY rows only.
+
+    QA_HOLD/HISTORICAL rows remain available in dedicated verification tabs but
+    are never mixed into the analytical matrix used for recommendations.
+    """
+    ready = [
+        row for row in rows
+        if str(row.get("quick_check_status") or "").upper() == "READY"
+    ]
     out = [["Sheet_Row"] + ANALYSIS_COLUMNS + ["Analysis_Source"]]
-    for sheet_row, row in enumerate(rows, start=2):
-        out.append([sheet_row] + [row.get(col) for col in ANALYSIS_COLUMNS] + ["FULL_MYSQL_PHASE3_CURRENT"])
+    for sheet_row, row in enumerate(ready, start=2):
+        out.append(
+            [sheet_row] + [row.get(col) for col in ANALYSIS_COLUMNS]
+            + ["FULL_MYSQL_PHASE3_READY_ONLY"]
+        )
     return out
 
 
@@ -444,11 +456,19 @@ def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
     out = [header]
     for family_id in sorted(groups, key=lambda v: (v is None, str(v))):
         rs = groups[family_id]
+        statuses = Counter(str(r.get("quick_check_status") or "") for r in rs)
+        ready_rs = [
+            r for r in rs
+            if str(r.get("quick_check_status") or "").upper() == "READY"
+        ]
+        # Families with no READY UPC are excluded from analytical family input.
+        # Their held rows remain visible in MYSQL_QA_HOLD.
+        if not ready_rs:
+            continue
         representative = max(
-            rs,
+            ready_rs,
             key=lambda r: (float(r.get("pos_qty_7d") or 0), 1 if r.get("current_price") is not None else 0),
         )
-        statuses = Counter(str(r.get("quick_check_status") or "") for r in rs)
         active = statuses.get("READY", 0) + statuses.get("QA_HOLD", 0)
         out.append([family_id,representative.get("main_article_number"),representative.get("family_description"),
                     representative.get("ean_upc"),len(rs),active,statuses.get("READY",0),statuses.get("QA_HOLD",0),
@@ -460,16 +480,28 @@ def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
     return out
 
 
-def _source_status(batch: dict[str, Any], phase3: dict[str, Any], row_count: int) -> list[list[Any]]:
+def _source_status(
+    batch: dict[str, Any],
+    phase3: dict[str, Any],
+    row_count: int,
+    *,
+    analysis_ready_rows: int,
+    analysis_family_rows: int,
+) -> list[list[Any]]:
     fields = [
         ("Snapshot_Status","MYSQL_PUBLISH_READY"),("MySQL_Batch_ID",batch.get("batch_id")),
         ("MySQL_Batch_Key",batch.get("batch_key")),("MySQL_Batch_Label",batch.get("batch_label")),
         ("MySQL_Batch_Status",batch.get("processing_status")),("Phase3_Result_Status",phase3.get("result_status")),
         ("Phase3_Blocking_Issues",phase3.get("blocking_issue_count")),("Current_Active_Rows",phase3.get("quick_check_rows")),
         ("Current_READY_Rows",phase3.get("quick_check_ready_rows")),("Current_HOLD_Rows",phase3.get("quick_check_hold_rows")),
-        ("Serving_Rows_Total",row_count),("Snapshot_Published_At_UTC",datetime.now(timezone.utc).isoformat()),
+        ("Serving_Rows_Total",row_count),
+        ("Analysis_READY_Rows",analysis_ready_rows),
+        ("Analysis_Family_Rows",analysis_family_rows),
+        ("Analysis_Excluded_HOLD_Rows",phase3.get("quick_check_hold_rows")),
+        ("Analysis_Input_Policy","READY_ONLY"),
+        ("Snapshot_Published_At_UTC",datetime.now(timezone.utc).isoformat()),
         ("Publisher","FULL_MYSQL_CHATGPT_SHEET_BRIDGE"),("Active_ChatGPT_Source",_active_source()),
-        ("Analysis_Cutover_Status","PARITY_REQUIRED"),
+        ("Analysis_Cutover_Status","READY_ONLY_SAFE_PARTIAL"),
     ]
     return [["Field","Value"]] + [[k,v] for k,v in fields]
 
@@ -499,6 +531,7 @@ def _validate_readback(
     batch_id: int,
     row_count: int,
     *,
+    analysis_row_count: int,
     reader=None,
 ) -> dict[str, Any]:
     read = reader or _read_values
@@ -506,6 +539,12 @@ def _validate_readback(
     lookup_head = read(session, spreadsheet_id, f"'{MYSQL_TABS['lookup']}'!A1:I2")
     lookup_tail = read(session, spreadsheet_id,
                        f"'{MYSQL_TABS['lookup']}'!A{row_count + 1}:I{row_count + 1}")
+    analysis_head = read(session, spreadsheet_id, f"'{MYSQL_TABS['analysis']}'!A1:B2")
+    analysis_tail = read(
+        session,
+        spreadsheet_id,
+        f"'{MYSQL_TABS['analysis']}'!A{analysis_row_count + 1}:B{analysis_row_count + 1}",
+    )
     source_map = {str(r[0]): r[1] if len(r) > 1 else "" for r in source[1:] if r}
     failures: list[str] = []
     if str(source_map.get("MySQL_Batch_ID")) != str(batch_id):
@@ -517,8 +556,24 @@ def _validate_readback(
     expected_last_sheet_row = row_count + 1
     if not lookup_tail or not lookup_tail[0] or str(lookup_tail[0][0]) != str(expected_last_sheet_row):
         failures.append("LOOKUP_LAST_ROW_MISMATCH")
-    return {"pass":not failures,"failures":failures,"source_status":source_map,
-            "expected_last_sheet_row":expected_last_sheet_row}
+    if str(source_map.get("Analysis_READY_Rows")) != str(analysis_row_count):
+        failures.append("ANALYSIS_READY_ROW_COUNT_MISMATCH")
+    if not analysis_head or analysis_head[0][:2] != ["Sheet_Row","ean_upc"]:
+        failures.append("ANALYSIS_HEADER_MISMATCH")
+    expected_analysis_last_row = analysis_row_count + 1
+    if (
+        not analysis_tail
+        or not analysis_tail[0]
+        or str(analysis_tail[0][0]) != str(expected_analysis_last_row)
+    ):
+        failures.append("ANALYSIS_LAST_ROW_MISMATCH")
+    return {
+        "pass":not failures,
+        "failures":failures,
+        "source_status":source_map,
+        "expected_last_sheet_row":expected_last_sheet_row,
+        "expected_analysis_last_row":expected_analysis_last_row,
+    }
 
 
 def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
@@ -547,6 +602,22 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
         if not rows:
             return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
 
+        ready_rows = [
+            row for row in rows
+            if str(row.get("quick_check_status") or "").upper() == "READY"
+        ]
+        hold_rows = [
+            row for row in rows
+            if str(row.get("quick_check_status") or "").upper() == "QA_HOLD"
+        ]
+        if not ready_rows:
+            return {
+                "status":"BLOCKED",
+                "batch_id":batch_id,
+                "reason":"No READY Quick Check rows are available for safe analytical publish.",
+                "hold_row_count":len(hold_rows),
+            }
+
         negative_queue = negative_stock_queue(limit=500)
         cost_backfill = cost_backfill_queue(lookback_days=90)
 
@@ -566,12 +637,23 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             _ensure_tabs(publishing_session, spreadsheet_id, [MYSQL_TABS["bridge"]])
             _write_matrix(publishing_session, spreadsheet_id, MYSQL_TABS["bridge"], publishing_matrix)
 
+        analysis_matrix = _build_analysis(rows)
+        family_matrix = _build_family(rows)
+        analysis_row_count = max(0, len(analysis_matrix) - 1)
+        analysis_family_count = max(0, len(family_matrix) - 1)
+
         matrices = {
-            MYSQL_TABS["source"]:_source_status(batch,phase3,len(rows)),
+            MYSQL_TABS["source"]:_source_status(
+                batch,
+                phase3,
+                len(rows),
+                analysis_ready_rows=analysis_row_count,
+                analysis_family_rows=analysis_family_count,
+            ),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
-            MYSQL_TABS["family"]:_build_family(rows),
-            MYSQL_TABS["analysis"]:_build_analysis(rows),
+            MYSQL_TABS["family"]:family_matrix,
+            MYSQL_TABS["analysis"]:analysis_matrix,
             MYSQL_TABS["qa"]:_build_qa(rows),
             MYSQL_TABS["negative"]:_build_negative_stock(negative_queue.get("rows") or []),
             MYSQL_TABS["cost_backfill"]:_build_cost_backfill(cost_backfill.get("actions") or []),
@@ -588,6 +670,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 spreadsheet_id,
                 batch_id,
                 len(rows),
+                analysis_row_count=analysis_row_count,
                 reader=lambda _session, sid, a1: _apps_script_read_values(sid, a1),
             )
         else:
@@ -595,7 +678,13 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             _ensure_tabs(session, spreadsheet_id, list(matrices) + [MYSQL_TABS["bridge"]])
             for title, matrix in matrices.items():
                 _write_matrix(session, spreadsheet_id, title, matrix)
-            readback = _validate_readback(session, spreadsheet_id, batch_id, len(rows))
+            readback = _validate_readback(
+                session,
+                spreadsheet_id,
+                batch_id,
+                len(rows),
+                analysis_row_count=analysis_row_count,
+            )
 
         if not readback["pass"]:
             bridge_matrix = _bridge_status(
@@ -625,7 +714,10 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             publisher_identity=publisher_identity,
             transport=transport,
             status="PASS",
-            detail="MySQL snapshot written and batch/row/lookup readback verified.",
+            detail=(
+                f"READY-only analytical snapshot published: {analysis_row_count} READY rows; "
+                f"{len(hold_rows)} HOLD rows excluded to MYSQL_QA_HOLD."
+            ),
         )
         if transport == "APPS_SCRIPT":
             _apps_script_write_matrix(spreadsheet_id, MYSQL_TABS["bridge"], bridge_matrix)
@@ -656,6 +748,10 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             "batch_id":batch_id,
             "spreadsheet_id":spreadsheet_id,
             "row_count":len(rows),
+            "analysis_ready_row_count":analysis_row_count,
+            "analysis_family_row_count":analysis_family_count,
+            "excluded_hold_row_count":len(hold_rows),
+            "analysis_input_policy":"READY_ONLY",
             "active_source":_active_source(),
             "transport":transport,
             "publisher_identity":publisher_identity,
