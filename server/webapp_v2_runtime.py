@@ -648,59 +648,119 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
             )
             results.append(fam)
 
+        # Article / receiving aliases remain selectable ARTICLE results.
+        # Do not relabel them as FAMILY; that previously caused broad text
+        # searches to appear as an all-Family result list.
+        article_seen:set[tuple[int,str]]=set()
         for match in article_matches:
             fid=int(match["family_id"])
-            existing=next((x for x in results if x.get("result_type")=="FAMILY" and x.get("family_id")==fid),None)
-            rel=_relevance(q,name=match.get("article_description"),number=match.get("article_number"),kind="ARTICLE")
+            article_number=str(match.get("article_number") or "").strip()
+            key=(fid,article_number)
+            if not article_number or key in article_seen:
+                continue
+            article_seen.add(key)
+
+            rel=_relevance(
+                q,
+                name=match.get("article_description"),
+                number=article_number,
+                kind="ARTICLE",
+            )
             if rel<=0:
                 continue
-            if existing:
-                existing["relevance"]=max(int(existing["relevance"]),rel)
-                existing["matched_as"]="ARTICLE"
-                existing["matched_article_number"]=match.get("article_number")
-            else:
-                cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s",(fid,))
-                children=cur.fetchall()
-                statuses=[]; category=None
-                for child in children:
-                    statuses.append(str(child.get("quick_check_status") or ""))
-                    category=category or child.get("product_class")
-                family_sales=_family_sales_series(cur,children,28)
-                results.append({
-                    "result_type":"FAMILY",
-                    "family_id":fid,
-                    "number":match.get("main_article_number"),
-                    "name":match.get("family_description"),
-                    "category":category,
-                    "readiness":(
-                        "READY" if "READY" in statuses
-                        else ("QA_HOLD" if "QA_HOLD" in statuses else "HISTORICAL_ONLY")
-                    ),
-                    "relevance":rel,
-                    "qty_28d":family_sales.get("sold_quantity"),
-                    "qty_28d_uom":family_sales.get("uom"),
-                    "supported_days_28d":int(family_sales.get("supported_day_count") or 0),
-                    "family_sales_status":family_sales.get("status"),
-                    "matched_as":"ARTICLE",
-                    "matched_article_number":match.get("article_number"),
-                })
 
-        results.sort(
-            key=lambda x:(
-                0 if str(x.get("result_type") or "").upper()=="FAMILY" else 1,
+            cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s",(fid,))
+            children=cur.fetchall()
+            statuses=[str(child.get("quick_check_status") or "") for child in children]
+            category=next((child.get("product_class") for child in children if child.get("product_class")),None)
+            family_sales=_family_sales_series(cur,children,28)
+
+            results.append({
+                "result_type":"ARTICLE",
+                "family_id":fid,
+                "number":article_number,
+                "name":match.get("article_description") or match.get("family_description"),
+                "family_article_number":match.get("main_article_number"),
+                "family_name":match.get("family_description"),
+                "category":category,
+                "readiness":(
+                    "READY" if "READY" in statuses
+                    else ("QA_HOLD" if "QA_HOLD" in statuses else "HISTORICAL_ONLY")
+                ),
+                "relevance":rel,
+                "qty_28d":family_sales.get("sold_quantity"),
+                "qty_28d_uom":family_sales.get("uom"),
+                "supported_days_28d":int(family_sales.get("supported_day_count") or 0),
+                "family_sales_status":family_sales.get("status"),
+                "matched_as":"ARTICLE",
+            })
+
+        family_results=[x for x in results if str(x.get("result_type") or "").upper()=="FAMILY"]
+        upc_results=[x for x in results if str(x.get("result_type") or "").upper()=="UPC"]
+        article_results=[x for x in results if str(x.get("result_type") or "").upper()=="ARTICLE"]
+
+        def _result_sort_key(x:dict[str,Any]):
+            return (
                 -float(x.get("qty_28d") or 0),
                 -int(x.get("relevance") or 0),
                 _readiness_rank(x.get("readiness")),
                 str(x.get("name") or ""),
             )
-        )
+
+        family_results.sort(key=_result_sort_key)
+        upc_results.sort(key=_result_sort_key)
+        article_results.sort(key=_result_sort_key)
+
+        # Family remains first, but cannot consume the entire selectable list.
+        # Reserve the majority of slots for actual selling UPCs / Articles.
+        family_cap=min(8,max(1,limit//3))
+        selected_families=family_results[:family_cap]
+        remaining=max(0,limit-len(selected_families))
+
+        # Selling UPCs are the primary selectable item after Family. Articles
+        # fill any remaining slots and still resolve to their Family detail.
+        selected_upcs=upc_results[:remaining]
+        remaining=max(0,remaining-len(selected_upcs))
+        selected_articles=article_results[:remaining]
+        selected=selected_families+selected_upcs+selected_articles
+
+        # If one result class is sparse, backfill from the unused ranked pool.
+        if len(selected)<limit:
+            used={
+                (str(x.get("result_type") or ""),str(x.get("number") or ""),x.get("family_id"))
+                for x in selected
+            }
+            overflow=family_results[family_cap:]+upc_results[len(selected_upcs):]+article_results[len(selected_articles):]
+            overflow.sort(
+                key=lambda x:(
+                    0 if str(x.get("result_type") or "").upper()=="FAMILY" else
+                    1 if str(x.get("result_type") or "").upper()=="UPC" else 2,
+                    *_result_sort_key(x),
+                )
+            )
+            for x in overflow:
+                key=(str(x.get("result_type") or ""),str(x.get("number") or ""),x.get("family_id"))
+                if key in used:
+                    continue
+                selected.append(x)
+                used.add(key)
+                if len(selected)>=limit:
+                    break
+
         cur.close()
 
     return {
         "query":q,
-        "count":min(len(results),limit),
-        "results":results[:limit],
-        "sort_contract":["FAMILY_FIRST","QTY_28D_DESC","RELEVANCE_TIEBREAK","READINESS"],
+        "count":len(selected),
+        "results":selected,
+        "sort_contract":[
+            "FAMILY_FIRST_CAPPED",
+            "UPC_THEN_ARTICLE",
+            "QTY_28D_DESC",
+            "RELEVANCE_TIEBREAK",
+            "READINESS",
+        ],
+        "family_result_cap":family_cap,
         "sales_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
     }
 
