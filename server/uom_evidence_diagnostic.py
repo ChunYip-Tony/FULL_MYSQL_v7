@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from article_manual_multitab_repair import _load_roster
-from active_28d_uom_repair import PURE_ARTICLE_UOMS, RELATED_LB_PREFIXES, _related_prefix_evidence
+from active_28d_uom_repair import PURE_ARTICLE_UOMS, _authoritative_seafood_lb_prefix, _is_current_seafood_upc
 from normalize import _numeric_key
 
 
@@ -234,27 +234,22 @@ def _classify(
         }
 
     try:
-        related = _related_prefix_evidence(cur, target)
+        prefix_authority = bool(
+            _authoritative_seafood_lb_prefix(str(target["ean_upc"]))
+            and _is_current_seafood_upc(cur, int(target["upc_id"]))
+        )
     except Exception as exc:
-        errors.append(_safe_error("related_prefix_evidence", exc, ean_upc=str(target["ean_upc"])))
-        related = None
+        errors.append(_safe_error("seafood_prefix_authority", exc, ean_upc=str(target["ean_upc"])))
+        prefix_authority = False
 
-    if related:
-        desired = str(related["uom"]).upper()
-        conflicts = [x for x in hist_codes if x != desired]
-        if not conflicts:
-            return {
-                "classification": "CONFIRMED_FAMILY_RELATED_PREFIX_LB",
-                "proposed_selling_uom": desired,
-                "safe_to_auto_apply": True,
-                "evidence": related,
-            }
+    if prefix_authority:
         return {
-            "classification": "HISTORICAL_UOM_CONFLICT",
-            "proposed_selling_uom": desired,
-            "safe_to_auto_apply": False,
+            "classification": "USER_CONFIRMED_SEAFOOD_PREFIX_LB",
+            "proposed_selling_uom": "LB",
+            "safe_to_auto_apply": True,
+            "authority": "SEAFOOD_PREFIX_RULE",
             "historical_codes": hist_codes,
-            "evidence": related,
+            "note": "Current-active Seafood prefix authority supersedes stale historical UOM conflicts.",
         }
 
     return {
@@ -262,8 +257,8 @@ def _classify(
         "proposed_selling_uom": None,
         "safe_to_auto_apply": False,
         "reason": (
-            "No unique current Article Manual UOM evidence, no safe related-prefix "
-            "LB evidence, and no confirmed manual override."
+            "No unique current Article Manual UOM evidence, no applicable authoritative "
+            "Seafood LB prefix rule, and no confirmed manual override."
         ),
     }
 
@@ -360,7 +355,7 @@ def diagnose_uom_lineage(
                 "article_manual_exact_upc_rows": manual_rows,
                 "historical_uom_rows": historical,
                 "family_peers": peers,
-                "eligible_related_lb_prefix": str(target["ean_upc"])[:3] in RELATED_LB_PREFIXES,
+                "eligible_authoritative_seafood_lb_prefix": _authoritative_seafood_lb_prefix(str(target["ean_upc"])),
                 "diagnostic_errors": item_errors,
             }
         )
