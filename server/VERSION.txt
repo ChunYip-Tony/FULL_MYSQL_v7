@@ -1,5 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.177 Single-Service Edition
+Version: 7.0.178 Single-Service Edition
+
+
+v7.0.178 Current-Snapshot Phase 3 QA Rebuild:
+- Adds Rebuild Phase 3 / QA for the current serving batch so completed batches can be recalculated after backend rule repairs without uploading fake files or re-running RAW/Phase 2C.
+- Rebuild is fail-closed to the batch that owns every quick_check_current row and requires Phase 2C READY with zero blockers.
+- Rebuild is serialized with active upload/Phase 3 work; another active batch blocks the request.
+- Previous committed Quick Check stays live until the Phase 3 rebuild transaction commits successfully.
+- Active PHASE3_RERUN now overrides the old final-result display with PHASE3_REBUILD_QUEUED / PHASE3_REBUILD_RUNNING and the exact live Phase 3 stage.
+- A failed rebuild surfaces REBUILD FAILED while preserving the previous committed serving snapshot.
+- Upload UI clearly labels the visible QA breakdown as the previous snapshot while rebuild is running.
 
 
 v7.0.177 Safe Partial ChatGPT Analysis + 14D Quick Check:
