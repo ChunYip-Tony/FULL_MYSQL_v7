@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.171 Single-Service Edition
+Version: 7.0.172 Single-Service Edition
+
+
+v7.0.172 Persistent New Batch Status:
+- Section 2 (New Batch Status) no longer disappears when a batch reaches a terminal state.
+- /v1/web-upload/active now returns both active_batch and latest_batch so a page refresh can repopulate Section 2 even when no batch is currently processing.
+- Active batches continue live polling; terminal batches keep their final authoritative backend status visible without polling.
+- If no upload batches exist, Section 2 remains visible with a No batch yet placeholder.
+- Deleting a displayed history batch refreshes Section 2 to the next latest available batch instead of leaving the card hidden.
 
 
 v7.0.171 Embedded QA + Recent History Fail-Open:
