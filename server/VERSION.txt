@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.198 Single-Service Edition
+Version: 7.0.199 Single-Service Edition
+
+v7.0.199 Web Upload In-Flight Status Repair:
+- Prevents the 3-second batch-status poll from overwriting the local file PROCESSING state with Files=0 while the file POST is still running.
+- Suspends visibility/pageshow/online refresh reconciliation during an active browser file upload.
+- Adds a 1-second elapsed timer showing the current filename and that the browser/server upload+parse request is still active.
+- Keeps v7.0.198 chunked RAW inserts and v7.0.197 retryable API_UPLOADING behavior.
+- Aligns UI/runtime version display to 7.0.199.
 
 v7.0.198 MVT Upload Performance + Visibility:
 - Replaces one-row-at-a-time RAW persistence with chunked executemany inserts (default 1,000 rows per batch) to reduce remote MySQL round trips during large MVT uploads.
