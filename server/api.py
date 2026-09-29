@@ -1672,6 +1672,8 @@ def web_upload_calendar(request:Request,days:int=14):
                 'file_id':mvt.get('file_id') if mvt else None,
                 'batch_id':mvt.get('batch_id') if mvt else None,
                 'coverage_kind':mvt.get('coverage_kind') if mvt else None,
+                'snapshot_completeness':mvt.get('snapshot_completeness') if mvt else None,
+                'source_filename':mvt.get('original_filename') if mvt else None,
             },
         })
         d+=timedelta(days=1)

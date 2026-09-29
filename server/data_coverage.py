@@ -5,6 +5,7 @@ from typing import Any
 
 from db import db_conn
 from business_clock import completed_through_date
+from movement_coverage_rules import movement_daily_close_filename_evidence
 
 DAILY_REQUIRED_SOURCES = {
     'POS_SALES': 'sales_by_price_type',
@@ -62,16 +63,33 @@ def _source_snapshot_date(row: dict[str, Any]) -> date | None:
     return max(candidates) if candidates else None
 
 
-def _movement_daily_snapshot_complete(row: dict[str, Any], business_date: date) -> bool:
-    """True only when a movement export proves the business day was already closed.
+def _movement_snapshot_completeness(row: dict[str, Any], business_date: date) -> str | None:
+    """Return the exact source-backed reason a movement day is complete.
 
-    FULL MYSQL movement exports observed in production include same-day intraday
-    snapshots (for example 12:30) and next-morning completed snapshots for the
-    prior posting date. Same-day snapshots remain preserved in RAW/history but
-    must not become canonical daily movement coverage.
+    Authority order:
+    1) the source was generated on a later date than the posting business day;
+    2) the source matches the store's exact closed-day, date-only MVT filename
+       contract for a one-day report.
+
+    Upload timestamp is never used as completeness evidence.
     """
     snapshot_date = _source_snapshot_date(row)
-    return snapshot_date is not None and snapshot_date > business_date
+    if snapshot_date is not None and snapshot_date > business_date:
+        return 'COMPLETE_AFTER_BUSINESS_DATE'
+
+    ok, reason = movement_daily_close_filename_evidence(
+        original_filename=row.get('original_filename'),
+        filename_date_candidate=_as_date(row.get('filename_date_candidate')),
+        filename_time_candidate=row.get('filename_time_candidate'),
+        coverage_start_date=_as_date(row.get('coverage_start_date')),
+        coverage_end_date=_as_date(row.get('coverage_end_date')),
+        business_date=business_date,
+    )
+    return reason if ok else None
+
+
+def _movement_daily_snapshot_complete(row: dict[str, Any], business_date: date) -> bool:
+    return _movement_snapshot_completeness(row, business_date) is not None
 
 
 def _table_exists(cur, table_name: str) -> bool:
@@ -146,7 +164,7 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
         params.append(include_batch_id)
 
     cur.execute(
-        f"""SELECT f.file_id,f.batch_id,f.source_type,f.processing_status,f.error_count,
+        f"""SELECT f.file_id,f.batch_id,f.original_filename,f.source_type,f.processing_status,f.error_count,
                    f.duplicate_of_file_id,f.source_row_count,f.date_semantics_status,
                    f.coverage_type,f.coverage_start_date,f.coverage_end_date,
                    f.header_period_start_date,f.header_period_end_date,
@@ -180,13 +198,14 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
             'date': d,
             'file_id': int(r['file_id']),
             'batch_id': int(r['batch_id']),
+            'original_filename': r.get('original_filename'),
             'report_generated_at': r.get('report_generated_at'),
             'filename_date_candidate': r.get('filename_date_candidate'),
             'filename_time_candidate': r.get('filename_time_candidate'),
             'upload_timestamp': r.get('upload_timestamp'),
             'source_snapshot_date': _source_snapshot_date(r),
             'snapshot_completeness': (
-                'COMPLETE_AFTER_BUSINESS_DATE'
+                _movement_snapshot_completeness(r, d)
                 if source_type == 'movement'
                 else 'NOT_APPLICABLE'
             ),
@@ -242,12 +261,13 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
                     'date': d,
                     'file_id': fid,
                     'batch_id': int(r['batch_id']),
+                    'original_filename': r.get('original_filename'),
                     'report_generated_at': r.get('report_generated_at'),
                     'filename_date_candidate': r.get('filename_date_candidate'),
                     'filename_time_candidate': r.get('filename_time_candidate'),
                     'upload_timestamp': r.get('upload_timestamp'),
                     'source_snapshot_date': _source_snapshot_date(r),
-                    'snapshot_completeness': 'COMPLETE_AFTER_BUSINESS_DATE',
+                    'snapshot_completeness': _movement_snapshot_completeness(r, d),
                     'coverage_kind': (
                         'DIRECT_SINGLE_DATE'
                         if direct_day == d
