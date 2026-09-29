@@ -1,5 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.176 Single-Service Edition
+Version: 7.0.177 Single-Service Edition
+
+
+v7.0.177 Safe Partial ChatGPT Analysis + 14D Quick Check:
+- Quick Check Sales Trend now has an expandable View Past 14D Sales Performance control directly below the 28D GP$/Avg Selling Price chart.
+- The 14D panel lazy-loads daily Date, Qty Sold, Sales$, Avg Price, GP$, and Price Type without slowing initial Quick Check load.
+- MYSQL_ANALYSIS_CURRENT now publishes READY Quick Check rows only; QA_HOLD and historical rows are excluded from ChatGPT analytical input.
+- MYSQL_FAMILY_CURRENT uses READY UPCs only for representative analytical metrics while retaining READY/HOLD counts for transparency; families with zero READY rows are excluded from analytical family input.
+- MYSQL_QA_HOLD continues to receive all non-READY rows and reasons; MYSQL_QUICK_CHECK_CURRENT remains complete for verification.
+- Source status records Analysis_READY_Rows, Analysis_Family_Rows, Analysis_Excluded_HOLD_Rows, and READY_ONLY input policy.
+- Google Sheet readback now validates the READY-only analysis row count and final analysis row.
+- Adds same-origin Republish ChatGPT Analysis action for the current serving READY/READY_WITH_HOLDS batch, with strict batch-binding and zero-global-blocker checks.
 
 
 v7.0.176 Deploy Import Hotfix:
