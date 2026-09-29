@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Wait for API and worker v7.0.188 deployment
+      - name: Wait for API and worker v7.0.189 deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -28,8 +28,8 @@ jobs:
               p={}
           ok=(
               p.get('ok') is True
-              and p.get('version') == '7.0.188-single-service'
-              and p.get('worker_version') == '7.0.188-single-service'
+              and p.get('version') == '7.0.189-single-service'
+              and p.get('worker_version') == '7.0.189-single-service'
               and p.get('worker_healthy') is True
           )
           print('1' if ok else '0')
@@ -75,7 +75,7 @@ jobs:
               read -r version_ok run_id session_id < <(python - <<'PY'
           import json
           p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
-          version_ok='1' if p.get('code_version') == '7.0.188-single-service' and p.get('version_fence_pass') is True else '0'
+          version_ok='1' if p.get('code_version') == '7.0.189-single-service' and p.get('version_fence_pass') is True else '0'
           print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
           PY
           )
@@ -133,7 +133,7 @@ jobs:
             rest="${state#*|}"
             code_version="${rest%%|*}"
 
-            if [ "$code_version" != "7.0.188-single-service" ] && [ "$status" != "MISSING" ]; then
+            if [ "$code_version" != "7.0.189-single-service" ] && [ "$status" != "MISSING" ]; then
               echo "RUN_VERSION_FENCE_BROKEN=$state"
               exit 1
             fi
@@ -212,5 +212,5 @@ jobs:
           if qty is None:
               raise SystemExit('249450 pos_qty_7d is missing')
           if float(qty) == 0:
-              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.188 rebuild')
+              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.189 rebuild')
           PY
