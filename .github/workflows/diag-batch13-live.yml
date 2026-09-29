@@ -1,4 +1,4 @@
-name: Verify v7.0.192 MVT daily coverage
+name: Check current QA holds
 
 on:
   push:
@@ -8,50 +8,16 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 5
     steps:
-      - name: Wait for v7.0.192 and verify 9/27 calendar
+      - name: Read current Batch 13 QA summary
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-
-          for i in $(seq 1 120); do
-            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
-            echo "$body"
-            version="$(BODY="$body" python - <<'PY'
-          import json, os
-          try:
-              p=json.loads(os.environ.get('BODY') or '{}')
-          except Exception:
-              p={}
-          print(p.get('version') or '')
-          PY
-          )"
-            if [ "$version" = "7.0.192-single-service" ]; then
-              break
-            fi
-            sleep 5
-          done
-
-          test "$version" = "7.0.192-single-service"
-
-          echo "=== CALENDAR ==="
-          curl -fsS --max-time 30 "$base/v1/web-upload/calendar?days=14" -o /tmp/calendar.json
-          cat /tmp/calendar.json
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 20 "$base/healthz"
           echo
-
-          python - <<'PY'
-          import json
-          p=json.load(open('/tmp/calendar.json',encoding='utf-8'))
-          row=next((x for x in p.get('days',[]) if str(x.get('date'))=='2026-09-27'),None)
-          assert row, p
-          print(json.dumps(row,indent=2))
-          assert (row.get('mvt') or {}).get('updated') is True, row
-          assert (row.get('mvt') or {}).get('snapshot_completeness') in {
-              'COMPLETE_DATE_ONLY_MVT_FILENAME_CONTRACT',
-              'COMPLETE_EXPLICIT_FULL_FILENAME',
-              'COMPLETE_AFTER_BUSINESS_DATE',
-          }, row
-          print('MVT_0927_CALENDAR=PASS')
-          PY
+          echo "=== QA ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary"
+          echo
