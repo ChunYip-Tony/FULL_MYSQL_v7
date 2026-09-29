@@ -1,2 +1,2 @@
-check=7
-reason=verify_v7189_phase3_progress
+check=8
+reason=explain_current_v7189_phase3_latency
