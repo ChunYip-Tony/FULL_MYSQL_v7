@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from upc_aliases import service_249_canonical_base
 
 from db import db_conn
 
@@ -308,6 +309,17 @@ def _ensure_upc(cur, ean_upc: str, description: str | None, ctx: RowContext) -> 
                 (key,),
             )
             row = cur.fetchone()
+    if not row:
+        service_candidate=service_249_canonical_base(ean_upc)
+        if service_candidate and service_candidate!=str(ean_upc):
+            cur.execute(
+                """SELECT upc_id,ean_upc FROM selling_upc
+                   WHERE ean_upc=%s
+                     AND record_status='ACTIVE'
+                   LIMIT 1""",
+                (service_candidate,),
+            )
+            row=cur.fetchone()
     if row:
         upc_id = int(row['upc_id'])
         if description:
