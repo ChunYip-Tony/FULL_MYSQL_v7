@@ -42,6 +42,29 @@ TRUSTED_UOM_RESOLUTION_METHODS = {
 }
 
 
+def _upca_check_digit(body11: str) -> str | None:
+    if not re.fullmatch(r'\d{11}', str(body11 or '')):
+        return None
+    digits=[int(x) for x in body11]
+    total=sum(digits[0::2])*3 + sum(digits[1::2])
+    return str((10-(total % 10)) % 10)
+
+
+def _upca_alias_candidates(raw: str | None) -> list[str]:
+    s=str(raw or '').strip()
+    out=[]
+    if re.fullmatch(r'\d{11}',s):
+        cd=_upca_check_digit(s)
+        if cd is not None:
+            out.append(s+cd)
+    elif re.fullmatch(r'\d{10}',s):
+        body='0'+s
+        cd=_upca_check_digit(body)
+        if cd is not None:
+            out.append(body+cd)
+    return out
+
+
 def _numeric_equiv_pred(column: str, value: str) -> tuple[str, tuple[Any, ...]]:
     key = _numeric_key(value)
     if key is None:
@@ -65,7 +88,22 @@ def _find_upc(cur, ean: str) -> dict[str, Any] | None:
             LIMIT 1""",
         (*params, ean),
     )
-    return cur.fetchone()
+    hit=cur.fetchone()
+    if hit:
+        return hit
+    for candidate in _upca_alias_candidates(ean):
+        cur.execute(
+            """SELECT upc_id,ean_upc,selling_description,record_status
+               FROM selling_upc
+               WHERE ean_upc=%s
+                 AND record_status='ACTIVE'
+               LIMIT 1""",
+            (candidate,),
+        )
+        hit=cur.fetchone()
+        if hit:
+            return hit
+    return None
 
 
 def _is_manual_retired_upc(cur, ean: str) -> bool:
@@ -534,6 +572,11 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
     issues = list(by_key.values())
 
     target_keys = {_numeric_key(x['ean_upc']) for x in issues}
+    for item in issues:
+        for candidate in _upca_alias_candidates(item['ean_upc']):
+            key=_numeric_key(candidate)
+            if key:
+                target_keys.add(key)
     target_keys.discard(None)
     manual = _article_manual_candidates(cur, target_keys)
 
@@ -555,7 +598,14 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
             continue
 
         key = _numeric_key(ean)
-        mcands = manual.get(key or '', [])
+        candidate_keys=[key] if key else []
+        candidate_keys.extend(
+            _numeric_key(x) for x in _upca_alias_candidates(ean)
+            if _numeric_key(x)
+        )
+        mcands=[]
+        for ckey in dict.fromkeys(candidate_keys):
+            mcands.extend(manual.get(ckey or '', []))
         if mcands:
             ok, detail = _apply_article_manual_candidate(cur, ean, mcands)
             if ok:
