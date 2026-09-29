@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any
 
 from data_coverage import source_data_days
+from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import apply_manual_upc_overrides
 from normalize import (
@@ -257,6 +258,113 @@ def _open_active_unmapped(cur, batch_id: int) -> list[dict[str, Any]]:
     return rows
 
 
+def _canonical_recent_pos_qty_for_ean(
+    cur,
+    ean: str,
+    pos_days: list[dict[str, Any]],
+) -> Decimal:
+    """Canonical current POS quantity for a raw UPC across selected valid data days.
+
+    Mirrors the Phase 3 current-active guard semantics for both direct single-date
+    POS and derived residual daily coverage. Exact/numeric-equivalent UPC matches
+    are allowed; no product identity inference is performed here.
+    """
+    total = Decimal('0')
+    direct_days = [
+        d for d in pos_days
+        if d.get('coverage_kind') != 'DERIVED_PERIOD_RESIDUAL'
+    ]
+    if direct_days:
+        clauses: list[str] = []
+        args: list[Any] = []
+        for d in direct_days:
+            clauses.append(
+                '(file_id=%s AND period_start_date=%s AND period_end_date=%s)'
+            )
+            args.extend([int(d['file_id']), d['date'], d['date']])
+        pred, pred_args = _numeric_equiv_pred('ean_upc', ean)
+        cur.execute(
+            f"""SELECT COALESCE(SUM(sold_quantity),0) AS q
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND ({' OR '.join(clauses)})
+                  AND {pred}""",
+            tuple(args) + tuple(pred_args),
+        )
+        total += Decimal(str((cur.fetchone() or {}).get('q') or 0))
+
+    derived_days = [
+        d for d in pos_days
+        if d.get('coverage_kind') == 'DERIVED_PERIOD_RESIDUAL'
+    ]
+    if derived_days:
+        clauses = []
+        args = []
+        for d in derived_days:
+            clauses.append('(source_file_id=%s AND business_date=%s)')
+            args.extend([int(d['file_id']), d['date']])
+        pred, pred_args = _numeric_equiv_pred('ean_upc', ean)
+        cur.execute(
+            f"""SELECT COALESCE(SUM(sold_quantity),0) AS q
+                FROM pos_daily_backfill_observation
+                WHERE ({' OR '.join(clauses)})
+                  AND {pred}""",
+            tuple(args) + tuple(pred_args),
+        )
+        total += Decimal(str((cur.fetchone() or {}).get('q') or 0))
+
+    return total
+
+
+def _global_current_active_unmapped(
+    cur,
+    batch_id: int,
+) -> list[dict[str, Any]]:
+    """Return current-active Seafood UPCs missing confirmed product identity.
+
+    This intentionally matches the global current-state readiness gate rather
+    than looking only at SOLD_UPC_UNMAPPED issues created by files in the current
+    ingest batch. It allows evidence-only repair to examine the same population
+    that can block publication.
+    """
+    pos_days = source_data_days(
+        cur,
+        'sales_by_price_type',
+        limit=28,
+        include_batch_id=batch_id,
+        up_to=completed_through_date(),
+    )
+    cur.execute(
+        """SELECT DISTINCT ean_upc
+           FROM upc_department_observation
+           WHERE source_type='POS'
+             AND department_code='400'
+             AND ean_upc IS NOT NULL
+             AND TRIM(ean_upc)<>''
+           ORDER BY ean_upc"""
+    )
+    rows: list[dict[str, Any]] = []
+    for r in cur.fetchall():
+        ean = str(r['ean_upc'])
+        existing = _find_upc(cur, ean)
+        if existing and _active_family_for_upc(cur, int(existing['upc_id'])) is not None:
+            continue
+        qty = _canonical_recent_pos_qty_for_ean(cur, ean, pos_days)
+        if qty <= 0:
+            continue
+        rows.append({
+            'issue_id': None,
+            'ean_upc': ean,
+            'detail': {
+                'activity_scope': 'ACTIVE_SELLING',
+                'activity_basis': 'POS_LATEST_28_VALID_DATA_DAYS_GLOBAL_CURRENT',
+                'recent_pos_qty_28_valid_days': str(qty),
+                'recent_pos_valid_day_count': len(pos_days),
+            },
+        })
+    return rows
+
+
 def _article_manual_candidates(cur, target_keys: set[str]) -> dict[str, list[dict[str, Any]]]:
     """Find exact/numeric-equivalent UPC evidence across all uploaded Article Manual worksheets."""
     out: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -403,13 +511,36 @@ def _official_report_candidates(cur, ean: str) -> list[dict[str, Any]]:
 
 
 def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
-    issues = _open_active_unmapped(cur, batch_id)
+    source_batch_issues = _open_active_unmapped(cur, batch_id)
+    global_current = _global_current_active_unmapped(cur, batch_id)
+
+    # De-duplicate leading-zero-equivalent spellings while preferring the
+    # current global raw UPC spelling. The later global gate will independently
+    # re-evaluate every raw POS spelling after repairs complete.
+    by_key: dict[str, dict[str, Any]] = {}
+    for item in source_batch_issues:
+        key = _numeric_key(item['ean_upc']) or str(item['ean_upc'])
+        by_key[key] = item
+    for item in global_current:
+        key = _numeric_key(item['ean_upc']) or str(item['ean_upc'])
+        prior = by_key.get(key)
+        if prior and prior.get('issue_id') is not None:
+            merged = dict(item)
+            merged['issue_id'] = prior.get('issue_id')
+            merged['detail'] = {**(prior.get('detail') or {}), **(item.get('detail') or {})}
+            by_key[key] = merged
+        else:
+            by_key[key] = item
+    issues = list(by_key.values())
+
     target_keys = {_numeric_key(x['ean_upc']) for x in issues}
     target_keys.discard(None)
     manual = _article_manual_candidates(cur, target_keys)
 
     result = {
         'examined': len(issues),
+        'source_batch_issue_count': len(source_batch_issues),
+        'global_current_candidate_count': len(global_current),
         'repaired_article_manual': 0,
         'repaired_official_report': 0,
         'already_repaired': 0,
@@ -471,10 +602,11 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         # Attach candidate diagnostics to the existing blocker; do not change severity/status.
         detail = item['detail']
         detail['v711_repair_candidates'] = unresolved
-        cur.execute(
-            "UPDATE qa_phase3_issue SET detail_json=%s WHERE issue_id=%s",
-            (json.dumps(detail, ensure_ascii=False, default=str), item['issue_id']),
-        )
+        if item.get('issue_id') is not None:
+            cur.execute(
+                "UPDATE qa_phase3_issue SET detail_json=%s WHERE issue_id=%s",
+                (json.dumps(detail, ensure_ascii=False, default=str), item['issue_id']),
+            )
 
     return result
 
