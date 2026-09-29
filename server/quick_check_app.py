@@ -470,6 +470,26 @@ def _numeric_key(value: str) -> str:
     return digits.lstrip("0") or "0"
 
 
+def _sales_lineage_pred(
+    cur,
+    upc_id: int,
+    *,
+    column_upc_id: str = "upc_id",
+    column_ean: str = "ean_upc",
+) -> tuple[str, tuple[Any, ...]]:
+    cur.execute("SELECT ean_upc FROM selling_upc WHERE upc_id=%s LIMIT 1",(int(upc_id),))
+    row=cur.fetchone()
+    ean=str((row or {}).get("ean_upc") or "").strip()
+    if not ean:
+        return f"{column_upc_id}=%s",(int(upc_id),)
+    key=_numeric_key(ean)
+    return (
+        f"({column_upc_id}=%s OR {column_ean}=%s OR "
+        f"({column_ean} REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM {column_ean})=%s))",
+        (int(upc_id),ean,key),
+    )
+
+
 def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
     q = str(query or "").strip()
     if not q:
@@ -854,6 +874,7 @@ def _quick_check_daily_sales(
         for d in direct_days:
             clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
             args.extend([int(d["file_id"]), d["date"], d["date"]])
+        sales_pred,sales_pred_args=_sales_lineage_pred(cur,upc_id)
         cur.execute(
             f"""SELECT period_end_date AS business_date,
                        COALESCE(SUM(sales_amount),0) AS sales_amount,
@@ -861,9 +882,9 @@ def _quick_check_daily_sales(
                 FROM sales_period_observation
                 WHERE temporal_grain='SINGLE_DATE'
                   AND ({' OR '.join(clauses)})
-                  AND upc_id=%s
+                  AND {sales_pred}
                 GROUP BY period_end_date""",
-            tuple(args) + (upc_id,),
+            tuple(args) + tuple(sales_pred_args),
         )
         for r in cur.fetchall():
             daily[r["business_date"]] = {
@@ -881,15 +902,16 @@ def _quick_check_daily_sales(
         for d in derived_days:
             clauses.append("(source_file_id=%s AND business_date=%s)")
             args.extend([int(d["file_id"]), d["date"]])
+        sales_pred,sales_pred_args=_sales_lineage_pred(cur,upc_id)
         cur.execute(
             f"""SELECT business_date,
                        COALESCE(SUM(sales_amount),0) AS sales_amount,
                        COALESCE(SUM(sold_quantity),0) AS sold_quantity
                 FROM pos_daily_backfill_observation
                 WHERE ({' OR '.join(clauses)})
-                  AND upc_id=%s
+                  AND {sales_pred}
                 GROUP BY business_date""",
-            tuple(args) + (upc_id,),
+            tuple(args) + tuple(sales_pred_args),
         )
         for r in cur.fetchall():
             d = r["business_date"]
@@ -1143,16 +1165,17 @@ def _quick_check_sales_trend(
     limit: int = 40,
 ) -> list[dict[str, Any]]:
     """Return source-period sales observations without inventing daily grain."""
+    sales_pred,sales_pred_args=_sales_lineage_pred(cur,upc_id)
     cur.execute(
-        """SELECT period_start_date,period_end_date,temporal_grain,price_type,
+        f"""SELECT period_start_date,period_end_date,temporal_grain,price_type,
                   sales_amount,sold_quantity,avg_sold_price,
                   batch_id,file_id,sheet_id,raw_id,source_row_number
            FROM sales_period_observation
-           WHERE upc_id=%s
+           WHERE {sales_pred}
            ORDER BY period_end_date DESC,period_start_date DESC,
                     file_id DESC,raw_id DESC
            LIMIT %s""",
-        (upc_id, max(1, min(int(limit or 40), 120))),
+        (*sales_pred_args, max(1, min(int(limit or 40), 120))),
     )
     rows = cur.fetchall()
     for row in rows:

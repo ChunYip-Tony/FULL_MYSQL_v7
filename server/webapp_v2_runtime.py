@@ -40,6 +40,26 @@ def _numeric_key(value: Any) -> str:
     return digits.lstrip("0") or ("0" if digits else "")
 
 
+def _sales_lineage_pred(
+    cur,
+    upc_id: int,
+    column_upc_id: str = "upc_id",
+    column_ean: str = "ean_upc",
+) -> tuple[str, tuple[Any, ...]]:
+    """Read sales by canonical UPC id OR raw POS EAN/UPC lineage."""
+    cur.execute("SELECT ean_upc FROM selling_upc WHERE upc_id=%s LIMIT 1",(int(upc_id),))
+    row=cur.fetchone()
+    ean=str((row or {}).get("ean_upc") or "").strip()
+    if not ean:
+        return f"{column_upc_id}=%s",(int(upc_id),)
+    key=_numeric_key(ean)
+    return (
+        f"({column_upc_id}=%s OR {column_ean}=%s OR "
+        f"({column_ean} REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM {column_ean})=%s))",
+        (int(upc_id),ean,key),
+    )
+
+
 def _readiness_rank(status: Any) -> int:
     return {
         "READY": 0,
@@ -95,16 +115,17 @@ def _daily_sales_by_price_type(
         for x in direct:
             clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
             args.extend([int(x["file_id"]), x["date"], x["date"]])
+        sales_pred,sales_pred_args=_sales_lineage_pred(cur,int(upc_id))
         cur.execute(
             f"""SELECT period_end_date AS business_date,UPPER(TRIM(price_type)) AS price_type,
                        COALESCE(SUM(sales_amount),0) AS sales_amount,
                        COALESCE(SUM(sold_quantity),0) AS sold_quantity
                 FROM sales_period_observation
-                WHERE upc_id=%s
+                WHERE {sales_pred}
                   AND temporal_grain='SINGLE_DATE'
                   AND ({' OR '.join(clauses)})
                 GROUP BY period_end_date,UPPER(TRIM(price_type))""",
-            (int(upc_id), *args),
+            (*sales_pred_args, *args),
         )
         for row in cur.fetchall():
             day = row["business_date"]
@@ -128,15 +149,16 @@ def _daily_sales_by_price_type(
         for x in derived:
             clauses.append("(source_file_id=%s AND business_date=%s)")
             args.extend([int(x["file_id"]), x["date"]])
+        sales_pred,sales_pred_args=_sales_lineage_pred(cur,int(upc_id))
         cur.execute(
             f"""SELECT business_date,UPPER(TRIM(price_type)) AS price_type,
                        COALESCE(SUM(sales_amount),0) AS sales_amount,
                        COALESCE(SUM(sold_quantity),0) AS sold_quantity
                 FROM pos_daily_backfill_observation
-                WHERE upc_id=%s
+                WHERE {sales_pred}
                   AND ({' OR '.join(clauses)})
                 GROUP BY business_date,UPPER(TRIM(price_type))""",
-            (int(upc_id), *args),
+            (*sales_pred_args, *args),
         )
         for row in cur.fetchall():
             day = row["business_date"]

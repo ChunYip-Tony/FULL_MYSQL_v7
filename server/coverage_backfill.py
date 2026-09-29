@@ -575,18 +575,20 @@ def canonical_pos_qty_by_upc(
 
 
 def relink_pos_backfill(cur) -> int:
+    # Raw EAN/UPC remains the source lineage key. Repair stale derived IDs as
+    # well as NULL IDs so service/fried UPC history follows current identity.
     cur.execute(
         """UPDATE pos_daily_backfill_observation b
            JOIN selling_upc u ON u.ean_upc=b.ean_upc
            SET b.upc_id=u.upc_id
-           WHERE b.upc_id IS NULL"""
+           WHERE b.upc_id IS NULL OR b.upc_id<>u.upc_id"""
     )
     updated = int(cur.rowcount)
     cur.execute(
         """UPDATE pos_period_residual_observation b
            JOIN selling_upc u ON u.ean_upc=b.ean_upc
            SET b.upc_id=u.upc_id
-           WHERE b.upc_id IS NULL"""
+           WHERE b.upc_id IS NULL OR b.upc_id<>u.upc_id"""
     )
     return updated + int(cur.rowcount)
 

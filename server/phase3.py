@@ -1411,10 +1411,15 @@ def _record_product_identity_guard_issues(
 
 def relink_history(cur) -> None:
     # Late-arriving identity evidence must repair prior history links without rewriting RAW.
+    # Raw EAN/UPC is the sales lineage key. Repair both NULL and stale/wrong
+    # derived upc_id links so service/fried UPCs cannot remain attached to an
+    # older canonical row after product identity changes.
     cur.execute("""UPDATE sales_period_observation s JOIN selling_upc u ON u.ean_upc=s.ean_upc
-                   SET s.upc_id=u.upc_id WHERE s.upc_id IS NULL""")
+                   SET s.upc_id=u.upc_id
+                   WHERE s.upc_id IS NULL OR s.upc_id<>u.upc_id""")
     cur.execute("""UPDATE price_list_observation p JOIN selling_upc u ON u.ean_upc=p.ean_upc
-                   SET p.upc_id=u.upc_id WHERE p.upc_id IS NULL""")
+                   SET p.upc_id=u.upc_id
+                   WHERE p.upc_id IS NULL OR p.upc_id<>u.upc_id""")
     cur.execute("""UPDATE movement_history m JOIN article a ON a.article_number=m.article_number
                    LEFT JOIN bridge_article_family baf ON baf.article_id=a.article_id AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
                      AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
@@ -1436,18 +1441,28 @@ def relink_history(cur) -> None:
              AND (i.article_id IS NULL OR i.family_id IS NULL)"""
     )
     cur.execute("""UPDATE inventory_observation i JOIN selling_upc u ON u.ean_upc=i.ean_upc
-                   SET i.upc_id=u.upc_id WHERE i.upc_id IS NULL AND i.ean_upc IS NOT NULL""")
+                   SET i.upc_id=u.upc_id
+                   WHERE i.ean_upc IS NOT NULL
+                     AND (i.upc_id IS NULL OR i.upc_id<>u.upc_id)""")
     cur.execute("""UPDATE company_price_observation c JOIN selling_upc u ON u.ean_upc=c.ean_upc
-                   SET c.upc_id=u.upc_id WHERE c.upc_id IS NULL AND c.ean_upc IS NOT NULL""")
+                   SET c.upc_id=u.upc_id
+                   WHERE c.ean_upc IS NOT NULL
+                     AND (c.upc_id IS NULL OR c.upc_id<>u.upc_id)""")
 
-    # Second pass: resolve leading-zero-equivalent UPCs that cannot match by exact string.
+    # Second pass: resolve numeric/UPC-A aliases and repair stale derived links.
     for table in ('sales_period_observation','price_list_observation','inventory_observation','company_price_observation'):
-        cur.execute(f"SELECT DISTINCT ean_upc FROM {table} WHERE upc_id IS NULL AND ean_upc IS NOT NULL")
+        cur.execute(f"SELECT DISTINCT ean_upc FROM {table} WHERE ean_upc IS NOT NULL")
         for row in cur.fetchall():
             ean = row['ean_upc']
             upc_id = _find_upc_id(cur, ean)
             if upc_id is not None:
-                cur.execute(f"UPDATE {table} SET upc_id=%s WHERE upc_id IS NULL AND ean_upc=%s", (upc_id, ean))
+                cur.execute(
+                    f"""UPDATE {table}
+                        SET upc_id=%s
+                        WHERE ean_upc=%s
+                          AND (upc_id IS NULL OR upc_id<>%s)""",
+                    (upc_id, ean, upc_id),
+                )
 
 
 def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
@@ -1548,9 +1563,13 @@ def _sales_daily_aggregates(
                 '(file_id=%s AND period_start_date=%s AND period_end_date=%s)'
             )
             args.extend([int(d['file_id']), d['date'], d['date']])
-        if upc_id is not None:
+        if upc_id is not None and ean:
+            ean_pred, ean_args = _upc_match_sql('ean_upc', str(ean))
+            pred = f'(upc_id=%s OR {ean_pred})'
+            pred_args: tuple[Any, ...] = (int(upc_id), *ean_args)
+        elif upc_id is not None:
             pred = 'upc_id=%s'
-            pred_args: tuple[Any, ...] = (int(upc_id),)
+            pred_args = (int(upc_id),)
         else:
             pred, pred_args = _upc_match_sql('ean_upc', str(ean))
         cur.execute(
@@ -1918,7 +1937,7 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     return None
 
 
-def _current_price(cur, upc_id: int) -> dict[str, Any] | None:
+def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] | None:
     # Latest point-in-time Price List vs latest period-level POS evidence.
     cur.execute(
         """SELECT snapshot_at FROM price_list_observation WHERE upc_id=%s AND configured_price>0
@@ -1934,14 +1953,27 @@ def _current_price(cur, upc_id: int) -> dict[str, Any] | None:
         if rows:
             rows.sort(key=lambda x: PRICE_TYPE_PRIORITY.get(str(x['price_type']).upper(), 0), reverse=True)
             config = rows[0]
-    cur.execute('SELECT MAX(period_end_date) AS d FROM sales_period_observation WHERE upc_id=%s AND sold_quantity<>0', (upc_id,))
+    if ean:
+        ean_pred, ean_args = _upc_match_sql('ean_upc', str(ean))
+        sales_pred = f'(upc_id=%s OR {ean_pred})'
+        sales_args = (upc_id, *ean_args)
+    else:
+        sales_pred = 'upc_id=%s'
+        sales_args = (upc_id,)
+    cur.execute(
+        f'SELECT MAX(period_end_date) AS d FROM sales_period_observation WHERE {sales_pred} AND sold_quantity<>0',
+        sales_args,
+    )
     sr = cur.fetchone(); sales_date = sr['d'] if sr else None
     pos = None
     if sales_date:
         cur.execute(
-            """SELECT SUM(sales_amount) AS s,SUM(sold_quantity) AS q,COUNT(DISTINCT price_type) AS types,
+            f"""SELECT SUM(sales_amount) AS s,SUM(sold_quantity) AS q,COUNT(DISTINCT price_type) AS types,
                       GROUP_CONCAT(DISTINCT price_type ORDER BY price_type SEPARATOR '+') AS price_types
-               FROM sales_period_observation WHERE upc_id=%s AND period_end_date=%s""", (upc_id, sales_date))
+               FROM sales_period_observation
+               WHERE {sales_pred} AND period_end_date=%s""",
+            (*sales_args, sales_date),
+        )
         r = cur.fetchone()
         if r and r['q'] not in (None, 0):
             pos = {'price': r['s'] / r['q'], 'type': r['price_types'] if r['types'] == 1 else 'MIXED', 'date': sales_date}
@@ -1954,7 +1986,12 @@ def _current_price(cur, upc_id: int) -> dict[str, Any] | None:
     return None
 
 
-def _sales_metrics(cur, upc_id: int, data_days: list[dict[str, Any]]) -> dict[str, Any]:
+def _sales_metrics(
+    cur,
+    upc_id: int,
+    data_days: list[dict[str, Any]],
+    ean: str | None = None,
+) -> dict[str, Any]:
     """Metrics across canonical POS data days.
 
     Direct single-day files and one-missing-day residual backfills are valid
@@ -1963,7 +2000,7 @@ def _sales_metrics(cur, upc_id: int, data_days: list[dict[str, Any]]) -> dict[st
     """
     if not data_days:
         return {'sales': Decimal('0'), 'qty': Decimal('0'), 'days': 0, 'start': None, 'end': None}
-    daily = _sales_daily_aggregates(cur, data_days, upc_id=upc_id)
+    daily = _sales_daily_aggregates(cur, data_days, upc_id=upc_id, ean=ean)
     sales = sum((x['sales'] for x in daily.values()), Decimal('0'))
     qty = sum((x['qty'] for x in daily.values()), Decimal('0'))
     dates = [x['date'] for x in data_days]
@@ -2079,11 +2116,17 @@ def _company_prices(cur, upc_id: int, family_id: int | None) -> dict[str, Any] |
     return cur.fetchone()
 
 
-def _historical_sweet_spot(cur, upc_id: int, family_id: int, factor: Decimal | None,
-                           data_days: list[dict[str, Any]]) -> Decimal | None:
+def _historical_sweet_spot(
+    cur,
+    upc_id: int,
+    family_id: int,
+    factor: Decimal | None,
+    data_days: list[dict[str, Any]],
+    ean: str | None = None,
+) -> Decimal | None:
     if factor is None or not data_days:
         return None
-    daily_map = _sales_daily_aggregates(cur, data_days, upc_id=upc_id)
+    daily_map = _sales_daily_aggregates(cur, data_days, upc_id=upc_id, ean=ean)
     daily = [
         {'period_end_date': d, 's': x['sales'], 'q': x['qty']}
         for d, x in sorted(daily_map.items())
@@ -2192,10 +2235,10 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     active_rows = active_ready = active_hold = historical_rows = 0
     for p in products:
         upc_id = int(p['upc_id']); family_id = int(p['family_id'])
-        m7 = _sales_metrics(cur, upc_id, pos_days_7)
-        m28 = _sales_metrics(cur, upc_id, pos_days_28)
-        m30 = _sales_metrics(cur, upc_id, pos_days_30)
-        price = _current_price(cur, upc_id)
+        m7 = _sales_metrics(cur, upc_id, pos_days_7, p['ean_upc'])
+        m28 = _sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])
+        m30 = _sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])
+        price = _current_price(cur, upc_id, p['ean_upc'])
         cost = _latest_cost(cur, family_id)
         cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'107\',\'109\')', (family_id,))
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
@@ -2276,7 +2319,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
         if cost_sell is not None and pclass in {'LIVE', 'FRESH', 'FROZEN'}:
             target = {'LIVE': Decimal('0.15'), 'FRESH': Decimal('0.30'), 'FROZEN': Decimal('0.44')}[pclass]
             wgpm = (cost_sell / (Decimal('1') - target)).quantize(Decimal('0.01'))
-        sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30) if cost else None
+        sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc']) if cost else None
         reasons = []
         activity_scope, activity_basis = _mapped_current_activity_scope(m28)
         # Only positive sales in the latest up-to-28 VALID POS data days make
