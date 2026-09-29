@@ -478,6 +478,7 @@ def _sales_lineage_pred(
     column_upc_id: str = "upc_id",
     column_ean: str = "ean_upc",
 ) -> tuple[str, tuple[Any, ...]]:
+    """Read sales by canonical UPC id OR raw POS EAN/UPC lineage."""
     cur.execute("SELECT ean_upc FROM selling_upc WHERE upc_id=%s LIMIT 1",(int(upc_id),))
     row=cur.fetchone()
     ean=str((row or {}).get("ean_upc") or "").strip()
@@ -485,10 +486,19 @@ def _sales_lineage_pred(
         return f"{column_upc_id}=%s",(int(upc_id),)
     key=_numeric_key(ean)
     service_prefix=service_249_source_prefix(ean)
+    numeric_only=f"({column_ean}<>'' AND {column_ean} NOT REGEXP '[^0-9]')"
     if service_prefix:
         return (
             f"({column_upc_id}=%s OR {column_ean}=%s OR "
-            f"({column_ean} REGEXP '^[0-9]+
+            f"({numeric_only} AND TRIM(LEADING '0' FROM {column_ean})=%s) OR "
+            f"{column_ean} LIKE %s)",
+            (int(upc_id),ean,key,service_prefix+'%'),
+        )
+    return (
+        f"({column_upc_id}=%s OR {column_ean}=%s OR "
+        f"({numeric_only} AND TRIM(LEADING '0' FROM {column_ean})=%s))",
+        (int(upc_id),ean,key),
+    )
 
 
 def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
