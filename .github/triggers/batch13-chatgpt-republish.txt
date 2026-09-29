@@ -1,4 +1,4 @@
-Batch 13 ChatGPT republish trigger for v7.0.194
-source_merge=8f3ae607af107f1a0cdf9e4bf0f11c49ad586185
-attempt=9
-reason=force_phase3_rebuild_for_249_service_sales_and_canonical_price_refresh
+Batch 13 ChatGPT republish trigger for v7.0.195
+source_merge=c0d42631d6e8466565e598d215f3566f27e07006
+attempt=10
+reason=repair_249_service_short_code_pos_price_lineage
