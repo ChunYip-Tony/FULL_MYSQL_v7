@@ -218,7 +218,7 @@ def _recover_stale_started(cur) -> int:
                   started_at,code_version,detail_json
            FROM pipeline_run
            WHERE pipeline_name=%s
-             AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+             AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
              AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
         (API_PIPELINE,),
     )
@@ -361,7 +361,7 @@ def _supersede_incompatible_queued(cur) -> int:
         """SELECT pipeline_run_id,batch_id,stage_name,code_version,detail_json
            FROM pipeline_run
            WHERE pipeline_name=%s
-             AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+             AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
              AND processing_status='QUEUED'
              AND COALESCE(code_version,'')<>%s""",
         (API_PIPELINE,API_VERSION),
