@@ -1291,7 +1291,9 @@ async function loadWebUploadRecent(){
   try{
     let d=await api('/v1/web-upload/recent?limit=8',{cache:'no-store'});
     let batches=(d.batches||[]).filter(b=>!deletedUploadBatchIds.has(Number(b.batch_id)));
-    $('uploadRecentMsg').textContent=batches.length+' recent batch(es)'+(d.degraded?' · history loaded with limited stage detail':'');
+    let warn=(d.warnings||[]).filter(Boolean);
+    $('uploadRecentMsg').textContent=batches.length+' recent batch(es)'+
+      (d.degraded?' · DEGRADED: '+warn.slice(0,3).join(' · '):'');
     $('uploadRecent').innerHTML=batches.map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
     document.querySelectorAll('#uploadRecent [data-delete-batch]').forEach(
       b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch,b)
