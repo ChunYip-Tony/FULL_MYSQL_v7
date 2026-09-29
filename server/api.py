@@ -496,6 +496,30 @@ async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(..
     except PermissionError as exc:
         raise HTTPException(403,str(exc))
     except Exception as exc:
+        # Persist the exact upload failure on the open batch so polling cannot
+        # replace the actionable error with a generic API_UPLOADING message.
+        try:
+            with db_conn() as conn:
+                cur=conn.cursor(dictionary=True)
+                cur.execute("SELECT batch_id,notes FROM ingest_batch WHERE batch_key=%s LIMIT 1",(session_id,))
+                row=cur.fetchone()
+                if row:
+                    notes={}
+                    try:
+                        parsed=json.loads(row.get('notes') or '{}')
+                        if isinstance(parsed,dict): notes=parsed
+                    except Exception:
+                        notes={}
+                    notes.update({
+                        'last_upload_error':str(exc),
+                        'last_upload_error_file':filename,
+                        'last_upload_error_at':datetime.now().isoformat(timespec='seconds'),
+                    })
+                    cur.execute("UPDATE ingest_batch SET notes=%s WHERE batch_id=%s",(json.dumps(notes,ensure_ascii=False,default=str),int(row['batch_id'])))
+                    conn.commit()
+                cur.close()
+        except Exception:
+            pass
         raise HTTPException(400,str(exc))
 
 
