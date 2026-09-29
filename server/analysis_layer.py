@@ -439,7 +439,7 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                 %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
-                %s,%s,CURRENT_TIMESTAMP(6)
+                %s,CURRENT_TIMESTAMP(6)
             )
             """,
             (
