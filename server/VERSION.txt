@@ -1,6 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.166 Single-Service Edition
+Version: 7.0.167 Single-Service Edition
 
+
+v7.0.167 Phase 3 Failure Visibility:
+- Current Batch status now exposes the actual backend exception summary for failed Phase 3 runs instead of only STOPPED · RESUME REQUIRED.
+- Authoritative status includes failure_error, failure_stage, recovery_reason, pipeline_run_id, and run_completed_at from the latest Phase 3 run.
+- Future worker failures preserve the last progress stage in the failed run detail before writing FAILED.
+- UI shows Backend failure / Stage / Run directly above Resume Phase 3 so operators can diagnose before retrying.
 
 v7.0.166 Backend-Authoritative Batch Status + Resume-Only Controls:
 - Batch status API now returns authoritative_status, derived directly from ingest_batch, phase results, and the latest Phase 3 pipeline_run.
