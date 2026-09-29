@@ -281,6 +281,13 @@ def session_status(session_id: str) -> dict[str,Any]:
         runs.sort(key=lambda x: int(x.get('pipeline_run_id') or 0))
         cur.execute("SELECT result_status,blocking_issue_count,updated_at FROM phase2c_batch_result WHERE batch_id=%s",(bid,)); p2=cur.fetchone()
         cur.execute("SELECT result_status,blocking_issue_count,quick_check_rows,quick_check_ready_rows,quick_check_hold_rows,updated_at FROM phase3_batch_result WHERE batch_id=%s",(bid,)); p3=cur.fetchone()
+        cur.execute(
+            """SELECT COUNT(*) AS c,
+                      MIN(publish_batch_id) AS min_batch,
+                      MAX(publish_batch_id) AS max_batch
+               FROM quick_check_current"""
+        )
+        serving_owner=cur.fetchone() or {}
         cur.close()
     def conv(o):
         if not o: return o
@@ -307,11 +314,67 @@ def session_status(session_id: str) -> dict[str,Any]:
         and heartbeat_fresh
         and code_version_matches
     )
+    latest_stage_name=str((latest_phase3_run or {}).get('stage_name') or '').upper()
+    current_serving_bound=(
+        int(serving_owner.get('c') or 0)>0
+        and int(serving_owner.get('min_batch') or 0)==bid
+        and int(serving_owner.get('max_batch') or 0)==bid
+    )
+
+    # A PHASE3_RERUN can coexist with the previous committed Phase 3 result.
+    # Treat the run as newer than the result only when it started after the
+    # result's last update. This lets a live rebuild override display state
+    # without allowing stale historical runs to pollute the current result.
+    rebuild_newer_than_result=False
+    if p3 and latest_stage_name=='PHASE3_RERUN' and latest_phase3_run:
+        try:
+            run_started=latest_phase3_run.get('started_at')
+            result_updated=p3.get('updated_at')
+            if isinstance(run_started,str):
+                run_started=datetime.fromisoformat(run_started.replace('Z','+00:00'))
+            if isinstance(result_updated,str):
+                result_updated=datetime.fromisoformat(result_updated.replace('Z','+00:00'))
+            rebuild_newer_than_result=bool(
+                run_started and result_updated and run_started > result_updated
+            )
+        except Exception:
+            rebuild_newer_than_result=run_status in {'QUEUED','STARTED','PAUSE_REQUESTED'}
+
+    rebuild_active=bool(
+        p3
+        and latest_stage_name=='PHASE3_RERUN'
+        and rebuild_newer_than_result
+        and run_status in {'QUEUED','STARTED','PAUSE_REQUESTED'}
+    )
+    rebuild_failed=bool(
+        p3
+        and latest_stage_name=='PHASE3_RERUN'
+        and rebuild_newer_than_result
+        and run_status in {'FAILED','FAILED_QA','QA_HOLD','ABORTED'}
+    )
+
     resume_allowed=False
+    rebuild_allowed=False
     pipeline_display=batch_status
     phase3_display=(p3 or {}).get('result_status') if p3 else None
 
-    if not p3 and batch_status=='PHASE2C_READY':
+    if rebuild_active:
+        if run_status=='QUEUED':
+            pipeline_display='PHASE3_REBUILD_QUEUED'
+            phase3_display='REBUILD QUEUED'
+        elif run_status=='STARTED' and phase3_running:
+            pipeline_display='PHASE3_REBUILD_RUNNING'
+            phase3_display=live_stage or 'REBUILD RUNNING'
+        elif run_status=='STARTED':
+            pipeline_display='PHASE3_RECOVERING'
+            phase3_display='REBUILD WORKER RESTART DETECTED · AUTO-RESUME'
+        elif run_status=='PAUSE_REQUESTED':
+            pipeline_display='PHASE3_RECOVERING'
+            phase3_display='LEGACY REBUILD PAUSE STATE · AUTO-RESUME'
+    elif rebuild_failed:
+        pipeline_display='PHASE3_REBUILD_FAILED'
+        phase3_display='REBUILD FAILED · PREVIOUS SNAPSHOT PRESERVED'
+    elif not p3 and batch_status=='PHASE2C_READY':
         if run_status=='QUEUED':
             pipeline_display='PHASE3_RECOVERING' if (latest_phase3_run or {}).get('recovery_reason') else 'PHASE3_QUEUED'
             phase3_display='AUTO-RESUME QUEUED' if (latest_phase3_run or {}).get('recovery_reason') else 'QUEUED'
@@ -336,6 +399,18 @@ def session_status(session_id: str) -> dict[str,Any]:
             phase3_display='READY TO RESUME'
             resume_allowed=True
 
+    if p3 and not rebuild_active:
+        p3_status=str(p3.get('result_status') or '').upper()
+        rebuild_allowed=bool(
+            current_serving_bound
+            and p3_status in {
+                'QUICK_CHECK_READY',
+                'QUICK_CHECK_READY_WITH_HOLDS',
+                'PHASE3_QA_HOLD',
+            }
+            and run_status not in {'QUEUED','STARTED','PAUSE_REQUESTED'}
+        )
+
     quick_check_display='PENDING'
     if p3 and p3.get('quick_check_rows') is not None:
         hold_rows=int(p3.get('quick_check_hold_rows') or 0)
@@ -352,7 +427,12 @@ def session_status(session_id: str) -> dict[str,Any]:
         'phase3_stage_live':live_stage,
         'quick_check':quick_check_display,
         'resume_allowed':resume_allowed,
-        'user_action':'RESUME_PHASE3' if resume_allowed else 'NONE',
+        'rebuild_allowed':rebuild_allowed,
+        'rebuild_active':rebuild_active,
+        'rebuild_failed':rebuild_failed,
+        'current_serving_bound':current_serving_bound,
+        'previous_snapshot_preserved_during_rebuild':bool(rebuild_active or rebuild_failed),
+        'user_action':'RESUME_PHASE3' if resume_allowed else ('REBUILD_PHASE3' if rebuild_allowed else 'NONE'),
         'pipeline_run_id':(latest_phase3_run or {}).get('pipeline_run_id'),
         'worker':(latest_phase3_run or {}).get('worker'),
         'run_code_version':(latest_phase3_run or {}).get('code_version'),
@@ -361,11 +441,23 @@ def session_status(session_id: str) -> dict[str,Any]:
         'heartbeat_age_seconds':heartbeat_age_seconds,
         'heartbeat_fresh':heartbeat_fresh,
         'heartbeat_fresh_seconds':STATUS_HEARTBEAT_FRESH_SECONDS,
-        # A committed Phase 3 result is authoritative final state. Historical
-        # failed/recovery run metadata must not pollute a successful final batch.
-        'failure_error':None if p3 else (latest_phase3_run or {}).get('failure_error'),
-        'failure_stage':None if p3 else ((latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage')),
-        'recovery_reason':None if p3 else (latest_phase3_run or {}).get('recovery_reason'),
+        # Historical failures never pollute a committed result, but a rebuild
+        # that is newer than the current result must surface its own failure.
+        'failure_error':(
+            (latest_phase3_run or {}).get('failure_error')
+            if rebuild_failed
+            else (None if p3 else (latest_phase3_run or {}).get('failure_error'))
+        ),
+        'failure_stage':(
+            ((latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage'))
+            if rebuild_failed
+            else (None if p3 else ((latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage')))
+        ),
+        'recovery_reason':(
+            (latest_phase3_run or {}).get('recovery_reason')
+            if (rebuild_active or rebuild_failed)
+            else (None if p3 else (latest_phase3_run or {}).get('recovery_reason'))
+        ),
         'run_completed_at':(latest_phase3_run or {}).get('completed_at'),
     }
 
