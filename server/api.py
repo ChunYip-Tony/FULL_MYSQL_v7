@@ -27,6 +27,16 @@ from chatgpt_sheet_bridge import bridge_enabled, enqueue_chatgpt_publish, chatgp
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
+from backoffice_ui import backoffice_html
+from backoffice_runtime import (
+    inventory_review as backoffice_inventory_review,
+    ordering_review as backoffice_ordering_review,
+    pricing_review as backoffice_pricing_review,
+)
+from qa_resolution import (
+    qa_review as backoffice_qa_review,
+    resolve_qa_issue as backoffice_resolve_qa_issue,
+)
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 from version import VERSION
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
@@ -298,6 +308,19 @@ def _web_upload_filename_ok(filename: str) -> bool:
 def public_web_app():
     return HTMLResponse(
         webapp_v2_html(),
+        headers={
+            'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma':'no-cache',
+            'Expires':'0',
+            'X-FULLMYSQL-Version':VERSION,
+        },
+    )
+
+
+@app.get('/app/backoffice',response_class=HTMLResponse,include_in_schema=False)
+def backoffice_web_app():
+    return HTMLResponse(
+        backoffice_html(VERSION),
         headers={
             'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0',
             'Pragma':'no-cache',
@@ -3276,6 +3299,86 @@ def app_dashboard():
         result=operational_dashboard()
     except Exception as exc:
         raise HTTPException(500,f'Operations dashboard failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+class BackofficeQAResolveRequest(BaseModel):
+    issue_id: int | None = None
+    ean_upc: str
+    article_number: str | None = None
+    selling_uom: str
+    base_uom: str | None = None
+    base_qty_per_selling_unit: Decimal | None = None
+    note: str | None = None
+    confirm: str
+
+
+@app.get('/v1/backoffice/qa-review')
+def backoffice_qa(limit:int=250):
+    try:
+        result=backoffice_qa_review(limit=limit)
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice QA review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/backoffice/qa-resolve')
+def backoffice_qa_resolve(
+    body: BackofficeQAResolveRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=backoffice_resolve_qa_issue(
+            issue_id=body.issue_id,
+            ean_upc=body.ean_upc,
+            article_number=body.article_number,
+            selling_uom=body.selling_uom,
+            base_uom=body.base_uom,
+            base_qty_per_selling_unit=body.base_qty_per_selling_unit,
+            note=body.note,
+            actor=actor,
+            confirm=body.confirm,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice QA resolution failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/backoffice/inventory')
+def backoffice_inventory(category:str='ALL',limit:int=300):
+    try:
+        result=backoffice_inventory_review(limit=limit,category=category)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice inventory failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/backoffice/ordering-review')
+def backoffice_ordering(category:str='ALL'):
+    try:
+        result=backoffice_ordering_review(category=category)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice ordering review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/backoffice/pricing-review')
+def backoffice_pricing(category:str='ALL',limit:int=100):
+    try:
+        result=backoffice_pricing_review(category=category,limit=limit)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice pricing review failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
