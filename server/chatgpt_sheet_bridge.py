@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections import Counter, defaultdict
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -11,6 +12,7 @@ from urllib.parse import quote
 from db import db_conn
 from quick_check_app import negative_stock_queue
 from cost_backfill_queue import cost_backfill_queue
+from data_coverage import coverage_summary, source_data_days
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -641,6 +643,49 @@ def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
     return out
 
 
+def _iso_date(value: Any) -> str | None:
+    if value is None:
+        return None
+    iso = getattr(value, "isoformat", None)
+    return iso() if callable(iso) else str(value)
+
+
+def _canonical_freshness(cur, batch_id: int) -> dict[str, Any]:
+    """Compute serving freshness from FULL MYSQL canonical coverage only."""
+    bid = int(batch_id)
+    pos = coverage_summary(cur, "sales_by_price_type", include_batch_id=bid)
+    mvt = coverage_summary(cur, "movement", include_batch_id=bid)
+
+    pos_days = source_data_days(
+        cur,
+        "sales_by_price_type",
+        limit=1,
+        include_batch_id=bid,
+        up_to=pos.get("expected_through"),
+    )
+    mvt_days = source_data_days(
+        cur,
+        "movement",
+        limit=1,
+        include_batch_id=bid,
+        up_to=mvt.get("expected_through"),
+    )
+    pos_latest = pos_days[0] if pos_days else {}
+    mvt_latest = mvt_days[0] if mvt_days else {}
+
+    return {
+        "authority": "FULL_MYSQL_CANONICAL_COVERAGE",
+        "pos_data_through": _iso_date(pos.get("latest_valid_date")),
+        "pos_expected_through": _iso_date(pos.get("expected_through")),
+        "pos_status": pos.get("status"),
+        "pos_source": pos_latest.get("original_filename") or "",
+        "movement_data_through": _iso_date(mvt.get("latest_valid_date")),
+        "movement_expected_through": _iso_date(mvt.get("expected_through")),
+        "movement_status": mvt.get("status"),
+        "movement_source": mvt_latest.get("original_filename") or "",
+    }
+
+
 def _source_status(
     batch: dict[str, Any],
     phase3: dict[str, Any],
@@ -648,11 +693,21 @@ def _source_status(
     *,
     analysis_ready_rows: int,
     analysis_family_rows: int,
+    freshness: dict[str, Any],
 ) -> list[list[Any]]:
     fields = [
         ("Snapshot_Status","MYSQL_PUBLISH_READY"),("MySQL_Batch_ID",batch.get("batch_id")),
         ("MySQL_Batch_Key",batch.get("batch_key")),("MySQL_Batch_Label",batch.get("batch_label")),
         ("MySQL_Batch_Status",batch.get("processing_status")),("Phase3_Result_Status",phase3.get("result_status")),
+        ("Freshness_Authority",freshness.get("authority")),
+        ("POS_Data_Through",freshness.get("pos_data_through")),
+        ("POS_Expected_Through",freshness.get("pos_expected_through")),
+        ("POS_Coverage_Status",freshness.get("pos_status")),
+        ("POS_Canonical_Source",freshness.get("pos_source")),
+        ("Movement_Data_Through",freshness.get("movement_data_through")),
+        ("Movement_Expected_Through",freshness.get("movement_expected_through")),
+        ("Movement_Coverage_Status",freshness.get("movement_status")),
+        ("Canonical_Movement_Source",freshness.get("movement_source")),
         ("Phase3_Blocking_Issues",phase3.get("blocking_issue_count")),("Current_Active_Rows",phase3.get("quick_check_rows")),
         ("Current_READY_Rows",phase3.get("quick_check_ready_rows")),("Current_HOLD_Rows",phase3.get("quick_check_hold_rows")),
         ("Serving_Rows_Total",row_count),
@@ -686,7 +741,7 @@ def _bridge_status(
     return [["Field","Value"]] + [[k,v] for k,v in values]
 
 
-def _validate_readback(
+def _validate_readback_once(
     session,
     spreadsheet_id: str,
     batch_id: int,
@@ -696,7 +751,7 @@ def _validate_readback(
     reader=None,
 ) -> dict[str, Any]:
     read = reader or _read_values
-    source = read(session, spreadsheet_id, f"'{MYSQL_TABS['source']}'!A1:B20")
+    source = read(session, spreadsheet_id, f"'{MYSQL_TABS['source']}'!A1:B40")
     lookup_head = read(session, spreadsheet_id, f"'{MYSQL_TABS['lookup']}'!A1:I2")
     lookup_tail = read(session, spreadsheet_id,
                        f"'{MYSQL_TABS['lookup']}'!A{row_count + 1}:I{row_count + 1}")
@@ -737,6 +792,37 @@ def _validate_readback(
     }
 
 
+def _validate_readback(
+    session,
+    spreadsheet_id: str,
+    batch_id: int,
+    row_count: int,
+    *,
+    analysis_row_count: int,
+    reader=None,
+    attempts: int = 3,
+    retry_delay_seconds: float = 1.0,
+) -> dict[str, Any]:
+    """Retry readback to absorb short Google Sheets/Apps Script propagation lag."""
+    last: dict[str, Any] = {}
+    total = max(1, int(attempts))
+    for attempt in range(1, total + 1):
+        last = _validate_readback_once(
+            session,
+            spreadsheet_id,
+            batch_id,
+            row_count,
+            analysis_row_count=analysis_row_count,
+            reader=reader,
+        )
+        last["attempts"] = attempt
+        if last.get("pass"):
+            return last
+        if attempt < total:
+            time.sleep(max(0.0, float(retry_delay_seconds)))
+    return last
+
+
 def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
     if not bridge_enabled():
         return {"status":"DISABLED","batch_id":batch_id,
@@ -760,6 +846,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                     return {"status":"BLOCKED","batch_id":batch_id,
                             "reason":"Phase 3 blocking_issue_count is non-zero."}
                 rows = _fetch_quick_rows(cur)
+                freshness = _canonical_freshness(cur, batch_id)
             finally:
                 cur.close()
 
@@ -814,6 +901,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 len(rows),
                 analysis_ready_rows=analysis_row_count,
                 analysis_family_rows=analysis_family_count,
+                freshness=freshness,
             ),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),

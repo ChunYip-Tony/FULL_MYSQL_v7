@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Wait for API and worker v7.0.190 deployment
+      - name: Wait for API and worker v7.0.194 deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -28,8 +28,8 @@ jobs:
               p={}
           ok=(
               p.get('ok') is True
-              and p.get('version') == '7.0.190-single-service'
-              and p.get('worker_version') == '7.0.190-single-service'
+              and p.get('version') == '7.0.194-single-service'
+              and p.get('worker_version') == '7.0.194-single-service'
               and p.get('worker_healthy') is True
               and p.get('worker_ready') is True
           )
@@ -103,7 +103,7 @@ jobs:
               read -r version_ok run_id session_id < <(python - <<'PY'
           import json
           p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
-          version_ok='1' if p.get('code_version') == '7.0.190-single-service' and p.get('version_fence_pass') is True else '0'
+          version_ok='1' if p.get('code_version') == '7.0.194-single-service' and p.get('version_fence_pass') is True else '0'
           print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
           PY
           )
@@ -160,7 +160,7 @@ jobs:
             rest="${state#*|}"
             code_version="${rest%%|*}"
 
-            if [ "$code_version" != "7.0.190-single-service" ] && [ "$status" != "MISSING" ]; then
+            if [ "$code_version" != "7.0.194-single-service" ] && [ "$status" != "MISSING" ]; then
               echo "RUN_VERSION_FENCE_BROKEN=$state"
               exit 1
             fi
@@ -232,7 +232,7 @@ jobs:
           if qty is None:
               raise SystemExit('249450 pos_qty_7d is missing')
           if float(qty) == 0:
-              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.190 serving validation')
+              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.194 serving validation')
           PY
 
       - name: Queue ChatGPT Sheet publish asynchronously
@@ -258,17 +258,40 @@ jobs:
           print('ASYNC_SHEET_PUBLISH_QUEUE=PASS')
           PY
 
-      - name: Read async Sheet publish status without blocking Quick Check
+      - name: Wait for async Sheet publish terminal PASS
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/chatgpt-publish-status" | tee /tmp/publish-status.json
-          echo
-          python - <<'PY'
+          for i in $(seq 1 120); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/chatgpt-publish-status" -o /tmp/publish-status.json
+            cat /tmp/publish-status.json
+            echo
+            status="$(python - <<'PY'
           import json
           p=json.load(open('/tmp/publish-status.json', encoding='utf-8'))
-          assert p.get('status') in {'QUEUED','STARTED','COMPLETED','FAILED'}, p
           assert p.get('async_nonblocking') is True, p
-          print('ASYNC_PUBLISH_STATUS_VISIBLE=PASS')
+          print(str(p.get('status') or '').upper())
           PY
+          )"
+            echo "SHEET_PUBLISH_STATUS=$status"
+            case "$status" in
+              COMPLETED)
+                echo "ASYNC_SHEET_PUBLISH=PASS"
+                exit 0
+                ;;
+              FAILED)
+                echo "ASYNC_SHEET_PUBLISH=FAILED"
+                exit 1
+                ;;
+              QUEUED|STARTED)
+                sleep 5
+                ;;
+              *)
+                echo "UNEXPECTED_SHEET_PUBLISH_STATUS=$status"
+                exit 1
+                ;;
+            esac
+          done
+          echo "ASYNC_SHEET_PUBLISH=TIMEOUT"
+          exit 1
