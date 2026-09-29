@@ -55,10 +55,19 @@ def _sales_lineage_pred(
         return f"{column_upc_id}=%s",(int(upc_id),)
     key=_numeric_key(ean)
     service_prefix=service_249_source_prefix(ean)
+    numeric_only=f"({column_ean}<>'' AND {column_ean} NOT REGEXP '[^0-9]')"
     if service_prefix:
         return (
             f"({column_upc_id}=%s OR {column_ean}=%s OR "
-            f"({column_ean} REGEXP '^[0-9]+
+            f"({numeric_only} AND TRIM(LEADING '0' FROM {column_ean})=%s) OR "
+            f"{column_ean} LIKE %s)",
+            (int(upc_id),ean,key,service_prefix+'%'),
+        )
+    return (
+        f"({column_upc_id}=%s OR {column_ean}=%s OR "
+        f"({numeric_only} AND TRIM(LEADING '0' FROM {column_ean})=%s))",
+        (int(upc_id),ean,key),
+    )
 
 
 def _readiness_rank(status: Any) -> int:
