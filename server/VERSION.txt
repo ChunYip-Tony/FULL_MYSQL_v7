@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.172 Single-Service Edition
+Version: 7.0.173 Single-Service Edition
+
+
+v7.0.173 Final-State Precedence + Recent Enrichment Stability:
+- A committed Phase 3 result now suppresses historical pipeline failure/recovery metadata in authoritative batch status.
+- Web UI also refuses to render Backend failure when a final Phase 3 result exists.
+- Fixes Recent Batches QA blocker aggregation for MySQL ONLY_FULL_GROUP_BY by using aggregate-safe severity ordering.
+- Replaces multi-batch pipeline_run sort with one latest-run lookup per batch to avoid MySQL HY001 out-of-sort-memory errors.
 
 
 v7.0.172 Persistent New Batch Status:
