@@ -668,6 +668,7 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
                 })
 
     identity=detail.get('product_identity_guard') or {}
+    active_unmapped_guard=detail.get('current_active_unmapped_sales_guard') or {}
     analysis=detail.get('analysis_layer') or {}
     seafood=analysis.get('seafood') or {}
     seafood_audit=seafood.get('audit') or {}
@@ -698,6 +699,14 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             'warning_count':identity.get('warning_count'),
             'serving_hold_count':identity.get('serving_hold_count'),
             'summary':identity.get('summary'),
+        },
+        'current_active_unmapped_guard':{
+            'active_unmapped_count':active_unmapped_guard.get('active_unmapped_count'),
+            'candidate_count':active_unmapped_guard.get('candidate_count'),
+            'mapped_count':active_unmapped_guard.get('mapped_count'),
+            'inactive_or_historical_count':active_unmapped_guard.get('inactive_or_historical_count'),
+            'active_unmapped_upcs':active_unmapped_guard.get('active_unmapped_upcs'),
+            'activity_rule':active_unmapped_guard.get('activity_rule'),
         },
         'seafood_analysis_guard':{
             'pass':seafood.get('pass'),
