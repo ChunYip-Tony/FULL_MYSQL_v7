@@ -11,72 +11,148 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Wait for patched FULL MYSQL deployment
+      - name: Wait for API and worker v7.0.188 deployment
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          ready=0
-          for i in $(seq 1 72); do
+          consecutive=0
+          for i in $(seq 1 120); do
             body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
             echo "$body"
-            if echo "$body" | grep -q '"version":"7.0.187-single-service"'; then
-              ready=1
-              break
-            fi
-            sleep 10
-          done
-          test "$ready" = "1"
-
-      - name: Rebuild Batch 13 Phase 3 with fried/service POS lineage repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="https://seal-app-tkkkd.ondigitalocean.app"
-
-          curl -sS --max-time 60 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-before.json
-          before="$(python - <<'PY'
-          import json
-          p=json.load(open('/tmp/qa-before.json', encoding='utf-8'))
-          print((p.get('phase3') or {}).get('updated_at') or '')
+            pass="$(BODY="$body" python - <<'PY'
+          import json, os
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          ok=(
+              p.get('ok') is True
+              and p.get('version') == '7.0.188-single-service'
+              and p.get('worker_version') == '7.0.188-single-service'
+              and p.get('worker_healthy') is True
+          )
+          print('1' if ok else '0')
           PY
           )"
-          echo "BEFORE_PHASE3_UPDATED_AT=$before"
-
-          set +e
-          http_code="$(curl -sS --max-time 360 -o /tmp/rebuild.json -w '%{http_code}'             -X POST "$base/v1/web-upload/batches/13/rebuild-phase3")"
-          curl_rc=$?
-          set -e
-
-          echo "REBUILD_CURL_RC=$curl_rc"
-          echo "REBUILD_HTTP_STATUS=$http_code"
-          if [ -s /tmp/rebuild.json ]; then
-            cat /tmp/rebuild.json
-            echo
-          fi
-
-          complete=0
-          for i in $(seq 1 120); do
-            if curl -sS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-now.json; then
-              state="$(python - <<'PY'
-          import json
-          p=json.load(open('/tmp/qa-now.json', encoding='utf-8'))
-          ph=p.get('phase3') or {}
-          print((ph.get('updated_at') or '')+'|'+str(ph.get('result_status') or ''))
-          PY
-              )"
-              echo "$state"
-              updated="${state%%|*}"
-              if [ -n "$updated" ] && [ "$updated" != "$before" ]; then
-                complete=1
-                break
+            if [ "$pass" = "1" ]; then
+              consecutive=$((consecutive+1))
+              if [ "$consecutive" -ge 3 ]; then
+                echo "API_WORKER_VERSION_GATE=PASS"
+                exit 0
               fi
+            else
+              consecutive=0
             fi
             sleep 5
           done
+          echo "API_WORKER_VERSION_GATE=TIMEOUT"
+          exit 1
 
-          if [ "$complete" != "1" ]; then
-            echo "Phase 3 updated_at did not advance."
+      - name: Rebuild Batch 13 Phase 3 with version-fenced worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          accepted=0
+          run_id=""
+          session_id=""
+
+          for i in $(seq 1 120); do
+            set +e
+            http_code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' \
+              -X POST "$base/v1/web-upload/batches/13/rebuild-phase3")"
+            curl_rc=$?
+            set -e
+
+            echo "REBUILD_ATTEMPT=$i CURL_RC=$curl_rc HTTP_STATUS=$http_code"
+            if [ -s /tmp/rebuild.json ]; then
+              cat /tmp/rebuild.json
+              echo
+            fi
+
+            if [ "$curl_rc" = "0" ] && [ "$http_code" = "200" ]; then
+              read -r version_ok run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          version_ok='1' if p.get('code_version') == '7.0.188-single-service' and p.get('version_fence_pass') is True else '0'
+          print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
+          PY
+          )
+              if [ "$version_ok" = "1" ] && [ -n "$run_id" ] && [ -n "$session_id" ]; then
+                accepted=1
+                break
+              fi
+            fi
+
+            if [ "$http_code" = "409" ]; then
+              reason="$(python - <<'PY'
+          import json
+          try:
+              p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          except Exception:
+              p={}
+          d=p.get('detail') or {}
+          print(d.get('reason') or '')
+          PY
+          )"
+              echo "REBUILD_BLOCK_REASON=$reason"
+              if [ "$reason" = "ACTIVE_RUN_VERSION_MISMATCH" ]; then
+                sleep 5
+                continue
+              fi
+            fi
+
+            sleep 5
+          done
+
+          if [ "$accepted" != "1" ]; then
+            echo "VERSION_FENCED_REBUILD_NOT_ACCEPTED"
+            exit 1
+          fi
+
+          echo "VERSION_FENCED_RUN_ID=$run_id"
+          echo "SESSION_ID=$session_id"
+
+          terminal=0
+          for i in $(seq 1 180); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$session_id" -o /tmp/session.json
+            state="$(RUN_ID="$run_id" python - <<'PY'
+          import json, os
+          rid=int(os.environ['RUN_ID'])
+          p=json.load(open('/tmp/session.json', encoding='utf-8'))
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid), None)
+          if not run:
+              print('MISSING||')
+          else:
+              print(str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
+          PY
+          )"
+            echo "$state"
+            status="${state%%|*}"
+            rest="${state#*|}"
+            code_version="${rest%%|*}"
+
+            if [ "$code_version" != "7.0.188-single-service" ] && [ "$status" != "MISSING" ]; then
+              echo "RUN_VERSION_FENCE_BROKEN=$state"
+              exit 1
+            fi
+
+            case "$status" in
+              COMPLETED|QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED)
+                terminal=1
+                break
+                ;;
+            esac
+            sleep 5
+          done
+
+          if [ "$terminal" != "1" ]; then
+            echo "VERSION_FENCED_RUN_DID_NOT_REACH_TERMINAL_STATE"
+            exit 1
+          fi
+          if [ "$status" = "FAILED" ] || [ "$status" = "FAILED_QA" ] || [ "$status" = "ABORTED" ] || [ "$status" = "PAUSED" ]; then
+            echo "VERSION_FENCED_RUN_FAILED=$state"
             exit 1
           fi
 
@@ -136,5 +212,5 @@ jobs:
           if qty is None:
               raise SystemExit('249450 pos_qty_7d is missing')
           if float(qty) == 0:
-              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.187 rebuild')
+              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.188 rebuild')
           PY

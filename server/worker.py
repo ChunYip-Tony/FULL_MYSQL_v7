@@ -12,6 +12,7 @@ from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, bridg
 POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
 STALE_STARTED_SECONDS=max(90,int(os.environ.get('FULLMYSQL_WORKER_STALE_STARTED_SECONDS','180')))
+VERSION_MISMATCH_GRACE_SECONDS=max(30,int(os.environ.get('FULLMYSQL_WORKER_VERSION_MISMATCH_GRACE_SECONDS','45')))
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
 RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
 _RUNTIME_LOCK=threading.Lock()
@@ -21,6 +22,14 @@ class Phase3PauseRequested(RuntimeError):
     def __init__(self, stage:str|None=None):
         self.stage=stage
         super().__init__('PHASE3_PAUSE_REQUESTED')
+
+
+class RunClaimInvalid(RuntimeError):
+    def __init__(self, run_id:int, status:str, code_version:str):
+        self.run_id=run_id
+        self.status=status
+        self.code_version=code_version
+        super().__init__(f'RUN_CLAIM_INVALID:{run_id}:{status}:{code_version}')
 
 
 def _run_pause_requested(run_id:int) -> bool:
@@ -51,8 +60,10 @@ def _touch_run(run_id:int, *, stage:str|None=None) -> None:
             cur.execute(
                 """UPDATE pipeline_run
                    SET detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
-                   WHERE pipeline_run_id=%s""",
-                (json.dumps(payload,ensure_ascii=False),run_id),
+                   WHERE pipeline_run_id=%s
+                     AND code_version=%s
+                     AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
+                (json.dumps(payload,ensure_ascii=False),run_id,API_VERSION),
             )
             conn.commit()
         finally:
@@ -108,19 +119,89 @@ def _runtime_heartbeat_loop(stop_event:threading.Event) -> None:
         stop_event.wait(10)
 
 
-def _recover_stale_started(cur) -> int:
-    # STARTED jobs from an older deployment cannot still be owned by the
-    # current worker, so recover them immediately. Same-version jobs continue
-    # to use heartbeat age as the stale guard.
+def _heartbeat_age_seconds(detail:dict, started_at) -> float|None:
+    heartbeat_epoch=detail.get('heartbeat_epoch')
+    if heartbeat_epoch is not None:
+        try:
+            return max(0.0,time.time()-float(heartbeat_epoch))
+        except Exception:
+            pass
+    if started_at is not None:
+        try:
+            return max(0.0,(datetime.utcnow()-started_at).total_seconds())
+        except Exception:
+            pass
+    return None
+
+
+def _next_run_number(cur,batch_id:int,stage_name:str) -> int:
     cur.execute(
-        """SELECT pipeline_run_id,batch_id,processing_status,started_at,code_version,detail_json
+        """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+           FROM pipeline_run
+           WHERE batch_id=%s
+             AND pipeline_name=%s
+             AND stage_name=%s""",
+        (batch_id,API_PIPELINE,stage_name),
+    )
+    return int((cur.fetchone() or {}).get('next_run') or 1)
+
+
+def _replacement_exists(cur,batch_id:int,stage_name:str) -> bool:
+    cur.execute(
+        """SELECT 1
+           FROM pipeline_run
+           WHERE batch_id=%s
+             AND pipeline_name=%s
+             AND stage_name=%s
+             AND code_version=%s
+             AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+           LIMIT 1""",
+        (batch_id,API_PIPELINE,stage_name,API_VERSION),
+    )
+    return bool(cur.fetchone())
+
+
+def _enqueue_current_version_replacement(cur,batch_id:int,stage_name:str,old_run_id:int,reason:str) -> int|None:
+    if _replacement_exists(cur,batch_id,stage_name):
+        return None
+    run_number=_next_run_number(cur,batch_id,stage_name)
+    cur.execute(
+        """INSERT INTO pipeline_run
+           (batch_id,pipeline_name,stage_name,run_number,
+            processing_status,code_version,detail_json)
+           VALUES (%s,%s,%s,%s,'QUEUED',%s,%s)""",
+        (
+            batch_id,
+            API_PIPELINE,
+            stage_name,
+            run_number,
+            API_VERSION,
+            json.dumps({
+                'auto_recovery':True,
+                'reason':reason,
+                'supersedes_pipeline_run_id':old_run_id,
+                'queued_at':datetime.now(timezone.utc).isoformat(),
+                'required_code_version':API_VERSION,
+            },ensure_ascii=False),
+        ),
+    )
+    return int(cur.lastrowid)
+
+
+def _recover_stale_started(cur) -> int:
+    # Version is a lease boundary. A newer worker must never steal a run that
+    # still has a fresh heartbeat from an older deployment. Once that heartbeat
+    # expires, the old run is terminally superseded and a new current-version
+    # run is queued. Same-version stale jobs may be safely requeued in place.
+    cur.execute(
+        """SELECT pipeline_run_id,batch_id,stage_name,processing_status,
+                  started_at,code_version,detail_json
            FROM pipeline_run
            WHERE pipeline_name=%s
              AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
              AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
         (API_PIPELINE,),
     )
-    now=time.time()
     recovered=0
     for row in cur.fetchall():
         detail={}
@@ -129,62 +210,133 @@ def _recover_stale_started(cur) -> int:
         except Exception:
             detail={}
         previous_version=str(row.get('code_version') or '')
-        deployment_interrupted=bool(previous_version and previous_version!=API_VERSION)
-        heartbeat_epoch=detail.get('heartbeat_epoch')
-        started_at=row.get('started_at')
-        stale=deployment_interrupted
-        if not stale and heartbeat_epoch is not None:
-            try:
-                stale=(now-float(heartbeat_epoch)) > STALE_STARTED_SECONDS
-            except Exception:
-                stale=False
-        elif not stale and started_at is not None:
-            try:
-                stale=(datetime.utcnow()-started_at).total_seconds() > STALE_STARTED_SECONDS
-            except Exception:
-                stale=False
+        version_mismatch=bool(previous_version and previous_version!=API_VERSION)
+        age=_heartbeat_age_seconds(detail,row.get('started_at'))
+        stale_after=VERSION_MISMATCH_GRACE_SECONDS if version_mismatch else STALE_STARTED_SECONDS
+        stale=age is not None and age > stale_after
         if not stale:
             continue
+
+        previous_status=str(row.get('processing_status') or '').upper()
+        run_id=int(row['pipeline_run_id'])
+        bid=int(row['batch_id'])
+        stage_name=str(row['stage_name'])
+
+        if version_mismatch:
+            recovery_detail={
+                **detail,
+                'superseded':True,
+                'superseded_at':datetime.now(timezone.utc).isoformat(),
+                'recovery_reason':'OLD_DEPLOYMENT_WORKER_HEARTBEAT_EXPIRED',
+                'previous_processing_status':previous_status,
+                'previous_code_version':previous_version,
+                'required_code_version':API_VERSION,
+                'recovered_by_code_version':API_VERSION,
+                'previous_worker':detail.get('worker'),
+                'previous_heartbeat_at':detail.get('heartbeat_at'),
+                'previous_heartbeat_epoch':detail.get('heartbeat_epoch'),
+                'last_phase3_stage':detail.get('phase3_stage') or detail.get('last_phase3_stage'),
+            }
+            cur.execute(
+                """UPDATE pipeline_run
+                   SET processing_status='FAILED',
+                       completed_at=CURRENT_TIMESTAMP(6),
+                       error_count=GREATEST(COALESCE(error_count,0),1),
+                       detail_json=%s
+                   WHERE pipeline_run_id=%s
+                     AND processing_status=%s
+                     AND code_version=%s""",
+                (
+                    json.dumps(recovery_detail,ensure_ascii=False,default=str),
+                    run_id,
+                    previous_status,
+                    previous_version,
+                ),
+            )
+            if int(cur.rowcount or 0):
+                _enqueue_current_version_replacement(
+                    cur,bid,stage_name,run_id,'SUPERSEDE_OLD_DEPLOYMENT_RUN'
+                )
+                recovered += 1
+            continue
+
         recovery_detail={
+            **detail,
             'recovered_stale_started':True,
             'recovered_at':datetime.now(timezone.utc).isoformat(),
-            'recovery_reason':(
-                'OLD_DEPLOYMENT_WORKER_GONE'
-                if deployment_interrupted
-                else 'WORKER_HEARTBEAT_STALE'
-            ),
-            'previous_worker':detail.get('worker'),
-            'previous_code_version':previous_version,
+            'recovery_reason':'WORKER_HEARTBEAT_STALE',
+            'previous_processing_status':previous_status,
+            'recovered_processing_status':'QUEUED',
             'recovered_by_code_version':API_VERSION,
-            'batch_id':row.get('batch_id'),
-            'last_phase3_stage':detail.get('phase3_stage') or detail.get('last_phase3_stage'),
+            'previous_worker':detail.get('worker'),
             'previous_heartbeat_at':detail.get('heartbeat_at'),
             'previous_heartbeat_epoch':detail.get('heartbeat_epoch'),
+            'last_phase3_stage':detail.get('phase3_stage') or detail.get('last_phase3_stage'),
         }
-        previous_status=str(row.get('processing_status') or '').upper()
-        # Manual pause is disabled. Any orphaned PAUSE_REQUESTED record is a
-        # legacy execution state and should resume automatically, not strand.
-        recovered_status='QUEUED'
-        recovery_detail['previous_processing_status']=previous_status
-        recovery_detail['recovered_processing_status']=recovered_status
         cur.execute(
             """UPDATE pipeline_run
-               SET processing_status=%s,
-                   completed_at=CASE WHEN %s='PAUSED' THEN CURRENT_TIMESTAMP(6) ELSE NULL END,
+               SET processing_status='QUEUED',
+                   completed_at=NULL,
                    error_count=0,
                    detail_json=%s
                WHERE pipeline_run_id=%s
-                 AND processing_status=%s""",
+                 AND processing_status=%s
+                 AND code_version=%s""",
             (
-                recovered_status,
-                recovered_status,
                 json.dumps(recovery_detail,ensure_ascii=False,default=str),
-                row['pipeline_run_id'],
+                run_id,
                 previous_status,
+                API_VERSION,
             ),
         )
         recovered += int(cur.rowcount or 0)
     return recovered
+
+
+def _supersede_incompatible_queued(cur) -> int:
+    # QUEUED work is safe to supersede immediately because no worker owns it.
+    cur.execute(
+        """SELECT pipeline_run_id,batch_id,stage_name,code_version,detail_json
+           FROM pipeline_run
+           WHERE pipeline_name=%s
+             AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+             AND processing_status='QUEUED'
+             AND COALESCE(code_version,'')<>%s""",
+        (API_PIPELINE,API_VERSION),
+    )
+    superseded=0
+    for row in cur.fetchall():
+        run_id=int(row['pipeline_run_id'])
+        bid=int(row['batch_id'])
+        stage_name=str(row['stage_name'])
+        detail={}
+        try:
+            detail=json.loads(row.get('detail_json') or '{}')
+        except Exception:
+            detail={}
+        detail.update({
+            'superseded':True,
+            'superseded_at':datetime.now(timezone.utc).isoformat(),
+            'recovery_reason':'QUEUED_CODE_VERSION_MISMATCH',
+            'previous_code_version':str(row.get('code_version') or ''),
+            'required_code_version':API_VERSION,
+        })
+        cur.execute(
+            """UPDATE pipeline_run
+               SET processing_status='FAILED',
+                   completed_at=CURRENT_TIMESTAMP(6),
+                   error_count=GREATEST(COALESCE(error_count,0),1),
+                   detail_json=%s
+               WHERE pipeline_run_id=%s
+                 AND processing_status='QUEUED'""",
+            (json.dumps(detail,ensure_ascii=False,default=str),run_id),
+        )
+        if int(cur.rowcount or 0):
+            _enqueue_current_version_replacement(
+                cur,bid,stage_name,run_id,'SUPERSEDE_QUEUED_VERSION_MISMATCH'
+            )
+            superseded += 1
+    return superseded
 
 
 def _queue_orphaned_phase2c_ready(cur) -> int:
@@ -267,6 +419,7 @@ def claim_job():
                 return None
 
             _recover_stale_started(cur)
+            _supersede_incompatible_queued(cur)
             _queue_orphaned_phase2c_ready(cur)
             conn.commit()
 
@@ -285,20 +438,22 @@ def claim_job():
                    FROM pipeline_run
                    WHERE pipeline_name=%s
                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                     AND processing_status='QUEUED'""",
-                (API_PIPELINE,),
+                     AND processing_status='QUEUED'
+                     AND code_version=%s""",
+                (API_PIPELINE,API_VERSION),
             )
             queued=cur.fetchone() or {}
             queued_id=queued.get('pipeline_run_id')
             if queued_id is None:
                 return None
             cur.execute(
-                """SELECT pipeline_run_id,batch_id,stage_name
+                """SELECT pipeline_run_id,batch_id,stage_name,code_version
                    FROM pipeline_run
                    WHERE pipeline_run_id=%s
                      AND processing_status='QUEUED'
+                     AND code_version=%s
                    FOR UPDATE""",
-                (queued_id,),
+                (queued_id,API_VERSION),
             )
             row=cur.fetchone()
             if not row:
@@ -310,20 +465,25 @@ def claim_job():
                 "started_at=CURRENT_TIMESTAMP(6),"
                 "completed_at=NULL,"
                 "error_count=0,"
-                "code_version=%s,"
-                "detail_json=%s "
-                "WHERE pipeline_run_id=%s",
+                "detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s) "
+                "WHERE pipeline_run_id=%s "
+                "AND processing_status='QUEUED' "
+                "AND code_version=%s",
                 (
-                    API_VERSION,
                     json.dumps({
                         'worker':WORKER,
                         'heartbeat_at':datetime.utcnow().isoformat()+'Z',
                         'heartbeat_epoch':int(time.time()),
                         'phase3_stage':'CLAIMED' if str(row['stage_name'])=='PHASE3_RERUN' else 'POST_RAW_CLAIMED',
+                        'claimed_by_code_version':API_VERSION,
                     }),
                     row['pipeline_run_id'],
+                    API_VERSION,
                 ),
             )
+            if int(cur.rowcount or 0) != 1:
+                conn.rollback()
+                return None
             conn.commit()
             return int(row['pipeline_run_id']), int(row['batch_id']), str(row['stage_name'])
 
@@ -343,10 +503,45 @@ def claim_job():
             except Exception:
                 pass
 
+def _assert_run_claim_valid(run_id:int) -> None:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                "SELECT processing_status,code_version FROM pipeline_run WHERE pipeline_run_id=%s",
+                (run_id,),
+            )
+            row=cur.fetchone() or {}
+        finally:
+            cur.close()
+    status=str(row.get('processing_status') or '').upper()
+    code_version=str(row.get('code_version') or '')
+    if status not in {'STARTED','PAUSE_REQUESTED'} or code_version!=API_VERSION:
+        raise RunClaimInvalid(run_id,status,code_version)
+
+
 def finish(run_id:int,status:str,detail:dict,error_count:int=0):
     with db_conn() as conn:
-        cur=conn.cursor(); cur.execute("UPDATE pipeline_run SET processing_status=%s,completed_at=CURRENT_TIMESTAMP(6),error_count=%s,detail_json=%s WHERE pipeline_run_id=%s",
-            (status,error_count,json.dumps(detail,ensure_ascii=False,default=str),run_id)); conn.commit(); cur.close()
+        cur=conn.cursor()
+        cur.execute(
+            """UPDATE pipeline_run
+               SET processing_status=%s,
+                   completed_at=CURRENT_TIMESTAMP(6),
+                   error_count=%s,
+                   detail_json=%s
+               WHERE pipeline_run_id=%s
+                 AND code_version=%s
+                 AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
+            (
+                status,
+                error_count,
+                json.dumps(detail,ensure_ascii=False,default=str),
+                run_id,
+                API_VERSION,
+            ),
+        )
+        conn.commit()
+        cur.close()
 
 
 def _publish_chatgpt_bridge(batch_id:int, detail:dict, progress) -> bool:
@@ -371,6 +566,7 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
 
     def progress(stage:str, payload:dict|None=None):
         last_progress_stage['value']=stage
+        _assert_run_claim_valid(run_id)
         if _run_pause_requested(run_id):
             _write_runtime_health('PAUSING',run_id,stage)
             raise Phase3PauseRequested(stage)
@@ -430,6 +626,13 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         if not _publish_chatgpt_bridge(batch_id,detail,progress):
             finish(run_id,'FAILED',detail,1); return
         finish(run_id,'COMPLETED',detail,0)
+    except RunClaimInvalid as exc:
+        detail['superseded']=True
+        detail['superseded_at']=datetime.now(timezone.utc).isoformat()
+        detail['superseded_status']=exc.status
+        detail['superseded_code_version']=exc.code_version
+        detail['required_code_version']=API_VERSION
+        _write_runtime_health('SUPERSEDED',run_id,last_progress_stage.get('value'))
     except Phase3PauseRequested as exc:
         # process_phase3 rolls its transaction back before propagating this
         # cooperative stop. Keep the batch at PHASE2C_READY so Resume can
