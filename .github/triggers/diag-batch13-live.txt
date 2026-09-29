@@ -1,2 +1,2 @@
-check=6
-reason=verify_v7189_version_fenced_run
+check=7
+reason=verify_v7189_phase3_progress
