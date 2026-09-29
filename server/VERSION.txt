@@ -1,6 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.167 Single-Service Edition
+Version: 7.0.168 Single-Service Edition
 
+
+v7.0.168 Phase 3 Runtime Truth + Automatic Recovery:
+- PHASE3_RUNNING now requires pipeline_run=STARTED, a fresh worker heartbeat, and matching runtime code version. STARTED alone is no longer treated as proof of live execution.
+- Stale/mismatched STARTED runs display PHASE3_RECOVERING instead of falsely RUNNING or asking the user to Resume.
+- DigitalOcean/service shutdown now stops the worker, lets the Phase 3 transaction roll back, then requeues interrupted outer pipeline runs before the container exits.
+- Worker-process crashes are immediately requeued by the single-service supervisor before worker restart; no 180-second stale wait is required.
+- Startup stale/deployment recovery always requeues legacy PAUSE_REQUESTED/STARTED work for automatic continuation; manual Pause remains disabled.
+- Current Batch exposes worker heartbeat age, worker identity, run code version, and recovery reason for operational truth.
 
 v7.0.167 Phase 3 Failure Visibility:
 - Current Batch status now exposes the actual backend exception summary for failed Phase 3 runs instead of only STOPPED · RESUME REQUIRED.
