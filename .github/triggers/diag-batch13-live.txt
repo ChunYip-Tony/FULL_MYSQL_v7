@@ -1,2 +1,2 @@
-check=2
-reason=live_status_after_extended_phase3
+check=3
+reason=live_status_after_v7187_worker_mismatch
