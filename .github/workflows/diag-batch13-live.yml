@@ -59,3 +59,7 @@ jobs:
 
           echo "=== BATCH 14 QA ==="
           curl -sS --max-time 30 -w "\nHTTP_STATUS=%{http_code}\n" "$base/v1/web-upload/batches/14/qa-summary"
+
+          echo "=== QA DETAIL ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary"
+          echo
