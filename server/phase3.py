@@ -1606,6 +1606,7 @@ def classify_unmapped_sales_activity_scope(cur, batch_id: int) -> dict[str, int]
     counts = {
         'examined': 0,
         'active_blocking': 0,
+        'active_evidence_nonblocking': 0,
         'historical_nonblocking': 0,
     }
 
@@ -1652,7 +1653,7 @@ def classify_unmapped_sales_activity_scope(cur, batch_id: int) -> dict[str, int]
                     issue['issue_id'],
                 ),
             )
-            counts['active_blocking'] += 1
+            counts['active_evidence_nonblocking'] += 1
 
     return counts
 
