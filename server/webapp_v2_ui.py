@@ -627,8 +627,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.164</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.164</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.165</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.165</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -713,7 +713,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.164</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.165</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div class="card latest-ref-card">
     <div class="section">Latest Reference Uploads</div>
     <div id="latestRefMsg" class="msg"></div>
@@ -784,13 +784,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.164';
+  el.textContent='App v7.0.165';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.164'){
-      el.textContent='UI 7.0.164 · API '+rv;
+    if(rv&&rv!=='7.0.165'){
+      el.textContent='UI 7.0.165 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -919,7 +919,10 @@ function uploadStage(icon,label,value,cls=''){
 }
 function livePhase3FromRuns(runs){
   let ordered=[...(runs||[])].sort((a,b)=>Number(b.pipeline_run_id||0)-Number(a.pipeline_run_id||0));
-  let run=ordered.find(x=>x?.phase3_stage);
+  let run=ordered.find(x=>{
+    let ps=String(x?.processing_status||'').toUpperCase();
+    return ['STARTED','PAUSE_REQUESTED'].includes(ps) && x?.phase3_stage;
+  });
   return run?.phase3_stage||'';
 }
 function phase3Display(finalStatus,liveStage,pipelineStatus){
@@ -927,9 +930,9 @@ function phase3Display(finalStatus,liveStage,pipelineStatus){
   let ps=String(pipelineStatus||'').toUpperCase();
   if(ps==='PAUSE_REQUESTED')return 'PAUSING';
   if(ps==='PAUSED')return 'PAUSED';
-  if(liveStage)return String(liveStage);
-  if(ps==='STARTED')return 'RUNNING';
+  if(ps==='STARTED')return liveStage?String(liveStage):'RUNNING';
   if(ps==='QUEUED')return 'QUEUED';
+  if(['FAILED','FAILED_QA','QA_HOLD','ABORTED','COMPLETED'].includes(ps))return 'STOPPED · RESUME REQUIRED';
   return 'Pending';
 }
 function terminalUploadStatus(s){
@@ -939,24 +942,32 @@ function terminalUploadStatus(s){
 function renderWebUploadStatus(d){
   let b=d?.batch||{},files=d?.files||[],p2=d?.phase2c||{},p3=d?.phase3||{},runs=d?.api_runs||[];
   let orderedRuns=[...runs].sort((a,b)=>Number(b.pipeline_run_id||0)-Number(a.pipeline_run_id||0));
+  let latestPhase3Run=orderedRuns.find(x=>
+    ['POST_RAW_PIPELINE','PHASE3_RERUN'].includes(String(x.stage_name||'').toUpperCase())
+  )||{};
+  let runStatus=String(latestPhase3Run.processing_status||'').toUpperCase();
   let controlRun=orderedRuns.find(x=>
     ['POST_RAW_PIPELINE','PHASE3_RERUN'].includes(String(x.stage_name||'').toUpperCase()) &&
-    ['QUEUED','STARTED','PAUSE_REQUESTED','PAUSED'].includes(String(x.processing_status||'').toUpperCase())
+    ['QUEUED','STARTED','PAUSE_REQUESTED'].includes(String(x.processing_status||'').toUpperCase())
   )||{};
   let controlStatus=String(controlRun.processing_status||'').toUpperCase();
-  let liveP3=controlRun.phase3_stage||livePhase3FromRuns(runs);
-  let latestRun=controlRun.pipeline_run_id?controlRun:(orderedRuns[0]||{});
+  let liveP3=(
+    ['STARTED','PAUSE_REQUESTED'].includes(controlStatus)
+      ? (controlRun.phase3_stage||'')
+      : ''
+  );
   let rawStatus=String(b.processing_status||'—').toUpperCase();
 
-  // ingest_batch remains PHASE2C_READY as the transactional restart anchor
-  // until Phase 3 commits. The user-facing Pipeline stage must reflect the
-  // active Phase 3 run instead of exposing that internal checkpoint.
+  // PHASE2C_READY is the internal restart anchor. The visible Pipeline state
+  // follows the latest Phase 3 run, but only active statuses may expose a live
+  // checkpoint. Historical last_phase3_stage is never rendered as live.
   let displayStatus=rawStatus;
   if(rawStatus==='PHASE2C_READY'&&!p3.result_status){
-    if(controlStatus==='QUEUED')displayStatus='PHASE3_QUEUED';
-    else if(controlStatus==='STARTED')displayStatus='PHASE3_RUNNING';
-    else if(controlStatus==='PAUSE_REQUESTED')displayStatus='PHASE3_PAUSING';
-    else if(controlStatus==='PAUSED')displayStatus='PHASE3_PAUSED';
+    if(runStatus==='QUEUED')displayStatus='PHASE3_QUEUED';
+    else if(runStatus==='STARTED')displayStatus='PHASE3_RUNNING';
+    else if(runStatus==='PAUSE_REQUESTED')displayStatus='PHASE3_PAUSING';
+    else if(runStatus==='PAUSED')displayStatus='PHASE3_PAUSED';
+    else if(['FAILED','FAILED_QA','QA_HOLD','ABORTED','COMPLETED'].includes(runStatus))displayStatus='PHASE3_STOPPED';
   }
 
   $('uploadStatusCard').classList.remove('hide');
@@ -979,7 +990,7 @@ function renderWebUploadStatus(d){
     uploadStage(pipelineIcon,'Pipeline',displayStatus,pipelineCls),
     uploadStage('📄','Files',String(files.length)),
     uploadStage('🧩','Phase 2C',p2.result_status||'Pending',String(p2.result_status||'').includes('READY')?'ok':''),
-    uploadStage('⚙️','Phase 3',phase3Display(p3.result_status,liveP3,latestRun.processing_status),p3.result_status?'ok':(liveP3||['QUEUED','STARTED','PAUSE_REQUESTED'].includes(controlStatus)?'warn':'')),
+    uploadStage('⚙️','Phase 3',phase3Display(p3.result_status,liveP3,runStatus),p3.result_status?'ok':(liveP3||['QUEUED','STARTED','PAUSE_REQUESTED'].includes(runStatus)?'warn':'')),
     uploadStage('🔎','Quick Check',p3.quick_check_rows==null?'Pending':(fmt(p3.quick_check_ready_rows,0)+' / '+fmt(p3.quick_check_rows,0)+' READY · '+fmt(p3.quick_check_hold_rows,0)+' HOLD'),Number(p3.quick_check_hold_rows||0)>0?'warn':(p3.quick_check_rows!=null?'ok':''))
   ].join('');
 
@@ -997,9 +1008,14 @@ function renderWebUploadStatus(d){
       '<button class="pause-phase3" type="button" disabled>Pausing Phase 3…</button>'+
       '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Pause requested · waiting for the next safe Phase 3 boundary.</div>';
   }else if(canControl){
+    let stoppedNote=runStatus==='PAUSED'
+      ? 'Phase 3 is paused.'
+      : (['FAILED','FAILED_QA','QA_HOLD','ABORTED','COMPLETED'].includes(runStatus)
+          ? 'Phase 3 is not running · Resume required.'
+          : '');
     $('uploadCurrentActions').innerHTML=
       '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button>'+
-      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">'+(controlStatus==='PAUSED'?'Phase 3 is paused.':'')+'</div>';
+      '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">'+stoppedNote+'</div>';
   }else{
     $('uploadCurrentActions').innerHTML='';
   }
@@ -1024,7 +1040,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.164')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.165')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1256,7 +1272,13 @@ async function pollWebUpload(session){
     let status=renderWebUploadStatus(d);
     $('uploadMsg').textContent=terminalUploadStatus(status)
       ? (status.includes('READY')?'Batch complete. Quick Check has been refreshed.':'Batch finished with '+status+'. Review QA status before relying on held rows.')
-      : 'Server is processing this batch…';
+      : (status==='PHASE3_STOPPED'
+          ? 'Phase 3 is not running. Resume Phase 3 to continue.'
+          : (status==='PHASE3_PAUSED'
+              ? 'Phase 3 is paused.'
+              : (status==='PHASE2C_READY'
+                  ? 'Phase 2C is ready. Resume Phase 3 to continue.'
+                  : 'Server is processing this batch…')));
     await loadWebUploadRecent();
     if(terminalUploadStatus(status)){
       await loadLatestReferenceUploads();
