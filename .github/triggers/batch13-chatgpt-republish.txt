@@ -1,4 +1,4 @@
-Batch 13 ChatGPT republish trigger for v7.0.184
-source_merge=d28704f2a76b2ce71e5623c73e80788cc98a393d
-attempt=3
-reason=ean13_lineage_repair_and_verify_blocker_reduction
+Batch 13 ChatGPT republish trigger for v7.0.185
+source_merge=900aa82485dbf12ffe5a5d73711ae6e2c083bfcb
+attempt=4
+reason=restore_four_identity_authorities_and_verify_remaining_blocker
