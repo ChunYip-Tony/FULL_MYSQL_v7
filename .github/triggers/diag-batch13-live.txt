@@ -1,2 +1,2 @@
-check=4
-reason=verify_v7188_version_fenced_run
+check=5
+reason=verify_v7188_recovery_progress_after_queue
