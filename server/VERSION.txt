@@ -1,5 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.174 Single-Service Edition
+Version: 7.0.175 Single-Service Edition
+
+
+v7.0.175 OH/UOM False-HOLD Repair:
+- Stops treating ON_HAND Sales Set # as UPC/EAN identity in both inventory ingest and OH-cost repair.
+- SAP OH rows with confirmed Article identity are now rolled forward at Article scope even if source metadata also carries a UPC-like value; UPC scope is reserved for truly UPC-owned rows with no Article owner.
+- ON_HAND reruns now overwrite derived ean_upc/upc_id fields so stale Sales-Set mislinks can be cleared while RAW remains immutable.
+- Applies the latest user-confirmed Seafood Selling-UOM prefix authority to CURRENT-ACTIVE Seafood UPCs: 230-239, 240, 242, 245, 247, 249, 250-259, 260-269 => LB.
+- Authoritative prefix LB supersedes stale conflicting current/history UOM mappings for active Seafood UPCs; non-prefix UPCs still require explicit Article Manual/user evidence.
+- Quick Check QA evidence now stores exact inventory roll-forward sub-blockers, UOM state, cost source/UOM, missing movement dates, and UOM mismatches.
+- Upload HOLD breakdown now shows per-reason UPC samples plus backend sub-diagnostics so remaining true HOLDs are directly actionable.
 
 
 v7.0.174 Global Current-Active Unmapped Sales Gate:
