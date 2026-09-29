@@ -688,44 +688,73 @@ def web_upload_qa_summary(batch_id:int,request:Request,response:Response):
 
 
 @app.get('/v1/web-upload/recent')
-def web_upload_recent(request:Request,limit:int=8):
+def web_upload_recent(request:Request,response:Response,limit:int=8):
     _browser_upload_guard(request)
+    response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma']='no-cache'
+    response.headers['Expires']='0'
     limit=max(1,min(int(limit or 8),20))
     scan_limit=max(limit,min(limit*4,80))
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
+        warnings=[]
 
-        # Core history path: only columns already required by the ingest/session
-        # workflow. Optional Phase2C/Phase3/pipeline data is enriched later and
-        # must never prevent basic upload history from rendering.
-        cur.execute(
-            """SELECT ib.batch_id,ib.batch_label,ib.processing_status,
-                      ib.upload_started_at,ib.completed_at,ib.file_count,
-                      ib.source_row_count,ib.error_count,ib.notes
-               FROM ingest_batch ib
-               WHERE ib.processing_status NOT IN (
+        # Preferred history query excludes any still-active Phase 3 pipeline run.
+        # If a production schema/query edge case breaks this enrichment-heavy
+        # path, fall back to a simpler terminal-batch query instead of returning
+        # HTTP 500 and blanking the whole Recent Batches panel.
+        try:
+            cur.execute(
+                """SELECT ib.batch_id,ib.batch_label,ib.processing_status,
+                          ib.upload_started_at,ib.completed_at,ib.file_count,
+                          ib.source_row_count,ib.error_count,ib.notes
+                   FROM ingest_batch ib
+                   WHERE ib.processing_status NOT IN (
+                             'API_UPLOADING',
+                             'INGESTED_PENDING_QA',
+                             'RAW_RELEASED',
+                             'RELEASED',
+                             'PHASE2C_READY'
+                         )
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM pipeline_run active
+                         WHERE active.batch_id=ib.batch_id
+                           AND active.pipeline_name=%s
+                           AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                           AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                     )
+                   ORDER BY ib.batch_id DESC
+                   LIMIT %s""",
+                (API_PIPELINE,scan_limit),
+            )
+            core_rows=cur.fetchall()
+        except Exception as exc:
+            warnings.append('CORE_HISTORY_PRIMARY_FAILED: '+str(exc))
+            cur.execute(
+                """SELECT batch_id,batch_label,processing_status,
+                          upload_started_at,completed_at,file_count,
+                          source_row_count,error_count
+                   FROM ingest_batch
+                   WHERE processing_status NOT IN (
                          'API_UPLOADING',
                          'INGESTED_PENDING_QA',
                          'RAW_RELEASED',
                          'RELEASED',
                          'PHASE2C_READY'
-                     )
-                 AND NOT EXISTS (
-                     SELECT 1
-                     FROM pipeline_run active
-                     WHERE active.batch_id=ib.batch_id
-                       AND active.pipeline_name=%s
-                       AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                       AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
-                 )
-               ORDER BY ib.batch_id DESC
-               LIMIT %s""",
-            (API_PIPELINE,scan_limit),
-        )
+                   )
+                   ORDER BY batch_id DESC
+                   LIMIT %s""",
+                (scan_limit,),
+            )
+            core_rows=cur.fetchall()
+            for row in core_rows:
+                row['notes']=None
+            warnings.append('CORE_HISTORY_FALLBACK_USED')
 
         batches=[]
-        for row in cur.fetchall():
+        for row in core_rows:
             notes={}
             try:
                 parsed=json.loads(row.get('notes') or '{}')
@@ -754,7 +783,6 @@ def web_upload_recent(request:Request,limit:int=8):
         by_id={int(x['batch_id']):x for x in batches}
         file_map={bid:[] for bid in ids}
         pipeline_map={}
-        warnings=[]
 
         if ids:
             ph=','.join(['%s']*len(ids))
