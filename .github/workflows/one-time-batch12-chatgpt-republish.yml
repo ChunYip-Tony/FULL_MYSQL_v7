@@ -20,7 +20,7 @@ jobs:
           for i in $(seq 1 72); do
             body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
             echo "$body"
-            if echo "$body" | grep -q '"version":"7.0.184-single-service"'; then
+            if echo "$body" | grep -q '"version":"7.0.185-single-service"'; then
               ready=1
               break
             fi
@@ -136,5 +136,5 @@ jobs:
           if qty is None:
               raise SystemExit('249450 pos_qty_7d is missing')
           if float(qty) == 0:
-              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.184 rebuild')
+              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.185 rebuild')
           PY
