@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.164-single-service'
+VERSION='7.0.165-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -672,11 +672,21 @@ def web_upload_recent(request:Request,limit:int=8):
                             detail=parsed
                     except Exception:
                         detail={}
+                    run_status=str(row.get('processing_status') or '').upper()
+                    last_stage=detail.get('phase3_stage')
                     pipeline_map[bid]={
                         'pipeline_run_id':row.get('pipeline_run_id'),
                         'stage_name':row.get('stage_name'),
                         'processing_status':row.get('processing_status'),
-                        'phase3_stage':detail.get('phase3_stage'),
+                        'phase3_stage':(
+                            last_stage
+                            if run_status in {'STARTED','PAUSE_REQUESTED'}
+                            else None
+                        ),
+                        'last_phase3_stage':last_stage,
+                        'phase3_stage_live':bool(
+                            last_stage and run_status in {'STARTED','PAUSE_REQUESTED'}
+                        ),
                         'started_at':row.get('started_at'),
                         'completed_at':row.get('completed_at'),
                         'error_count':row.get('error_count'),
