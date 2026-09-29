@@ -393,6 +393,25 @@ def parse_file(filename: str, data: bytes) -> ParsedFile:
         _analyze_sales_period(parsed)
     elif source_type == "movement":
         _analyze_movement_dates(parsed)
+        if (
+            parsed.coverage_start is not None
+            and parsed.coverage_start == parsed.coverage_end
+        ):
+            ok, reason = movement_daily_close_filename_evidence(
+                original_filename=parsed.filename,
+                filename_date_candidate=parsed.filename_date_candidate,
+                filename_time_candidate=parsed.filename_time_candidate,
+                coverage_start_date=parsed.coverage_start,
+                coverage_end_date=parsed.coverage_end,
+                business_date=parsed.coverage_start,
+            )
+            if ok:
+                parsed.date_evidence["movement_daily_close_filename_contract"] = {
+                    "complete": True,
+                    "reason": reason,
+                    "business_date": parsed.coverage_start.isoformat(),
+                    "upload_time_used": False,
+                }
     elif source_type == "unclassified":
         parsed.warnings.append("Source type unresolved; rows will be stored in raw_unclassified and require QA classification.")
     return parsed
