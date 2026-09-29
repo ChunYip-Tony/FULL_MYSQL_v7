@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.174-single-service'
+VERSION='7.0.175-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -609,6 +609,8 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
     batch_blockers=cur.fetchall()
 
     reason_counts={}
+    reason_samples={}
+    diagnostic_counts={}
     hold_samples=[]
     hold_source='QUICK_CHECK_CURRENT'
     cur.execute(
@@ -630,6 +632,10 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             ]
             for reason in reasons:
                 reason_counts[reason]=reason_counts.get(reason,0)+1
+                samples=reason_samples.setdefault(reason,[])
+                upc=str(row.get('ean_upc') or '')
+                if upc and upc not in samples and len(samples)<8:
+                    samples.append(upc)
             if len(hold_samples)<12:
                 hold_samples.append({
                     'upc':str(row.get('ean_upc') or ''),
@@ -661,11 +667,39 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             ]
             for reason in reasons:
                 reason_counts[reason]=reason_counts.get(reason,0)+1
+                samples=reason_samples.setdefault(reason,[])
+                upc=str(row.get('entity_key') or '')
+                if upc and upc not in samples and len(samples)<8:
+                    samples.append(upc)
             if len(hold_samples)<12:
                 hold_samples.append({
                     'upc':str(row.get('entity_key') or ''),
                     'reasons':reasons,
                 })
+
+    cur.execute(
+        """SELECT entity_key,detail_json
+           FROM qa_phase3_issue
+           WHERE batch_id=%s
+             AND issue_status='OPEN'
+             AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'
+           ORDER BY issue_id""",
+        (bid,),
+    )
+    for row in cur.fetchall():
+        qd={}
+        try:
+            parsed=json.loads(row.get('detail_json') or '{}')
+            if isinstance(parsed,dict):
+                qd=parsed
+        except Exception:
+            qd={}
+        for blocker in (qd.get('inventory_rollforward_blockers') or []):
+            key='OH:'+str(blocker)
+            diagnostic_counts[key]=diagnostic_counts.get(key,0)+1
+        if qd.get('cost_source') and 'COST_TO_SELLING_UOM_UNRESOLVED' in (qd.get('reasons') or []):
+            key='COST_CONVERSION:'+str(qd.get('selling_uom') or '?')+'<-'+str(qd.get('cost_uom') or '?')
+            diagnostic_counts[key]=diagnostic_counts.get(key,0)+1
 
     identity=detail.get('product_identity_guard') or {}
     active_unmapped_guard=detail.get('current_active_unmapped_sales_guard') or {}
@@ -689,6 +723,8 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
         'batch_blockers':batch_blockers,
         'quick_check':{
             'reason_counts':reason_counts,
+            'reason_samples':reason_samples,
+            'diagnostic_counts':diagnostic_counts,
             'hold_samples':hold_samples,
             'reason_source':hold_source,
             'sample_count':len(hold_samples),

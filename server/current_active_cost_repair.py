@@ -12,7 +12,7 @@ from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
-VERSION = "7.0.96-current-active-cost-authority-order"
+VERSION = "7.0.175-current-active-cost-authority-order"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -141,7 +141,8 @@ def _oh_cost_columns(hmap: dict[str, str]) -> dict[str, str | None]:
             hmap,
             ["Article", "Article Number", "Material", "Material Number"],
         ),
-        "upc": _pick(hmap, ["UPC", "EAN", "Barcode", "Sales Set"]),
+        # Sales Set # is not a UPC/EAN join key in FULL MYSQL.
+        "upc": _pick(hmap, ["UPC", "EAN", "Barcode"]),
         "explicit_cost": _pick(
             hmap,
             [
@@ -335,10 +336,10 @@ def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str
 
 
 def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
-    # Authority order:
+    # Authoritative current-cost order:
     # 1) Valid receipt valuation from 101/107/109.
-    # 2) Explicit supported cost from the On-Hand report.
-    # 3) Live/Fresh/Frozen official report cost.
+    # 2) Live/Fresh/Frozen official report cost.
+    # 3) Explicit supported cost from the On-Hand report (fallback).
     # 4) Explicit user-confirmed Family/Main-Article fallback.
     cur.execute(
         """SELECT co.cost_observation_id,co.cost_per_base_uom,co.cost_amount,
@@ -365,30 +366,7 @@ def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
             "movement_type": row.get("movement_type"),
         }
 
-    # 2) Explicit OH cost authority.
-    cur.execute(
-        """SELECT co.cost_observation_id,co.cost_amount,co.business_date,
-                  co.source_type,cu.uom_code AS cost_uom
-           FROM article_cost_observation co
-           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
-           WHERE co.family_id=%s
-             AND co.source_type=%s
-             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
-             AND co.cost_amount>0
-           ORDER BY co.business_date DESC,co.cost_observation_id DESC
-           LIMIT 1""",
-        (family_id, OH_FALLBACK_SOURCE_TYPE),
-    )
-    row = cur.fetchone()
-    if row:
-        return {
-            "source": row["source_type"],
-            "date": row["business_date"],
-            "uom": row["cost_uom"],
-            "amount": row["cost_amount"],
-        }
-
-    # 3) Live/Fresh/Frozen official report cost.
+    # 2) Live/Fresh/Frozen official report cost.
     placeholders = ",".join(["%s"] * len(OFFICIAL_COST_SOURCE_TYPES))
     cur.execute(
         f"""SELECT co.cost_observation_id,co.cost_amount,co.business_date,
@@ -402,6 +380,29 @@ def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
             ORDER BY co.business_date DESC,co.cost_observation_id DESC
             LIMIT 1""",
         (family_id, *sorted(OFFICIAL_COST_SOURCE_TYPES)),
+    )
+    row = cur.fetchone()
+    if row:
+        return {
+            "source": row["source_type"],
+            "date": row["business_date"],
+            "uom": row["cost_uom"],
+            "amount": row["cost_amount"],
+        }
+
+    # 3) Explicit OH cost fallback.
+    cur.execute(
+        """SELECT co.cost_observation_id,co.cost_amount,co.business_date,
+                  co.source_type,cu.uom_code AS cost_uom
+           FROM article_cost_observation co
+           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+           WHERE co.family_id=%s
+             AND co.source_type=%s
+             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND co.cost_amount>0
+           ORDER BY co.business_date DESC,co.cost_observation_id DESC
+           LIMIT 1""",
+        (family_id, OH_FALLBACK_SOURCE_TYPE),
     )
     row = cur.fetchone()
     if row:

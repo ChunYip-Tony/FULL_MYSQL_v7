@@ -611,7 +611,7 @@ body{
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
-/* v7.0.174 completed-batch QA breakdown */
+/* v7.0.175 completed-batch QA breakdown */
 #upload .qa-breakdown{
   margin:8px 0 3px;padding:9px;border:1px solid #e2b0aa;border-radius:10px;
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
@@ -648,8 +648,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.174</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.174</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.175</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.175</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -734,7 +734,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.174</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.175</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -811,13 +811,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.174';
+  el.textContent='App v7.0.175';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.174'){
-      el.textContent='UI 7.0.174 · API '+rv;
+    if(rv&&rv!=='7.0.175'){
+      el.textContent='UI 7.0.175 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -1073,7 +1073,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.174')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.175')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1270,8 +1270,11 @@ function renderWebUploadQASummary(d){
   if(d?.error)return '<div class="msg bad">'+esc(d.error)+'</div>';
   if(!d?.qa_available)return '<div class="msg">QA detail is not available for this batch.</div>';
   let p=d.phase3||{},idg=d.product_identity_guard||{},ug=d.current_active_unmapped_guard||{},ag=d.seafood_analysis_guard||{};
-  let blockers=d.batch_blockers||[],reasons=Object.entries(d.quick_check?.reason_counts||{})
-    .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0));
+  let blockers=d.batch_blockers||[],reasonSamples=d.quick_check?.reason_samples||{},
+      diagnostics=Object.entries(d.quick_check?.diagnostic_counts||{})
+        .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0)),
+      reasons=Object.entries(d.quick_check?.reason_counts||{})
+        .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0));
   let idPass=idg.pass===true,analysisPass=(ag.pass===true||ag.audit_pass===true);
   let blockerText=blockers.length
     ? blockers.map(x=>esc(x.issue_code||'UNKNOWN')+' ('+esc(x.severity||'')+') × '+fmt(x.issue_count,0)).join(' · ')
@@ -1295,9 +1298,20 @@ function renderWebUploadQASummary(d){
     '<div class="qa-blockers"><b>Batch-level blocker types:</b> '+blockerText+'</div>'+
     '<div class="qa-reasons">'+
       (reasons.length
-        ? reasons.map(([reason,count])=>'<div class="qa-reason"><span>'+esc(reason)+'</span><span class="n">'+fmt(count,0)+'</span></div>').join('')
+        ? reasons.map(([reason,count])=>
+            '<div class="qa-reason"><span>'+esc(reason)+
+              ((reasonSamples[reason]||[]).length
+                ? '<br><span style="font-size:7px;color:#6c7b84">'+(reasonSamples[reason]||[]).slice(0,5).map(esc).join(' · ')+'</span>'
+                : '')+
+            '</span><span class="n">'+fmt(count,0)+'</span></div>'
+          ).join('')
         : '<div class="qa-reason"><span>No per-UPC hold reason detail</span><span class="n">—</span></div>')+
     '</div>'+
+    (diagnostics.length
+      ? '<div class="qa-samples"><b>Backend sub-diagnostics:</b> '+
+          diagnostics.map(([k,v])=>esc(k)+' × '+fmt(v,0)).join(' · ')+
+        '</div>'
+      : '')+
     (samples?'<div class="qa-samples"><b>Sample HOLD UPCs:</b> '+samples+'</div>':'')+
     ((ug.active_unmapped_upcs||[]).length
       ? '<div class="qa-samples"><b>Current active unmapped UPCs:</b> '+(ug.active_unmapped_upcs||[]).slice(0,12).map(esc).join(' · ')+'</div>'
