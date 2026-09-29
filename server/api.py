@@ -29,7 +29,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.179-single-service'
+VERSION='7.0.180-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -704,6 +704,7 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
 
     identity=detail.get('product_identity_guard') or {}
     active_unmapped_guard=detail.get('current_active_unmapped_sales_guard') or {}
+    active_product_repair=detail.get('active_product_master_repair') or {}
     analysis=detail.get('analysis_layer') or {}
     seafood=analysis.get('seafood') or {}
     seafood_audit=seafood.get('audit') or {}
@@ -744,6 +745,10 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             'inactive_or_historical_count':active_unmapped_guard.get('inactive_or_historical_count'),
             'active_unmapped_upcs':active_unmapped_guard.get('active_unmapped_upcs'),
             'activity_rule':active_unmapped_guard.get('activity_rule'),
+        },
+        'active_product_repair':{
+            'identity':active_product_repair.get('identity'),
+            'uom':active_product_repair.get('uom'),
         },
         'seafood_analysis_guard':{
             'pass':seafood.get('pass'),
