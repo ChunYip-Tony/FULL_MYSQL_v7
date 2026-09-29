@@ -129,7 +129,9 @@ def main() -> int:
 
             worker_rc = worker.poll()
             if worker_rc is not None:
-                log(f"worker exited with code {worker_rc}; restarting in {RESTART_DELAY}s")
+                log(f"worker exited with code {worker_rc}; requeueing interrupted work before restart")
+                requeue_interrupted_pipeline_runs("WORKER_PROCESS_EXIT")
+                log(f"restarting worker in {RESTART_DELAY}s")
                 deadline = time.time() + RESTART_DELAY
                 while time.time() < deadline and not stopping:
                     if api.poll() is not None:
@@ -145,8 +147,9 @@ def main() -> int:
         # prevents a normal deployment restart from stranding the batch in a
         # misleading STOPPED / manual-Resume state.
         stop_process(worker, "worker")
-        if stopping:
-            requeue_interrupted_pipeline_runs("SERVICE_DEPLOYMENT_SHUTDOWN")
+        requeue_interrupted_pipeline_runs(
+            "SERVICE_DEPLOYMENT_SHUTDOWN" if stopping else "SERVICE_PROCESS_EXIT"
+        )
         stop_process(api, "api")
 
     return 0
