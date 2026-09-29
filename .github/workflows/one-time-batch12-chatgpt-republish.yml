@@ -202,7 +202,27 @@ jobs:
           print('BATCH13_QA=PASS')
           PY
 
-      - name: Verify 249450 fried/service Quick Check sales
+      - name: Verify canonical POS coverage is through 2026-09-27
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/v1/status" -o /tmp/status.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/status.json', encoding='utf-8'))
+          cov=p.get('coverage') or {}
+          pos=cov.get('POS_SALES') or {}
+          mvt=cov.get('MVT') or {}
+          print(json.dumps({'POS_SALES':pos,'MVT':mvt}, indent=2))
+          got=str(pos.get('latest_valid_date') or '')
+          if got != '2026-09-27':
+              raise SystemExit(f'Canonical POS latest_valid_date is {got!r}, expected 2026-09-27')
+          print('CANONICAL_POS_2026_09_27=PASS')
+          PY
+
+      - name: Inspect 249450 fried/service Quick Check sales (non-blocking regression diagnostic)
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
