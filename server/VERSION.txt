@@ -1,5 +1,14 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.162 Single-Service Edition
+Version: 7.0.163 Single-Service Edition
+
+
+v7.0.163 UPC Grouping + Phase 3 Pause Controls:
+- Quick Check search groups confirmed Seafood 240 / 245 / 247 / 249 selling forms under the 240 main UPC when Family and product-code evidence agree.
+- UPC-level quantities remain separate inside the group; mixed UOM groups do not publish a false aggregate quantity.
+- Resume Phase 3 now changes the Current Batch control to Pause Phase 3 while QUEUED / STARTED.
+- Pause Phase 3 is a real cooperative control: QUEUED runs pause immediately; STARTED runs stop at the next safe Phase 3 progress boundary.
+- Phase 3 transactional work is rolled back before PAUSED is acknowledged, leaving the batch at PHASE2C_READY for a clean Resume.
+- PAUSE_REQUESTED is treated as an active worker state so another worker cannot claim concurrent pipeline work.
 
 v7.0.162 Search First-Screen Balance:
 - Family results remain first, but are now capped at 3 instead of up to 8.
