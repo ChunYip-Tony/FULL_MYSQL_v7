@@ -1,4 +1,4 @@
-name: Check current QA holds
+name: Check POS sales freshness
 
 on:
   push:
@@ -10,14 +10,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Read current Batch 13 QA summary
+      - name: Read production POS freshness
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
+
           echo "=== HEALTH ==="
           curl -fsS --max-time 20 "$base/healthz"
           echo
-          echo "=== QA ==="
-          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary"
+
+          echo "=== CALENDAR ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/calendar?days=14"
+          echo
+
+          echo "=== RECENT BATCHES ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=12"
           echo
