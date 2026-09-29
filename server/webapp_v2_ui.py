@@ -617,7 +617,7 @@ body{
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
 }
 #upload .qa-breakdown-title{font-size:11px;font-weight:950;color:#8c272d;margin-bottom:6px}
-#upload .qa-gates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:7px}
+#upload .qa-gates{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-bottom:7px}
 #upload .qa-gate{padding:6px;border-radius:8px;background:rgba(255,255,255,.72);border:1px solid rgba(126,84,84,.12)}
 #upload .qa-gate .k{font-size:7.5px;color:#6d777f;text-transform:uppercase;font-weight:850}
 #upload .qa-gate .v{font-size:10px;font-weight:950;margin-top:2px;color:#17384d;overflow-wrap:anywhere}
@@ -1269,7 +1269,7 @@ async function deleteQAHoldBatch(batchId,button){
 function renderWebUploadQASummary(d){
   if(d?.error)return '<div class="msg bad">'+esc(d.error)+'</div>';
   if(!d?.qa_available)return '<div class="msg">QA detail is not available for this batch.</div>';
-  let p=d.phase3||{},idg=d.product_identity_guard||{},ag=d.seafood_analysis_guard||{};
+  let p=d.phase3||{},idg=d.product_identity_guard||{},ug=d.current_active_unmapped_guard||{},ag=d.seafood_analysis_guard||{};
   let blockers=d.batch_blockers||[],reasons=Object.entries(d.quick_check?.reason_counts||{})
     .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0));
   let idPass=idg.pass===true,analysisPass=(ag.pass===true||ag.audit_pass===true);
@@ -1287,6 +1287,8 @@ function renderWebUploadQASummary(d){
       '<div class="qa-gate"><div class="k">Batch blockers</div><div class="v '+(Number(p.blocking_issue_count||0)>0?'bad':'ok')+'">'+fmt(p.blocking_issue_count,0)+'</div></div>'+
       '<div class="qa-gate"><div class="k">Identity guard</div><div class="v '+(idPass?'ok':'bad')+'">'+(idPass?'PASS':'FAIL')+
         (idg.blocking_count!=null?' · '+fmt(idg.blocking_count,0)+' blocker(s)':'')+'</div></div>'+
+      '<div class="qa-gate"><div class="k">Active unmapped UPCs</div><div class="v '+(Number(ug.active_unmapped_count||0)>0?'bad':'ok')+'">'+
+        (ug.active_unmapped_count==null?'—':fmt(ug.active_unmapped_count,0))+'</div></div>'+
       '<div class="qa-gate"><div class="k">Seafood analysis</div><div class="v '+(analysisPass?'ok':'bad')+'">'+(analysisPass?'PASS':'FAIL')+
         (ag.refresh_status?' · '+esc(ag.refresh_status):'')+'</div></div>'+
     '</div>'+
@@ -1297,6 +1299,9 @@ function renderWebUploadQASummary(d){
         : '<div class="qa-reason"><span>No per-UPC hold reason detail</span><span class="n">—</span></div>')+
     '</div>'+
     (samples?'<div class="qa-samples"><b>Sample HOLD UPCs:</b> '+samples+'</div>':'')+
+    ((ug.active_unmapped_upcs||[]).length
+      ? '<div class="qa-samples"><b>Current active unmapped UPCs:</b> '+(ug.active_unmapped_upcs||[]).slice(0,12).map(esc).join(' · ')+'</div>'
+      : '')+
     '<div class="qa-samples"><b>Reason source:</b> '+esc(d.quick_check?.reason_source||'—')+'</div>'+
   '</div>';
 }
