@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.200 Single-Service Edition
+Version: 7.0.201 Single-Service Edition
+
+v7.0.201 MVT Parser Import Fix:
+- Fixes Batch 17 MVT upload failure: name 'movement_daily_close_filename_evidence' is not defined.
+- Restores the missing import from movement_coverage_rules into ingest.py.
+- No movement completeness rule changed; this only repairs the parser/runtime reference.
+- Batch 17 can remain open in API_UPLOADING and be retried with the same sf-mvt-092826.xls file.
+- Aligns UI/runtime version display to 7.0.201.
 
 v7.0.200 Web Upload Failure Diagnostics + Retry Lock Fix:
 - Stops holding a FOR UPDATE lock on the batch row for the full add_file ingest, preventing a timed-out/retried upload from blocking the next retry behind the same batch-row lock.
