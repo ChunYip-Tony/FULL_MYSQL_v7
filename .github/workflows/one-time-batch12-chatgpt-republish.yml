@@ -1,4 +1,4 @@
-name: One-time Batch 12 ChatGPT republish
+name: One-time Batch 13 ChatGPT republish
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   republish:
-    if: github.event.head_commit.message == 'Trigger Batch 12 ChatGPT republish'
+    if: github.event.head_commit.message == 'Trigger Batch 13 ChatGPT republish'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -28,7 +28,7 @@ jobs:
           done
           test "$ready" = "1"
 
-      - name: Republish current Batch 12 ChatGPT analysis snapshot
+      - name: Republish current Batch 13 ChatGPT analysis snapshot
         shell: bash
         run: |
           set -euo pipefail
@@ -36,7 +36,7 @@ jobs:
           http_code="$(curl -sS --max-time 240 \
             -o /tmp/republish.json \
             -w '%{http_code}' \
-            -X POST "$base/v1/web-upload/batches/12/republish-chatgpt-analysis")"
+            -X POST "$base/v1/web-upload/batches/13/republish-chatgpt-analysis")"
           cat /tmp/republish.json
           echo
           echo "HTTP_STATUS=$http_code"
@@ -45,6 +45,6 @@ jobs:
           import json
           p=json.load(open('/tmp/republish.json', encoding='utf-8'))
           assert p.get('status') == 'PASS', p
-          assert int(p.get('batch_id') or 0) == 12, p
+          assert int(p.get('batch_id') or 0) == 13, p
           print(json.dumps(p, indent=2))
           PY
