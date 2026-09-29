@@ -23,6 +23,10 @@ jobs:
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import api; print(api.VERSION)"
+      - name: Verify shared runtime version
+        env:
+          FULLMYSQL_WORK_TOKEN: smoke-token
+        run: python -c "import api, v7_ingest; assert api.VERSION == v7_ingest.API_VERSION, (api.VERSION, v7_ingest.API_VERSION); print(api.VERSION)"
       - name: Import worker and Phase 3 modules
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
