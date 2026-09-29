@@ -614,8 +614,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.161</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.161</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.162</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.162</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -700,7 +700,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.161</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.162</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
   <div class="card latest-ref-card">
     <div class="section">Latest Reference Uploads</div>
     <div id="latestRefMsg" class="msg"></div>
@@ -771,13 +771,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.161';
+  el.textContent='App v7.0.162';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.161'){
-      el.textContent='UI 7.0.161 · API '+rv;
+    if(rv&&rv!=='7.0.162'){
+      el.textContent='UI 7.0.162 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -966,7 +966,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.161')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.162')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1243,7 +1243,7 @@ async function csearch(){
   $('cmsg').textContent='Searching…';$('cres').innerHTML='';
   try{
     let d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=30');
-    $('cmsg').textContent=d.count+' result(s) · Family first · UPC and Article shown separately · sorted by 28D Qty';
+    $('cmsg').textContent=d.count+' result(s) · Top 3 Family matches · then UPC · Article shown separately';
     $('cres').innerHTML=(d.results||[]).map((r,i)=>{
       let type=String(r.result_type||'').toUpperCase();
       let isFamily=type==='FAMILY',isUpc=type==='UPC',isArticle=type==='ARTICLE';
