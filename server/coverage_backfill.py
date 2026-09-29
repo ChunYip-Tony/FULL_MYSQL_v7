@@ -590,7 +590,131 @@ def relink_pos_backfill(cur) -> int:
            SET b.upc_id=u.upc_id
            WHERE b.upc_id IS NULL OR b.upc_id<>u.upc_id"""
     )
-    return updated + int(cur.rowcount)
+    updated += int(cur.rowcount)
+
+    # 249 service/fried items use a canonical base UPC of
+    # 249 + 3-digit product code + 00000. Source exports may carry the
+    # six-digit service code or a scale-derived suffix. Resolve only when the
+    # exact canonical base row exists and is ACTIVE.
+    for table in ("pos_daily_backfill_observation","pos_period_residual_observation"):
+        cur.execute(
+            f"""UPDATE {table} b
+                JOIN selling_upc u
+                  ON u.ean_upc=CONCAT(LEFT(TRIM(LEADING '0' FROM b.ean_upc),6),'00000')
+                 AND u.record_status='ACTIVE'
+                SET b.upc_id=u.upc_id
+                WHERE b.ean_upc REGEXP '^0*249[0-9]{{3}}[0-9]*
+
+
+def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
+    """Read-only view of multi-date POS/MVT backfill behavior for one batch."""
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT file_id,batch_id,original_filename,source_type,
+                          coverage_type,coverage_start_date,coverage_end_date,
+                          header_period_start_date,header_period_end_date,
+                          report_generated_at,filename_date_candidate,
+                          filename_time_candidate,processing_status,error_count
+                   FROM ingest_file
+                   WHERE batch_id=%s
+                     AND source_type IN ('sales_by_price_type','movement')
+                   ORDER BY file_id""",
+                (batch_id,),
+            )
+            files = cur.fetchall()
+            file_ids = {int(x["file_id"]) for x in files}
+
+            cur.execute(
+                """SELECT 1
+                   FROM information_schema.TABLES
+                   WHERE TABLE_SCHEMA=DATABASE()
+                     AND TABLE_NAME='pos_daily_backfill_coverage'
+                   LIMIT 1"""
+            )
+            backfill_initialized = bool(cur.fetchone())
+
+            pos_days = [
+                x for x in source_data_days(
+                    cur, "sales_by_price_type", include_batch_id=batch_id
+                )
+                if int(x["file_id"]) in file_ids
+            ]
+            mvt_days = [
+                x for x in source_data_days(
+                    cur, "movement", include_batch_id=batch_id
+                )
+                if int(x["file_id"]) in file_ids
+            ]
+
+            pos_backfill = []
+            pos_backfill_totals = []
+            if backfill_initialized:
+                cur.execute(
+                    """SELECT business_date,source_file_id,source_batch_id,
+                              period_start_date,period_end_date,derivation_method,
+                              backfill_status,known_day_count,missing_day_count,
+                              detail_json
+                       FROM pos_daily_backfill_coverage
+                       WHERE source_batch_id=%s
+                       ORDER BY business_date,source_file_id""",
+                    (batch_id,),
+                )
+                pos_backfill = cur.fetchall()
+
+                cur.execute(
+                    """SELECT source_file_id,business_date,COUNT(*) AS row_count,
+                              COALESCE(SUM(sales_amount),0) AS sales_amount,
+                              COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                       FROM pos_daily_backfill_observation
+                       WHERE source_batch_id=%s
+                       GROUP BY source_file_id,business_date
+                       ORDER BY business_date,source_file_id""",
+                    (batch_id,),
+                )
+                pos_backfill_totals = cur.fetchall()
+
+            pos_period_residuals = []
+            if backfill_initialized:
+                cur.execute(
+                    """SELECT source_file_id,source_batch_id,
+                              period_start_date,period_end_date,
+                              missing_start_date,missing_end_date,
+                              missing_day_count,missing_dates_json,
+                              ean_upc,upc_id,description,price_type,
+                              sales_amount,sold_quantity,avg_sold_price,
+                              derivation_method
+                       FROM pos_period_residual_observation
+                       WHERE source_batch_id=%s
+                       ORDER BY source_file_id,ean_upc,price_type""",
+                    (batch_id,),
+                )
+                pos_period_residuals = cur.fetchall()
+
+            return {
+                "batch_id": batch_id,
+                "initialized": backfill_initialized,
+                "files": files,
+                "canonical_pos_days_from_batch": pos_days,
+                "canonical_movement_days_from_batch": mvt_days,
+                "pos_derived_daily_coverage": pos_backfill,
+                "pos_derived_daily_totals": pos_backfill_totals,
+                "pos_period_price_type_residuals": pos_period_residuals,
+                "rules": {
+                    "pos_one_missing_day": "PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE",
+                    "pos_multiple_missing_days": "PERIOD_MINUS_CANONICAL_DAYS_BY_PRICE_TYPE_AS_MULTI_DAY_RESIDUAL",
+                    "movement_multi_date": "EXACT_POSTING_DATE_SLICE",
+                },
+            }
+        finally:
+            cur.close()
+
+                  AND (b.upc_id IS NULL OR b.upc_id<>u.upc_id)"""
+        )
+        updated += int(cur.rowcount)
+
+    return updated
 
 
 def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
