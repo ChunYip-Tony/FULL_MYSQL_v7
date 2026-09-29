@@ -1,6 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.163 Single-Service Edition
+Version: 7.0.164 Single-Service Edition
 
+
+v7.0.164 Phase 3 Current-Stage Display:
+- Current Batch Pipeline status now follows the active Phase 3 pipeline_run once Resume Phase 3 has been queued or started.
+- User-facing states are PHASE3_QUEUED, PHASE3_RUNNING, PHASE3_PAUSING, and PHASE3_PAUSED.
+- The underlying ingest_batch may remain PHASE2C_READY as the transactional restart anchor until Phase 3 commits; that internal checkpoint is no longer shown as the current running stage.
+- Phase 2C remains separately visible as READY while Phase 3 runs.
 
 v7.0.163 UPC Grouping + Phase 3 Pause Controls:
 - Quick Check search groups confirmed Seafood 240 / 245 / 247 / 249 selling forms under the 240 main UPC when Family and product-code evidence agree.
