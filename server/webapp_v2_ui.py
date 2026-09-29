@@ -1647,18 +1647,24 @@ async function csearch(){
             : (isGroup?'<div class="upc-group-badge">UPC GROUP</div>':''));
       let members=isGroup
         ? '<div class="upc-group-members">'+(r.group_members||[]).map(x=>
-            '<div class="upc-group-member"><div><div class="u">'+esc(x.upc||'—')+'</div><div class="r">'+esc(x.group_role||x.upc_role||'RELATED')+'</div></div><div class="q">'+qv(x.qty_28d,x.qty_28d_uom)+'</div></div>'
+            '<div class="upc-group-member"><div><div class="u">'+esc(x.upc||'—')+'</div><div class="r">'+esc(x.group_role||x.upc_role||'RELATED')+'</div><div class="r">Current '+priceText(x.current_price,x.selling_uom)+' · '+esc(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+esc(x.current_price_asof_date):'')+'</div></div><div class="q">'+qv(x.pos_qty_7d,x.qty_28d_uom)+' 7D<br>'+qv(x.qty_28d,x.qty_28d_uom)+' 28D</div></div>'
           ).join('')+'</div>'
         : '';
+      let priceLine=(isGroup||isUpc)
+        ? '<div class="meta"><b>Current '+priceText(r.current_price,r.selling_uom||r.qty_28d_uom)+'</b> · '+esc(r.current_price_source||'NO PRICE EVIDENCE')+(r.current_price_asof_date?' · '+esc(r.current_price_asof_date):'')+'</div>'
+        : '';
       let qtyLine=isGroup
-        ? '<div class="meta">Group 28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+(r.qty_28d_status==='MIXED_UOM'?' · mixed UOM, see UPC rows':'')+'</div>'
-        : '<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>';
+        ? '<div class="meta">Sales 7D '+money(r.sales_dollars_7d)+' · Qty 7D '+qv(r.pos_qty_7d,r.qty_28d_uom)+' · Group 28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+(r.qty_28d_status==='MIXED_UOM'?' · mixed UOM, see UPC rows':'')+'</div>'
+        : (isUpc
+            ? '<div class="meta">Sales 7D '+money(r.sales_dollars_7d)+' · Qty 7D '+qv(r.pos_qty_7d,r.selling_uom||r.qty_28d_uom)+' · 28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
+            : '<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>');
       return '<div class="card result '+cls+'" data-i="'+i+'">'
         +badge
         +'<div class="row" style="justify-content:space-between"><div class="name">'+esc(r.name)+'</div>'+pill(r.readiness)+'</div>'
         +numberHtml
         +'<div class="result-type">'+esc(type||'UNKNOWN')+' · '+esc(r.category||'—')+'</div>'
         +(isArticle&&r.family_article_number?'<div class="meta">Family '+esc(r.family_article_number)+' · '+esc(r.family_name||'')+'</div>':'')
+        +priceLine
         +qtyLine
         +members
         +'</div>';
