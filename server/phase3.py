@@ -1558,20 +1558,24 @@ def _latest_price_snapshot(cur) -> datetime | None:
 
 
 def _upc_match_sql(column: str, ean: str) -> tuple[str, tuple[Any, ...]]:
-    """Return source-lineage predicate for one canonical selling UPC.
-
-    Besides exact/leading-zero equivalence, 249 service UPCs accept the
-    authoritative six-digit service product prefix so shortened/scale-derived
-    POS and Price-List identifiers resolve to the same canonical base UPC.
-    """
+    """Return source-lineage predicate for one canonical selling UPC."""
     key = _numeric_key(ean)
     service_prefix = service_249_source_prefix(ean)
     if key is None:
         return f"{column}=%s", (ean,)
+    numeric_only = f"({column}<>'' AND {column} NOT REGEXP '[^0-9]')"
     if service_prefix:
         return (
             f"({column}=%s OR "
-            f"({column} REGEXP '^[0-9]+
+            f"({numeric_only} AND TRIM(LEADING '0' FROM {column})=%s) OR "
+            f"{column} LIKE %s)",
+            (ean, key, service_prefix + '%'),
+        )
+    return (
+        f"({column}=%s OR "
+        f"({numeric_only} AND TRIM(LEADING '0' FROM {column})=%s))",
+        (ean, key),
+    )
 
 
 def _sales_daily_aggregates(
