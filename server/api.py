@@ -1281,19 +1281,33 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
                     },
                 )
 
+            # Only one user-visible ingest/Phase 3 job may be active. This
+            # keeps rebuild serialized with normal uploads and other reruns.
             cur.execute(
-                """SELECT pipeline_run_id,stage_name,processing_status,code_version
+                """SELECT pipeline_run_id,batch_id,stage_name,processing_status,code_version
                    FROM pipeline_run
-                   WHERE batch_id=%s
-                     AND pipeline_name=%s
+                   WHERE pipeline_name=%s
                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
                      AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                    ORDER BY pipeline_run_id DESC
                    LIMIT 1""",
-                (bid,API_PIPELINE),
+                (API_PIPELINE,),
             )
             active=cur.fetchone()
             if active:
+                active_bid=int(active.get('batch_id') or 0)
+                if active_bid!=bid:
+                    raise HTTPException(
+                        409,
+                        detail={
+                            'status':'BLOCKED',
+                            'reason':'ANOTHER_BATCH_IS_ACTIVE',
+                            'active_batch_id':active_bid,
+                            'active_pipeline_run_id':active.get('pipeline_run_id'),
+                            'active_stage_name':active.get('stage_name'),
+                            'active_status':active.get('processing_status'),
+                        },
+                    )
                 conn.commit()
                 return {
                     'queued':active.get('processing_status')=='QUEUED',
