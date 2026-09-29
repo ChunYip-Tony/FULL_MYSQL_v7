@@ -10,6 +10,7 @@ from typing import Any
 from data_coverage import source_data_days
 from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
+from upc_aliases import service_249_canonical_base
 from manual_overrides import apply_manual_upc_overrides
 from normalize import (
     RowContext,
@@ -103,6 +104,21 @@ def _find_upc(cur, ean: str) -> dict[str, Any] | None:
     hit=cur.fetchone()
     if hit:
         return hit
+
+    service_candidate=service_249_canonical_base(ean)
+    if service_candidate and service_candidate!=str(ean):
+        cur.execute(
+            """SELECT upc_id,ean_upc,selling_description,record_status
+               FROM selling_upc
+               WHERE ean_upc=%s
+                 AND record_status='ACTIVE'
+               LIMIT 1""",
+            (service_candidate,),
+        )
+        hit=cur.fetchone()
+        if hit:
+            return hit
+
     for candidate in _upca_alias_candidates(ean):
         cur.execute(
             """SELECT upc_id,ean_upc,selling_description,record_status
