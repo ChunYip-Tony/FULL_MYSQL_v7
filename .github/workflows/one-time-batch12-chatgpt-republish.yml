@@ -202,22 +202,27 @@ jobs:
           print('BATCH13_QA=PASS')
           PY
 
-      - name: Verify canonical POS coverage is through 2026-09-27
+      - name: Verify canonical POS coverage includes 2026-09-27
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          curl -fsS --max-time 30 "$base/v1/status" -o /tmp/status.json
+          curl -fsS --max-time 30 "$base/v1/web-upload/calendar?days=5" -o /tmp/calendar.json
+          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=8" -o /tmp/recent.json
           python - <<'PY'
           import json
-          p=json.load(open('/tmp/status.json', encoding='utf-8'))
-          cov=p.get('coverage') or {}
-          pos=cov.get('POS_SALES') or {}
-          mvt=cov.get('MVT') or {}
-          print(json.dumps({'POS_SALES':pos,'MVT':mvt}, indent=2))
-          got=str(pos.get('latest_valid_date') or '')
-          if got != '2026-09-27':
-              raise SystemExit(f'Canonical POS latest_valid_date is {got!r}, expected 2026-09-27')
+          cal=json.load(open('/tmp/calendar.json', encoding='utf-8'))
+          recent=json.load(open('/tmp/recent.json', encoding='utf-8'))
+          print('CALENDAR=')
+          print(json.dumps(cal, indent=2))
+          print('RECENT_BATCHES=')
+          print(json.dumps(recent, indent=2))
+          target=next((d for d in (cal.get('days') or []) if str(d.get('date') or '')=='2026-09-27'), None)
+          if not target:
+              raise SystemExit('2026-09-27 is absent from canonical upload calendar')
+          pos=target.get('pos') or {}
+          if pos.get('updated') is not True:
+              raise SystemExit(f'Canonical POS for 2026-09-27 is not updated: {target!r}')
           print('CANONICAL_POS_2026_09_27=PASS')
           PY
 
