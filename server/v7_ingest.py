@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.165-single-service'
+API_VERSION='7.0.166-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 
@@ -48,7 +48,7 @@ def find_active_batch() -> dict[str,Any]|None:
                     SELECT 1 FROM pipeline_run pr
                     WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
                       AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                      AND pr.processing_status IN ('QUEUED','STARTED')
+                      AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                )
             ORDER BY ib.batch_id DESC LIMIT 1
         """,(API_PIPELINE,))
@@ -260,7 +260,75 @@ def session_status(session_id: str) -> dict[str,Any]:
             if isinstance(v,(date,datetime)):
                 o[k]=_wire_value(v)
         return o
-    return {'batch':conv(b),'files':[conv(x) for x in files],'api_runs':[conv(x) for x in runs],'phase2c':conv(p2),'phase3':conv(p3)}
+    batch_status=str(b.get('processing_status') or '').upper()
+    latest_phase3_run=next(
+        (
+            x for x in reversed(runs)
+            if str(x.get('stage_name') or '').upper() in {'POST_RAW_PIPELINE','PHASE3_RERUN'}
+        ),
+        None,
+    )
+    run_status=str((latest_phase3_run or {}).get('processing_status') or '').upper()
+    live_stage=(
+        (latest_phase3_run or {}).get('phase3_stage')
+        if run_status in {'STARTED','PAUSE_REQUESTED'}
+        else None
+    )
+
+    phase3_running=run_status=='STARTED'
+    resume_allowed=False
+    pipeline_display=batch_status
+    phase3_display=(p3 or {}).get('result_status') if p3 else None
+
+    if not p3 and batch_status=='PHASE2C_READY':
+        if run_status=='QUEUED':
+            pipeline_display='PHASE3_QUEUED'
+            phase3_display='QUEUED'
+        elif run_status=='STARTED':
+            pipeline_display='PHASE3_RUNNING'
+            phase3_display=live_stage or 'RUNNING'
+        elif run_status=='PAUSE_REQUESTED':
+            # Pause is no longer a user-supported action. Treat any legacy
+            # in-flight pause request as stopped/recovery state in the UI.
+            pipeline_display='PHASE3_STOPPED'
+            phase3_display='STOPPING · RESUME WHEN STOPPED'
+        elif run_status in {'PAUSED','FAILED','FAILED_QA','QA_HOLD','ABORTED','COMPLETED'}:
+            pipeline_display='PHASE3_STOPPED'
+            phase3_display='STOPPED · RESUME REQUIRED'
+            resume_allowed=True
+        else:
+            pipeline_display='PHASE2C_READY'
+            phase3_display='READY TO RESUME'
+            resume_allowed=True
+
+    quick_check_display='PENDING'
+    if p3 and p3.get('quick_check_rows') is not None:
+        hold_rows=int(p3.get('quick_check_hold_rows') or 0)
+        quick_check_display='READY_WITH_HOLDS' if hold_rows else 'READY'
+
+    authoritative_status={
+        'source':'BACKEND_AUTHORITATIVE',
+        'pipeline':pipeline_display,
+        'batch_processing_status':batch_status,
+        'phase2c':(p2 or {}).get('result_status') if p2 else None,
+        'phase3':phase3_display,
+        'phase3_run_status':run_status or None,
+        'phase3_running':phase3_running,
+        'phase3_stage_live':live_stage,
+        'quick_check':quick_check_display,
+        'resume_allowed':resume_allowed,
+        'user_action':'RESUME_PHASE3' if resume_allowed else 'NONE',
+        'pipeline_run_id':(latest_phase3_run or {}).get('pipeline_run_id'),
+    }
+
+    return {
+        'batch':conv(b),
+        'files':[conv(x) for x in files],
+        'api_runs':[conv(x) for x in runs],
+        'phase2c':conv(p2),
+        'phase3':conv(p3),
+        'authoritative_status':authoritative_status,
+    }
 
 
 
