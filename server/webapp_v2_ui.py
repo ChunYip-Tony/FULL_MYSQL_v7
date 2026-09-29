@@ -613,6 +613,12 @@ body{
   background:#e9f6fc!important;color:#0f5578!important;font-weight:900!important
 }
 #upload .resume-phase3:disabled{opacity:.65;cursor:wait}
+#upload .publish-analysis{
+  width:100%;margin-top:8px;min-height:38px;border:1px solid #80b99a!important;
+  background:#eaf8ef!important;color:#17643a!important;font-weight:900!important
+}
+#upload .publish-analysis:disabled{opacity:.65;cursor:wait}
+#upload .publish-analysis-msg{margin-top:5px;font-size:9px}
 #upload .pause-phase3{
   width:100%;margin-top:8px;min-height:38px;border:1px solid #d7a0a0!important;
   background:#fff1f1!important;color:#9b252b!important;font-weight:900!important
@@ -1066,11 +1072,20 @@ function renderWebUploadStatus(d){
       '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button>'+
       '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Phase 3 is not running · Resume required.</div>';
   }else{
-    $('uploadCurrentActions').innerHTML=failureHtml;
+    let p3Status=String(p3.result_status||'').toUpperCase();
+    let publishable=p3Status==='QUICK_CHECK_READY'||p3Status==='QUICK_CHECK_READY_WITH_HOLDS';
+    $('uploadCurrentActions').innerHTML=
+      failureHtml+
+      (publishable
+        ? '<button class="publish-analysis" data-publish-analysis="'+esc(b.batch_id)+'" type="button">Republish ChatGPT Analysis</button>'+
+          '<div class="msg publish-analysis-msg" data-publish-msg="'+esc(b.batch_id)+'">Publishes READY rows only; HOLD rows stay isolated in QA.</div>'
+        : '');
   }
 
   let resumeBtn=$('uploadCurrentActions').querySelector('[data-current-resume-phase3]');
   if(resumeBtn)resumeBtn.onclick=()=>resumePhase3Batch(resumeBtn.dataset.currentResumePhase3,resumeBtn);
+  let publishBtn=$('uploadCurrentActions').querySelector('[data-publish-analysis]');
+  if(publishBtn)publishBtn.onclick=()=>republishChatGPTAnalysis(publishBtn.dataset.publishAnalysis,publishBtn);
   return displayStatus;
 }
 
@@ -1188,10 +1203,49 @@ function renderWebUploadRecentBatch(b){
       (x.duplicate_of_file_id?' · duplicate of file '+esc(x.duplicate_of_file_id):'')+
       '</div></div><span class="pill '+(Number(x.error_count||0)>0?'bad':'ok')+'">'+esc(x.processing_status||'UNKNOWN')+'</span></div>'
     ).join('')+'</div>'+
+    ((p3Status==='QUICK_CHECK_READY'||p3Status==='QUICK_CHECK_READY_WITH_HOLDS')
+      ? '<button class="publish-analysis" data-publish-analysis="'+esc(b.batch_id)+'" type="button">Republish ChatGPT Analysis</button>'+
+        '<div class="msg publish-analysis-msg" data-publish-msg="'+esc(b.batch_id)+'">READY rows only · HOLD rows excluded from analysis.</div>'
+      : '')+
     ((String(b.processing_status||'').toUpperCase()==='QA_HOLD'&&!b.phase2c_status&&!b.phase3_status)
       ? '<button class="delete-qa-batch" data-delete-batch="'+esc(b.batch_id)+'" data-confirmed="0" type="button">Delete QA HOLD Batch</button><div class="msg delete-qa-msg" data-delete-msg="'+esc(b.batch_id)+'"></div>'
       : '')+
   '</div>';
+}
+
+async function republishChatGPTAnalysis(batchId,button){
+  let id=Number(batchId);
+  if(!Number.isInteger(id)||id<1)return;
+  let card=button?.closest('.card')||$('uploadStatusCard');
+  let msg=card?.querySelector('[data-publish-msg="'+id+'"]')||document.querySelector('[data-publish-msg="'+id+'"]');
+  if(button){
+    button.disabled=true;
+    button.textContent='Publishing READY Analysis…';
+  }
+  if(msg)msg.textContent='Writing READY-only analysis snapshot to Google Sheet…';
+  try{
+    let d=await api('/v1/web-upload/batches/'+id+'/republish-chatgpt-analysis',{method:'POST'});
+    let ready=fmt(d.analysis_ready_row_count,0),held=fmt(d.excluded_hold_row_count,0);
+    if(msg){
+      msg.className='msg ok publish-analysis-msg';
+      msg.textContent='Published '+ready+' READY rows · '+held+' HOLD rows excluded to QA.';
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Republish ChatGPT Analysis';
+    }
+    $('uploadMsg').textContent='ChatGPT analysis snapshot published from Batch '+id+' · '+ready+' READY rows.';
+  }catch(e){
+    let reason=e?.message||String(e);
+    if(msg){
+      msg.className='msg bad publish-analysis-msg';
+      msg.textContent='Publish failed: '+reason;
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Republish ChatGPT Analysis';
+    }
+  }
 }
 
 async function resumePhase3Batch(batchId,button){
@@ -1345,6 +1399,9 @@ async function loadWebUploadRecent(){
     $('uploadRecent').innerHTML=batches.map(renderWebUploadRecentBatch).join('')||'<div class="card small">No uploads yet.</div>';
     document.querySelectorAll('#uploadRecent [data-delete-batch]').forEach(
       b=>b.onclick=()=>deleteQAHoldBatch(b.dataset.deleteBatch,b)
+    );
+    document.querySelectorAll('#uploadRecent [data-publish-analysis]').forEach(
+      b=>b.onclick=()=>republishChatGPTAnalysis(b.dataset.publishAnalysis,b)
     );
 
   }catch(e){$('uploadRecentMsg').textContent=e.message}
