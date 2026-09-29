@@ -23,6 +23,7 @@ from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
+from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
@@ -1171,6 +1172,113 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
             raise HTTPException(500,f'Phase 3 resume failed: {exc}')
         finally:
             cur.close()
+
+
+@app.post('/v1/web-upload/batches/{batch_id}/republish-chatgpt-analysis')
+def web_upload_republish_chatgpt_analysis(batch_id:int,request:Request):
+    _browser_upload_guard(request)
+    bid=int(batch_id)
+    if bid<1:
+        raise HTTPException(422,'INVALID_BATCH_ID')
+    if not bridge_enabled():
+        raise HTTPException(
+            409,
+            detail={
+                'status':'BLOCKED',
+                'reason':'CHATGPT_SHEET_BRIDGE_DISABLED',
+            },
+        )
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,processing_status
+                   FROM ingest_batch
+                   WHERE batch_id=%s
+                   LIMIT 1""",
+                (bid,),
+            )
+            batch=cur.fetchone()
+            if not batch:
+                raise HTTPException(404,'Batch not found')
+
+            cur.execute(
+                """SELECT result_status,blocking_issue_count,
+                          quick_check_rows,quick_check_ready_rows,quick_check_hold_rows
+                   FROM phase3_batch_result
+                   WHERE batch_id=%s
+                   LIMIT 1""",
+                (bid,),
+            )
+            p3=cur.fetchone()
+            if not p3:
+                raise HTTPException(409,detail={'status':'BLOCKED','reason':'PHASE3_RESULT_MISSING'})
+
+            result_status=str(p3.get('result_status') or '').upper()
+            if result_status not in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE3_NOT_PUBLISHABLE',
+                        'phase3_status':result_status,
+                    },
+                )
+            if int(p3.get('blocking_issue_count') or 0)>0:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE3_GLOBAL_BLOCKERS_PRESENT',
+                        'blocking_issue_count':int(p3.get('blocking_issue_count') or 0),
+                    },
+                )
+            if int(p3.get('quick_check_ready_rows') or 0)<=0:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'NO_READY_ROWS_FOR_ANALYSIS',
+                    },
+                )
+
+            # Do not relabel a newer serving snapshot as an older batch.
+            cur.execute(
+                """SELECT COUNT(*) AS c,
+                          MIN(publish_batch_id) AS min_batch,
+                          MAX(publish_batch_id) AS max_batch
+                   FROM quick_check_current"""
+            )
+            serving=cur.fetchone() or {}
+            if (
+                int(serving.get('c') or 0)<=0
+                or int(serving.get('min_batch') or 0)!=bid
+                or int(serving.get('max_batch') or 0)!=bid
+            ):
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'BATCH_IS_NOT_CURRENT_SERVING_SNAPSHOT',
+                        'serving_min_batch':serving.get('min_batch'),
+                        'serving_max_batch':serving.get('max_batch'),
+                    },
+                )
+        finally:
+            cur.close()
+
+    result=publish_chatgpt_snapshot(bid)
+    if str(result.get('status') or '').upper()!='PASS':
+        raise HTTPException(
+            409,
+            detail={
+                'status':'BLOCKED',
+                'reason':'CHATGPT_ANALYSIS_REPUBLISH_FAILED',
+                'bridge_result':result,
+            },
+        )
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.post('/v1/web-upload/batches/{batch_id}/pause-phase3')
