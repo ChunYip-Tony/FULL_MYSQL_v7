@@ -10,6 +10,7 @@ v7.0.175 OH/UOM False-HOLD Repair:
 - Authoritative prefix LB supersedes stale conflicting current/history UOM mappings for active Seafood UPCs; non-prefix UPCs still require explicit Article Manual/user evidence.
 - Quick Check QA evidence now stores exact inventory roll-forward sub-blockers, UOM state, cost source/UOM, missing movement dates, and UOM mismatches.
 - Upload HOLD breakdown now shows per-reason UPC samples plus backend sub-diagnostics so remaining true HOLDs are directly actionable.
+- Aligns current-active cost repair with serving authority: Receipt valuation → Live/Fresh/Frozen official cost → OH fallback → confirmed manual fallback.
 
 
 v7.0.174 Global Current-Active Unmapped Sales Gate:
