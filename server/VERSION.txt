@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.199 Single-Service Edition
+Version: 7.0.200 Single-Service Edition
+
+v7.0.200 Web Upload Failure Diagnostics + Retry Lock Fix:
+- Stops holding a FOR UPDATE lock on the batch row for the full add_file ingest, preventing a timed-out/retried upload from blocking the next retry behind the same batch-row lock.
+- Persists the exact failing filename, error text, and timestamp onto the open batch when the web file endpoint fails.
+- Batch status now exposes the persisted upload error, and Web Upload keeps that exact error visible instead of replacing it with a generic "Server is processing this batch" message.
+- Keeps v7.0.199 in-flight UI protection, v7.0.198 chunked RAW inserts, and v7.0.197 retryable open-batch behavior.
+- Aligns UI/runtime version display to 7.0.200.
 
 v7.0.199 Web Upload In-Flight Status Repair:
 - Prevents the 3-second batch-status poll from overwriting the local file PROCESSING state with Files=0 while the file POST is still running.
