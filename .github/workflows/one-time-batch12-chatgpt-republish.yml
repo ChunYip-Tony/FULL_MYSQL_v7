@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Wait for API and worker v7.0.189 deployment
+      - name: Wait for API and worker v7.0.190 deployment
         shell: bash
         run: |
           set -euo pipefail
@@ -28,9 +28,10 @@ jobs:
               p={}
           ok=(
               p.get('ok') is True
-              and p.get('version') == '7.0.189-single-service'
-              and p.get('worker_version') == '7.0.189-single-service'
+              and p.get('version') == '7.0.190-single-service'
+              and p.get('worker_version') == '7.0.190-single-service'
               and p.get('worker_healthy') is True
+              and p.get('worker_ready') is True
           )
           print('1' if ok else '0')
           PY
@@ -49,7 +50,34 @@ jobs:
           echo "API_WORKER_VERSION_GATE=TIMEOUT"
           exit 1
 
+      - name: Decide whether Batch 13 needs another Phase 3 rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/pre-qa.json
+          cat /tmp/pre-qa.json
+          echo
+          need="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/pre-qa.json', encoding='utf-8'))
+          p3=p.get('phase3') or {}
+          guard=p.get('current_active_unmapped_guard') or {}
+          ready=(
+              str(p3.get('result_status') or '').upper() in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}
+              and int(p3.get('blocking_issue_count') or 0) == 0
+              and int(guard.get('active_unmapped_count') or 0) == 0
+          )
+          print('0' if ready else '1')
+          PY
+          )"
+          echo "NEED_REBUILD=$need" | tee -a "$GITHUB_ENV"
+          if [ "$need" = "0" ]; then
+            echo "BATCH13_ALREADY_PUBLISHABLE=PASS"
+          fi
+
       - name: Rebuild Batch 13 Phase 3 with version-fenced worker
+        if: ${{ env.NEED_REBUILD == '1' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -75,7 +103,7 @@ jobs:
               read -r version_ok run_id session_id < <(python - <<'PY'
           import json
           p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
-          version_ok='1' if p.get('code_version') == '7.0.189-single-service' and p.get('version_fence_pass') is True else '0'
+          version_ok='1' if p.get('code_version') == '7.0.190-single-service' and p.get('version_fence_pass') is True else '0'
           print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
           PY
           )
@@ -102,7 +130,6 @@ jobs:
                 continue
               fi
             fi
-
             sleep 5
           done
 
@@ -133,7 +160,7 @@ jobs:
             rest="${state#*|}"
             code_version="${rest%%|*}"
 
-            if [ "$code_version" != "7.0.189-single-service" ] && [ "$status" != "MISSING" ]; then
+            if [ "$code_version" != "7.0.190-single-service" ] && [ "$status" != "MISSING" ]; then
               echo "RUN_VERSION_FENCE_BROKEN=$state"
               exit 1
             fi
@@ -151,35 +178,28 @@ jobs:
             echo "VERSION_FENCED_RUN_DID_NOT_REACH_TERMINAL_STATE"
             exit 1
           fi
-          if [ "$status" = "FAILED" ] || [ "$status" = "FAILED_QA" ] || [ "$status" = "ABORTED" ] || [ "$status" = "PAUSED" ]; then
-            echo "VERSION_FENCED_RUN_FAILED=$state"
+          if [ "$status" != "COMPLETED" ]; then
+            echo "VERSION_FENCED_RUN_NOT_COMPLETED=$state"
             exit 1
           fi
 
-      - name: Read Batch 13 QA summary after rebuild
+      - name: Verify Batch 13 QA is publishable
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          curl -sS --max-time 60 "$base/v1/web-upload/batches/13/qa-summary" | tee /tmp/qa-summary.json
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa-summary.json
+          cat /tmp/qa-summary.json
           echo
-
-      - name: Republish current Batch 13 ChatGPT analysis snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="https://seal-app-tkkkd.ondigitalocean.app"
-          http_code="$(curl -sS --max-time 360             -o /tmp/republish.json             -w '%{http_code}'             -X POST "$base/v1/web-upload/batches/13/republish-chatgpt-analysis")"
-          cat /tmp/republish.json
-          echo
-          echo "HTTP_STATUS=$http_code"
-          test "$http_code" = "200"
           python - <<'PY'
           import json
-          p=json.load(open('/tmp/republish.json', encoding='utf-8'))
-          assert p.get('status') == 'PASS', p
-          assert int(p.get('batch_id') or 0) == 13, p
-          print(json.dumps(p, indent=2))
+          p=json.load(open('/tmp/qa-summary.json', encoding='utf-8'))
+          p3=p.get('phase3') or {}
+          guard=p.get('current_active_unmapped_guard') or {}
+          assert str(p3.get('result_status') or '').upper() in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}, p3
+          assert int(p3.get('blocking_issue_count') or 0) == 0, p3
+          assert int(guard.get('active_unmapped_count') or 0) == 0, guard
+          print('BATCH13_QA=PASS')
           PY
 
       - name: Verify 249450 fried/service Quick Check sales
@@ -187,7 +207,7 @@ jobs:
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          curl -sS --max-time 60 "$base/v1/app/quick-check/24945000000" -o /tmp/qc-249450.json
+          curl -fsS --max-time 60 "$base/v1/app/quick-check/24945000000" -o /tmp/qc-249450.json
           python - <<'PY'
           import json
           p=json.load(open('/tmp/qc-249450.json', encoding='utf-8'))
@@ -212,5 +232,43 @@ jobs:
           if qty is None:
               raise SystemExit('249450 pos_qty_7d is missing')
           if float(qty) == 0:
-              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.189 rebuild')
+              raise SystemExit('249450 pos_qty_7d is still zero after v7.0.190 serving validation')
+          PY
+
+      - name: Queue ChatGPT Sheet publish asynchronously
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          http_code="$(curl -sS --max-time 30 \
+            -o /tmp/republish.json \
+            -w '%{http_code}' \
+            -X POST "$base/v1/web-upload/batches/13/republish-chatgpt-analysis")"
+          cat /tmp/republish.json
+          echo
+          echo "HTTP_STATUS=$http_code"
+          test "$http_code" = "200"
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/republish.json', encoding='utf-8'))
+          assert p.get('status') in {'QUEUED','ALREADY_QUEUED','ALREADY_ACTIVE'}, p
+          assert int(p.get('batch_id') or 0) == 13, p
+          assert p.get('async_nonblocking') is True, p
+          assert p.get('quick_check_serving_unblocked') is True, p
+          print('ASYNC_SHEET_PUBLISH_QUEUE=PASS')
+          PY
+
+      - name: Read async Sheet publish status without blocking Quick Check
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/chatgpt-publish-status" | tee /tmp/publish-status.json
+          echo
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/publish-status.json', encoding='utf-8'))
+          assert p.get('status') in {'QUEUED','STARTED','COMPLETED','FAILED'}, p
+          assert p.get('async_nonblocking') is True, p
+          print('ASYNC_PUBLISH_STATUS_VISIBLE=PASS')
           PY

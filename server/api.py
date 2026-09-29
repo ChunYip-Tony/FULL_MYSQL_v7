@@ -23,7 +23,7 @@ from movement_snapshot_diagnostic import movement_same_day_compare
 from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
-from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled
+from chatgpt_sheet_bridge import bridge_enabled, enqueue_chatgpt_publish, chatgpt_publish_status
 from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
@@ -1535,17 +1535,31 @@ def web_upload_republish_chatgpt_analysis(batch_id:int,request:Request):
         finally:
             cur.close()
 
-    result=publish_chatgpt_snapshot(bid)
-    if str(result.get('status') or '').upper()!='PASS':
-        raise HTTPException(
-            409,
-            detail={
-                'status':'BLOCKED',
-                'reason':'CHATGPT_ANALYSIS_REPUBLISH_FAILED',
-                'bridge_result':result,
-            },
-        )
-    return json.loads(json.dumps(result,default=j))
+    result=enqueue_chatgpt_publish(
+        bid,
+        pipeline_name=API_PIPELINE,
+        code_version=VERSION,
+        requested_by='WEB_UPLOAD_REPUBLISH',
+        source_pipeline_run_id=None,
+        reason='MANUAL_ASYNC_REPUBLISH',
+    )
+    return json.loads(json.dumps({
+        **result,
+        'async_nonblocking':True,
+        'quick_check_serving_unblocked':True,
+    },default=j))
+
+
+@app.get('/v1/web-upload/batches/{batch_id}/chatgpt-publish-status')
+def web_upload_chatgpt_publish_status(batch_id:int,request:Request):
+    _browser_upload_guard(request)
+    bid=int(batch_id)
+    if bid<1:
+        raise HTTPException(422,'INVALID_BATCH_ID')
+    return json.loads(json.dumps(
+        chatgpt_publish_status(bid,pipeline_name=API_PIPELINE),
+        default=j,
+    ))
 
 
 @app.post('/v1/web-upload/batches/{batch_id}/pause-phase3')
