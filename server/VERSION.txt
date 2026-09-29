@@ -1,5 +1,21 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.159 Single-Service Edition
+Version: 7.0.161 Single-Service Edition
+
+v7.0.161 Search Result Type Repair:
+- Quick Check search no longer relabels receiving/order Article matches as FAMILY.
+- Search choices now preserve three distinct result types: FAMILY, ARTICLE, and UPC.
+- Family results remain first, but are capped to at most one-third of the selection list and never more than 8 rows.
+- Remaining selection capacity prioritizes selling UPCs, then Article aliases.
+- ARTICLE selections resolve to their mapped Family page; UPC selections open UPC Quick Check.
+- This prevents broad searches such as SALMON from appearing as an all-Family selection list.
+
+v7.0.160 Current vs Recent Upload Separation:
+- In-progress lifecycle states are treated as Current Batch Status.
+- Current states include API_UPLOADING, INGESTED_PENDING_QA, RAW_RELEASED/RELEASED, PHASE2C_READY, and active QUEUED/STARTED pipeline jobs.
+- Current batches are excluded from Recent Uploads.
+- Resume Phase 3 moved to Current Batch Status for PHASE2C_READY batches.
+- Terminal batches leave Current Batch Status and appear only under Recent Uploads.
+
 
 v7.0.159 Phase 3 Resume Controls:
 - Orphaned PHASE2C_READY auto-recovery is now limited once per current code version, not once across all historical reruns.
