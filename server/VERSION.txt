@@ -1,6 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.165 Single-Service Edition
+Version: 7.0.166 Single-Service Edition
 
+
+v7.0.166 Backend-Authoritative Batch Status + Resume-Only Controls:
+- Batch status API now returns authoritative_status, derived directly from ingest_batch, phase results, and the latest Phase 3 pipeline_run.
+- Current Batch UI renders Pipeline / Phase 3 / Quick Check from backend-authoritative status instead of independently inferring live execution state.
+- PHASE3_RUNNING is emitted only when the latest Phase 3 run is actually STARTED.
+- Quick Check state is explicitly PENDING, READY, or READY_WITH_HOLDS from backend result data.
+- Manual Phase 3 pause is disabled at the API boundary and removed from the Web UI. Running batches continue uninterrupted.
+- Resume Phase 3 is the only manual Phase 3 control and appears only when backend marks resume_allowed=true.
+- Upload page order is now: Upload New File → New Batch Status → OH / Live-Fresh / Frozen freshness (plus daily POS/MVT freshness) → Recent Batches.
 
 v7.0.165 Phase 3 Live-State Integrity:
 - Historical Phase 3 checkpoints are no longer presented as live execution stages.
