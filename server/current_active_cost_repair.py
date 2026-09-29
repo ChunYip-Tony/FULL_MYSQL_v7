@@ -12,7 +12,7 @@ from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
-VERSION = "7.0.96-current-active-cost-authority-order"
+VERSION = "7.0.175-current-active-cost-authority-order"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -141,7 +141,8 @@ def _oh_cost_columns(hmap: dict[str, str]) -> dict[str, str | None]:
             hmap,
             ["Article", "Article Number", "Material", "Material Number"],
         ),
-        "upc": _pick(hmap, ["UPC", "EAN", "Barcode", "Sales Set"]),
+        # Sales Set # is not a UPC/EAN join key in FULL MYSQL.
+        "upc": _pick(hmap, ["UPC", "EAN", "Barcode"]),
         "explicit_cost": _pick(
             hmap,
             [
