@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.166-single-service'
+API_VERSION='7.0.167-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 
@@ -245,10 +245,13 @@ def session_status(session_id: str) -> dict[str,Any]:
                 if run_status in {'STARTED','PAUSE_REQUESTED'}
                 else None
             )
-            run['last_phase3_stage']=last_stage
+            run['last_phase3_stage']=last_stage or detail.get('last_phase3_stage')
             run['phase3_stage_live']=bool(
                 last_stage and run_status in {'STARTED','PAUSE_REQUESTED'}
             )
+            run['failure_error']=detail.get('error') if run_status in {'FAILED','FAILED_QA','QA_HOLD','ABORTED'} else None
+            run['failure_stage']=detail.get('failure_stage') or detail.get('last_phase3_stage')
+            run['recovery_reason']=detail.get('recovery_reason')
             run.pop('detail_json',None)
         runs.sort(key=lambda x: int(x.get('pipeline_run_id') or 0))
         cur.execute("SELECT result_status,blocking_issue_count,updated_at FROM phase2c_batch_result WHERE batch_id=%s",(bid,)); p2=cur.fetchone()
@@ -319,6 +322,10 @@ def session_status(session_id: str) -> dict[str,Any]:
         'resume_allowed':resume_allowed,
         'user_action':'RESUME_PHASE3' if resume_allowed else 'NONE',
         'pipeline_run_id':(latest_phase3_run or {}).get('pipeline_run_id'),
+        'failure_error':(latest_phase3_run or {}).get('failure_error'),
+        'failure_stage':(latest_phase3_run or {}).get('failure_stage') or (latest_phase3_run or {}).get('last_phase3_stage'),
+        'recovery_reason':(latest_phase3_run or {}).get('recovery_reason'),
+        'run_completed_at':(latest_phase3_run or {}).get('completed_at'),
     }
 
     return {
