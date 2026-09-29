@@ -1174,6 +1174,197 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
             cur.close()
 
 
+@app.post('/v1/web-upload/batches/{batch_id}/rebuild-phase3')
+def web_upload_rebuild_phase3(batch_id:int,request:Request):
+    """Re-run Phase 3 against the current serving batch without re-ingesting RAW.
+
+    This is intentionally limited to the batch that currently owns the entire
+    quick_check_current serving snapshot. The previous committed snapshot stays
+    live until the rebuild transaction commits successfully.
+    """
+    _browser_upload_guard(request)
+    bid=int(batch_id)
+    if bid<1:
+        raise HTTPException(422,'INVALID_BATCH_ID')
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,batch_key,processing_status
+                   FROM ingest_batch
+                   WHERE batch_id=%s
+                   FOR UPDATE""",
+                (bid,),
+            )
+            batch=cur.fetchone()
+            if not batch:
+                raise HTTPException(404,'Batch not found')
+
+            cur.execute(
+                """SELECT result_status,blocking_issue_count
+                   FROM phase2c_batch_result
+                   WHERE batch_id=%s
+                   LIMIT 1""",
+                (bid,),
+            )
+            p2=cur.fetchone()
+            if (
+                not p2
+                or str(p2.get('result_status') or '').upper()!='READY'
+                or int(p2.get('blocking_issue_count') or 0)>0
+            ):
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE2C_NOT_READY_FOR_REBUILD',
+                        'phase2c_status':(p2 or {}).get('result_status'),
+                        'phase2c_blockers':int((p2 or {}).get('blocking_issue_count') or 0),
+                    },
+                )
+
+            cur.execute(
+                """SELECT result_status,blocking_issue_count,
+                          quick_check_rows,quick_check_ready_rows,quick_check_hold_rows
+                   FROM phase3_batch_result
+                   WHERE batch_id=%s
+                   LIMIT 1""",
+                (bid,),
+            )
+            p3=cur.fetchone()
+            if not p3:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE3_RESULT_MISSING_USE_RESUME_INSTEAD',
+                    },
+                )
+
+            result_status=str(p3.get('result_status') or '').upper()
+            if result_status not in {
+                'QUICK_CHECK_READY',
+                'QUICK_CHECK_READY_WITH_HOLDS',
+                'PHASE3_QA_HOLD',
+            }:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'PHASE3_RESULT_NOT_REBUILDABLE',
+                        'phase3_status':result_status,
+                    },
+                )
+
+            # Rebuild may mutate the serving snapshot, so only the batch that
+            # currently owns ALL Quick Check rows is eligible.
+            cur.execute(
+                """SELECT COUNT(*) AS c,
+                          MIN(publish_batch_id) AS min_batch,
+                          MAX(publish_batch_id) AS max_batch
+                   FROM quick_check_current"""
+            )
+            serving=cur.fetchone() or {}
+            if (
+                int(serving.get('c') or 0)<=0
+                or int(serving.get('min_batch') or 0)!=bid
+                or int(serving.get('max_batch') or 0)!=bid
+            ):
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BLOCKED',
+                        'reason':'BATCH_IS_NOT_CURRENT_SERVING_SNAPSHOT',
+                        'serving_min_batch':serving.get('min_batch'),
+                        'serving_max_batch':serving.get('max_batch'),
+                    },
+                )
+
+            cur.execute(
+                """SELECT pipeline_run_id,stage_name,processing_status,code_version
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1""",
+                (bid,API_PIPELINE),
+            )
+            active=cur.fetchone()
+            if active:
+                conn.commit()
+                return {
+                    'queued':active.get('processing_status')=='QUEUED',
+                    'already_active':True,
+                    'batch_id':bid,
+                    'batch_key':batch.get('batch_key'),
+                    'session_id':batch.get('batch_key'),
+                    'pipeline_run_id':active.get('pipeline_run_id'),
+                    'stage_name':active.get('stage_name'),
+                    'status':active.get('processing_status'),
+                    'code_version':active.get('code_version'),
+                }
+
+            cur.execute(
+                """SELECT COALESCE(MAX(run_number),0)+1 AS next_run
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name='PHASE3_RERUN'""",
+                (bid,API_PIPELINE),
+            )
+            run_number=int((cur.fetchone() or {}).get('next_run') or 1)
+
+            cur.execute(
+                """INSERT INTO pipeline_run
+                   (batch_id,pipeline_name,stage_name,run_number,
+                    processing_status,code_version,detail_json)
+                   VALUES (%s,%s,'PHASE3_RERUN',%s,'QUEUED',%s,%s)""",
+                (
+                    bid,
+                    API_PIPELINE,
+                    run_number,
+                    VERSION,
+                    json.dumps({
+                        'requested_by':WEB_UPLOAD_DEVICE,
+                        'reason':'MANUAL_REBUILD_PHASE3_QA_ANALYSIS',
+                        'previous_phase3_status':result_status,
+                        'previous_quick_check_rows':p3.get('quick_check_rows'),
+                        'previous_ready_rows':p3.get('quick_check_ready_rows'),
+                        'previous_hold_rows':p3.get('quick_check_hold_rows'),
+                        'preserve_previous_serving_until_commit':True,
+                    }),
+                ),
+            )
+            run_id=int(cur.lastrowid)
+            conn.commit()
+            return {
+                'queued':True,
+                'already_active':False,
+                'batch_id':bid,
+                'batch_key':batch.get('batch_key'),
+                'session_id':batch.get('batch_key'),
+                'pipeline_run_id':run_id,
+                'stage_name':'PHASE3_RERUN',
+                'status':'QUEUED',
+                'code_version':VERSION,
+                'previous_phase3_status':result_status,
+                'previous_quick_check_ready_rows':p3.get('quick_check_ready_rows'),
+                'previous_quick_check_hold_rows':p3.get('quick_check_hold_rows'),
+                'previous_serving_preserved_until_commit':True,
+            }
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(500,f'Phase 3 rebuild failed: {exc}')
+        finally:
+            cur.close()
+
+
 @app.post('/v1/web-upload/batches/{batch_id}/republish-chatgpt-analysis')
 def web_upload_republish_chatgpt_analysis(batch_id:int,request:Request):
     _browser_upload_guard(request)
