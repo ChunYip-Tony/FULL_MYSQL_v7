@@ -619,6 +619,12 @@ body{
 }
 #upload .publish-analysis:disabled{opacity:.65;cursor:wait}
 #upload .publish-analysis-msg{margin-top:5px;font-size:9px}
+#upload .rebuild-phase3{
+  width:100%;margin-top:8px;min-height:38px;border:1px solid #d5a24b!important;
+  background:#fff6df!important;color:#855b08!important;font-weight:950!important
+}
+#upload .rebuild-phase3:disabled{opacity:.65;cursor:wait}
+#upload .rebuild-phase3-msg{margin-top:5px;font-size:9px}
 #upload .pause-phase3{
   width:100%;margin-top:8px;min-height:38px;border:1px solid #d7a0a0!important;
   background:#fff1f1!important;color:#9b252b!important;font-weight:900!important
@@ -1005,25 +1011,33 @@ function renderWebUploadStatus(d){
   else if(displayStatus.includes('QA_HOLD'))pct=100;
   $('uploadProgressBar').style.width=pct+'%';
 
-  let pipelineCls=displayStatus.includes('QUICK_CHECK_READY')||quickCheckText.startsWith('READY')
-    ? 'ok'
-    : (displayStatus.includes('HOLD')||displayStatus.includes('FAIL')?'bad':'warn');
-  let pipelineIcon=displayStatus.includes('QUICK_CHECK_READY')||quickCheckText.startsWith('READY')?'✅':'⏳';
+  let rebuildWorking=Boolean(auth.rebuild_active)||displayStatus.includes('PHASE3_REBUILD');
+  let pipelineCls=rebuildWorking
+    ? (displayStatus.includes('FAIL')?'bad':'warn')
+    : (displayStatus.includes('QUICK_CHECK_READY')||quickCheckText.startsWith('READY')
+        ? 'ok'
+        : (displayStatus.includes('HOLD')||displayStatus.includes('FAIL')?'bad':'warn'));
+  let pipelineIcon=rebuildWorking
+    ? '🔄'
+    : (displayStatus.includes('QUICK_CHECK_READY')||quickCheckText.startsWith('READY')?'✅':'⏳');
 
   let qcDetail=quickCheckText==='PENDING'
     ? 'Pending'
     : (p3.quick_check_rows==null
         ? quickCheckText
-        : (fmt(p3.quick_check_ready_rows,0)+' / '+fmt(p3.quick_check_rows,0)+' READY · '+fmt(p3.quick_check_hold_rows,0)+' HOLD'));
+        : (fmt(p3.quick_check_ready_rows,0)+' / '+fmt(p3.quick_check_rows,0)+' READY · '+fmt(p3.quick_check_hold_rows,0)+' HOLD'+
+          (auth.rebuild_active?' · previous snapshot active':'')));
 
   $('uploadStatus').innerHTML=[
     uploadStage(pipelineIcon,'Pipeline',displayStatus,pipelineCls),
     uploadStage('📄','Files',String(files.length)),
     uploadStage('🧩','Phase 2C',auth.phase2c||p2.result_status||'Pending',String(auth.phase2c||p2.result_status||'').includes('READY')?'ok':''),
-    uploadStage('⚙️','Phase 3',phase3Text,auth.phase3_running?'warn':(
-      String(p3.result_status||'').toUpperCase()==='PHASE3_QA_HOLD' || String(p3.result_status||'').toUpperCase().includes('FAIL')
+    uploadStage('⚙️','Phase 3',phase3Text,(auth.rebuild_active||auth.phase3_running)?'warn':(
+      auth.rebuild_failed
         ? 'bad'
-        : (String(p3.result_status||'').toUpperCase()==='QUICK_CHECK_READY_WITH_HOLDS'?'warn':(p3.result_status?'ok':''))
+        : (String(p3.result_status||'').toUpperCase()==='PHASE3_QA_HOLD' || String(p3.result_status||'').toUpperCase().includes('FAIL')
+            ? 'bad'
+            : (String(p3.result_status||'').toUpperCase()==='QUICK_CHECK_READY_WITH_HOLDS'?'warn':(p3.result_status?'ok':'')))
     )),
     uploadStage('🔎','Quick Check',qcDetail,quickCheckText.startsWith('READY')?(quickCheckText.includes('HOLD')?'warn':'ok'):'')
   ].join('');
@@ -1032,15 +1046,16 @@ function renderWebUploadStatus(d){
     '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
   ).join('');
 
-  $('uploadCurrentQA').innerHTML=d?.qa_summary
-    ? renderWebUploadQASummary(d.qa_summary)
-    : '';
+  let qaHtml=d?.qa_summary?renderWebUploadQASummary(d.qa_summary):'';
+  $('uploadCurrentQA').innerHTML=auth.rebuild_active
+    ? '<div class="msg warn" style="margin-top:8px"><b>QA rebuild in progress.</b> The breakdown below is the previous committed snapshot and remains serving until the rebuild commits.</div>'+qaHtml
+    : qaHtml;
 
   // Resume is the only manual Phase 3 control. Running/queued batches have no
   // user action; they must continue uninterrupted.
   let failureHtml='';
   let hasFinalPhase3=Boolean(p3&&p3.result_status);
-  if(auth.failure_error&&!hasFinalPhase3){
+  if(auth.failure_error&&(!hasFinalPhase3||auth.rebuild_failed)){
     failureHtml=
       '<div class="msg bad" style="margin-top:8px"><b>Backend failure:</b> '+esc(auth.failure_error)+
       (auth.failure_stage?' · <b>Stage:</b> '+esc(auth.failure_stage):'')+
@@ -1071,11 +1086,21 @@ function renderWebUploadStatus(d){
       failureHtml+
       '<button class="resume-phase3" data-current-resume-phase3="'+esc(b.batch_id)+'" type="button">Resume Phase 3</button>'+
       '<div class="msg resume-phase3-msg" data-resume-msg="'+esc(b.batch_id)+'">Phase 3 is not running · Resume required.</div>';
+  }else if(auth.rebuild_active){
+    $('uploadCurrentActions').innerHTML=
+      failureHtml+
+      '<div class="msg warn rebuild-phase3-msg">Rebuilding Phase 3 / QA with the current rules. Previous Quick Check remains live until commit.</div>';
   }else{
     let p3Status=String(p3.result_status||'').toUpperCase();
     let publishable=p3Status==='QUICK_CHECK_READY'||p3Status==='QUICK_CHECK_READY_WITH_HOLDS';
+    let hasHolds=Number(p3.quick_check_hold_rows||0)>0||p3Status==='PHASE3_QA_HOLD';
+    let canRebuild=auth.rebuild_allowed===true;
     $('uploadCurrentActions').innerHTML=
       failureHtml+
+      (canRebuild&&hasHolds
+        ? '<button class="rebuild-phase3" data-rebuild-phase3="'+esc(b.batch_id)+'" type="button">Rebuild Phase 3 / QA</button>'+
+          '<div class="msg rebuild-phase3-msg" data-rebuild-msg="'+esc(b.batch_id)+'">Re-runs current OH/UOM/cost/identity/QA rules without re-uploading RAW.</div>'
+        : '')+
       (publishable
         ? '<button class="publish-analysis" data-publish-analysis="'+esc(b.batch_id)+'" type="button">Republish ChatGPT Analysis</button>'+
           '<div class="msg publish-analysis-msg" data-publish-msg="'+esc(b.batch_id)+'">Publishes READY rows only; HOLD rows stay isolated in QA.</div>'
@@ -1084,6 +1109,8 @@ function renderWebUploadStatus(d){
 
   let resumeBtn=$('uploadCurrentActions').querySelector('[data-current-resume-phase3]');
   if(resumeBtn)resumeBtn.onclick=()=>resumePhase3Batch(resumeBtn.dataset.currentResumePhase3,resumeBtn);
+  let rebuildBtn=$('uploadCurrentActions').querySelector('[data-rebuild-phase3]');
+  if(rebuildBtn)rebuildBtn.onclick=()=>rebuildPhase3QA(rebuildBtn.dataset.rebuildPhase3,rebuildBtn);
   let publishBtn=$('uploadCurrentActions').querySelector('[data-publish-analysis]');
   if(publishBtn)publishBtn.onclick=()=>republishChatGPTAnalysis(publishBtn.dataset.publishAnalysis,publishBtn);
   return displayStatus;
@@ -1211,6 +1238,43 @@ function renderWebUploadRecentBatch(b){
       ? '<button class="delete-qa-batch" data-delete-batch="'+esc(b.batch_id)+'" data-confirmed="0" type="button">Delete QA HOLD Batch</button><div class="msg delete-qa-msg" data-delete-msg="'+esc(b.batch_id)+'"></div>'
       : '')+
   '</div>';
+}
+
+async function rebuildPhase3QA(batchId,button){
+  let id=Number(batchId);
+  if(!Number.isInteger(id)||id<1)return;
+  let card=button?.closest('.card')||$('uploadStatusCard');
+  let msg=card?.querySelector('[data-rebuild-msg="'+id+'"]')||document.querySelector('[data-rebuild-msg="'+id+'"]');
+  if(button){
+    button.disabled=true;
+    button.textContent='Queuing QA Rebuild…';
+  }
+  if(msg)msg.textContent='Queuing Phase 3 rebuild. RAW and Phase 2C will not be re-ingested.';
+  try{
+    let d=await api('/v1/web-upload/batches/'+id+'/rebuild-phase3',{method:'POST'});
+    if(msg){
+      msg.className='msg warn rebuild-phase3-msg';
+      msg.textContent='Phase 3 rebuild '+String(d.status||'QUEUED')+
+        ' · previous Quick Check snapshot stays live until commit.';
+    }
+    $('uploadMsg').textContent='Batch '+id+' Phase 3 / QA rebuild queued.';
+    if(d.session_id){
+      webUploadSession=String(d.session_id);
+      await pollWebUpload(webUploadSession);
+    }else{
+      await loadWebUploadActive();
+    }
+  }catch(e){
+    let reason=e?.message||String(e);
+    if(msg){
+      msg.className='msg bad rebuild-phase3-msg';
+      msg.textContent='Rebuild failed: '+reason;
+    }
+    if(button){
+      button.disabled=false;
+      button.textContent='Rebuild Phase 3 / QA';
+    }
+  }
 }
 
 async function republishChatGPTAnalysis(batchId,button){
