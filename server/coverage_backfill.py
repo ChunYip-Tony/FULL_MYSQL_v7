@@ -575,8 +575,7 @@ def canonical_pos_qty_by_upc(
 
 
 def relink_pos_backfill(cur) -> int:
-    # Raw EAN/UPC remains the source lineage key. Repair stale derived IDs as
-    # well as NULL IDs so service/fried UPC history follows current identity.
+    # Raw EAN/UPC remains immutable source lineage. Repair its derived upc_id.
     cur.execute(
         """UPDATE pos_daily_backfill_observation b
            JOIN selling_upc u ON u.ean_upc=b.ean_upc
@@ -592,10 +591,8 @@ def relink_pos_backfill(cur) -> int:
     )
     updated += int(cur.rowcount)
 
-    # 249 service/fried items use a canonical base UPC of
-    # 249 + 3-digit product code + 00000. Source exports may carry the
-    # six-digit service code or a scale-derived suffix. Resolve only when the
-    # exact canonical base row exists and is ACTIVE.
+    # 249 service source IDs share the stable first six digits with the
+    # canonical 249 + product-code + 00000 roster.
     for table in ("pos_daily_backfill_observation","pos_period_residual_observation"):
         cur.execute(
             f"""UPDATE {table} b
@@ -603,7 +600,12 @@ def relink_pos_backfill(cur) -> int:
                   ON u.ean_upc=CONCAT(LEFT(TRIM(LEADING '0' FROM b.ean_upc),6),'00000')
                  AND u.record_status='ACTIVE'
                 SET b.upc_id=u.upc_id
-                WHERE b.ean_upc REGEXP '^0*249[0-9]{{3}}[0-9]*
+                WHERE TRIM(LEADING '0' FROM b.ean_upc) LIKE '249___%'
+                  AND TRIM(LEADING '0' FROM b.ean_upc) NOT REGEXP '[^0-9]'
+                  AND (b.upc_id IS NULL OR b.upc_id<>u.upc_id)"""
+        )
+        updated += int(cur.rowcount)
+    return updated
 
 
 def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
