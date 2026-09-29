@@ -157,9 +157,14 @@ def _recover_stale_started(cur) -> int:
             'previous_code_version':previous_version,
             'recovered_by_code_version':API_VERSION,
             'batch_id':row.get('batch_id'),
+            'last_phase3_stage':detail.get('phase3_stage') or detail.get('last_phase3_stage'),
+            'previous_heartbeat_at':detail.get('heartbeat_at'),
+            'previous_heartbeat_epoch':detail.get('heartbeat_epoch'),
         }
         previous_status=str(row.get('processing_status') or '').upper()
-        recovered_status='PAUSED' if previous_status=='PAUSE_REQUESTED' else 'QUEUED'
+        # Manual pause is disabled. Any orphaned PAUSE_REQUESTED record is a
+        # legacy execution state and should resume automatically, not strand.
+        recovered_status='QUEUED'
         recovery_detail['previous_processing_status']=previous_status
         recovery_detail['recovered_processing_status']=recovered_status
         cur.execute(
