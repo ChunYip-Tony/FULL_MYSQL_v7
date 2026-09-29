@@ -377,7 +377,36 @@ def admin_logout(response:Response):
 
 
 @app.get('/healthz')
-def healthz(): return {'ok':True,'version':VERSION}
+def healthz():
+    worker_path=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
+    worker_payload={}
+    if worker_path.exists():
+        try:
+            parsed=json.loads(worker_path.read_text(encoding='utf-8'))
+            if isinstance(parsed,dict):
+                worker_payload=parsed
+        except Exception:
+            worker_payload={}
+    worker_epoch=worker_payload.get('heartbeat_epoch')
+    worker_age=None
+    try:
+        if worker_epoch is not None:
+            worker_age=max(0,int(time.time())-int(worker_epoch))
+    except Exception:
+        worker_age=None
+    worker_version=str(worker_payload.get('code_version') or '')
+    worker_healthy=bool(
+        worker_age is not None
+        and worker_age <= 30
+        and worker_version == VERSION
+    )
+    return {
+        'ok':True,
+        'version':VERSION,
+        'worker_version':worker_version or None,
+        'worker_healthy':worker_healthy,
+        'worker_heartbeat_age_seconds':worker_age,
+    }
 
 @app.get('/v1/worker-health')
 def worker_health(authorization: Annotated[str|None,Header()]=None):
@@ -1300,6 +1329,7 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
             active=cur.fetchone()
             if active:
                 active_bid=int(active.get('batch_id') or 0)
+                active_version=str(active.get('code_version') or '')
                 if active_bid!=bid:
                     raise HTTPException(
                         409,
@@ -1310,6 +1340,23 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
                             'active_pipeline_run_id':active.get('pipeline_run_id'),
                             'active_stage_name':active.get('stage_name'),
                             'active_status':active.get('processing_status'),
+                            'active_code_version':active_version,
+                            'required_code_version':VERSION,
+                        },
+                    )
+                if active_version != VERSION:
+                    raise HTTPException(
+                        409,
+                        detail={
+                            'status':'BLOCKED',
+                            'reason':'ACTIVE_RUN_VERSION_MISMATCH',
+                            'batch_id':bid,
+                            'active_pipeline_run_id':active.get('pipeline_run_id'),
+                            'active_stage_name':active.get('stage_name'),
+                            'active_status':active.get('processing_status'),
+                            'active_code_version':active_version,
+                            'required_code_version':VERSION,
+                            'action':'WAIT_FOR_WORKER_VERSION_FENCE_RECOVERY',
                         },
                     )
                 conn.commit()
@@ -1322,7 +1369,9 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
                     'pipeline_run_id':active.get('pipeline_run_id'),
                     'stage_name':active.get('stage_name'),
                     'status':active.get('processing_status'),
-                    'code_version':active.get('code_version'),
+                    'code_version':active_version,
+                    'required_code_version':VERSION,
+                    'version_fence_pass':True,
                 }
 
             cur.execute(
@@ -1368,6 +1417,8 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
                 'stage_name':'PHASE3_RERUN',
                 'status':'QUEUED',
                 'code_version':VERSION,
+                'required_code_version':VERSION,
+                'version_fence_pass':True,
                 'previous_phase3_status':result_status,
                 'previous_quick_check_ready_rows':p3.get('quick_check_ready_rows'),
                 'previous_quick_check_hold_rows':p3.get('quick_check_hold_rows'),
