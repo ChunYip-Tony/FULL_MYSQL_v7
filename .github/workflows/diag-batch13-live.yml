@@ -1,4 +1,4 @@
-name: Check POS sales freshness
+name: Inspect v7.0.193 QA holds
 
 on:
   push:
@@ -6,24 +6,40 @@ on:
       - diag/batch13-live-20260928
 
 jobs:
-  verify:
+  inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
-      - name: Read production POS freshness
+      - name: Wait for v7.0.193 and read QA
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 120); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            version="$(BODY="$body" python - <<'PY'
+          import json, os
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          print(p.get('version') or '')
+          PY
+          )"
+            if [ "$version" = "7.0.193-single-service" ]; then break; fi
+            sleep 5
+          done
+          test "$version" = "7.0.193-single-service"
 
-          echo "=== HEALTH ==="
-          curl -fsS --max-time 20 "$base/healthz"
-          echo
-
-          echo "=== CALENDAR ==="
-          curl -fsS --max-time 30 "$base/v1/web-upload/calendar?days=14"
-          echo
-
-          echo "=== RECENT BATCHES ==="
-          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=12"
-          echo
+          curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary" -o /tmp/qa.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/qa.json',encoding='utf-8'))
+          q=p.get('quick_check') or {}
+          print(json.dumps({
+            'phase3':p.get('phase3'),
+            'reason_counts':q.get('reason_counts'),
+            'reason_upcs':q.get('reason_upcs'),
+          },indent=2))
+          PY
