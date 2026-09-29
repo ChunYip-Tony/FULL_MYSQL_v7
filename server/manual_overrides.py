@@ -163,6 +163,38 @@ SEED_OVERRIDES = (
         "base_qty_per_selling_unit": 1,
         "source_note": "Resolved 2026-09-26 from combined authoritative evidence: user confirmed POS Selling UOM=PACK and case configuration=40/150G; receipt 107 for Article 3461050 shows 3 CV = 120 EA with $330 valuation, exactly matching 3 cases x 40 selling packs = 120. Therefore 1 selling PACK = 1 base EA and authoritative receipt cost is $2.75 per PACK.",
     },
+    {
+        "ean_upc": "24555500000",
+        "article_number": "1361555",
+        "selling_uom_code": "LB",
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "BATCH13_RECOVERY_APPROVED_20260928: BLACK COD FILLET. User instructed Proceed after lineage diagnostic identified the stable historical UPC-to-main-article mapping 24555500000 -> 1361555 and LB selling unit. Restore authoritative identity; do not infer Base/Inventory conversion.",
+    },
+    {
+        "ean_upc": "40082",
+        "article_number": "3440082",
+        "selling_uom_code": "LB",
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "BATCH13_RECOVERY_APPROVED_20260928: FISH MEAT DIM SUM 1/22LBS (5/4.4LBS). User instructed Proceed after diagnostic showed the longstanding internal POS code 40082 belongs to Main/Family 3440082 and is sold by LB. Treat 40082 as an internal selling code; no retail check-digit inference.",
+    },
+    {
+        "ean_upc": "75339325356",
+        "article_number": "3468350",
+        "selling_uom_code": "PACK",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("2"),
+        "source_note": "BATCH13_RECOVERY_APPROVED_20260928: BLUE RIVER 21/25 IQF EZP SHRIMP 10/2LBS. User instructed Proceed after diagnostic confirmed UPC 75339325356 -> Main/Family 3468350 and 1 selling PACK = 2 LB.",
+    },
+    {
+        "ean_upc": "81009389133",
+        "article_number": "3467050",
+        "selling_uom_code": None,
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "BATCH13_RECOVERY_APPROVED_20260928: FUZHOU FISH BALL 4PAC/5LB. User instructed Proceed after diagnostic confirmed UPC 81009389133 -> Main/Family 3467050. Identity only: Selling UOM remains unresolved and must stay QA HOLD until authoritative selling-unit evidence is supplied.",
+    },
  ) + USER_CONFIRMED_UOM_REVIEW_20260926 + USER_CONFIRMED_UOM_REVIEW_20260927
 
 
