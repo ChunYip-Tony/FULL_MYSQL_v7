@@ -27,6 +27,33 @@ jobs:
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import api, v7_ingest; assert api.VERSION == v7_ingest.API_VERSION, (api.VERSION, v7_ingest.API_VERSION); print(api.VERSION)"
+      - name: Verify daily MVT close-file contract
+        run: |
+          python - <<'PY'
+          from datetime import date
+          from movement_coverage_rules import movement_daily_close_filename_evidence
+
+          d=date(2026,9,27)
+          def check(name,time,start=d,end=d,expected=False):
+              ok,reason=movement_daily_close_filename_evidence(
+                  original_filename=name,
+                  filename_date_candidate=d,
+                  filename_time_candidate=time,
+                  coverage_start_date=start,
+                  coverage_end_date=end,
+                  business_date=d,
+              )
+              assert ok is expected, (name,time,start,end,ok,reason)
+              return reason
+
+          assert check('sf-mvt-092726.xls',None,expected=True) == 'COMPLETE_DATE_ONLY_MVT_FILENAME_CONTRACT'
+          assert check('sf-mvt-092726-full.xls',None,expected=True) == 'COMPLETE_EXPLICIT_FULL_FILENAME'
+          check('sf-mvt-092726-1630.xls','16:30:00',expected=False)
+          check('mvt-092726-1521.xls','15:21:00',expected=False)
+          check('sf-mvt-092726.xls',None,start=date(2026,9,26),end=d,expected=False)
+          print('mvt-close-contract-ok')
+          PY
+
       - name: Import worker and Phase 3 modules
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
