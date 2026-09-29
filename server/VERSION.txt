@@ -1,5 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.201 Single-Service Edition
+Version: 7.0.202 Single-Service Edition
+
+v7.0.202 Batch 17 HOLD Authority Propagation Repair:
+- Promotes the Sep 29 exact Seafood Selling-UOM confirmations into the final manual override set so the final Phase 3 authority lock cannot restore stale conflicting UOM rows.
+- UPC 4029549384 is authoritative PACK with 1 PACK = 2 LB; stale EA state is superseded.
+- UPC 4029550430 is authoritative PACK; no weight/base conversion is inferred.
+- UPC 75339325301 is authoritative PACK with 1 PACK = 2 LB.
+- Includes Sep 29 confirmed cost conversions in maintenance refresh verification/target checks.
+- Rebuild Phase 3 / QA can now propagate these authorities through Quick Check without re-uploading RAW.
+- Unknown Selling-UOM/cost conversions remain QA HOLD; no package weight is guessed from descriptions alone.
+- Aligns UI/runtime version display to 7.0.202.
 
 v7.0.201 MVT Parser Import Fix:
 - Fixes Batch 17 MVT upload failure: name 'movement_daily_close_filename_evidence' is not defined.
