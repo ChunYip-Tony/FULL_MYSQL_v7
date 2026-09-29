@@ -1274,6 +1274,8 @@ PRODUCT_IDENTITY_GUARD_ISSUE_CODES = (
 RECOMPUTED_PHASE3_ISSUE_CODES = (
     'SALES_PERIOD_UNRESOLVED',
     'SOLD_UPC_UNMAPPED',
+    'SOLD_UPC_UNMAPPED_EVIDENCE',
+    'CURRENT_ACTIVE_SOLD_UPC_UNMAPPED',
     'HISTORICAL_SOLD_UPC_UNMAPPED',
     'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED',
     'MOVEMENT_HISTORY_FILE_EMPTY',
@@ -1390,14 +1392,25 @@ def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
     cur.execute(
         """SELECT issue_id,issue_code,entity_key FROM qa_phase3_issue
            WHERE batch_id=%s AND issue_status='OPEN'
-             AND issue_code IN ('SOLD_UPC_UNMAPPED','HISTORICAL_SOLD_UPC_UNMAPPED','SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED')""",
+             AND issue_code IN (
+                 'SOLD_UPC_UNMAPPED',
+                 'SOLD_UPC_UNMAPPED_EVIDENCE',
+                 'CURRENT_ACTIVE_SOLD_UPC_UNMAPPED',
+                 'HISTORICAL_SOLD_UPC_UNMAPPED',
+                 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED'
+             )""",
         (batch_id,),
     )
     for issue in cur.fetchall():
         code = issue['issue_code']
         key = str(issue['entity_key'])
         repaired = False
-        if code in {'SOLD_UPC_UNMAPPED','HISTORICAL_SOLD_UPC_UNMAPPED'}:
+        if code in {
+            'SOLD_UPC_UNMAPPED',
+            'SOLD_UPC_UNMAPPED_EVIDENCE',
+            'CURRENT_ACTIVE_SOLD_UPC_UNMAPPED',
+            'HISTORICAL_SOLD_UPC_UNMAPPED',
+        }:
             repaired = _upc_identity_ready(cur, key)
         elif code == 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED':
             _, family_id = _find_article(cur, key)
@@ -1410,7 +1423,12 @@ def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
                    WHERE issue_id=%s""",
                 (issue['issue_id'],),
             )
-            if code in {'SOLD_UPC_UNMAPPED','HISTORICAL_SOLD_UPC_UNMAPPED'}:
+            if code in {
+                'SOLD_UPC_UNMAPPED',
+                'SOLD_UPC_UNMAPPED_EVIDENCE',
+                'CURRENT_ACTIVE_SOLD_UPC_UNMAPPED',
+                'HISTORICAL_SOLD_UPC_UNMAPPED',
+            }:
                 resolved_sales += 1
             else:
                 resolved_movement += 1
@@ -1524,7 +1542,12 @@ def _sales_daily_aggregates(
     return out
 
 
-def _active_selling_evidence_for_unmapped(cur, ean: str, batch_id: int) -> dict[str, Any]:
+def _active_selling_evidence_for_unmapped(
+    cur,
+    ean: str,
+    batch_id: int,
+    pos_days: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Current activity scope for an unmapped historical UPC.
 
     v7.0.10 rule:
@@ -1535,10 +1558,11 @@ def _active_selling_evidence_for_unmapped(cur, ean: str, batch_id: int) -> dict[
     Historical sales and lineage are preserved.
     """
     completed_through = completed_through_date()
-    pos_days = source_data_days(
-        cur, 'sales_by_price_type', limit=28,
-        include_batch_id=batch_id, up_to=completed_through
-    )
+    if pos_days is None:
+        pos_days = source_data_days(
+            cur, 'sales_by_price_type', limit=28,
+            include_batch_id=batch_id, up_to=completed_through
+        )
     daily = _sales_daily_aggregates(cur, pos_days, ean=ean)
     recent_qty = sum(
         (x['qty'] for x in daily.values()),
@@ -1582,6 +1606,7 @@ def classify_unmapped_sales_activity_scope(cur, batch_id: int) -> dict[str, int]
     counts = {
         'examined': 0,
         'active_blocking': 0,
+        'active_evidence_nonblocking': 0,
         'historical_nonblocking': 0,
     }
 
@@ -1613,15 +1638,99 @@ def classify_unmapped_sales_activity_scope(cur, batch_id: int) -> dict[str, int]
             )
             counts['historical_nonblocking'] += 1
         else:
+            detail['gate_role'] = 'RAW_EVIDENCE_ONLY_CURRENT_GLOBAL_GUARD_RECOMPUTES'
             cur.execute(
                 """UPDATE qa_phase3_issue
-                   SET severity='HIGH',detail_json=%s
+                   SET issue_code='SOLD_UPC_UNMAPPED_EVIDENCE',
+                       severity='MEDIUM',
+                       issue_summary=%s,
+                       detail_json=%s
                    WHERE issue_id=%s""",
-                (json.dumps(detail, ensure_ascii=False, default=str), issue['issue_id']),
+                (
+                    f"Raw POS evidence shows currently active sold UPC {ean} without confirmed identity. "
+                    "Current readiness is evaluated by the global active-selling unmapped UPC guard.",
+                    json.dumps(detail, ensure_ascii=False, default=str),
+                    issue['issue_id'],
+                ),
             )
-            counts['active_blocking'] += 1
+            counts['active_evidence_nonblocking'] += 1
 
     return counts
+
+
+def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str, Any]:
+    """Recompute current Seafood sold-but-unmapped blockers from all retained POS history.
+
+    The readiness gate is current-state based, not source-batch based. Every Phase 3
+    run scans all Seafood UPCs observed in POS, evaluates activity on the latest
+    up-to-28 valid completed POS data days, and creates one blocking issue per
+    currently active UPC that still lacks confirmed UPC->Article->Family identity.
+    """
+    completed_through = completed_through_date()
+    pos_days = source_data_days(
+        cur,
+        'sales_by_price_type',
+        limit=28,
+        include_batch_id=batch_id,
+        up_to=completed_through,
+    )
+
+    cur.execute(
+        """SELECT DISTINCT ean_upc
+           FROM upc_department_observation
+           WHERE source_type='POS'
+             AND department_code=%s
+             AND ean_upc IS NOT NULL
+             AND TRIM(ean_upc)<>''
+           ORDER BY ean_upc""",
+        (SEAFOOD_DEPT_CODE,),
+    )
+    candidates = [str(x['ean_upc']) for x in cur.fetchall()]
+
+    result: dict[str, Any] = {
+        'candidate_count': len(candidates),
+        'active_unmapped_count': 0,
+        'inactive_or_historical_count': 0,
+        'mapped_count': 0,
+        'active_unmapped_upcs': [],
+        'activity_rule': 'POS_POSITIVE_LATEST_UP_TO_28_VALID_COMPLETED_DATA_DAYS',
+        'department_code': SEAFOOD_DEPT_CODE,
+    }
+
+    for ean in candidates:
+        if _upc_identity_ready(cur, ean):
+            result['mapped_count'] += 1
+            continue
+
+        evidence = _active_selling_evidence_for_unmapped(
+            cur,
+            ean,
+            batch_id,
+            pos_days=pos_days,
+        )
+        if evidence['activity_scope'] != 'ACTIVE_SELLING':
+            result['inactive_or_historical_count'] += 1
+            continue
+
+        _issue(
+            cur,
+            batch_id,
+            'CURRENT_ACTIVE_SOLD_UPC_UNMAPPED',
+            'UPC',
+            ean,
+            f'Current active-selling Seafood UPC {ean} has positive POS quantity in the latest valid data days but no confirmed UPC identity mapping.',
+            'HIGH',
+            detail={
+                **evidence,
+                'guard': 'CURRENT_ACTIVE_SOLD_UPC_GLOBAL_GATE',
+                'scope': 'GLOBAL_CURRENT_STATE',
+                'department_code': SEAFOOD_DEPT_CODE,
+            },
+        )
+        result['active_unmapped_count'] += 1
+        result['active_unmapped_upcs'].append(ean)
+
+    return result
 
 
 def _mapped_current_activity_scope(
@@ -2587,11 +2696,6 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
 
-            # Explicit temporary waivers are applied only after active/historical
-            # classification so a rerun cannot silently restore them to HIGH.
-            # Identity remains unresolved and Quick Check remains unavailable.
-            temporary_qa_waivers = apply_temporary_identity_waivers(cur, batch_id)
-
             # FINAL USER-AUTHORITY LOCK (v7.0.25): automatic identity/UOM repair runs above.
             # Reapply confirmed overrides and retirements after every automatic repair so a
             # rebuild cannot resurrect a nonexistent UPC or overwrite a user-confirmed UOM.
@@ -2609,6 +2713,18 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     'One or more confirmed family subarticles failed final authority lock: '
                     + str(family_subarticle_result_final.get('held'))
                 )
+
+            # Current sold-but-unmapped readiness is GLOBAL current state, not
+            # source-batch state. Evaluate only after the final user-authority
+            # lock so confirmed mappings/retirements are the last identity writer.
+            current_active_unmapped_guard = rebuild_current_active_unmapped_sales_guard(
+                cur,
+                batch_id,
+            )
+
+            # Explicit temporary waivers, when configured, apply to the newly
+            # recomputed current-state blocker rather than stale source-batch QA.
+            temporary_qa_waivers = apply_temporary_identity_waivers(cur, batch_id)
 
             # v7.0.30 fail-closed product-identity publish guard.
             # Candidate serving rows are built under a SAVEPOINT. A GLOBAL
@@ -2721,6 +2837,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
                  qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_family_costs_final': family_cost_result_final, 'manual_family_subarticles_final': family_subarticle_result_final, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                  'current_active_unmapped_sales_guard': current_active_unmapped_guard,
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
                   'cross_tab_signature_repair': cross_tab_signature_repair,
@@ -2749,6 +2866,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             )
             conn.commit()
             return {'batch_id': batch_id, 'status': status, **counts, 'quick_check': qc, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                    'current_active_unmapped_sales_guard': current_active_unmapped_guard,
                     'active_product_master_repair': active_master_repair,
                     'article_manual_multitab_repair': multitab_manual_repair,
                     'cross_tab_signature_repair': cross_tab_signature_repair,

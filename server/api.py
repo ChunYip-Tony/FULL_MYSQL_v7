@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.173-single-service'
+VERSION='7.0.174-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -496,7 +496,24 @@ def web_upload_status(session_id:str,request:Request,response:Response):
     response.headers['Pragma']='no-cache'
     response.headers['Expires']='0'
     try:
-        return json.loads(json.dumps(session_status(session_id),default=j))
+        payload=session_status(session_id)
+        p3=payload.get('phase3') or {}
+        p3_status=str(p3.get('result_status') or '').upper()
+        hold_rows=int(p3.get('quick_check_hold_rows') or 0)
+        if p3_status in {'PHASE3_QA_HOLD','QUICK_CHECK_READY_WITH_HOLDS'} or hold_rows>0:
+            bid=int((payload.get('batch') or {}).get('batch_id') or 0)
+            if bid>0:
+                with db_conn() as conn:
+                    cur=conn.cursor(dictionary=True)
+                    try:
+                        payload['qa_summary']=_web_upload_qa_summary_for_batch(
+                            cur,
+                            bid,
+                            batch_status=(payload.get('batch') or {}).get('processing_status'),
+                        )
+                    finally:
+                        cur.close()
+        return json.loads(json.dumps(payload,default=j))
     except KeyError as exc:
         raise HTTPException(404,str(exc))
     except Exception as exc:
@@ -651,6 +668,7 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
                 })
 
     identity=detail.get('product_identity_guard') or {}
+    active_unmapped_guard=detail.get('current_active_unmapped_sales_guard') or {}
     analysis=detail.get('analysis_layer') or {}
     seafood=analysis.get('seafood') or {}
     seafood_audit=seafood.get('audit') or {}
@@ -681,6 +699,14 @@ def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
             'warning_count':identity.get('warning_count'),
             'serving_hold_count':identity.get('serving_hold_count'),
             'summary':identity.get('summary'),
+        },
+        'current_active_unmapped_guard':{
+            'active_unmapped_count':active_unmapped_guard.get('active_unmapped_count'),
+            'candidate_count':active_unmapped_guard.get('candidate_count'),
+            'mapped_count':active_unmapped_guard.get('mapped_count'),
+            'inactive_or_historical_count':active_unmapped_guard.get('inactive_or_historical_count'),
+            'active_unmapped_upcs':active_unmapped_guard.get('active_unmapped_upcs'),
+            'activity_rule':active_unmapped_guard.get('activity_rule'),
         },
         'seafood_analysis_guard':{
             'pass':seafood.get('pass'),
@@ -957,7 +983,9 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
                 batch_row=by_id.get(qa_bid)
                 if not batch_row:
                     continue
-                if str(batch_row.get('phase3_status') or '').upper()!='PHASE3_QA_HOLD':
+                p3_status=str(batch_row.get('phase3_status') or '').upper()
+                hold_rows=int(batch_row.get('quick_check_hold_rows') or 0)
+                if p3_status not in {'PHASE3_QA_HOLD','QUICK_CHECK_READY_WITH_HOLDS'} and hold_rows<=0:
                     continue
                 try:
                     batch_row['qa_summary']=_web_upload_qa_summary_for_batch(
@@ -986,7 +1014,7 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
             'batches':batches,
             'degraded':bool(warnings),
             'warnings':warnings,
-            'contract_version':'WEB_UPLOAD_RECENT_V3',
+            'contract_version':'WEB_UPLOAD_RECENT_V4',
         },
         default=j,
     ))

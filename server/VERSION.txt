@@ -1,5 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.173 Single-Service Edition
+Version: 7.0.174 Single-Service Edition
+
+
+v7.0.174 Global Current-Active Unmapped Sales Gate:
+- Phase 3 readiness now recomputes Seafood sold-but-unmapped UPC blockers from GLOBAL current POS state on every run, not only from issues created by the current source batch.
+- Current activity is defined by positive POS quantity across the latest up-to-28 valid completed POS data days.
+- Raw SOLD_UPC_UNMAPPED rows are retained as MEDIUM evidence-only QA; one CURRENT_ACTIVE_SOLD_UPC_UNMAPPED HIGH blocker is created per currently active unresolved UPC.
+- The global gate runs after final user-authority identity/retirement locks so confirmed mappings are authoritative before blocking.
+- OH-only and other non-POS batches can no longer bypass unresolved active-selling POS identity blockers from earlier batches.
+- Current and Recent Batch status now show HOLD breakdown for QUICK_CHECK_READY_WITH_HOLDS as well as PHASE3_QA_HOLD.
+- QA breakdown includes Current active unmapped UPC count and samples.
 
 
 v7.0.173 Final-State Precedence + Recent Enrichment Stability:

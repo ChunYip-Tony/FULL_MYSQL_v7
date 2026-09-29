@@ -611,13 +611,13 @@ body{
 #upload .resume-phase3-msg{margin-top:5px;font-size:9px}
 
 
-/* v7.0.173 completed-batch QA breakdown */
+/* v7.0.174 completed-batch QA breakdown */
 #upload .qa-breakdown{
   margin:8px 0 3px;padding:9px;border:1px solid #e2b0aa;border-radius:10px;
   background:linear-gradient(135deg,#fff7f5,#fff1ef)
 }
 #upload .qa-breakdown-title{font-size:11px;font-weight:950;color:#8c272d;margin-bottom:6px}
-#upload .qa-gates{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:7px}
+#upload .qa-gates{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-bottom:7px}
 #upload .qa-gate{padding:6px;border-radius:8px;background:rgba(255,255,255,.72);border:1px solid rgba(126,84,84,.12)}
 #upload .qa-gate .k{font-size:7.5px;color:#6d777f;text-transform:uppercase;font-weight:850}
 #upload .qa-gate .v{font-size:10px;font-weight:950;margin-top:2px;color:#17384d;overflow-wrap:anywhere}
@@ -648,8 +648,8 @@ body{
   .global-app-version{right:8px;bottom:78px;font-size:9px;padding:4px 7px}
 }
 
-</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.173</div><div class="w">
-<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.173</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
+</style></head><body><div id="globalAppVersion" class="global-app-version">App v7.0.174</div><div class="w">
+<div class="top"><div class="brand"><h1>FULL MYSQL</h1><div class="ver">Fish Market V2 · v7.0.174</div></div><div class="msg">Quick Check · PI · OH Discrepancy · Reports</div></div>
 
 <section id="core" class="screen on"><div class="head"><div><div class="title">🔎 Quick Check</div><div class="meta">Search item name, Family Article, Article, or UPC.</div></div></div><div class="search-bar"><input id="cq" placeholder="Search item" autocomplete="off"><button id="cc" class="clear-btn" type="button">Clear</button><button id="cs" class="primary">Search</button></div><div id="cmsg" class="msg"></div><div id="cres"></div></section>
 
@@ -734,7 +734,7 @@ body{
 
 <section id="pid" class="screen"><div class="head"><button class="back" data-go="pi">‹</button><div><div id="pit" class="title"></div><div id="pisub" class="meta"></div></div></div><div id="pisum"></div><div class="card"><b>Apply True Stock</b><div class="form" style="margin-top:8px"><div><label>True Stock</label><input id="pqty"></div><div><label>UOM</label><input id="puom" readonly></div></div><div style="margin-top:8px"><label>Note</label><input id="pnote"></div><button id="papply" class="primary" style="margin-top:9px">Apply True Stock</button><div id="pamsg" class="msg"></div></div><div class="card"><b>PI History</b><div class="scroll"><table><thead><tr><th>Time</th><th>System</th><th>True</th><th>Diff</th><th>Status</th><th>Note</th></tr></thead><tbody id="pih"></tbody></table></div></div></section>
 <section id="upload" class="screen">
-  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.173</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
+  <div class="head"><button class="back" id="uploadBack" type="button">‹</button><div><div class="title">⬆ Raw File Upload</div><div class="meta">Reports · Upload and view readiness directly in the Web App — no login or Windows client required.</div><div class="row" style="margin-top:5px"><span class="pill ok">UI v7.0.174</span><span id="uploadRuntimeVersion" class="pill warn">Runtime checking…</span></div></div><button id="uploadRefresh" class="primary" style="margin-left:auto">Refresh</button></div>
 
   <div class="section" style="color:#fff!important;margin:13px 4px 5px!important">1. Upload New File</div>
   <div id="uploadDrop" class="card upload-drop">
@@ -758,6 +758,7 @@ body{
     <div class="upload-progress"><div id="uploadProgressBar"></div></div>
     <div id="uploadStatus"></div>
     <div id="uploadServerFiles" style="margin-top:8px"></div>
+    <div id="uploadCurrentQA"></div>
     <div id="uploadCurrentActions"></div>
   </div>
   <div id="uploadMsg" class="msg"></div>
@@ -810,13 +811,13 @@ async function api(p,o={}){
 async function loadGlobalAppVersion(){
   let el=$('globalAppVersion');
   if(!el)return;
-  el.textContent='App v7.0.173';
+  el.textContent='App v7.0.174';
   el.className='global-app-version';
   try{
     let d=await api('/healthz',{cache:'no-store'});
     let rv=String(d.version||'').replace('-single-service','');
-    if(rv&&rv!=='7.0.173'){
-      el.textContent='UI 7.0.173 · API '+rv;
+    if(rv&&rv!=='7.0.174'){
+      el.textContent='UI 7.0.174 · API '+rv;
       el.className='global-app-version warn';
     }
   }catch{}
@@ -999,13 +1000,21 @@ function renderWebUploadStatus(d){
     uploadStage(pipelineIcon,'Pipeline',displayStatus,pipelineCls),
     uploadStage('📄','Files',String(files.length)),
     uploadStage('🧩','Phase 2C',auth.phase2c||p2.result_status||'Pending',String(auth.phase2c||p2.result_status||'').includes('READY')?'ok':''),
-    uploadStage('⚙️','Phase 3',phase3Text,auth.phase3_running?'warn':((String(p3.result_status||'').includes('HOLD')||String(p3.result_status||'').includes('FAIL'))?'bad':(p3.result_status?'ok':''))),
+    uploadStage('⚙️','Phase 3',phase3Text,auth.phase3_running?'warn':(
+      String(p3.result_status||'').toUpperCase()==='PHASE3_QA_HOLD' || String(p3.result_status||'').toUpperCase().includes('FAIL')
+        ? 'bad'
+        : (String(p3.result_status||'').toUpperCase()==='QUICK_CHECK_READY_WITH_HOLDS'?'warn':(p3.result_status?'ok':''))
+    )),
     uploadStage('🔎','Quick Check',qcDetail,quickCheckText.startsWith('READY')?(quickCheckText.includes('HOLD')?'warn':'ok'):'')
   ].join('');
 
   $('uploadServerFiles').innerHTML=files.map(x=>
     '<div class="upload-file"><div><div class="upload-file-name">'+esc(x.original_filename||'')+'</div><div class="upload-file-meta">'+esc(x.source_type||'unclassified')+' · '+fmt(x.source_row_count,0)+' rows'+(x.coverage_start_date||x.coverage_end_date?' · '+esc(x.coverage_start_date||'')+' → '+esc(x.coverage_end_date||''):'')+'</div></div><span class="pill '+(x.error_count?'bad':'ok')+'">'+esc(x.processing_status||'')+'</span></div>'
   ).join('');
+
+  $('uploadCurrentQA').innerHTML=d?.qa_summary
+    ? renderWebUploadQASummary(d.qa_summary)
+    : '';
 
   // Resume is the only manual Phase 3 control. Running/queued batches have no
   // user action; they must continue uninterrupted.
@@ -1064,7 +1073,7 @@ async function loadUploadRuntimeVersion(){
   try{
     let d=await api('/healthz',{cache:'no-store'});
     el.textContent='Runtime '+String(d.version||'unknown');
-    el.className='pill '+(String(d.version||'').startsWith('7.0.173')?'ok':'warn');
+    el.className='pill '+(String(d.version||'').startsWith('7.0.174')?'ok':'warn');
   }catch(e){
     el.textContent='Runtime unavailable';
     el.className='pill bad';
@@ -1135,7 +1144,9 @@ function renderWebUploadRecentBatch(b){
   let liveP3=run.phase3_stage||'';
   let p3Label=phase3Display(b.phase3_status,liveP3,run.processing_status);
   let p3Status=String(b.phase3_status||'').toUpperCase();
-  let p3Tone=(p3Status.includes('HOLD')||p3Status.includes('FAIL'))?'bad':(p3Status.includes('READY')?'ok':(liveP3?'warn':''));
+  let p3Tone=p3Status==='PHASE3_QA_HOLD'||p3Status.includes('FAIL')
+    ? 'bad'
+    : (p3Status==='QUICK_CHECK_READY_WITH_HOLDS'?'warn':(p3Status.includes('READY')?'ok':(liveP3?'warn':'')));
   let qc=b.quick_check_rows==null?'Pending':(fmt(b.quick_check_ready_rows,0)+' / '+fmt(b.quick_check_rows,0)+' READY · '+fmt(b.quick_check_hold_rows,0)+' HOLD');
   return '<div class="card" data-upload-batch-card="'+esc(b.batch_id)+'">'+
     '<div class="row" style="justify-content:space-between"><div><div class="name">Batch '+esc(b.batch_id??'—')+'</div><div class="meta">'+esc(b.batch_label||'')+'</div>'+
@@ -1148,11 +1159,11 @@ function renderWebUploadRecentBatch(b){
       uploadStage('⚙️','Phase 3',p3Label,p3Tone)+
       uploadStage('🔎','Quick Check',qc,Number(b.quick_check_hold_rows||0)>0?'warn':(b.quick_check_rows!=null?'ok':''))+
     '</div>'+
-    (p3Status==='PHASE3_QA_HOLD'
+    ((p3Status==='PHASE3_QA_HOLD'||Number(b.quick_check_hold_rows||0)>0)
       ? '<div data-qa-summary="'+esc(b.batch_id)+'">'+
           (b.qa_summary
             ? renderWebUploadQASummary(b.qa_summary)
-            : '<div class="msg warn">QA breakdown unavailable in this Recent Batches response.</div>')+
+            : '<div class="msg warn">HOLD breakdown unavailable in this Recent Batches response.</div>')+
         '</div>'
       : '')+
     '<div style="margin-top:7px">'+files.map(x=>
@@ -1258,7 +1269,7 @@ async function deleteQAHoldBatch(batchId,button){
 function renderWebUploadQASummary(d){
   if(d?.error)return '<div class="msg bad">'+esc(d.error)+'</div>';
   if(!d?.qa_available)return '<div class="msg">QA detail is not available for this batch.</div>';
-  let p=d.phase3||{},idg=d.product_identity_guard||{},ag=d.seafood_analysis_guard||{};
+  let p=d.phase3||{},idg=d.product_identity_guard||{},ug=d.current_active_unmapped_guard||{},ag=d.seafood_analysis_guard||{};
   let blockers=d.batch_blockers||[],reasons=Object.entries(d.quick_check?.reason_counts||{})
     .sort((a,b)=>Number(b[1]||0)-Number(a[1]||0));
   let idPass=idg.pass===true,analysisPass=(ag.pass===true||ag.audit_pass===true);
@@ -1268,12 +1279,16 @@ function renderWebUploadQASummary(d){
   let samples=(d.quick_check?.hold_samples||[]).slice(0,8).map(x=>
     esc(x.upc||'—')+(x.reasons?.length?' ['+x.reasons.map(esc).join(', ')+']':'')
   ).join(' · ');
+  let resultStatus=String(p.result_status||'').toUpperCase();
+  let breakdownTitle=resultStatus==='PHASE3_QA_HOLD'?'⚠ QA HOLD Breakdown':'⚠ Quick Check HOLD Breakdown';
   return '<div class="qa-breakdown">'+
-    '<div class="qa-breakdown-title">⚠ QA HOLD Breakdown</div>'+
+    '<div class="qa-breakdown-title">'+esc(breakdownTitle)+'</div>'+
     '<div class="qa-gates">'+
       '<div class="qa-gate"><div class="k">Batch blockers</div><div class="v '+(Number(p.blocking_issue_count||0)>0?'bad':'ok')+'">'+fmt(p.blocking_issue_count,0)+'</div></div>'+
       '<div class="qa-gate"><div class="k">Identity guard</div><div class="v '+(idPass?'ok':'bad')+'">'+(idPass?'PASS':'FAIL')+
         (idg.blocking_count!=null?' · '+fmt(idg.blocking_count,0)+' blocker(s)':'')+'</div></div>'+
+      '<div class="qa-gate"><div class="k">Active unmapped UPCs</div><div class="v '+(Number(ug.active_unmapped_count||0)>0?'bad':'ok')+'">'+
+        (ug.active_unmapped_count==null?'—':fmt(ug.active_unmapped_count,0))+'</div></div>'+
       '<div class="qa-gate"><div class="k">Seafood analysis</div><div class="v '+(analysisPass?'ok':'bad')+'">'+(analysisPass?'PASS':'FAIL')+
         (ag.refresh_status?' · '+esc(ag.refresh_status):'')+'</div></div>'+
     '</div>'+
@@ -1284,6 +1299,9 @@ function renderWebUploadQASummary(d){
         : '<div class="qa-reason"><span>No per-UPC hold reason detail</span><span class="n">—</span></div>')+
     '</div>'+
     (samples?'<div class="qa-samples"><b>Sample HOLD UPCs:</b> '+samples+'</div>':'')+
+    ((ug.active_unmapped_upcs||[]).length
+      ? '<div class="qa-samples"><b>Current active unmapped UPCs:</b> '+(ug.active_unmapped_upcs||[]).slice(0,12).map(esc).join(' · ')+'</div>'
+      : '')+
     '<div class="qa-samples"><b>Reason source:</b> '+esc(d.quick_check?.reason_source||'—')+'</div>'+
   '</div>';
 }
@@ -1371,6 +1389,7 @@ async function loadWebUploadActive(){
       uploadStage('🔎','Quick Check','Pending','')
     ].join('');
     $('uploadServerFiles').innerHTML='';
+    $('uploadCurrentQA').innerHTML='';
     $('uploadCurrentActions').innerHTML='';
   }catch(e){
     // Preserve whatever batch status is already visible; a refresh error must

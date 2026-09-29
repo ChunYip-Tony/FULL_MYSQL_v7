@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-VERSION = "7.0.22-temporary-qa-waiver-registry"
+VERSION = "7.0.174-temporary-qa-waiver-registry"
 
 # Explicit user-approved temporary identity waivers.
 #
@@ -36,7 +36,7 @@ def apply_temporary_identity_waivers(cur, batch_id: int) -> dict[str, Any]:
                FROM qa_phase3_issue
                WHERE batch_id=%s
                  AND issue_status='OPEN'
-                 AND issue_code='SOLD_UPC_UNMAPPED'
+                 AND issue_code IN ('SOLD_UPC_UNMAPPED','CURRENT_ACTIVE_SOLD_UPC_UNMAPPED')
                  AND entity_key=%s
                ORDER BY issue_id""",
             (batch_id, upc),
