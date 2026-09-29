@@ -73,18 +73,42 @@ def _apps_script_secret() -> str:
 
 def _apps_script_post(payload: dict[str, Any], *, timeout: int = 90) -> dict[str, Any]:
     import requests
+    import time as _time
 
     body = {"secret": _apps_script_secret(), **payload}
-    resp = requests.post(_apps_script_url(), json=body, timeout=timeout, allow_redirects=True)
-    if resp.status_code >= 300:
-        raise RuntimeError(f"Apps Script bridge HTTP {resp.status_code}: {resp.text[:500]}")
-    try:
-        data = resp.json()
-    except Exception as exc:
-        raise RuntimeError(f"Apps Script bridge returned non-JSON: {resp.text[:500]}") from exc
-    if not isinstance(data, dict) or not data.get("ok"):
-        raise RuntimeError(f"Apps Script bridge rejected request: {data}")
-    return data
+    last_error: Exception | None = None
+    for attempt in range(1, 5):
+        try:
+            resp = requests.post(
+                _apps_script_url(),
+                json=body,
+                timeout=timeout,
+                allow_redirects=True,
+            )
+            if resp.status_code >= 300:
+                raise RuntimeError(
+                    f"Apps Script bridge HTTP {resp.status_code}: {resp.text[:500]}"
+                )
+            try:
+                data = resp.json()
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Apps Script bridge returned non-JSON: {resp.text[:500]}"
+                ) from exc
+            if not isinstance(data, dict) or not data.get("ok"):
+                raise RuntimeError(f"Apps Script bridge rejected request: {data}")
+            return data
+        except Exception as exc:
+            last_error = exc
+            if attempt >= 4:
+                break
+            # Apps Script can transiently throttle or time out during a multi-tab
+            # snapshot replacement. Back off before retrying the same idempotent
+            # chunk/read request.
+            _time.sleep(min(2 ** (attempt - 1), 8))
+    raise RuntimeError(
+        f"Apps Script bridge failed after 4 attempts: {last_error!r}"
+    )
 
 
 def _apps_script_write_matrix(
@@ -92,7 +116,7 @@ def _apps_script_write_matrix(
     title: str,
     matrix: list[list[Any]],
     *,
-    chunk_rows: int = 350,
+    chunk_rows: int = 1500,
 ) -> None:
     if not matrix:
         _apps_script_post(
@@ -104,8 +128,11 @@ def _apps_script_write_matrix(
         )
         return
     width = max(len(r) for r in matrix)
-    for start in range(0, len(matrix), chunk_rows):
-        chunk = matrix[start : start + chunk_rows]
+    # Apps Script rejects payloads above 50,000 cells. Use a dynamic chunk size
+    # that stays below that limit while avoiding dozens of tiny HTTP executions.
+    safe_chunk_rows = max(1, min(int(chunk_rows), max(1, 40000 // max(1, width))))
+    for start in range(0, len(matrix), safe_chunk_rows):
+        chunk = matrix[start : start + safe_chunk_rows]
         normalized = [
             [_wire(v) for v in row] + [""] * (width - len(row))
             for row in chunk
@@ -580,6 +607,9 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
     if not bridge_enabled():
         return {"status":"DISABLED","batch_id":batch_id,
                 "reason":"FULLMYSQL_CHATGPT_SHEET_ENABLED is not enabled."}
+    spreadsheet_id: str | None = None
+    transport: str | None = None
+    publish_row_count = 0
     try:
         spreadsheet_id = _sheet_id()
         transport = _bridge_transport()
@@ -602,6 +632,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
         if not rows:
             return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
 
+        publish_row_count = len(rows)
         ready_rows = [
             row for row in rows
             if str(row.get("quick_check_status") or "").upper() == "READY"
@@ -758,4 +789,43 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             "readback":readback,
         }
     except Exception as exc:
-        return {"status":"FAILED","batch_id":batch_id,"error":repr(exc)}
+        error = repr(exc)
+        # Never leave readers stuck on PUBLISHING after a transport failure.
+        # Best-effort write a terminal FAILED state; preserve the original error
+        # if even that status write cannot be completed.
+        if spreadsheet_id and transport:
+            try:
+                failed_matrix = _bridge_status(
+                    batch_id=batch_id,
+                    row_count=publish_row_count,
+                    publisher_identity=(
+                        "GOOGLE_APPS_SCRIPT_WEB_APP"
+                        if transport == "APPS_SCRIPT"
+                        else "GOOGLE_SERVICE_ACCOUNT"
+                    ),
+                    transport=transport,
+                    status="FAILED",
+                    detail=error[:1000],
+                )
+                if transport == "APPS_SCRIPT":
+                    _apps_script_write_matrix(
+                        spreadsheet_id,
+                        MYSQL_TABS["bridge"],
+                        failed_matrix,
+                    )
+                else:
+                    failed_session, _ = _session()
+                    _ensure_tabs(
+                        failed_session,
+                        spreadsheet_id,
+                        [MYSQL_TABS["bridge"]],
+                    )
+                    _write_matrix(
+                        failed_session,
+                        spreadsheet_id,
+                        MYSQL_TABS["bridge"],
+                        failed_matrix,
+                    )
+            except Exception:
+                pass
+        return {"status":"FAILED","batch_id":batch_id,"error":error}
