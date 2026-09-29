@@ -34,7 +34,7 @@ jobs:
           )
           print('1' if ok else '0')
           PY
-)"
+          )"
             if [ "$pass" = "1" ]; then
               consecutive=$((consecutive+1))
               if [ "$consecutive" -ge 3 ]; then
@@ -78,7 +78,7 @@ jobs:
           version_ok='1' if p.get('code_version') == '7.0.188-single-service' and p.get('version_fence_pass') is True else '0'
           print(version_ok, p.get('pipeline_run_id') or '', p.get('session_id') or '')
           PY
-)
+          )
               if [ "$version_ok" = "1" ] && [ -n "$run_id" ] && [ -n "$session_id" ]; then
                 accepted=1
                 break
@@ -95,7 +95,7 @@ jobs:
           d=p.get('detail') or {}
           print(d.get('reason') or '')
           PY
-)"
+          )"
               echo "REBUILD_BLOCK_REASON=$reason"
               if [ "$reason" = "ACTIVE_RUN_VERSION_MISMATCH" ]; then
                 sleep 5
@@ -127,7 +127,7 @@ jobs:
           else:
               print(str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
           PY
-)"
+          )"
             echo "$state"
             status="${state%%|*}"
             rest="${state#*|}"
