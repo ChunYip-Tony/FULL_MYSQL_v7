@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.161 Single-Service Edition
+Version: 7.0.162 Single-Service Edition
+
+v7.0.162 Search First-Screen Balance:
+- Family results remain first, but are now capped at 3 instead of up to 8.
+- Selling UPC choices appear immediately after the top 3 Family matches.
+- Article results remain distinct and continue to resolve to their mapped Family.
+- This prevents broad searches such as SALMON from presenting an entire first screen of Family cards.
+
 
 v7.0.161 Search Result Type Repair:
 - Quick Check search no longer relabels receiving/order Article matches as FAMILY.
