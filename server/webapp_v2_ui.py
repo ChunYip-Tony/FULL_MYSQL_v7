@@ -1237,6 +1237,7 @@ async function deleteQAHoldBatch(batchId,button){
     await loadWebUploadRecent();
     await loadWebUploadCalendar();
     await loadLatestReferenceUploads();
+    await loadWebUploadActive();
   }catch(e){
     let reason=e?.message||String(e);
     if(msg){
