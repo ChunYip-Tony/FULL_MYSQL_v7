@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.170 Single-Service Edition
+Version: 7.0.171 Single-Service Edition
+
+
+v7.0.171 Embedded QA + Recent History Fail-Open:
+- Recent Batches now embeds QA summary in the same /v1/web-upload/recent response; the browser no longer makes a secondary per-batch /qa-summary request, eliminating rollout-time 404s.
+- The preferred Recent Batches core query is fail-open. If it errors, a simplified terminal-batch query is used so the panel still renders instead of returning HTTP 500.
+- Degraded Recent Batches responses expose CORE_HISTORY_PRIMARY_FAILED and fallback warnings in the UI for direct diagnosis.
+- /v1/web-upload/recent now uses no-store/no-cache response headers.
 
 
 v7.0.170 Upload QA Breakdown:

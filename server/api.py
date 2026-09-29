@@ -28,7 +28,7 @@ from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 
-VERSION='7.0.170-single-service'
+VERSION='7.0.171-single-service'
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
 def j(v):
@@ -512,6 +512,148 @@ def web_upload_active(request:Request,response:Response):
     return {'active_batch':find_active_batch()}
 
 
+def _web_upload_qa_summary_for_batch(cur,bid:int,batch_status=None):
+    cur.execute(
+        """SELECT result_status,blocking_issue_count,
+                  quick_check_rows,quick_check_ready_rows,quick_check_hold_rows,
+                  detail_json,updated_at
+           FROM phase3_batch_result
+           WHERE batch_id=%s
+           LIMIT 1""",
+        (bid,),
+    )
+    p3=cur.fetchone()
+    if not p3:
+        return {
+            'batch_id':bid,
+            'processing_status':batch_status,
+            'phase3':None,
+            'qa_available':False,
+        }
+
+    detail={}
+    try:
+        parsed=json.loads(p3.get('detail_json') or '{}')
+        if isinstance(parsed,dict):
+            detail=parsed
+    except Exception:
+        detail={}
+
+    cur.execute(
+        """SELECT issue_code,UPPER(severity) AS severity,COUNT(*) AS issue_count
+           FROM qa_phase3_issue
+           WHERE batch_id=%s
+             AND issue_status='OPEN'
+             AND UPPER(severity) IN ('HIGH','CRITICAL')
+             AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'
+           GROUP BY issue_code,UPPER(severity)
+           ORDER BY FIELD(UPPER(severity),'CRITICAL','HIGH'),issue_count DESC,issue_code""",
+        (bid,),
+    )
+    batch_blockers=cur.fetchall()
+
+    reason_counts={}
+    hold_samples=[]
+    hold_source='QUICK_CHECK_CURRENT'
+    cur.execute(
+        """SELECT ean_upc,blocking_reason
+           FROM quick_check_current
+           WHERE publish_batch_id=%s
+             AND quick_check_status='QA_HOLD'
+           ORDER BY ean_upc""",
+        (bid,),
+    )
+    current_holds=cur.fetchall()
+
+    if current_holds:
+        for row in current_holds:
+            reasons=[
+                x.strip()
+                for x in str(row.get('blocking_reason') or '').split(',')
+                if x and x.strip()
+            ]
+            for reason in reasons:
+                reason_counts[reason]=reason_counts.get(reason,0)+1
+            if len(hold_samples)<12:
+                hold_samples.append({
+                    'upc':str(row.get('ean_upc') or ''),
+                    'reasons':reasons,
+                })
+    else:
+        hold_source='BATCH_QA_ISSUES'
+        cur.execute(
+            """SELECT entity_key,detail_json
+               FROM qa_phase3_issue
+               WHERE batch_id=%s
+                 AND issue_status='OPEN'
+                 AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'
+               ORDER BY issue_id""",
+            (bid,),
+        )
+        for row in cur.fetchall():
+            issue_detail={}
+            try:
+                parsed=json.loads(row.get('detail_json') or '{}')
+                if isinstance(parsed,dict):
+                    issue_detail=parsed
+            except Exception:
+                issue_detail={}
+            reasons=[
+                str(x).strip()
+                for x in (issue_detail.get('reasons') or [])
+                if str(x).strip()
+            ]
+            for reason in reasons:
+                reason_counts[reason]=reason_counts.get(reason,0)+1
+            if len(hold_samples)<12:
+                hold_samples.append({
+                    'upc':str(row.get('entity_key') or ''),
+                    'reasons':reasons,
+                })
+
+    identity=detail.get('product_identity_guard') or {}
+    analysis=detail.get('analysis_layer') or {}
+    seafood=analysis.get('seafood') or {}
+    seafood_audit=seafood.get('audit') or {}
+    seafood_refresh=seafood.get('refresh') or {}
+
+    return {
+        'batch_id':bid,
+        'processing_status':batch_status,
+        'qa_available':True,
+        'phase3':{
+            'result_status':p3.get('result_status'),
+            'blocking_issue_count':p3.get('blocking_issue_count'),
+            'quick_check_rows':p3.get('quick_check_rows'),
+            'quick_check_ready_rows':p3.get('quick_check_ready_rows'),
+            'quick_check_hold_rows':p3.get('quick_check_hold_rows'),
+            'updated_at':p3.get('updated_at'),
+        },
+        'batch_blockers':batch_blockers,
+        'quick_check':{
+            'reason_counts':reason_counts,
+            'hold_samples':hold_samples,
+            'reason_source':hold_source,
+            'sample_count':len(hold_samples),
+        },
+        'product_identity_guard':{
+            'pass':identity.get('pass'),
+            'blocking_count':identity.get('blocking_count'),
+            'warning_count':identity.get('warning_count'),
+            'serving_hold_count':identity.get('serving_hold_count'),
+            'summary':identity.get('summary'),
+        },
+        'seafood_analysis_guard':{
+            'pass':seafood.get('pass'),
+            'refresh_status':seafood_refresh.get('status'),
+            'audit_pass':seafood_audit.get('pass'),
+            'checks':seafood_audit.get('checks'),
+            'quick_check_rows':seafood_audit.get('quick_check_rows'),
+            'analysis_item_rows':seafood_audit.get('analysis_item_rows'),
+        },
+    }
+
+
 @app.get('/v1/web-upload/batches/{batch_id}/qa-summary')
 def web_upload_qa_summary(batch_id:int,request:Request,response:Response):
     _browser_upload_guard(request)
@@ -535,191 +677,88 @@ def web_upload_qa_summary(batch_id:int,request:Request,response:Response):
             batch=cur.fetchone()
             if not batch:
                 raise HTTPException(404,'Batch not found')
-
-            cur.execute(
-                """SELECT result_status,blocking_issue_count,
-                          quick_check_rows,quick_check_ready_rows,quick_check_hold_rows,
-                          detail_json,updated_at
-                   FROM phase3_batch_result
-                   WHERE batch_id=%s
-                   LIMIT 1""",
-                (bid,),
+            result=_web_upload_qa_summary_for_batch(
+                cur,
+                bid,
+                batch_status=batch.get('processing_status'),
             )
-            p3=cur.fetchone()
-            if not p3:
-                return {
-                    'batch_id':bid,
-                    'processing_status':batch.get('processing_status'),
-                    'phase3':None,
-                    'qa_available':False,
-                }
-
-            detail={}
-            try:
-                parsed=json.loads(p3.get('detail_json') or '{}')
-                if isinstance(parsed,dict):
-                    detail=parsed
-            except Exception:
-                detail={}
-
-            cur.execute(
-                """SELECT issue_code,UPPER(severity) AS severity,COUNT(*) AS issue_count
-                   FROM qa_phase3_issue
-                   WHERE batch_id=%s
-                     AND issue_status='OPEN'
-                     AND UPPER(severity) IN ('HIGH','CRITICAL')
-                     AND issue_code<>'QUICK_CHECK_CORE_FIELD_MISSING'
-                   GROUP BY issue_code,UPPER(severity)
-                   ORDER BY FIELD(UPPER(severity),'CRITICAL','HIGH'),issue_count DESC,issue_code""",
-                (bid,),
-            )
-            batch_blockers=cur.fetchall()
-
-            reason_counts={}
-            hold_samples=[]
-            hold_source='QUICK_CHECK_CURRENT'
-            cur.execute(
-                """SELECT ean_upc,blocking_reason
-                   FROM quick_check_current
-                   WHERE publish_batch_id=%s
-                     AND quick_check_status='QA_HOLD'
-                   ORDER BY ean_upc""",
-                (bid,),
-            )
-            current_holds=cur.fetchall()
-
-            if current_holds:
-                for row in current_holds:
-                    reasons=[
-                        x.strip()
-                        for x in str(row.get('blocking_reason') or '').split(',')
-                        if x and x.strip()
-                    ]
-                    for reason in reasons:
-                        reason_counts[reason]=reason_counts.get(reason,0)+1
-                    if len(hold_samples)<12:
-                        hold_samples.append({
-                            'upc':str(row.get('ean_upc') or ''),
-                            'reasons':reasons,
-                        })
-            else:
-                # If the serving snapshot has since moved to another batch,
-                # fall back to this batch's own recorded Quick Check QA evidence.
-                hold_source='BATCH_QA_ISSUES'
-                cur.execute(
-                    """SELECT entity_key,detail_json
-                       FROM qa_phase3_issue
-                       WHERE batch_id=%s
-                         AND issue_status='OPEN'
-                         AND issue_code='QUICK_CHECK_CORE_FIELD_MISSING'
-                       ORDER BY issue_id""",
-                    (bid,),
-                )
-                for row in cur.fetchall():
-                    issue_detail={}
-                    try:
-                        parsed=json.loads(row.get('detail_json') or '{}')
-                        if isinstance(parsed,dict):
-                            issue_detail=parsed
-                    except Exception:
-                        issue_detail={}
-                    reasons=[
-                        str(x).strip()
-                        for x in (issue_detail.get('reasons') or [])
-                        if str(x).strip()
-                    ]
-                    for reason in reasons:
-                        reason_counts[reason]=reason_counts.get(reason,0)+1
-                    if len(hold_samples)<12:
-                        hold_samples.append({
-                            'upc':str(row.get('entity_key') or ''),
-                            'reasons':reasons,
-                        })
-
-            identity=detail.get('product_identity_guard') or {}
-            analysis=detail.get('analysis_layer') or {}
-            seafood=analysis.get('seafood') or {}
-            seafood_audit=seafood.get('audit') or {}
-            seafood_refresh=seafood.get('refresh') or {}
-
-            return json.loads(json.dumps({
-                'batch_id':bid,
-                'processing_status':batch.get('processing_status'),
-                'qa_available':True,
-                'phase3':{
-                    'result_status':p3.get('result_status'),
-                    'blocking_issue_count':p3.get('blocking_issue_count'),
-                    'quick_check_rows':p3.get('quick_check_rows'),
-                    'quick_check_ready_rows':p3.get('quick_check_ready_rows'),
-                    'quick_check_hold_rows':p3.get('quick_check_hold_rows'),
-                    'updated_at':p3.get('updated_at'),
-                },
-                'batch_blockers':batch_blockers,
-                'quick_check':{
-                    'reason_counts':reason_counts,
-                    'hold_samples':hold_samples,
-                    'reason_source':hold_source,
-                    'sample_count':len(hold_samples),
-                },
-                'product_identity_guard':{
-                    'pass':identity.get('pass'),
-                    'blocking_count':identity.get('blocking_count'),
-                    'warning_count':identity.get('warning_count'),
-                    'serving_hold_count':identity.get('serving_hold_count'),
-                    'summary':identity.get('summary'),
-                },
-                'seafood_analysis_guard':{
-                    'pass':seafood.get('pass'),
-                    'refresh_status':seafood_refresh.get('status'),
-                    'audit_pass':seafood_audit.get('pass'),
-                    'checks':seafood_audit.get('checks'),
-                    'quick_check_rows':seafood_audit.get('quick_check_rows'),
-                    'analysis_item_rows':seafood_audit.get('analysis_item_rows'),
-                },
-            },default=j))
+            return json.loads(json.dumps(result,default=j))
         finally:
             cur.close()
 
 
 @app.get('/v1/web-upload/recent')
-def web_upload_recent(request:Request,limit:int=8):
+def web_upload_recent(request:Request,response:Response,limit:int=8):
     _browser_upload_guard(request)
+    response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma']='no-cache'
+    response.headers['Expires']='0'
     limit=max(1,min(int(limit or 8),20))
     scan_limit=max(limit,min(limit*4,80))
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
+        warnings=[]
 
-        # Core history path: only columns already required by the ingest/session
-        # workflow. Optional Phase2C/Phase3/pipeline data is enriched later and
-        # must never prevent basic upload history from rendering.
-        cur.execute(
-            """SELECT ib.batch_id,ib.batch_label,ib.processing_status,
-                      ib.upload_started_at,ib.completed_at,ib.file_count,
-                      ib.source_row_count,ib.error_count,ib.notes
-               FROM ingest_batch ib
-               WHERE ib.processing_status NOT IN (
-                         'API_UPLOADING',
-                         'INGESTED_PENDING_QA',
-                         'RAW_RELEASED',
-                         'RELEASED',
-                         'PHASE2C_READY'
+        # Preferred history query excludes any still-active Phase 3 pipeline run.
+        # If a production schema/query edge case breaks this enrichment-heavy
+        # path, fall back to a simpler terminal-batch query instead of returning
+        # HTTP 500 and blanking the whole Recent Batches panel.
+        try:
+            cur.execute(
+                """SELECT ib.batch_id,ib.batch_label,ib.processing_status,
+                          ib.upload_started_at,ib.completed_at,ib.file_count,
+                          ib.source_row_count,ib.error_count,ib.notes
+                   FROM ingest_batch ib
+                   WHERE ib.processing_status NOT IN (
+                             'API_UPLOADING',
+                             'INGESTED_PENDING_QA',
+                             'RAW_RELEASED',
+                             'RELEASED',
+                             'PHASE2C_READY'
+                         )
+                     AND NOT EXISTS (
+                         SELECT 1
+                         FROM pipeline_run active
+                         WHERE active.batch_id=ib.batch_id
+                           AND active.pipeline_name=%s
+                           AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                           AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                      )
-                 AND NOT EXISTS (
-                     SELECT 1
-                     FROM pipeline_run active
-                     WHERE active.batch_id=ib.batch_id
-                       AND active.pipeline_name=%s
-                       AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                       AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
-                 )
-               ORDER BY ib.batch_id DESC
-               LIMIT %s""",
-            (API_PIPELINE,scan_limit),
-        )
+                   ORDER BY ib.batch_id DESC
+                   LIMIT %s""",
+                (API_PIPELINE,scan_limit),
+            )
+            core_rows=cur.fetchall()
+        except Exception as exc:
+            warnings.append('CORE_HISTORY_PRIMARY_FAILED: '+str(exc))
+            try:
+                cur.execute(
+                    """SELECT batch_id,batch_label,processing_status,
+                              upload_started_at,completed_at,file_count,
+                              source_row_count,error_count
+                       FROM ingest_batch
+                       WHERE processing_status NOT IN (
+                             'API_UPLOADING',
+                             'INGESTED_PENDING_QA',
+                             'RAW_RELEASED',
+                             'RELEASED',
+                             'PHASE2C_READY'
+                       )
+                       ORDER BY batch_id DESC
+                       LIMIT %s""",
+                    (scan_limit,),
+                )
+                core_rows=cur.fetchall()
+                for row in core_rows:
+                    row['notes']=None
+                warnings.append('CORE_HISTORY_FALLBACK_USED')
+            except Exception as fallback_exc:
+                core_rows=[]
+                warnings.append('CORE_HISTORY_FALLBACK_FAILED: '+str(fallback_exc))
 
         batches=[]
-        for row in cur.fetchall():
+        for row in core_rows:
             notes={}
             try:
                 parsed=json.loads(row.get('notes') or '{}')
@@ -738,6 +777,7 @@ def web_upload_recent(request:Request,limit:int=8):
                 'quick_check_rows':None,
                 'quick_check_ready_rows':None,
                 'quick_check_hold_rows':None,
+                'qa_summary':None,
             })
             batches.append(row)
             if len(batches)>=limit:
@@ -747,7 +787,6 @@ def web_upload_recent(request:Request,limit:int=8):
         by_id={int(x['batch_id']):x for x in batches}
         file_map={bid:[] for bid in ids}
         pipeline_map={}
-        warnings=[]
 
         if ids:
             ph=','.join(['%s']*len(ids))
@@ -869,6 +908,28 @@ def web_upload_recent(request:Request,limit:int=8):
             except Exception as exc:
                 warnings.append('PIPELINE_ENRICHMENT_FAILED: '+str(exc))
 
+            # Embed QA breakdown in the same Recent Batches response so the
+            # browser never depends on a second route being deployed in sync.
+            for qa_bid in ids:
+                batch_row=by_id.get(qa_bid)
+                if not batch_row:
+                    continue
+                if str(batch_row.get('phase3_status') or '').upper()!='PHASE3_QA_HOLD':
+                    continue
+                try:
+                    batch_row['qa_summary']=_web_upload_qa_summary_for_batch(
+                        cur,
+                        qa_bid,
+                        batch_status=batch_row.get('processing_status'),
+                    )
+                except Exception as exc:
+                    batch_row['qa_summary']={
+                        'batch_id':qa_bid,
+                        'qa_available':False,
+                        'error':'QA_ENRICHMENT_FAILED: '+str(exc),
+                    }
+                    warnings.append(f'QA_ENRICHMENT_FAILED_BATCH_{qa_bid}: '+str(exc))
+
         cur.close()
 
     for batch in batches:
@@ -882,7 +943,7 @@ def web_upload_recent(request:Request,limit:int=8):
             'batches':batches,
             'degraded':bool(warnings),
             'warnings':warnings,
-            'contract_version':'WEB_UPLOAD_RECENT_V2',
+            'contract_version':'WEB_UPLOAD_RECENT_V3',
         },
         default=j,
     ))
