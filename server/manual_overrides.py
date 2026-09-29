@@ -308,6 +308,27 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927 = (
 )
 
 
+USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260929 = (
+    {
+        "ean_upc": "75339325301",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260929: 1 PACK = 2 LB.",
+    },
+    {
+        "ean_upc": "4029549384",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260929: 1 PACK = 2 LB.",
+    },
+)
+
+
+
 USER_CONFIRMED_FAMILY_COSTS_20260926 = (
     {"main_article_number":"1341156","cost_amount":Decimal("3.82"),"cost_uom_code":"LB","confirmed_date":"2026-09-26",
      "source_note":"USER_CONFIRMED_FAMILY_COST_20260926: Pony Fish = $3.82/LB."},
@@ -738,7 +759,11 @@ def ensure_cost_conversion_table(cur) -> None:
 
 def seed_confirmed_cost_conversions(cur) -> int:
     changed = 0
-    for row in (USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 + USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927):
+    for row in (
+        USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926
+        + USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260927
+        + USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260929
+    ):
         cur.execute(
             """
             INSERT INTO manual_cost_selling_conversion
