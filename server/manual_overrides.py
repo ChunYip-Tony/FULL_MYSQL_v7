@@ -195,6 +195,14 @@ SEED_OVERRIDES = (
         "base_qty_per_selling_unit": None,
         "source_note": "BATCH13_RECOVERY_APPROVED_20260928: FUZHOU FISH BALL 4PAC/5LB. User instructed Proceed after diagnostic confirmed UPC 81009389133 -> Main/Family 3467050. Identity only: Selling UOM remains unresolved and must stay QA HOLD until authoritative selling-unit evidence is supplied.",
     },
+    {
+        "ean_upc": "7004121200",
+        "article_number": "3480186",
+        "selling_uom_code": None,
+        "base_uom_code": None,
+        "base_qty_per_selling_unit": None,
+        "source_note": "BATCH13_OH_IDENTITY_RULE_20260928: User confirmed that the correct article for an ambiguous selling UPC is the candidate present in the OH report. Seafood_Master_Inventory_OH and sf-oh-091826-1230 lineage contain Article 3480186 with description COOKED PDTO SHRIMP RING WITH SAUCE and positive OH, matching POS UPC 7004121200 description COOKED PDTO SHRIMP RING WITH SAUCE 12/10OZ. Identity only; Selling UOM is not inferred by this OH rule.",
+    },
  ) + USER_CONFIRMED_UOM_REVIEW_20260926 + USER_CONFIRMED_UOM_REVIEW_20260927
 
 
