@@ -133,6 +133,36 @@ def _numeric_key(v: str | None) -> str | None:
     return k or '0'
 
 
+def _upca_check_digit(body11: str) -> str | None:
+    if not re.fullmatch(r'\d{11}', str(body11 or '')):
+        return None
+    digits=[int(x) for x in body11]
+    total=sum(digits[0::2])*3 + sum(digits[1::2])
+    return str((10-(total % 10)) % 10)
+
+
+def _upca_alias_candidates(raw: str | None) -> list[str]:
+    """Deterministic POS-short UPC-A candidates.
+
+    Only generates candidates; callers must require an exact authoritative hit.
+    - 11 digits may be UPC-A body missing its check digit.
+    - 10 digits may be a leading-zero UPC-A body missing its check digit.
+    Leading-zero-only variants are already handled by numeric equivalence.
+    """
+    s=str(raw or '').strip()
+    out=[]
+    if re.fullmatch(r'\d{11}',s):
+        cd=_upca_check_digit(s)
+        if cd is not None:
+            out.append(s+cd)
+    elif re.fullmatch(r'\d{10}',s):
+        body='0'+s
+        cd=_upca_check_digit(body)
+        if cd is not None:
+            out.append(body+cd)
+    return out
+
+
 def _num(v: Any) -> Decimal | None:
     if v is None:
         return None
@@ -227,7 +257,24 @@ def _find_upc_id(cur, ean: str | None) -> int | None:
         (key,),
     )
     r = cur.fetchone()
-    return int(r['upc_id']) if r else None
+    if r:
+        return int(r['upc_id'])
+
+    # Conservative UPC-A normalization: a generated check-digit candidate is
+    # accepted only when that exact canonical UPC already exists in selling_upc.
+    for candidate in _upca_alias_candidates(ean):
+        cur.execute(
+            """SELECT upc_id
+               FROM selling_upc
+               WHERE ean_upc=%s
+                 AND record_status='ACTIVE'
+               LIMIT 1""",
+            (candidate,),
+        )
+        hit=cur.fetchone()
+        if hit:
+            return int(hit['upc_id'])
+    return None
 
 
 def _upc_identity_ready(cur, ean: str | None) -> bool:
@@ -902,7 +949,16 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
                 continue
             article_id, family_id = _find_article(cur, article_num)
             upc_id = _find_upc_id(cur, ean)
-            obs_date = _date(p.get(c_date)) if c_date else (f.get('coverage_end_date') or f.get('filename_date_candidate'))
+            # ON_HAND is a point-in-time file snapshot. File-level report/filename
+            # date owns the entire snapshot; row-level Date is only a fallback and
+            # may represent another SAP business date rather than snapshot time.
+            obs_date = (
+                f.get('coverage_end_date')
+                or f.get('filename_date_candidate')
+                or (f.get('report_generated_at').date() if f.get('report_generated_at') else None)
+                or (_date(p.get(c_date)) if c_date else None)
+                or (f.get('upload_timestamp').date() if f.get('upload_timestamp') else None)
+            )
             uom = (_text(p.get(c_uom)) or '').upper() or None if c_uom else None
 
             if article_num and department_code:
