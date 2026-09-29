@@ -1498,6 +1498,21 @@ async function pollWebUpload(session){
       webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
     }
   }catch(e){
+    // A stale client session must never keep rendering a phantom batch. Reconcile
+    // against backend authority before retrying the old session.
+    try{
+      let astate=await api('/v1/web-upload/active',{cache:'no-store'});
+      let active=astate?.active_batch||null, latest=astate?.latest_batch||null;
+      let authoritativeKeys=new Set([active?.batch_key,latest?.batch_key].filter(Boolean).map(String));
+      if(!authoritativeKeys.has(String(session))){
+        if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
+        webUploadSession=null;
+        $('uploadMsg').textContent='Local batch status was stale. Reloaded authoritative server status.';
+        await loadWebUploadActive();
+        await loadWebUploadRecent();
+        return;
+      }
+    }catch(_reconcileErr){}
     $('uploadMsg').textContent='Status refresh failed · retrying… '+(e?.message||String(e));
     if(webUploadSession===session){
       webUploadPoll=setTimeout(()=>pollWebUpload(session),3000);
@@ -1505,15 +1520,21 @@ async function pollWebUpload(session){
   }
 }
 async function loadWebUploadActive(){
-  if(webUploadSession){pollWebUpload(webUploadSession);return}
   try{
+    // Backend authority wins over any client-side remembered session.
     let d=await api('/v1/web-upload/active',{cache:'no-store'}),a=d.active_batch,l=d.latest_batch;
     if(a?.batch_key){
+      if(String(webUploadSession||'')!==String(a.batch_key)){
+        if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
+      }
       webUploadSession=a.batch_key;
       pollWebUpload(a.batch_key);
       return;
     }
 
+    // No active backend batch means any locally remembered in-progress session
+    // is stale and must be discarded immediately.
+    if(webUploadPoll){clearTimeout(webUploadPoll);webUploadPoll=null}
     webUploadSession=null;
     if(l?.batch_key){
       // No active batch: keep section 2 populated with the latest batch's
