@@ -361,7 +361,6 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
         "already_has_current_uom": 0,
         "repaired_authoritative_prefix_lb": 0,
         "repaired_source_supported": 0,
-        "repaired_related_prefix_lb": 0,
         "held_historical_uom_conflict": 0,
         "held_no_safe_evidence": 0,
         "repaired": [],
@@ -422,35 +421,7 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
                 })
                 continue
 
-        # 2) User-confirmed internal seafood related-prefix rule.
-        #    Prefix alone does nothing: require a DIFFERENT eligible prefix
-        #    in the same confirmed family.
-        prefix_evidence = _related_prefix_evidence(cur, target)
-        if prefix_evidence:
-            conflict = _historical_uom_conflict(cur, upc_id, "LB")
-            if conflict:
-                result["held_historical_uom_conflict"] += 1
-                result["held_conflicts"].append({
-                    "upc": upc,
-                    "rule": prefix_evidence["rule"],
-                    "conflict": conflict,
-                })
-                continue
-            if _apply_uom(
-                cur,
-                upc_id,
-                "LB",
-                "USER_RULE_RELATED_SEAFOOD_PREFIX_LB_V716",
-            ):
-                result["repaired_related_prefix_lb"] += 1
-                result["repaired"].append({
-                    "upc": upc,
-                    "uom": "LB",
-                    "method": "USER_RULE_RELATED_SEAFOOD_PREFIX_LB_V716",
-                    "evidence": prefix_evidence,
-                })
-                continue
-
+        # Non-prefix UPCs require explicit Article Manual/user evidence.
         result["held_no_safe_evidence"] += 1
 
     return result
