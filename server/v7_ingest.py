@@ -7,7 +7,7 @@ from db import db_conn
 from ingest import parse_file, RAW_TABLE_BY_SOURCE, _excel_col, _jsonable, _cell_text
 
 API_PIPELINE='FULLMYSQL_SECURE_API'
-API_VERSION='7.0.159-single-service'
+API_VERSION='7.0.160-single-service'
 ACTIVE_UPLOAD='API_UPLOADING'
 
 
@@ -37,7 +37,13 @@ def find_active_batch() -> dict[str,Any]|None:
         cur.execute("""
             SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,ib.upload_started_at,ib.completed_at,ib.notes
             FROM ingest_batch ib
-            WHERE ib.processing_status='API_UPLOADING'
+            WHERE ib.processing_status IN (
+                      'API_UPLOADING',
+                      'INGESTED_PENDING_QA',
+                      'RAW_RELEASED',
+                      'RELEASED',
+                      'PHASE2C_READY'
+                  )
                OR EXISTS (
                     SELECT 1 FROM pipeline_run pr
                     WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
