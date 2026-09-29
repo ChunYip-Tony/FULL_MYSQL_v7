@@ -343,7 +343,6 @@ def session_status(session_id: str) -> dict[str,Any]:
     rebuild_active=bool(
         p3
         and latest_stage_name=='PHASE3_RERUN'
-        and rebuild_newer_than_result
         and run_status in {'QUEUED','STARTED','PAUSE_REQUESTED'}
     )
     rebuild_failed=bool(
