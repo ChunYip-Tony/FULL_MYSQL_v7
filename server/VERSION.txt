@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.169 Single-Service Edition
+Version: 7.0.170 Single-Service Edition
+
+
+v7.0.170 Upload QA Breakdown:
+- Adds same-origin browser QA summary endpoint for completed upload batches.
+- PHASE3_QA_HOLD recent-batch cards now show batch-level blocker counts/types, Product Identity Guard status, Seafood Analysis Layer gate status, Quick Check HOLD reason counts, and sample HOLD UPCs.
+- HOLD reason lookup is batch-bound to quick_check_current.publish_batch_id when available, with batch QA issue fallback for historical snapshots.
+- Phase 3 QA_HOLD/FAIL rows are rendered with an error tone instead of appearing successful.
 
 
 v7.0.169 Analysis SQL + Mobile Status Synchronization:
