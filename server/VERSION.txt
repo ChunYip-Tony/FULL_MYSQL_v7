@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.175 Single-Service Edition
+Version: 7.0.176 Single-Service Edition
+
+
+v7.0.176 Deploy Import Hotfix:
+- Fixes App Platform startup failure caused by uom_evidence_diagnostic importing removed symbol RELATED_LB_PREFIXES from active_28d_uom_repair.
+- UOM diagnostics now use the current authoritative Seafood prefix rule directly and mirror the v7.0.175 repair semantics.
+- Docker build now performs both compileall and an API import smoke test with a dummy runtime token, catching import-time failures before deployment health checks.
+- Adds a GitHub Python smoke workflow for dependency install, compileall, API import, worker import, and Phase 3 module import.
 
 
 v7.0.175 OH/UOM False-HOLD Repair:
