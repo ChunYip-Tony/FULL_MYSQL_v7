@@ -653,6 +653,24 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         heartbeat.join(timeout=2)
         _write_runtime_health('IDLE')
 
+def _pending_pipeline_work() -> bool:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE pipeline_name=%s
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')""",
+                (API_PIPELINE,),
+            )
+            row=cur.fetchone() or {}
+            return int(row.get('c') or 0) > 0
+        finally:
+            cur.close()
+
+
 def _recover_chatgpt_bridge_on_startup() -> None:
     """Best-effort recovery for an interrupted ChatGPT Sheet publish.
 
@@ -702,11 +720,24 @@ def _recover_chatgpt_bridge_on_startup() -> None:
 def main():
     _write_runtime_health('STARTING')
     db=test_database(); print('FULL MYSQL v7 worker DB:',db,flush=True)
-    _recover_chatgpt_bridge_on_startup()
+
+    # Start the runtime heartbeat BEFORE any best-effort startup repair. This
+    # prevents a slow external ChatGPT-sheet publish from making the worker
+    # look dead during deployment.
     runtime_stop=threading.Event()
     runtime_thread=threading.Thread(target=_runtime_heartbeat_loop,args=(runtime_stop,),daemon=True)
     runtime_thread.start()
     try:
+        if _pending_pipeline_work():
+            print(
+                'ChatGPT bridge startup recovery skipped: pipeline work is pending',
+                flush=True,
+            )
+        else:
+            _write_runtime_health('STARTUP_RECOVERY')
+            _recover_chatgpt_bridge_on_startup()
+
+        _write_runtime_health('IDLE')
         while True:
             try:
                 job=claim_job()
