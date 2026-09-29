@@ -7,12 +7,13 @@ from ingest import audit_batch, release_batch
 from normalize import normalize_batch, audit_phase2c
 from phase3 import process_phase3, audit_phase3
 from v7_ingest import API_PIPELINE, API_VERSION
-from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, bridge_required
+from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, enqueue_chatgpt_publish
 
 POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
 STALE_STARTED_SECONDS=max(90,int(os.environ.get('FULLMYSQL_WORKER_STALE_STARTED_SECONDS','180')))
 VERSION_MISMATCH_GRACE_SECONDS=max(30,int(os.environ.get('FULLMYSQL_WORKER_VERSION_MISMATCH_GRACE_SECONDS','45')))
+BRIDGE_STAGE='CHATGPT_SHEET_PUBLISH'
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
 RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
 _RUNTIME_LOCK=threading.Lock()
@@ -188,6 +189,25 @@ def _enqueue_current_version_replacement(cur,batch_id:int,stage_name:str,old_run
     return int(cur.lastrowid)
 
 
+def _phase3_result_publishable(cur,batch_id:int) -> bool:
+    cur.execute(
+        """SELECT ib.processing_status AS batch_status,
+                  p3.result_status,p3.blocking_issue_count
+           FROM ingest_batch ib
+           LEFT JOIN phase3_batch_result p3 ON p3.batch_id=ib.batch_id
+           WHERE ib.batch_id=%s
+           LIMIT 1""",
+        (batch_id,),
+    )
+    row=cur.fetchone() or {}
+    allowed={'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}
+    return (
+        str(row.get('batch_status') or '').upper() in allowed
+        and str(row.get('result_status') or '').upper() in allowed
+        and int(row.get('blocking_issue_count') or 0)==0
+    )
+
+
 def _recover_stale_started(cur) -> int:
     # Version is a lease boundary. A newer worker must never steal a run that
     # still has a fresh heartbeat from an older deployment. Once that heartbeat
@@ -221,6 +241,48 @@ def _recover_stale_started(cur) -> int:
         run_id=int(row['pipeline_run_id'])
         bid=int(row['batch_id'])
         stage_name=str(row['stage_name'])
+
+        last_stage=str(detail.get('phase3_stage') or detail.get('last_phase3_stage') or '')
+        if (
+            version_mismatch
+            and stage_name in {'POST_RAW_PIPELINE','PHASE3_RERUN'}
+            and last_stage.startswith('CHATGPT_SHEET_')
+            and _phase3_result_publishable(cur,bid)
+        ):
+            recovery_detail={
+                **detail,
+                'bridge_decoupled_recovery':True,
+                'recovered_at':datetime.now(timezone.utc).isoformat(),
+                'recovery_reason':'PHASE3_ALREADY_COMMITTED_BRIDGE_DECOUPLED',
+                'previous_processing_status':previous_status,
+                'previous_code_version':previous_version,
+                'required_code_version':API_VERSION,
+                'recovered_by_code_version':API_VERSION,
+                'last_phase3_stage':last_stage,
+            }
+            cur.execute(
+                """UPDATE pipeline_run
+                   SET processing_status='COMPLETED',
+                       completed_at=CURRENT_TIMESTAMP(6),
+                       error_count=0,
+                       detail_json=%s
+                   WHERE pipeline_run_id=%s
+                     AND processing_status=%s
+                     AND code_version=%s""",
+                (
+                    json.dumps(recovery_detail,ensure_ascii=False,default=str),
+                    run_id,
+                    previous_status,
+                    previous_version,
+                ),
+            )
+            if int(cur.rowcount or 0):
+                if bridge_enabled():
+                    _enqueue_current_version_replacement(
+                        cur,bid,BRIDGE_STAGE,run_id,'PHASE3_COMMITTED_BRIDGE_ASYNC_RECOVERY'
+                    )
+                recovered += 1
+            continue
 
         if version_mismatch:
             recovery_detail={
@@ -544,18 +606,177 @@ def finish(run_id:int,status:str,detail:dict,error_count:int=0):
         cur.close()
 
 
-def _publish_chatgpt_bridge(batch_id:int, detail:dict, progress) -> bool:
+def _queue_chatgpt_bridge_async(batch_id:int, source_run_id:int, reason:str) -> dict:
     if not bridge_enabled():
-        detail['chatgpt_sheet_bridge']={'status':'DISABLED'}
-        return True
-    progress('CHATGPT_SHEET_PUBLISH')
-    result=publish_chatgpt_snapshot(batch_id)
-    detail['chatgpt_sheet_bridge']=result
-    if result.get('status')=='PASS':
-        progress('CHATGPT_SHEET_READBACK_PASS')
-        return True
-    progress('CHATGPT_SHEET_READBACK_FAILED', result)
-    return not bridge_required()
+        return {'status':'DISABLED','batch_id':batch_id,'async_nonblocking':True}
+    try:
+        result=enqueue_chatgpt_publish(
+            batch_id,
+            pipeline_name=API_PIPELINE,
+            code_version=API_VERSION,
+            requested_by='FULL_MYSQL_WORKER',
+            source_pipeline_run_id=source_run_id,
+            reason=reason,
+        )
+        return {**result,'async_nonblocking':True}
+    except Exception as exc:
+        # Sheet publishing is secondary. Never fail or hold a committed MySQL
+        # Quick Check snapshot because the external queue could not be written.
+        return {
+            'status':'QUEUE_FAILED',
+            'batch_id':batch_id,
+            'async_nonblocking':True,
+            'error':repr(exc),
+        }
+
+
+def claim_bridge_job():
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True, buffered=True)
+        lock_acquired=False
+        try:
+            cur.execute("SELECT GET_LOCK('fullmysql_v7_bridge_worker',0) ok")
+            lock_row=cur.fetchone() or {}
+            lock_acquired=int(lock_row.get('ok') or 0)==1
+            if not lock_acquired:
+                return None
+
+            _recover_stale_started(cur)
+            _supersede_incompatible_queued(cur)
+            conn.commit()
+
+            cur.execute(
+                """SELECT COUNT(*) AS c
+                   FROM pipeline_run
+                   WHERE pipeline_name=%s
+                     AND stage_name=%s
+                     AND processing_status IN ('STARTED','PAUSE_REQUESTED')
+                     AND code_version=%s""",
+                (API_PIPELINE,BRIDGE_STAGE,API_VERSION),
+            )
+            if int((cur.fetchone() or {}).get('c') or 0)>0:
+                return None
+
+            cur.execute(
+                """SELECT MIN(pipeline_run_id) AS pipeline_run_id
+                   FROM pipeline_run
+                   WHERE pipeline_name=%s
+                     AND stage_name=%s
+                     AND processing_status='QUEUED'
+                     AND code_version=%s""",
+                (API_PIPELINE,BRIDGE_STAGE,API_VERSION),
+            )
+            queued_id=(cur.fetchone() or {}).get('pipeline_run_id')
+            if queued_id is None:
+                return None
+
+            cur.execute(
+                """SELECT pipeline_run_id,batch_id,code_version
+                   FROM pipeline_run
+                   WHERE pipeline_run_id=%s
+                     AND stage_name=%s
+                     AND processing_status='QUEUED'
+                     AND code_version=%s
+                   FOR UPDATE""",
+                (queued_id,BRIDGE_STAGE,API_VERSION),
+            )
+            row=cur.fetchone()
+            if not row:
+                return None
+
+            cur.execute(
+                """UPDATE pipeline_run
+                   SET processing_status='STARTED',
+                       started_at=CURRENT_TIMESTAMP(6),
+                       completed_at=NULL,
+                       error_count=0,
+                       detail_json=JSON_MERGE_PATCH(
+                           COALESCE(detail_json,JSON_OBJECT()),%s
+                       )
+                   WHERE pipeline_run_id=%s
+                     AND processing_status='QUEUED'
+                     AND code_version=%s""",
+                (
+                    json.dumps({
+                        'worker':WORKER,
+                        'heartbeat_at':datetime.utcnow().isoformat()+'Z',
+                        'heartbeat_epoch':int(time.time()),
+                        'bridge_stage':'CLAIMED',
+                        'claimed_by_code_version':API_VERSION,
+                        'async_nonblocking':True,
+                    }),
+                    row['pipeline_run_id'],
+                    API_VERSION,
+                ),
+            )
+            if int(cur.rowcount or 0)!=1:
+                conn.rollback()
+                return None
+            conn.commit()
+            return int(row['pipeline_run_id']),int(row['batch_id'])
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            if lock_acquired:
+                try:
+                    cur.execute("SELECT RELEASE_LOCK('fullmysql_v7_bridge_worker') released")
+                    cur.fetchone()
+                except Exception:
+                    pass
+            try:
+                cur.close()
+            except Exception:
+                pass
+
+
+def process_bridge_job(run_id:int,batch_id:int) -> None:
+    detail={
+        'worker':WORKER,
+        'batch_id':batch_id,
+        'stage_name':BRIDGE_STAGE,
+        'started_at':datetime.utcnow().isoformat()+'Z',
+        'async_nonblocking':True,
+    }
+    stop_event=threading.Event()
+    heartbeat=threading.Thread(target=_heartbeat_loop,args=(run_id,stop_event),daemon=True)
+    heartbeat.start()
+    try:
+        _assert_run_claim_valid(run_id)
+        _touch_run(run_id,stage='CHATGPT_SHEET_PUBLISH_ASYNC')
+        result=publish_chatgpt_snapshot(batch_id)
+        detail['publish_result']=result
+        if str(result.get('status') or '').upper() in {'PASS','DISABLED'}:
+            finish(run_id,'COMPLETED',detail,0)
+        else:
+            detail['error']='CHATGPT_SHEET_PUBLISH_FAILED'
+            finish(run_id,'FAILED',detail,1)
+    except RunClaimInvalid:
+        return
+    except Exception as exc:
+        detail['error']=repr(exc)
+        detail['traceback']=traceback.format_exc()
+        finish(run_id,'FAILED',detail,1)
+    finally:
+        stop_event.set()
+        heartbeat.join(timeout=2)
+
+
+def _bridge_worker_loop(stop_event:threading.Event) -> None:
+    while not stop_event.is_set():
+        try:
+            job=claim_bridge_job()
+        except Exception as exc:
+            print('Bridge worker claim error:',repr(exc),flush=True)
+            stop_event.wait(max(2,POLL))
+            continue
+        if job:
+            print('Processing async ChatGPT Sheet publish',job,flush=True)
+            process_bridge_job(*job)
+        else:
+            stop_event.wait(max(2,POLL))
+
+
 
 def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     detail={'worker':WORKER,'batch_id':batch_id,'stage_name':stage_name,'started_at':datetime.utcnow().isoformat()+'Z'}
@@ -588,9 +809,9 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
             if not a3['pass']:
                 finish(run_id,'QA_HOLD',detail,len(a3.get('blocking_issues',[])))
                 return
-            if not _publish_chatgpt_bridge(batch_id,detail,progress):
-                finish(run_id,'FAILED',detail,1)
-                return
+            detail['chatgpt_sheet_bridge']=_queue_chatgpt_bridge_async(
+                batch_id,run_id,'PHASE3_RERUN_COMPLETED'
+            )
             finish(run_id,'COMPLETED',detail,0)
             return
 
@@ -623,8 +844,9 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         a3=audit_phase3(batch_id); detail['phase3']=p3; detail['phase3_audit']=a3
         if not a3['pass']:
             finish(run_id,'QA_HOLD',detail,len(a3.get('blocking_issues',[]))); return
-        if not _publish_chatgpt_bridge(batch_id,detail,progress):
-            finish(run_id,'FAILED',detail,1); return
+        detail['chatgpt_sheet_bridge']=_queue_chatgpt_bridge_async(
+            batch_id,run_id,'POST_RAW_PIPELINE_COMPLETED'
+        )
         finish(run_id,'COMPLETED',detail,0)
     except RunClaimInvalid as exc:
         detail['superseded']=True
@@ -705,9 +927,16 @@ def _recover_chatgpt_bridge_on_startup() -> None:
                 flush=True,
             )
             return
-        result=publish_chatgpt_snapshot(max_batch)
+        result=enqueue_chatgpt_publish(
+            max_batch,
+            pipeline_name=API_PIPELINE,
+            code_version=API_VERSION,
+            requested_by='WORKER_STARTUP_RECOVERY',
+            source_pipeline_run_id=None,
+            reason='STARTUP_BRIDGE_RECOVERY',
+        )
         print(
-            'ChatGPT bridge startup recovery:',
+            'ChatGPT bridge startup recovery queued:',
             json.dumps(result,ensure_ascii=False,default=str),
             flush=True,
         )
@@ -727,16 +956,12 @@ def main():
     runtime_stop=threading.Event()
     runtime_thread=threading.Thread(target=_runtime_heartbeat_loop,args=(runtime_stop,),daemon=True)
     runtime_thread.start()
+    bridge_stop=threading.Event()
+    bridge_thread=threading.Thread(target=_bridge_worker_loop,args=(bridge_stop,),daemon=True)
+    bridge_thread.start()
     try:
-        if _pending_pipeline_work():
-            print(
-                'ChatGPT bridge startup recovery skipped: pipeline work is pending',
-                flush=True,
-            )
-        else:
-            _write_runtime_health('STARTUP_RECOVERY')
-            _recover_chatgpt_bridge_on_startup()
-
+        _write_runtime_health('STARTUP_RECOVERY')
+        _recover_chatgpt_bridge_on_startup()
         _write_runtime_health('IDLE')
         while True:
             try:
@@ -755,6 +980,8 @@ def main():
                 _write_runtime_health('IDLE')
                 time.sleep(max(2,POLL))
     finally:
+        bridge_stop.set()
+        bridge_thread.join(timeout=2)
         runtime_stop.set()
         runtime_thread.join(timeout=2)
         _write_runtime_health('STOPPED')
