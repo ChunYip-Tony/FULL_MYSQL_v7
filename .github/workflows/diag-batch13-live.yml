@@ -63,3 +63,7 @@ jobs:
           echo "=== QA DETAIL ==="
           curl -fsS --max-time 30 "$base/v1/web-upload/batches/13/qa-summary"
           echo
+
+          echo "=== COVERAGE DIAGNOSTIC ==="
+          curl -sS --max-time 30 -w "\nHTTP_STATUS=%{http_code}\n" "$base/v1/diagnostics/coverage-backfill?batch_id=13"
+          echo
