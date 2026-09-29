@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.183 Single-Service Edition
+Version: 7.0.197 Single-Service Edition
+
+v7.0.197 Retryable Web Upload Repair:
+- Stops auto-aborting a newly created web upload batch when an individual file upload or parser request fails before commit.
+- Keeps the API_UPLOADING session open so the same selected MVT file can be retried without creating a new batch.
+- Reuses the existing open web-upload session on retry; add_file SHA idempotency prevents already accepted files from duplicating.
+- Preserves the exact failing filename and API error in the Upload message.
+- Existing POS / Price List history remains in MySQL and is not required in the later MVT batch.
+- Aligns Upload UI/runtime version display to 7.0.197.
 
 
 v7.0.183 Service/Fried UPC Sales Lineage Repair:
