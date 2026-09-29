@@ -1,5 +1,12 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.197 Single-Service Edition
+Version: 7.0.198 Single-Service Edition
+
+v7.0.198 MVT Upload Performance + Visibility:
+- Replaces one-row-at-a-time RAW persistence with chunked executemany inserts (default 1,000 rows per batch) to reduce remote MySQL round trips during large MVT uploads.
+- Keeps the exact RAW row payload, row hash, source row number, posting date, and provenance semantics unchanged.
+- Web Upload now shows the selected file as PROCESSING immediately while the server parses the workbook and writes RAW rows, instead of misleadingly showing Files=0 with no explanation.
+- Upload retry behavior from v7.0.197 remains unchanged: file/API failures keep the batch open in API_UPLOADING for retry instead of auto-aborting.
+- Aligns UI/runtime version display to 7.0.198.
 
 v7.0.197 Retryable Web Upload Repair:
 - Stops auto-aborting a newly created web upload batch when an individual file upload or parser request fails before commit.
