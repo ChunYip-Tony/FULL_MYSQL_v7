@@ -202,6 +202,16 @@ body.detail-open .top{display:none}
 .qc-order-grid{display:grid;grid-template-columns:1fr 1fr;gap:0}.qc-order-cell{padding:7px 7px;border-right:1px solid rgba(68,115,141,.15);border-bottom:1px solid rgba(68,115,141,.15);min-height:55px}.qc-order-cell:nth-child(2n){border-right:0}.qc-order-cell:nth-child(n+3){border-bottom:0}.qc-order-cell .k{font-size:10px;color:#3f6079}.qc-order-cell .v{font-size:13px;font-weight:950;margin-top:2px}.qc-order-open{border:0;background:transparent;color:#0b66a2;min-height:24px;padding:2px 0;font-size:10px;text-align:left}
 .qc-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px 0}.qc-section-title{font-size:15px;font-weight:950;display:flex;gap:6px;align-items:center}.qc-legend{display:flex;gap:9px;font-size:9px;color:#31556d;align-items:center}.qc-legend i{display:inline-block;vertical-align:middle;margin-right:3px}.qc-legend .gp{width:18px;height:5px;background:#154a9f;border-radius:4px}.qc-legend .pr{width:18px;height:4px;background:#f27c1a;border-radius:4px}
 .qc-chart-scroll{overflow-x:auto;overflow-y:hidden;padding:0 5px 5px}.qc-chart{display:block;height:235px;min-width:760px;width:760px;background:transparent}
+.qc-sales14-wrap{padding:0 10px 10px}
+.qc-sales14-open{width:100%;min-height:38px;border:1px solid rgba(30,103,145,.24);border-radius:9px;background:rgba(227,243,249,.66);color:#0b5f95;font-size:11px;font-weight:900;text-align:center}
+.qc-sales14-open.open{background:#d9edf6}
+.qc-sales14-panel{margin-top:8px;border:1px solid rgba(72,122,149,.20);border-radius:10px;overflow:hidden;background:rgba(255,255,255,.72)}
+.qc-sales14-table{width:100%;border-collapse:collapse;font-size:9px}
+.qc-sales14-table th,.qc-sales14-table td{padding:6px 5px;border-bottom:1px solid rgba(77,120,144,.14);text-align:right;white-space:nowrap}
+.qc-sales14-table th:first-child,.qc-sales14-table td:first-child{text-align:left}
+.qc-sales14-table th{background:rgba(209,233,243,.66);color:#244c66;font-size:8px;text-transform:uppercase;letter-spacing:.02em}
+.qc-sales14-table tr:last-child td{border-bottom:0}
+.qc-sales14-note{padding:7px 8px;font-size:8.5px;color:#557080;background:rgba(238,248,251,.72)}
 .qc-family-head{display:flex;align-items:center;justify-content:space-between;padding:9px 10px 4px}.qc-viewall{border:0;background:transparent;color:#154f77;min-height:28px;padding:2px 0;font-size:10px;box-shadow:none}.qc-family-table{width:100%;font-size:9.5px}.qc-family-table th,.qc-family-table td{padding:5px 6px;border-bottom:1px solid rgba(76,121,146,.17)}.qc-family-table th{background:rgba(196,225,237,.44);color:#244a64}.qc-rel{display:inline-flex;padding:2px 7px;border-radius:999px;background:#d5ebfb;color:#164d73;font-size:9px;white-space:nowrap}.qc-rel.same{background:#e4edf3}.qc-rel.related{background:#fae7c8}
 .qc-highlights{padding:8px 10px}.qc-highlights-head{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:950}.qc-count{background:#f7a623;color:#182535;border-radius:999px;padding:2px 7px;font-size:9px}.qc-alert{display:grid;grid-template-columns:22px 1fr 16px;gap:5px;align-items:center;padding:6px 0;border-top:1px solid rgba(75,119,145,.18);font-size:10.5px}.qc-alert:first-of-type{margin-top:5px}.qc-alert-ico{font-size:14px}.qc-chevron{font-size:18px;color:#164e72}
 .qc-inline-msg{font-size:9px;color:#49687a;margin-top:5px}
@@ -678,6 +688,10 @@ body{
     <div class="qc-card">
       <div class="qc-section-head"><div class="qc-section-title">📊 Sales Trend <span class="small">(Last 28 Days)</span></div><div class="qc-legend"><span><i class="gp"></i>GP$</span><span><i class="pr"></i>Avg Selling Price</span></div></div>
       <div class="qc-chart-scroll"><canvas id="qcChart" class="qc-chart"></canvas></div>
+      <div class="qc-sales14-wrap">
+        <button id="qcSales14Open" class="qc-sales14-open" type="button">View Past 14D Sales Performance ▾</button>
+        <div id="qcSales14Panel" class="qc-sales14-panel hide"></div>
+      </div>
     </div>
     <div class="qc-card">
       <div class="qc-family-head"><div class="qc-section-title">👥 Family / Ordering Article / Related UPC</div><button id="qcFamilyView" class="qc-viewall">View All ›</button></div>
@@ -1625,6 +1639,11 @@ async function upc(u,b='core'){try{
   ].join('');
 
   quickChart(p.price_vs_sales_trend?.rows||[]);
+  $('qcSales14Panel').classList.add('hide');
+  $('qcSales14Panel').innerHTML='';
+  $('qcSales14Panel').dataset.loadedUpc='';
+  $('qcSales14Open').classList.remove('open');
+  $('qcSales14Open').textContent='View Past 14D Sales Performance ▾';
 
   let related=q.related_upcs||[];
   $('qcFamilyRows').innerHTML=related.slice(0,4).map(r=>{
@@ -1639,6 +1658,7 @@ async function upc(u,b='core'){try{
   $('qcHighlightsCard').classList.toggle('hide',highs.length===0);
 
   $('qcPriceOpen').onclick=()=>price(d.upc);
+  $('qcSales14Open').onclick=()=>toggleQc14Sales(d.upc,uom,$('qcSales14Open'));
   $('qcOrderOpen').onclick=()=>corder(d.upc);
   $('qcFamilyView').onclick=()=>family(d.family_article_number);
   $('qcTrueUpdate').onclick=()=>submitQcTrueStock(d.upc,q.true_stock_input?.required_uom||invUom||uom);
@@ -1706,6 +1726,49 @@ async function submitQcTrueStock(upc,uom){
     ohLoaded=false;$('qcTrueMsg').textContent='Saved. Refreshing current OH…';await upc(upc,uback)
   }catch(e){$('qcTrueMsg').textContent=e.message}
 }
+function renderQc14Sales(rows,uom){
+  let a=(rows||[]).slice().reverse();
+  if(!a.length)return '<div class="qc-sales14-note">No supported sales history in the past 14 days.</div>';
+  return '<div class="scroll"><table class="qc-sales14-table"><thead><tr>'+
+    '<th>Date</th><th>Qty Sold</th><th>Sales</th><th>Avg Price</th><th>GP$</th><th>Price Type</th>'+
+    '</tr></thead><tbody>'+
+    a.map(x=>'<tr>'+
+      '<td><b>'+esc(dayName(x.date))+'</b><br>'+esc(x.date||'—')+'</td>'+
+      '<td>'+qv(x.sold_quantity,x.qty_uom||uom)+'</td>'+
+      '<td>'+money(x.sales_amount)+'</td>'+
+      '<td>'+esc(priceText(x.avg_sold_price,uom))+'</td>'+
+      '<td>'+money(x.gp_dollars)+'</td>'+
+      '<td>'+esc(((x.price_types||[]).map(p=>p.price_type).filter(Boolean).join(', '))||'—')+'</td>'+
+    '</tr>').join('')+
+    '</tbody></table></div>'+
+    '<div class="qc-sales14-note">Past 14D sales performance uses supported completed sales history. Missing unsupported dates are not treated as zero.</div>';
+}
+
+async function toggleQc14Sales(upc,uom,button){
+  let panel=$('qcSales14Panel');
+  if(!panel)return;
+  if(!panel.classList.contains('hide')){
+    panel.classList.add('hide');
+    button?.classList.remove('open');
+    if(button)button.textContent='View Past 14D Sales Performance ▾';
+    return;
+  }
+  panel.classList.remove('hide');
+  button?.classList.add('open');
+  if(button)button.textContent='Hide Past 14D Sales Performance ▴';
+  if(panel.dataset.loadedUpc===String(upc))return;
+  panel.innerHTML='<div class="qc-sales14-note">Loading past 14D sales performance…</div>';
+  try{
+    let d=await api('/v1/app/v2/upc/'+encodeURIComponent(upc)+'/price?trend_supported_days=14');
+    let resolvedUom=d.qty_uom||d.selling_uom||uom||'UOM UNKNOWN';
+    panel.innerHTML=renderQc14Sales(d.sales_history_14d?.rows||[],resolvedUom);
+    panel.dataset.loadedUpc=String(upc);
+  }catch(e){
+    panel.innerHTML='<div class="qc-sales14-note" style="color:#b3262e">14D sales history failed: '+esc(e?.message||String(e))+'</div>';
+    panel.dataset.loadedUpc='';
+  }
+}
+
 function quickChart(rows){
   let c=$('qcChart'),ctx=c.getContext('2d'),R=devicePixelRatio||1,w=760,h=235;
   c.width=w*R;c.height=h*R;ctx.setTransform(R,0,0,R,0,0);ctx.clearRect(0,0,w,h);
