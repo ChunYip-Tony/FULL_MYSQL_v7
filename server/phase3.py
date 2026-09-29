@@ -2694,15 +2694,6 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
 
             late_identity = resolve_late_identity_issues(cur, batch_id)
             unmapped_activity = classify_unmapped_sales_activity_scope(cur, batch_id)
-            current_active_unmapped_guard = rebuild_current_active_unmapped_sales_guard(
-                cur,
-                batch_id,
-            )
-
-            # Explicit temporary waivers are applied only after active/historical
-            # classification so a rerun cannot silently restore them to HIGH.
-            # Identity remains unresolved and Quick Check remains unavailable.
-            temporary_qa_waivers = apply_temporary_identity_waivers(cur, batch_id)
 
             # FINAL USER-AUTHORITY LOCK (v7.0.25): automatic identity/UOM repair runs above.
             # Reapply confirmed overrides and retirements after every automatic repair so a
@@ -2721,6 +2712,18 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     'One or more confirmed family subarticles failed final authority lock: '
                     + str(family_subarticle_result_final.get('held'))
                 )
+
+            # Current sold-but-unmapped readiness is GLOBAL current state, not
+            # source-batch state. Evaluate only after the final user-authority
+            # lock so confirmed mappings/retirements are the last identity writer.
+            current_active_unmapped_guard = rebuild_current_active_unmapped_sales_guard(
+                cur,
+                batch_id,
+            )
+
+            # Explicit temporary waivers, when configured, apply to the newly
+            # recomputed current-state blocker rather than stale source-batch QA.
+            temporary_qa_waivers = apply_temporary_identity_waivers(cur, batch_id)
 
             # v7.0.30 fail-closed product-identity publish guard.
             # Candidate serving rows are built under a SAVEPOINT. A GLOBAL
