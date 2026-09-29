@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from db import db_conn
+from movement_coverage_rules import movement_daily_close_filename_evidence
 
 RAW_TABLE_BY_SOURCE = {
     "movement": "raw_movement",
