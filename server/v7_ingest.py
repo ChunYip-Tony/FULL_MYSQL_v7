@@ -10,6 +10,7 @@ from version import VERSION as API_VERSION
 API_PIPELINE='FULLMYSQL_SECURE_API'
 ACTIVE_UPLOAD='API_UPLOADING'
 STATUS_HEARTBEAT_FRESH_SECONDS=max(30,min(120,int(os.environ.get('FULLMYSQL_STATUS_HEARTBEAT_FRESH_SECONDS','45'))))
+RAW_INSERT_CHUNK_SIZE=max(100,min(5000,int(os.environ.get('FULLMYSQL_RAW_INSERT_CHUNK_SIZE','1000'))))
 
 
 def _json_dump(v):
@@ -154,14 +155,27 @@ def add_file(session_id: str, device_id: str, filename: str, data: bytes) -> dic
                         VALUES (%s,%s,%s,%s,%s,NULL,NULL,%s)""",
                         (sheet_id,c,_excel_col(c),header,header.strip().lower() if header else None,_json_dump(samples)))
                 if duplicate_of is not None: continue
+                raw_insert_sql=f"""INSERT INTO {raw_table}
+                    (batch_id,file_id,sheet_id,source_row_number,source_row_kind,observed_business_date,observed_date_role,raw_payload,raw_text,row_sha256)
+                    VALUES (%s,%s,%s,%s,'UNKNOWN',%s,%s,%s,%s,%s)"""
+                raw_batch=[]
                 for row_no,row in enumerate(sh.rows,1):
-                    payload={_excel_col(i+1):_jsonable(v) for i,v in enumerate(row)}; raw_text='\t'.join(_cell_text(v) for v in row)
-                    row_hash=hashlib.sha256(raw_text.encode('utf-8',errors='replace')).hexdigest(); observed_date=sh.row_dates.get(row_no)
+                    payload={_excel_col(i+1):_jsonable(v) for i,v in enumerate(row)}
+                    raw_text='\t'.join(_cell_text(v) for v in row)
+                    row_hash=hashlib.sha256(raw_text.encode('utf-8',errors='replace')).hexdigest()
+                    observed_date=sh.row_dates.get(row_no)
                     observed_role='POSTING_DATE' if observed_date and p.source_type=='movement' else None
-                    cur.execute(f"""INSERT INTO {raw_table}
-                        (batch_id,file_id,sheet_id,source_row_number,source_row_kind,observed_business_date,observed_date_role,raw_payload,raw_text,row_sha256)
-                        VALUES (%s,%s,%s,%s,'UNKNOWN',%s,%s,%s,%s,%s)""",
-                        (batch_id,file_id,sheet_id,row_no,observed_date,observed_role,_json_dump(payload),raw_text,row_hash)); raw_count+=1
+                    raw_batch.append((
+                        batch_id,file_id,sheet_id,row_no,observed_date,observed_role,
+                        _json_dump(payload),raw_text,row_hash,
+                    ))
+                    if len(raw_batch)>=RAW_INSERT_CHUNK_SIZE:
+                        cur.executemany(raw_insert_sql,raw_batch)
+                        raw_count+=len(raw_batch)
+                        raw_batch.clear()
+                if raw_batch:
+                    cur.executemany(raw_insert_sql,raw_batch)
+                    raw_count+=len(raw_batch)
             status='QA_HOLD' if p.source_type=='unclassified' else 'INGESTED'; err_count=1 if p.source_type=='unclassified' else 0
             cur.execute("UPDATE ingest_file SET source_row_count=%s,processing_status=%s,error_count=%s,completed_at=CURRENT_TIMESTAMP(6) WHERE file_id=%s",
                         (raw_count,status,err_count,file_id))
