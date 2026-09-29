@@ -1,4 +1,4 @@
-Batch 13 ChatGPT republish trigger for v7.0.189
-source_merge=cce6175ae732cd8b1c16d493c091ac944141a774
-attempt=7
-reason=worker_startup_recovery_fix_and_version_fenced_batch13_rebuild
+Batch 13 ChatGPT republish trigger for v7.0.190
+source_merge=2f1b14d1dcceb6b7e541968c8e11fcff43a824ac
+attempt=8
+reason=decouple_phase3_from_async_chatgpt_sheet_publish
