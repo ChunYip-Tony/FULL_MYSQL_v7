@@ -359,11 +359,13 @@ def _publish_chatgpt_bridge(batch_id:int, detail:dict, progress) -> bool:
 
 def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     detail={'worker':WORKER,'batch_id':batch_id,'stage_name':stage_name,'started_at':datetime.utcnow().isoformat()+'Z'}
+    last_progress_stage={'value':'STARTING'}
     stop_event=threading.Event()
     heartbeat=threading.Thread(target=_heartbeat_loop,args=(run_id,stop_event),daemon=True)
     heartbeat.start()
 
     def progress(stage:str, payload:dict|None=None):
+        last_progress_stage['value']=stage
         if _run_pause_requested(run_id):
             _write_runtime_health('PAUSING',run_id,stage)
             raise Phase3PauseRequested(stage)
@@ -433,7 +435,11 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
         finish(run_id,'PAUSED',detail,0)
         _write_runtime_health('PAUSED',run_id,exc.stage)
     except Exception as exc:
-        detail['error']=repr(exc); detail['traceback']=traceback.format_exc(); finish(run_id,'FAILED',detail,1)
+        detail['failure_stage']=last_progress_stage.get('value')
+        detail['last_phase3_stage']=last_progress_stage.get('value')
+        detail['error']=repr(exc)
+        detail['traceback']=traceback.format_exc()
+        finish(run_id,'FAILED',detail,1)
     finally:
         stop_event.set()
         heartbeat.join(timeout=2)
