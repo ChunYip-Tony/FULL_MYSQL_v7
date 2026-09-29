@@ -395,16 +395,23 @@ def healthz():
     except Exception:
         worker_age=None
     worker_version=str(worker_payload.get('code_version') or '')
+    worker_state=str(worker_payload.get('state') or '')
     worker_healthy=bool(
         worker_age is not None
         and worker_age <= 30
         and worker_version == VERSION
     )
+    worker_ready=bool(
+        worker_healthy
+        and worker_state in {'IDLE','BUSY'}
+    )
     return {
         'ok':True,
         'version':VERSION,
         'worker_version':worker_version or None,
+        'worker_state':worker_state or None,
         'worker_healthy':worker_healthy,
+        'worker_ready':worker_ready,
         'worker_heartbeat_age_seconds':worker_age,
     }
 
