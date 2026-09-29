@@ -3825,6 +3825,343 @@ def _gp_day_price_suggestion(
         "cost_date":row.get("cost_date"),
     }
 
+
+def _batch_daily_sales_by_price_type(
+    cur,
+    rows: list[dict[str,Any]],
+    data_days: list[dict[str,Any]],
+) -> dict[int,dict[date,dict[str,Any]]]:
+    """Load canonical POS history for all serving UPCs in a small fixed query set.
+
+    This is the set-based equivalent of repeatedly calling
+    _daily_sales_by_price_type() per UPC.  Direct canonical upc_id lineage wins;
+    raw EAN/UPC fallback is used only when it resolves unambiguously to one
+    serving UPC.
+    """
+    if not data_days or not rows:
+        return {}
+
+    serving_ids: set[int] = set()
+    exact_candidates: dict[str,set[int]] = {}
+    numeric_candidates: dict[str,set[int]] = {}
+    for row in rows:
+        if row.get("upc_id") is None:
+            continue
+        uid=int(row["upc_id"])
+        serving_ids.add(uid)
+        ean=str(row.get("ean_upc") or "").strip()
+        if ean:
+            exact_candidates.setdefault(ean,set()).add(uid)
+            key=_numeric_key(ean)
+            if key:
+                numeric_candidates.setdefault(key,set()).add(uid)
+
+    exact_map={
+        key:next(iter(ids))
+        for key,ids in exact_candidates.items()
+        if len(ids)==1
+    }
+    numeric_map={
+        key:next(iter(ids))
+        for key,ids in numeric_candidates.items()
+        if len(ids)==1
+    }
+    valid_days={x["date"] for x in data_days}
+    out: dict[int,dict[date,dict[str,Any]]] = {}
+
+    def resolve_upc(raw_upc_id: Any, raw_ean: Any) -> int|None:
+        if raw_upc_id is not None:
+            try:
+                uid=int(raw_upc_id)
+            except Exception:
+                uid=None
+            if uid is not None and uid in serving_ids:
+                return uid
+        ean=str(raw_ean or "").strip()
+        if ean in exact_map:
+            return exact_map[ean]
+        key=_numeric_key(ean)
+        return numeric_map.get(key) if key else None
+
+    def absorb(obs: dict[str,Any]) -> None:
+        uid=resolve_upc(obs.get("upc_id"),obs.get("ean_upc"))
+        day=obs.get("business_date")
+        if uid is None or day not in valid_days:
+            return
+        by_day=out.setdefault(uid,{})
+        bucket=by_day.setdefault(day,{
+            "date":day,
+            "supported":True,
+            "price_types":{},
+            "sales_amount":Decimal("0"),
+            "sold_quantity":Decimal("0"),
+        })
+        pt=str(obs.get("price_type") or "UNKNOWN").upper()
+        sales=_d(obs.get("sales_amount"))
+        qty=_d(obs.get("sold_quantity"))
+        prev=bucket["price_types"].get(pt,{
+            "sales_amount":Decimal("0"),
+            "sold_quantity":Decimal("0"),
+            "avg_sold_price":None,
+        })
+        ps=_d(prev.get("sales_amount"))+sales
+        pq=_d(prev.get("sold_quantity"))+qty
+        bucket["price_types"][pt]={
+            "sales_amount":ps,
+            "sold_quantity":pq,
+            "avg_sold_price":(ps/pq if pq!=0 else None),
+        }
+        bucket["sales_amount"]+=sales
+        bucket["sold_quantity"]+=qty
+
+    direct=[x for x in data_days if x.get("coverage_kind")!="DERIVED_PERIOD_RESIDUAL"]
+    if direct:
+        clauses=[]
+        args=[]
+        for x in direct:
+            clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
+            args.extend([int(x["file_id"]),x["date"],x["date"]])
+        cur.execute(
+            f"""SELECT period_end_date AS business_date,upc_id,ean_upc,
+                       UPPER(TRIM(price_type)) AS price_type,
+                       COALESCE(SUM(sales_amount),0) AS sales_amount,
+                       COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND ({' OR '.join(clauses)})
+                GROUP BY period_end_date,upc_id,ean_upc,UPPER(TRIM(price_type))""",
+            tuple(args),
+        )
+        for obs in cur.fetchall():
+            absorb(obs)
+
+    derived=[x for x in data_days if x.get("coverage_kind")=="DERIVED_PERIOD_RESIDUAL"]
+    if derived:
+        clauses=[]
+        args=[]
+        for x in derived:
+            clauses.append("(source_file_id=%s AND business_date=%s)")
+            args.extend([int(x["file_id"]),x["date"]])
+        cur.execute(
+            f"""SELECT business_date,upc_id,ean_upc,
+                       UPPER(TRIM(price_type)) AS price_type,
+                       COALESCE(SUM(sales_amount),0) AS sales_amount,
+                       COALESCE(SUM(sold_quantity),0) AS sold_quantity
+                FROM pos_daily_backfill_observation
+                WHERE {' OR '.join(clauses)}
+                GROUP BY business_date,upc_id,ean_upc,UPPER(TRIM(price_type))""",
+            tuple(args),
+        )
+        for obs in cur.fetchall():
+            absorb(obs)
+
+    return out
+
+
+def _batch_sales_metric(
+    daily_by_upc: dict[int,dict[date,dict[str,Any]]],
+    data_days: list[dict[str,Any]],
+    upc_id: int,
+    supported_day_count: int,
+) -> dict[str,Any]:
+    days=sorted(data_days,key=lambda x:x["date"],reverse=True)[:supported_day_count]
+    by_day=daily_by_upc.get(int(upc_id),{})
+    qty=sum((_d(by_day.get(x["date"],{}).get("sold_quantity")) for x in days),Decimal("0"))
+    sales=sum((_d(by_day.get(x["date"],{}).get("sales_amount")) for x in days),Decimal("0"))
+    n=len(days)
+    return {
+        "requested_supported_days":supported_day_count,
+        "supported_day_count":n,
+        "coverage_status":"COMPLETE" if n>=supported_day_count else "PARTIAL",
+        "start_date":min((x["date"] for x in days),default=None),
+        "end_date":max((x["date"] for x in days),default=None),
+        "sold_quantity":qty,
+        "sales_amount":sales,
+        "velocity_per_supported_day":(qty/Decimal(n) if n else None),
+        "data_day_definition":"LATEST_COMPLETED_CANONICAL_SALES_DATA_DAYS",
+    }
+
+
+def _batch_observed_price_as_of(
+    daily_by_upc: dict[int,dict[date,dict[str,Any]]],
+    data_days: list[dict[str,Any]],
+    upc_id: int,
+    lookback_supported_days: int=28,
+) -> dict[str,Any]:
+    days=sorted(data_days,key=lambda x:x["date"],reverse=True)[:lookback_supported_days]
+    by_day=daily_by_upc.get(int(upc_id),{})
+    for entry in days:
+        day=entry["date"]
+        x=by_day.get(day,{})
+        qty=_d(x.get("sold_quantity"))
+        sales=_d(x.get("sales_amount"))
+        if qty>0:
+            return {
+                "status":"READY",
+                "date":day,
+                "price":sales/qty,
+                "price_types":sorted(str(k).upper() for k in (x.get("price_types") or {}).keys()),
+                "basis":"LAST_OBSERVED_SOLD_PRICE_ON_OR_BEFORE_REPORT_DATE",
+            }
+    return {
+        "status":"UNAVAILABLE",
+        "date":None,
+        "price":None,
+        "price_types":[],
+        "basis":"NO_OBSERVED_SOLD_PRICE_ON_OR_BEFORE_REPORT_DATE",
+    }
+
+
+def _batch_observed_price_gp_day_candidates(
+    daily_by_upc: dict[int,dict[date,dict[str,Any]]],
+    data_days: list[dict[str,Any]],
+    upc_id: int,
+    *,
+    current_cost: Decimal,
+    supported_day_limit: int=90,
+    company_c_floor: Decimal|None=None,
+) -> list[dict[str,Any]]:
+    days=sorted(data_days,key=lambda x:x["date"],reverse=True)[:max(7,min(int(supported_day_limit),180))]
+    by_day=daily_by_upc.get(int(upc_id),{})
+    buckets: dict[Decimal,dict[str,Any]]={}
+    for entry in sorted(days,key=lambda x:x["date"]):
+        x=by_day.get(entry["date"],{})
+        qty=_d(x.get("sold_quantity"))
+        sales=_d(x.get("sales_amount"))
+        if qty<=0:
+            continue
+        price=(sales/qty).quantize(Decimal("0.01"))
+        b=buckets.setdefault(price,{
+            "price":price,
+            "sales_qty":Decimal("0"),
+            "observed_days":0,
+            "gp_dollars":Decimal("0"),
+            "price_types":set(),
+        })
+        b["sales_qty"]+=qty
+        b["observed_days"]+=1
+        b["gp_dollars"]+=(price-current_cost)*qty
+        b["price_types"].update(str(k).upper() for k in (x.get("price_types") or {}).keys())
+
+    out=[]
+    for price,b in buckets.items():
+        n=int(b["observed_days"])
+        gp_day=(b["gp_dollars"]/Decimal(n)) if n else None
+        velocity=(b["sales_qty"]/Decimal(n)) if n else None
+        out.append({
+            "price":price,
+            "observed_days":n,
+            "observed_velocity_per_day":velocity,
+            "gp_per_observed_day_at_current_cost":gp_day,
+            "price_types":sorted(b["price_types"]),
+            "meets_company_c_floor":(
+                True if company_c_floor is None else price>=company_c_floor
+            ),
+        })
+    out.sort(
+        key=lambda x:(
+            -float(x.get("gp_per_observed_day_at_current_cost") or Decimal("-999999")),
+            -int(x.get("observed_days") or 0),
+            -float(x.get("price") or 0),
+        )
+    )
+    return out
+
+
+def _gp_day_price_suggestion_from_batch(
+    row: dict[str,Any],
+    upc_id: int,
+    daily_by_upc: dict[int,dict[date,dict[str,Any]]],
+    data_days: list[dict[str,Any]],
+) -> dict[str,Any]:
+    cost=(
+        Decimal(str(row["current_cost_per_selling_unit"]))
+        if row.get("current_cost_per_selling_unit") is not None else None
+    )
+    observed_asof=_batch_observed_price_as_of(
+        daily_by_upc,data_days,upc_id,lookback_supported_days=28
+    )
+    current=(
+        _d(observed_asof.get("price"))
+        if observed_asof.get("price") is not None
+        else (
+            Decimal(str(row["current_price"]))
+            if row.get("current_price") is not None else None
+        )
+    )
+    company_c=(
+        Decimal(str(row["company_price_c"]))
+        if row.get("company_price_c") is not None
+        and Decimal(str(row["company_price_c"]))>0
+        else None
+    )
+    if cost is None or current is None or current<=0:
+        return {
+            "status":"UNAVAILABLE",
+            "reason":"CURRENT_COST_OR_PRICE_UNAVAILABLE",
+            "suggested_price":None,
+            "company_c_floor":company_c,
+            "candidates":[],
+        }
+
+    candidates=_batch_observed_price_gp_day_candidates(
+        daily_by_upc,
+        data_days,
+        upc_id,
+        current_cost=cost,
+        supported_day_limit=90,
+        company_c_floor=company_c,
+    )
+    eligible=[x for x in candidates if x["meets_company_c_floor"]]
+    floor_constrained=False
+    basis="OBSERVED_PRICE_MAX_GP_PER_DAY"
+
+    if eligible:
+        best=eligible[0]
+        suggested=best["price"]
+        expected_gp_day=best["gp_per_observed_day_at_current_cost"]
+        expected_velocity=best["observed_velocity_per_day"]
+    elif company_c is not None:
+        floor_constrained=True
+        basis="COMPANY_C_FLOOR_NO_OBSERVED_DEMAND_AT_OR_ABOVE_FLOOR"
+        suggested=company_c
+        expected_gp_day=None
+        expected_velocity=None
+    else:
+        return {
+            "status":"UNAVAILABLE",
+            "reason":"NO_OBSERVED_PRICE_HISTORY",
+            "suggested_price":None,
+            "company_c_floor":None,
+            "candidates":candidates,
+        }
+
+    sweet=(
+        Decimal(str(row["sweet_spot_price"]))
+        if row.get("sweet_spot_price") is not None else None
+    )
+    if company_c is not None and sweet is not None and sweet<company_c:
+        floor_constrained=True
+
+    return {
+        "status":"READY",
+        "suggested_price":suggested,
+        "basis":basis,
+        "company_c_floor":company_c,
+        "company_c_applied":company_c is not None,
+        "floor_constrained":floor_constrained,
+        "expected_gp_per_day_from_observed_demand":expected_gp_day,
+        "expected_velocity_from_observed_price_days":expected_velocity,
+        "sweet_spot_price":sweet,
+        "candidate_count":len(candidates),
+        "top_observed_candidates":candidates[:5],
+        "current_price_used":current,
+        "current_price_basis":observed_asof.get("basis"),
+        "current_price_observed_date":observed_asof.get("date") or row.get("current_price_asof_date"),
+        "cost_basis":"CURRENT_AUTHORITATIVE_COST",
+        "cost_date":row.get("cost_date"),
+    }
+
 def performance_supported_dates(limit: int=180) -> dict[str,Any]:
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
@@ -4096,6 +4433,13 @@ def performance_report(
             )
         rows=cur.fetchall()
 
+        # Price Change and Daily Performance share this endpoint.  Load the
+        # complete 90 supported-day sales window once, then reuse it for every
+        # UPC.  This removes the prior per-UPC N+1 query pattern that could
+        # exceed the gateway timeout on category=ALL.
+        history_days=_canonical_sales_days(cur,limit=90,up_to=anchor)
+        daily_history=_batch_daily_sales_by_price_type(cur,rows,history_days)
+
         anchor_day_entry=[x for x in latest_days if x["date"]==anchor]
         canonical_day_sales=(
             _canonical_report_date_sales(cur,anchor_day_entry[0])
@@ -4134,9 +4478,9 @@ def performance_report(
 
         for row in rows:
             upc_id=int(row["upc_id"])
-            m7=_sales_metric(cur,upc_id,7,up_to=anchor)
-            m14=_sales_metric(cur,upc_id,14,up_to=anchor)
-            m28=_sales_metric(cur,upc_id,28,up_to=anchor)
+            m7=_batch_sales_metric(daily_history,history_days,upc_id,7)
+            m14=_batch_sales_metric(daily_history,history_days,upc_id,14)
+            m28=_batch_sales_metric(daily_history,history_days,upc_id,28)
             q28=_d(m28.get("sold_quantity"))
             if q28<=0:
                 continue
@@ -4152,8 +4496,7 @@ def performance_report(
             summary["sales_dollars_14d"]+=_d(m14.get("sales_amount"))
             summary["sales_dollars_28d"]+=_d(m28.get("sales_amount"))
 
-            day_daily=_daily_sales_by_price_type(cur,upc_id,anchor_day_entry)
-            day_obs=day_daily.get(anchor,{
+            day_obs=daily_history.get(upc_id,{}).get(anchor,{
                 "sold_quantity":Decimal("0"),
                 "sales_amount":Decimal("0"),
                 "price_types":{},
@@ -4202,8 +4545,8 @@ def performance_report(
                     "velocity_28d":v28,
                 })
 
-            price_opt=_gp_day_price_suggestion(
-                cur,row,upc_id,as_of_date=anchor
+            price_opt=_gp_day_price_suggestion_from_batch(
+                row,upc_id,daily_history,history_days
             )
             current=price_opt.get("current_price_used")
             suggested=price_opt.get("suggested_price")
