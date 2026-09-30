@@ -1,5 +1,16 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.204 Single-Service Edition
+Version: 7.0.231 Single-Service Edition
+
+v7.0.231 Current Price + Full Pricing Review:
+- Current Price on Backoffice serving surfaces remains canonical Quick Check CURRENT: newest valid Price List snapshot vs later eligible single-date POS sold price, with source and as-of date shown.
+- Price Overview now requests up to 1,000 pricing rows so the Seafood qualified set is not truncated at the prior Top 100 limit.
+- Qualified pricing review requires usable positive OH plus recent 14D sales history or freshness-risk qualification.
+- Fresh/Live DOH > 7 and Frozen DOH > 60 raise review urgency but no longer force a lower sell-through candidate.
+- Suggested price objective is maximum supported GP$/day from recent observed price performance.
+- When Company A/B/C references exist, the suggested price is constrained to the Company min-max range.
+- Without Company A/B/C references, the best supported max-GP$/day price is suggested directly.
+- Backoffice pricing contract advanced to V4.
+- Runtime/API/UI version aligned to 7.0.231.
 
 v7.0.204 Dockside Seafood Backoffice:
 - Adds /app/backoffice as the new production-style Seafood operations workspace.
