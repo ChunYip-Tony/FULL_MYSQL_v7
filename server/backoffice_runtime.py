@@ -1040,6 +1040,7 @@ def _quick_receiving_article_context(
     # available for any linked Article that independently has 101-109 history.
     receipt_articles = sorted(set(source_articles) | set(article_numbers))
     receipt_by_article: dict[str, dict[str, Any]] = {}
+    receipt_history_by_article: dict[str, list[dict[str, Any]]] = {}
     if receipt_articles:
         aph = ",".join(["%s"] * len(receipt_articles))
         receipt_types = tuple(str(x) for x in range(101, 110))
@@ -1060,14 +1061,28 @@ def _quick_receiving_article_context(
                          file_id DESC""",
             tuple(receipt_articles) + receipt_types,
         )
+        seen_receipt_dates: dict[str, set[str]] = {}
         for r in cur.fetchall():
             art = str(r.get("article_number") or "")
-            if not art or art in receipt_by_article:
+            posting_date = r.get("posting_date")
+            if not art or posting_date is None:
                 continue
-            receipt_by_article[art] = {
+            date_key = str(posting_date)
+            seen = seen_receipt_dates.setdefault(art, set())
+            if date_key in seen:
+                continue
+            history = receipt_history_by_article.setdefault(art, [])
+            if len(history) >= 2:
+                continue
+            entry = {
                 "verified": True,
                 "movement_type": r.get("movement_type"),
-                "date": r.get("posting_date"),
+                "date": posting_date,
+                "weekday": (
+                    posting_date.strftime("%A")
+                    if hasattr(posting_date, "strftime")
+                    else None
+                ),
                 "quantity": (
                     abs(_d(r.get("base_quantity")))
                     if r.get("base_quantity") is not None
@@ -1076,6 +1091,10 @@ def _quick_receiving_article_context(
                 "uom": r.get("base_uom_code"),
                 "source": "MVT_101_109",
             }
+            history.append(entry)
+            seen.add(date_key)
+            if art not in receipt_by_article:
+                receipt_by_article[art] = entry
 
     day_count = len(movement_days_7)
 
@@ -1181,6 +1200,7 @@ def _quick_receiving_article_context(
                     "receipt_qty": receipt.get("quantity"),
                     "receipt_uom": receipt.get("uom"),
                     "receipt_source": receipt.get("source"),
+                    "receipt_history": receipt_history_by_article.get(art, []),
                 }
             )
             articles.append(a)
@@ -1232,6 +1252,7 @@ def _quick_receiving_article_context(
             "family_receipt_qty": family_receipt.get("quantity"),
             "family_receipt_uom": family_receipt.get("uom"),
             "family_receipt_source": family_receipt.get("source"),
+            "family_receipt_history": receipt_history_by_article.get(str(source_article or ""), []),
             "receiving_articles": articles,
             "upc_map": upc_map,
             "family_group_movement_7d": family_qty,
@@ -1404,21 +1425,17 @@ def inventory_review(
         )
 
         family_cache: dict[int, dict[str, Any]] = {}
+        live_prices = _bulk_live_current_prices(cur, qrows)
         out = []
         for row in qrows:
-            # Mobile Quick Check search is identity + recent-velocity discovery.
-            # Do not make search wait for price-history resolution. Authoritative
-            # CURRENT price is resolved when the user opens the UPC detail.
-            if lightweight:
-                live_price = None
-            elif row.get("upc_id") is None:
-                live_price = None
-            else:
-                live_price = _live_current_price(
-                    cur,
-                    int(row["upc_id"]),
-                    row.get("ean_upc"),
-                )
+            # Current price is light enough to resolve in bulk, so mobile Quick
+            # Check can show the same live price authority as Pricing Review
+            # without waiting for expensive family OH roll-forward.
+            live_price = (
+                live_prices.get(int(row["upc_id"]))
+                if row.get("upc_id") is not None
+                else None
+            )
             if live_price:
                 row["current_price"] = live_price.get("price")
                 row["current_price_type"] = live_price.get("type")
@@ -1523,6 +1540,8 @@ def inventory_review(
                     "family_receipt_qty": family_ctx.get("family_receipt_qty"),
                     "family_receipt_uom": family_ctx.get("family_receipt_uom"),
                     "family_receipt_source": family_ctx.get("family_receipt_source"),
+                    "family_receipt_history": family_ctx.get("family_receipt_history", []),
+                    "receiving_receipt_history": assigned_receiving_row.get("receipt_history", []),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),
                     "family_name": row.get("family_description"),
@@ -1573,7 +1592,7 @@ def inventory_review(
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V6",
+        "contract_version": "BACKOFFICE_INVENTORY_V7",
         "category": cat,
         "query": q or None,
         "count": len(out),
@@ -1597,7 +1616,7 @@ def inventory_review(
             "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",
             "lightweight": bool(lightweight),
             "lightweight_skips": (
-                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD","LIVE_CURRENT_PRICE_RESOLUTION"]
+                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD"]
                 if lightweight
                 else []
             ),
