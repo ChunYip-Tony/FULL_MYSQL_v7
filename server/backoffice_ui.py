@@ -1909,6 +1909,24 @@ BACKOFFICE_HTML = r'''<!doctype html>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,quickPriceByUpc:{},quickPriceHealth:null,quickPriceLoadedAt:0,quickPriceLoading:false,quickPricePromise:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null,batchLoadWarning:''};
+let mobileBatchProgressPollSeq=0;
+let mobileBatchStageTracker={runId:null,stage:null,since:0};
+const PHASE3_PROGRESS_STAGES=[
+  'STARTING',
+  'PHASE3_CONNECT',
+  'PHASE3_SCHEMA_READY',
+  'PHASE3_MANUAL_AUTHORITY_READY',
+  'PHASE3_HISTORY_INGESTED',
+  'PHASE3_COVERAGE_BACKFILL_READY',
+  'PHASE3_IDENTITY_UOM_REPAIR_READY',
+  'PHASE3_COST_REPAIR_READY',
+  'PHASE3_QUICK_CHECK_REBUILD',
+  'PHASE3_ANALYSIS_LAYER_REFRESH',
+  'PHASE3_IDENTITY_AUDIT',
+  'PHASE3_FINALIZE',
+  'PHASE3_AUDIT'
+];
+
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -2999,6 +3017,95 @@ function mobileOrderingDetail(key){
   html+='</div>';
   mobileShowDetail(r.family_article||'Ordering',r.family_name||'',html);
 }
+function phase3ProgressState(b){
+  const runStatus=String(b?.active_run_status||'').toUpperCase();
+  const stage=String(b?.active_phase3_stage||b?.active_last_phase3_stage||'STARTING').toUpperCase();
+  let idx=PHASE3_PROGRESS_STAGES.indexOf(stage);
+  if(idx<0)idx=runStatus==='QUEUED'?-1:0;
+  const pct=runStatus==='QUEUED'
+    ? 2
+    : Math.max(5,Math.min(98,Math.round(((idx+1)/PHASE3_PROGRESS_STAGES.length)*98)));
+  const heartbeatAge=Number(b?.active_heartbeat_age_seconds);
+  const heartbeatKnown=Number.isFinite(heartbeatAge);
+  const heartbeatFresh=b?.active_heartbeat_fresh===true;
+  let healthText='STARTED';
+  if(runStatus==='QUEUED')healthText='WAITING FOR WORKER';
+  else if(heartbeatFresh)healthText='● WORKER ALIVE';
+  else if(heartbeatKnown)healthText='⚠ HEARTBEAT DELAYED';
+  const stageLabel=stage.replace(/^PHASE3_/,'').replaceAll('_',' ');
+  return {runStatus,stage,stageLabel,idx,pct,heartbeatAge,heartbeatKnown,heartbeatFresh,healthText};
+}
+function phase3MonitorHtml(b){
+  const p=phase3ProgressState(b);
+  const runId=String(b?.active_pipeline_run_id||'');
+  const now=Date.now();
+  if(mobileBatchStageTracker.runId!==runId||mobileBatchStageTracker.stage!==p.stage){
+    mobileBatchStageTracker={runId,stage:p.stage,since:now};
+  }
+  const sameStageSec=Math.max(0,Math.floor((now-mobileBatchStageTracker.since)/1000));
+  const sameStageText=sameStageSec<60
+    ? sameStageSec+'s'
+    : Math.floor(sameStageSec/60)+'m '+String(sameStageSec%60).padStart(2,'0')+'s';
+  const heartbeatText=p.heartbeatKnown
+    ? 'Heartbeat '+Math.max(0,Math.round(p.heartbeatAge))+'s ago'
+    : 'Waiting for first heartbeat';
+  const stageNo=p.idx>=0?(p.idx+1):0;
+  return '<div id="mPhase3Monitor" class="m-detailsection">'+
+    '<h3>Live Phase 3 Progress</h3>'+
+    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:7px">'+
+      '<b id="mPhase3Stage" style="font-size:12px">'+esc(p.stageLabel)+'</b>'+
+      '<span id="mPhase3Heartbeat" class="pill '+(p.heartbeatFresh?'green':p.runStatus==='QUEUED'?'blue':'amber')+'">'+esc(p.healthText)+'</span>'+
+    '</div>'+
+    '<div class="progress" style="height:10px;margin:7px 0 8px"><span id="mPhase3ProgressBar" style="width:'+p.pct+'%;transition:width .35s ease"></span></div>'+
+    '<p id="mPhase3ProgressText">Stage '+stageNo+'/'+PHASE3_PROGRESS_STAGES.length+' · '+p.pct+'% stage progress · '+esc(heartbeatText)+' · same stage '+esc(sameStageText)+'</p>'+
+    '<p style="margin-top:6px;font-size:9px">Auto-refresh every 3 seconds. Progress is pipeline-stage progress, not row-count completion.</p>'+
+  '</div>';
+}
+function updateMobilePhase3Monitor(b){
+  const box=mNode('mPhase3Monitor');if(!box)return;
+  const p=phase3ProgressState(b);
+  const runId=String(b?.active_pipeline_run_id||'');
+  const now=Date.now();
+  if(mobileBatchStageTracker.runId!==runId||mobileBatchStageTracker.stage!==p.stage){
+    mobileBatchStageTracker={runId,stage:p.stage,since:now};
+  }
+  const sameStageSec=Math.max(0,Math.floor((now-mobileBatchStageTracker.since)/1000));
+  const sameStageText=sameStageSec<60
+    ? sameStageSec+'s'
+    : Math.floor(sameStageSec/60)+'m '+String(sameStageSec%60).padStart(2,'0')+'s';
+  const stageNo=p.idx>=0?(p.idx+1):0;
+  const heartbeatText=p.heartbeatKnown
+    ? 'Heartbeat '+Math.max(0,Math.round(p.heartbeatAge))+'s ago'
+    : 'Waiting for first heartbeat';
+  const stageEl=mNode('mPhase3Stage');if(stageEl)stageEl.textContent=p.stageLabel;
+  const hb=mNode('mPhase3Heartbeat');
+  if(hb){hb.textContent=p.healthText;hb.className='pill '+(p.heartbeatFresh?'green':p.runStatus==='QUEUED'?'blue':'amber')}
+  const bar=mNode('mPhase3ProgressBar');if(bar)bar.style.width=p.pct+'%';
+  const txt=mNode('mPhase3ProgressText');if(txt)txt.textContent='Stage '+stageNo+'/'+PHASE3_PROGRESS_STAGES.length+' · '+p.pct+'% stage progress · '+heartbeatText+' · same stage '+sameStageText;
+  const sub=mNode('mobileDetailSub');if(sub)sub.textContent=p.runStatus+(p.stage?' · '+p.stageLabel:'');
+}
+async function mobilePollPhase3Run(batchId,runId,seq){
+  if(seq!==mobileBatchProgressPollSeq)return;
+  if(mobileState.module!=='batches'||String(mobileState.currentDetailKey)!=='active:'+String(batchId))return;
+  try{
+    const d=await api('/v1/web-upload/active',{timeoutMs:8000});
+    const b=d.active_batch||null;
+    const same=b&&String(b.batch_id||b.id)===String(batchId)&&String(b.active_pipeline_run_id||'')===String(runId);
+    if(!same){
+      const box=mNode('mPhase3Monitor');
+      if(box)box.innerHTML='<h3>Live Phase 3 Progress</h3><p><b>Run is no longer active.</b> The rebuild finished or moved to a final QA state. Refreshing batch history…</p>';
+      try{await loadBatches()}catch(_){}
+      return;
+    }
+    state.active=b;
+    updateMobilePhase3Monitor(b);
+  }catch(e){
+    const txt=mNode('mPhase3ProgressText');
+    if(txt)txt.textContent='Live status check failed: '+String(e?.message||e)+' · retrying in 3s';
+  }
+  if(seq===mobileBatchProgressPollSeq)setTimeout(()=>mobilePollPhase3Run(batchId,runId,seq),3000);
+}
+
 function mobileActiveBatchDetail(){
   const b=state.active;if(!b)return;
   const waiting=batchResumeEligible(b);
@@ -3015,7 +3122,9 @@ function mobileActiveBatchDetail(){
     html+=mobileMetric('Run ID','#'+b.active_pipeline_run_id,(b.active_code_version||'')+(runStage?' · '+runStage:''));
     html+=mobileMetric('Previous Result',b.processing_status||'—','Last committed batch result');
   }
-  html+='</div><div class="m-detailsection"><h3>Processing</h3><p>';
+  html+='</div>';
+  if(hasActiveRun)html+=phase3MonitorHtml(b);
+  html+='<div class="m-detailsection"><h3>Processing</h3><p>';
   if(hasActiveRun){
     html+='Phase 3 rebuild is currently <b>'+esc(displayStatus)+'</b>. Do not submit another rebuild while Run #'+esc(b.active_pipeline_run_id)+' is active.';
   }else{
@@ -3026,6 +3135,9 @@ function mobileActiveBatchDetail(){
   html+='</div>';
   mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),displayStatus,html);
   const btn=mNode('mResumePhase3');if(btn)btn.onclick=()=>resumePhase3(b.batch_id||b.id);
+  mobileBatchProgressPollSeq+=1;
+  const seq=mobileBatchProgressPollSeq;
+  if(hasActiveRun)setTimeout(()=>mobilePollPhase3Run(b.batch_id||b.id,b.active_pipeline_run_id,seq),1000);
 }
 async function mobileLoadFreshness(){
   const d=await api('/v1/backoffice/data-health?days=14');
