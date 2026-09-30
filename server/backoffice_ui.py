@@ -304,21 +304,47 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-spotlight small{font-size:10px}.m-spotlight b{font-size:18px;margin-top:5px}.m-spotlight em{font-size:11px;margin-top:5px}
   .m-spotlight .m-arrow{width:40px;height:40px;font-size:24px}
 
-  .m-modgrid{grid-template-columns:1fr;gap:12px;margin-top:15px}
+  /* Approved mobile home: 2 columns × 3 rows */
+  .m-modgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:15px}
   .m-module{
-    min-height:108px;
+    min-height:176px;
     border-radius:20px;
-    padding:16px 17px 15px 76px;
-    display:block
+    padding:15px 14px 18px;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:flex-start;
   }
   .m-module .ico{
-    position:absolute;left:16px;top:17px;
-    width:48px;height:48px;border-radius:15px;font-size:23px
+    position:static;
+    width:50px;height:50px;border-radius:16px;
+    display:grid;place-items:center;
+    font-size:23px;
+    margin:0 0 16px;
   }
-  .m-module:after{right:16px;top:50%;transform:translateY(-50%);width:32px;height:32px;font-size:22px}
-  .m-module b{font-size:17px;margin-top:1px;padding-right:38px}
-  .m-module span:last-child{font-size:11px;line-height:1.45;margin-top:7px;padding-right:35px}
-  .m-module-meta{font-size:10px!important;padding:4px 8px!important;margin-top:9px!important}
+  .m-module:after{
+    right:12px;top:12px;transform:none;
+    width:28px;height:28px;font-size:20px
+  }
+  .m-module:before{
+    content:"";position:absolute;left:0;right:0;bottom:0;height:16px;
+    border-radius:0 0 20px 20px;background:linear-gradient(90deg,rgba(22,121,133,.08),rgba(44,160,168,.16))
+  }
+  .m-module:nth-child(1):before{background:linear-gradient(90deg,#eaf5ff,#dceeff)}
+  .m-module:nth-child(2):before{background:linear-gradient(90deg,#fff0f0,#ffe0e2)}
+  .m-module:nth-child(3):before{background:linear-gradient(90deg,#eef9ec,#dcf4dc)}
+  .m-module:nth-child(4):before{background:linear-gradient(90deg,#fff6e8,#ffebc9)}
+  .m-module:nth-child(5):before{background:linear-gradient(90deg,#f3efff,#e7ddff)}
+  .m-module:nth-child(6):before{background:linear-gradient(90deg,#e9fbfa,#d2f4f1)}
+  .m-module b{
+    font-size:17px;line-height:1.18;margin:0;
+    padding-right:25px;letter-spacing:-.02em
+  }
+  .m-module span:last-child{
+    font-size:11px;line-height:1.42;margin-top:8px;padding:0 5px 0 0;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden
+  }
+  .m-module-meta{font-size:10px!important;margin-top:8px!important;padding:0!important;background:transparent!important}
 
   .m-pagehead{padding-bottom:13px;margin-bottom:13px}
   .m-back{width:48px;height:48px;min-width:48px;font-size:22px}
@@ -326,6 +352,11 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
   .m-chipbar{gap:8px;padding-bottom:12px}
   .m-chip{min-height:42px;padding:8px 14px;font-size:11px}
+  .m-quicktools{display:none;gap:8px;margin-bottom:12px;padding:12px;background:#fff;border-radius:17px;box-shadow:0 8px 22px rgba(9,49,54,.06)}
+  .m-quicktools.on{display:grid}
+  .m-quickrow{display:grid;grid-template-columns:minmax(0,1fr) 82px;gap:8px}
+  .m-quicktools input{min-width:0;min-height:50px;border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:16px;background:#fff}
+  .m-quicktools .btn{min-height:50px;border-radius:12px}
   .m-qatools{grid-template-columns:1fr;gap:8px;margin-bottom:12px}
   .m-qatools input,.m-qatools select{min-height:48px;font-size:14px;padding:10px 12px}.m-qatools input{font-size:17px}
   .m-perftools{display:none;gap:10px;margin:0 0 13px;padding:13px;background:#fff;border-radius:17px;box-shadow:0 8px 22px rgba(9,49,54,.06)}
@@ -376,17 +407,12 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div class="m-brand"><strong>FULL MYSQL</strong><span>Backoffice · Seafood · v__VERSION__</span></div>
     <span id="mServicePill" class="m-status">Checking…</span>
   </div>
-  <form id="mobileSearchForm" class="m-searchbox">
-    <label class="m-label" for="mobileSearchInput">Quick Search</label>
-    <div class="m-searchrow"><input id="mobileSearchInput" placeholder="UPC / Article / Family / Item"><button class="btn primary" type="submit">Search</button></div>
-    <div class="m-hint"><span>Most active items first</span><span>Typo tolerant</span></div>
-  </form>
   <div class="m-modgrid">
-    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span>Family, Article and UPC lookup</span></button>
-    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">💲</span><b>Price Change</b><span>Current price, suggestions and accepted changes</span></button>
-    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span>Date-range sales, velocity and GP$ analysis</span></button>
-    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span>Family / Receiving Article ordering review</span></button>
-    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span>OH, DOS, velocity and stock review</span></button>
+    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span>Check price, cost and recent sales</span></button>
+    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">💲</span><b>Price Change</b><span>Review and accept price changes</span></button>
+    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span>Analyze sales, velocity and GP$</span></button>
+    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span>Review family-level order suggestions</span></button>
+    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span>View stock, OH and DOS</span></button>
     <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span id="mDataModuleMeta">Uploads, QA, processing and data health</span></button>
   </div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
@@ -397,6 +423,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="mobileListPage" class="mobile-listpage" aria-label="Mobile Backoffice List">
   <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div></div>
   <div id="mobileListChips" class="m-chipbar"></div>
+  <div id="mobileQuickTools" class="m-quicktools">
+    <div class="m-quickrow"><input id="mobileQuickSearch" placeholder="UPC / Article / Family / Item"><button id="mobileQuickSearchBtn" type="button" class="btn primary">Search</button></div>
+    <button id="mobileQuickClear" type="button" class="btn secondary">Clear Search</button>
+  </div>
   <div id="mobileQaTools" class="m-qatools"><input id="mobileQaSearch" placeholder="Search UPC / Article / item / reason"><select id="mobileQaSort"><option value="oh_vel_desc">OH ↓, then Velocity ↓</option><option value="vel_oh_desc">Velocity ↓, then OH ↓</option><option value="severity">Severity</option><option value="name">Item A → Z</option><option value="upc">UPC</option></select></div>
   <div id="mobilePerformanceTools" class="m-perftools">
     <div class="m-perf-dates">
@@ -688,6 +718,25 @@ function mobileRenderChips(){
   box.style.display=cfg.chips.length?'flex':'none';
   box.querySelectorAll('[data-m-filter]').forEach(b=>b.onclick=()=>{mobileState.filter=b.dataset.mFilter;mobileRenderChips();mobileRenderList()});
 }
+function mobileRenderQuickTools(){
+ const box=mNode('mobileQuickTools');if(!box)return;
+ const on=mobileState.module==='quick';box.classList.toggle('on',on);
+ if(!on)return;
+ const input=mNode('mobileQuickSearch'),search=mNode('mobileQuickSearchBtn'),clear=mNode('mobileQuickClear');
+ input.value=state.inventorySearch||mobileState.query||'';
+ const run=async()=>{
+   state.inventorySearch=input.value.trim();
+   mobileState.query=state.inventorySearch;
+   await loadInventory();
+   mobileRenderList();
+ };
+ search.onclick=run;
+ input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();run()}};
+ clear.onclick=async()=>{
+   input.value='';state.inventorySearch='';mobileState.query='';
+   await loadInventory();mobileRenderList();
+ };
+}
 function mobileRenderQaTools(){
  const box=mNode('mobileQaTools');if(!box)return;
  const on=mobileState.module==='qa';box.classList.toggle('on',on);
@@ -745,6 +794,7 @@ async function mobileOpenModule(module,{query=''}={}){
   mNode('mobileListContent').innerHTML='<div class="m-loading">Loading…</div>';
   mobileScreen('mobileListPage');
   mobileRenderChips();
+  mobileRenderQuickTools();
   mobileRenderQaTools();
   mobileRenderPerformanceTools();
   try{
@@ -1019,7 +1069,6 @@ $$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
 mNode('mobileListBack').onclick=()=>showMobileHome();
 mNode('mobileDetailBack').onclick=()=>mobileScreen('mobileListPage');
 
-mNode('mobileSearchForm').onsubmit=e=>{e.preventDefault();mobileOpenModule('quick',{query:mNode('mobileSearchInput').value})};
 mobileMedia.addEventListener?.('change',e=>{
   if(e.matches)showMobileHome({scroll:false});
   else{closeDrawer();mobileScreen('',{scroll:false});restoreRoute()}
