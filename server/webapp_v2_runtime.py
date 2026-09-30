@@ -4832,6 +4832,175 @@ def performance_report(
         history_days=_canonical_sales_days(cur,limit=90,up_to=anchor)
         daily_history=_batch_daily_sales_by_price_type(cur,rows,history_days)
 
+        # 240 main UPC and 249 cook/service UPC must always carry the same
+        # current retail price when both forms exist in the same confirmed
+        # Family/product group.  Resolve those pairs up front so mismatches can
+        # bypass normal freshness/DOH qualification and surface as the highest
+        # pricing-review priority.
+        price_pair_meta: dict[str,dict[str,Any]] = {}
+        pair_mismatch_suggestions: list[dict[str,Any]] = []
+        pair_mismatch_service_upcs: set[str] = set()
+        pair_groups: dict[tuple[int,str],dict[str,dict[str,Any]]] = {}
+        for pair_row in rows:
+            sig=_seafood_upc_group_signature(pair_row.get("family_id"),pair_row.get("ean_upc"))
+            if sig is None:
+                continue
+            prefix=_numeric_key(pair_row.get("ean_upc"))[:3]
+            if prefix not in {"240","249"}:
+                continue
+            pair_groups.setdefault(sig,{})[prefix]=pair_row
+
+        for sig,members in pair_groups.items():
+            main=members.get("240")
+            service=members.get("249")
+            if not main or not service:
+                continue
+
+            _overlay_live_current_price(cur,main)
+            _overlay_live_current_price(cur,service)
+            main_upc=str(main.get("ean_upc") or "")
+            service_upc=str(service.get("ean_upc") or "")
+            main_price=(
+                _d(main.get("current_price"))
+                if main.get("current_price") is not None else None
+            )
+            service_price=(
+                _d(service.get("current_price"))
+                if service.get("current_price") is not None else None
+            )
+            equal=(
+                main_price is not None
+                and service_price is not None
+                and main_price==service_price
+            )
+            meta={
+                "related_240_upc":main_upc,
+                "related_240_name":main.get("selling_description"),
+                "related_240_current_price":main_price,
+                "related_240_current_price_type":main.get("current_price_type"),
+                "related_240_current_price_source":main.get("current_price_source"),
+                "related_240_current_price_asof_date":main.get("current_price_asof_date"),
+                "related_249_present":True,
+                "related_249_upc":service_upc,
+                "related_249_name":service.get("selling_description"),
+                "related_249_current_price":service_price,
+                "related_249_current_price_type":service.get("current_price_type"),
+                "related_249_current_price_source":service.get("current_price_source"),
+                "related_249_current_price_asof_date":service.get("current_price_asof_date"),
+                "price_240_249_equal":equal,
+            }
+            price_pair_meta[main_upc]=dict(meta)
+            price_pair_meta[service_upc]=dict(meta)
+
+            if (
+                main_price is None
+                or main_price<=0
+                or service_price is None
+                or service_price<=0
+                or equal
+            ):
+                continue
+
+            pair_mismatch_service_upcs.add(service_upc)
+            m7_pair=_batch_sales_metric(daily_history,history_days,int(service["upc_id"]),7)
+            m14_pair=_batch_sales_metric(daily_history,history_days,int(service["upc_id"]),14)
+            m28_pair=_batch_sales_metric(daily_history,history_days,int(service["upc_id"]),28)
+            v7_pair=m7_pair.get("velocity_per_supported_day")
+            service_cost=(
+                _d(service.get("current_cost_per_selling_unit"))
+                if service.get("current_cost_per_selling_unit") is not None else None
+            )
+            current_gp=(
+                (service_price-service_cost)/service_price
+                if service_cost is not None and service_price>0 else None
+            )
+            target_gp=(
+                (main_price-service_cost)/main_price
+                if service_cost is not None and main_price>0 else None
+            )
+            current_gp_day=(
+                (service_price-service_cost)*_d(v7_pair)
+                if service_cost is not None and v7_pair is not None else None
+            )
+            target_gp_day=(
+                (main_price-service_cost)*_d(v7_pair)
+                if service_cost is not None and v7_pair is not None else None
+            )
+            ready=(
+                str(main.get("quick_check_status") or "").upper()=="READY"
+                and str(service.get("quick_check_status") or "").upper()=="READY"
+            )
+            pair_mismatch_suggestions.append({
+                "urgency_score":Decimal("9999.00"),
+                "priority_240_249_mismatch":True,
+                "review_status":"ACTIONABLE" if ready else "QA_HOLD",
+                "review_blocker":None if ready else "240_249_PAIR_NOT_READY",
+                "actionable":ready,
+                "report_date":anchor,
+                "upc":service_upc,
+                "name":service.get("selling_description"),
+                "family_article_number":service.get("main_article_number"),
+                "family_name":service.get("family_description"),
+                "category":str(service.get("product_class") or main.get("product_class") or "").upper(),
+                "readiness":service.get("quick_check_status"),
+                "selling_uom":service.get("selling_uom"),
+                "upc_role":_upc_role(service),
+                "current_price":service_price,
+                "current_price_type":service.get("current_price_type"),
+                "current_price_basis":"LIVE_CANONICAL_249_PRICE",
+                "current_price_source":service.get("current_price_source"),
+                "current_price_observed_date":service.get("current_price_asof_date"),
+                "suggested_price":main_price if ready else None,
+                "candidate_price":main_price,
+                "suggestion_basis":"MANDATORY_240_EQUALS_249",
+                "selection_basis":"COPY_CURRENT_240_MAIN_PRICE_TO_249_SERVICE_PRICE",
+                "historical_window_supported_days":14,
+                "company_price_a":None,
+                "company_price_b":None,
+                "company_price_c":None,
+                "company_range_low":None,
+                "company_range_high":None,
+                "has_company_reference":False,
+                "current_within_company_range":None,
+                "clearance_due_to_doh":False,
+                "clearance_reason":None,
+                "doh":service.get("doh"),
+                "current_oh":service.get("current_oh"),
+                "current_oh_uom":service.get("current_oh_uom"),
+                "pricing_rule_priority":-1,
+                "primary_reason_text":f"URGENT: 249 service price must equal 240 main price ({main_price})",
+                "direction":"INCREASE" if main_price>service_price else "DECREASE",
+                "price_gap_pct":abs(main_price-service_price)/service_price,
+                "current_gp_pct_reference":current_gp,
+                "suggested_gp_pct_at_current_cost":target_gp,
+                "current_gp_per_day_7d":current_gp_day,
+                "expected_gp_per_day_observed_price_demand":target_gp_day if ready else None,
+                "candidate_expected_gp_per_day":target_gp_day,
+                "gp_per_day_opportunity":(
+                    target_gp_day-current_gp_day
+                    if target_gp_day is not None
+                    and current_gp_day is not None
+                    and target_gp_day>current_gp_day
+                    else None
+                ),
+                "gp_per_day_opportunity_pct":None,
+                "observed_velocity_at_suggested_price":v7_pair,
+                "qty_report_date":Decimal("0"),
+                "sales_report_date":Decimal("0"),
+                "qty_uom":_safe_qty_uom(service_upc,service.get("selling_uom")),
+                "qty_7d":m7_pair.get("sold_quantity"),
+                "qty_14d":m14_pair.get("sold_quantity"),
+                "qty_28d":m28_pair.get("sold_quantity"),
+                "velocity_7d":v7_pair,
+                "velocity_14d":m14_pair.get("velocity_per_supported_day"),
+                "velocity_28d":m28_pair.get("velocity_per_supported_day"),
+                "velocity_7d_vs_28d_ratio":None,
+                "cost_basis":"CURRENT_AUTHORITATIVE_COST",
+                "cost_date":service.get("cost_date"),
+                "reasons":["URGENT_240_249_PRICE_MISMATCH","MANDATORY_PRICE_EQUALITY"],
+                **meta,
+            })
+
         anchor_day_entry=[x for x in latest_days if x["date"]==anchor]
         canonical_day_sales=(
             _canonical_report_date_sales(cur,anchor_day_entry[0])
@@ -4864,6 +5033,7 @@ def performance_report(
             "low_gp_items":0,
             "price_review_candidates":0,
             "price_tolerance_suppressed":0,
+            "price_240_249_mismatch_count":len(pair_mismatch_suggestions),
         }
         suggestions=[]
         day_items=[]
@@ -5241,10 +5411,28 @@ def performance_report(
             "audit_rule":"CANONICAL_SOURCE_TOTAL_IS_REPORT_DATE_SALES_AUTHORITY",
         }
 
+        # Add mandatory 240=249 mismatches ahead of the normal suggestion
+        # queue and suppress a duplicate normal 249 suggestion for the same UPC.
+        suggestions = pair_mismatch_suggestions + [
+            x for x in suggestions
+            if str(x.get("upc") or "") not in pair_mismatch_service_upcs
+        ]
+        for suggestion in suggestions:
+            upc_key=str(suggestion.get("upc") or "")
+            pair_meta=price_pair_meta.get(upc_key)
+            if not pair_meta:
+                continue
+            suggestion.update(pair_meta)
+            if _numeric_key(upc_key).startswith("240") and suggestion.get("candidate_price") is not None:
+                suggestion["related_249_required_price"]=suggestion.get("candidate_price")
+            elif _numeric_key(upc_key).startswith("249"):
+                suggestion["related_249_required_price"]=suggestion.get("candidate_price")
+
         suggestions.sort(
             key=lambda x:(
+                0 if x.get("priority_240_249_mismatch") else 1,
                 0 if x.get("actionable") else 1,
-                int(x.get("pricing_rule_priority") or 9),
+                int(x.get("pricing_rule_priority") if x.get("pricing_rule_priority") is not None else 9),
                 -float(x.get("gp_per_day_opportunity") or 0),
                 -float(x.get("urgency_score") or 0),
                 -float(x.get("qty_28d") or 0),
@@ -5353,7 +5541,9 @@ def performance_report(
             "qa_hold_excluded":True,
             "price_change_tolerance":"SUPPRESS_WHEN_ABS_CURRENT_MINUS_SUGGESTED_LE_0.25",
             "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY; FRESH_DOH_GT_7; FROZEN_DOH_GT_60; LIVE_OR_OTHER_NO_EXTRA_DOH_GATE",
-            "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
+            "price_240_249_rule":"WHEN_CONFIRMED_240_AND_249_FORMS_EXIST_IN_THE_SAME_FAMILY_PRODUCT_GROUP_THEIR_CURRENT_PRICES_MUST_MATCH; MISMATCH_IS_HIGHEST_PRIORITY",
+            "price_249_reminder_rule":"ANY_240_PRICING_SUGGESTION_WITH_A_RELATED_249_MUST_REMIND_THE_USER_TO_CHANGE_249_TO_THE_SAME_ACCEPTED_PRICE",
+            "urgency_primary_sort":"240_249_MISMATCH_FIRST_THEN_ACTIONABLE_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
         },
     }
 
