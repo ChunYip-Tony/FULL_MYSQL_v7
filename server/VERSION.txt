@@ -1,5 +1,15 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.202 Single-Service Edition
+Version: 7.0.204 Single-Service Edition
+
+v7.0.204 Dockside Seafood Backoffice:
+- Adds /app/backoffice as the new production-style Seafood operations workspace.
+- Inventory, sell-through, explainable Pricing Review, Family/Receiving-Article Ordering Review, QA, direct uploads, Batch Monitor, and Data Pipeline are integrated with the existing FastAPI/MySQL runtime.
+- Ordering Review is strictly Family Article / Receiving Article level. Main list shows Family Name, Receiving Article, Family Article, OH, last receipt date, last receipt quantity in Base UOM, ordering frequency, and coming-delivery quantity suggestion. Other evidence stays behind Details / Why.
+- Pricing Review is read-only and adds category/status/text filters plus sorting by GP$/day opportunity, urgency, price gap, velocity, GP%, price, or name.
+- Direct upload has no staging UI: one upload action creates one batch, uploads its files, then starts processing.
+- System data stays read-only except OH / True Stock and controlled QA resolution for user-confirmed UPC identity / Selling UOM holds.
+- QA resolution preserves RAW source rows, writes audited user-confirmed overrides, performs targeted serving refresh, and records before/applied/after resolution history.
+- Removes the top KPI summary strip to keep the workspace compact.
 
 v7.0.202 Batch 17 HOLD Authority Propagation Repair:
 - Promotes the Sep 29 exact Seafood Selling-UOM confirmations into the final manual override set so the final Phase 3 authority lock cannot restore stale conflicting UOM rows.
