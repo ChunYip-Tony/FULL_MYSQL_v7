@@ -1904,6 +1904,10 @@ function mobileQuickDetail(key,piMode){
   if(!r)return;
   const title=piMode?String(r.family_article||r.upc||'Item'):String(r.upc||r.family_article||'Item');
   const sub=(piMode?(r.family_name||r.name):(r.name||r.family_name))+(r.chinese_name?' · '+r.chinese_name:'');
+  const ohStatus=String(r.family_oh_status||'').toUpperCase();
+  const ohNote=ohStatus==='READY'
+    ? 'Current effective family OH'
+    : (r.family_oh_as_of?'Latest published family OH · through '+r.family_oh_as_of:'Family OH unavailable')+(r.family_oh_live_status?' · '+r.family_oh_live_status:'');
   let html='<div class="m-detailcard"><div class="m-label">'+(piMode?'Family / PI Summary':'UPC Summary')+'</div><div class="m-detailgrid">';
   html+=mobileMetric('Current Price',money(r.price),(r.price_type||'—')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''));
   html+=mobileMetric(
@@ -1911,7 +1915,7 @@ function mobileQuickDetail(key,piMode){
     money(r.cost)+(r.cost_uom?' / '+r.cost_uom:''),
     (r.cost_source||'Source unavailable')+(r.cost_date?' · '+r.cost_date:'')
   );
-  html+=mobileMetric('OH',fmt(r.family_oh)+' '+(r.family_oh_uom||''),'Current effective family OH');
+  html+=mobileMetric('OH',fmt(r.family_oh)+' '+(r.family_oh_uom||''),ohNote);
   html+=mobileMetric('7D Sold',fmt(r.qty_7d)+' '+(r.selling_uom||''),'POS quantity');
   html+=mobileMetric('7D Velocity',fmt(r.velocity_7d),(r.selling_uom||'unit')+'/day');
   html+=mobileMetric('GP%',pct(r.gp_pct),'At current price / cost');
