@@ -32,6 +32,7 @@ from backoffice_runtime import (
     inventory_review as backoffice_inventory_review,
     ordering_review as backoffice_ordering_review,
     pricing_review as backoffice_pricing_review,
+    sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
 )
 from qa_resolution import (
@@ -3440,6 +3441,15 @@ def backoffice_data_health(days:int=14):
         result=data_health_14_day_board(days=days)
     except Exception as exc:
         raise HTTPException(500,f'Backoffice Data Health failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/backoffice/lineage-audit')
+def backoffice_lineage_audit():
+    try:
+        result=backoffice_sales_lineage_audit()
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice lineage audit failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
