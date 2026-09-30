@@ -268,3 +268,120 @@ jobs:
           echo
           curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240816&lightweight=true"
           echo
+
+
+      - name: Audit all live Quick Check SAP movement
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 120 "$base/v1/backoffice/inventory?category=ALL&limit=500&lightweight=true" -o /tmp/all.json
+          python - <<'PY'
+          import json
+          from collections import defaultdict
+          from decimal import Decimal
+
+          p=json.load(open('/tmp/all.json',encoding='utf-8'))
+          rows=p.get('rows') or []
+          def D(v):
+              return None if v is None else Decimal(str(v))
+          fam=defaultdict(list)
+          for r in rows:
+              fam[str(r.get('family_id') or r.get('family_article') or r.get('upc'))].append(r)
+
+          mismatch=[]
+          family_no_mvt=[]
+          family_source_owned=[]
+          family_child_owned=[]
+          family_mixed=[]
+          active_upc_article_no_mvt=[]
+          receipt_only={}
+          active_article_mvt={}
+
+          for _,rr in fam.items():
+              r=rr[0]
+              fg=D(r.get('family_group_movement_7d'))
+              legacy=D(r.get('family_qty_7d'))
+              fgu=str(r.get('family_group_movement_uom') or '')
+              lgu=str(r.get('family_qty_uom') or '')
+              if fg is not None and legacy is not None and (fg != legacy or fgu != lgu):
+                  mismatch.append([r.get('family_article'),r.get('family_name'),str(fg),fgu,str(legacy),lgu])
+
+              if fg is None:
+                  family_no_mvt.append([r.get('family_article'),r.get('family_name')])
+              else:
+                  src=D(r.get('family_source_movement_7d'))
+                  if src is not None and src==fg:
+                      family_source_owned.append([r.get('family_article'),r.get('family_name'),str(fg),fgu])
+                  elif src is None or src==0:
+                      family_child_owned.append([r.get('family_article'),r.get('family_name'),str(fg),fgu])
+                  else:
+                      family_mixed.append([r.get('family_article'),r.get('family_name'),str(fg),str(src),fgu])
+
+              for x in rr:
+                  q=D(x.get('qty_7d')) or Decimal('0')
+                  if q>0 and x.get('receiving_article') and (D(x.get('receiving_movement_7d')) in (None,Decimal('0'))):
+                      active_upc_article_no_mvt.append([
+                          x.get('upc'),x.get('name'),x.get('family_article'),
+                          x.get('receiving_article'),str(q),
+                          str(D(x.get('family_group_movement_7d')) or 0),
+                          x.get('family_source_article'),
+                          str(D(x.get('family_source_movement_7d')) or 0),
+                      ])
+                  for a in x.get('receiving_articles') or []:
+                      art=str(a.get('article_number') or '')
+                      if not art: continue
+                      mv=D(a.get('movement_7d'))
+                      key=(x.get('family_article'),art)
+                      row=[x.get('family_article'),x.get('family_name'),art,a.get('article_description'),
+                           str(mv) if mv is not None else None,a.get('movement_uom'),
+                           bool(a.get('receipt_verified')),str(a.get('receipt_date') or '')]
+                      if a.get('receipt_verified') and (mv is None or mv==0):
+                          receipt_only[key]=row
+                      if mv is not None and mv!=0:
+                          active_article_mvt[key]=row
+
+          summary={
+            'rows':len(rows),'families':len(fam),
+            'family_total_mismatch':len(mismatch),
+            'families_no_251_252':len(family_no_mvt),
+            'families_source_article_owns_all_mvt':len(family_source_owned),
+            'families_child_articles_own_all_mvt':len(family_child_owned),
+            'families_mixed_source_and_child_mvt':len(family_mixed),
+            'active_upcs_assigned_article_has_no_251_252':len(active_upc_article_no_mvt),
+            'receipt_only_articles':len(receipt_only),
+            'articles_with_251_252':len(active_article_mvt),
+            'limit_reached':len(rows)>=500,
+          }
+          print("AUDIT_SUMMARY="+json.dumps(summary))
+          print("ACTIVE_UPC_ASSIGNED_ARTICLE_NO_MVT="+json.dumps(active_upc_article_no_mvt[:300]))
+          print("RECEIPT_ONLY_ARTICLES="+json.dumps(list(receipt_only.values())[:300]))
+          print("FAMILY_SOURCE_OWNED="+json.dumps(family_source_owned[:300]))
+          print("FAMILY_CHILD_OWNED="+json.dumps(family_child_owned[:300]))
+          print("FAMILY_MIXED="+json.dumps(family_mixed[:300]))
+          print("FAMILY_NO_MVT="+json.dumps(family_no_mvt[:300]))
+          print("FAMILY_MISMATCH="+json.dumps(mismatch[:100]))
+          PY
+
+
+      - name: Inspect live Oyster Jar 1348438 UOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=1348438&lightweight=true" -o /tmp/oyster.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/oyster.json',encoding='utf-8'))
+          for r in p.get('rows') or []:
+              print("OYSTER_ROW="+json.dumps({
+                  k:r.get(k) for k in (
+                      'upc','name','family_id','family_article','family_name',
+                      'selling_uom','qty_uom','qty_7d','family_qty_7d','family_qty_uom',
+                      'family_group_movement_7d','family_group_movement_uom',
+                      'family_source_article','family_source_movement_7d','family_source_movement_uom',
+                      'receiving_article','receiving_movement_7d','receiving_movement_uom'
+                  )
+              },default=str))
+              print("OYSTER_ARTICLES="+json.dumps(r.get('receiving_articles') or [],default=str))
+          PY
