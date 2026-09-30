@@ -8,6 +8,7 @@ from typing import Any
 
 from business_clock import business_today, completed_through_date
 from data_coverage import source_data_days
+from coverage_backfill import canonical_pos_qty_by_upc
 from db import db_conn
 from phase3 import (
     PRICE_TYPE_PRIORITY,
@@ -658,6 +659,88 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
         },
     }
 
+
+
+def sales_lineage_audit() -> dict[str, Any]:
+    """Audit every current Seafood UPC against lineage-aware canonical POS totals."""
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        days=source_data_days(
+            cur,
+            "sales_by_price_type",
+            limit=7,
+            up_to=completed_through_date(),
+        )
+        qty_by_upc=canonical_pos_qty_by_upc(cur,days)
+        cur.execute(
+            """SELECT q.upc_id,q.ean_upc,q.selling_description,q.main_article_number,
+                      q.pos_qty_7d,q.upc_velocity_7d,q.sales_days_7d,
+                      q.quick_check_status,q.blocking_reason
+               FROM quick_check_current q
+               WHERE EXISTS (
+                 SELECT 1
+                 FROM upc_department_observation d
+                 WHERE d.upc_id=q.upc_id
+                   AND d.department_code='400'
+               )
+               ORDER BY q.ean_upc"""
+        )
+        rows=cur.fetchall()
+        cur.close()
+
+    day_count=len(days)
+    mismatches=[]
+    historical_with_sales=[]
+    velocity_mismatches=[]
+    for row in rows:
+        uid=int(row["upc_id"])
+        expected=_d(qty_by_upc.get(uid,Decimal("0")))
+        stored=_d(row.get("pos_qty_7d"))
+        if expected!=stored:
+            mismatches.append({
+                "upc":row.get("ean_upc"),
+                "name":row.get("selling_description"),
+                "family_article":row.get("main_article_number"),
+                "stored_pos_qty_7d":stored,
+                "lineage_pos_qty_7d":expected,
+                "status":row.get("quick_check_status"),
+            })
+        if expected>0 and str(row.get("quick_check_status") or "").upper()=="HISTORICAL_ONLY":
+            historical_with_sales.append({
+                "upc":row.get("ean_upc"),
+                "name":row.get("selling_description"),
+                "lineage_pos_qty_7d":expected,
+                "blocking_reason":row.get("blocking_reason"),
+            })
+        expected_velocity=(expected/Decimal(day_count)) if day_count else Decimal("0")
+        stored_velocity=_d(row.get("upc_velocity_7d"))
+        if day_count and abs(expected_velocity-stored_velocity)>Decimal("0.000001"):
+            velocity_mismatches.append({
+                "upc":row.get("ean_upc"),
+                "stored_velocity_7d":stored_velocity,
+                "lineage_velocity_7d":expected_velocity,
+                "completed_pos_days":day_count,
+            })
+
+    passed=not mismatches and not historical_with_sales and not velocity_mismatches
+    return {
+        "contract_version":"BACKOFFICE_SALES_LINEAGE_AUDIT_V1",
+        "pass":passed,
+        "seafood_upcs_checked":len(rows),
+        "completed_pos_days":day_count,
+        "data_days":[str(x.get("date")) for x in days],
+        "qty_mismatch_count":len(mismatches),
+        "historical_with_sales_count":len(historical_with_sales),
+        "velocity_mismatch_count":len(velocity_mismatches),
+        "qty_mismatches":mismatches[:100],
+        "historical_with_sales":historical_with_sales[:100],
+        "velocity_mismatches":velocity_mismatches[:100],
+        "rules":{
+            "qty_authority":"POS_RAW_EAN_LINEAGE_TO_CURRENT_CANONICAL_UPC",
+            "family_movement_not_used_for_upc_qty":True,
+            "missing_calendar_dates_are_zero":False,
+        },
+    }
 
 
 def _quick_check_fuzzy_rows(
