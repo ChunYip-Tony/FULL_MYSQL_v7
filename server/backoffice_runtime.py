@@ -2277,15 +2277,11 @@ def inventory_review(
                     "gp_pct": row.get("gp_pct_current"),
                     "qty_7d": row.get("pos_qty_7d"),
                     "velocity_7d": row.get("upc_velocity_7d"),
-                    # Family quantities are Movement 251-252 metrics and are
-                    # expressed in the movement Base UOM, not summed UPC POS units.
-                    "family_qty_7d": row.get("family_movement_7d"),
-                    "family_qty_uom": row.get("family_movement_uom"),
-                    "family_avg_qty_day": (
-                        _d(row.get("family_movement_7d")) / Decimal(family_movement_day_count)
-                        if row.get("family_movement_7d") is not None and family_movement_day_count > 0
-                        else None
-                    ),
+                    # Compatibility aliases now point to the canonical
+                    # Total Selling MVT metric used by the Family header.
+                    "family_qty_7d": family_ctx.get("family_group_movement_7d"),
+                    "family_qty_uom": family_ctx.get("family_group_movement_uom"),
+                    "family_avg_qty_day": family_ctx.get("family_group_avg_qty_day"),
                     "family_movement_days_7d": family_movement_day_count,
                     "dos": row.get("dos"),
                     "doh": row.get("doh"),
@@ -2317,11 +2313,11 @@ def inventory_review(
             "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
             "receiving_qty_basis": "TABLE1_COLUMN_B_SELLING_ARTICLES_SHOW_251_MINUS_252_EVEN_WHEN_ZERO",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
-            "family_group_qty_basis": "SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS",
+            "family_group_qty_basis": "SUM_UNIQUE_ALL_SELLING_ARTICLE_251_MINUS_252_IN_FAMILY",
             "sap_selling_article_discovery": "ARTICLE_MANUAL_COLUMN_B_TO_D_AUTHORITY;317_318_LINEAGE_ONLY",
             "receipt_verification": "FAMILY_SOURCE_AND_LINKED_ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
             "upc_receiving_display_link": "ARTICLE_MANUAL_COLUMN_D_UPC_TO_COLUMN_B_SELLING_ARTICLE_EXACT;FALLBACK_ONLY_WITHOUT_MANUAL_AUTHORITY",
-            "family_qty_basis": "LEGACY_RELATIONSHIP_METRIC_ONLY",
+            "family_qty_basis": "TOTAL_SELLING_MVT_COMPATIBILITY_ALIAS",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
             "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",

@@ -183,6 +183,9 @@ jobs:
           # 317/318 and 309 are lineage/conversion only, never added as sold usage.
           assert 'ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT' in runtime
           assert 'SUM_UNIQUE_ALL_SELLING_ARTICLE_251_MINUS_252_IN_FAMILY' in runtime
+          assert '"family_qty_7d": family_ctx.get("family_group_movement_7d")' in runtime
+          assert '"family_qty_basis": "TOTAL_SELLING_MVT_COMPATIBILITY_ALIAS"' in runtime
+          assert 'SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' not in runtime
           assert 'all_selling_articles: set[str] = set()' in runtime
           assert 'for art in sorted(all_selling_articles)' in runtime
           assert 'SUM_UNIQUE_ASSIGNED_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' not in runtime
