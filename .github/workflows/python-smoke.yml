@@ -219,22 +219,24 @@ jobs:
           import backoffice_runtime as b
 
           ok=b._fallback_selling_article_compatible
-          # The production bug class: 240/245 regular UPC must never land on
-          # a 1549 Fried-Service article through heuristic fallback.
+          # Deterministic production bug class.
           assert not ok('240','1549739','NORWEGIAN SABA(Fried Service)')
           assert not ok('245','1549739','NORWEGIAN SABA(Fried Service)')
-          # Structural channels cannot cross.
-          assert ok('240','1540739','NORWEGIAN SABA')
           assert not ok('240','1545739','NORWEGIAN SABA')
-          assert ok('245','1545739','NORWEGIAN SABA')
           assert not ok('245','1540739','NORWEGIAN SABA')
-          assert ok('249','1549739','NORWEGIAN SABA(Fried Service)')
-          assert not ok('249','1540739','NORWEGIAN SABA')
-          assert not ok('249','1341297','SABA MACKEREL')
-          # Non-structural service articles remain valid for 249 when the
-          # description itself carries explicit Fried/Service semantics.
+          assert ok('240','1540739','NORWEGIAN SABA')
+          assert ok('245','1545739','NORWEGIAN SABA')
+
+          # Generic FRIED in a product name is not the same as SERVICE.
+          assert ok('245','3400184','FRIED ROE BALL')
+          assert not ok('240','2000001','FISH SERVICE')
+          assert not ok('245','2000001','FISH SERVICE')
+
+          # 249 is intentionally not hard-restricted in fallback because valid
+          # 317/318 service lineage can resolve to non-1549 SAP articles.
+          assert ok('249','1540453','SEA BASS STEAK')
+          assert ok('249','2012274','FRESH BIG MOUTH BASS')
           assert ok('249','2045590','30/40 H/O WHITE SHRIMP(Fried Service)')
-          # Exact manual authority is checked before this fallback guard.
           print('global-selling-article-fallback-guard=PASS')
           PY
 
@@ -410,6 +412,7 @@ jobs:
           payload=json.load(open('/tmp/all.json'))
           rows=payload.get('rows') or []
           mismatches=[]
+          review_249_fallbacks=[]
           fallback_rows=0
           exact_rows=0
 
@@ -437,19 +440,22 @@ jobs:
                   continue
               fallback_rows+=1
               desc=desc_for(row,art).upper()
-              service=('FRIED' in desc) or ('SERVICE' in desc)
+              service=('SERVICE' in desc)
               bad=False
               reason=[]
               if prefix=='240' and (art.startswith('1545') or art.startswith('1549')):
-                  bad=True; reason.append('240_TO_WRONG_154X_CHANNEL')
+                  bad=True; reason.append('240_TO_WRONG_STRUCTURAL_CHANNEL')
               if prefix=='245' and (art.startswith('1540') or art.startswith('1549')):
-                  bad=True; reason.append('245_TO_WRONG_154X_CHANNEL')
-              if prefix=='249' and (art.startswith('1540') or art.startswith('1545')):
-                  bad=True; reason.append('249_TO_WRONG_154X_CHANNEL')
+                  bad=True; reason.append('245_TO_WRONG_STRUCTURAL_CHANNEL')
               if prefix in {'240','245'} and service:
                   bad=True; reason.append('REGULAR_UPC_TO_SERVICE_ARTICLE')
-              if prefix=='249' and art and not art.startswith('1549') and not service:
-                  bad=True; reason.append('249_TO_NON_SERVICE_FALLBACK')
+              if prefix=='249' and basis!='ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT':
+                  review_249_fallbacks.append({
+                      'family_article':row.get('family_article'),
+                      'upc':row.get('upc'),
+                      'assigned_article':art,
+                      'basis':basis,
+                  })
               if bad:
                   mismatches.append({
                       'family_article':row.get('family_article'),
@@ -468,6 +474,7 @@ jobs:
               'fallback_rows':fallback_rows,
               'mismatch_count':len(mismatches),
               'mismatches':mismatches[:100],
+              '249_fallback_review_count':len(review_249_fallbacks),
           }
           print(json.dumps(out,indent=2,default=str))
           if health.get('version')=='7.0.295-single-service' and mismatches:
