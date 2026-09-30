@@ -541,6 +541,10 @@ def resolve_qa_issue(
             + (str(note or "").strip() or "User confirmed QA resolution")
         )[:512]
 
+        # mysql.connector with autocommit=False starts an implicit transaction
+        # on the validation SELECTs above. End that read-only transaction before
+        # opening the explicit atomic write transaction.
+        conn.commit()
         conn.start_transaction()
         try:
             cur.execute(
@@ -784,6 +788,10 @@ def resolve_cost_conversion_issue(
             + (str(note or "").strip() or "User confirmed cost-to-selling conversion")
         )[:512]
 
+        # mysql.connector with autocommit=False starts an implicit transaction
+        # on the validation SELECTs above. End that read-only transaction before
+        # opening the explicit atomic write transaction.
+        conn.commit()
         conn.start_transaction()
         try:
             cur.execute(
@@ -1031,6 +1039,10 @@ def resolve_article_family_issue(
             + (str(note or "").strip() or "User confirmed Article to Family mapping")
         )[:512]
 
+        # mysql.connector with autocommit=False starts an implicit transaction
+        # on the validation SELECTs above. End that read-only transaction before
+        # opening the explicit atomic write transaction.
+        conn.commit()
         conn.start_transaction()
         try:
             cur.execute(
