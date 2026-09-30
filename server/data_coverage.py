@@ -395,3 +395,174 @@ def fmt_date_list(values: list[date], max_items: int = 8) -> str:
     txt = ', '.join(d.isoformat() for d in shown)
     extra = len(values) - len(shown)
     return f'{txt} (+{extra} more)' if extra > 0 else txt
+
+
+SNAPSHOT_HEALTH_SOURCES = {
+    'PRICE': 'price_list',
+    'OH': 'on_hand',
+    'LIVE_FRESH': 'live_fresh_suggestion',
+    'FROZEN': 'frozen_inventory',
+}
+
+
+def _health_file_date(row: dict[str, Any]) -> date | None:
+    """Best source-evidenced date for Data Health snapshot display."""
+    generated = _as_datetime(row.get('report_generated_at'))
+    candidates = [
+        generated.date() if generated else None,
+        _as_date(row.get('filename_date_candidate')),
+        _as_date(row.get('coverage_end_date')),
+        _as_date(row.get('coverage_start_date')),
+    ]
+    return next((d for d in candidates if d is not None), None)
+
+
+def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
+    """Return newest-first Data Health board for required daily + snapshot sources.
+
+    POS/MVT are required through completed_through_date(). Snapshot sources are
+    informational updates: absence on a given day is not itself an error.
+    """
+    span = max(1, min(int(days or 14), 31))
+    today = date.today()
+    completed = completed_through_date()
+    start = today - timedelta(days=span - 1)
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            pos_days = source_data_days(
+                cur, 'sales_by_price_type', up_to=completed
+            )
+            mvt_days = source_data_days(
+                cur, 'movement', up_to=completed
+            )
+            pos_by_date = {x['date']: dict(x) for x in pos_days if x['date'] >= start}
+            mvt_by_date = {x['date']: dict(x) for x in mvt_days if x['date'] >= start}
+
+            cur.execute(
+                """SELECT file_id,batch_id,original_filename,source_type,
+                          processing_status,error_count,duplicate_of_file_id,
+                          coverage_start_date,coverage_end_date,
+                          filename_date_candidate,report_generated_at,upload_timestamp
+                   FROM ingest_file
+                   WHERE source_type IN ('price_list','on_hand','live_fresh_suggestion','frozen_inventory')
+                     AND processing_status='INGESTED'
+                     AND COALESCE(error_count,0)=0
+                     AND duplicate_of_file_id IS NULL
+                   ORDER BY file_id DESC"""
+            )
+            snap_by_source_date: dict[tuple[str,date], dict[str,Any]] = {}
+            for row in cur.fetchall():
+                d = _health_file_date(row)
+                if d is None or d < start or d > today:
+                    continue
+                key = (str(row.get('source_type') or ''), d)
+                if key not in snap_by_source_date:
+                    snap_by_source_date[key] = dict(row)
+
+            labels = {
+                'PRICE':'price_list',
+                'OH':'on_hand',
+                'LIVE_FRESH':'live_fresh_suggestion',
+                'FROZEN':'frozen_inventory',
+            }
+
+            rows = []
+            for offset in range(span):
+                d = today - timedelta(days=offset)
+                required = d <= completed
+                p = pos_by_date.get(d)
+                m = mvt_by_date.get(d)
+
+                def daily_cell(obs: dict[str,Any] | None) -> dict[str,Any]:
+                    if not required:
+                        return {'status':'NOT_DUE','file':None,'batch_id':None,'source_type':None}
+                    if not obs:
+                        return {'status':'MISSING','file':None,'batch_id':None,'source_type':None}
+                    return {
+                        'status':'OK',
+                        'file':obs.get('original_filename'),
+                        'batch_id':obs.get('batch_id'),
+                        'file_id':obs.get('file_id'),
+                        'coverage_kind':obs.get('coverage_kind'),
+                        'source_type':obs.get('source_type'),
+                    }
+
+                sources = {
+                    'POS': daily_cell(p),
+                    'MVT': daily_cell(m),
+                }
+                for label, source_type in labels.items():
+                    obs = snap_by_source_date.get((source_type,d))
+                    sources[label] = (
+                        {
+                            'status':'OK',
+                            'file':obs.get('original_filename'),
+                            'batch_id':obs.get('batch_id'),
+                            'file_id':obs.get('file_id'),
+                            'source_type':source_type,
+                        }
+                        if obs else
+                        {
+                            'status':'NONE',
+                            'file':None,
+                            'batch_id':None,
+                            'file_id':None,
+                            'source_type':source_type,
+                        }
+                    )
+
+                missing_required = [
+                    name for name in ('POS','MVT')
+                    if sources[name]['status']=='MISSING'
+                ]
+                overall = (
+                    'MISSING' if missing_required
+                    else ('COMPLETE' if required else 'CURRENT_DAY')
+                )
+                rows.append({
+                    'date':d,
+                    'weekday':d.strftime('%a'),
+                    'required_daily_due':required,
+                    'overall_status':overall,
+                    'missing_required':missing_required,
+                    'sources':sources,
+                })
+
+            latest: dict[str,Any] = {}
+            for label, source_type in labels.items():
+                dates = [d for (st,d) in snap_by_source_date if st == source_type]
+                last = max(dates) if dates else None
+                latest[label] = {
+                    'date':last,
+                    'file':(
+                        snap_by_source_date[(source_type,last)].get('original_filename')
+                        if last else None
+                    ),
+                }
+            latest['POS'] = {
+                'date':max(pos_by_date) if pos_by_date else None,
+                'file':pos_by_date[max(pos_by_date)].get('original_filename') if pos_by_date else None,
+            }
+            latest['MVT'] = {
+                'date':max(mvt_by_date) if mvt_by_date else None,
+                'file':mvt_by_date[max(mvt_by_date)].get('original_filename') if mvt_by_date else None,
+            }
+
+            return {
+                'contract_version':'DATA_HEALTH_14_DAY_V1',
+                'window_days':span,
+                'today':today,
+                'completed_through':completed,
+                'rows':rows,
+                'latest':latest,
+                'rules':{
+                    'sort':'MOST_RECENT_FIRST',
+                    'daily_required':['POS','MVT'],
+                    'snapshot_sources':['PRICE','OH','LIVE_FRESH','FROZEN'],
+                    'current_day_required_status':'NOT_DUE_UNTIL_COMPLETED',
+                },
+            }
+        finally:
+            cur.close()
