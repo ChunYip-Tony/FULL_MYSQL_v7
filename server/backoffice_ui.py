@@ -960,7 +960,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-family-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;border:1px solid var(--family-border);border-radius:15px;background:var(--family-bg)}
 .m-family-head small,.m-family-velocity small{display:block;font-size:9px;color:var(--muted);font-weight:900;letter-spacing:.04em}
 .m-family-head b{display:block;font-size:16px;line-height:1.2;margin-top:2px;color:var(--ink)}
-.m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:var(--sea)}
+.m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:var(--sea)}.m-family-velocity small:last-child{margin-top:3px}
 .m-family-upcs{display:grid;gap:7px;padding-left:5px}
 .m-family-upcs .m-row{background:var(--family-bg);border-color:var(--family-border);border-left:4px solid var(--family-accent)}
 
@@ -1777,11 +1777,15 @@ function mobileQuickFamilyGroups(rows){
       category:r.category||'',
       rows:[],
       max_velocity:Number.NEGATIVE_INFINITY,
+      avg_qty_day:0,
       qty_7d:0
     });
     const g=groups.get(key),v=Number(r.velocity_7d);
     g.rows.push(r);
-    if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
+    if(Number.isFinite(v)){
+      g.max_velocity=Math.max(g.max_velocity,v);
+      g.avg_qty_day+=v;
+    }
     g.qty_7d+=Number(r.qty_7d||0);
   });
   const out=[...groups.values()];
@@ -1797,8 +1801,9 @@ function mobileQuickFamilyGroups(rows){
 }
 function mobileQuickGroupedHtml(rows){
   return mobileQuickFamilyGroups(rows).map(g=>{
-    const vel=Number.isFinite(g.max_velocity)?fmt(g.max_velocity):'—';
-    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Top 7D Vel</small><b>'+esc(vel)+'/day</b></div></div>';
+    const avg=fmt(g.avg_qty_day);
+    const total=fmt(g.qty_7d);
+    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Avg Qty/Day</small><b>'+esc(avg)+'/day</b><small>7D Total · '+esc(total)+'</small></div></div>';
     const children=g.rows.map(r=>mobileRow(
       String(r.upc||''),
       r.upc||r.family_article,
