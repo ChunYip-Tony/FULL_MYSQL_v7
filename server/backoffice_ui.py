@@ -915,6 +915,31 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:0}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
+
+.m-quick7d{margin-top:12px}
+.m-trendcard{margin-top:12px}
+.m-chartnote{font-size:10px;color:var(--muted);margin-top:5px}
+.m-trendlegend{display:flex;gap:14px;align-items:center;margin:13px 0 5px;font-size:10px;font-weight:850;color:var(--muted)}
+.m-trendlegend span{display:flex;align-items:center;gap:5px}.m-trendlegend i{display:inline-block}
+.m-trendlegend .bar{width:12px;height:9px;border-radius:3px;background:#86bbb4}
+.m-trendlegend .line{width:15px;height:3px;border-radius:99px;background:#1f7180}
+.m-trendwrap{overflow:hidden;border:1px solid #e3eeeb;border-radius:14px;background:#fbfdfd;padding:6px 3px 0}
+.m-trendwrap svg{display:block;width:100%;height:auto;min-height:205px}
+.m-chart-zero{stroke:#d8e5e2;stroke-width:1}.m-chart-bar{fill:#86bbb4;opacity:.86}
+.m-chart-line{fill:none;stroke:#1f7180;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.m-chart-dot{fill:#fff;stroke:#1f7180;stroke-width:4}
+.m-chart-date{font-size:14px;fill:#6d7f80;font-weight:800}
+.m-chart-gpval{font-size:12px;fill:#47716d;font-weight:900}
+.m-chart-priceval{font-size:13px;fill:#0e5963;font-weight:950}
+.m-history7{display:grid;gap:7px;margin-top:8px}
+.m-history7-row{display:grid;grid-template-columns:1.35fr repeat(4,minmax(0,1fr));gap:6px;align-items:center;padding:9px;border:1px solid #e3ece9;border-radius:12px;background:#f9fbfa}
+.m-history7-row>div{min-width:0}.m-history7-row small{display:block;font-size:8px;color:var(--muted);font-weight:850;text-transform:uppercase}
+.m-history7-row b{display:block;font-size:11px;line-height:1.2;overflow-wrap:anywhere}.m-history7-date span{display:block;font-size:8px;color:var(--muted);margin-top:2px}
+@media(max-width:420px){
+  .m-history7-row{grid-template-columns:1.35fr 1fr 1fr;row-gap:8px}
+  .m-history7-row>div:nth-child(4),.m-history7-row>div:nth-child(5){grid-column:auto}
+  .m-trendwrap{margin-left:-3px;margin-right:-3px}
+}
 </style>
 </head>
 <body>
@@ -1544,6 +1569,75 @@ function mobileOpenItem(key){
   }
   if(mod==='freshness')return mobileFreshnessDetail(key);
 }
+function mobileQuickTrendSvg(rows){
+  const a=(rows||[]).slice(-7);
+  if(!a.length)return '<div class="m-empty">No supported sales days available.</div>';
+  const W=680,H=270,L=34,R=18,T=34,B=42;
+  const plotW=W-L-R,plotH=H-T-B,step=plotW/Math.max(1,a.length);
+  const gps=a.map(x=>x.gp_dollars===null||x.gp_dollars===undefined?null:Number(x.gp_dollars));
+  const prices=a.map(x=>x.avg_sold_price===null||x.avg_sold_price===undefined?null:Number(x.avg_sold_price));
+  const gpFinite=gps.filter(Number.isFinite),priceFinite=prices.filter(Number.isFinite);
+  const gpMin=Math.min(0,...(gpFinite.length?gpFinite:[0]));
+  const gpMax=Math.max(0,...(gpFinite.length?gpFinite:[1]));
+  const gpSpan=(gpMax-gpMin)||1;
+  const pMin=priceFinite.length?Math.min(...priceFinite):0;
+  const pMax=priceFinite.length?Math.max(...priceFinite):1;
+  const pSpan=(pMax-pMin)||1;
+  const gy=v=>T+(gpMax-v)/gpSpan*plotH;
+  const py=v=>T+12+(pMax-v)/pSpan*(plotH-24);
+  const zeroY=gy(0);
+  let bars='',labels='',linePts=[],dots='';
+  a.forEach((x,i)=>{
+    const cx=L+step*i+step/2;
+    const gp=gps[i],pr=prices[i];
+    const date=String(x.date||'').slice(5);
+    labels+='<text x="'+cx.toFixed(1)+'" y="'+(H-12)+'" text-anchor="middle" class="m-chart-date">'+esc(date)+'</text>';
+    if(Number.isFinite(gp)){
+      const y=gy(gp),top=Math.min(y,zeroY),height=Math.max(2,Math.abs(zeroY-y));
+      bars+='<rect x="'+(cx-step*.27).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+(step*.54).toFixed(1)+'" height="'+height.toFixed(1)+'" rx="5" class="m-chart-bar"/>';
+      bars+='<text x="'+cx.toFixed(1)+'" y="'+(gp>=0?Math.max(12,top-5):Math.min(H-B+14,top+height+13)).toFixed(1)+'" text-anchor="middle" class="m-chart-gpval">'+esc(money(gp))+'</text>';
+    }
+    if(Number.isFinite(pr)){
+      const y=py(pr);linePts.push(cx.toFixed(1)+','+y.toFixed(1));
+      dots+='<circle cx="'+cx.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="5" class="m-chart-dot"/>'+
+            '<text x="'+cx.toFixed(1)+'" y="'+Math.max(13,y-10).toFixed(1)+'" text-anchor="middle" class="m-chart-priceval">'+esc(money(pr))+'</text>';
+    }
+  });
+  const line=linePts.length>1?'<polyline points="'+linePts.join(' ')+'" class="m-chart-line"/>':'';
+  return '<div class="m-trendlegend"><span><i class="bar"></i>GP$</span><span><i class="line"></i>Avg Selling Price</span></div>'+
+    '<div class="m-trendwrap"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="7-day GP dollars and average selling price trend">'+
+    '<line x1="'+L+'" y1="'+zeroY.toFixed(1)+'" x2="'+(W-R)+'" y2="'+zeroY.toFixed(1)+'" class="m-chart-zero"/>'+
+    bars+line+dots+labels+'</svg></div>';
+}
+function mobileQuick7dHistoryHtml(rows,qtyUom){
+  const a=(rows||[]).slice(-7).reverse();
+  if(!a.length)return '<div class="m-empty">No supported sales history available.</div>';
+  return '<div class="m-history7">'+a.map(x=>
+    '<div class="m-history7-row">'+
+      '<div class="m-history7-date"><b>'+esc(String(x.date||''))+'</b><span>'+esc((x.price_types||[]).map(p=>p.price_type).filter(Boolean).join(' / ')||'No sale')+'</span></div>'+
+      '<div><small>Qty</small><b>'+esc(fmt(x.sold_quantity))+' '+esc(qtyUom||x.qty_uom||'')+'</b></div>'+
+      '<div><small>Sales</small><b>'+esc(money(x.sales_amount))+'</b></div>'+
+      '<div><small>Avg Price</small><b>'+esc(money(x.avg_sold_price))+'</b></div>'+
+      '<div><small>GP$</small><b>'+esc(money(x.gp_dollars))+'</b></div>'+
+    '</div>'
+  ).join('')+'</div>';
+}
+async function mobileLoadQuick7d(upc){
+  const box=mNode('mQuick7dSection');if(!box)return;
+  try{
+    const d=await api('/v1/app/v2/upc/'+encodeURIComponent(upc)+'/price?trend_supported_days=7');
+    const trend=d.price_vs_sales_trend||{},rows=trend.rows||[];
+    box.innerHTML=
+      '<div class="m-detailcard m-trendcard">'+
+        '<div class="m-label">Past 7 Data Days · Sales History & Trend</div>'+
+        '<div class="m-chartnote">Completed canonical POS data days only · missing source dates are not zeros</div>'+
+        mobileQuickTrendSvg(rows)+
+        '<div class="m-detailsection"><h3>Daily Sales History</h3>'+mobileQuick7dHistoryHtml(rows,d.qty_uom||trend.qty_uom)+'</div>'+
+      '</div>';
+  }catch(e){
+    box.innerHTML='<div class="m-error">7-day history unavailable: '+esc(e.message||String(e))+'</div>';
+  }
+}
 function mobileQuickDetail(key,piMode){
   let r=null;
   if(piMode)r=state.inventory.find(x=>String(x.family_article||x.upc)===String(key));
@@ -1567,8 +1661,10 @@ function mobileQuickDetail(key,piMode){
   html+='</div>';
   if(r.family_article)html+='<button id="mAdjustOH" type="button" class="m-action primary">Update True Stock / OH</button>';
   html+='</div>';
+  if(!piMode&&r.upc)html+='<div id="mQuick7dSection" class="m-quick7d"><div class="m-loading">Loading 7-day sales history…</div></div>';
   mobileShowDetail(title,sub,html);
   const btn=mNode('mAdjustOH');if(btn)btn.onclick=()=>openOH({family:r.family_article,uom:r.family_oh_uom||'',oh:r.family_oh??'',name:r.family_name||r.name||''});
+  if(!piMode&&r.upc)mobileLoadQuick7d(r.upc);
 }
 function mobilePerformanceDetail(key){
   const r=state.salesRows.find(x=>String(x.upc)===String(key));if(!r)return;
