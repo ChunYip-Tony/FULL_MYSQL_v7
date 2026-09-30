@@ -900,8 +900,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
   <div class="m-topbar">
     <div class="m-brand">
-      <strong>FULL MYSQL</strong>
-      <span class="m-market-title">SEAFOOD MARKET · v__VERSION__</span>
+      <strong>WEBAPP v__VERSION__</strong>
+      <span class="m-market-title">SEAFOOD MARKET</span>
       <small class="m-storeline">Store #1032 · Las Vegas</small>
     </div>
     <span class="m-header-fish" aria-hidden="true">🐟</span>
