@@ -1001,8 +1001,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-q-family-identity .m-q-upc-photo{width:58px;height:58px}
 .m-q-label{font-size:8px;color:var(--muted);font-weight:950;letter-spacing:.05em}
 .m-q-family-number-line{display:flex;align-items:center;gap:7px;min-width:0}
-.m-q-family-number{font-size:14px;font-weight:900;line-height:1;color:#5e5227}
-.m-q-family-name{font-size:18px;font-weight:1000;line-height:1.08;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#102c42}
+.m-q-family-number{font-size:13px;font-weight:900;line-height:1;color:#5e5227}
+.m-q-family-name{font-size:17px;font-weight:1000;line-height:1.08;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#102c42}
 .m-q-family-kpis,.m-q-recv-kpis{display:flex;gap:8px;align-items:center}
 .m-q-kpi{min-width:72px;text-align:right}
 .m-q-kpi small{display:block;font-size:7px;color:var(--muted);font-weight:950;text-transform:uppercase}
@@ -1107,8 +1107,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-q-price-state{font-size:6px;font-weight:900;color:#8b6a00;margin-top:2px}
 
 @media(max-width:380px){
-  .m-q-family-number{font-size:13px}
-  .m-q-family-name{font-size:16px}
+  .m-q-family-number{font-size:12px}
+  .m-q-family-name{font-size:15px}
   .m-q-recv-number{font-size:12px}
   .m-q-recv-name{font-size:15px}
   .m-q-family-kpis .m-q-kpi b{font-size:24px}
