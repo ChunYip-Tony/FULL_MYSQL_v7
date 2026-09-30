@@ -60,6 +60,10 @@ html,body{max-width:100%;overflow-x:hidden}
 .group-block .m{background:color-mix(in srgb,var(--card) 82%,transparent);box-shadow:none}
 .related-list{display:grid;gap:10px;margin-top:10px}
 .related-card{border:1.5px solid var(--line);border-radius:17px;padding:13px;background:var(--card);box-shadow:var(--shadow);cursor:pointer}
+.related-240249-subgroup{border:2px solid color-mix(in srgb,#0f8aa6 34%,var(--line));border-radius:18px;padding:10px;background:color-mix(in srgb,#0f8aa6 5%,var(--card));display:grid;gap:8px}
+.related-240249-subgroup .related-card{margin:0;box-shadow:none;background:var(--card)}
+.related-240249-subgroup .related-card.main240{border-left:5px solid #0f8aa6}
+.related-240249-subgroup .related-card.service249{border-left:5px solid #d18b2f}
 .related-upc{font-size:22px;font-weight:950;letter-spacing:.02em;overflow-wrap:anywhere}
 .review-actionable{border-left:7px solid var(--ok)}
 .review-only{border-left:7px solid var(--warn)}
@@ -1690,13 +1694,55 @@ window.addEventListener('online',refreshUploadStatusAfterResume);
 ['dragleave','drop'].forEach(ev=>$('uploadDrop').addEventListener(ev,e=>{e.preventDefault();$('uploadDrop').classList.remove('drag')}));
 $('uploadDrop').addEventListener('drop',e=>setWebUploadFiles(e.dataTransfer.files));
 
+function v2NumericUpc(v){
+  return (String(v??'').replace(/\D/g,'').replace(/^0+/,'')||'');
+}
+function v2PairIdentity(x){
+  const n=v2NumericUpc(x?.upc??x?.number??'');
+  if(n.length<6)return null;
+  const prefix=n.slice(0,3);
+  if(prefix!=='240'&&prefix!=='249')return null;
+  return {key:n.slice(3,6),prefix};
+}
+function renderFamilyRelatedUpcs(rows){
+  const items=(rows||[]).map((x,i)=>({x,i,id:v2PairIdentity(x)}));
+  const groups=new Map();
+  items.forEach(item=>{
+    if(!item.id)return;
+    if(!groups.has(item.id.key))groups.set(item.id.key,{main:null,service:null});
+    const g=groups.get(item.id.key);
+    if(item.id.prefix==='240'&&!g.main)g.main=item;
+    if(item.id.prefix==='249'&&!g.service)g.service=item;
+  });
+  const valid=new Map([...groups].filter(([,g])=>g.main&&g.service));
+  const seen=new Set();
+  const card=item=>{
+    const x=item.x,id=item.id;
+    const cls=id?.prefix==='240'?' main240':(id?.prefix==='249'?' service249':'');
+    const role=id?.prefix==='240'?' · MAIN':(id?.prefix==='249'?' · COOK / SERVICE':'');
+    return '<div class="related-card'+cls+'" data-i="'+item.i+'">'+
+      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+esc(role)+'</div></div>'+pill(x.readiness)+'</div>'+
+      mr('Current Price',priceText(x.current_price,x.selling_uom)+' · '+(x.current_price_type||'—'),(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+x.current_price_asof_date:''))+
+      mr('7D Qty',qv(x.qty_7d,x.selling_uom))+
+      mr('28D Qty',qv(x.qty_28d,x.selling_uom))+
+    '</div>';
+  };
+  return items.map(item=>{
+    const g=item.id?valid.get(item.id.key):null;
+    if(!g)return card(item);
+    if(seen.has(item.id.key))return '';
+    seen.add(item.id.key);
+    return '<div class="related-240249-subgroup"><div class="upc-group-badge">240 / 249 SUBGROUP</div>'+card(g.main)+card(g.service)+'</div>';
+  }).join('');
+}
+
 async function csearch(){
   let q=$('cq').value.trim();
   if(!q){$('cmsg').textContent='Enter an item, Family Article, Article, or UPC.';return}
   $('cmsg').textContent='Searching…';$('cres').innerHTML='';
   try{
     let d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=30');
-    $('cmsg').textContent=d.count+' result(s) · Top 3 Family matches · then UPC groups / UPC · Article shown separately';
+    $('cmsg').textContent=d.count+' result(s) · Top 3 Family matches · then 240/249 subgroups / UPC · Article shown separately';
     $('cres').innerHTML=(d.results||[]).map((r,i)=>{
       let type=String(r.result_type||'').toUpperCase();
       let isFamily=type==='FAMILY',isGroup=type==='UPC_GROUP',isUpc=type==='UPC',isArticle=type==='ARTICLE';
@@ -1712,7 +1758,7 @@ async function csearch(){
         ? '<div class="family-badge">★ FAMILY ARTICLE</div>'
         : (isArticle
             ? '<div class="article-badge">ARTICLE</div>'
-            : (isGroup?'<div class="upc-group-badge">UPC GROUP</div>':''));
+            : (isGroup?'<div class="upc-group-badge">240 / 249 SUBGROUP</div>':''));
       let members=isGroup
         ? '<div class="upc-group-members">'+(r.group_members||[]).map(x=>
             '<div class="upc-group-member"><div><div class="u">'+esc(x.upc||'—')+'</div><div class="r">'+esc(x.group_role||x.upc_role||'RELATED')+'</div><div class="r">Current '+priceText(x.current_price,x.selling_uom)+' · '+esc(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+esc(x.current_price_asof_date):'')+'</div></div><div class="q">'+qv(x.pos_qty_7d,x.qty_28d_uom)+' 7D<br>'+qv(x.qty_28d,x.qty_28d_uom)+' 28D</div></div>'
@@ -1726,11 +1772,12 @@ async function csearch(){
         : (isUpc
             ? '<div class="meta">Sales 7D '+money(r.sales_dollars_7d)+' · Qty 7D '+qv(r.pos_qty_7d,r.selling_uom||r.qty_28d_uom)+' · 28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>'
             : '<div class="meta">28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+'</div>');
+      let displayType=isGroup?'240 / 249 SUBGROUP':(type||'UNKNOWN');
       return '<div class="card result '+cls+'" data-i="'+i+'">'
         +badge
         +'<div class="row" style="justify-content:space-between"><div class="name">'+esc(r.name)+'</div>'+pill(r.readiness)+'</div>'
         +numberHtml
-        +'<div class="result-type">'+esc(type||'UNKNOWN')+' · '+esc(r.category||'—')+'</div>'
+        +'<div class="result-type">'+esc(displayType)+' · '+esc(r.category||'—')+'</div>'
         +(isArticle&&r.family_article_number?'<div class="meta">Family '+esc(r.family_article_number)+' · '+esc(r.family_name||'')+'</div>':'')
         +priceLine
         +qtyLine
@@ -1782,14 +1829,7 @@ async function family(k){try{
       mr('Receipt Qty',qv(r.quantity,r.uom)),
       mr('Receipt Cost',priceText(r.cost,r.cost_uom))
     ]);
-  $('fu').innerHTML=(d.related_upcs||[]).map((x,i)=>
-    '<div class="related-card" data-i="'+i+'">'+
-      '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div></div>'+pill(x.readiness)+'</div>'+
-      mr('Current Price',priceText(x.current_price,x.selling_uom)+' · '+(x.current_price_type||'—'),(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+x.current_price_asof_date:''))+
-      mr('7D Qty',qv(x.qty_7d,x.selling_uom))+
-      mr('28D Qty',qv(x.qty_28d,x.selling_uom))+
-    '</div>'
-  ).join('')||'<div class="small">No related UPCs.</div>';
+  $('fu').innerHTML=renderFamilyRelatedUpcs(d.related_upcs||[])||'<div class="small">No related UPCs.</div>';
   document.querySelectorAll('#fu [data-i]').forEach(e=>e.onclick=()=>upc(d.related_upcs[+e.dataset.i].upc,'family'));
   go('family')
 }catch(e){alert(e.message)}}

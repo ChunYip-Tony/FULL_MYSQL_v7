@@ -19,6 +19,8 @@ from webapp_v2_runtime import (
     _family_receipt_events,
     bulk_ordering_suggestions,
     performance_report,
+    _numeric_key,
+    _seafood_upc_group_signature,
 )
 
 
@@ -814,6 +816,58 @@ def inventory_review(
                 )
             qrows = cur.fetchall()
 
+        # Keep canonical 240 main + 249 cook/service forms together in
+        # every Quick Check result set. Search may match only one member, so
+        # expand the companion from the same confirmed Family + Seafood product
+        # code before rendering. 245/247 remain separate siblings.
+        pair_signatures: set[tuple[int,str]] = set()
+        for pair_row in qrows:
+            sig = _seafood_upc_group_signature(pair_row.get("family_id"), pair_row.get("ean_upc"))
+            prefix = _numeric_key(pair_row.get("ean_upc"))[:3]
+            if sig is not None and prefix in {"240","249"}:
+                pair_signatures.add(sig)
+        if pair_signatures:
+            pair_family_ids = sorted({sig[0] for sig in pair_signatures})
+            placeholders = ",".join(["%s"] * len(pair_family_ids))
+            cur.execute(
+                f"SELECT * FROM quick_check_current WHERE family_id IN ({placeholders}) ORDER BY family_id,ean_upc",
+                tuple(pair_family_ids),
+            )
+            existing = {
+                (int(r["upc_id"]) if r.get("upc_id") is not None else None, str(r.get("ean_upc") or ""))
+                for r in qrows
+            }
+            for companion in cur.fetchall():
+                sig = _seafood_upc_group_signature(companion.get("family_id"), companion.get("ean_upc"))
+                prefix = _numeric_key(companion.get("ean_upc"))[:3]
+                if sig not in pair_signatures or prefix not in {"240","249"}:
+                    continue
+                key = (
+                    int(companion["upc_id"]) if companion.get("upc_id") is not None else None,
+                    str(companion.get("ean_upc") or ""),
+                )
+                if key not in existing:
+                    qrows.append(companion)
+                    existing.add(key)
+            qrows.sort(
+                key=lambda r: (
+                    -float(r.get("upc_velocity_7d") or 0),
+                    -float(r.get("pos_qty_7d") or 0),
+                    str(r.get("ean_upc") or ""),
+                )
+            )
+            if search_meta is not None:
+                search_meta["pair_240_249_expanded"] = True
+                search_meta["pair_240_249_grouping_basis"] = "CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE"
+
+        pair_members: dict[tuple[int,str], set[str]] = {}
+        for pair_row in qrows:
+            sig = _seafood_upc_group_signature(pair_row.get("family_id"), pair_row.get("ean_upc"))
+            prefix = _numeric_key(pair_row.get("ean_upc"))[:3]
+            if sig is not None and prefix in {"240","249"}:
+                pair_members.setdefault(sig,set()).add(prefix)
+        confirmed_pairs = {sig for sig,prefixes in pair_members.items() if {"240","249"}.issubset(prefixes)}
+
         family_cache: dict[int, dict[str, Any]] = {}
         out = []
         for row in qrows:
@@ -884,9 +938,24 @@ def inventory_review(
                         else:
                             family_cache[fid] = live_family_oh
                 family_oh = family_cache.get(fid or -1, {})
+            pair_sig = _seafood_upc_group_signature(fid, row.get("ean_upc"))
+            pair_prefix = _numeric_key(row.get("ean_upc"))[:3]
+            pair_key = (
+                f"{pair_sig[0]}:{pair_sig[1]}"
+                if pair_sig in confirmed_pairs and pair_prefix in {"240","249"}
+                else None
+            )
             out.append(
                 {
                     "upc": row.get("ean_upc"),
+                    "pair_240_249_key": pair_key,
+                    "pair_240_249_role": (
+                        "MAIN_240" if pair_key and pair_prefix=="240"
+                        else ("COOK_SERVICE_249" if pair_key and pair_prefix=="249" else None)
+                    ),
+                    "pair_240_249_grouping_basis": (
+                        "CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE" if pair_key else None
+                    ),
                     "name": row.get("selling_description"),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),

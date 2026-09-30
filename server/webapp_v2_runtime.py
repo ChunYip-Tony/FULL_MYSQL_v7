@@ -562,6 +562,19 @@ def _seafood_upc_group_signature(family_id: Any, ean_upc: Any) -> tuple[int,str]
     return int(family_id),upc[3:6]
 
 
+def _seafood_240_249_pair_signature(family_id: Any, ean_upc: Any) -> tuple[int,str] | None:
+    """Canonical 240/249 display subgroup key.
+
+    Pair only the 240 main and 249 cook/service forms. 245/247 remain siblings
+    under the Family rather than being folded into this subgroup.
+    """
+    sig=_seafood_upc_group_signature(family_id,ean_upc)
+    if sig is None:
+        return None
+    prefix=_numeric_key(ean_upc)[:3]
+    return sig if prefix in {"240","249"} else None
+
+
 def _seafood_upc_group_member_order(ean_upc: Any) -> tuple[int,str]:
     upc=_numeric_key(ean_upc)
     prefix=upc[:3] if len(upc)>=3 else ""
@@ -812,13 +825,13 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         raw_upc_results=[x for x in results if str(x.get("result_type") or "").upper()=="UPC"]
         article_results=[x for x in results if str(x.get("result_type") or "").upper()=="ARTICLE"]
 
-        # Search-selection grouping for Seafood selling forms.
+        # Search-selection grouping for the canonical 240 / 249 subgroup.
         #
-        # 240 is the main anchor. 245 / 247 / 249 are folded into the same
-        # selectable card only when they resolve to the same confirmed Family
-        # and carry the same Seafood product code. This deliberately prevents
-        # unrelated UPCs from being grouped merely because a numeric suffix
-        # happens to look similar. UPC-level POS quantities remain independent.
+        # 240 is the main anchor and 249 is the cook/service companion. 245 /
+        # 247 remain independent sibling UPC choices under the same Family.
+        # Grouping still requires the same confirmed Family and Seafood product
+        # code, so numeric similarity alone can never create a subgroup.
+        # UPC-level POS quantities remain independent.
         family_child_cache: dict[int,list[dict[str,Any]]] = {}
         def _group_family_children(fid:int) -> list[dict[str,Any]]:
             if fid not in family_child_cache:
@@ -832,7 +845,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
         upc_results: list[dict[str,Any]] = []
         processed_group_keys:set[tuple[int,str]]=set()
         for item in raw_upc_results:
-            signature=_seafood_upc_group_signature(item.get("family_id"),item.get("number"))
+            signature=_seafood_240_249_pair_signature(item.get("family_id"),item.get("number"))
             if signature is None:
                 upc_results.append(item)
                 continue
@@ -841,13 +854,13 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
 
             matched_members=[
                 x for x in raw_upc_results
-                if _seafood_upc_group_signature(x.get("family_id"),x.get("number"))==signature
+                if _seafood_240_249_pair_signature(x.get("family_id"),x.get("number"))==signature
             ]
             fid,product_code=signature
             all_children=_group_family_children(fid)
             group_by_upc:dict[str,dict[str,Any]]={}
             for child in all_children:
-                if _seafood_upc_group_signature(child.get("family_id"),child.get("ean_upc"))!=signature:
+                if _seafood_240_249_pair_signature(child.get("family_id"),child.get("ean_upc"))!=signature:
                     continue
                 ean=str(child.get("ean_upc") or "").strip()
                 if ean:
@@ -924,6 +937,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                 "number":anchor.get("ean_upc"),
                 "group_anchor_upc":anchor.get("ean_upc"),
                 "group_product_code":product_code,
+                "group_kind":"240_249_SUBGROUP",
                 "name":anchor.get("selling_description") or item.get("name"),
                 "family_article_number":anchor.get("main_article_number"),
                 "family_name":anchor.get("family_description"),
@@ -962,7 +976,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                     (int(x.get("supported_days_28d") or 0) for x in members),
                     default=0,
                 ),
-                "grouping_basis":"CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE",
+                "grouping_basis":"CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE_240_249_ONLY",
             })
             processed_group_keys.add(signature)
 
