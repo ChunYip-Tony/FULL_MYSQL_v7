@@ -321,7 +321,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesCat:'ALL',salesTrend:'ALL',salesText:'',salesSort:'sales_desc',salesRows:[],orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesCat:'ALL',salesTrend:'ALL',salesText:'',salesSort:'sales_desc',salesRows:[],orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -1160,12 +1160,69 @@ $('#refreshBatch').onclick=loadBatches;
 
 $('#uploadBtn').onclick=async()=>{const files=[...$('#uploadFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#uploadBtn');btn.disabled=true;$('#uploadResult').innerHTML='<span class="meta">Creating batch...</span>';try{const label=($('#uploadNote').value||'').trim()||`Web direct upload ${new Date().toLocaleString()}`;const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});if(created.created===false){$('#uploadResult').innerHTML='<b>Upload not started</b><div class="meta">A batch is already active. Wait for it to finish before uploading another batch.</div>';toast('Active batch already processing');showDbTab('dboverview');await loadBatches();return}const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');const uploaded=[];for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('#uploadResult').innerHTML=`<span class="meta">Uploading ${i+1}/${files.length}: ${esc(files[i].name)}</span>`;const u=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/files`,{method:'POST',body:fd});uploaded.push(u)}$('#uploadResult').innerHTML='<span class="meta">Committing batch and starting processing...</span>';const commit=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/commit`,{method:'POST'});$('#uploadResult').innerHTML=`<b>Upload accepted</b><div class="meta">${files.length} file(s) · processing started</div><div class="filelist">${files.map(f=>`<div class="filerow"><span>${esc(f.name)}</span><span>${fmt(f.size/1024/1024,2)} MB</span></div>`).join('')}</div>`;$('#uploadFiles').value='';$('#uploadNote').value='';toast('Upload complete; batch processing started');showDbTab('dboverview');await loadBatches()}catch(e){$('#uploadResult').innerHTML=`<div class="error" style="margin:-9px">${esc(e.message)}</div>`;toast(e.message)}finally{btn.disabled=false}};
 
-async function loadData(){try{const [h,a,r]=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5')]);const latest=(r.batches||[])[0]||a.latest_batch||{};$('#dataGrid').innerHTML=`<div class="kpi"><small>API Version</small><b>${esc(h.version||'—')}</b><span>${h.ok?'Healthy':'Issue'}</span></div><div class="kpi"><small>Worker</small><b>${esc(h.worker_state||'—')}</b><span>${h.worker_healthy?'Healthy':'Check worker'}</span></div><div class="kpi"><small>Serving / Latest Batch</small><b>#${esc(latest.batch_id||'—')}</b><span>${esc(latest.processing_status||latest.phase3_status||'')}</span></div><div class="kpi"><small>Active Batch</small><b>${a.active_batch?'Yes':'No'}</b><span>${a.active_batch?('#'+a.active_batch.batch_id):'Idle'}</span></div>`;$('#dataEvents').innerHTML=(r.batches||[]).map(b=>`<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(b.batch_id)}</div><div class="meta">${esc(b.completed_at||b.upload_started_at||'')}</div></div>${pill(b.phase3_status||b.processing_status)}</div></div>`).join('')}catch(e){$('#dataEvents').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+async function loadData(){
+  const err=$('#dataHealthError');if(err)err.innerHTML='';
+  try{
+    const d=await api('/v1/backoffice/data-health?days=14');
+    state.dataHealth=d;
+    const latest=d.latest||{};
+    const sourceKeys=['POS','MVT','PRICE','OH','LIVE_FRESH','FROZEN'];
+    const labels={POS:'POS',MVT:'MVT',PRICE:'Price',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
+    $('#dataGrid').innerHTML=sourceKeys.map(k=>{
+      const x=latest[k]||{};
+      return '<div class="kpi"><small>'+esc(labels[k])+'</small><b>'+esc(x.date||'—')+'</b><span>'+esc(x.file||'No recent source')+'</span></div>';
+    }).join('');
+    const stateTag=x=>{
+      const s=String(x?.status||'NONE').toUpperCase();
+      if(s==='OK')return '<span class="pill green">OK</span>';
+      if(s==='MISSING')return '<span class="pill red">MISS</span>';
+      if(s==='NOT_DUE')return '<span class="pill blue">NOT DUE</span>';
+      return '<span class="pill blue">—</span>';
+    };
+    const overallTag=s=>{
+      const v=String(s||'').toUpperCase();
+      if(v==='COMPLETE')return '<span class="pill green">COMPLETE</span>';
+      if(v==='MISSING')return '<span class="pill red">MISSING</span>';
+      return '<span class="pill blue">CURRENT DAY</span>';
+    };
+    $('#dataHealthRows').innerHTML=(d.rows||[]).map(r=>{
+      const s=r.sources||{};
+      return '<tr class="data-health-row" data-date="'+esc(r.date)+'">'+
+        '<td><b>'+esc(r.date)+'</b><div class="meta">'+esc(r.weekday||'')+'</div></td>'+
+        '<td>'+overallTag(r.overall_status)+'</td>'+
+        '<td>'+stateTag(s.POS)+'</td>'+
+        '<td>'+stateTag(s.MVT)+'</td>'+
+        '<td>'+stateTag(s.PRICE)+'</td>'+
+        '<td>'+stateTag(s.OH)+'</td>'+
+        '<td>'+stateTag(s.LIVE_FRESH)+'</td>'+
+        '<td>'+stateTag(s.FROZEN)+'</td>'+
+        '<td><button class="btn small data-health-detail" data-date="'+esc(r.date)+'">Details</button></td>'+
+      '</tr>';
+    }).join('')||'<tr><td colspan="9" class="empty">No Data Health rows.</td></tr>';
+    $$('.data-health-detail').forEach(b=>b.onclick=e=>{e.stopPropagation();openDataHealthDetail(b.dataset.date)});
+    $$('.data-health-row').forEach(tr=>tr.onclick=()=>openDataHealthDetail(tr.dataset.date));
+  }catch(e){
+    if(err)err.innerHTML='<div class="error">'+esc(e.message)+'</div>';
+    $('#dataHealthRows').innerHTML='<tr><td colspan="9" class="empty">Unable to load Data Health.</td></tr>';
+  }
+}
+function openDataHealthDetail(dateKey){
+  const data=state.dataHealth||{},r=(data.rows||[]).find(x=>String(x.date)===String(dateKey));if(!r)return;
+  const names={POS:'POS',MVT:'MVT',PRICE:'Price List',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
+  const blocks=Object.keys(names).map(k=>{
+    const x=(r.sources||{})[k]||{};
+    const requirement=(k==='POS'||k==='MVT')?'Daily required':'Snapshot source';
+    return '<div class="reason"><span class="rdot"></span><div><b>'+esc(names[k])+' · '+esc(x.status||'NONE')+'</b><span>'+
+      esc(requirement)+' · '+esc(x.file||'No source')+(x.batch_id?' · Batch #'+esc(x.batch_id):'')+
+    '</span></div></div>';
+  }).join('');
+  openDrawer('Data Health · '+r.date,(r.weekday||'')+' · '+(r.overall_status||''),'<div class="reasonlist">'+blocks+'</div>','<span class="pill blue">READ ONLY</span>');
+}
 $('#refreshData').onclick=loadData;
-$('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
+$('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
 
 $('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
-async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice())showMobileHome({scroll:false});else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
+async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice())showMobileHome({scroll:false});else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
 })();
 </script>
 </body></html>'''
