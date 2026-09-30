@@ -196,7 +196,7 @@ jobs:
           PY
 
 
-      - name: Validate 4816 pack authority
+      - name: Validate 4816 EA authority
         run: |
           python - <<'PY'
           from decimal import Decimal
@@ -206,7 +206,7 @@ jobs:
           assert len(rows)==1, rows
           row=rows[0]
           assert row['article_number']=='1351311'
-          assert row['selling_uom_code']=='PACK'
+          assert row['selling_uom_code']=='EA'
           assert row['base_uom_code']=='LB'
           assert Decimal(str(row['base_qty_per_selling_unit']))==Decimal('4')
 
@@ -215,10 +215,10 @@ jobs:
               if str(x.get('ean_upc'))=='4816'
           ]
           assert len(conv)==1, conv
-          assert conv[0]['selling_uom_code']=='PACK'
+          assert conv[0]['selling_uom_code']=='EA'
           assert Decimal(str(conv[0]['cost_qty']))==Decimal('4')
           assert conv[0]['cost_uom_code']=='LB'
-          print('upc-4816-pack-authority=PASS')
+          print('upc-4816-ea-authority=PASS')
           PY
 
       - name: Validate current price authority contract
