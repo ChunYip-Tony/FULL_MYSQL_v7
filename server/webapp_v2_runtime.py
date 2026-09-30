@@ -4143,9 +4143,11 @@ def _gp_day_price_suggestion_from_batch(
     historical sales response. Company A/B/C constrains the candidate range but
     does not by itself exclude an otherwise qualified UPC.
 
-    Fresh DOH > 7 and Frozen DOH > 60 enter clearance mode. Clearance
-    prioritizes a historically observed lower price with stronger sell-through;
-    normal mode maximizes observed GP$/day.
+    Fresh/Live DOH > 7 and Frozen DOH > 60 raise freshness urgency.
+    For every qualified UPC, the candidate objective remains maximum observed
+    GP$/day from recent selling history. Company A/B/C, when present, is a
+    hard candidate range; without Company price references, the best supported
+    price is suggested directly.
     """
     cost=(
         Decimal(str(row["current_cost_per_selling_unit"]))
@@ -4172,7 +4174,7 @@ def _gp_day_price_suggestion_from_batch(
     pclass=str(row.get("product_class") or "").upper()
     doh=(Decimal(str(row["doh"])) if row.get("doh") is not None else None)
     clearance_reason=None
-    if pclass=="FRESH" and doh is not None and doh>Decimal("7"):
+    if pclass in {"FRESH","LIVE"} and doh is not None and doh>Decimal("7"):
         clearance_reason="FRESH_DOH_GT_7"
     elif pclass=="FROZEN" and doh is not None and doh>Decimal("60"):
         clearance_reason="FROZEN_DOH_GT_60"
@@ -4226,71 +4228,34 @@ def _gp_day_price_suggestion_from_batch(
         if (not refs or company_low<=_d(x.get("price"))<=company_high)
     ]
 
-    if clearance:
-        lower=[x for x in pool if _d(x.get("price"))<current]
-        if lower:
-            lower.sort(key=lambda x:(
-                -float(x.get("observed_velocity_per_day") or 0),
-                -float(x.get("gp_per_observed_day_at_current_cost") or 0),
-                float(x.get("price") or 0),
-            ))
-            best=lower[0]
-            suggested=_d(best["price"])
-            basis=(
-                "COMPANY_RANGE_CLEARANCE_14D_SELL_THROUGH"
-                if refs else "CLEARANCE_14D_SELL_THROUGH"
-            )
-            selection="LOWER_14D_OBSERVED_PRICE_MAX_SELL_THROUGH"
-            expected_gp=best.get("gp_per_observed_day_at_current_cost")
-            expected_vel=best.get("observed_velocity_per_day")
-        elif sweet is not None and clamp_company(sweet)<current:
-            suggested=clamp_company(sweet)
-            basis=(
-                "COMPANY_RANGE_CLEARANCE_CLAMPED_SWEET_SPOT"
-                if refs else "CLEARANCE_HISTORICAL_SWEET_SPOT"
-            )
-            selection="LOWER_HISTORICAL_SWEET_SPOT"
-            expected_gp=None
-            expected_vel=None
-        elif refs:
-            suggested=company_low
-            basis="COMPANY_RANGE_CLEARANCE_FLOOR"
-            selection="COMPANY_RANGE_LOW_FOR_CLEARANCE"
-            expected_gp=None
-            expected_vel=None
-        else:
-            return {
-                **base,"status":"UNAVAILABLE",
-                "reason":"CLEARANCE_LOWER_PRICE_HISTORY_UNAVAILABLE",
-                "suggested_price":None,
-            }
+    # DOH/freshness changes urgency, not the optimization objective.
+    # The supported candidate is always the price with maximum observed GP$/day.
+    if pool:
+        best=pool[0]
+        suggested=_d(best["price"])
+        basis=("COMPANY_RANGE_14D_MAX_GP_PER_DAY" if refs else "14D_MAX_GP_PER_DAY")
+        selection=("14D_OBSERVED_IN_COMPANY_RANGE" if refs else "14D_OBSERVED_MAX_GP_PER_DAY")
+        expected_gp=best.get("gp_per_observed_day_at_current_cost")
+        expected_vel=best.get("observed_velocity_per_day")
+    elif candidates and refs:
+        best=candidates[0]
+        suggested=clamp_company(_d(best["price"]))
+        basis="COMPANY_RANGE_CLAMPED_14D_MAX_GP_PER_DAY"
+        selection="14D_MAX_GP_PER_DAY_CLAMPED_TO_COMPANY_RANGE"
+        expected_gp=None
+        expected_vel=None
+    elif sweet is not None:
+        suggested=clamp_company(sweet)
+        basis=("COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT" if refs else "HISTORICAL_SWEET_SPOT")
+        selection="HISTORICAL_SWEET_SPOT"
+        expected_gp=None
+        expected_vel=None
     else:
-        if pool:
-            best=pool[0]
-            suggested=_d(best["price"])
-            basis=("COMPANY_RANGE_14D_MAX_GP_PER_DAY" if refs else "14D_MAX_GP_PER_DAY")
-            selection=("14D_OBSERVED_IN_COMPANY_RANGE" if refs else "14D_OBSERVED_MAX_GP_PER_DAY")
-            expected_gp=best.get("gp_per_observed_day_at_current_cost")
-            expected_vel=best.get("observed_velocity_per_day")
-        elif candidates and refs:
-            best=candidates[0]
-            suggested=clamp_company(_d(best["price"]))
-            basis="COMPANY_RANGE_CLAMPED_14D_MAX_GP_PER_DAY"
-            selection="14D_MAX_GP_PER_DAY_CLAMPED_TO_COMPANY_RANGE"
-            expected_gp=None
-            expected_vel=None
-        elif sweet is not None:
-            suggested=clamp_company(sweet)
-            basis=("COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT" if refs else "HISTORICAL_SWEET_SPOT")
-            selection="HISTORICAL_SWEET_SPOT"
-            expected_gp=None
-            expected_vel=None
-        else:
-            return {
-                **base,"status":"UNAVAILABLE",
-                "reason":"NO_14D_PRICE_HISTORY_OR_SWEET_SPOT",
-                "suggested_price":None,
-            }
+        return {
+            **base,"status":"UNAVAILABLE",
+            "reason":"NO_14D_PRICE_HISTORY_OR_SWEET_SPOT",
+            "suggested_price":None,
+        }
 
     return {
         **base,
@@ -4546,7 +4511,7 @@ def performance_report(
     cat=str(category or "ALL").strip().upper()
     if cat not in {"ALL","LIVE","FRESH","FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
-    limit=max(1,min(int(limit or 100),100))
+    limit=max(1,min(int(limit or 100),1000))
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
@@ -4635,7 +4600,7 @@ def performance_report(
             )
             clearance_gate=bool(
                 (
-                    pclass=="FRESH"
+                    pclass in {"FRESH","LIVE"}
                     and doh_for_gate is not None
                     and doh_for_gate>Decimal("7")
                 )
@@ -5066,9 +5031,9 @@ def performance_report(
             "sales_evidence_cutoff":anchor,
             "historical_window_supported_days":14,
             "company_reference_rule":"RANGE_IS_MIN_TO_MAX_OF_AVAILABLE_POSITIVE_A_B_C; QUALIFIED_UPCS_MAY_BE_REVIEWED_REGARDLESS_OF_CURRENT_IN_RANGE",
-            "company_candidate_rule":"CANDIDATE_MUST_STAY_WITHIN_COMPANY_RANGE; NORMAL_MODE_MAX_14D_GP_DOLLARS_PER_DAY; CLEARANCE_MODE_LOWER_SELL_THROUGH_PRICE; FALLBACK_CLAMP_14D_OR_SWEET_SPOT_TO_RANGE",
+            "company_candidate_rule":"CANDIDATE_MUST_STAY_WITHIN_COMPANY_RANGE; ALL_QUALIFIED_UPCS_MAXIMIZE_14D_GP_DOLLARS_PER_DAY; FALLBACK_CLAMP_14D_OR_SWEET_SPOT_TO_RANGE",
             "no_company_reference_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY",
-            "freshness_rule":"FRESH_OR_LIVE_DOH_GT_7_AND_FROZEN_DOH_GT_60_USE_CLEARANCE_OR_MARKDOWN_MODE",
+            "freshness_rule":"FRESH_OR_LIVE_DOH_GT_7_AND_FROZEN_DOH_GT_60_RAISE_PRICE_REVIEW_URGENCY; GP_DOLLARS_PER_DAY_REMAINS_OPTIMIZATION_OBJECTIVE",
             "clearance_candidate_rule":"LOWER_14D_OBSERVED_PRICE_WITH_HIGHEST_SELL_THROUGH_VELOCITY; NO_INVENTED_MARKDOWN_WITHOUT_HISTORY",
             "candidate_demand_basis":"ACTUAL_HISTORICAL_SALES_RESPONSE_AT_OBSERVED_PRICE",
             "cost_basis":"CURRENT_AUTHORITATIVE_COST",
