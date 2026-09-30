@@ -886,8 +886,9 @@ ANALYSIS_COLUMNS = [
 def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
     """ChatGPT analytical input: READY rows only.
 
-    QA_HOLD/HISTORICAL rows remain available in dedicated verification tabs but
-    are never mixed into the analytical matrix used for recommendations.
+    QA_HOLD rows remain isolated in MYSQL_QA_HOLD. HISTORICAL_ONLY rows remain
+    searchable in MYSQL_QUICK_CHECK_CURRENT but are neither analytical input nor
+    QA HOLD rows.
     """
     ready = [
         row for row in rows
@@ -905,12 +906,18 @@ def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def _build_qa(rows: list[dict[str, Any]]) -> list[list[Any]]:
+    """Export only true operational QA HOLD rows.
+
+    HISTORICAL_ONLY is an informational/current-activity classification, not a
+    blocker. In particular, NO_POS_SALES_LATEST_28_VALID_DATA_DAYS must never
+    appear in MYSQL_QA_HOLD or contribute to hold/excluded counts.
+    """
     header = ["Sheet_Row","ean_upc","main_article_number","article_number","selling_description",
               "selling_uom","current_price","current_cost_per_selling_unit","pos_qty_7d",
               "quick_check_status","blocking_reason","publish_batch_id"]
     out = [header]
     for sheet_row, row in enumerate(rows, start=2):
-        if str(row.get("quick_check_status") or "").upper() != "READY":
+        if str(row.get("quick_check_status") or "").upper() == "QA_HOLD":
             out.append([sheet_row,row.get("ean_upc"),row.get("main_article_number"),row.get("article_number"),
                         row.get("selling_description"),row.get("selling_uom"),row.get("current_price"),
                         row.get("current_cost_per_selling_unit"),row.get("pos_qty_7d"),
@@ -1056,6 +1063,7 @@ def _source_status(
     *,
     analysis_ready_rows: int,
     analysis_family_rows: int,
+    analysis_hold_rows: int,
     freshness: dict[str, Any],
     latest_daily: dict[str, Any],
 ) -> list[list[Any]]:
@@ -1077,7 +1085,7 @@ def _source_status(
         ("Serving_Rows_Total",row_count),
         ("Analysis_READY_Rows",analysis_ready_rows),
         ("Analysis_Family_Rows",analysis_family_rows),
-        ("Analysis_Excluded_HOLD_Rows",phase3.get("quick_check_hold_rows")),
+        ("Analysis_Excluded_HOLD_Rows",analysis_hold_rows),
         ("Analysis_Input_Policy","READY_ONLY"),
         ("Latest_Daily_Business_Date",latest_daily.get("business_date")),
         ("Latest_Daily_Coverage_Kind",latest_daily.get("coverage_kind")),
@@ -1278,6 +1286,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 len(rows),
                 analysis_ready_rows=analysis_row_count,
                 analysis_family_rows=analysis_family_count,
+                analysis_hold_rows=len(hold_rows),
                 freshness=freshness,
                 latest_daily=latest_daily,
             ),
@@ -1347,7 +1356,8 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             status="PASS",
             detail=(
                 f"READY-only analytical snapshot published: {analysis_row_count} READY rows; "
-                f"{len(hold_rows)} HOLD rows excluded to MYSQL_QA_HOLD."
+                f"{len(hold_rows)} true QA HOLD rows excluded to MYSQL_QA_HOLD; "
+                "HISTORICAL_ONLY rows remain verification-only."
             ),
         )
         if transport == "APPS_SCRIPT":
