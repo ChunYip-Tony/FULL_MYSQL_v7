@@ -4927,6 +4927,9 @@ def performance_report(
                 "current_within_company_range":price_opt.get("current_within_company_range"),
                 "clearance_due_to_doh":clearance,
                 "doh":doh_value,
+                "pricing_rule_priority":(
+                    0 if clearance else (1 if has_company else 2)
+                ),
                 "primary_reason_text":primary_reason,
                 "direction":(
                     (
@@ -5027,6 +5030,7 @@ def performance_report(
         suggestions.sort(
             key=lambda x:(
                 0 if x.get("actionable") else 1,
+                int(x.get("pricing_rule_priority") or 9),
                 -float(x.get("gp_per_day_opportunity") or 0),
                 -float(x.get("urgency_score") or 0),
                 -float(x.get("qty_28d") or 0),
