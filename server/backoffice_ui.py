@@ -1732,10 +1732,8 @@ function seafood240249Identity(r,familyOverride=''){
   if(key.length<6)return null;
   const prefix=key.slice(0,3);
   if(prefix!=='240'&&prefix!=='249')return null;
-  const family=String(
-    familyOverride||
-    r.family_id??r.family_article??r.family_article_number??r.main_article_number??''
-  );
+  const familyCandidate=r.family_id??r.family_article??r.family_article_number??r.main_article_number??'';
+  const family=String(familyOverride||familyCandidate);
   if(!family)return null;
   const product=key.slice(3,6);
   const explicit=String(r.pair_240_249_key||'');
