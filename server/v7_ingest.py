@@ -48,23 +48,35 @@ def find_active_batch() -> dict[str,Any]|None:
                       'RELEASED',
                       'PHASE2C_READY'
                   )
-               OR (
-                    ib.processing_status NOT IN (
-                      'QUICK_CHECK_READY',
-                      'QUICK_CHECK_READY_WITH_HOLDS',
-                      'PHASE3_QA_HOLD',
-                      'API_ABORTED'
-                    )
-                    AND EXISTS (
-                      SELECT 1 FROM pipeline_run pr
-                      WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
-                        AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                        AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
-                    )
+               OR EXISTS (
+                    SELECT 1 FROM pipeline_run pr
+                    WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
+                      AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                      AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
                   )
             ORDER BY ib.batch_id DESC LIMIT 1
         """,(API_PIPELINE,))
-        row=cur.fetchone(); cur.close()
+        row=cur.fetchone()
+        if row:
+            cur.execute(
+                """SELECT pipeline_run_id,stage_name,processing_status,code_version,started_at,created_at
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                     AND pipeline_name=%s
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                   ORDER BY pipeline_run_id DESC
+                   LIMIT 1""",
+                (int(row['batch_id']),API_PIPELINE),
+            )
+            active_run=cur.fetchone()
+            if active_run:
+                row['active_pipeline_run_id']=active_run.get('pipeline_run_id')
+                row['active_stage_name']=active_run.get('stage_name')
+                row['active_run_status']=active_run.get('processing_status')
+                row['active_code_version']=active_run.get('code_version')
+                row['active_run_started_at']=active_run.get('started_at') or active_run.get('created_at')
+        cur.close()
     if row:
         row['device_id']=_device_from_notes(row.get('notes'))
         for k,v in list(row.items()):
