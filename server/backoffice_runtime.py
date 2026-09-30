@@ -465,6 +465,9 @@ def inventory_review(
                     "readiness": row.get("quick_check_status"),
                     "selling_uom": row.get("selling_uom"),
                     "price": row.get("current_price"),
+                    "price_type": row.get("current_price_type"),
+                    "price_source": row.get("current_price_source"),
+                    "price_as_of": row.get("current_price_asof_date"),
                     "cost": row.get("current_cost_per_selling_unit"),
                     "gp_pct": row.get("gp_pct_current"),
                     "qty_7d": row.get("pos_qty_7d"),
@@ -474,7 +477,6 @@ def inventory_review(
                     "family_oh_uom": family_oh.get("uom"),
                     "family_oh_source": family_oh.get("source"),
                     "last_receipt_date": row.get("last_receipt_date"),
-                    "price_type": row.get("current_price_type"),
                 }
             )
         cur.close()

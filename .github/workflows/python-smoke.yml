@@ -82,6 +82,21 @@ jobs:
           print('backoffice-dom-bindings=PASS')
           PY
 
+      - name: Validate current price authority contract
+        run: |
+          python - <<'PY'
+          import inspect
+          import phase3
+
+          src = inspect.getsource(phase3._current_price)
+          assert "s.temporal_grain='SINGLE_DATE'" in src, src
+          assert "s.period_start_date=s.period_end_date" in src, src
+          assert "POS_SINGLE_DATE" in src, src
+          assert "POS_SOLD_AVG" not in src, src
+          assert "source_since_date<=DATE(p.snapshot_at)" in src, src
+          print('current-price-authority=PASS')
+          PY
+
       - name: Import worker and Phase 3 modules
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
