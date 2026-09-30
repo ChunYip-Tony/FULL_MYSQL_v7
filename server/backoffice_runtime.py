@@ -28,6 +28,46 @@ from webapp_v2_runtime import (
 )
 
 
+def _fallback_selling_article_compatible(
+    prefix: str,
+    article_number: str,
+    article_description: str,
+) -> bool:
+    """Reject impossible Seafood UPC -> Selling Article heuristic matches.
+
+    Exact Article Manual or user-confirmed mappings are resolved before this
+    helper. These restrictions apply only to fallback scoring.
+    """
+    p = str(prefix or "")
+    art = str(article_number or "")
+    raw = str(article_description or "").upper()
+    desc = " ".join("".join(ch if ch.isalnum() else " " for ch in raw).split())
+    is_service_desc = ("FRIED" in desc) or ("SERVICE" in desc)
+
+    structural_prefix = None
+    if art.startswith("1540"):
+        structural_prefix = "240"
+    elif art.startswith("1545"):
+        structural_prefix = "245"
+    elif art.startswith("1549"):
+        structural_prefix = "249"
+
+    if structural_prefix and p in {"240", "245", "249"}:
+        if structural_prefix != p:
+            return False
+
+    if p in {"240", "245"} and is_service_desc:
+        return False
+
+    if p == "249":
+        if art.startswith("1549"):
+            return True
+        if not is_service_desc:
+            return False
+
+    return True
+
+
 def _d(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
@@ -1549,51 +1589,6 @@ def _quick_receiving_article_context(
 
     day_count = len(movement_days_7)
 
-    def _fallback_article_compatible_with_upc(
-        prefix: str,
-        article_number: str,
-        article_description: str,
-    ) -> bool:
-        """Hard guard for fallback UPC -> SAP Selling Article assignment.
-
-        Exact Article Manual / user-confirmed mappings are resolved before this
-        function and are not constrained here. This guard exists only to stop
-        heuristic suffix/name matching from crossing known Seafood selling
-        channels, e.g. 240739 -> 1549739 (249 Fried Service).
-        """
-        p = str(prefix or "")
-        art = str(article_number or "")
-        desc = _norm_desc(article_description)
-        is_service_desc = ("FRIED" in desc) or ("SERVICE" in desc)
-
-        # Structural 1540/1545/1549 Articles belong to 240/245/249 channels.
-        structural_prefix = None
-        if art.startswith("1540"):
-            structural_prefix = "240"
-        elif art.startswith("1545"):
-            structural_prefix = "245"
-        elif art.startswith("1549"):
-            structural_prefix = "249"
-
-        if structural_prefix and p in {"240", "245", "249"}:
-            if structural_prefix != p:
-                return False
-
-        # Regular 240/245 UPCs must never heuristically attach to a Fried/Service
-        # Selling Article. Only an exact manual/user-confirmed authority may do so.
-        if p in {"240", "245"} and is_service_desc:
-            return False
-
-        # 249 is the Fried/Service channel. In fallback mode, require either its
-        # structural 1549 form or explicit Fried/Service semantics.
-        if p == "249":
-            if art.startswith("1549"):
-                return True
-            if not is_service_desc:
-                return False
-
-        return True
-
     def _norm_desc(value: Any) -> str:
         raw = str(value or "").upper()
         return " ".join(
@@ -1625,7 +1620,7 @@ def _quick_receiving_article_context(
         for a in articles:
             art = str(a.get("article_number") or "")
             desc = _norm_desc(a.get("article_description"))
-            if not _fallback_article_compatible_with_upc(prefix, art, desc):
+            if not _fallback_selling_article_compatible(prefix, art, desc):
                 continue
             score = (
                 SequenceMatcher(None, sell_desc, desc).ratio() * 60.0
