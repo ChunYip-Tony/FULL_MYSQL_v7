@@ -207,9 +207,36 @@ jobs:
           assert 'm.family_id IS NULL' in runtime
           assert 'FAMILY / SAP SELLING ARTICLE' not in ui
           assert 'Place its UPCs directly underneath' in ui
+          assert '_fallback_selling_article_compatible' in runtime
+          assert 'NO_PREFIX_COMPATIBLE_SAP_SELLING_ARTICLE' in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
+
+      - name: Validate global Selling Article fallback guards
+        run: |
+          python - <<'PY'
+          import backoffice_runtime as b
+
+          ok=b._fallback_selling_article_compatible
+          # The production bug class: 240/245 regular UPC must never land on
+          # a 1549 Fried-Service article through heuristic fallback.
+          assert not ok('240','1549739','NORWEGIAN SABA(Fried Service)')
+          assert not ok('245','1549739','NORWEGIAN SABA(Fried Service)')
+          # Structural channels cannot cross.
+          assert ok('240','1540739','NORWEGIAN SABA')
+          assert not ok('240','1545739','NORWEGIAN SABA')
+          assert ok('245','1545739','NORWEGIAN SABA')
+          assert not ok('245','1540739','NORWEGIAN SABA')
+          assert ok('249','1549739','NORWEGIAN SABA(Fried Service)')
+          assert not ok('249','1540739','NORWEGIAN SABA')
+          assert not ok('249','1341297','SABA MACKEREL')
+          # Non-structural service articles remain valid for 249 when the
+          # description itself carries explicit Fried/Service semantics.
+          assert ok('249','2045590','30/40 H/O WHITE SHRIMP(Fried Service)')
+          # Exact manual authority is checked before this fallback guard.
+          print('global-selling-article-fallback-guard=PASS')
+          PY
 
       - name: Validate Article Manual tab schemas
         run: |
