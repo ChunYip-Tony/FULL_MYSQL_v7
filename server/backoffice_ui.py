@@ -941,7 +941,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-trendwrap{margin-left:-3px;margin-right:-3px}
 }
 
-/* Quick Check compact text-only Family -> SAP Selling Article -> UPC hierarchy */
+/* Quick Check compact Family -> evidence-classified SAP Article -> UPC hierarchy */
 .m-quicktools.on{display:grid!important;grid-template-columns:1fr!important}
 .m-quicktools>input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-size:16px;background:#fff}
 
@@ -2534,6 +2534,7 @@ function mobileQuickFamilyGroups(rows){
         relationship_type:a.relationship_type||'',
         is_primary:!!a.is_primary,
         mapping_status:a.mapping_status||'',
+        article_role:a.article_role||'',
         movement_7d:a.movement_7d,
         movement_uom:a.movement_uom||'',
         avg_qty_day:a.avg_qty_day,
@@ -2556,6 +2557,7 @@ function mobileQuickFamilyGroups(rows){
       article_number:assigned||null,
       article_description:assigned?'':'Receiving Article unresolved',
       mapping_status:assigned?'ASSIGNED':'UNRESOLVED',
+      article_role:'RELATED_SAP_ARTICLE',
       movement_7d:r.receiving_movement_7d,
       movement_uom:r.receiving_movement_uom||'',
       avg_qty_day:r.receiving_avg_qty_day,
@@ -2684,9 +2686,18 @@ function mobileQuickGroupedHtml(rows){
         {movement_type:a.receipt_movement_type,date:a.receipt_date,quantity:a.receipt_qty,uom:a.receipt_uom}
       );
       const articleHasMvt=hasNonZero(a.movement_7d);
-      const articleRole=a.receipt_verified&&articleHasMvt
+      const roleCode=String(a.article_role||'').toUpperCase();
+      const articleRole=roleCode==='RECEIVING_AND_SAP_SELLING_ARTICLE'
         ? 'RECEIVING / SAP SELLING ARTICLE'
-        : (a.receipt_verified?'RECEIVING ARTICLE':(articleHasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE'));
+        : (roleCode==='RECEIVING_ARTICLE'
+          ? 'RECEIVING ARTICLE'
+          : (roleCode==='SAP_SELLING_ARTICLE'
+            ? 'SAP SELLING ARTICLE'
+            : (roleCode==='RELATED_SAP_ARTICLE'
+              ? 'RELATED SAP ARTICLE'
+              : (a.receipt_verified&&articleHasMvt
+                ? 'RECEIVING / SAP SELLING ARTICLE'
+                : (a.receipt_verified?'RECEIVING ARTICLE':(articleHasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE'))))));
       const recvHead='<div class="m-q-receiving-head">'+
         '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">'+esc(articleRole)+'</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">'+(articleHasMvt?'251−252 MVT':'No 251−252 on this Article')+'</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
@@ -2728,7 +2739,7 @@ function mobileQuickGroupedHtml(rows){
       const hasMvt=hasNonZero(a?.movement_7d);
       const upcRows=Array.isArray(a?.rows)?a.rows:[];
       const hasUpcActivity=upcRows.some(r=>hasNonZero(r?.qty_7d));
-      // Any Receiving Article with 101–109 history stays visible.
+      // Any Article with 101–109 receipt evidence stays visible.
       // Only non-receipt articles with no 7D MVT and no related UPC POS activity are hidden.
       const shouldHide=!a?.receipt_verified&&!hasMvt&&!hasUpcActivity;
       (shouldHide?hidden:visible).push({a,recentVerified});
@@ -2738,8 +2749,8 @@ function mobileQuickGroupedHtml(rows){
     const hiddenId='m-q-hidden-'+String(idx)+'-'+String(g.family_id??g.family_article??'family').replace(/[^A-Za-z0-9_-]/g,'');
     const hiddenHtml=hidden.map(x=>receivingCard(x.a,{inactive:true,recentVerified:x.recentVerified})).join('');
     const hiddenToggle=hidden.length
-      ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(hiddenId)+'" data-hidden-noun="Receiving Article" aria-expanded="false">'+
-          '<span class="m-q-hidden-left"><span class="m-q-hidden-count">'+hidden.length+'</span><span>Show inactive Receiving Article'+(hidden.length===1?'':'s')+'</span></span>'+
+      ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(hiddenId)+'" data-hidden-noun="SAP Article" aria-expanded="false">'+
+          '<span class="m-q-hidden-left"><span class="m-q-hidden-count">'+hidden.length+'</span><span>Show inactive SAP Article'+(hidden.length===1?'':'s')+'</span></span>'+
           '<span class="m-q-hidden-chevron">⌄</span>'+
         '</button>'+
         '<div class="m-q-hidden-wrap" id="'+esc(hiddenId)+'"><div class="m-q-hidden-inner">'+hiddenHtml+'</div></div>'
