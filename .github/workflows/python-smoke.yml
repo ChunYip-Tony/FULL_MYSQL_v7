@@ -209,6 +209,7 @@ jobs:
           assert 'Place its UPCs directly underneath' in ui
           assert '_fallback_selling_article_compatible' in runtime
           assert 'NO_PREFIX_COMPATIBLE_SAP_SELLING_ARTICLE' in runtime
+          assert 'must never win heuristic UPC assignment' in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
@@ -495,8 +496,8 @@ jobs:
               if mismatches:
                   raise SystemExit('GLOBAL_SELLING_ARTICLE_MAPPING_AUDIT_FAILED')
               saba=regression.get('24073900000')
-              if saba and str(saba.get('assigned_article') or '')=='1549739':
-                  raise SystemExit('REGRESSION_240739_STILL_MAPPED_TO_1549739')
+              if saba and str(saba.get('assigned_article') or '')!='1341297':
+                  raise SystemExit('REGRESSION_240739_NOT_MAPPED_TO_FAMILY_SELLING_ARTICLE')
               roe=regression.get('24518400000')
               if roe and not str(roe.get('assigned_article') or ''):
                   raise SystemExit('REGRESSION_245184_WAS_OVERBLOCKED')
