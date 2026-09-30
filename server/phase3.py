@@ -17,11 +17,13 @@ from manual_overrides import (
     ensure_retirement_table,
     ensure_cost_conversion_table,
     ensure_family_cost_table,
+    ensure_article_family_override_table,
     apply_manual_upc_overrides,
     apply_manual_upc_retirements,
     apply_manual_cost_conversions,
     apply_manual_family_costs,
     apply_manual_family_subarticles,
+    apply_manual_article_family_overrides,
     confirmed_cost_conversion,
     confirmed_family_cost,
     confirmed_receipt_entry_cost_basis,
@@ -2843,6 +2845,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             ensure_retirement_table(cur)
             ensure_cost_conversion_table(cur)
             ensure_family_cost_table(cur)
+            ensure_article_family_override_table(cur)
             ensure_coverage_backfill_tables(cur)
             ensure_analysis_layer_tables(cur)
             conn.commit()
@@ -2864,6 +2867,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             cost_conversion_result = apply_manual_cost_conversions(cur)
             family_cost_result = apply_manual_family_costs(cur)
             family_subarticle_result = apply_manual_family_subarticles(cur)
+            article_family_override_result = apply_manual_article_family_overrides(cur)
             if cost_conversion_result.get('held'):
                 raise RuntimeError(
                     'One or more confirmed cost conversions could not be applied: '
@@ -2878,6 +2882,11 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                 raise RuntimeError(
                     'One or more confirmed family subarticles could not be applied: '
                     + str(family_subarticle_result.get('held'))
+                )
+            if article_family_override_result.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed Article->Family overrides could not be applied: '
+                    + str(article_family_override_result.get('held'))
                 )
             retired_recomputed_issues = retire_recomputed_phase3_issues(cur, batch_id)
             report('PHASE3_MANUAL_AUTHORITY_READY')
@@ -2971,6 +2980,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             retirement_result = apply_manual_upc_retirements(cur)
             family_cost_result_final = apply_manual_family_costs(cur)
             family_subarticle_result_final = apply_manual_family_subarticles(cur)
+            article_family_override_result_final = apply_manual_article_family_overrides(cur)
             if family_cost_result_final.get('held'):
                 raise RuntimeError(
                     'One or more confirmed family costs failed final authority lock: '
@@ -2980,6 +2990,11 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                 raise RuntimeError(
                     'One or more confirmed family subarticles failed final authority lock: '
                     + str(family_subarticle_result_final.get('held'))
+                )
+            if article_family_override_result_final.get('held'):
+                raise RuntimeError(
+                    'One or more confirmed Article->Family overrides failed final authority lock: '
+                    + str(article_family_override_result_final.get('held'))
                 )
 
             # Current sold-but-unmapped readiness is GLOBAL current state, not
