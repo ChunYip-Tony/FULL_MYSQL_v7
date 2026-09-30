@@ -2497,7 +2497,7 @@ function mobileQuickGroupedHtml(rows){
         : '';
 
       const receiptKeepNote=a.receipt_verified&&!hasNonZero(a.movement_7d)&&!allUpcRows.some(r=>hasNonZero(r?.qty_7d))
-        ? '<div class="m-q-recent-receipt-note">Kept visible: 101–109 verified Receiving Article'+(recentVerified?' · most recent receipt':'')+'.</div>'
+        ? '<div class="m-q-recent-receipt-note">Kept visible: 101–109 verified SAP Selling Article'+(recentVerified?' · most recent receipt':'')+'.</div>'
         : '';
       const inactiveNote=inactive
         ? '<div class="m-q-inactive-note">Hidden by default · no 7D Receiving MVT and no related UPC 7D POS activity.</div>'
