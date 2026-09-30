@@ -1779,16 +1779,24 @@ function mobileQuickFamilyGroups(rows){
       category:r.category||'',
       rows:[],
       max_velocity:Number.NEGATIVE_INFINITY,
-      avg_qty_day:0,
-      qty_7d:0
+      family_avg_qty_day:null,
+      family_qty_7d:null,
+      family_qty_uom:'',
+      family_movement_days_7d:null
     });
     const g=groups.get(key),v=Number(r.velocity_7d);
     g.rows.push(r);
-    if(Number.isFinite(v)){
-      g.max_velocity=Math.max(g.max_velocity,v);
-      g.avg_qty_day+=v;
+    if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
+    if(g.family_qty_7d===null&&r.family_qty_7d!==null&&r.family_qty_7d!==undefined){
+      g.family_qty_7d=Number(r.family_qty_7d);
     }
-    g.qty_7d+=Number(r.qty_7d||0);
+    if(g.family_avg_qty_day===null&&r.family_avg_qty_day!==null&&r.family_avg_qty_day!==undefined){
+      g.family_avg_qty_day=Number(r.family_avg_qty_day);
+    }
+    if(!g.family_qty_uom&&r.family_qty_uom)g.family_qty_uom=String(r.family_qty_uom);
+    if(g.family_movement_days_7d===null&&r.family_movement_days_7d!==null&&r.family_movement_days_7d!==undefined){
+      g.family_movement_days_7d=Number(r.family_movement_days_7d);
+    }
   });
   const out=[...groups.values()];
   // UPCs inside every family are always highest recent velocity first.
@@ -1798,14 +1806,17 @@ function mobileQuickFamilyGroups(rows){
     const bb=Number.isFinite(bv)?bv:Number.NEGATIVE_INFINITY;
     return bb-aa||Number(b.qty_7d||0)-Number(a.qty_7d||0)||String(a.upc||'').localeCompare(String(b.upc||''));
   }));
-  out.sort((a,b)=>b.max_velocity-a.max_velocity||b.qty_7d-a.qty_7d||String(a.family_name||'').localeCompare(String(b.family_name||'')));
+  out.sort((a,b)=>b.max_velocity-a.max_velocity||(Number(b.family_qty_7d||0)-Number(a.family_qty_7d||0))||String(a.family_name||'').localeCompare(String(b.family_name||'')));
   return out;
 }
 function mobileQuickGroupedHtml(rows){
   return mobileQuickFamilyGroups(rows).map(g=>{
-    const avg=fmt(g.avg_qty_day);
-    const total=fmt(g.qty_7d);
-    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Avg Qty/Day</small><b>'+esc(avg)+'/day</b><small>7D Total · '+esc(total)+'</small></div></div>';
+    const avg=g.family_avg_qty_day===null?'—':fmt(g.family_avg_qty_day);
+    const total=g.family_qty_7d===null?'—':fmt(g.family_qty_7d);
+    const uom=g.family_qty_uom||'';
+    const avgText=avg==='—'?'—':avg+(uom?' '+uom:'')+'/day';
+    const totalText=total==='—'?'—':total+(uom?' '+uom:'');
+    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Avg Qty/Day</small><b>'+esc(avgText)+'</b><small>7D Qty · '+esc(totalText)+'</small></div></div>';
     const children=g.rows.map(r=>mobileRow(
       String(r.upc||''),
       r.upc||r.family_article,
