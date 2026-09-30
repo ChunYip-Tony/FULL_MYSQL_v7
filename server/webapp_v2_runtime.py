@@ -2283,24 +2283,23 @@ def _ordering_family_bucket(
         if source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
             return "FRESH"
 
+    # Report membership is the category authority even when the report has
+    # no usable Official Cost. company_price_observation is populated for the
+    # Live/Fresh and Frozen reports whenever A/B/C or Cost evidence exists.
     cur.execute(
         """SELECT source_type
-           FROM article_cost_observation
+           FROM company_price_observation
            WHERE family_id=%s
-             AND source_type IN (
-               'FROZEN_INVENTORY_OFFICIAL_COST',
-               'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-             )
-             AND cost_status NOT IN ('REJECTED','SUPERSEDED')
-           ORDER BY business_date DESC,cost_observation_id DESC
+             AND source_type IN ('frozen_inventory','live_fresh_suggestion')
+           ORDER BY observation_date DESC,company_price_observation_id DESC
            LIMIT 1""",
         (int(family_id),),
     )
     row=cur.fetchone()
-    source=str((row or {}).get("source_type") or "").strip().upper()
-    if source=="FROZEN_INVENTORY_OFFICIAL_COST":
+    source=str((row or {}).get("source_type") or "").strip().lower()
+    if source=="frozen_inventory":
         return "FROZEN"
-    if source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+    if source=="live_fresh_suggestion":
         return "FRESH"
     return None
 
@@ -2328,24 +2327,21 @@ def _ordering_candidate_families(cur, kind: str) -> list[dict[str,Any]]:
              FROM quick_check_current
              WHERE family_id IS NOT NULL
            ),
-           ranked_official AS (
+           ranked_report AS (
              SELECT family_id,source_type,
                     ROW_NUMBER() OVER (
                       PARTITION BY family_id
-                      ORDER BY business_date DESC,cost_observation_id DESC
+                      ORDER BY observation_date DESC,company_price_observation_id DESC
                     ) AS rn
-             FROM article_cost_observation
-             WHERE source_type IN (
-               'FROZEN_INVENTORY_OFFICIAL_COST',
-               'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-             )
-               AND cost_status NOT IN ('REJECTED','SUPERSEDED')
+             FROM company_price_observation
+             WHERE source_type IN ('frozen_inventory','live_fresh_suggestion')
+               AND family_id IS NOT NULL
            )
            SELECT q.family_id,q.main_article_number,q.family_description,
                   q.product_class,q.cost_source,
                   o.source_type AS official_source
            FROM ranked_qc q
-           LEFT JOIN ranked_official o
+           LEFT JOIN ranked_report o
              ON o.family_id=q.family_id AND o.rn=1
            WHERE q.rn=1
            ORDER BY q.family_description,q.main_article_number"""
@@ -2363,9 +2359,9 @@ def _ordering_candidate_families(cur, kind: str) -> list[dict[str,Any]]:
             bucket="FROZEN"
         elif cost_source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
             bucket="FRESH"
-        elif official_source=="FROZEN_INVENTORY_OFFICIAL_COST":
+        elif official_source.lower()=="frozen_inventory":
             bucket="FROZEN"
-        elif official_source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+        elif official_source.lower()=="live_fresh_suggestion":
             bucket="FRESH"
         else:
             bucket=None
