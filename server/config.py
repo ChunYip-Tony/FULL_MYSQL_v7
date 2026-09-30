@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json, os, tempfile
+import hashlib, json, os, tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, unquote
@@ -81,11 +81,44 @@ class Settings:
         cert = self.ca_cert_text.strip()
         if not cert:
             return None
-        p = Path(tempfile.gettempdir()) / 'fullmysql-v7-ca.crt'
+
         # Bindable vars may carry escaped newlines depending on deployment path.
         if '\\n' in cert and 'BEGIN CERTIFICATE' in cert:
             cert = cert.replace('\\n','\n')
-        p.write_text(cert, encoding='utf-8')
+
+        # The Backoffice opens several DB connections concurrently (health,
+        # active batch, history, QA). Rewriting one shared /tmp CA file on every
+        # connection can briefly expose a truncated certificate to another SSL
+        # handshake. Use a content-addressed immutable filename and publish it
+        # atomically instead.
+        cert_bytes = cert.encode('utf-8')
+        digest = hashlib.sha256(cert_bytes).hexdigest()[:16]
+        p = Path(tempfile.gettempdir()) / f'fullmysql-v7-ca-{digest}.crt'
+
+        try:
+            if p.exists() and p.read_bytes() == cert_bytes:
+                return p
+        except OSError:
+            pass
+
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f'fullmysql-v7-ca-{digest}-',
+            suffix='.tmp',
+            dir=tempfile.gettempdir(),
+        )
+        tmp = Path(tmp_name)
+        try:
+            with os.fdopen(fd, 'wb') as fh:
+                fh.write(cert_bytes)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp, p)
+        finally:
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
         return p
 
 def get_settings() -> Settings:
