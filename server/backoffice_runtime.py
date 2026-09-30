@@ -877,7 +877,16 @@ def _manual_main_selling_uom_map(
     for row in cur.fetchall():
         article = str(row.get("article_number") or "").strip()
         uom = str(row.get("source_value_text") or "").strip().upper()
-        if article and uom:
+        if not article or not uom:
+            continue
+        # Main-row pack specifications such as 10/4LB are configuration evidence,
+        # not canonical movement UOM codes. Only exact dim_uom codes may drive
+        # Family movement reconciliation.
+        cur.execute(
+            "SELECT 1 FROM dim_uom WHERE UPPER(uom_code)=UPPER(%s) LIMIT 1",
+            (uom,),
+        )
+        if cur.fetchone():
             latest_by_article.setdefault(article, uom)
     return {
         fid: latest_by_article[main]
@@ -932,7 +941,56 @@ def _manual_selling_article_map(
         for fid in targets.get(key, set()):
             if str(family_main_by_id.get(fid) or "") != main:
                 continue
+            # Explicit Table 1 Column B always wins.
             out.setdefault((fid, key), article)
+
+    # Table 1 convention: when a UPC row has Column B blank, the Selling Article
+    # is the Family/Main Article in Column A. Confirm that fallback only through
+    # an Article-Manual-backed UPC -> Main bridge; never infer it from name/suffix.
+    missing_keys = sorted({
+        key
+        for key, fids_for_key in targets.items()
+        if any((fid, key) not in out for fid in fids_for_key)
+    })
+    if missing_keys:
+        mph = ",".join(["%s"] * len(missing_keys))
+        cur.execute(
+            f"""SELECT su.ean_upc,pf.main_article_number
+                FROM selling_upc su
+                JOIN bridge_article_upc bau
+                  ON bau.upc_id=su.upc_id
+                 AND bau.mapping_status='CONFIRMED'
+                 AND bau.is_primary=TRUE
+                 AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+                JOIN article a ON a.article_id=bau.article_id
+                JOIN bridge_article_family baf
+                  ON baf.article_id=a.article_id
+                 AND baf.mapping_status='CONFIRMED'
+                 AND baf.is_primary=TRUE
+                 AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+                JOIN product_family pf ON pf.family_id=baf.family_id
+                WHERE su.record_status='ACTIVE'
+                  AND TRIM(LEADING '0' FROM su.ean_upc) IN ({mph})
+                  AND EXISTS (
+                      SELECT 1
+                      FROM normalized_source_evidence nse
+                      WHERE nse.object_type='ARTICLE_UPC'
+                        AND nse.object_id=bau.article_upc_id
+                        AND nse.raw_table_name='raw_article_manual'
+                  )
+                ORDER BY su.upc_id""",
+            tuple(missing_keys),
+        )
+        for row in cur.fetchall():
+            raw_upc = str(row.get("ean_upc") or "").strip()
+            main = str(row.get("main_article_number") or "").strip()
+            key = _numeric_key(raw_upc) or raw_upc
+            if not key or not main:
+                continue
+            for fid in targets.get(key, set()):
+                if str(family_main_by_id.get(fid) or "") != main:
+                    continue
+                out.setdefault((fid, key), main)
     return out
 
 
