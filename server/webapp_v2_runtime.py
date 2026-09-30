@@ -2256,6 +2256,125 @@ def _family_promotion_baseline(
     }
 
 
+
+def _ordering_family_bucket(
+    cur,
+    family_id: int,
+    product_class: Any=None,
+    current_cost_source: Any=None,
+    official_source: Any=None,
+) -> str | None:
+    """Resolve the operational Ordering bucket.
+
+    Ordering exposes FRESH and FROZEN. LIVE belongs to the FRESH ordering
+    bucket. When Quick Check product_class is blank, use official report
+    evidence instead of silently excluding the family.
+    """
+    pclass=str(product_class or "").strip().upper()
+    if pclass=="FROZEN":
+        return "FROZEN"
+    if pclass in {"FRESH","LIVE"}:
+        return "FRESH"
+
+    for raw_source in (current_cost_source, official_source):
+        source=str(raw_source or "").strip().upper()
+        if source=="FROZEN_INVENTORY_OFFICIAL_COST":
+            return "FROZEN"
+        if source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+            return "FRESH"
+
+    cur.execute(
+        """SELECT source_type
+           FROM article_cost_observation
+           WHERE family_id=%s
+             AND source_type IN (
+               'FROZEN_INVENTORY_OFFICIAL_COST',
+               'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
+             AND cost_status NOT IN ('REJECTED','SUPERSEDED')
+           ORDER BY business_date DESC,cost_observation_id DESC
+           LIMIT 1""",
+        (int(family_id),),
+    )
+    row=cur.fetchone()
+    source=str((row or {}).get("source_type") or "").strip().upper()
+    if source=="FROZEN_INVENTORY_OFFICIAL_COST":
+        return "FROZEN"
+    if source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+        return "FRESH"
+    return None
+
+
+def _ordering_candidate_families(cur, kind: str) -> list[dict[str,Any]]:
+    """Return families for one operational Ordering bucket in one bulk read."""
+    target=str(kind or "").strip().upper()
+    if target not in {"FRESH","FROZEN"}:
+        raise ValueError("ORDER_TYPE_MUST_BE_FRESH_OR_FROZEN")
+
+    cur.execute(
+        """WITH ranked_qc AS (
+             SELECT family_id,main_article_number,family_description,
+                    product_class,cost_source,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY family_id
+                      ORDER BY CASE quick_check_status
+                                 WHEN 'READY' THEN 0
+                                 WHEN 'QA_HOLD' THEN 1
+                                 ELSE 2
+                               END,
+                               COALESCE(upc_velocity_7d,0) DESC,
+                               ean_upc
+                    ) AS rn
+             FROM quick_check_current
+             WHERE family_id IS NOT NULL
+           ),
+           ranked_official AS (
+             SELECT family_id,source_type,
+                    ROW_NUMBER() OVER (
+                      PARTITION BY family_id
+                      ORDER BY business_date DESC,cost_observation_id DESC
+                    ) AS rn
+             FROM article_cost_observation
+             WHERE source_type IN (
+               'FROZEN_INVENTORY_OFFICIAL_COST',
+               'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
+               AND cost_status NOT IN ('REJECTED','SUPERSEDED')
+           )
+           SELECT q.family_id,q.main_article_number,q.family_description,
+                  q.product_class,q.cost_source,
+                  o.source_type AS official_source
+           FROM ranked_qc q
+           LEFT JOIN ranked_official o
+             ON o.family_id=q.family_id AND o.rn=1
+           WHERE q.rn=1
+           ORDER BY q.family_description,q.main_article_number"""
+    )
+    out=[]
+    for fam in cur.fetchall():
+        pclass=str(fam.get("product_class") or "").strip().upper()
+        cost_source=str(fam.get("cost_source") or "").strip().upper()
+        official_source=str(fam.get("official_source") or "").strip().upper()
+        if pclass=="FROZEN":
+            bucket="FROZEN"
+        elif pclass in {"FRESH","LIVE"}:
+            bucket="FRESH"
+        elif cost_source=="FROZEN_INVENTORY_OFFICIAL_COST":
+            bucket="FROZEN"
+        elif cost_source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+            bucket="FRESH"
+        elif official_source=="FROZEN_INVENTORY_OFFICIAL_COST":
+            bucket="FROZEN"
+        elif official_source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+            bucket="FRESH"
+        else:
+            bucket=None
+        if bucket==target:
+            fam["ordering_category"]=bucket
+            out.append(fam)
+    return out
+
+
 def bulk_ordering_suggestions(
     order_type: str,
     *,
@@ -2299,16 +2418,7 @@ def bulk_ordering_suggestions(
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         shared_sales_days_28=_canonical_sales_days(cur,limit=28)
-        classes=("FRESH",) if kind=="FRESH" else ("FROZEN",)
-        ph=",".join(["%s"]*len(classes))
-        cur.execute(
-            f"""SELECT DISTINCT family_id,main_article_number,family_description
-                FROM quick_check_current
-                WHERE UPPER(COALESCE(product_class,'')) IN ({ph})
-                ORDER BY family_description,main_article_number""",
-            classes,
-        )
-        families=cur.fetchall()
+        families=_ordering_candidate_families(cur,kind)
         suggestions=[]
         skipped=[]
 
@@ -2451,7 +2561,7 @@ def bulk_ordering_suggestions(
     return {
         "contract_version":"WEBAPP_V2_BULK_ORDERING_V1",
         "order_type":kind,
-        "category_scope":["FRESH"] if kind=="FRESH" else ["FROZEN"],
+        "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
             "ordering_date":order_day,
             "expected_delivery_date":delivery,
@@ -3126,10 +3236,15 @@ def bulk_ordering_suggestions(
                 raise ValueError(f"DUPLICATE_PROMOTION_UPC:{canonical_upc}")
             seen_promo_upcs.add(canonical_upc)
 
-            pclass=str(prow.get("product_class") or "").upper()
+            pclass=_ordering_family_bucket(
+                cur,
+                int(prow["family_id"]),
+                prow.get("product_class"),
+                prow.get("cost_source"),
+            )
             if pclass!=kind:
                 raise ValueError(
-                    f"PROMOTION_UPC_CATEGORY_MISMATCH:{canonical_upc}:{pclass}:{kind}"
+                    f"PROMOTION_UPC_CATEGORY_MISMATCH:{canonical_upc}:{pclass or 'UNRESOLVED'}:{kind}"
                 )
 
             upc_id=int(prow["upc_id"])
@@ -3159,16 +3274,7 @@ def bulk_ordering_suggestions(
                 "promotion_baseline":promo_baseline,
             })
 
-        classes=(kind,)
-        ph=",".join(["%s"]*len(classes))
-        cur.execute(
-            f"""SELECT DISTINCT family_id,main_article_number,family_description
-                FROM quick_check_current
-                WHERE UPPER(COALESCE(product_class,'')) IN ({ph})
-                ORDER BY family_description,main_article_number""",
-            classes,
-        )
-        families=cur.fetchall()
+        families=_ordering_candidate_families(cur,kind)
         suggestions=[]
         skipped=[]
 
@@ -3337,7 +3443,7 @@ def bulk_ordering_suggestions(
     return {
         "contract_version":"WEBAPP_V2_BULK_ORDERING_V2",
         "order_type":kind,
-        "category_scope":[kind],
+        "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
             "ordering_date":order_day,
             "expected_delivery_date":delivery,
