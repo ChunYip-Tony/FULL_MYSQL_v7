@@ -587,7 +587,8 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
         "rules": {
             "write_enabled": False,
             "price_changes_are_review_only": True,
-            "current_price_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
+            "current_price_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
+            "current_price_rule": "NEWEST_VALID_PRICE_LIST_VS_NEWER_SINGLE_DATE_POS_SOLD_EVENT; MULTI_DAY_POS_AVERAGES_ARE_HISTORICAL_ONLY",
             "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
             "source_contract": report.get("price_suggestion_rules"),
         },
