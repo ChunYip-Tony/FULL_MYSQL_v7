@@ -247,8 +247,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div class="toolrow">
       <div class="filters">
         <button class="filter dbtab on" data-dbtab="dboverview">Database Home</button>
-        <button class="filter dbtab" data-dbtab="dbqa">QA Fixes</button>
         <button class="filter dbtab" data-dbtab="dbdata">Data Health</button>
+        <button class="filter dbtab" data-dbtab="dbqa">QA Fixes</button>
       </div>
     </div>
   </div>
@@ -329,7 +329,7 @@ function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
 async function api(url,opts={}){const r=await fetch(url,{cache:'no-store',...opts});let data=null;try{data=await r.json()}catch{data={detail:await r.text()}}if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}return data}
-const DB_TAB_HASH={dboverview:'home',dbqa:'qa',dbdata:'health'};
+const DB_TAB_HASH={dboverview:'home',dbdata:'health',dbqa:'qa'};
 const HASH_DB_TAB={home:'dboverview',overview:'dboverview',upload:'dboverview',processing:'dboverview',qa:'dbqa',health:'dbdata'};
 function routeFromHash(){
   const raw=decodeURIComponent((location.hash||'').replace(/^#/,'').trim().toLowerCase());
