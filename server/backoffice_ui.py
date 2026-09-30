@@ -941,130 +941,147 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-trendwrap{margin-left:-3px;margin-right:-3px}
 }
 
-/* Quick Check compact Family -> Receiving Article -> UPC hierarchy */
+/* Quick Check compact text-only Family -> SAP Selling Article -> UPC hierarchy */
 .m-quicktools.on{display:grid!important;grid-template-columns:1fr!important}
 .m-quicktools>input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-size:16px;background:#fff}
 
 .m-q-family-group{
-  --q-bg:#fff4c7;
-  --q-head:#ffe89a;
-  --q-border:#dfbd55;
-  --q-accent:#846515;
+  --q-bg:#fff6c9;
+  --q-head:#ffeda4;
+  --q-border:#d9b92d;
+  --q-accent:#806414;
   position:relative;
   display:grid;
   gap:3px;
-  margin-bottom:10px;
+  margin-bottom:9px;
   padding:3px;
   border:2px solid var(--q-border);
-  border-radius:15px;
+  border-radius:12px;
   background:var(--q-bg);
-  box-shadow:0 4px 10px rgba(7,55,62,.04);
+  box-shadow:0 2px 8px rgba(7,55,62,.035);
 }
 .m-q-family-group.q-family-tone-1,
 .m-q-family-group.q-family-tone-2,
 .m-q-family-group.q-family-tone-3,
 .m-q-family-group.q-family-tone-4,
 .m-q-family-group.q-family-tone-5{
-  --q-bg:#fff4c7;
-  --q-head:#ffe89a;
-  --q-border:#dfbd55;
-  --q-accent:#846515;
+  --q-bg:#fff6c9;
+  --q-head:#ffeda4;
+  --q-border:#d9b92d;
+  --q-accent:#806414;
 }
-.m-q-family-group+.m-q-family-group{margin-top:12px}
-.m-q-family-group+.m-q-family-group:before{
-  content:"NEXT FAMILY";
-  position:absolute;
-  top:-10px;
-  left:50%;
-  transform:translateX(-50%);
-  padding:1px 7px;
-  border-radius:999px;
-  background:#f5f8f7;
-  color:#89999a;
-  font-size:7px;
-  font-weight:950;
-  letter-spacing:.12em;
-  white-space:nowrap;
-}
+.m-q-family-group+.m-q-family-group{margin-top:10px}
+.m-q-family-group+.m-q-family-group:before{display:none}
 
-.m-q-family-head{
+.m-q-family-head,
+.m-q-receiving-head{
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
-  gap:8px;
+  gap:7px;
   align-items:center;
-  padding:4px 6px;
+  padding:5px 6px;
+  border-radius:8px;
+}
+.m-q-family-head{
   border:1px solid var(--q-border);
-  border-radius:9px;
   background:var(--q-head);
 }
-.m-q-family-identity{display:grid;grid-template-columns:54px minmax(0,1fr);gap:6px;align-items:center;min-width:0}
-.m-q-family-identity .m-q-upc-photo{width:54px;height:54px}
-.m-q-label{font-size:8px;color:var(--muted);font-weight:950;letter-spacing:.05em}
-.m-q-family-number-line{display:flex;align-items:center;gap:7px;min-width:0}
-.m-q-family-number{font-size:13px;font-weight:900;line-height:1;color:#5e5227}
-.m-q-family-name{font-size:17px;font-weight:1000;line-height:1.02;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#102c42}
+.m-q-receiving-head{background:rgba(255,247,205,.72)}
+.m-q-family-identity,
+.m-q-recv-identity{min-width:0}
+.m-q-titleline{display:flex;align-items:center;gap:5px;min-width:0;flex-wrap:wrap}
+.m-q-label{
+  display:inline-flex;
+  align-items:center;
+  padding:2px 5px;
+  border-radius:5px;
+  background:#f1d94d;
+  color:#2e371d;
+  font-size:7px;
+  font-weight:1000;
+  letter-spacing:.025em;
+  white-space:nowrap;
+}
+.m-q-receiving .m-q-label{background:#d9f0d5;color:#176b42}
+.m-q-family-number-line,.m-q-recv-number-line{display:flex;align-items:center;gap:5px;min-width:0}
+.m-q-family-number,.m-q-recv-number{
+  font-size:13px;
+  font-weight:950;
+  line-height:1.05;
+  color:#1d2938;
+  white-space:nowrap;
+}
+.m-q-family-name,.m-q-recv-name{
+  display:block;
+  width:100%;
+  font-size:15px;
+  font-weight:1000;
+  line-height:1.12;
+  color:#102c42;
+  margin-top:2px;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  overflow-wrap:anywhere;
+}
 .m-q-family-kpis,.m-q-recv-kpis{display:flex;gap:5px;align-items:center}
-.m-q-kpi{min-width:64px;text-align:right}
-.m-q-kpi small{display:block;font-size:7px;color:var(--muted);font-weight:950;text-transform:uppercase}
+.m-q-kpi{min-width:60px;text-align:right}
+.m-q-kpi small{display:block;font-size:6px;color:var(--muted);font-weight:950;text-transform:uppercase}
 .m-q-kpi b{display:block;font-weight:1000;margin-top:1px;white-space:nowrap}
-.m-q-family-kpis .m-q-kpi b{font-size:24px;line-height:1;color:#d71920}
-.m-q-recv-kpis .m-q-kpi b{font-size:12px;line-height:1.05;color:#d71920}
+.m-q-family-kpis .m-q-kpi b{font-size:22px;line-height:1;color:#d71920}
+.m-q-recv-kpis .m-q-kpi b{font-size:11px;line-height:1.05;color:#d71920}
 
-.m-q-receiving-list{display:grid;gap:4px;padding-left:9px;position:relative}
-.m-q-receiving-list:before{content:"";position:absolute;left:3px;top:3px;bottom:8px;width:2px;background:#d4aa29;border-radius:999px}
+.m-q-receiving-list{display:grid;gap:4px;padding-left:7px;position:relative}
+.m-q-receiving-list:before{content:"";position:absolute;left:2px;top:2px;bottom:6px;width:2px;background:#d9b92d;border-radius:999px}
 .m-q-receiving{
   overflow:hidden;
   position:relative;
   border:1px solid var(--q-border);
-  border-left:4px solid #d4aa29;
-  border-radius:9px;
-  background:rgba(255,249,213,.88);
+  border-left:3px solid #d9b92d;
+  border-radius:8px;
+  background:rgba(255,250,222,.90);
 }
-.m-q-receiving:before{content:"";position:absolute;left:-9px;top:26px;width:10px;height:2px;background:#d4aa29}
-.m-q-receiving-head{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  gap:5px;
-  align-items:center;
-  padding:4px 6px;
-  background:rgba(255,244,199,.72);
-}
-.m-q-recv-number-line{display:flex;align-items:center;gap:7px;min-width:0}
-.m-q-recv-number{font-size:13px;font-weight:900;line-height:1.05;color:#5e5227}
-.m-q-recv-name{font-size:17px;font-weight:1000;line-height:1.02;color:#102c42;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-q-receiving:before{content:"";position:absolute;left:-7px;top:22px;width:7px;height:2px;background:#d9b92d}
+
 .m-q-receipt-o{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  width:23px;
-  height:23px;
-  flex:0 0 23px;
+  width:22px;
+  height:22px;
+  flex:0 0 22px;
   border:2px solid #8b1018;
   border-radius:50%;
   color:#8b1018;
-  font-size:16px;
+  font-size:15px;
   line-height:1;
   font-weight:1000;
   background:transparent;
 }
 .m-q-receipt-caption{display:none}
-.m-q-receipt-info{
-  display:flex;
-  gap:7px;
-  flex-wrap:wrap;
-  padding:0 8px 6px;
-  color:#655f58;
-  font-size:7px;
-  font-weight:850;
+.m-q-receipt-info{display:none}
+.m-q-receipt-history{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) minmax(0,1fr);
+  gap:3px;
+  align-items:center;
+  padding:0 5px 3px;
 }
-.m-q-receipt-info b{color:#3f4e50}
-.m-q-receipt-history{display:grid;grid-template-columns:42px repeat(2,minmax(0,1fr));gap:2px;align-items:center;padding:0 5px 3px}
-.m-q-receipt-history-label{display:flex;align-items:center;font-size:6px;font-weight:950;color:#5b5a50;line-height:1.05;padding:2px 0}
-.m-q-receipt-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px;align-items:center;border:1px solid #e2d8a8;border-radius:6px;background:rgba(255,255,255,.88);padding:1px 3px;min-width:0}
-.m-q-receipt-type{display:grid;place-items:center;min-width:24px;height:20px;border:1px solid #e02020;border-radius:5px;color:#d71920;font-size:9px;font-weight:1000;background:#fff}
-.m-q-receipt-date{font-size:7px;font-weight:900;color:#264f76;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-q-receipt-history-label{font-size:6px;font-weight:950;color:#5b5a50;line-height:1.05;white-space:nowrap}
+.m-q-receipt-card{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:3px;
+  align-items:center;
+  min-width:0;
+  border:1px solid #e2d8a8;
+  border-radius:6px;
+  background:rgba(255,255,255,.9);
+  padding:2px 3px;
+}
+.m-q-receipt-type{display:grid;place-items:center;min-width:24px;height:19px;border:1px solid #e02020;border-radius:4px;color:#d71920;font-size:8px;font-weight:1000;background:#fff}
+.m-q-receipt-date{font-size:7px;font-weight:900;color:#264f76;white-space:normal;line-height:1.05}
 .m-q-receipt-qty{font-size:6px;font-weight:900;color:#18304a;margin-top:1px}
-@media(max-width:390px){.m-q-receipt-history{grid-template-columns:42px repeat(2,minmax(0,1fr))}.m-q-receipt-history-label{grid-column:auto;padding-bottom:0}}
 
 .m-q-upcs{
   display:grid;
@@ -1074,53 +1091,100 @@ BACKOFFICE_HTML = r'''<!doctype html>
   background:transparent;
 }
 .m-q-upc-row.m-row{
-  padding:3px 5px!important;
+  padding:4px 5px!important;
   min-height:0!important;
   border:1px solid #e0d7a6!important;
-  border-radius:10px!important;
+  border-radius:8px!important;
   background:#fff!important;
-  box-shadow:0 2px 7px rgba(7,55,62,.025)!important;
+  box-shadow:none!important;
 }
-.m-q-upc-row .m-row-main{display:grid!important;grid-template-columns:minmax(0,1fr) 58px 66px 12px;gap:4px;align-items:center}
+.m-q-upc-row .m-row-main{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) 12px;
+  gap:4px;
+  align-items:center;
+}
 .m-q-upc-main{min-width:0}
-.m-q-upc-mainwrap{display:grid;grid-template-columns:54px minmax(0,1fr);gap:6px;align-items:center;min-width:0}
-.m-q-upc-photo{width:54px;height:54px;border:1px solid #d7dedc;border-radius:9px;overflow:hidden;background:#f3f5f4;display:grid;place-items:center;flex:0 0 58px}
-.m-q-upc-photo img{width:100%;height:100%;object-fit:cover;display:block}
-.m-q-upc-photo-fallback{font-size:22px;opacity:.55}
-.m-q-upc-role{font-size:7px;color:var(--muted);font-weight:950;letter-spacing:.04em}
-.m-q-upc-code{font-size:13px;font-weight:950;line-height:1.05;color:var(--ink)}
-.m-q-upc-name{font-size:9px;font-weight:800;color:#496467;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.m-q-upc-stat{text-align:right}
-.m-q-upc-stat small{display:block;font-size:7px;color:var(--muted);font-weight:950;text-transform:uppercase}
-.m-q-upc-stat b{display:block;font-size:12px;color:#111827;font-weight:1000;margin-top:1px;white-space:nowrap}
-.m-q-upc-ready{font-size:6px;color:#167447;font-weight:950;margin-top:2px;white-space:nowrap}
-.m-q-upc-row .m-arrow{font-size:18px!important}
-.m-q-price-strip{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:1px;padding-top:2px;border-top:1px solid #e7e1c2}
-.m-q-price-cell{min-width:0;border:1px solid #e7e9e8;border-radius:6px;padding:2px 4px;background:#fbfcfc;text-align:left}
-.m-q-price-cell small{display:block;font-size:6px;color:var(--muted);font-weight:950;text-transform:uppercase}
-.m-q-price-cell b{display:block;font-size:11px;line-height:1;color:#102c42;margin-top:0}
-.m-q-price-cell.suggested b{color:#0b6f46}
-.m-q-price-meta{font-size:6px;color:var(--muted);font-weight:800;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.m-q-company-prices{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px}
-.m-q-company-prices span{display:flex;justify-content:space-between;gap:2px;padding:1px 3px;border-radius:5px;background:#fff9df;border:1px solid #eadb9a;font-size:6px;color:#6e6540}
-.m-q-company-prices b{font-size:7px;color:#263238}
-.m-q-price-state{font-size:6px;font-weight:900;color:#8b6a00;margin-top:2px}
+.m-q-upc-top{display:flex;align-items:center;gap:5px;min-width:0;flex-wrap:wrap}
+.m-q-upc-role{
+  display:inline-flex;
+  padding:1px 4px;
+  border-radius:4px;
+  background:#e8f3fd;
+  color:#2d5674;
+  font-size:6px;
+  font-weight:950;
+  letter-spacing:.03em;
+  white-space:nowrap;
+}
+.m-q-upc-code{font-size:12px;font-weight:1000;line-height:1.05;color:var(--ink);white-space:nowrap}
+.m-q-upc-name{
+  font-size:10px;
+  font-weight:900;
+  color:#344e58;
+  line-height:1.14;
+  margin-top:2px;
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
+  overflow-wrap:anywhere;
+}
+.m-q-upc-ready{display:inline-flex;font-size:6px;color:#167447;font-weight:950;white-space:nowrap}
+.m-q-upc-row .m-arrow{font-size:17px!important}
 
-@media(max-width:380px){
-  .m-q-family-number{font-size:12px}
-  .m-q-family-name{font-size:15px}
-  .m-q-recv-number{font-size:12px}
-  .m-q-recv-name{font-size:15px}
-  .m-q-family-kpis .m-q-kpi b{font-size:22px}
-  .m-q-recv-kpis .m-q-kpi b{font-size:11px}
-  .m-q-upc-code{font-size:11px}
-  .m-q-family-kpis,.m-q-recv-kpis{gap:4px}
-  .m-q-kpi{min-width:58px}
-  .m-q-upc-row .m-row-main{grid-template-columns:minmax(0,1fr) 50px 58px 10px}
-  .m-q-upc-mainwrap{grid-template-columns:50px minmax(0,1fr);gap:5px}
-  .m-q-upc-photo{width:50px;height:50px}
-  .m-q-family-identity{grid-template-columns:50px minmax(0,1fr);gap:5px}
-  .m-q-family-identity .m-q-upc-photo{width:50px;height:50px}
+.m-q-upc-metrics{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:3px;
+  margin-top:3px;
+}
+.m-q-mini{
+  min-width:0;
+  border:1px solid #e5e8e8;
+  border-radius:6px;
+  background:#fbfcfc;
+  padding:3px 4px;
+  text-align:center;
+}
+.m-q-mini small{display:block;font-size:5.5px;color:var(--muted);font-weight:950;text-transform:uppercase;white-space:nowrap}
+.m-q-mini b{display:block;font-size:10px;line-height:1.05;color:#111827;font-weight:1000;margin-top:1px;white-space:nowrap}
+.m-q-mini.current b{color:#123652}
+.m-q-mini.suggested{background:#effaf2;border-color:#d2ead8}
+.m-q-mini.suggested b{color:#0b6f46}
+.m-q-price-meta{font-size:5px;color:var(--muted);font-weight:800;margin-top:1px;white-space:normal;line-height:1.05;overflow-wrap:anywhere}
+.m-q-company-prices{
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:2px;
+  margin-top:2px;
+}
+.m-q-company-prices span{
+  display:flex;
+  justify-content:center;
+  gap:3px;
+  padding:2px 3px;
+  border-radius:5px;
+  background:#fff9df;
+  border:1px solid #eadb9a;
+  font-size:6px;
+  color:#6e6540;
+}
+.m-q-company-prices b{font-size:7px;color:#263238}
+
+@media(max-width:390px){
+  .m-q-family-name,.m-q-recv-name{font-size:14px}
+  .m-q-family-kpis .m-q-kpi b{font-size:20px}
+  .m-q-recv-kpis .m-q-kpi b{font-size:10px}
+  .m-q-kpi{min-width:54px}
+  .m-q-upc-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media(max-width:350px){
+  .m-q-family-head,.m-q-receiving-head{grid-template-columns:minmax(0,1fr)}
+  .m-q-family-kpis,.m-q-recv-kpis{justify-content:flex-start}
+  .m-q-kpi{text-align:left}
+  .m-q-upc-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
 .m-q-hidden-toggle{
@@ -2384,38 +2448,6 @@ function mobileQuickReceiptHistoryHtml(history,fallback){
   }).join('');
   return '<div class="m-q-receipt-history"><div class="m-q-receipt-history-label" title="Latest 2 Receipts (101–109)">2 Receipts<br>101–109</div>'+cards+'</div>';
 }
-function mobileQuickPhotoInfo(r){
-  const name=String(r?.name||r?.family_name||'').toUpperCase();
-  let file='';
-  if(name.includes('GROUPER')&&name.includes('HEAD'))file='Fish head.jpg';
-  else if(name.includes('GROUPER')&&name.includes('STEAK'))file='El Remo, La Palma, fish steak.jpg';
-  else if(name.includes('GROUPER'))file='Grouper (Epinephelus coioides).jpg';
-  else if(name.includes('SALMON'))file='Raw salmon fillets.jpg';
-  else if(name.includes('SHRIMP')||name.includes('PRAWN'))file='Raw shrimp.jpg';
-  else if(name.includes('TILAPIA'))file='Tilapia Fish.jpg';
-  else if(name.includes('CATFISH'))file='Catfish.jpg';
-  else if(name.includes('CRAB'))file='Crab Street Food in Cebu.jpg';
-  else if(name.includes('CLAM'))file='Taiwanese clam meat.jpg';
-  else if(name.includes('ABALONE'))file='Food abalones dinner.jpg';
-  else if(name.includes('OCTOPUS'))file='Frozen fresh octopus.jpg';
-  else if(name.includes('SCALLOP'))file='Scallops seafood pasta food dinner.jpg';
-  else if(name.includes('MACKEREL'))file='Mackerel fish.jpg';
-  else if(name.includes('SNAPPER'))file='Original and duplicate redsnapper.jpg';
-  else if(name.includes('COD'))file='Atlantic cod.jpg';
-  else if(name.includes('HEAD'))file='Fish head.jpg';
-  else if(name.includes('FISH')&&name.includes('STEAK'))file='El Remo, La Palma, fish steak.jpg';
-  if(!file)return null;
-  return {
-    src:'https://commons.wikimedia.org/wiki/Special:FilePath/'+encodeURIComponent(file)+'?width=320',
-    alt:String(r?.name||r?.family_name||'Seafood item')
-  };
-}
-function mobileQuickPhotoHtml(r){
-  const p=mobileQuickPhotoInfo(r);
-  if(!p)return '<div class="m-q-upc-photo"><span class="m-q-upc-photo-fallback">🐟</span></div>';
-  return '<div class="m-q-upc-photo"><img loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(p.src)+'" alt="'+esc(p.alt)+'" onerror="this.replaceWith(document.createTextNode(\'🐟\'))"></div>';
-}
-
 function mobileQuickFamilyGroups(rows){
   const groups=new Map();
   (rows||[]).forEach(r=>{
@@ -2557,17 +2589,16 @@ function mobileQuickUpcHtml(r){
     : '';
   return '<button type="button" class="m-row m-q-upc-row" data-mobile-key="'+esc(String(r.upc||''))+'">'+
     '<div class="m-row-main">'+
-      '<div class="m-q-upc-mainwrap">'+mobileQuickPhotoHtml(r)+'<div class="m-q-upc-main">'+
-        '<div class="m-q-upc-role">'+esc(role)+'</div>'+
-        '<div class="m-q-upc-code">'+esc(r.upc||'—')+'</div>'+
+      '<div class="m-q-upc-main">'+
+        '<div class="m-q-upc-top"><span class="m-q-upc-role">'+esc(role)+'</span><span class="m-q-upc-code">'+esc(r.upc||'—')+'</span><span class="m-q-upc-ready">'+esc(badge)+'</span></div>'+
         '<div class="m-q-upc-name">'+esc(r.name||r.family_name||'')+'</div>'+
-      '</div></div>'+
-      '<div class="m-q-upc-stat"><small>7D Qty</small><b>'+esc(qty)+'</b></div>'+
-      '<div class="m-q-upc-stat"><small>Avg/Day</small><b>'+esc(avg)+'</b><div class="m-q-upc-ready">'+esc(badge)+'</div></div>'+
+      '</div>'+
       '<span class="m-arrow">›</span>'+
-      '<div class="m-q-price-strip">'+
-        '<div class="m-q-price-cell"><small>Current Price</small><b>'+money(current)+'</b><div class="m-q-price-meta">'+esc(currentSource)+(currentAsOf?' · '+esc(currentAsOf):'')+'</div></div>'+
-        '<div class="m-q-price-cell suggested"><small>Suggested Price</small><b>'+esc(suggestedDisplay)+'</b><div class="m-q-price-meta">'+esc(suggestionBasis||'Same rules as Price Suggestion')+'</div></div>'+
+      '<div class="m-q-upc-metrics">'+
+        '<div class="m-q-mini"><small>7D Qty</small><b>'+esc(qty)+'</b></div>'+
+        '<div class="m-q-mini"><small>Avg/Day</small><b>'+esc(avg)+'</b></div>'+
+        '<div class="m-q-mini current"><small>Current</small><b>'+money(current)+'</b><div class="m-q-price-meta">'+esc(currentSource)+(currentAsOf?' · '+esc(currentAsOf):'')+'</div></div>'+
+        '<div class="m-q-mini suggested"><small>Suggested</small><b>'+esc(suggestedDisplay)+'</b><div class="m-q-price-meta">'+esc(suggestionBasis||'Price Suggestion rule')+'</div></div>'+
         companyHtml+
       '</div>'+
     '</div>'+
@@ -2592,7 +2623,7 @@ function mobileQuickGroupedHtml(rows){
       {movement_type:g.family_receipt_movement_type,date:g.family_receipt_date,quantity:g.family_receipt_qty,uom:g.family_receipt_uom}
     );
     const familyHead='<div class="m-q-family-head">'+
-      '<div class="m-q-family-identity">'+mobileQuickPhotoHtml({name:g.family_name,family_name:g.family_name})+'<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div>'+familyReceiptCaption+'</div></div>'+
+      '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
         '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
@@ -2618,7 +2649,7 @@ function mobileQuickGroupedHtml(rows){
         {movement_type:a.receipt_movement_type,date:a.receipt_date,quantity:a.receipt_qty,uom:a.receipt_uom}
       );
       const recvHead='<div class="m-q-receiving-head">'+
-        '<div><div class="m-q-label">SAP SELLING ARTICLE</div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div><div class="m-q-recv-name" style="font-size:6px;color:var(--muted);font-weight:850;margin-top:0">251−252 MVT</div>'+receiptCaption+'</div>'+
+        '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">SAP SELLING ARTICLE</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">251−252 MVT</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
 
