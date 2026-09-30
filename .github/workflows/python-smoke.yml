@@ -173,13 +173,16 @@ jobs:
           assert 'family_group_raw_movement_uom' in runtime
           assert 'SAP_ARTICLES_CLASSIFIED_BY_101_109_AND_251_252_EVIDENCE' in runtime
           assert 'Show inactive SAP Article' in ui
-          assert 'SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT_WHEN_CONVERSION_EXISTS_ELSE_ALL_FAMILY_251_252' in runtime
+          assert 'FAMILY_SOURCE_ARTICLE_251_MINUS_252_AUTHORITATIVE_317_318_REFERENCE_ONLY_CHILD_251_252_DETAIL_ONLY' in runtime
           assert 'PAIRED_SOURCE_317_318_NET_CONVERTED_OUT' in runtime
           assert 'family_conversion_317_318_7d' in runtime
+          assert 'family_source_251_252_7d' in runtime
           assert 'FAMILY_SOURCE_SELLING_ARTICLE' in runtime
           assert 'movement_by_article.get((fid, art), {})' in runtime
           assert 'FAMILY ARTICLE IS ALSO SAP SELLING ARTICLE' in ui
-          assert '317/318 CONVERTED' in ui
+          assert 'FAMILY 251−252 TOTAL' in ui
+          assert '317/318 CONVERSION REF' in ui
+          assert 'ALREADY INCLUDED' in ui
           assert 'SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES' not in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
