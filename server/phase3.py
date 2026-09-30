@@ -39,7 +39,13 @@ from current_active_cost_repair import repair_current_active_cost
 from product_identity_audit import audit_product_identity
 from quick_check_app import expire_true_stock_for_new_oh
 from inventory_position import rollforward_position
-from upc_aliases import service_249_canonical_base, service_249_source_prefix, source_ean_predicate
+from upc_aliases import (
+    service_249_canonical_base,
+    service_249_source_prefix,
+    source_ean_predicate,
+    normalize_selling_description,
+    looks_like_249_service_description,
+)
 from coverage_backfill import (
     ensure_coverage_backfill_tables,
     resolve_pos_period_backfill,
@@ -309,6 +315,49 @@ def _find_upc_id(cur, ean: str | None) -> int | None:
     return None
 
 
+def _find_pos_upc_id(cur, ean: str | None, description: str | None) -> int | None:
+    """Resolve one POS selling row to canonical UPC using source evidence.
+
+    Barcode lineage remains primary. For explicit Fried/Cook Service rows, a
+    unique ACTIVE canonical 249 roster-description match may override a
+    non-249/unresolved source code. This keeps quantity sourced from the actual
+    POS row while preventing family movement from being used as UPC sales.
+    """
+    base_id=_find_upc_id(cur,ean)
+    if not looks_like_249_service_description(description):
+        return base_id
+
+    desc_key=normalize_selling_description(description)
+    if not desc_key:
+        return base_id
+
+    cur.execute(
+        """SELECT DISTINCT su.upc_id,su.ean_upc,su.selling_description
+           FROM selling_upc su
+           JOIN bridge_article_upc bau
+             ON bau.upc_id=su.upc_id
+            AND bau.mapping_status='CONFIRMED'
+            AND bau.is_primary=TRUE
+            AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN bridge_article_family baf
+             ON baf.article_id=bau.article_id
+            AND baf.mapping_status='CONFIRMED'
+            AND baf.is_primary=TRUE
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           WHERE su.record_status='ACTIVE'
+             AND su.ean_upc LIKE '249%'
+           ORDER BY su.upc_id"""
+    )
+    matches={
+        int(row["upc_id"])
+        for row in cur.fetchall()
+        if normalize_selling_description(row.get("selling_description"))==desc_key
+    }
+    if len(matches)==1:
+        return next(iter(matches))
+    return base_id
+
+
 def _upc_identity_ready(cur, ean: str | None) -> bool:
     upc_id = _find_upc_id(cur, ean)
     if upc_id is None:
@@ -420,7 +469,11 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
             # Product sales rows have TOTAL amount/qty or at least one price-type amount/qty.
             if not any(_num(p.get(c)) is not None for pair in SALES_COLS.values() for c in pair):
                 continue
-            upc_id = _find_upc_id(cur, ean)
+            upc_id = (
+                _find_pos_upc_id(cur, ean, b)
+                if current_dept == SEAFOOD_DEPT_CODE
+                else _find_upc_id(cur, ean)
+            )
             cur.execute(
                 """INSERT INTO upc_department_observation
                    (upc_id,ean_upc,department_code,department_name,source_type,
@@ -1488,9 +1541,29 @@ def relink_history(cur) -> None:
                    WHERE d.ean_upc IS NOT NULL
                      AND (d.upc_id IS NULL OR d.upc_id<>u.upc_id)""")
 
-    # Second pass: resolve numeric/service/short-barcode aliases and repair
-    # every derived identity surface used by current-active logic.
-    for table in ('sales_period_observation','price_list_observation','inventory_observation','company_price_observation','upc_department_observation'):
+    # Second pass: sales history is description-aware for explicit 249
+    # Fried/Cook Service rows. Other sources continue to use barcode-only
+    # deterministic lineage.
+    cur.execute(
+        """SELECT DISTINCT ean_upc,description
+           FROM sales_period_observation
+           WHERE ean_upc IS NOT NULL"""
+    )
+    for row in cur.fetchall():
+        ean=row['ean_upc']
+        description=row.get('description')
+        upc_id=_find_pos_upc_id(cur,ean,description)
+        if upc_id is not None:
+            cur.execute(
+                """UPDATE sales_period_observation
+                   SET upc_id=%s
+                   WHERE ean_upc=%s
+                     AND COALESCE(description,'')=COALESCE(%s,'')
+                     AND (upc_id IS NULL OR upc_id<>%s)""",
+                (upc_id,ean,description,upc_id),
+            )
+
+    for table in ('price_list_observation','inventory_observation','company_price_observation','upc_department_observation'):
         cur.execute(f"SELECT DISTINCT ean_upc FROM {table} WHERE ean_upc IS NOT NULL")
         for row in cur.fetchall():
             ean = row['ean_upc']
