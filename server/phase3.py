@@ -2020,7 +2020,9 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
     newest valid evidence remains its CURRENT price until newer valid evidence
     for that UPC arrives.
 
-    Only accepted, non-duplicate, resolved source files are eligible.
+    Price List uses accepted, non-duplicate, error-free uploads because upload
+    time itself is the authoritative snapshot time; POS still requires resolved
+    date semantics for its sold-event date.
     """
     current_day = business_today()
     completed_day = completed_through_date()
@@ -2053,8 +2055,7 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
               AND f.source_type='price_list'
               AND f.processing_status='INGESTED'
               AND f.error_count=0
-              AND f.duplicate_of_file_id IS NULL
-              AND f.date_semantics_status='RESOLVED'""",
+              AND f.duplicate_of_file_id IS NULL""",
         (*price_args, current_day),
     )
     pr = cur.fetchone() or {}
@@ -2073,8 +2074,7 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
                   AND f.source_type='price_list'
                   AND f.processing_status='INGESTED'
                   AND f.error_count=0
-                  AND f.duplicate_of_file_id IS NULL
-                  AND f.date_semantics_status='RESOLVED'""",
+                  AND f.duplicate_of_file_id IS NULL""",
             (*price_args, price_evidence_at, current_day),
         )
         price_rows = cur.fetchall()
