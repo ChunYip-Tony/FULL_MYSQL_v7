@@ -1168,6 +1168,39 @@ async function resumePhase3(id){
     buttons.forEach(x=>{x.disabled=false;x.textContent='▶ Retry Phase 3'});
   }
 }
+async function loadChatgptBridgeStatus(batchId){
+  const box=$('#batchBridgeStatus');if(!box)return;
+  box.innerHTML='<div class="meta">Checking ChatGPT analysis bridge…</div>';
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(batchId)}/chatgpt-publish-status`);
+    const result=d.publish_result||{};
+    const publishStatus=String(result.status||'').toUpperCase();
+    const runStatus=String(d.status||'').toUpperCase();
+    const ok=runStatus==='COMPLETED'&&publishStatus==='PASS';
+    box.innerHTML=`<div class="detailgrid">
+      <div class="detail"><small>Bridge Job</small><b>${esc(runStatus||'NONE')}</b></div>
+      <div class="detail"><small>Sheet Publish</small><b>${esc(publishStatus||'—')}</b></div>
+      <div class="detail"><small>Run ID</small><b>${esc(d.publish_run_id||'—')}</b></div>
+      <div class="detail"><small>Completed</small><b>${esc(d.completed_at||'—')}</b></div>
+    </div>
+    <div class="calc" style="margin-top:8px">${ok?'<b>Bridge PASS.</b> ChatGPT analysis snapshot is published.':'<b>Bridge not PASS.</b> MySQL Quick Check remains live; republish affects only the ChatGPT/Google Sheet analysis snapshot.'}</div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px"><button id="republishChatgptBtn" class="btn ${ok?'soft':'primary'}">↻ Republish ChatGPT Analysis</button></div>`;
+    const rb=$('#republishChatgptBtn');if(rb)rb.onclick=()=>republishChatgptAnalysis(batchId,rb);
+  }catch(e){box.innerHTML=`<div class="error" style="margin:0">${esc(e.message)}</div>`}
+}
+async function republishChatgptAnalysis(batchId,btn=null){
+  if(btn){btn.disabled=true;btn.textContent='Queuing Republish…'}
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(batchId)}/republish-chatgpt-analysis`,{method:'POST'});
+    toast(d.already_active?'ChatGPT analysis publish is already active':'ChatGPT analysis republish queued');
+    if(btn)btn.textContent='Publishing…';
+    setTimeout(()=>loadChatgptBridgeStatus(batchId),1500);
+  }catch(e){
+    toast(e.message);
+    if(btn){btn.disabled=false;btn.textContent='↻ Republish ChatGPT Analysis'}
+  }
+}
+
 async function rebuildPhase3(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));
   if(!b){toast('Batch detail is not loaded yet');return}
@@ -1197,10 +1230,11 @@ function openBatchDetail(id){
   openDrawer(
     `Batch #${b.batch_id}`,
     `${b.processing_status||''} · ${b.phase3_status||''}`,
-    `<div class="detailgrid"><div class="detail"><small>Files</small><b>${fmt(b.file_count,0)}</b></div><div class="detail"><small>Rows</small><b>${fmt(b.source_row_count,0)}</b></div><div class="detail"><small>Errors</small><b>${fmt(b.error_count,0)}</b></div><div class="detail"><small>Completed</small><b>${esc(b.completed_at||'—')}</b></div><div class="detail"><small>QC Ready</small><b>${fmt(b.quick_check_ready_rows,0)}</b></div><div class="detail"><small>QC Hold</small><b>${fmt(b.quick_check_hold_rows,0)}</b></div></div><div class="sectiontitle">Source Files</div><div class="reasonlist">${files.map(f=>`<div class="reason"><span class="rdot"></span><div><b>${esc(f.original_filename||'')}</b><span>${esc(f.source_type||'Unknown')} · ${esc(f.processing_status||'')}</span></div></div>`).join('')||'<span class="meta">No file detail.</span>'}</div>${q.phase3?`<div class="sectiontitle">QA</div><div class="calc">${esc(q.phase3.result_status||'')} · blockers ${fmt(q.phase3.blocking_issue_count,0)} · hold rows ${fmt(q.phase3.quick_check_hold_rows,0)}</div>`:''}${eligible?'<div class="calc" style="margin-top:10px"><b>Rebuild available.</b> Re-runs Phase 3 / QA only; the previous Quick Check snapshot stays live until commit.</div>':''}`,
+    `<div class="detailgrid"><div class="detail"><small>Files</small><b>${fmt(b.file_count,0)}</b></div><div class="detail"><small>Rows</small><b>${fmt(b.source_row_count,0)}</b></div><div class="detail"><small>Errors</small><b>${fmt(b.error_count,0)}</b></div><div class="detail"><small>Completed</small><b>${esc(b.completed_at||'—')}</b></div><div class="detail"><small>QC Ready</small><b>${fmt(b.quick_check_ready_rows,0)}</b></div><div class="detail"><small>QC Hold</small><b>${fmt(b.quick_check_hold_rows,0)}</b></div></div><div class="sectiontitle">ChatGPT Analysis Bridge</div><div id="batchBridgeStatus"><div class="meta">Checking bridge status…</div></div><div class="sectiontitle">Source Files</div><div class="reasonlist">${files.map(f=>`<div class="reason"><span class="rdot"></span><div><b>${esc(f.original_filename||'')}</b><span>${esc(f.source_type||'Unknown')} · ${esc(f.processing_status||'')}</span></div></div>`).join('')||'<span class="meta">No file detail.</span>'}</div>${q.phase3?`<div class="sectiontitle">QA</div><div class="calc">${esc(q.phase3.result_status||'')} · blockers ${fmt(q.phase3.blocking_issue_count,0)} · hold rows ${fmt(q.phase3.quick_check_hold_rows,0)}</div>`:''}${eligible?'<div class="calc" style="margin-top:10px"><b>Rebuild available.</b> Re-runs Phase 3 / QA only; the previous Quick Check snapshot stays live until commit.</div>':''}`,
     foot
   );
   const rb=$('#rebuildPhase3Btn');if(rb)rb.onclick=()=>rebuildPhase3(b.batch_id);
+  loadChatgptBridgeStatus(b.batch_id);
 }
 $('#refreshBatch').onclick=loadBatches;
 
