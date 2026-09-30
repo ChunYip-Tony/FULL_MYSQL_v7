@@ -4,10 +4,14 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from business_clock import completed_through_date
+from business_clock import business_today, completed_through_date
 from data_coverage import source_data_days
 from db import db_conn
-from phase3 import _current_price as _live_current_price
+from phase3 import (
+    PRICE_TYPE_PRIORITY,
+    _current_price as _live_current_price,
+    _price_list_upload_business_date,
+)
 from webapp_v2_runtime import (
     _delivery_pattern,
     _family_effective_oh,
@@ -22,6 +26,195 @@ def _d(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
     return Decimal(str(value))
+
+
+def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict[str, Any] | None]:
+    """Resolve CURRENT price for many Quick Check rows without N×SQL fan-out.
+
+    The authority remains identical to phase3._current_price:
+      newest applicable Price List vs latest completed SINGLE_DATE sold event;
+      newer business-date evidence wins and Price List wins same-day ties.
+
+    Canonical upc_id is handled in bulk. 249/service rows that need raw-EAN
+    lineage fall back to the full resolver individually.
+    """
+    targets = {
+        int(r["upc_id"]): str(r.get("ean_upc") or "").strip()
+        for r in rows
+        if r.get("upc_id") is not None
+    }
+    if not targets:
+        return {}
+
+    ids = list(targets)
+    current_day = business_today()
+    completed_day = completed_through_date()
+    config_by_id: dict[int, dict[str, Any]] = {}
+
+    # Match phase3 semantics: inspect accepted Price List files newest-first,
+    # and for each UPC use the newest file containing that UPC.
+    cur.execute(
+        """SELECT file_id,upload_timestamp,report_generated_at
+           FROM ingest_file
+           WHERE source_type='price_list'
+             AND processing_status='INGESTED'
+             AND error_count=0
+             AND duplicate_of_file_id IS NULL
+           ORDER BY COALESCE(upload_timestamp,report_generated_at) DESC,file_id DESC
+           LIMIT 12"""
+    )
+    price_files = cur.fetchall()
+    unresolved = set(ids)
+    for pf in price_files:
+        if not unresolved:
+            break
+        uid_list = sorted(unresolved)
+        ph = ",".join(["%s"] * len(uid_list))
+        cur.execute(
+            f"""SELECT p.upc_id,p.configured_price,p.price_type,p.source_since_date,
+                       p.snapshot_at,p.file_id,f.upload_timestamp
+                FROM price_list_observation p
+                JOIN ingest_file f ON f.file_id=p.file_id
+                WHERE p.file_id=%s
+                  AND p.upc_id IN ({ph})
+                  AND p.configured_price>0
+                  AND (p.source_since_date IS NULL OR p.source_since_date<=%s)""",
+            (int(pf["file_id"]), *uid_list, current_day),
+        )
+        grouped: dict[int, list[dict[str, Any]]] = {}
+        for pr in cur.fetchall():
+            if pr.get("upc_id") is None:
+                continue
+            grouped.setdefault(int(pr["upc_id"]), []).append(pr)
+        for uid, candidates in grouped.items():
+            candidates.sort(
+                key=lambda x: PRICE_TYPE_PRIORITY.get(
+                    str(x.get("price_type") or "").upper(), 0
+                ),
+                reverse=True,
+            )
+            chosen = candidates[0]
+            if chosen.get("upload_timestamp") is None:
+                chosen["upload_timestamp"] = pf.get("upload_timestamp")
+            config_by_id[uid] = chosen
+            unresolved.discard(uid)
+
+    pos_by_id: dict[int, dict[str, Any]] = {}
+    if completed_day is not None and ids:
+        ph = ",".join(["%s"] * len(ids))
+        # Latest sold day for every canonical UPC in one query, then aggregate
+        # that day's price types in one second bulk query.
+        cur.execute(
+            f"""SELECT s.upc_id,MAX(s.period_end_date) AS sold_date
+                FROM sales_period_observation s
+                JOIN ingest_file f ON f.file_id=s.file_id
+                WHERE s.upc_id IN ({ph})
+                  AND s.temporal_grain='SINGLE_DATE'
+                  AND s.period_start_date=s.period_end_date
+                  AND s.period_end_date<=%s
+                  AND s.sold_quantity<>0
+                  AND f.source_type='sales_by_price_type'
+                  AND f.processing_status='INGESTED'
+                  AND f.error_count=0
+                  AND f.duplicate_of_file_id IS NULL
+                  AND f.date_semantics_status='RESOLVED'
+                GROUP BY s.upc_id""",
+            (*ids, completed_day),
+        )
+        latest_rows = [
+            x for x in cur.fetchall()
+            if x.get("upc_id") is not None and x.get("sold_date") is not None
+        ]
+        if latest_rows:
+            clauses = []
+            args: list[Any] = []
+            for x in latest_rows:
+                clauses.append("(s.upc_id=%s AND s.period_end_date=%s)")
+                args.extend([int(x["upc_id"]), x["sold_date"]])
+            cur.execute(
+                f"""SELECT s.upc_id,s.period_end_date,
+                           UPPER(TRIM(s.price_type)) AS price_type,
+                           SUM(s.sales_amount) AS sales_amount,
+                           SUM(s.sold_quantity) AS sold_quantity
+                    FROM sales_period_observation s
+                    JOIN ingest_file f ON f.file_id=s.file_id
+                    WHERE ({' OR '.join(clauses)})
+                      AND s.temporal_grain='SINGLE_DATE'
+                      AND s.period_start_date=s.period_end_date
+                      AND s.sold_quantity<>0
+                      AND f.source_type='sales_by_price_type'
+                      AND f.processing_status='INGESTED'
+                      AND f.error_count=0
+                      AND f.duplicate_of_file_id IS NULL
+                      AND f.date_semantics_status='RESOLVED'
+                    GROUP BY s.upc_id,s.period_end_date,UPPER(TRIM(s.price_type))""",
+                tuple(args),
+            )
+            sold_grouped: dict[int, list[dict[str, Any]]] = {}
+            for sr in cur.fetchall():
+                if sr.get("upc_id") is None:
+                    continue
+                sold_grouped.setdefault(int(sr["upc_id"]), []).append(sr)
+            for uid, candidates in sold_grouped.items():
+                candidates = [x for x in candidates if _d(x.get("sold_quantity")) != 0]
+                if not candidates:
+                    continue
+                candidates.sort(
+                    key=lambda x: PRICE_TYPE_PRIORITY.get(
+                        str(x.get("price_type") or "").upper(), 0
+                    ),
+                    reverse=True,
+                )
+                chosen = candidates[0]
+                qty = _d(chosen.get("sold_quantity"))
+                pos_by_id[uid] = {
+                    "price": _d(chosen.get("sales_amount")) / qty,
+                    "type": chosen.get("price_type") or "UNKNOWN",
+                    "source": "POS_CALCULATED",
+                    "date": chosen.get("period_end_date"),
+                }
+
+    out: dict[int, dict[str, Any] | None] = {}
+    for uid, ean in targets.items():
+        config = config_by_id.get(uid)
+        pos = pos_by_id.get(uid)
+        price_date = None
+        if config is not None:
+            if config.get("upload_timestamp") is not None:
+                price_date = _price_list_upload_business_date(config.get("upload_timestamp"))
+            elif config.get("snapshot_at") is not None:
+                price_date = config.get("snapshot_at").date()
+
+        if config is not None and price_date is not None and (
+            pos is None or price_date >= pos.get("date")
+        ):
+            out[uid] = {
+                "price": config.get("configured_price"),
+                "type": config.get("price_type"),
+                "source": "PRICE_LIST",
+                "date": price_date,
+            }
+        elif pos is not None:
+            out[uid] = pos
+        elif config is not None:
+            out[uid] = {
+                "price": config.get("configured_price"),
+                "type": config.get("price_type"),
+                "source": "PRICE_LIST",
+                "date": price_date,
+            }
+        else:
+            out[uid] = None
+
+        # 249 service POS lineage can live under raw service EAN aliases. Keep
+        # the proven alias-aware resolver only for those exceptional rows.
+        numeric = "".join(ch for ch in ean if ch.isdigit()).lstrip("0")
+        if numeric.startswith("249"):
+            alias_resolved = _live_current_price(cur, uid, ean)
+            if alias_resolved is not None:
+                out[uid] = alias_resolved
+
+    return out
 
 
 def _published_family_oh_fallback(children: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -520,12 +713,18 @@ def inventory_review(
 
         family_cache: dict[int, dict[str, Any]] = {}
         out = []
+        bulk_prices = _bulk_live_current_prices(cur, qrows) if lightweight else {}
         for row in qrows:
-            live_price = _live_current_price(
-                cur,
-                int(row["upc_id"]),
-                row.get("ean_upc"),
-            ) if row.get("upc_id") is not None else None
+            if row.get("upc_id") is None:
+                live_price = None
+            elif lightweight:
+                live_price = bulk_prices.get(int(row["upc_id"]))
+            else:
+                live_price = _live_current_price(
+                    cur,
+                    int(row["upc_id"]),
+                    row.get("ean_upc"),
+                )
             if live_price:
                 row["current_price"] = live_price.get("price")
                 row["current_price_type"] = live_price.get("type")
