@@ -984,6 +984,128 @@ def _quick_receiving_article_context(
             )
             candidates[fid][art] = existing
 
+    # Discover every SAP Article with actual 251/252 activity inside the
+    # canonical Family window. Do not require the Article to already exist in
+    # bridge_article_family or to have a recent 317/318 conversion. This is
+    # important for established selling Articles whose conversion happened
+    # outside the latest seven movement-data days.
+    #
+    # The Family header is calculated from ALL Family-owned 251/252 rows,
+    # including movement posted directly to the Family/source Article. The
+    # second-level SAP Selling Article cards remain Article-specific.
+    movement_by_article: dict[tuple[int, str], dict[str, Any]] = {}
+    family_movement_by_family: dict[int, dict[str, Any]] = {}
+    if fids and movement_days_7:
+        fph = ",".join(["%s"] * len(fids))
+        canonical_clauses = []
+        args: list[Any] = list(fids)
+        for d in movement_days_7:
+            canonical_clauses.append("(m.file_id=%s AND m.posting_date=%s)")
+            args.extend([int(d["file_id"]), d["date"]])
+        cur.execute(
+            f"""SELECT m.family_id,
+                       m.article_number,
+                       MAX(m.description) AS article_description,
+                       m.base_uom_code,
+                       SUM(
+                         CASE
+                           WHEN m.movement_type='251' THEN ABS(COALESCE(m.base_quantity,0))
+                           WHEN m.movement_type='252' THEN -ABS(COALESCE(m.base_quantity,0))
+                           ELSE 0
+                         END
+                       ) AS qty_7d
+                FROM movement_history m
+                WHERE m.family_id IN ({fph})
+                  AND m.movement_type IN ('251','252')
+                  AND ({' OR '.join(canonical_clauses)})
+                  AND m.base_quantity IS NOT NULL
+                GROUP BY m.family_id,m.article_number,m.base_uom_code""",
+            tuple(args),
+        )
+        movement_rows = cur.fetchall()
+
+        article_groups: dict[tuple[int, str], list[dict[str, Any]]] = {}
+        family_groups: dict[int, list[dict[str, Any]]] = {}
+        for r in movement_rows:
+            if r.get("family_id") is None:
+                continue
+            fid = int(r["family_id"])
+            art = str(r.get("article_number") or "").strip()
+            family_groups.setdefault(fid, []).append(r)
+            if art:
+                article_groups.setdefault((fid, art), []).append(r)
+
+                # An Article with real canonical 251/252 activity is valid
+                # second-level evidence even if its bridge/317-318 lineage was
+                # not seen in the current seven-day conversion window.
+                if art != source_by_family.get(fid):
+                    existing = candidates[fid].get(art, {})
+                    if not existing:
+                        existing = {
+                            "article_number": art,
+                            "article_description": r.get("article_description"),
+                            "relationship_type": "ACTIVE_SAP_SELLING_ARTICLE",
+                            "is_primary": False,
+                            "mapping_status": "MVT_251_252_ACTIVE",
+                            "lineage_basis": "FAMILY_251_252_ACTIVE",
+                            "lineage_hits": 0,
+                            "lineage_latest_date": None,
+                            "lineage_movement_types": "251,252",
+                        }
+                    else:
+                        if not existing.get("article_description"):
+                            existing["article_description"] = r.get("article_description")
+                    existing["active_251_252"] = True
+                    candidates[fid][art] = existing
+
+        for key, rows in article_groups.items():
+            valid = [r for r in rows if r.get("qty_7d") is not None]
+            uoms = {
+                str(r.get("base_uom_code") or "").strip().upper()
+                for r in valid
+                if str(r.get("base_uom_code") or "").strip()
+            }
+            has_missing_uom = any(
+                not str(r.get("base_uom_code") or "").strip()
+                for r in valid
+            )
+            if valid and len(uoms) == 1 and not has_missing_uom:
+                movement_by_article[key] = {
+                    "quantity": sum((_d(r.get("qty_7d")) for r in valid), Decimal("0")),
+                    "uom": next(iter(uoms)),
+                    "status": "READY",
+                }
+            elif valid:
+                movement_by_article[key] = {
+                    "quantity": None,
+                    "uom": None,
+                    "status": "MIXED_OR_MISSING_BASE_UOM",
+                }
+
+        for fid, rows in family_groups.items():
+            valid = [r for r in rows if r.get("qty_7d") is not None]
+            uoms = {
+                str(r.get("base_uom_code") or "").strip().upper()
+                for r in valid
+                if str(r.get("base_uom_code") or "").strip()
+            }
+            has_missing_uom = any(
+                not str(r.get("base_uom_code") or "").strip()
+                for r in valid
+            )
+            if valid and len(uoms) == 1 and not has_missing_uom:
+                family_movement_by_family[fid] = {
+                    "quantity": sum((_d(r.get("qty_7d")) for r in valid), Decimal("0")),
+                    "uom": next(iter(uoms)),
+                    "status": "READY",
+                }
+            elif valid:
+                family_movement_by_family[fid] = {
+                    "quantity": None,
+                    "uom": None,
+                    "status": "MIXED_OR_MISSING_BASE_UOM",
+                }
+
     article_numbers = sorted(
         {
             art
@@ -991,50 +1113,6 @@ def _quick_receiving_article_context(
             for art in family_candidates
         }
     )
-
-    # 251/252 is the SAP selling movement shown on the second-level Article.
-    movement_by_article: dict[str, dict[str, Any]] = {}
-    if article_numbers and movement_days_7:
-        aph = ",".join(["%s"] * len(article_numbers))
-        clauses = []
-        args = list(article_numbers)
-        for d in movement_days_7:
-            clauses.append("(file_id=%s AND posting_date=%s)")
-            args.extend([int(d["file_id"]), d["date"]])
-        cur.execute(
-            f"""SELECT article_number,base_uom_code,
-                       SUM(
-                         CASE
-                           WHEN movement_type='251' THEN ABS(COALESCE(base_quantity,0))
-                           WHEN movement_type='252' THEN -ABS(COALESCE(base_quantity,0))
-                           ELSE 0
-                         END
-                       ) AS qty_7d
-                FROM movement_history
-                WHERE article_number IN ({aph})
-                  AND movement_type IN ('251','252')
-                  AND ({' OR '.join(clauses)})
-                  AND base_quantity IS NOT NULL
-                GROUP BY article_number,base_uom_code""",
-            tuple(args),
-        )
-        grouped: dict[str, list[dict[str, Any]]] = {}
-        for r in cur.fetchall():
-            grouped.setdefault(str(r.get("article_number") or ""), []).append(r)
-        for art, rows in grouped.items():
-            valid = [r for r in rows if r.get("qty_7d") is not None]
-            if len(valid) == 1:
-                movement_by_article[art] = {
-                    "quantity": _d(valid[0].get("qty_7d")),
-                    "uom": valid[0].get("base_uom_code"),
-                    "status": "READY",
-                }
-            elif len(valid) > 1:
-                movement_by_article[art] = {
-                    "quantity": None,
-                    "uom": None,
-                    "status": "MIXED_BASE_UOM",
-                }
 
     # Receipt verification applies to the Family/source header and also remains
     # available for any linked Article that independently has 101-109 history.
@@ -1174,12 +1252,10 @@ def _quick_receiving_article_context(
         family_receipt = receipt_by_article.get(str(source_article or ""), {})
 
         articles: list[dict[str, Any]] = []
-        movement_uoms: set[str] = set()
-        movement_values: list[Decimal] = []
 
         for art in sorted(candidates.get(fid, {})):
             a = dict(candidates[fid][art])
-            mv = movement_by_article.get(art, {})
+            mv = movement_by_article.get((fid, art), {})
             qty = mv.get("quantity")
             uom = mv.get("uom")
             receipt = receipt_by_article.get(art, {})
@@ -1205,23 +1281,10 @@ def _quick_receiving_article_context(
             )
             articles.append(a)
 
-            if qty is not None:
-                movement_values.append(_d(qty))
-                if uom:
-                    movement_uoms.add(str(uom))
-
-        if movement_values and len(movement_uoms) == 1:
-            family_qty: Decimal | None = sum(movement_values, Decimal("0"))
-            family_uom: str | None = next(iter(movement_uoms))
-            family_status = "READY"
-        elif movement_values and len(movement_uoms) > 1:
-            family_qty = None
-            family_uom = None
-            family_status = "MIXED_BASE_UOM"
-        else:
-            family_qty = None
-            family_uom = None
-            family_status = "NO_251_252_IN_WINDOW"
+        family_mv = family_movement_by_family.get(fid, {})
+        family_qty = family_mv.get("quantity")
+        family_uom = family_mv.get("uom")
+        family_status = family_mv.get("status") or "NO_251_252_IN_WINDOW"
 
         upc_map: dict[str, dict[str, Any]] = {}
         article_lookup = {
@@ -1608,9 +1671,10 @@ def inventory_review(
             "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
             "receiving_qty_basis": "SAP_SELLING_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
-            "family_group_qty_basis": "SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES",
+            "family_group_qty_basis": "ALL_FAMILY_251_MINUS_252_CANONICAL_MOVEMENT_ROWS_BASE_UOM",
+            "sap_selling_article_discovery": "CONFIRMED_BRIDGE_OR_317_318_OR_ACTIVE_FAMILY_251_252",
             "receipt_verification": "FAMILY_SOURCE_AND_LINKED_ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
-            "upc_receiving_display_link": "SAP_317_318_DOCUMENT_LINEAGE_THEN_UPC_ARTICLE_PATTERN_OR_DESCRIPTION",
+            "upc_receiving_display_link": "ACTIVE_251_252_PLUS_SAP_317_318_THEN_UPC_ARTICLE_PATTERN_OR_DESCRIPTION",
             "family_qty_basis": "LEGACY_RELATIONSHIP_METRIC_ONLY",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
