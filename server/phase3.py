@@ -84,6 +84,24 @@ def _department_from_price_subdept(code: str | None) -> str | None:
         return '500'
     return None
 
+
+def _department_from_pos_section(code: str | None) -> str | None:
+    """Normalize POS section headers to the canonical department code.
+
+    Seafood POS exports can use either 400 or 401 section headers. Both belong
+    to Seafood for selling-history purposes, matching the Price List rule.
+    """
+    if not code:
+        return None
+    s = str(code).strip()
+    if s in SEAFOOD_PRICE_SUBDEPT_CODES:
+        return SEAFOOD_DEPT_CODE
+    if s == '300':
+        return '300'
+    if s == '500':
+        return '500'
+    return None
+
 def _department_from_merch_category(code: str | None) -> str | None:
     """Map perishable SAP merchandise categories to app department codes.
 
@@ -323,33 +341,42 @@ def _find_pos_upc_id(
     description: str | None,
     article_manual_index: dict[str, Any] | None = None,
 ) -> int | None:
-    """Resolve one Seafood POS selling row to canonical UPC using source evidence.
+    """Resolve one Seafood POS row with RAW identity first, manual verification next.
 
-    Authority order:
-      1) newest valid Article Manual identity (A/B/C/D schema),
-      2) canonical/raw barcode lineage,
+    Priority:
+      1) exact/numeric RAW POS UPC and deterministic 249 product-code alias,
+      2) newest Article Manual identity when RAW does not resolve,
       3) explicit Fried/Cook Service description fallback.
 
-    Article Manual supplies identity only. Sold quantity always comes from POS,
-    and 251/252 movement is never substituted for UPC sales.
+    When RAW/product-code identity and Article Manual both resolve but disagree,
+    the row fails closed so normal SOLD_UPC_UNMAPPED QA can surface the conflict.
+    Sold quantity remains POS-only; Article Manual and SAP movement never add
+    UPC sales quantity.
     """
     if article_manual_index is None:
         article_manual_index = article_manual_pos_alias_index(cur)
+
+    base_id=_find_upc_id(cur,ean)
     manual_id = resolve_article_manual_pos_upc_id(
         article_manual_index,
         ean,
         seafood_context=True,
     )
+
+    if base_id is not None:
+        if manual_id is not None and int(manual_id) != int(base_id):
+            return None
+        return int(base_id)
+
     if manual_id is not None:
         return int(manual_id)
 
-    base_id=_find_upc_id(cur,ean)
     if not looks_like_249_service_description(description):
-        return base_id
+        return None
 
     desc_key=normalize_selling_description(description)
     if not desc_key:
-        return base_id
+        return None
 
     cur.execute(
         """SELECT DISTINCT su.upc_id,su.ean_upc,su.selling_description
@@ -375,7 +402,7 @@ def _find_pos_upc_id(
     }
     if len(matches)==1:
         return next(iter(matches))
-    return base_id
+    return None
 
 
 def _upc_id_identity_ready(cur, upc_id: int | None) -> bool:
@@ -545,8 +572,8 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
         return 0
     temporal = 'SINGLE_DATE' if start == end else 'DATE_RANGE'
     inserted = 0
-    # Build once per POS file. Article Manual is the primary 249 identity
-    # authority; this does not contribute quantity, only the canonical upc_id.
+    # Build once per POS file. RAW UPC / 249 product code resolves first;
+    # Article Manual verifies or fills identity and never contributes quantity.
     article_manual_index = article_manual_pos_alias_index(cur)
     cur.execute('SELECT sheet_id FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
@@ -559,7 +586,7 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
             b = _text(p.get('B'))
             # Department section rows are exact 3-digit department IDs and have no total sales columns.
             if a and len(a) == 3 and b and not _num(p.get('M')) and not _num(p.get('N')):
-                current_dept = a
+                current_dept = _department_from_pos_section(a)
                 continue
             if current_dept not in DEPARTMENT_REGISTRY:
                 continue
@@ -1732,9 +1759,9 @@ def relink_history(cur) -> None:
                    WHERE d.ean_upc IS NOT NULL
                      AND (d.upc_id IS NULL OR d.upc_id<>u.upc_id)""")
 
-    # Second pass: rebuild Seafood POS identity with Article Manual first.
-    # This repairs historical rows whose raw POS code was previously attached
-    # to a stale/non-249 upc_id. Description matching remains last-resort only.
+    # Second pass: rebuild Seafood POS identity with the same hybrid resolver.
+    # RAW barcode / 249 product code is authoritative first; Article Manual
+    # verifies or fills unresolved identity. Description remains last-resort.
     article_manual_index = article_manual_pos_alias_index(cur)
     cur.execute(
         """SELECT DISTINCT ean_upc,description
@@ -1769,9 +1796,9 @@ def relink_history(cur) -> None:
                     (upc_id, ean, upc_id),
                 )
 
-    # Department POS lineage must use the same Article Manual-first identity as
-    # sales history. Restrict the override to Seafood POS rows; other department
-    # observations keep ordinary barcode lineage.
+    # Department POS lineage must use the same RAW-first hybrid identity as
+    # sales history. Restrict the special resolver to Seafood POS rows; other
+    # department observations keep ordinary barcode lineage.
     cur.execute(
         """SELECT DISTINCT ean_upc,department_code,source_type
            FROM upc_department_observation
@@ -1783,13 +1810,12 @@ def relink_history(cur) -> None:
             str(row.get('department_code') or '') == SEAFOOD_DEPT_CODE
             and str(row.get('source_type') or '').upper() == 'POS'
         ):
-            upc_id = resolve_article_manual_pos_upc_id(
-                article_manual_index,
+            upc_id = _find_pos_upc_id(
+                cur,
                 ean,
-                seafood_context=True,
+                None,
+                article_manual_index,
             )
-            if upc_id is None:
-                upc_id = _find_upc_id(cur, ean)
         else:
             upc_id = _find_upc_id(cur, ean)
         if upc_id is not None:
