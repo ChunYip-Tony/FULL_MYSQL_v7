@@ -328,6 +328,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-chip{min-height:42px;padding:8px 14px;font-size:11px}
   .m-qatools{grid-template-columns:1fr;gap:8px;margin-bottom:12px}
   .m-qatools input,.m-qatools select{min-height:48px;font-size:14px;padding:10px 12px}.m-qatools input{font-size:17px}
+  .m-perftools{display:none;gap:10px;margin:0 0 13px;padding:13px;background:#fff;border-radius:17px;box-shadow:0 8px 22px rgba(9,49,54,.06)}
+  .m-perftools.on{display:grid}.m-perftools label{display:grid;gap:5px;font-size:10px;font-weight:900;color:var(--muted)}
+  .m-perftools select{width:100%;min-width:0;min-height:48px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:9px 10px;font-size:14px}
+  .m-perf-dates{display:grid;grid-template-columns:1fr 1fr;gap:9px}.m-perftools .btn{min-height:50px;border-radius:12px}
 
   .m-list{gap:11px}
   .m-row{min-height:92px;padding:15px 14px 14px 15px;border-radius:18px}
@@ -399,6 +403,22 @@ BACKOFFICE_HTML = r'''<!doctype html>
   <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div></div>
   <div id="mobileListChips" class="m-chipbar"></div>
   <div id="mobileQaTools" class="m-qatools"><input id="mobileQaSearch" placeholder="Search UPC / Article / item / reason"><select id="mobileQaSort"><option value="oh_vel_desc">OH ↓, then Velocity ↓</option><option value="vel_oh_desc">Velocity ↓, then OH ↓</option><option value="severity">Severity</option><option value="name">Item A → Z</option><option value="upc">UPC</option></select></div>
+  <div id="mobilePerformanceTools" class="m-perftools">
+    <div class="m-perf-dates">
+      <label><span>Start Date</span><select id="mPerfStart"></select></label>
+      <label><span>End Date</span><select id="mPerfEnd"></select></label>
+    </div>
+    <label><span>Sort By</span><select id="mPerfSort">
+      <option value="gp_desc">Highest GP$</option>
+      <option value="velocity_desc">Highest Velocity</option>
+      <option value="sales_desc">Highest Sales $</option>
+      <option value="qty_desc">Highest Qty</option>
+      <option value="gp_pct_desc">Highest GP%</option>
+      <option value="price_desc">Highest Avg Sold Price</option>
+      <option value="name">Item A → Z</option>
+    </select></label>
+    <button id="mPerfApply" type="button" class="btn primary">Analyze Range</button>
+  </div>
   <div id="mobileListContent" class="m-list"></div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
     <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Search</button><button type="button" data-mobile-module="uploads">⇧<br>Uploads</button><button type="button" data-mobile-module="qa">⚠<br>QA</button>
@@ -434,12 +454,26 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 <section id="sales" class="view">
 <div class="panel">
- <div class="panelhead"><div><div class="title">Sales Performance</div><div class="sub">Latest completed canonical sales date. Report-day average sold price is historical; Current Price is live serving data.</div></div><span class="pill blue">READ ONLY</span></div>
+ <div class="panelhead"><div><div class="title">Performance</div><div class="sub">All Seafood together. Select completed canonical dates, then sort the item-level analysis.</div></div><span class="pill blue">RANGE ANALYSIS</span></div>
  <div class="toolrow">
-   <div class="filters"><button class="filter salescat on" data-cat="ALL">All</button><button class="filter salescat" data-cat="FRESH">Fresh</button><button class="filter salescat" data-cat="LIVE">Live</button><button class="filter salescat" data-cat="FROZEN">Frozen</button></div>
-   <div class="tools"><input id="salesTextFilter" class="select" style="min-width:150px" placeholder="Filter item / UPC"><select id="salesTrendFilter" class="select"><option value="ALL">All Velocity</option><option value="SLOWING">Slowing</option><option value="STABLE_GROWING">Stable / Growing</option></select><select id="salesSort" class="select"><option value="sales_desc">Highest Sales $</option><option value="qty_desc">Highest Qty</option><option value="price_desc">Highest Avg Sold Price</option><option value="vel7_desc">Highest 7D Velocity</option><option value="vel28_desc">Highest 28D Velocity</option><option value="drop_desc">Largest Velocity Drop</option><option value="name">Item A → Z</option></select><span id="salesCount" class="pill sea">—</span></div>
+   <div class="tools">
+     <label class="meta">Start Date <select id="salesStartDate" class="select"></select></label>
+     <label class="meta">End Date <select id="salesEndDate" class="select"></select></label>
+     <select id="salesSort" class="select">
+       <option value="gp_desc">Highest GP$</option>
+       <option value="velocity_desc">Highest Velocity</option>
+       <option value="sales_desc">Highest Sales $</option>
+       <option value="qty_desc">Highest Qty</option>
+       <option value="gp_pct_desc">Highest GP%</option>
+       <option value="price_desc">Highest Avg Sold Price</option>
+       <option value="name">Item A → Z</option>
+     </select>
+     <button id="salesApplyRange" class="btn primary">Analyze Range</button>
+     <span id="salesCount" class="pill sea">—</span>
+   </div>
  </div>
- <div id="sellKpi" class="grid"></div><div id="sellError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Sales</th><th>Report-Day Avg Sold Price</th><th>Current Price</th><th>7D Vel</th><th>28D Vel</th></tr></thead><tbody id="sellRows"></tbody></table></div>
+ <div id="sellKpi" class="grid"></div><div id="sellError"></div>
+ <div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Qty</th><th>Velocity</th><th>Sales</th><th>GP$</th><th>GP%</th><th>Avg Sold Price</th></tr></thead><tbody id="sellRows"></tbody></table></div>
 </div>
 </section>
 
@@ -557,7 +591,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesCat:'ALL',salesTrend:'ALL',salesText:'',salesSort:'sales_desc',salesRows:[],orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -643,7 +677,7 @@ function mobileModuleConfig(module){
     qa:{title:'QA Holds',sub:'Choose one issue, review it, then fix',chips:[['all','All'],['fixable','Fixable'],['view_only','Review only'],['high','High / Critical']]},
     price:{title:'Price Overview',sub:'Current price, source and qualified review',chips:[['all','All'],['actionable','Actionable'],['review_only','Review only'],['qa_hold','QA Hold']]},
     uploads:{title:'Uploads',sub:'New source batch and recent upload history',chips:[]},
-    performance:{title:'Performance',sub:'Latest completed canonical sales date',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
+    performance:{title:'Performance',sub:'Choose analysis dates · all Seafood together · sort by the metric you need',chips:[]},
     pi:{title:'PI / OH',sub:'Family True Stock and OH review',chips:[['all','All'],['positive','OH > 0'],['zero','OH ≤ 0']]},
     batches:{title:'Batches',sub:'Current processing first, then completed history',chips:[['all','All'],['current','Current'],['completed','Completed']]},
     freshness:{title:'Data Health',sub:'Last 14 days · newest first · tap a date for source details',chips:[]}
@@ -665,6 +699,20 @@ function mobileRenderQaTools(){
  input.value=state.qaText||'';sort.value=state.qaSort||'oh_vel_desc';
  input.oninput=()=>{state.qaText=input.value;mobileRenderList()};
  sort.onchange=()=>{state.qaSort=sort.value;mobileRenderList()};
+}
+function mobileRenderPerformanceTools(){
+ const box=mNode('mobilePerformanceTools');if(!box)return;
+ const on=mobileState.module==='performance';box.classList.toggle('on',on);
+ if(!on)return;
+ syncPerformanceDateControls();
+ const sort=mNode('mPerfSort');sort.value=state.salesSort||'gp_desc';
+ sort.onchange=()=>{state.salesSort=sort.value;syncPerformanceDateControls();renderSales();mobileRenderList()};
+ mNode('mPerfApply').onclick=async()=>{
+   state.salesStartDate=mNode('mPerfStart').value;
+   state.salesEndDate=mNode('mPerfEnd').value;
+   await loadSell();
+   mobileRenderList();
+ };
 }
 async function mobileRefreshHome(){
   if(!isMobileBackoffice())return;
@@ -700,6 +748,7 @@ async function mobileOpenModule(module,{query=''}={}){
   mobileScreen('mobileListPage');
   mobileRenderChips();
   mobileRenderQaTools();
+  mobileRenderPerformanceTools();
   try{
     if(module==='quick'){
       state.inventorySearch=mobileState.query;state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
@@ -708,7 +757,7 @@ async function mobileOpenModule(module,{query=''}={}){
     }else if(module==='price'){
       state.priceCat='ALL';state.priceStatus='ALL';state.priceSort='opportunity';state.priceText='';await loadPrices();
     }else if(module==='performance'){
-      state.salesCat='ALL';state.salesTrend='ALL';state.salesText='';state.salesSort='sales_desc';await loadSell();
+      state.salesSort=state.salesSort||'gp_desc';await loadSell();mobileRenderPerformanceTools();
     }else if(module==='pi'){
       state.inventorySearch='';state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
     }else if(module==='batches'||module==='uploads'){
@@ -740,11 +789,7 @@ function mobileRows(){
     if(f!=='all')a=a.filter(x=>String(x.review_status||'').toLowerCase()===f);
     return a;
   }
-  if(mod==='performance'){
-    let a=filteredSalesRows();
-    if(f!=='all')a=a.filter(r=>String(r.category||'').toLowerCase()===f);
-    return a;
-  }
+  if(mod==='performance')return filteredSalesRows();
   if(mod==='pi'){
     const map=new Map();
     filteredInventoryRows().forEach(r=>{const k=String(r.family_article||r.upc||'');if(!k)return;const old=map.get(k);if(!old||Number(r.velocity_7d||0)>Number(old.velocity_7d||0))map.set(k,r)});
@@ -793,7 +838,7 @@ function mobileRenderList(){
   }else if(mobileState.module==='price'){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:''),r.review_status||'REVIEW','')).join('');
   }else if(mobileState.module==='performance'){
-    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.sales_amount)+' sales · '+fmt(r.sold_quantity)+' '+(r.qty_uom||'')+' · '+money(r.current_price)+' current · '+(r.current_price_source||'—')+(r.current_price_asof_date?' · '+r.current_price_asof_date:''),r.category||'READY','')).join('');
+    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.sales_amount)+' Sales · '+money(r.gp_dollars)+' GP$ · '+fmt(r.velocity)+' '+(r.qty_uom||'')+'/day · '+fmt(r.sold_quantity)+' '+(r.qty_uom||''),r.gp_cost_complete?'GP READY':'GP HOLD','')).join('');
   }else if(mobileState.module==='pi'){
     html=rows.map(r=>mobileRow(String(r.family_article||r.upc||''),r.family_article||r.upc,r.family_name||r.name,fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' OH · '+fmt(r.qty_7d)+' 7D · DOS '+fmt(r.dos),'OH',r.chinese_name||'')).join('');
   }else if(mobileState.module==='batches'){
@@ -852,13 +897,748 @@ function mobileQuickDetail(key,piMode){
 }
 function mobilePerformanceDetail(key){
   const r=state.salesRows.find(x=>String(x.upc)===String(key));if(!r)return;
-  let html='<div class="m-detailcard"><div class="m-label">Completed-day Performance</div><div class="m-detailgrid">';
-  html+=mobileMetric('Sales',money(r.sales_amount),'Report date');
-  html+=mobileMetric('Sold Qty',fmt(r.sold_quantity)+' '+(r.qty_uom||''),'POS');
-  html+=mobileMetric('Avg Sold Price',money(r.avg_sold_price),'Historical report-day average');
-  html+=mobileMetric('Current Price',money(r.current_price),(r.current_price_type||'—')+' · '+(r.current_price_source||'—')+(r.current_price_asof_date?' · '+r.current_price_asof_date:''));
-  html+=mobileMetric('7D Velocity',fmt(r.velocity_7d),'per day');
-  html+=mobileMetric('28D Velocity',fmt(r.velocity_28d),'per day');
+  const range=state.salesRange||{};
+  let html='<div class="m-detailcard"><div class="m-label">Range Performance</div><div class="m-detailgrid">';
+  html+=mobileMetric('Sales',money(r.sales_amount),(range.start_date||'—')+' → '+(range.end_date||'—'));
+  html+=mobileMetric('GP
+function mobileActiveBatchDetail(){
+  const b=state.active;if(!b)return;
+  const waiting=batchResumeEligible(b);
+  let html='<div class="m-detailcard"><div class="m-label">Current Batch</div><div class="m-detailgrid">';
+  html+=mobileMetric('Batch','#'+(b.batch_id||b.id||'—'),b.batch_label||'Active processing');
+  html+=mobileMetric('Files',String(b.file_count??'—'),'Source files');
+  html+=mobileMetric('Started',b.upload_started_at||'—','Upload start');
+  html+=mobileMetric('Status',b.processing_status||b.status||'PROCESSING','Current pipeline state');
+  html+='</div><div class="m-detailsection"><h3>Processing</h3><p>'+(waiting?'Past: Phase 2C complete. Current: waiting for Phase 3. Next: Phase 3 rebuild → QA → Quick Check.':'This batch is still active.')+'</p></div>';
+  if(waiting)html+='<button id="mResumePhase3" type="button" class="m-action primary">Retry Phase 3</button>';
+  html+='</div>';
+  mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),b.processing_status||b.status||'PROCESSING',html);
+  const btn=mNode('mResumePhase3');if(btn)btn.onclick=()=>resumePhase3(b.batch_id||b.id);
+}
+async function mobileLoadFreshness(){
+  const d=await api('/v1/backoffice/data-health?days=14');
+  state.dataHealth=d;
+  mobileState.freshness=d.rows||[];
+}
+
+function mobileFreshnessDetail(key){
+  const dateKey=String(key||'').replace(/^date:/,'');
+  const r=mobileState.freshness.find(x=>String(x.date)===dateKey);if(!r)return;
+  const names={POS:'POS',MVT:'MVT',PRICE:'Price List',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
+  let html='<div class="m-detailcard"><div class="m-label">14-Day Data Health</div><div class="m-detailgrid">';
+  Object.keys(names).forEach(k=>{
+    const x=(r.sources||{})[k]||{},st=mobileDataHealthStatus(x);
+    html+=mobileMetric(names[k],st.text,(x.file||'No source')+(x.batch_id?' · Batch #'+x.batch_id:''));
+  });
+  html+='</div><div class="m-detailsection"><h3>Coverage rule</h3><p>POS and MVT are daily-required through the latest completed business day. Price, OH, Live/Fresh and Frozen are snapshot sources; “—” means no new snapshot was ingested on that date.</p></div></div>';
+  mobileShowDetail(r.date||'Data Health',(r.weekday||'')+' · '+(r.overall_status||''),html);
+}
+
+function mobileUploadDetail(){
+  let html='<div class="m-detailcard"><div class="m-label">New Source Batch</div><div class="m-detailsection" style="border-top:0;padding-top:0;margin-top:9px"><p>Select XLSX / XLS / XLSM / CSV / TXT / TSV files. Files selected together create one immutable batch.</p></div><button id="mChooseUploadFiles" type="button" class="m-action secondary">Choose Files</button><div id="mUploadFileSummary" class="m-detailsection"><p>No files selected.</p></div><div class="formfield"><label>Optional batch note</label><input id="mUploadNote" placeholder="Daily seafood upload"></div><button id="mStartUpload" type="button" class="m-action primary">Upload & Start Processing</button><div id="mUploadResult" class="m-detailsection"><p>File type is detected automatically.</p></div></div>';
+  mobileShowDetail('New Upload','Create one source batch',html);
+  const fileInput=$('#uploadFiles');
+  mNode('mChooseUploadFiles').onclick=()=>fileInput.click();
+  fileInput.onchange=()=>{
+    const files=[...fileInput.files],box=mNode('mUploadFileSummary');
+    box.innerHTML=files.length?'<h3>Selected Files</h3><p>'+files.map(f=>esc(f.name)+' · '+fmt(f.size/1024/1024,2)+' MB').join('<br>')+'</p>':'<p>No files selected.</p>';
+  };
+  mNode('mStartUpload').onclick=mobileSubmitUpload;
+}
+async function mobileSubmitUpload(){
+  const files=[...$('#uploadFiles').files],result=mNode('mUploadResult'),btn=mNode('mStartUpload');
+  if(!files.length){toast('Select files first');return}
+  btn.disabled=true;result.innerHTML='<p>Creating batch…</p>';
+  try{
+    const label=(mNode('mUploadNote').value||'').trim()||('Mobile Backoffice upload '+new Date().toLocaleString());
+    const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
+    if(created.created===false){result.innerHTML='<p>An active batch is already processing. Upload was not started.</p>';toast('Active batch already processing');return}
+    const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');
+    for(let i=0;i<files.length;i++){
+      result.innerHTML='<p>Uploading '+(i+1)+' / '+files.length+' · '+esc(files[i].name)+'</p>';
+      const fd=new FormData();fd.append('file',files[i]);await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd});
+    }
+    result.innerHTML='<p>Committing batch and starting processing…</p>';
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});
+    $('#uploadFiles').value='';toast('Upload accepted; batch processing started');await mobileOpenModule('batches');
+  }catch(e){result.innerHTML='<p>'+esc(e.message)+'</p>';toast(e.message)}finally{const z=mNode('mStartUpload');if(z)z.disabled=false}
+}
+
+$$('[data-mobile-module]').forEach(b=>b.onclick=()=>mobileOpenModule(b.dataset.mobileModule));
+$$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
+mNode('mobileListBack').onclick=()=>showMobileHome();
+mNode('mobileDetailBack').onclick=()=>mobileScreen('mobileListPage');
+mNode('mobileBatchSpotlight').onclick=()=>mobileOpenModule('batches');
+mNode('mobileSearchForm').onsubmit=e=>{e.preventDefault();mobileOpenModule('quick',{query:mNode('mobileSearchInput').value})};
+mobileMedia.addEventListener?.('change',e=>{
+  if(e.matches)showMobileHome({scroll:false});
+  else{closeDrawer();mobileScreen('',{scroll:false});restoreRoute()}
+});
+function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
+function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
+
+async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').textContent=h.ok?'SERVICE READY':'SERVICE ISSUE';$('#readyPill').style.color=h.ok?'#bff3d2':'#ffd0c8'}catch(e){$('#readyPill').textContent='SERVICE ERROR'}}
+async function loadInventory(){const err=$('#invError');err.innerHTML='';$('#invRows').innerHTML='<tr><td colspan="11" class="loading">Loading...</td></tr>';try{const q=state.inventorySearch.trim();const url=`/v1/backoffice/inventory?category=${encodeURIComponent(state.invCat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;const d=await api(url);state.inventory=d.rows||[];const badge=$('#invSearchState'),clear=$('#clearInventorySearch');if(q){badge.textContent=`Search: ${q}`;badge.style.display='inline-flex';clear.style.display='inline-flex'}else{badge.style.display='none';clear.style.display='none'}renderInventory()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#invRows').innerHTML=''}}
+function filteredInventoryRows(){
+  let rows=[...state.inventory];
+  const status=String(state.invStatus||'ALL').toUpperCase();
+  if(status!=='ALL')rows=rows.filter(r=>String(r.readiness||'').toUpperCase()===status);
+  if(state.invOH==='POSITIVE')rows=rows.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)>0);
+  if(state.invOH==='ZERO_NEGATIVE')rows=rows.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)<=0);
+  if(state.invOH==='UNKNOWN')rows=rows.filter(r=>r.family_oh===null||r.family_oh===undefined||r.family_oh==='');
+  if(state.invSales==='SOLD')rows=rows.filter(r=>Number(r.qty_7d||0)>0);
+  if(state.invSales==='NO_SALES')rows=rows.filter(r=>Number(r.qty_7d||0)<=0);
+  const s=state.invSort||'vel7_oh_desc';
+  const num=(v,fallback)=>v===null||v===undefined||v===''?fallback:Number(v);
+  if(s==='vel7_oh_desc')rows.sort((x,y)=>{
+    const xv=num(x.velocity_7d,Number.NEGATIVE_INFINITY);
+    const yv=num(y.velocity_7d,Number.NEGATIVE_INFINITY);
+    if(yv!==xv)return yv-xv;
+    return num(y.family_oh,Number.NEGATIVE_INFINITY)-num(x.family_oh,Number.NEGATIVE_INFINITY);
+  });
+  if(s==='qty7_desc')rows.sort((x,y)=>num(y.qty_7d,-1)-num(x.qty_7d,-1));
+  if(s==='oh_asc')rows.sort((x,y)=>num(x.family_oh,Number.POSITIVE_INFINITY)-num(y.family_oh,Number.POSITIVE_INFINITY));
+  if(s==='oh_desc')rows.sort((x,y)=>num(y.family_oh,Number.NEGATIVE_INFINITY)-num(x.family_oh,Number.NEGATIVE_INFINITY));
+  if(s==='dos_asc')rows.sort((x,y)=>num(x.dos,Number.POSITIVE_INFINITY)-num(y.dos,Number.POSITIVE_INFINITY));
+  if(s==='dos_desc')rows.sort((x,y)=>num(y.dos,Number.NEGATIVE_INFINITY)-num(x.dos,Number.NEGATIVE_INFINITY));
+  if(s==='gp_asc')rows.sort((x,y)=>num(x.gp_pct,Number.POSITIVE_INFINITY)-num(y.gp_pct,Number.POSITIVE_INFINITY));
+  if(s==='gp_desc')rows.sort((x,y)=>num(y.gp_pct,Number.NEGATIVE_INFINITY)-num(x.gp_pct,Number.NEGATIVE_INFINITY));
+  if(s==='price_desc')rows.sort((x,y)=>num(y.price,Number.NEGATIVE_INFINITY)-num(x.price,Number.NEGATIVE_INFINITY));
+  if(s==='name')rows.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  return rows;
+}
+function renderInventory(){const rows=filteredInventoryRows();$('#invCount').textContent=`${rows.length} shown · ${state.inventory.length} loaded`;$('#invRows').innerHTML=rows.map(r=>`<tr class="${Number(r.velocity_7d||0)>0?'velocity-active':''}"><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td><b>${fmt(r.velocity_7d)}</b><div class="meta">${esc(r.selling_uom||'unit')}/day</div></td><td><b>${money(r.price)}</b><div class="meta">${esc(r.price_type||'—')} · ${esc(r.price_source||'—')} ${r.price_as_of?'· '+esc(r.price_as_of):''}</div></td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`).join('')||`<tr><td colspan="11" class="empty">${state.inventorySearch?'No matching rows after current Inventory filters for: '+esc(state.inventorySearch):'No inventory rows match the current filters.'}</td></tr>`;$$('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset))}
+$$('.invfilter').forEach(b=>b.onclick=()=>{state.invCat=b.dataset.cat;$$('.invfilter').forEach(x=>x.classList.toggle('on',x===b));loadInventory()});
+$('#invStatusFilter').onchange=e=>{state.invStatus=e.target.value;renderInventory()};
+$('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
+$('#invSalesFilter').onchange=e=>{state.invSales=e.target.value;renderInventory()};
+$('#invSort').onchange=e=>{state.invSort=e.target.value;renderInventory()};
+$('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';loadInventory()};
+
+function openOH(d){if(!d.family){toast('Family Article unavailable');return}const current=d.oh||'';openDrawer('OH / True Stock Adjustment',`${d.name} · Family ${d.family}`,`<div class="detailgrid"><div class="detail"><small>Family Article</small><b>${esc(d.family)}</b></div><div class="detail"><small>System / Effective OH</small><b>${fmt(current)} ${esc(d.uom)}</b></div></div><div class="formfield"><label>True Stock</label><input id="trueStockInput" type="number" min="0" step="0.01" value="${esc(current)}"></div><div class="formfield"><label>UOM</label><input id="trueStockUom" value="${esc(d.uom)}" readonly></div><div class="formfield"><label>Note</label><textarea id="trueStockNote" placeholder="Physical count / OH adjustment"></textarea></div><div id="ohPreview" class="calc">Difference: 0</div>`,`<button id="saveOH" class="btn primary">Save OH Adjustment</button>`);const inp=$('#trueStockInput');inp.oninput=()=>{const n=Number(inp.value||0),o=Number(current||0),diff=n-o;$('#ohPreview').textContent=`Difference: ${diff>=0?'+':''}${diff.toFixed(2)}${diff<0?' · shortage / pending dumping '+Math.abs(diff).toFixed(2):''}`};$('#saveOH').onclick=async()=>{try{$('#saveOH').disabled=true;await api(`/v1/app/v2/pi/${encodeURIComponent(d.family)}/true-stock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:Number(inp.value),uom:d.uom,note:$('#trueStockNote').value||null})});toast('OH / True Stock saved');closeDrawer();await loadInventory()}catch(e){toast(e.message)}finally{const x=$('#saveOH');if(x)x.disabled=false}}}
+
+async function ensurePerformanceDates(){
+  if(state.salesSupportedDates.length){syncPerformanceDateControls();return}
+  const d=await api('/v1/app/v2/performance/dates?limit=180');
+  const dates=(d.dates||[]).map(x=>String(x.date||'')).filter(Boolean).sort();
+  state.salesSupportedDates=dates;
+  if(dates.length){
+    if(!state.salesEndDate)state.salesEndDate=dates[dates.length-1];
+    if(!state.salesStartDate)state.salesStartDate=dates[Math.max(0,dates.length-7)];
+  }
+  syncPerformanceDateControls();
+}
+function syncPerformanceDateControls(){
+  const dates=state.salesSupportedDates||[];
+  const opts=dates.map(d=>'<option value="'+esc(d)+'">'+esc(d)+'</option>').join('');
+  [['salesStartDate',state.salesStartDate],['salesEndDate',state.salesEndDate],['mPerfStart',state.salesStartDate],['mPerfEnd',state.salesEndDate]].forEach(([id,val])=>{
+    const el=document.getElementById(id);if(!el)return;
+    if(el.options.length!==dates.length)el.innerHTML=opts;
+    if(val)el.value=val;
+  });
+  const ds=$('#salesSort');if(ds)ds.value=state.salesSort||'gp_desc';
+  const ms=mNode('mPerfSort');if(ms)ms.value=state.salesSort||'gp_desc';
+}
+async function loadSell(){
+  const err=$('#sellError');if(err)err.innerHTML='';
+  const body=$('#sellRows');if(body)body.innerHTML='<tr><td colspan="8" class="loading">Loading range analysis...</td></tr>';
+  try{
+    await ensurePerformanceDates();
+    if(!state.salesStartDate||!state.salesEndDate)throw new Error('No supported Performance dates are available.');
+    if(state.salesStartDate>state.salesEndDate)throw new Error('Start Date must be on or before End Date.');
+    const d=await api('/v1/app/v2/performance/range?start_date='+encodeURIComponent(state.salesStartDate)+'&end_date='+encodeURIComponent(state.salesEndDate)+'&limit=1000');
+    state.salesRange=d;state.salesRows=d.items||[];
+    state.salesStartDate=d.start_date||state.salesStartDate;state.salesEndDate=d.end_date||state.salesEndDate;
+    syncPerformanceDateControls();
+    const s=d.summary||{};
+    if($('#sellKpi'))$('#sellKpi').innerHTML=
+      '<div class="kpi"><small>Date Range</small><b>'+esc(d.start_date||'—')+' → '+esc(d.end_date||'—')+'</b><span>'+fmt(d.supported_day_count,0)+' completed canonical data days</span></div>'+
+      '<div class="kpi"><small>Sales</small><b>'+money(s.sales_dollars)+'</b><span>All Seafood · selected range</span></div>'+
+      '<div class="kpi"><small>GP$</small><b>'+money(s.gp_dollars)+'</b><span>'+(s.gp_dollars_complete?'Historical applicable cost':'Some item GP$ unavailable due to missing cost')+'</span></div>'+
+      '<div class="kpi"><small>Items Sold</small><b>'+fmt(s.sold_item_count,0)+'</b><span>'+fmt(s.ready_item_count,0)+' READY · '+fmt(s.qa_hold_item_count,0)+' QA HOLD</span></div>';
+    renderSales();
+  }catch(e){
+    if(err)err.innerHTML='<div class="error">'+esc(e.message)+'</div>';
+    if(body)body.innerHTML='';
+  }
+}
+function filteredSalesRows(){
+  const rows=[...state.salesRows],s=state.salesSort||'gp_desc';
+  const n=v=>Number(v??0),nullable=v=>(v===null||v===undefined||v===''?-Infinity:Number(v));
+  if(s==='gp_desc')rows.sort((x,y)=>nullable(y.gp_dollars)-nullable(x.gp_dollars));
+  if(s==='velocity_desc')rows.sort((x,y)=>n(y.velocity)-n(x.velocity));
+  if(s==='sales_desc')rows.sort((x,y)=>n(y.sales_amount)-n(x.sales_amount));
+  if(s==='qty_desc')rows.sort((x,y)=>n(y.sold_quantity)-n(x.sold_quantity));
+  if(s==='gp_pct_desc')rows.sort((x,y)=>nullable(y.gp_pct)-nullable(x.gp_pct));
+  if(s==='price_desc')rows.sort((x,y)=>n(y.avg_sold_price)-n(x.avg_sold_price));
+  if(s==='name')rows.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  return rows;
+}
+function renderSales(){
+  const rows=filteredSalesRows();
+  if($('#salesCount'))$('#salesCount').textContent=rows.length+' items';
+  if($('#sellRows'))$('#sellRows').innerHTML=rows.map(r=>
+    '<tr><td><div class="name">'+esc(r.name||'—')+'</div><div class="meta">Family '+esc(r.family_article_number||'—')+'</div></td>'+
+    '<td>'+esc(r.upc||'—')+'</td>'+
+    '<td>'+fmt(r.sold_quantity)+' '+esc(r.qty_uom||'')+'</td>'+
+    '<td><b>'+fmt(r.velocity)+'</b><div class="meta">'+esc(r.qty_uom||'unit')+'/data day</div></td>'+
+    '<td>'+money(r.sales_amount)+'</td>'+
+    '<td><b>'+money(r.gp_dollars)+'</b><div class="meta">'+(r.gp_cost_complete?'historical cost complete':'cost unavailable on sold day(s)')+'</div></td>'+
+    '<td>'+pct(r.gp_pct)+'</td>'+
+    '<td>'+money(r.avg_sold_price)+'</td></tr>'
+  ).join('')||'<tr><td colspan="8" class="empty">No sales in the selected analysis range.</td></tr>';
+}
+$('#salesSort').onchange=e=>{state.salesSort=e.target.value;renderSales();mobileRenderList()};
+$('#salesApplyRange').onclick=async()=>{state.salesStartDate=$('#salesStartDate').value;state.salesEndDate=$('#salesEndDate').value;await loadSell()};
+$('#salesStartDate').onchange=e=>{state.salesStartDate=e.target.value};
+$('#salesEndDate').onchange=e=>{state.salesEndDate=e.target.value};
+
+async function loadOrders(){const err=$('#orderError');err.innerHTML='';$('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';try{const d=await api('/v1/backoffice/ordering-review?category=ALL');state.orders=d.rows||[];renderOrders()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#orderRows').innerHTML=''}}
+function orderRows(){let a=[...state.orders];if(state.orderFilter==='FRESH')a=a.filter(x=>String(x.category).toUpperCase()==='FRESH');if(state.orderFilter==='FROZEN')a=a.filter(x=>String(x.category).toUpperCase()==='FROZEN');if(state.orderFilter==='ATTENTION')a=a.filter(x=>x.attention);const s=$('#orderSort').value;if(s==='suggested')a.sort((x,y)=>Number(y.suggested_delivery_qty||0)-Number(x.suggested_delivery_qty||0));if(s==='receipt')a.sort((x,y)=>String(y.last_receipt_date||'').localeCompare(String(x.last_receipt_date||'')));if(s==='oh')a.sort((x,y)=>Number(x.oh??1e18)-Number(y.oh??1e18));if(s==='frequency')a.sort((x,y)=>String(x.ordering_frequency||'').localeCompare(String(y.ordering_frequency||'')));if(s==='family')a.sort((x,y)=>String(x.family_name||'').localeCompare(String(y.family_name||'')));return a}
+function renderOrders(){const a=orderRows();$('#orderCount').textContent=`${a.length} families`;$('#orderRows').innerHTML=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span></td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No ordering suggestions match this filter.</td></tr>';$$('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))}
+$$('.ordfilter').forEach(b=>b.onclick=()=>{state.orderFilter=b.dataset.filter;$$('.ordfilter').forEach(x=>x.classList.toggle('on',x===b));renderOrders()});$('#orderSort').onchange=renderOrders;
+function openOrderDetail(fam){const r=state.orders.find(x=>String(x.family_article)===String(fam));if(!r)return;const d=r.details||{},reasons=d.reasons||[], recArts=d.receiving_articles_on_last_receipt||[];openDrawer('Ordering Detail / Why?',`${r.family_name} · Family ${r.family_article}`,`<div class="detailgrid"><div class="detail"><small>Receiving Article</small><b>${esc(r.receiving_article||'—')}</b></div><div class="detail"><small>Family OH</small><b>${fmt(r.oh)} ${esc(r.oh_uom||'')}</b></div><div class="detail"><small>Last Receipt</small><b>${esc(r.last_receipt_date||'—')}</b></div><div class="detail"><small>Receipt Qty · Base</small><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></div><div class="detail"><small>Family 7D Movement</small><b>${fmt(d.qty_7d)}</b></div><div class="detail"><small>Family 28D Movement</small><b>${fmt(d.qty_28d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(d.velocity_7d)}/day</b></div><div class="detail"><small>DOS</small><b>${fmt(d.dos)}</b></div></div><div class="sectiontitle">Why this suggestion?</div><div class="reasonlist">${reasons.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div></div>`).join('')}</div><div class="calc">Coming delivery suggestion ≈ expected family usage through coverage window − usable family OH + promotion/safety adjustment. Incoming is not used as a displayed Ordering Review field.</div>${recArts.length?`<div class="sectiontitle">Receiving Articles on Last Receipt</div><div class="reasonlist">${recArts.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.article_number)}</b><span>${fmt(x.quantity)} ${esc(x.base_uom||'')} · Base UOM</span></div></div>`).join('')}</div>`:''}`,`<span class="pill blue">READ ONLY</span>`)}
+
+async function loadPrices(){const err=$('#priceError');err.innerHTML='';$('#priceRows').innerHTML='<tr><td colspan="12" class="loading">Loading...</td></tr>';try{const d=await api(`/v1/backoffice/pricing-review?category=${encodeURIComponent(state.priceCat)}&limit=1000`);state.prices=d.rows||[];renderPrices()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#priceRows').innerHTML=''}}
+function filteredPrices(){
+  let a=[...state.prices];
+  const status=String(state.priceStatus||'ALL').toUpperCase();
+  const text=String(state.priceText||'').trim().toLowerCase();
+  if(status!=='ALL')a=a.filter(r=>String(r.review_status||'').toUpperCase()===status);
+  if(text)a=a.filter(r=>[r.name,r.upc,r.family_name,r.family_article_number,r.review_status,r.review_blocker,r.primary_reason_text,...(r.reasons||[])].join(' ').toLowerCase().includes(text));
+  const sort=state.priceSort||'opportunity';
+  if(sort==='opportunity')a.sort((x,y)=>Number(y.gp_per_day_opportunity||0)-Number(x.gp_per_day_opportunity||0)||Number(y.urgency_score||0)-Number(x.urgency_score||0));
+  if(sort==='urgency')a.sort((x,y)=>Number(y.urgency_score||0)-Number(x.urgency_score||0)||Number(y.gp_per_day_opportunity||0)-Number(x.gp_per_day_opportunity||0));
+  if(sort==='gap')a.sort((x,y)=>Number(y.price_gap_pct||0)-Number(x.price_gap_pct||0));
+  if(sort==='qty7')a.sort((x,y)=>Number(y.qty_7d||0)-Number(x.qty_7d||0));
+  if(sort==='qty28')a.sort((x,y)=>Number(y.qty_28d||0)-Number(x.qty_28d||0));
+  if(sort==='lowgp')a.sort((x,y)=>Number(x.current_gp_pct_reference??999)-Number(y.current_gp_pct_reference??999));
+  if(sort==='currentprice')a.sort((x,y)=>Number(y.current_price||0)-Number(x.current_price||0));
+  if(sort==='name')a.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  return a;
+}
+function renderPrices(){const rows=filteredPrices();$('#priceCount').textContent=`${rows.length} shown · ${state.prices.length} loaded`;$('#priceRows').innerHTML=rows.map(r=>{const range=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'No A/B/C';return `<tr><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.family_name||'')}</div></td><td><div class="name">${esc(r.upc)}</div><div class="meta">${esc(r.name||'')}</div></td><td><b>${money(r.current_price)}</b><div class="meta">${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</div></td><td><b>${money(r.candidate_price)}</b><div class="meta">${esc(r.selection_basis||r.suggestion_basis||'')}</div></td><td><b>${fmt(r.current_oh)} ${esc(r.current_oh_uom||'')}</b><div class="meta">DOH ${fmt(r.doh)}</div></td><td><b>${esc(range)}</b><div class="meta">${r.has_company_reference?'Candidate constrained':'No company constraint'}</div></td><td><b>${money(r.current_cost)}</b><div class="meta">${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</div></td><td>${pct(r.current_gp_pct_reference)}</td><td>${fmt(r.qty_14d)}</td><td>${pill(r.review_status)}</td><td><div class="meta" style="max-width:240px">${esc(r.primary_reason_text||r.review_blocker||'Pricing review')}</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small pricedetail" data-upc="${esc(r.upc)}">Why?</button>${String(r.review_status||"").toUpperCase()==="ACTIONABLE"&&r.current_price!==null&&r.current_price!==undefined&&r.candidate_price!==null&&r.candidate_price!==undefined?`<button class="btn small primary priceaccept" data-upc="${esc(r.upc)}">Accepted</button>`:""}</div></td></tr>`}).join('')||'<tr><td colspan="12" class="empty">No pricing review rows match the current filters.</td></tr>';$$('.pricedetail').forEach(b=>b.onclick=()=>openPriceDetail(b.dataset.upc));$$('.priceaccept').forEach(b=>b.onclick=()=>acceptPriceSuggestion(b.dataset.upc,b))}
+async function acceptPriceSuggestion(upc,button){
+ const r=state.prices.find(x=>String(x.upc)===String(upc));if(!r)return;
+ if(button){button.disabled=true;button.textContent='Saving…'}
+ try{
+   await api('/v1/backoffice/pricing-review/'+encodeURIComponent(upc)+'/accept',{
+     method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price})
+   });
+   state.prices=state.prices.filter(x=>String(x.upc)!==String(upc));
+   renderPrices();
+   toast('Accepted · hidden until new price evidence or a new suggestion');
+ }catch(e){
+   toast(e.message);
+   if(button){button.disabled=false;button.textContent='Accepted'}
+   if(String(e.message||'').includes('REFRESH')||String(e.message||'').includes('CHANGED'))loadPrices();
+ }
+}
+$$('.pricefilter').forEach(b=>b.onclick=()=>{state.priceCat=b.dataset.cat;$$('.pricefilter').forEach(x=>x.classList.toggle('on',x===b));loadPrices()});
+$('#priceStatusFilter').onchange=e=>{state.priceStatus=e.target.value;renderPrices()};
+$('#priceSort').onchange=e=>{state.priceSort=e.target.value;renderPrices()};
+$('#priceTextFilter').oninput=e=>{state.priceText=e.target.value;renderPrices()};
+function openPriceDetail(upc){const r=state.prices.find(x=>String(x.upc)===String(upc));if(!r)return;const company=[['A',r.company_price_a],['B',r.company_price_b],['C',r.company_price_c]].filter(x=>x[1]!==null&&x[1]!==undefined);const companyText=company.length?company.map(x=>x[0]+' '+money(x[1])).join(' · '):'No Company A/B/C reference';const rangeText=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'—';openDrawer('Price Suggestion Explanation',`${r.name} · UPC ${r.upc}`,`<div class="detailgrid"><div class="detail"><small>Current Price</small><b>${money(r.current_price)}</b><span>${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</span></div><div class="detail"><small>Candidate Price</small><b>${money(r.candidate_price)}</b><span>${esc(r.selection_basis||r.suggestion_basis||'')}</span></div><div class="detail"><small>Current Cost</small><b>${money(r.current_cost)}</b><span>${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</span></div><div class="detail"><small>Current GP%</small><b>${pct(r.current_gp_pct_reference)}</b></div><div class="detail"><small>Candidate GP%</small><b>${pct(r.suggested_gp_pct_at_current_cost)}</b></div><div class="detail"><small>Company A/B/C</small><b>${esc(companyText)}</b><span>Range: ${esc(rangeText)}</span></div><div class="detail"><small>DOH</small><b>${fmt(r.doh)}</b><span>${r.clearance_due_to_doh?'Clearance mode':'Standard pricing mode'}</span></div><div class="detail"><small>14D Qty</small><b>${fmt(r.qty_14d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(r.velocity_7d)}</b></div><div class="detail"><small>14D Velocity</small><b>${fmt(r.velocity_14d)}</b></div><div class="detail"><small>GP$/Day Current</small><b>${money(r.current_gp_per_day_7d)}</b></div><div class="detail"><small>GP$/Day Candidate</small><b>${money(r.candidate_expected_gp_per_day)}</b></div></div><div class="sectiontitle">Primary reason</div><div class="calc">${esc(r.primary_reason_text||'Pricing review')}</div><div class="sectiontitle">Rule used</div><div class="calc">${r.clearance_reason==='FROZEN_DOH_GT_60'?'Frozen DOH > 60: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.':(r.clearance_due_to_doh?'Fresh DOH > 7: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.':(r.has_company_reference?'Qualified stocked item: candidate maximizes 14D GP$/day and must stay inside the Company A/B/C range.':'Qualified stocked item with no Company A/B/C: candidate maximizes 14D GP$/day from observed sales history.'))}</div><div class="calc">Current Price and Current Cost come from the live Quick Check serving row. Pricing Review is read-only.</div>`,`<span class="pill blue">READ ONLY</span>`)}
+
+async function loadQA(){
+ const err=$('#qaError');err.innerHTML='';$('#qaRows').innerHTML='<tr><td colspan="8" class="loading">Loading QA...</td></tr>';
+ try{
+   const d=await api('/v1/backoffice/qa-review?limit=300');
+   state.qaIssues=d.issues||[];state.qaHistory=d.resolution_history||[];
+   renderQA();
+ }catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#qaRows').innerHTML=''}
+}
+function qaNumeric(v,fallback=-Infinity){const n=Number(v);return Number.isFinite(n)?n:fallback}
+function qaSearchBlob(x){
+ const cur=x.current||{};
+ return [x.entity_key,x.issue_code,x.issue_summary,x.entity_type,cur.article_number,cur.main_article_number,cur.family_description,cur.item_name,cur.selling_description,cur.chinese_name,cur.selling_uom].filter(Boolean).join(' ').toLowerCase();
+}
+function qaSortRows(a){
+ const sev={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3};
+ const sort=state.qaSort||'oh_vel_desc';
+ return a.sort((x,y)=>{
+   const xc=x.current||{},yc=y.current||{};
+   const xoh=qaNumeric(xc.current_oh),yoh=qaNumeric(yc.current_oh);
+   const xv=qaNumeric(xc.upc_velocity_7d),yv=qaNumeric(yc.upc_velocity_7d);
+   if(sort==='vel_oh_desc')return (yv-xv)||(yoh-xoh)||String(x.entity_key||'').localeCompare(String(y.entity_key||''));
+   if(sort==='severity')return ((sev[String(x.severity||'').toUpperCase()]??9)-(sev[String(y.severity||'').toUpperCase()]??9))||(yoh-xoh)||(yv-xv);
+   if(sort==='name')return String(xc.item_name||xc.selling_description||'').localeCompare(String(yc.item_name||yc.selling_description||''))||String(x.entity_key||'').localeCompare(String(y.entity_key||''));
+   if(sort==='upc')return String(x.entity_key||'').localeCompare(String(y.entity_key||''),undefined,{numeric:true});
+   return (yoh-xoh)||(yv-xv)||String(x.entity_key||'').localeCompare(String(y.entity_key||''));
+ });
+}
+function filteredQA(){
+ let a=[...state.qaIssues];
+ if(state.qaFilter==='FIXABLE')a=a.filter(x=>x.can_fix);
+ if(state.qaFilter==='VIEW_ONLY')a=a.filter(x=>!x.can_fix);
+ if(state.qaFilter==='HIGH')a=a.filter(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
+ const q=String(state.qaText||'').trim().toLowerCase();
+ if(q)a=a.filter(x=>qaSearchBlob(x).includes(q));
+ return qaSortRows(a);
+}
+function renderQA(){
+ const a=filteredQA();$('#qaCount').textContent=`${a.length} shown · ${state.qaIssues.length} open`;
+ $('#qaRows').innerHTML=a.map(x=>{
+   const cur=x.current||{};
+   const entityType=String(x.entity_type||'').toUpperCase();
+   const code=String(x.issue_code||'').toUpperCase();
+   const stateParts=[
+     cur.article_number?('Article '+cur.article_number):'',
+     cur.main_article_number?('Family '+cur.main_article_number):''
+   ];
+   if(entityType==='UPC'){
+     stateParts.push(cur.selling_uom?('UOM '+cur.selling_uom):'UOM missing');
+   }else if(entityType==='ARTICLE' && code.includes('ARTICLE_UNMAPPED')){
+     stateParts.push('Family mapping missing');
+   }
+   const stateText=stateParts.filter(Boolean).join(' · ');
+   return `<tr>
+     <td>${pill(x.severity)}</td>
+     <td><div class="name">${esc(x.issue_code)}</div><div class="meta" style="max-width:380px">${esc(x.issue_summary||'')}</div></td>
+     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.item_name||cur.selling_description||'Item name unavailable'):(cur.item_name||x.entity_type||''))}</div>${cur.chinese_name?`<div class="qa-cn-list">${esc(cur.chinese_name)}</div>`:''}${cur.main_article_number?`<div class="meta">Family ${esc(cur.main_article_number)}${cur.family_description?' · '+esc(cur.family_description):''}</div>`:''}</td>
+     <td><b>${fmt(cur.current_oh)}</b><div class="meta">${esc(cur.current_oh_uom||'')}</div></td>
+     <td><b>${fmt(cur.upc_velocity_7d)}</b><div class="meta">${esc(cur.selling_uom||'unit')}/day</div></td>
+     <td>${esc(stateText||'No current serving row')}</td>
+     <td>${x.can_fix?'<span class="pill amber">USER CONFIRM</span>':'<span class="pill blue">VIEW ONLY</span>'}</td>
+     <td><button class="btn small qadetail" data-key="${esc(String(x.issue_id??('QC:'+x.entity_key)))}">${x.can_fix?'Fix':'Details'}</button></td>
+   </tr>`;
+ }).join('')||'<tr><td colspan="8" class="empty">No QA issues match this search / filter.</td></tr>';
+ $$('.qadetail').forEach(b=>b.onclick=()=>openQAIssue(b.dataset.key));
+ $('#qaHistoryRows').innerHTML=state.qaHistory.map(h=>`<tr><td>${esc(h.created_at||'—')}</td><td><b>${esc(h.entity_key||'')}</b><div class="meta">${esc(h.entity_type||'')}</div></td><td>${esc(h.issue_code||'')}</td><td>${esc(h.resolution_kind||'')}</td><td>${esc(h.actor||'')}</td><td>${esc(h.resolution_note||'—')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">No manual QA resolutions yet.</td></tr>';
+}
+function findQAIssue(key){
+ if(String(key).startsWith('QC:'))return state.qaIssues.find(x=>x.issue_id===null&&('QC:'+x.entity_key)===key);
+ return state.qaIssues.find(x=>String(x.issue_id)===String(key));
+}
+function qaFixKindLabel(kind){
+ const k=String(kind||'').toUpperCase();
+ if(k==='UOM_OR_IDENTITY'||k==='IDENTITY_AND_UOM')return 'Selling unit / item link';
+ if(k==='COST_CONVERSION')return 'Cost conversion';
+ if(k==='ARTICLE_FAMILY_MAPPING')return 'Article → Family mapping';
+ return String(kind||'Review');
+}
+function qaFriendlyReasons(x,detail){
+ const codes=Array.isArray(detail?.reasons)?detail.reasons.map(v=>String(v||'').toUpperCase()):[];
+ const labels={
+  SELLING_UOM_MISSING:'Selling UOM is missing. Select the unit represented by POS Qty = 1 for this UPC.',
+  CURRENT_ACTIVE_SELLING_UOM_MISSING:'Selling UOM is missing for an actively selling UPC. Select the POS selling unit.',
+  COST_TO_SELLING_UOM_UNRESOLVED:'Cost cannot yet be converted to the selling unit. Confirm the Selling UOM first; a separate cost-conversion QA step may remain afterward.',
+  CURRENT_COST_MISSING:'Current cost is missing. This cannot be corrected from the identity/UOM form.',
+  CURRENT_PRICE_MISSING:'Current selling price is missing. This form does not edit price.',
+  OH_MOVEMENT_ROLLFORWARD_BLOCKED:'Current OH roll-forward has a movement/UOM blocker. Review the inventory lineage after the unit is corrected.'
+ };
+ const out=[];
+ codes.forEach(c=>{if(labels[c]&&!out.includes(labels[c]))out.push(labels[c])});
+ if(!out.length&&x.issue_summary)out.push(x.issue_summary);
+ if(!out.length)out.push('Review the current item identity and unit information before applying a correction.');
+ return out;
+}
+function qaApplyFeedback(msg,kind=''){
+ const foot=$('#drawerFoot');
+ if(foot){let el=$('#qaApplyFeedback');if(!el){el=document.createElement('div');el.id='qaApplyFeedback';foot.prepend(el)}el.textContent=String(msg||'');el.className='qa-inline-feedback on'+(kind?' '+kind:'')}
+ toast(String(msg||''));
+}
+function qaClearFeedback(){const el=$('#qaApplyFeedback');if(el)el.remove()}
+function qaRemainingForEntity(entityKey){return state.qaIssues.filter(x=>String(x.entity_key||'')===String(entityKey||''))}
+function qaRemainingMessage(entityKey,savedLabel='QA fix saved'){
+ const remaining=qaRemainingForEntity(entityKey);
+ if(!remaining.length)return savedLabel+' · no QA issues remain';
+ const first=remaining[0];
+ const kind=qaFixKindLabel(first.fix_kind);
+ const code=String(first.issue_code||first.issue_summary||'QA HOLD');
+ return savedLabel+' · '+remaining.length+' QA '+(remaining.length===1?'issue':'issues')+' remain · '+kind+' · '+code;
+}
+async function qaRefreshAfterApply(entityKey,{withInventory=true,withBatches=false}={}){
+ const jobs=[loadQA()];
+ if(withInventory)jobs.push(loadInventory());
+ if(withBatches)jobs.push(loadBatches());
+ await Promise.allSettled(jobs);
+ if(isMobileBackoffice()&&mobileState.module==='qa')mobileRenderList();
+ return qaRemainingForEntity(entityKey);
+}
+function openQAIssue(key){
+ qaClearFeedback();
+ const x=findQAIssue(key);if(!x)return;
+ const cur=x.current||{},detail=x.detail||{};
+ const itemName=cur.item_name||cur.selling_description||cur.article_description||(Array.isArray(detail.descriptions)&&detail.descriptions[0])||'Item name unavailable';
+ const chineseName=cur.chinese_name||detail.chinese_name||detail.chinese_description||'';
+ const detailJson=esc(JSON.stringify(detail,null,2));
+ if(x.fix_kind==='ARTICLE_FAMILY_MAPPING'){
+   const article=String(x.entity_key||'').trim();
+   const descriptions=Array.isArray(detail.descriptions)?detail.descriptions.join(' · '):'';
+   const dates=Array.isArray(detail.posting_dates)?detail.posting_dates.join(', '):'';
+   const movements=Array.isArray(detail.movement_types)?detail.movement_types.join(', '):'';
+   openDrawer('Map Article to Family',`${itemName}${chineseName?' · '+chineseName:''} · Article ${esc(article)}`,`
+     <div class="qa-identity"><div class="qa-name">${esc(itemName)}</div>${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}<div class="qa-idmeta"><span>Article ${esc(article)}</span><span>Article → Family mapping</span></div></div>
+     <div class="detailgrid">
+       <div class="detail"><small>Unmapped Article</small><b>${esc(article)}</b></div>
+       <div class="detail"><small>Movement Rows</small><b>${fmt(detail.row_count,0)}</b></div>
+       <div class="detail"><small>Movement Types</small><b>${esc(movements||'—')}</b></div>
+       <div class="detail"><small>Posting Dates</small><b>${esc(dates||'—')}</b></div>
+     </div>
+     <div class="sectiontitle">Movement evidence</div>
+     <div class="calc">${esc(descriptions||x.issue_summary||'No description evidence available.')}</div>
+     <div class="sectiontitle">User-confirmed Family mapping</div>
+     <div class="formfield"><label>Article Number</label><input id="qaMapArticle" value="${esc(article)}" readonly></div>
+     <div class="formfield"><label>Main / Family Article Number</label><input id="qaMapFamily" placeholder="Enter the confirmed Main/Family Article"></div>
+     <div class="formfield"><label>Resolution Note</label><textarea id="qaMapNote" placeholder="How the Article → Family relationship was confirmed"></textarea></div>
+     <label style="display:flex;gap:7px;align-items:flex-start;margin-top:10px;font-size:9px"><input id="qaMapConfirm" type="checkbox" style="margin-top:2px"><span>I confirm this Article belongs to the Family/Main Article entered above. This affects family movement and downstream family calculations after Phase 3 rebuild.</span></label>
+     <div class="calc"><b>Fail-closed.</b> The target Family must already exist, and an Article already mapped to a different confirmed Family will be blocked. RAW movement values are never changed.</div>
+   `,`<button id="applyQAArticleFamily" class="btn primary">Apply Family Mapping</button>`);
+   $('#applyQAArticleFamily').onclick=async()=>{
+     if(!$('#qaMapConfirm').checked){qaApplyFeedback('Confirm the Article → Family mapping first','error');return}
+     const main=($('#qaMapFamily').value||'').trim();
+     if(!main){qaApplyFeedback('Enter the Main / Family Article number','error');return}
+     const btn=$('#applyQAArticleFamily');btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying Family mapping…','working');
+     try{
+       const d=await api('/v1/backoffice/qa-resolve-article-family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+         issue_id:x.issue_id,
+         article_number:article,
+         main_article_number:main,
+         note:($('#qaMapNote').value||'').trim()||null,
+         confirm:'APPLY_ARTICLE_FAMILY_FIX'
+       })});
+       qaApplyFeedback('Family mapping saved. Refreshing QA and batch status…','success');
+       closeDrawer();
+       await qaRefreshAfterApply(article,{withInventory:false,withBatches:true});
+       toast(qaRemainingMessage(article,'Family mapping saved')+' · Rebuild Phase 3 / QA to recalculate family movement.');
+     }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAArticleFamily');if(z){z.disabled=false;z.textContent='Apply Family Mapping'}}
+   };
+   return;
+ }
+ if(x.fix_kind==='COST_CONVERSION'){
+   const sell=String(cur.selling_uom||detail.selling_uom||'').toUpperCase();
+   const costUom=String(detail.cost_uom||'').toUpperCase();
+   openDrawer('Confirm Cost Conversion',`${itemName}${chineseName?' · '+chineseName:''} · UPC ${x.entity_key}`,`
+     <div class="qa-identity"><div class="qa-name">${esc(itemName)}</div>${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}<div class="qa-idmeta"><span>UPC ${esc(x.entity_key)}</span><span>Article ${esc(cur.article_number||cur.main_article_number||'—')}</span><span>Family ${esc(cur.main_article_number||'—')}</span></div></div>
+     <div class="detailgrid">
+       <div class="detail"><small>UPC</small><b>${esc(x.entity_key)}</b></div>
+       <div class="detail"><small>Article</small><b>${esc(cur.article_number||cur.main_article_number||'—')}</b></div>
+       <div class="detail"><small>Selling UOM</small><b>${esc(sell||'Missing')}</b></div>
+       <div class="detail"><small>Cost UOM</small><b>${esc(costUom||'Unknown')}</b></div>
+     </div>
+     <div class="sectiontitle">Issue</div><div class="calc">${esc(x.issue_summary||'')}</div>
+     <div class="sectiontitle">User-confirmed conversion</div>
+     <div class="formfield"><label>Selling Quantity</label><input id="qaConvSellQty" type="number" min="0.0001" step="0.0001" value="1"></div>
+     <div class="formfield"><label>Selling UOM</label><input id="qaConvSellUom" value="${esc(sell)}" readonly></div>
+     <div class="formfield"><label>Cost Quantity represented by that selling quantity</label><input id="qaConvCostQty" type="number" min="0.0001" step="0.0001" placeholder="Example: 2"></div>
+     <div class="formfield"><label>Cost UOM</label><input id="qaConvCostUom" value="${esc(costUom)}" readonly></div>
+     <div class="formfield"><label>Resolution Note</label><textarea id="qaConvNote" placeholder="What you confirmed, e.g. 1 PACK = 2 LB"></textarea></div>
+     <label style="display:flex;gap:7px;align-items:flex-start;margin-top:10px;font-size:9px"><input id="qaConvConfirm" type="checkbox" style="margin-top:2px"><span>I confirm this exact cost-to-selling conversion. This does not change the source cost value or RAW data.</span></label>
+     <div class="calc">Write scope: conversion authority only. Existing cost, POS sales, receipts, and source files remain unchanged.</div>
+   `,`<button id="applyQACostConversion" class="btn primary">Apply Cost Conversion</button>`);
+   const btn=$('#applyQACostConversion');
+   if(!sell||!costUom){btn.disabled=true;qaApplyFeedback('Selling UOM and Cost UOM must both be known before conversion can be confirmed','error');return}
+   btn.onclick=async()=>{
+     if(!$('#qaConvConfirm').checked){qaApplyFeedback('Confirm the conversion first','error');return}
+     const sq=Number($('#qaConvSellQty').value),cq=Number($('#qaConvCostQty').value);
+     if(!(sq>0)||!(cq>0)){qaApplyFeedback('Enter positive conversion quantities','error');return}
+     btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying cost conversion…','working');
+     try{
+       await api('/v1/backoffice/qa-resolve-cost-conversion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+         issue_id:x.issue_id,
+         ean_upc:x.entity_key,
+         selling_qty:sq,
+         selling_uom:sell,
+         cost_qty:cq,
+         cost_uom:costUom,
+         note:($('#qaConvNote').value||'').trim()||null,
+         confirm:'APPLY_COST_CONVERSION_FIX'
+       })});
+       qaApplyFeedback('Cost conversion saved. Refreshing QA and inventory…','success');
+       closeDrawer();
+       await qaRefreshAfterApply(x.entity_key);
+       toast(qaRemainingMessage(x.entity_key,'Cost conversion saved'));
+     }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQACostConversion');if(z){z.disabled=false;z.textContent='Apply Cost Conversion'}}
+   };
+   return;
+ }
+ if(!x.can_fix){
+   openDrawer('QA Issue Details',`${itemName}${chineseName?' · '+chineseName:''} · ${x.entity_key}`,`<div class="qa-identity"><div class="qa-name">${esc(itemName)}</div>${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}<div class="qa-idmeta"><span>${esc(x.entity_type)} ${esc(x.entity_key)}</span><span>Article ${esc(cur.article_number||'—')}</span><span>Family ${esc(cur.main_article_number||'—')}</span></div></div><div class="detailgrid"><div class="detail"><small>Severity</small><b>${esc(x.severity)}</b></div><div class="detail"><small>Entity</small><b>${esc(x.entity_type)} · ${esc(x.entity_key)}</b></div><div class="detail"><small>Batch</small><b>#${esc(x.batch_id??'—')}</b></div><div class="detail"><small>Fix Scope</small><b>View only</b></div></div><div class="sectiontitle">Summary</div><div class="calc">${esc(x.issue_summary||'')}</div><div class="sectiontitle">Evidence / Detail</div><pre class="logconsole" style="white-space:pre-wrap">${detailJson}</pre>`,`<span class="pill blue">VIEW ONLY</span>`);
+   return;
+ }
+ const article=cur.article_number||cur.main_article_number||'';
+ const sell=cur.selling_uom||'';
+ const base=cur.base_uom||'';
+ const factor=cur.base_qty_per_selling_unit??'';
+ const friendlyReasons=qaFriendlyReasons(x,detail);
+ const advancedOpen=(base||factor!=='')?' open':'';
+ openDrawer('Fix QA',`${itemName} · UPC ${x.entity_key}`,`
+   <div class="qa-identity">
+     <div class="qa-name">${esc(itemName)}</div>
+     ${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}
+     <div class="qa-idmeta">
+       <span>UPC ${esc(x.entity_key)}</span>
+       <span>Article ${esc(article||'Not linked')}</span>
+       <span>${esc(qaFixKindLabel(x.fix_kind))}</span>
+     </div>
+   </div>
+
+   <div class="qa-step">
+     <div class="qa-stephead"><span class="qa-stepnum">1</span><div><b>What needs fixing</b><span>Start with the field that is blocking Quick Check.</span></div></div>
+     <div class="qa-reasons">${friendlyReasons.map(r=>`<div class="qa-reason">${esc(r)}</div>`).join('')}</div>
+     <details class="qa-technical"><summary>Show technical QA reason</summary><div class="calc">${esc(x.issue_summary||'')}</div></details>
+   </div>
+
+   <div class="qa-step">
+     <div class="qa-stephead"><span class="qa-stepnum">2</span><div><b>Enter the confirmed correction</b><span>Only change values you have verified. No price, cost, sales, receipt, or RAW source value is edited here.</span></div></div>
+     <div class="detailgrid qa-detailgrid">
+       <div class="detail"><small>Current Selling UOM</small><b>${esc(sell||'Missing')}</b></div>
+       <div class="detail"><small>Current Article</small><b>${esc(article||'Not linked')}</b></div>
+     </div>
+     <div class="formfield"><label>Selling UOM <span class="qa-required">REQUIRED</span></label><select id="qaSellingUom"><option value="">Select how this UPC is sold...</option>${['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>`<option value="${u}" ${String(sell).toUpperCase()===u?'selected':''}>${u}</option>`).join('')}</select><div class="qa-field-help">Choose the unit represented by POS Qty = 1. Example: weighted seafood sold by the pound = LB; one retail bag = BAG or PACK only when confirmed.</div></div>
+     <div class="formfield"><label>Article Number</label><input id="qaArticle" value="${esc(article)}" placeholder="Required if the UPC is not linked to an Article"><div class="qa-field-help">Keep the current Article unless you have confirmed the UPC is linked to a different Article.</div></div>
+
+     <details class="qa-advanced"${advancedOpen}><summary>Advanced: Base UOM / conversion (optional)</summary>
+       <div class="qa-field-help">Leave this section blank unless the Base UOM and conversion are specifically confirmed.</div>
+       <div class="formfield"><label>Base UOM</label><select id="qaBaseUom"><option value="">Not confirmed</option>${['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>`<option value="${u}" ${String(base).toUpperCase()===u?'selected':''}>${u}</option>`).join('')}</select></div>
+       <div class="formfield"><label>Base Qty per Selling Unit</label><input id="qaFactor" type="number" min="0" step="0.0001" value="${esc(factor)}" placeholder="Example: 2"><div class="qa-field-help">Example only when confirmed: 1 PACK = 2 LB → Base UOM LB and quantity 2.</div></div>
+     </details>
+
+     <div class="formfield"><label>Resolution Note</label><textarea id="qaNote" placeholder="Optional: what you confirmed and the source of the confirmation"></textarea></div>
+   </div>
+
+   <div class="qa-step">
+     <div class="qa-stephead"><span class="qa-stepnum">3</span><div><b>Confirm and apply</b><span>The original source rows stay unchanged. The system records an audited user-confirmed override and refreshes the affected serving data.</span></div></div>
+     <label class="qa-confirm"><input id="qaConfirm" type="checkbox"><span>I confirmed the item link and Selling UOM entered above.</span></label>
+     <div class="qa-scope">Write scope: UPC identity / Selling UOM QA resolution only. Price, cost, sales, receipt quantities, and source files remain read-only.</div>
+   </div>
+ `,`<button id="applyQAFix" class="btn primary">Apply Confirmed QA Fix</button>`);
+ $('#applyQAFix').onclick=async()=>{
+   if(!$('#qaConfirm').checked){qaApplyFeedback('Check the confirmation box before applying the correction','error');return}
+   const sellingUom=$('#qaSellingUom').value;
+   if(!sellingUom){qaApplyFeedback('Select the Selling UOM first','error');return}
+   const baseUom=$('#qaBaseUom').value||null;
+   const factorRaw=($('#qaFactor').value||'').trim();
+   if(baseUom&&factorRaw===''){qaApplyFeedback('Enter Base Qty per Selling Unit, or leave Base UOM unconfirmed','error');return}
+   const body={
+     issue_id:x.issue_id,
+     ean_upc:x.entity_key,
+     article_number:($('#qaArticle').value||'').trim()||null,
+     selling_uom:sellingUom,
+     base_uom:baseUom,
+     base_qty_per_selling_unit:factorRaw===''?null:Number(factorRaw),
+     note:($('#qaNote').value||'').trim()||null,
+     confirm:'APPLY_QA_FIX'
+   };
+   const btn=$('#applyQAFix');btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying confirmed QA correction…','working');
+   try{
+     const r=await api('/v1/backoffice/qa-resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+     qaApplyFeedback(`Saved · resolution #${r.resolution_id}. Refreshing QA and inventory…`,'success');closeDrawer();await qaRefreshAfterApply(x.entity_key);toast(qaRemainingMessage(x.entity_key,`QA fix saved · resolution #${r.resolution_id}`));
+   }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAFix');if(z){z.disabled=false;z.textContent='Apply Confirmed QA Fix'}}
+ };
+}
+$('#qaSearch').oninput=e=>{state.qaText=e.currentTarget.value;renderQA()};
+$('#qaSort').onchange=e=>{state.qaSort=e.currentTarget.value;renderQA()};
+$$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
+$('#qaRefresh').onclick=loadQA;
+
+async function loadDatabaseOverview(){
+  const err=$('#dbOverviewError');if(err)err.innerHTML='';
+  try{
+    const [h,a,r,q]=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
+    state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
+    const latest=state.recent[0]||null;
+    $('#dbOverviewActive').innerHTML=activeCard(state.active);
+    $('#dbLatestBatch').innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';
+    wireRebuildButtons($('#dbLatestBatch'));
+    $('#dbProcessingSummary').textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch');
+    const fixable=state.qaIssues.filter(x=>x.can_fix).length;
+    $('#dbQASummary').textContent=state.qaIssues.length?`${state.qaIssues.length} open · ${fixable} fixable`:'No open QA issues';
+    $('#dbHealthSummary').textContent=h.ok?`Service healthy · ${h.version||''}`:'Service health needs attention';
+    $('#dbUploadSummary').textContent=state.active?'Wait for current batch to finish':'Ready for a new source batch';
+    const hasProblem=!h.ok||state.qaIssues.some(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
+    const status=$('#dbOverallStatus');status.textContent=hasProblem?'ATTENTION':(state.active?'PROCESSING':'READY');status.className='pill '+(hasProblem?'amber':state.active?'sea':'green');
+  }catch(e){if(err)err.innerHTML=`<div class="error">${esc(e.message)}</div>`;const st=$('#dbOverallStatus');if(st){st.textContent='CHECK FAILED';st.className='pill red'}}
+}
+function batchResumeEligible(b){
+  const status=String(b?.processing_status||b?.status||'').toUpperCase();
+  return status==='PHASE2C_READY';
+}
+function batchRebuildEligible(b){
+  const p2=String(b?.phase2c_status||'').toUpperCase();
+  const p3=String(b?.phase3_status||b?.processing_status||'').toUpperCase();
+  return p2==='READY' && ['QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','PHASE3_QA_HOLD'].includes(p3);
+}
+function resumeActionHtml(b,compact=false){
+  if(!b||!batchResumeEligible(b))return '';
+  return `<div style="${compact?'margin-top:8px':'margin-top:10px'}"><div class="calc" style="margin:0 0 8px"><b>Past:</b> Phase 2C complete ✅ &nbsp; <b>Current:</b> Waiting for Phase 3 ⚠️ &nbsp; <b>Next:</b> Phase 3 rebuild → QA → Quick Check</div><div style="display:flex;justify-content:flex-end"><button class="btn primary batch-resume-btn" data-batch="${esc(b.batch_id||b.id)}">▶ Retry Phase 3</button></div></div>`;
+}
+function rebuildActionHtml(b,compact=false){
+  if(!b||!batchRebuildEligible(b))return '';
+  return `<div style="${compact?'margin-top:8px':'margin-top:10px'};display:flex;justify-content:flex-end"><button class="btn primary batch-rebuild-btn" data-batch="${esc(b.batch_id)}">🔄 Rebuild Phase 3 / QA</button></div>`;
+}
+function wireRecoveryButtons(root=document){
+  root.querySelectorAll('.batch-resume-btn').forEach(btn=>{
+    btn.onclick=e=>{e.stopPropagation();resumePhase3(btn.dataset.batch)}
+  });
+  root.querySelectorAll('.batch-rebuild-btn').forEach(btn=>{
+    btn.onclick=e=>{e.stopPropagation();rebuildPhase3(btn.dataset.batch)}
+  });
+}
+async function resumePhase3(id){
+  const b=(state.active&&String(state.active.batch_id||state.active.id)===String(id))?state.active:null;
+  if(!b){toast('Current batch detail is not loaded yet');return}
+  if(!batchResumeEligible(b)){toast('This batch is not waiting at Phase 2C');return}
+  if(!window.confirm(`Retry Phase 3 for Batch #${b.batch_id||b.id}?\n\nRAW files will not be re-uploaded. This resumes the existing batch directly from Phase 3.`))return;
+  const buttons=[...document.querySelectorAll(`.batch-resume-btn[data-batch="${CSS.escape(String(b.batch_id||b.id))}"]`)];
+  buttons.forEach(x=>{x.disabled=true;x.textContent='Queuing Phase 3…'});
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id||b.id)}/resume-phase3`,{method:'POST'});
+    toast(d.already_active?'Phase 3 job is already active':'Phase 3 retry queued');
+    await loadBatches();
+    if(isMobileBackoffice()&&mobileState.module==='batches')mobileRenderList();
+  }catch(e){
+    toast(e.message);
+    buttons.forEach(x=>{x.disabled=false;x.textContent='▶ Retry Phase 3'});
+  }
+}
+async function loadChatgptBridgeStatus(batchId){
+  const box=$('#batchBridgeStatus');if(!box)return;
+  box.innerHTML='<div class="meta">Checking ChatGPT analysis bridge…</div>';
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(batchId)}/chatgpt-publish-status`);
+    const result=d.publish_result||{};
+    const publishStatus=String(result.status||'').toUpperCase();
+    const runStatus=String(d.status||'').toUpperCase();
+    const ok=runStatus==='COMPLETED'&&publishStatus==='PASS';
+    box.innerHTML=`<div class="detailgrid">
+      <div class="detail"><small>Bridge Job</small><b>${esc(runStatus||'NONE')}</b></div>
+      <div class="detail"><small>Sheet Publish</small><b>${esc(publishStatus||'—')}</b></div>
+      <div class="detail"><small>Run ID</small><b>${esc(d.publish_run_id||'—')}</b></div>
+      <div class="detail"><small>Completed</small><b>${esc(d.completed_at||'—')}</b></div>
+    </div>
+    <div class="calc" style="margin-top:8px">${ok?'<b>Bridge PASS.</b> ChatGPT analysis snapshot is published.':'<b>Bridge not PASS.</b> MySQL Quick Check remains live; republish affects only the ChatGPT/Google Sheet analysis snapshot.'}</div>
+    <div style="display:flex;justify-content:flex-end;margin-top:8px"><button id="republishChatgptBtn" class="btn ${ok?'soft':'primary'}">↻ Republish ChatGPT Analysis</button></div>`;
+    const rb=$('#republishChatgptBtn');if(rb)rb.onclick=()=>republishChatgptAnalysis(batchId,rb);
+  }catch(e){box.innerHTML=`<div class="error" style="margin:0">${esc(e.message)}</div>`}
+}
+async function republishChatgptAnalysis(batchId,btn=null){
+  if(btn){btn.disabled=true;btn.textContent='Queuing Republish…'}
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(batchId)}/republish-chatgpt-analysis`,{method:'POST'});
+    toast(d.already_active?'ChatGPT analysis publish is already active':'ChatGPT analysis republish queued');
+    if(btn)btn.textContent='Publishing…';
+    setTimeout(()=>loadChatgptBridgeStatus(batchId),1500);
+  }catch(e){
+    toast(e.message);
+    if(btn){btn.disabled=false;btn.textContent='↻ Republish ChatGPT Analysis'}
+  }
+}
+
+async function rebuildPhase3(id){
+  const b=state.recent.find(x=>String(x.batch_id)===String(id));
+  if(!b){toast('Batch detail is not loaded yet');return}
+  if(!batchRebuildEligible(b)){toast('This batch is not currently eligible for Phase 3 rebuild');return}
+  if(!window.confirm(`Rebuild Phase 3 / QA for Batch #${b.batch_id}?\n\nRAW files will not be re-uploaded. The current Quick Check snapshot remains active until the rebuild commits.`))return;
+  const buttons=[...document.querySelectorAll(`.batch-rebuild-btn[data-batch="${CSS.escape(String(b.batch_id))}"]`)];
+  buttons.forEach(x=>{x.disabled=true;x.textContent='Queuing Rebuild…'});
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id)}/rebuild-phase3`,{method:'POST'});
+    toast(d.already_active?'Phase 3 rebuild is already active':'Phase 3 / QA rebuild queued');
+    closeDrawer();
+    showDbTab('dboverview');
+    await loadBatches();
+  }catch(e){
+    toast(e.message);
+    buttons.forEach(x=>{x.disabled=false;x.textContent='🔄 Rebuild Phase 3 / QA'});
+  }
+}
+function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',status=a.processing_status||a.status||'PROCESSING';return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Started</small><b>${esc(a.upload_started_at||'—')}</b></div><div><small>Status</small><b>${esc(status)}</b></div></div></div>`}
+async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];const activeEl=$('#activeBatch');if(activeEl){activeEl.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);wireRecoveryButtons(activeEl)}const overviewActive=$('#dbOverviewActive');if(overviewActive){overviewActive.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);wireRecoveryButtons(overviewActive)}const batchRows=$('#batchRows');if(batchRows){batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}const latest=state.recent[0]||null;const latestEl=$('#dbLatestBatch');if(latestEl){latestEl.innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';wireRecoveryButtons(latestEl)}const ps=$('#dbProcessingSummary');if(ps)ps.textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch')}catch(e){const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(e.message)}</div>`;const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+function openBatchDetail(id){
+  const b=state.recent.find(x=>String(x.batch_id)===String(id));if(!b)return;
+  const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b);
+  const foot=eligible
+    ? `<span class="meta" style="margin-right:auto">Uses current OH / UOM / cost / identity / QA rules. RAW is not re-uploaded.</span><button id="rebuildPhase3Btn" class="btn primary">🔄 Rebuild Phase 3 / QA</button>`
+    : `<span class="pill blue">READ ONLY</span>`;
+  openDrawer(
+    `Batch #${b.batch_id}`,
+    `${b.processing_status||''} · ${b.phase3_status||''}`,
+    `<div class="detailgrid"><div class="detail"><small>Files</small><b>${fmt(b.file_count,0)}</b></div><div class="detail"><small>Rows</small><b>${fmt(b.source_row_count,0)}</b></div><div class="detail"><small>Errors</small><b>${fmt(b.error_count,0)}</b></div><div class="detail"><small>Completed</small><b>${esc(b.completed_at||'—')}</b></div><div class="detail"><small>QC Ready</small><b>${fmt(b.quick_check_ready_rows,0)}</b></div><div class="detail"><small>QC Hold</small><b>${fmt(b.quick_check_hold_rows,0)}</b></div></div><div class="sectiontitle">ChatGPT Analysis Bridge</div><div id="batchBridgeStatus"><div class="meta">Checking bridge status…</div></div><div class="sectiontitle">Source Files</div><div class="reasonlist">${files.map(f=>`<div class="reason"><span class="rdot"></span><div><b>${esc(f.original_filename||'')}</b><span>${esc(f.source_type||'Unknown')} · ${esc(f.processing_status||'')}</span></div></div>`).join('')||'<span class="meta">No file detail.</span>'}</div>${q.phase3?`<div class="sectiontitle">QA</div><div class="calc">${esc(q.phase3.result_status||'')} · blockers ${fmt(q.phase3.blocking_issue_count,0)} · hold rows ${fmt(q.phase3.quick_check_hold_rows,0)}</div>`:''}${eligible?'<div class="calc" style="margin-top:10px"><b>Rebuild available.</b> Re-runs Phase 3 / QA only; the previous Quick Check snapshot stays live until commit.</div>':''}`,
+    foot
+  );
+  const rb=$('#rebuildPhase3Btn');if(rb)rb.onclick=()=>rebuildPhase3(b.batch_id);
+  loadChatgptBridgeStatus(b.batch_id);
+}
+$('#refreshBatch').onclick=loadBatches;
+
+$('#uploadBtn').onclick=async()=>{const files=[...$('#uploadFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#uploadBtn');btn.disabled=true;$('#uploadResult').innerHTML='<span class="meta">Creating batch...</span>';try{const label=($('#uploadNote').value||'').trim()||`Web direct upload ${new Date().toLocaleString()}`;const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});if(created.created===false){$('#uploadResult').innerHTML='<b>Upload not started</b><div class="meta">A batch is already active. Wait for it to finish before uploading another batch.</div>';toast('Active batch already processing');showDbTab('dboverview');await loadBatches();return}const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');const uploaded=[];for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('#uploadResult').innerHTML=`<span class="meta">Uploading ${i+1}/${files.length}: ${esc(files[i].name)}</span>`;const u=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/files`,{method:'POST',body:fd});uploaded.push(u)}$('#uploadResult').innerHTML='<span class="meta">Committing batch and starting processing...</span>';const commit=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/commit`,{method:'POST'});$('#uploadResult').innerHTML=`<b>Upload accepted</b><div class="meta">${files.length} file(s) · processing started</div><div class="filelist">${files.map(f=>`<div class="filerow"><span>${esc(f.name)}</span><span>${fmt(f.size/1024/1024,2)} MB</span></div>`).join('')}</div>`;$('#uploadFiles').value='';$('#uploadNote').value='';toast('Upload complete; batch processing started');showDbTab('dboverview');await loadBatches()}catch(e){$('#uploadResult').innerHTML=`<div class="error" style="margin:-9px">${esc(e.message)}</div>`;toast(e.message)}finally{btn.disabled=false}};
+
+async function loadData(){
+  const err=$('#dataHealthError');if(err)err.innerHTML='';
+  try{
+    const d=await api('/v1/backoffice/data-health?days=14');
+    state.dataHealth=d;
+    const latest=d.latest||{};
+    const sourceKeys=['POS','MVT','PRICE','OH','LIVE_FRESH','FROZEN'];
+    const labels={POS:'POS',MVT:'MVT',PRICE:'Price',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
+    $('#dataGrid').innerHTML=sourceKeys.map(k=>{
+      const x=latest[k]||{};
+      return '<div class="kpi"><small>'+esc(labels[k])+'</small><b>'+esc(x.date||'—')+'</b><span>'+esc(x.file||'No recent source')+'</span></div>';
+    }).join('');
+    const stateTag=x=>{
+      const s=String(x?.status||'NONE').toUpperCase();
+      if(s==='OK')return '<span class="pill green">OK</span>';
+      if(s==='MISSING')return '<span class="pill red">MISS</span>';
+      if(s==='NOT_DUE')return '<span class="pill blue">NOT DUE</span>';
+      return '<span class="pill blue">—</span>';
+    };
+    const overallTag=s=>{
+      const v=String(s||'').toUpperCase();
+      if(v==='COMPLETE')return '<span class="pill green">COMPLETE</span>';
+      if(v==='MISSING')return '<span class="pill red">MISSING</span>';
+      return '<span class="pill blue">CURRENT DAY</span>';
+    };
+    $('#dataHealthRows').innerHTML=(d.rows||[]).map(r=>{
+      const s=r.sources||{};
+      return '<tr class="data-health-row" data-date="'+esc(r.date)+'">'+
+        '<td><b>'+esc(r.date)+'</b><div class="meta">'+esc(r.weekday||'')+'</div></td>'+
+        '<td>'+overallTag(r.overall_status)+'</td>'+
+        '<td>'+stateTag(s.POS)+'</td>'+
+        '<td>'+stateTag(s.MVT)+'</td>'+
+        '<td>'+stateTag(s.PRICE)+'</td>'+
+        '<td>'+stateTag(s.OH)+'</td>'+
+        '<td>'+stateTag(s.LIVE_FRESH)+'</td>'+
+        '<td>'+stateTag(s.FROZEN)+'</td>'+
+        '<td><button class="btn small data-health-detail" data-date="'+esc(r.date)+'">Details</button></td>'+
+      '</tr>';
+    }).join('')||'<tr><td colspan="9" class="empty">No Data Health rows.</td></tr>';
+    $$('.data-health-detail').forEach(b=>b.onclick=e=>{e.stopPropagation();openDataHealthDetail(b.dataset.date)});
+    $$('.data-health-row').forEach(tr=>tr.onclick=()=>openDataHealthDetail(tr.dataset.date));
+  }catch(e){
+    if(err)err.innerHTML='<div class="error">'+esc(e.message)+'</div>';
+    $('#dataHealthRows').innerHTML='<tr><td colspan="9" class="empty">Unable to load Data Health.</td></tr>';
+  }
+}
+function openDataHealthDetail(dateKey){
+  const data=state.dataHealth||{},r=(data.rows||[]).find(x=>String(x.date)===String(dateKey));if(!r)return;
+  const names={POS:'POS',MVT:'MVT',PRICE:'Price List',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
+  const blocks=Object.keys(names).map(k=>{
+    const x=(r.sources||{})[k]||{};
+    const requirement=(k==='POS'||k==='MVT')?'Daily required':'Snapshot source';
+    return '<div class="reason"><span class="rdot"></span><div><b>'+esc(names[k])+' · '+esc(x.status||'NONE')+'</b><span>'+
+      esc(requirement)+' · '+esc(x.file||'No source')+(x.batch_id?' · Batch #'+esc(x.batch_id):'')+
+    '</span></div></div>';
+  }).join('');
+  openDrawer('Data Health · '+r.date,(r.weekday||'')+' · '+(r.overall_status||''),'<div class="reasonlist">'+blocks+'</div>','<span class="pill blue">READ ONLY</span>');
+}
+$('#refreshData').onclick=loadData;
+$('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
+
+$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
+async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice())showMobileHome({scroll:false});else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
+})();
+</script>
+</body></html>'''
+,money(r.gp_dollars),r.gp_cost_complete?'Historical applicable cost':'Cost missing on '+(r.gp_missing_cost_days||[]).length+' sold day(s)');
+  html+=mobileMetric('GP%',pct(r.gp_pct),'Range gross margin');
+  html+=mobileMetric('Sold Qty',fmt(r.sold_quantity)+' '+(r.qty_uom||''),'POS range total');
+  html+=mobileMetric('Velocity',fmt(r.velocity)+' '+(r.qty_uom||'')+'/day',(r.supported_day_count||0)+' completed data days');
+  html+=mobileMetric('Avg Sold Price',money(r.avg_sold_price),'Weighted range average');
+  html+=mobileMetric('GP$/Data Day',money(r.gp_per_supported_day),'Completed canonical days');
+  html+=mobileMetric('Sold Days',fmt(r.sold_supported_day_count,0),'Days with positive POS qty');
   html+='</div></div>';
   mobileShowDetail(r.upc||'Performance',r.name||'',html);
 }
