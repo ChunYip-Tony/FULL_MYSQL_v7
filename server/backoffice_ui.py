@@ -19,7 +19,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .nav{display:flex;gap:3px;overflow:auto;padding:0 10px 10px}.nav button{border:0;background:transparent;color:#d2e6e6;border-radius:8px;padding:9px 11px;white-space:nowrap;font-size:13px}.nav button.on{background:#fff;color:var(--deep);font-weight:800}.btn{min-height:36px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 10px;font-weight:750}.btn.primary{background:var(--sea);border-color:var(--sea);color:#fff}.btn.soft{background:var(--foam);border-color:transparent;color:var(--sea)}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.btn.small{min-height:32px;font-size:11px;padding:6px 9px}.btn:disabled{opacity:.5;cursor:not-allowed}
 .pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:800;white-space:nowrap}.pill.green{background:var(--greenbg);color:var(--green)}.pill.amber{background:var(--amberbg);color:var(--amber)}.pill.red{background:var(--redbg);color:var(--red)}.pill.blue{background:var(--bluebg);color:var(--blue)}.pill.sea{background:var(--foam);color:var(--sea)}
 .statusstrip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 10px}.stat small{display:block;color:var(--muted);font-size:8px}.stat b{display:block;font-size:17px;margin-top:2px}.stat span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
-.view{display:none}.view.on{display:block}.subview{display:none}.subview.on{display:block}.panel{margin-top:9px;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}.panelhead{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;flex-wrap:wrap;padding:11px 12px;border-bottom:1px solid var(--line)}.title{font-size:19px;font-weight:850}.sub{font-size:11px;color:var(--muted);margin-top:3px}.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.toolrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 11px;border-bottom:1px solid var(--line)}.filters{display:flex;gap:5px;flex-wrap:wrap}.filter{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 10px;font-size:11px}.filter.on{background:var(--foam);border-color:transparent;color:var(--sea);font-weight:800}.select{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 9px;font-size:12px}
+.view{display:none}.view.on{display:block}.subview{display:none}.subview.on{display:block}.panel{margin-top:9px;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}.panelhead{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;flex-wrap:wrap;padding:11px 12px;border-bottom:1px solid var(--line)}.title{font-size:19px;font-weight:850}.sub{font-size:11px;color:var(--muted);margin-top:3px}.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.toolrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 11px;border-bottom:1px solid var(--line)}.filters{display:flex;gap:5px;flex-wrap:wrap}.filter{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 10px;font-size:11px}.filter.on{background:var(--foam);border-color:transparent;color:var(--sea);font-weight:800}.select{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 9px;font-size:12px}.qa-search{min-width:220px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:8px 10px;font-size:12px}
 .tablewrap{overflow:auto}.table{width:100%;min-width:980px;border-collapse:collapse;font-size:12px}.table th,.table td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}.table th{background:#f7faf9;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.035em}.table tbody tr:hover td{background:#fbfdfc}.table tbody tr.velocity-active td{background:#f2fbf8}.table tbody tr.velocity-active:hover td{background:#e8f7f2}.table tbody tr.velocity-active td:first-child{box-shadow:inset 3px 0 0 #6aaea4}.name{font-weight:800;font-size:13px}.meta{font-size:10px;color:var(--muted);margin-top:2px}.num{font-variant-numeric:tabular-nums}.linkbtn{border:0;background:transparent;padding:2px 0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:850}.suggest{font-weight:900;color:var(--sea);font-size:11px}.empty{padding:28px;text-align:center;color:var(--muted);font-size:10px}.loading{padding:22px;color:var(--muted);font-size:10px}.error{padding:10px 12px;background:var(--redbg);color:var(--red);font-size:10px;border-bottom:1px solid #f0cac4}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:11px}.kpi{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.kpi small{display:block;color:var(--muted);font-size:8px}.kpi b{display:block;font-size:14px;margin-top:2px}.kpi span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
 .reasonlist{display:grid;gap:6px}.reason{display:grid;grid-template-columns:auto 1fr;gap:7px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.rdot{width:7px;height:7px;border-radius:50%;background:var(--sea);margin-top:4px}.reason b{display:block;font-size:10px}.reason span{display:block;color:var(--muted);font-size:9px;margin-top:1px}.sectiontitle{font-size:10px;font-weight:850;margin:13px 0 6px}.detailgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.detail{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fbfdfc}.detail small{display:block;color:var(--muted);font-size:8px}.detail b{display:block;font-size:10px;margin-top:2px}.calc{border:1px dashed #b9d4cf;background:#f4fbf9;border-radius:9px;padding:8px;margin-top:8px;font-size:9px;color:var(--deep)}.logconsole{background:#0b272b;color:#d8efec;border-radius:10px;padding:9px;font:9px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:230px;overflow:auto}
@@ -83,7 +83,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-pagetitle{font-size:20px;font-weight:900;line-height:1.1}.m-pagesub{font-size:10px;line-height:1.35;color:var(--muted);margin-top:3px}
   .m-chipbar{display:flex;gap:7px;overflow-x:auto;padding:1px 0 8px;scrollbar-width:none}.m-chipbar::-webkit-scrollbar{display:none}
   .m-chip{flex:0 0 auto;min-height:39px;padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:999px;font-size:11px;font-weight:850}
-  .m-chip.on{background:var(--foam);border-color:#aad2cc;color:var(--sea)}
+  .m-chip.on{background:var(--foam);border-color:#aad2cc;color:var(--sea)}.m-qatools{display:none;grid-template-columns:minmax(0,1fr) 145px;gap:7px;margin:0 0 9px}.m-qatools.on{display:grid}.m-qatools input,.m-qatools select{min-width:0;min-height:44px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:9px 10px;font-size:13px}.m-qatools input{font-size:16px}
   .m-list{display:grid;gap:9px}
   .m-row{width:100%;min-height:82px;border:1px solid var(--line);background:#fff;border-radius:16px;padding:13px;text-align:left}
   .m-row-main{display:flex;gap:10px;align-items:center}.m-row-copy{min-width:0;flex:1}
@@ -162,6 +162,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="mobileListPage" class="mobile-listpage" aria-label="Mobile Backoffice List">
   <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div></div>
   <div id="mobileListChips" class="m-chipbar"></div>
+  <div id="mobileQaTools" class="m-qatools"><input id="mobileQaSearch" placeholder="Search UPC / Article / item / reason"><select id="mobileQaSort"><option value="oh_vel_desc">OH ↓, then Velocity ↓</option><option value="vel_oh_desc">Velocity ↓, then OH ↓</option><option value="severity">Severity</option><option value="name">Item A → Z</option><option value="upc">UPC</option></select></div>
   <div id="mobileListContent" class="m-list"></div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
     <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Search</button><button type="button" data-mobile-module="uploads">⇧<br>Uploads</button><button type="button" data-mobile-module="qa">⚠<br>QA</button>
@@ -290,9 +291,9 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
   <div id="dbqa" class="subview"><div class="panel">
     <div class="panelhead"><div><div class="title">QA Fixes</div><div class="sub">Only issues that require review or user-confirmed correction. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
-    <div class="toolrow"><div class="filters"><button class="filter qafilter on" data-qafilter="ALL">All Open</button><button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button><button class="filter qafilter" data-qafilter="VIEW_ONLY">Review Only</button><button class="filter qafilter" data-qafilter="HIGH">High / Critical</button></div><div class="tools"><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div></div>
+    <div class="toolrow"><div class="filters"><button class="filter qafilter on" data-qafilter="ALL">All Open</button><button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button><button class="filter qafilter" data-qafilter="VIEW_ONLY">Review Only</button><button class="filter qafilter" data-qafilter="HIGH">High / Critical</button></div><div class="tools"><input id="qaSearch" class="qa-search" placeholder="Search UPC / Article / Family / item / reason"><select id="qaSort" class="select"><option value="oh_vel_desc">Highest OH → Highest Velocity</option><option value="vel_oh_desc">Highest Velocity → Highest OH</option><option value="severity">Severity</option><option value="name">Item A → Z</option><option value="upc">UPC</option></select><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div></div>
     <div id="qaError"></div>
-    <div class="tablewrap"><table class="table" style="min-width:1050px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
+    <div class="tablewrap"><table class="table" style="min-width:1180px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>OH</th><th>7D Velocity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
     <div class="sectiontitle" style="padding:0 11px">Recent Resolution History</div>
     <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
   </div></div>
@@ -309,7 +310,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesCat:'ALL',salesTrend:'ALL',salesText:'',salesSort:'sales_desc',salesRows:[],orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesCat:'ALL',salesTrend:'ALL',salesText:'',salesSort:'sales_desc',salesRows:[],orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -409,6 +410,15 @@ function mobileRenderChips(){
   box.style.display=cfg.chips.length?'flex':'none';
   box.querySelectorAll('[data-m-filter]').forEach(b=>b.onclick=()=>{mobileState.filter=b.dataset.mFilter;mobileRenderChips();mobileRenderList()});
 }
+function mobileRenderQaTools(){
+ const box=mNode('mobileQaTools');if(!box)return;
+ const on=mobileState.module==='qa';box.classList.toggle('on',on);
+ if(!on)return;
+ const input=mNode('mobileQaSearch'),sort=mNode('mobileQaSort');
+ input.value=state.qaText||'';sort.value=state.qaSort||'oh_vel_desc';
+ input.oninput=()=>{state.qaText=input.value;mobileRenderList()};
+ sort.onchange=()=>{state.qaSort=sort.value;mobileRenderList()};
+}
 async function mobileRefreshHome(){
   if(!isMobileBackoffice())return;
   try{
@@ -442,11 +452,12 @@ async function mobileOpenModule(module,{query=''}={}){
   mNode('mobileListContent').innerHTML='<div class="m-loading">Loading…</div>';
   mobileScreen('mobileListPage');
   mobileRenderChips();
+  mobileRenderQaTools();
   try{
     if(module==='quick'){
       state.inventorySearch=mobileState.query;state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
     }else if(module==='qa'){
-      state.qaFilter='ALL';await loadQA();
+      state.qaFilter='ALL';state.qaText='';state.qaSort='oh_vel_desc';mobileRenderQaTools();await loadQA();
     }else if(module==='price'){
       state.priceCat='ALL';state.priceStatus='ALL';state.priceSort='opportunity';state.priceText='';await loadPrices();
     }else if(module==='performance'){
@@ -473,7 +484,9 @@ function mobileRows(){
     if(f==='fixable')a=a.filter(x=>x.can_fix);
     if(f==='view_only')a=a.filter(x=>!x.can_fix);
     if(f==='high')a=a.filter(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
-    return a;
+    const q=String(state.qaText||'').trim().toLowerCase();
+    if(q)a=a.filter(x=>qaSearchBlob(x).includes(q));
+    return qaSortRows(a);
   }
   if(mod==='price'){
     let a=filteredPrices();
@@ -516,7 +529,7 @@ function mobileRenderList(){
   if(mobileState.module==='quick'){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc||r.family_article,r.name||r.family_name,(r.family_article?'Family '+r.family_article+' · ':'')+fmt(r.qty_7d)+' 7D · '+money(r.price)+' '+(r.price_type||'')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''),r.readiness||r.category,r.chinese_name||'')).join('');
   }else if(mobileState.module==='qa'){
-    html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,qaFixKindLabel(x.fix_kind)+' · '+(x.issue_summary||''),x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
+    html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,'OH '+fmt(cur.current_oh)+' '+(cur.current_oh_uom||'')+' · 7D Vel '+fmt(cur.upc_velocity_7d)+'/'+(cur.selling_uom||'unit')+' · '+qaFixKindLabel(x.fix_kind)+' · '+(x.issue_summary||''),x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
   }else if(mobileState.module==='price'){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:''),r.review_status||'REVIEW','')).join('');
   }else if(mobileState.module==='performance'){
@@ -758,19 +771,40 @@ $('#priceTextFilter').oninput=e=>{state.priceText=e.target.value;renderPrices()}
 function openPriceDetail(upc){const r=state.prices.find(x=>String(x.upc)===String(upc));if(!r)return;const company=[['A',r.company_price_a],['B',r.company_price_b],['C',r.company_price_c]].filter(x=>x[1]!==null&&x[1]!==undefined);const companyText=company.length?company.map(x=>x[0]+' '+money(x[1])).join(' · '):'No Company A/B/C reference';const rangeText=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'—';openDrawer('Price Suggestion Explanation',`${r.name} · UPC ${r.upc}`,`<div class="detailgrid"><div class="detail"><small>Current Price</small><b>${money(r.current_price)}</b><span>${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</span></div><div class="detail"><small>Candidate Price</small><b>${money(r.candidate_price)}</b><span>${esc(r.selection_basis||r.suggestion_basis||'')}</span></div><div class="detail"><small>Current Cost</small><b>${money(r.current_cost)}</b><span>${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</span></div><div class="detail"><small>Current GP%</small><b>${pct(r.current_gp_pct_reference)}</b></div><div class="detail"><small>Candidate GP%</small><b>${pct(r.suggested_gp_pct_at_current_cost)}</b></div><div class="detail"><small>Company A/B/C</small><b>${esc(companyText)}</b><span>Range: ${esc(rangeText)}</span></div><div class="detail"><small>DOH</small><b>${fmt(r.doh)}</b><span>${r.clearance_due_to_doh?'Clearance mode':'Standard pricing mode'}</span></div><div class="detail"><small>14D Qty</small><b>${fmt(r.qty_14d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(r.velocity_7d)}</b></div><div class="detail"><small>14D Velocity</small><b>${fmt(r.velocity_14d)}</b></div><div class="detail"><small>GP$/Day Current</small><b>${money(r.current_gp_per_day_7d)}</b></div><div class="detail"><small>GP$/Day Candidate</small><b>${money(r.candidate_expected_gp_per_day)}</b></div></div><div class="sectiontitle">Primary reason</div><div class="calc">${esc(r.primary_reason_text||'Pricing review')}</div><div class="sectiontitle">Rule used</div><div class="calc">${r.clearance_reason==='FROZEN_DOH_GT_60'?'Frozen DOH > 60: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.':(r.clearance_due_to_doh?'Fresh DOH > 7: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.':(r.has_company_reference?'Qualified stocked item: candidate maximizes 14D GP$/day and must stay inside the Company A/B/C range.':'Qualified stocked item with no Company A/B/C: candidate maximizes 14D GP$/day from observed sales history.'))}</div><div class="calc">Current Price and Current Cost come from the live Quick Check serving row. Pricing Review is read-only.</div>`,`<span class="pill blue">READ ONLY</span>`)}
 
 async function loadQA(){
- const err=$('#qaError');err.innerHTML='';$('#qaRows').innerHTML='<tr><td colspan="6" class="loading">Loading QA...</td></tr>';
+ const err=$('#qaError');err.innerHTML='';$('#qaRows').innerHTML='<tr><td colspan="8" class="loading">Loading QA...</td></tr>';
  try{
    const d=await api('/v1/backoffice/qa-review?limit=300');
    state.qaIssues=d.issues||[];state.qaHistory=d.resolution_history||[];
    renderQA();
  }catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#qaRows').innerHTML=''}
 }
+function qaNumeric(v,fallback=-Infinity){const n=Number(v);return Number.isFinite(n)?n:fallback}
+function qaSearchBlob(x){
+ const cur=x.current||{};
+ return [x.entity_key,x.issue_code,x.issue_summary,x.entity_type,cur.article_number,cur.main_article_number,cur.family_description,cur.item_name,cur.selling_description,cur.chinese_name,cur.selling_uom].filter(Boolean).join(' ').toLowerCase();
+}
+function qaSortRows(a){
+ const sev={CRITICAL:0,HIGH:1,MEDIUM:2,LOW:3};
+ const sort=state.qaSort||'oh_vel_desc';
+ return a.sort((x,y)=>{
+   const xc=x.current||{},yc=y.current||{};
+   const xoh=qaNumeric(xc.current_oh),yoh=qaNumeric(yc.current_oh);
+   const xv=qaNumeric(xc.upc_velocity_7d),yv=qaNumeric(yc.upc_velocity_7d);
+   if(sort==='vel_oh_desc')return (yv-xv)||(yoh-xoh)||String(x.entity_key||'').localeCompare(String(y.entity_key||''));
+   if(sort==='severity')return ((sev[String(x.severity||'').toUpperCase()]??9)-(sev[String(y.severity||'').toUpperCase()]??9))||(yoh-xoh)||(yv-xv);
+   if(sort==='name')return String(xc.item_name||xc.selling_description||'').localeCompare(String(yc.item_name||yc.selling_description||''))||String(x.entity_key||'').localeCompare(String(y.entity_key||''));
+   if(sort==='upc')return String(x.entity_key||'').localeCompare(String(y.entity_key||''),undefined,{numeric:true});
+   return (yoh-xoh)||(yv-xv)||String(x.entity_key||'').localeCompare(String(y.entity_key||''));
+ });
+}
 function filteredQA(){
  let a=[...state.qaIssues];
  if(state.qaFilter==='FIXABLE')a=a.filter(x=>x.can_fix);
  if(state.qaFilter==='VIEW_ONLY')a=a.filter(x=>!x.can_fix);
  if(state.qaFilter==='HIGH')a=a.filter(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
- return a;
+ const q=String(state.qaText||'').trim().toLowerCase();
+ if(q)a=a.filter(x=>qaSearchBlob(x).includes(q));
+ return qaSortRows(a);
 }
 function renderQA(){
  const a=filteredQA();$('#qaCount').textContent=`${a.length} shown · ${state.qaIssues.length} open`;
@@ -791,12 +825,14 @@ function renderQA(){
    return `<tr>
      <td>${pill(x.severity)}</td>
      <td><div class="name">${esc(x.issue_code)}</div><div class="meta" style="max-width:380px">${esc(x.issue_summary||'')}</div></td>
-     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.item_name||cur.selling_description||'Item name unavailable'):(cur.item_name||x.entity_type||''))}</div>${cur.chinese_name?`<div class="qa-cn-list">${esc(cur.chinese_name)}</div>`:''}</td>
+     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.item_name||cur.selling_description||'Item name unavailable'):(cur.item_name||x.entity_type||''))}</div>${cur.chinese_name?`<div class="qa-cn-list">${esc(cur.chinese_name)}</div>`:''}${cur.main_article_number?`<div class="meta">Family ${esc(cur.main_article_number)}${cur.family_description?' · '+esc(cur.family_description):''}</div>`:''}</td>
+     <td><b>${fmt(cur.current_oh)}</b><div class="meta">${esc(cur.current_oh_uom||'')}</div></td>
+     <td><b>${fmt(cur.upc_velocity_7d)}</b><div class="meta">${esc(cur.selling_uom||'unit')}/day</div></td>
      <td>${esc(stateText||'No current serving row')}</td>
      <td>${x.can_fix?'<span class="pill amber">USER CONFIRM</span>':'<span class="pill blue">VIEW ONLY</span>'}</td>
      <td><button class="btn small qadetail" data-key="${esc(String(x.issue_id??('QC:'+x.entity_key)))}">${x.can_fix?'Fix':'Details'}</button></td>
    </tr>`;
- }).join('')||'<tr><td colspan="6" class="empty">No QA issues match this filter.</td></tr>';
+ }).join('')||'<tr><td colspan="8" class="empty">No QA issues match this search / filter.</td></tr>';
  $$('.qadetail').forEach(b=>b.onclick=()=>openQAIssue(b.dataset.key));
  $('#qaHistoryRows').innerHTML=state.qaHistory.map(h=>`<tr><td>${esc(h.created_at||'—')}</td><td><b>${esc(h.entity_key||'')}</b><div class="meta">${esc(h.entity_type||'')}</div></td><td>${esc(h.issue_code||'')}</td><td>${esc(h.resolution_kind||'')}</td><td>${esc(h.actor||'')}</td><td>${esc(h.resolution_note||'—')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">No manual QA resolutions yet.</td></tr>';
 }
@@ -862,7 +898,8 @@ function openQAIssue(key){
    const descriptions=Array.isArray(detail.descriptions)?detail.descriptions.join(' · '):'';
    const dates=Array.isArray(detail.posting_dates)?detail.posting_dates.join(', '):'';
    const movements=Array.isArray(detail.movement_types)?detail.movement_types.join(', '):'';
-   openDrawer('Map Article to Family',`Article ${esc(article)} · movement mapping`,`
+   openDrawer('Map Article to Family',`${itemName}${chineseName?' · '+chineseName:''} · Article ${esc(article)}`,`
+     <div class="qa-identity"><div class="qa-name">${esc(itemName)}</div>${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}<div class="qa-idmeta"><span>Article ${esc(article)}</span><span>Article → Family mapping</span></div></div>
      <div class="detailgrid">
        <div class="detail"><small>Unmapped Article</small><b>${esc(article)}</b></div>
        <div class="detail"><small>Movement Rows</small><b>${fmt(detail.row_count,0)}</b></div>
@@ -902,7 +939,8 @@ function openQAIssue(key){
  if(x.fix_kind==='COST_CONVERSION'){
    const sell=String(cur.selling_uom||detail.selling_uom||'').toUpperCase();
    const costUom=String(detail.cost_uom||'').toUpperCase();
-   openDrawer('Confirm Cost Conversion',`${x.issue_code} · UPC ${x.entity_key}`,`
+   openDrawer('Confirm Cost Conversion',`${itemName}${chineseName?' · '+chineseName:''} · UPC ${x.entity_key}`,`
+     <div class="qa-identity"><div class="qa-name">${esc(itemName)}</div>${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}<div class="qa-idmeta"><span>UPC ${esc(x.entity_key)}</span><span>Article ${esc(cur.article_number||cur.main_article_number||'—')}</span><span>Family ${esc(cur.main_article_number||'—')}</span></div></div>
      <div class="detailgrid">
        <div class="detail"><small>UPC</small><b>${esc(x.entity_key)}</b></div>
        <div class="detail"><small>Article</small><b>${esc(cur.article_number||cur.main_article_number||'—')}</b></div>
@@ -946,7 +984,7 @@ function openQAIssue(key){
    return;
  }
  if(!x.can_fix){
-   openDrawer('QA Issue Details',`${x.issue_code} · ${x.entity_key}`,`<div class="detailgrid"><div class="detail"><small>Severity</small><b>${esc(x.severity)}</b></div><div class="detail"><small>Entity</small><b>${esc(x.entity_type)} · ${esc(x.entity_key)}</b></div><div class="detail"><small>Batch</small><b>#${esc(x.batch_id??'—')}</b></div><div class="detail"><small>Fix Scope</small><b>View only</b></div></div><div class="sectiontitle">Summary</div><div class="calc">${esc(x.issue_summary||'')}</div><div class="sectiontitle">Evidence / Detail</div><pre class="logconsole" style="white-space:pre-wrap">${detailJson}</pre>`,`<span class="pill blue">VIEW ONLY</span>`);
+   openDrawer('QA Issue Details',`${itemName}${chineseName?' · '+chineseName:''} · ${x.entity_key}`,`<div class="qa-identity"><div class="qa-name">${esc(itemName)}</div>${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}<div class="qa-idmeta"><span>${esc(x.entity_type)} ${esc(x.entity_key)}</span><span>Article ${esc(cur.article_number||'—')}</span><span>Family ${esc(cur.main_article_number||'—')}</span></div></div><div class="detailgrid"><div class="detail"><small>Severity</small><b>${esc(x.severity)}</b></div><div class="detail"><small>Entity</small><b>${esc(x.entity_type)} · ${esc(x.entity_key)}</b></div><div class="detail"><small>Batch</small><b>#${esc(x.batch_id??'—')}</b></div><div class="detail"><small>Fix Scope</small><b>View only</b></div></div><div class="sectiontitle">Summary</div><div class="calc">${esc(x.issue_summary||'')}</div><div class="sectiontitle">Evidence / Detail</div><pre class="logconsole" style="white-space:pre-wrap">${detailJson}</pre>`,`<span class="pill blue">VIEW ONLY</span>`);
    return;
  }
  const article=cur.article_number||cur.main_article_number||'';
@@ -1020,7 +1058,9 @@ function openQAIssue(key){
    }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAFix');if(z){z.disabled=false;z.textContent='Apply Confirmed QA Fix'}}
  };
 }
-$$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
+$('#qaSearch').oninput=e=>{state.qaText=e.currentTarget.value;renderQA()};
+$('#qaSort').onchange=e=>{state.qaSort=e.currentTarget.value;renderQA()};
+$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
 $('#qaRefresh').onclick=loadQA;
 
 async function loadDatabaseOverview(){
