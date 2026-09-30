@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from config import get_settings
 from db import db_conn, test_database
 from business_clock import completed_through_date
-from data_coverage import required_daily_coverage, source_data_days
+from data_coverage import required_daily_coverage, source_data_days, data_health_14_day_board
 from ingest import recent_batches
 from v7_ingest import API_PIPELINE, begin_batch, add_file, commit_batch, session_status, find_active_batch, abort_batch, delete_raw_stage_qa_hold_batch
 from product_identity_audit import audit_product_identity
@@ -3431,6 +3431,15 @@ def backoffice_qa_resolve_article_family(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice QA Article-Family resolution failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/backoffice/data-health')
+def backoffice_data_health(days:int=14):
+    try:
+        result=data_health_14_day_board(days=days)
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice Data Health failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
