@@ -1426,63 +1426,28 @@ def _quick_receiving_article_context(
         conversion_uom = conversion_mv.get("uom")
         conversion_status = conversion_mv.get("status") or "NO_PAIRED_317_318_IN_WINDOW"
 
-        # If this Family has paired 317/318 conversion evidence, its Family
-        # movement is source-Article direct 251/252 plus net converted-out
-        # 317/318. Child Article 251/252 remains Article-level actual sold and is
-        # deliberately NOT added again to the Family total.
-        if conversion_mv:
-            direct_qty = _d(source_qty) if source_qty is not None else Decimal("0")
-            direct_uom = str(source_raw_uom or "").strip().upper() or None
-            conv_uom = str(conversion_uom or "").strip().upper() or None
-            compatible_uom = (
-                (not direct_uom)
-                or (not conv_uom)
-                or direct_uom == conv_uom
-            )
-            if conversion_qty is not None and compatible_uom:
-                family_qty = direct_qty + _d(conversion_qty)
-                family_raw_uom = direct_uom or conv_uom
-                family_uom = family_raw_uom
-                family_status = "READY_DIRECT_251_252_PLUS_PAIRED_317_318"
-                family_basis = "SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT"
-            else:
-                family_qty = None
-                family_raw_uom = None
-                family_uom = None
-                family_status = (
-                    conversion_status
-                    if conversion_qty is None
-                    else "DIRECT_251_252_AND_317_318_UOM_MISMATCH"
-                )
-                family_basis = "SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT"
-        else:
-            family_qty = raw_family_mv.get("quantity")
-            family_raw_uom = raw_family_mv.get("uom")
-            family_uom = family_raw_uom
-            family_status = raw_family_mv.get("status") or "NO_251_252_IN_WINDOW"
-            family_basis = "ALL_FAMILY_251_252_FALLBACK_NO_PAIRED_317_318"
-
-        canonical_metric = canonical_family_metric.get(fid)
+        # Family/source Article 251-252 is the authoritative Family sold movement.
+        # Its 251 already includes quantity that was converted through 317/318
+        # into child SAP Selling Articles and later sold on those Articles.
+        #
+        # Therefore:
+        #   Family total = source Article 251 - 252 only.
+        #   317/318       = conversion lineage/reference only.
+        #   child 251/252 = Article-level detail only.
+        #
+        # Never add conversion quantity or child 251/252 back into Family total.
+        family_qty = source_qty
+        family_raw_uom = source_raw_uom
+        family_uom = source_uom
+        family_status = source_status
+        family_basis = "FAMILY_SOURCE_ARTICLE_251_MINUS_252_AUTHORITATIVE"
         family_uom_reconciled = False
-        if (
-            not conversion_mv
-            and family_qty is not None
-            and canonical_metric is not None
-            and _d(canonical_metric.get("quantity")) == _d(family_qty)
-            and canonical_metric.get("uom")
-            and canonical_metric.get("uom") != family_uom
-        ):
-            family_uom = canonical_metric.get("uom")
-            family_status = "READY_UOM_RECONCILED_TO_CANONICAL_FAMILY_METRIC"
-            family_uom_reconciled = True
-        if (
-            family_uom_reconciled
-            and source_qty is not None
-            and family_qty is not None
-            and _d(source_qty) == _d(family_qty)
-        ):
-            source_uom = family_uom
-            source_status = "READY_UOM_RECONCILED_TO_CANONICAL_FAMILY_METRIC"
+
+        # Preserve the previously published all-family 251/252 metric only as a
+        # diagnostic comparison. It is not an arithmetic fallback because it can
+        # contain child Selling Article 251/252 already represented in source 251.
+        raw_family_detail_qty = raw_family_mv.get("quantity")
+        raw_family_detail_uom = raw_family_mv.get("uom")
 
         upc_map: dict[str, dict[str, Any]] = {}
         article_lookup = {
@@ -1548,8 +1513,10 @@ def _quick_receiving_article_context(
             "family_group_movement_days_7d": day_count,
             "family_group_movement_status": family_status,
             "family_group_movement_basis": family_basis,
-            "family_direct_251_252_7d": source_qty,
-            "family_direct_251_252_uom": source_uom,
+            "family_source_251_252_7d": source_qty,
+            "family_source_251_252_uom": source_uom,
+            "family_all_linked_251_252_detail_7d": raw_family_detail_qty,
+            "family_all_linked_251_252_detail_uom": raw_family_detail_uom,
             "family_conversion_317_318_7d": conversion_qty,
             "family_conversion_317_318_uom": conversion_uom,
             "family_conversion_317_318_status": conversion_status,
@@ -1832,8 +1799,10 @@ def inventory_review(
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
                     "family_group_movement_basis": family_ctx.get("family_group_movement_basis"),
-                    "family_direct_251_252_7d": family_ctx.get("family_direct_251_252_7d"),
-                    "family_direct_251_252_uom": family_ctx.get("family_direct_251_252_uom"),
+                    "family_source_251_252_7d": family_ctx.get("family_source_251_252_7d"),
+                    "family_source_251_252_uom": family_ctx.get("family_source_251_252_uom"),
+                    "family_all_linked_251_252_detail_7d": family_ctx.get("family_all_linked_251_252_detail_7d"),
+                    "family_all_linked_251_252_detail_uom": family_ctx.get("family_all_linked_251_252_detail_uom"),
                     "family_conversion_317_318_7d": family_ctx.get("family_conversion_317_318_7d"),
                     "family_conversion_317_318_uom": family_ctx.get("family_conversion_317_318_uom"),
                     "family_conversion_317_318_status": family_ctx.get("family_conversion_317_318_status"),
@@ -1915,7 +1884,7 @@ def inventory_review(
             "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
             "receiving_qty_basis": "ONLY_ARTICLES_WITH_NONZERO_251_252_ARE_SAP_SELLING_ARTICLES",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
-            "family_group_qty_basis": "SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT_WHEN_CONVERSION_EXISTS_ELSE_ALL_FAMILY_251_252",
+            "family_group_qty_basis": "FAMILY_SOURCE_ARTICLE_251_MINUS_252_AUTHORITATIVE_317_318_REFERENCE_ONLY_CHILD_251_252_DETAIL_ONLY",
             "sap_selling_article_discovery": "CONFIRMED_BRIDGE_OR_317_318_OR_ACTIVE_FAMILY_251_252",
             "receipt_verification": "FAMILY_SOURCE_AND_LINKED_ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
             "upc_receiving_display_link": "FAMILY_SOURCE_OR_ACTIVE_251_252_PLUS_SAP_317_318_THEN_UPC_ARTICLE_PATTERN_OR_DESCRIPTION",
