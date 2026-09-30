@@ -516,6 +516,7 @@ def pricing_review(category: str = "ALL", limit: int = 100) -> dict[str, Any]:
                 f"""SELECT ean_upc,current_price,current_price_type,
                            current_price_source,current_price_asof_date,
                            current_cost_per_selling_unit,cost_source,cost_date,
+                           current_oh,current_oh_uom,doh,
                            gp_pct_current,gp_per_day_7d,quick_check_status,
                            published_at,publish_batch_id
                     FROM quick_check_current
@@ -548,6 +549,9 @@ def pricing_review(category: str = "ALL", limit: int = 100) -> dict[str, Any]:
         row["current_cost_source"] = live.get("cost_source")
         row["cost_date"] = live.get("cost_date")
         row["cost_basis"] = "CURRENT_AUTHORITATIVE_COST"
+        row["current_oh"] = live.get("current_oh")
+        row["current_oh_uom"] = live.get("current_oh_uom")
+        row["doh"] = live.get("doh")
 
         row["current_gp_pct_reference"] = live.get("gp_pct_current")
         row["current_gp_per_day_7d"] = live.get("gp_per_day_7d")
@@ -575,7 +579,7 @@ def pricing_review(category: str = "ALL", limit: int = 100) -> dict[str, Any]:
             )
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V2",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V3",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),

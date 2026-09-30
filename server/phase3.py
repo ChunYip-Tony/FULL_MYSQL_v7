@@ -2460,7 +2460,13 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
         )
 
         # DOH is physical/calendar age, not a rolling-data-day metric.
-        doh = (calendar_today - last_receipt).days if pclass in {'FRESH', 'LIVE'} and last_receipt else None
+        # Fresh/Live uses the strict >7-day freshness rule; Frozen also keeps
+        # receipt age so Pricing Review can surface >60-day markdown risk.
+        doh = (
+            (calendar_today - last_receipt).days
+            if pclass in {'FRESH', 'LIVE', 'FROZEN'} and last_receipt
+            else None
+        )
         wgpm = None
         if cost_sell is not None and pclass in {'LIVE', 'FRESH', 'FROZEN'}:
             target = {'LIVE': Decimal('0.15'), 'FRESH': Decimal('0.30'), 'FROZEN': Decimal('0.44')}[pclass]
@@ -2734,7 +2740,13 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
         )
 
         # DOH is physical/calendar age, not a rolling-data-day metric.
-        doh = (calendar_today - last_receipt).days if pclass in {'FRESH', 'LIVE'} and last_receipt else None
+        # Fresh/Live uses the strict >7-day freshness rule; Frozen also keeps
+        # receipt age so Pricing Review can surface >60-day markdown risk.
+        doh = (
+            (calendar_today - last_receipt).days
+            if pclass in {'FRESH', 'LIVE', 'FROZEN'} and last_receipt
+            else None
+        )
         wgpm = None
         if cost_sell is not None and pclass in {'LIVE', 'FRESH', 'FROZEN'}:
             target = {'LIVE': Decimal('0.15'), 'FRESH': Decimal('0.30'), 'FROZEN': Decimal('0.44')}[pclass]

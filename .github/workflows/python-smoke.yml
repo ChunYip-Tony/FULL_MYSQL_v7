@@ -132,28 +132,39 @@ jobs:
           print('all-current-price-surfaces=PASS')
           PY
 
-      - name: Validate Pricing Review company range and freshness rules
+      - name: Validate Pricing Overview OH DOH and Company range rules
         run: |
           python - <<'PY'
           import inspect
+          import phase3
           import webapp_v2_runtime as w
+          from pathlib import Path
 
           src = inspect.getsource(w._gp_day_price_suggestion_from_batch)
           perf = inspect.getsource(w.performance_report)
+          p3 = inspect.getsource(phase3.rebuild_quick_check)
+          ui = Path('webapp_v2_ui.py').read_text(encoding='utf-8')
+          backoffice_ui = Path('backoffice_ui.py').read_text(encoding='utf-8')
 
           assert 'supported_day_limit=14' in src
           assert 'company_price_a' in src and 'company_price_b' in src and 'company_price_c' in src
-          assert 'CURRENT_PRICE_WITHIN_COMPANY_RANGE' in src
           assert 'COMPANY_RANGE_14D_MAX_GP_PER_DAY' in src
-          assert 'COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT' in src
-          assert 'NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY' in src
-          assert 'DOH_GT_7_CLEARANCE_14D_MAX_SELL_THROUGH' in src
-          assert 'include_in_review' in src
+          assert 'COMPANY_RANGE_CLAMPED_14D_MAX_GP_PER_DAY' in src
+          assert '14D_MAX_GP_PER_DAY' in src
+          assert 'FRESH_DOH_GT_7' in src
+          assert 'FROZEN_DOH_GT_60' in src
+          assert "pclass in {'FRESH', 'LIVE', 'FROZEN'}" in p3
+          assert 'current_oh' in perf and 'has_oh' in perf
+          assert 'q14' in perf
           assert 'primary_reason_text' in perf
           assert 'company_range_low' in perf and 'company_range_high' in perf
-          assert 'pricing_rule_priority' in perf
-          assert 'WEBAPP_V2_PERFORMANCE_V10' in perf
-          print('pricing-review-company-range=PASS')
+          assert 'WEBAPP_V2_PERFORMANCE_V11' in perf
+
+          assert "Current Price" in backoffice_ui
+          assert "current_price_source" in backoffice_ui
+          assert "Current Price" in ui
+          assert "price_source" in ui and "price_as_of" in ui
+          print('pricing-overview-v225=PASS')
           PY
 
       - name: Import worker and Phase 3 modules
