@@ -997,6 +997,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   border-radius:11px;
   background:var(--q-head);
 }
+.m-q-family-identity{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;align-items:center;min-width:0}
+.m-q-family-identity .m-q-upc-photo{width:58px;height:58px}
 .m-q-label{font-size:8px;color:var(--muted);font-weight:950;letter-spacing:.05em}
 .m-q-family-number-line{display:flex;align-items:center;gap:7px;min-width:0}
 .m-q-family-number{font-size:14px;font-weight:900;line-height:1;color:#5e5227}
@@ -1117,6 +1119,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-q-upc-row .m-row-main{grid-template-columns:minmax(0,1fr) 54px 62px 12px}
   .m-q-upc-mainwrap{grid-template-columns:52px minmax(0,1fr);gap:6px}
   .m-q-upc-photo{width:52px;height:52px}
+  .m-q-family-identity{grid-template-columns:52px minmax(0,1fr);gap:6px}
+  .m-q-family-identity .m-q-upc-photo{width:52px;height:52px}
 }
 
 .m-q-hidden-toggle{
@@ -2395,6 +2399,9 @@ function mobileQuickPhotoInfo(r){
   else if(name.includes('ABALONE'))file='Food abalones dinner.jpg';
   else if(name.includes('OCTOPUS'))file='Frozen fresh octopus.jpg';
   else if(name.includes('SCALLOP'))file='Scallops seafood pasta food dinner.jpg';
+  else if(name.includes('MACKEREL'))file='Mackerel fish.jpg';
+  else if(name.includes('SNAPPER'))file='Original and duplicate redsnapper.jpg';
+  else if(name.includes('COD'))file='Atlantic cod.jpg';
   else if(name.includes('HEAD'))file='Fish head.jpg';
   else if(name.includes('FISH')&&name.includes('STEAK'))file='El Remo, La Palma, fish steak.jpg';
   if(!file)return null;
@@ -2585,7 +2592,7 @@ function mobileQuickGroupedHtml(rows){
       {movement_type:g.family_receipt_movement_type,date:g.family_receipt_date,quantity:g.family_receipt_qty,uom:g.family_receipt_uom}
     );
     const familyHead='<div class="m-q-family-head">'+
-      '<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div>'+familyReceiptCaption+'</div>'+
+      '<div class="m-q-family-identity">'+mobileQuickPhotoHtml({name:g.family_name,family_name:g.family_name})+'<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div>'+familyReceiptCaption+'</div></div>'+
       '<div class="m-q-family-kpis">'+
         '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
