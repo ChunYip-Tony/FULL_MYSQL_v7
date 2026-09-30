@@ -51,87 +51,64 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .qa-cn-list{font-size:10px;color:var(--muted);margin-top:2px}
 @media(max-width:620px){.drawer{width:100vw}.drawerbody{padding:12px}.qa-detailgrid{grid-template-columns:1fr}.qa-name{font-size:17px}.qa-zh{font-size:14px}}
 
-/* Mobile-only Backoffice navigation: desktop remains unchanged */
-.mobilehome,.mobilepagebar{display:none}
+/* Mobile-only Backoffice: independent Home → List → Detail; desktop remains unchanged */
+.mobilehome,.mobile-listpage,.mobile-detailpage{display:none}
 @media(max-width:759px){
   html,body{overflow-x:hidden}
   body{background:#f5f8f7}
-  .shell{padding:8px 8px 82px;max-width:520px}
-  .appbar{border-radius:16px;box-shadow:none}
-  .appbar .nav{display:none}
-  .top{padding:11px 12px 8px;gap:9px}
-  .mark{width:36px;height:36px;border-radius:11px;font-size:18px}
-  .brand{gap:9px}.brand strong{font-size:16px}.brand small{font-size:10px}
-  .topstat{gap:4px}.glass{font-size:9px;padding:5px 7px}
-  .searchbar{padding:0 10px 10px;gap:6px}
-  .searchbar input{min-height:46px;font-size:16px;padding:10px 11px}
-  .searchbar .btn{min-height:46px}
-  body.mobile-subpage .searchbar{display:none}
-  body.mobile-home-mode .view{display:none!important}
-  .mobilehome{display:block;margin-top:10px}
-  .mobilehome.hidden{display:none}
-  .mobile-home-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:3px 2px 10px}
-  .mobile-home-head b{font-size:19px;line-height:1.15}.mobile-home-head span{display:block;font-size:11px;color:var(--muted);margin-top:3px}
-  .mobile-spotlight{width:100%;border:1px solid #b8d7d2;background:linear-gradient(135deg,#f2fbf9,#fff);border-radius:16px;padding:13px 14px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:76px}
-  .mobile-spotlight small{display:block;color:var(--muted);font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}
-  .mobile-spotlight b{display:block;font-size:15px;margin-top:3px}.mobile-spotlight span{display:block;color:var(--muted);font-size:10px;margin-top:3px}
-  .mobile-spotlight .arrow{font-size:22px;color:var(--sea);flex:0 0 auto}
-  .mobile-modgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
-  .mobile-module{border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px;text-align:left;min-height:108px;box-shadow:0 4px 14px rgba(9,49,54,.025)}
-  .mobile-module:active{transform:scale(.985)}
-  .mobile-module .ico{display:block;font-size:22px;line-height:1}
-  .mobile-module b{display:block;font-size:15px;line-height:1.15;margin-top:10px}
-  .mobile-module span:last-child{display:block;color:var(--muted);font-size:10px;line-height:1.35;margin-top:5px}
-  .mobilepagebar{align-items:center;gap:10px;margin:10px 0 0;padding:10px 11px;background:#fff;border:1px solid var(--line);border-radius:15px}
-  .mobilepagebar.on{display:flex}
-  .mobileback{width:44px;height:44px;min-width:44px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:20px;font-weight:900}
-  .mobilepagetitle{font-size:17px;font-weight:900;line-height:1.15}.mobilepagesub{font-size:10px;color:var(--muted);margin-top:3px}
-  .view.on>.panel,.subview.on>.panel{margin-top:9px}
-  #database>.panel:first-child{display:none}
-  .panel{border-radius:15px;box-shadow:none}
-  .panelhead{padding:13px 12px}.title{font-size:18px}.sub{font-size:11px;line-height:1.4}
-  .toolrow{display:block;padding:9px 10px}
-  .filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
-  .filters::-webkit-scrollbar{display:none}
-  .filter{flex:0 0 auto;min-height:40px;padding:8px 12px}
-  .tools{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;margin-top:8px}
-  .select{width:100%;min-height:44px;font-size:16px;padding:8px 10px}
+  .shell{max-width:520px;margin:auto;padding:9px 9px 76px}
+  .appbar,.view{display:none!important}
+
+  .mobilehome.on,.mobile-listpage.on,.mobile-detailpage.on{display:block}
+  .m-topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:2px 2px 12px}
+  .m-brand strong{display:block;font-size:20px;line-height:1.05}.m-brand span{display:block;font-size:11px;color:var(--muted);margin-top:4px}
+  .m-status{display:inline-flex;align-items:center;min-height:28px;padding:5px 9px;border:1px solid var(--line);border-radius:999px;background:#fff;font-size:10px;font-weight:900;white-space:nowrap}
+  .m-status.good{background:var(--greenbg);border-color:#bfe4cf;color:var(--green)}.m-status.bad{background:var(--redbg);border-color:#f1c9c4;color:var(--red)}
+  .m-searchbox{background:#fff;border:1px solid var(--line);border-radius:17px;padding:11px;margin-bottom:10px}
+  .m-label{display:block;font-size:9px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .m-searchrow{display:flex;gap:7px;margin-top:7px}.m-searchrow input{min-width:0;flex:1;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:10px 11px;font-size:16px;background:#fff}.m-searchrow button{min-width:76px;min-height:48px}
+  .m-hint{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:var(--muted);margin-top:7px}
+
+  .m-spotlight{width:100%;min-height:78px;border:1px solid #b8d7d2;background:linear-gradient(135deg,#f2fbf9,#fff);border-radius:17px;padding:13px 14px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .m-spotlight small{display:block;font-size:9px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+  .m-spotlight b{display:block;font-size:15px;line-height:1.25;margin-top:3px}.m-spotlight em{display:block;font-size:10px;line-height:1.35;color:var(--muted);font-style:normal;margin-top:3px}.m-arrow{font-size:24px;color:var(--sea);flex:0 0 auto}
+  .m-modgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+  .m-module{min-height:112px;border:1px solid var(--line);background:#fff;border-radius:17px;padding:14px;text-align:left;box-shadow:0 4px 14px rgba(9,49,54,.025)}
+  .m-module:active,.m-row:active{transform:scale(.987)}
+  .m-module .ico{display:block;font-size:23px;line-height:1}.m-module b{display:block;font-size:15px;line-height:1.18;margin-top:10px}.m-module span:last-child{display:block;font-size:10px;line-height:1.35;color:var(--muted);margin-top:5px}
+  .m-module-meta{font-weight:850;color:var(--sea)!important}
+
+  .m-pagehead{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
+  .m-back{width:46px;height:46px;min-width:46px;border:1px solid var(--line);background:#fff;border-radius:13px;font-size:20px;font-weight:900}
+  .m-pagetitle{font-size:20px;font-weight:900;line-height:1.1}.m-pagesub{font-size:10px;line-height:1.35;color:var(--muted);margin-top:3px}
+  .m-chipbar{display:flex;gap:7px;overflow-x:auto;padding:1px 0 8px;scrollbar-width:none}.m-chipbar::-webkit-scrollbar{display:none}
+  .m-chip{flex:0 0 auto;min-height:39px;padding:7px 12px;border:1px solid var(--line);background:#fff;border-radius:999px;font-size:11px;font-weight:850}
+  .m-chip.on{background:var(--foam);border-color:#aad2cc;color:var(--sea)}
+  .m-list{display:grid;gap:9px}
+  .m-row{width:100%;min-height:82px;border:1px solid var(--line);background:#fff;border-radius:16px;padding:13px;text-align:left}
+  .m-row-main{display:flex;gap:10px;align-items:center}.m-row-copy{min-width:0;flex:1}
+  .m-row-code{font-size:17px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}.m-row-name{font-size:13px;font-weight:800;line-height:1.3;margin-top:4px}.m-row-cn{font-size:12px;line-height:1.3;color:var(--muted);margin-top:2px}.m-row-meta{font-size:10px;line-height:1.4;color:var(--muted);margin-top:6px}
+  .m-badge{display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;background:#f8faf9;font-size:9px;font-weight:900;white-space:nowrap}.m-badge.good{background:var(--greenbg);border-color:#bfe4cf;color:var(--green)}.m-badge.warn{background:var(--amberbg);border-color:#efd49d;color:var(--amber)}
+  .m-empty,.m-loading{padding:28px 16px;text-align:center;border:1px solid var(--line);background:#fff;border-radius:16px;color:var(--muted);font-size:11px}
+  .m-error{padding:12px;border:1px solid #f1c9c4;background:var(--redbg);border-radius:14px;color:var(--red);font-size:11px}
+
+  .m-detailcard{background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px}
+  .m-detailgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+  .m-metric{min-width:0;padding:11px;border-radius:13px;background:#f7faf9;border:1px solid #e5eeeb}.m-metric small{display:block;font-size:8px;font-weight:900;letter-spacing:.045em;text-transform:uppercase;color:var(--muted)}.m-metric b{display:block;font-size:18px;line-height:1.12;margin-top:4px;overflow-wrap:anywhere}.m-metric span{display:block;font-size:9px;line-height:1.3;color:var(--muted);margin-top:4px}
+  .m-detailsection{margin-top:14px;padding-top:13px;border-top:1px solid var(--line)}.m-detailsection h3{font-size:11px;margin:0 0 6px}.m-detailsection p{font-size:11px;line-height:1.5;color:var(--muted);margin:0}
+  .m-action{width:100%;min-height:48px;margin-top:10px;border-radius:12px;font-weight:850}.m-action.primary{border:1px solid var(--sea);background:var(--sea);color:#fff}.m-action.secondary{border:1px solid var(--line);background:#fff}
+
+  .m-bottomnav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:14px;padding-top:10px;border-top:1px solid var(--line)}
+  .m-bottomnav button{min-height:52px;border:0;background:transparent;border-radius:12px;font-size:10px;font-weight:850;line-height:1.2}.m-bottomnav button.on{background:var(--foam);color:var(--sea)}
+
   .btn{min-height:44px;padding:9px 11px}.btn.small{min-height:40px;font-size:11px}
-  .grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px;gap:8px}
-  .kpi{padding:10px;border-radius:12px}.kpi small{font-size:9px}.kpi b{font-size:16px}.kpi span{font-size:9px}
-  .dbcardgrid{grid-template-columns:1fr;padding:10px}.dbcard{min-height:72px;padding:12px;border-radius:14px}
-  .dboverviewgrid{padding:0 10px 10px}.dbsummary{border-radius:13px}
-  .uploadgrid{padding:10px}.drop{padding:15px 12px}.drop input{font-size:16px;min-height:44px}
-  .batchgrid{padding:10px}.batch{padding:11px;border-radius:13px}.batchid{font-size:13px}.batchmeta{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .tablewrap{overflow:visible}
-  .table{display:block;width:100%;min-width:0!important;font-size:12px}
-  .table thead{display:none}
-  .table tbody{display:grid;gap:9px;padding:10px}
-  .table tbody tr{display:block;border:1px solid var(--line);border-radius:15px;background:#fff;overflow:hidden}
-  .table tbody tr:hover td,.table tbody tr.velocity-active td,.table tbody tr.velocity-active:hover td{background:#fff}
-  .table tbody tr.velocity-active{border-left:4px solid #6aaea4}
-  .table tbody tr.velocity-active td:first-child{box-shadow:none}
-  .table td{display:grid;grid-template-columns:minmax(92px,34%) minmax(0,1fr);gap:9px;align-items:start;padding:9px 11px;border-bottom:1px solid #edf2f0;min-width:0;overflow-wrap:anywhere}
-  .table td:last-child{border-bottom:0}
-  .table td::before{content:attr(data-label);font-size:9px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.035em}
-  .table td[data-label=""]{display:block}.table td[data-label=""]::before{display:none}
-  .table td[colspan]{display:block;text-align:center}.table td[colspan]::before{display:none}
-  .table .name{font-size:14px}.table .meta{font-size:10px;line-height:1.35}
-  .table td .btn{width:100%;margin-top:2px}
-  .sectiontitle{font-size:11px}
-  .detailgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
-  .detail{padding:10px;border-radius:11px}.detail small{font-size:9px}.detail b{font-size:12px}
   .drawerback.on{display:none!important}
   .drawer{display:none;left:0;right:0;top:0;bottom:0;width:100vw!important;max-width:none;transform:none!important;transition:none;box-shadow:none;z-index:80}
   .drawer.on{display:flex}
-  .drawerhead{padding:12px 13px;align-items:center;background:#fff;position:sticky;top:0;z-index:2}
-  .drawertitle{font-size:18px}.drawersub{font-size:11px}
-  .drawerhead .btn{min-width:64px}
-  .drawerbody{padding:12px;background:#f7faf9}
-  .drawerfoot{padding:10px 12px;gap:7px;flex-direction:column;align-items:stretch}
-  .drawerfoot .btn{width:100%}
-  .qa-step{padding:12px}.qa-name{font-size:17px}.qa-zh{font-size:14px}
-  .qa-detailgrid{grid-template-columns:1fr 1fr!important}
+  .drawerhead{padding:12px 13px;align-items:center;background:#fff;position:sticky;top:0;z-index:2}.drawertitle{font-size:18px}.drawersub{font-size:11px}.drawerhead .btn{min-width:64px}
+  .drawerbody{padding:12px;background:#f7faf9}.drawerfoot{padding:10px 12px;gap:7px;flex-direction:column;align-items:stretch}.drawerfoot .btn{width:100%}
+  .detailgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.detail{padding:10px;border-radius:11px}.detail small{font-size:9px}.detail b{font-size:12px}
+  .qa-step{padding:12px}.qa-name{font-size:17px}.qa-zh{font-size:14px}.qa-detailgrid{grid-template-columns:1fr 1fr!important}
   .toast{left:10px;right:10px;bottom:12px;text-align:center;font-size:11px}
 }
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
@@ -154,30 +131,47 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <button class="navbtn" data-view="database">Database Center</button>
   </nav>
 </header>
-<section id="mobileHome" class="mobilehome hidden" aria-label="Mobile Backoffice Home">
-  <div class="mobile-home-head">
-    <div><b>Seafood Backoffice</b><span>Choose a task, then open its list and details.</span></div>
-    <span class="pill green">MOBILE</span>
+<section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
+  <div class="m-topbar">
+    <div class="m-brand"><strong>FULL MYSQL</strong><span>Backoffice · Seafood · v__VERSION__</span></div>
+    <span id="mServicePill" class="m-status">Checking…</span>
   </div>
-  <button id="mobileBatchSpotlight" class="mobile-spotlight" type="button">
-    <span><small>Current Batch</small><b id="mobileBatchTitle">Checking processing status…</b><span id="mobileBatchMeta">Tap to open Processing</span></span>
-    <span class="arrow">›</span>
+  <form id="mobileSearchForm" class="m-searchbox">
+    <label class="m-label" for="mobileSearchInput">Quick Search</label>
+    <div class="m-searchrow"><input id="mobileSearchInput" placeholder="UPC / Article / Family / Item"><button class="btn primary" type="submit">Search</button></div>
+    <div class="m-hint"><span>Most active items first</span><span>Typo tolerant</span></div>
+  </form>
+  <button id="mobileBatchSpotlight" class="m-spotlight" type="button">
+    <span><small>Current Batch</small><b id="mobileBatchTitle">Checking processing status…</b><em id="mobileBatchMeta">Tap to open batch list</em></span><span class="m-arrow">›</span>
   </button>
-  <div class="mobile-modgrid">
-    <button class="mobile-module" type="button" data-mobile-view="inventory" data-mobile-title="Quick Check" data-mobile-sub="Family / Article / UPC lookup"><span class="ico">🔎</span><b>Quick Check</b><span>Search and review operational item details</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbqa" data-mobile-title="QA Holds" data-mobile-sub="Issue list → review → fix"><span class="ico">⚠️</span><b>QA Holds</b><span>UOM, mapping, cost and OH issues</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="pricing" data-mobile-title="Price Overview" data-mobile-sub="Current price, source and review"><span class="ico">💲</span><b>Price Overview</b><span>Latest prices and qualified review items</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbupload" data-mobile-title="Uploads" data-mobile-sub="Choose files and start processing"><span class="ico">⬆️</span><b>Uploads</b><span>Price, POS, MVT, OH and source files</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="sales" data-mobile-title="Performance" data-mobile-sub="Completed-day sales performance"><span class="ico">📊</span><b>Performance</b><span>Daily sales, GP and active sellers</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="inventory" data-mobile-title="PI / OH" data-mobile-sub="Inventory and True Stock review"><span class="ico">📦</span><b>PI / OH</b><span>OH, True Stock and discrepancy actions</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbbatches" data-mobile-title="Batches" data-mobile-sub="Current processing and history"><span class="ico">🧩</span><b>Batches</b><span>Current batch, rebuild and completed history</span></button>
-    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbdata" data-mobile-title="Data Health" data-mobile-sub="Serving and pipeline status"><span class="ico">🕒</span><b>Data Health</b><span>Service, worker and latest publish status</span></button>
+  <div class="m-modgrid">
+    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span>Family, Article and UPC lookup</span></button>
+    <button class="m-module" type="button" data-mobile-module="qa"><span class="ico">⚠️</span><b>QA Holds</b><span id="mQaModuleMeta" class="m-module-meta">Review unresolved issues</span></button>
+    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">💲</span><b>Price Overview</b><span>Current price, source and review</span></button>
+    <button class="m-module" type="button" data-mobile-module="uploads"><span class="ico">⬆️</span><b>Uploads</b><span>New batch and upload history</span></button>
+    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span>Completed-day sales performance</span></button>
+    <button class="m-module" type="button" data-mobile-module="pi"><span class="ico">📦</span><b>PI / OH</b><span>True Stock and OH discrepancy</span></button>
+    <button class="m-module" type="button" data-mobile-module="batches"><span class="ico">🧩</span><b>Batches</b><span>Current processing and history</span></button>
+    <button class="m-module" type="button" data-mobile-module="freshness"><span class="ico">🕒</span><b>Data Health</b><span>Serving and pipeline freshness</span></button>
   </div>
+  <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
+    <button class="on" type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Search</button><button type="button" data-mobile-module="uploads">⇧<br>Uploads</button><button type="button" data-mobile-module="qa">⚠<br>QA</button>
+  </nav>
 </section>
-<div id="mobilePageBar" class="mobilepagebar">
-  <button id="mobileBack" class="mobileback" type="button" aria-label="Back to mobile home">←</button>
-  <div><div id="mobilePageTitle" class="mobilepagetitle">Backoffice</div><div id="mobilePageSub" class="mobilepagesub"></div></div>
-</div>
+
+<section id="mobileListPage" class="mobile-listpage" aria-label="Mobile Backoffice List">
+  <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div></div>
+  <div id="mobileListChips" class="m-chipbar"></div>
+  <div id="mobileListContent" class="m-list"></div>
+  <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
+    <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Search</button><button type="button" data-mobile-module="uploads">⇧<br>Uploads</button><button type="button" data-mobile-module="qa">⚠<br>QA</button>
+  </nav>
+</section>
+
+<section id="mobileDetailPage" class="mobile-detailpage" aria-label="Mobile Backoffice Detail">
+  <div class="m-pagehead"><button id="mobileDetailBack" class="m-back" type="button" aria-label="Back to List">←</button><div><div id="mobileDetailTitle" class="m-pagetitle">Detail</div><div id="mobileDetailSub" class="m-pagesub"></div></div></div>
+  <div id="mobileDetailContent"></div>
+</section>
 <section id="inventory" class="view on"><div class="panel">
  <div class="panelhead"><div><div class="title">Inventory Ledger</div><div class="sub">Read-only system data. OH / True Stock is the only editable value.</div></div><span class="pill blue">OH WRITE ONLY</span></div>
  <div class="toolrow">
@@ -375,70 +369,295 @@ $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
 window.addEventListener('hashchange',()=>restoreRoute());
 
 const mobileMedia=window.matchMedia('(max-width:759px)');
+const mobileState={module:null,filter:'all',query:'',freshness:[]};
+
 function isMobileBackoffice(){return mobileMedia.matches}
-function labelMobileTables(){
-  if(!isMobileBackoffice())return;
-  $$('.table').forEach(table=>{
-    const labels=[...table.querySelectorAll('thead th')].map(th=>(th.textContent||'').trim());
-    table.querySelectorAll('tbody tr').forEach(tr=>{
-      [...tr.children].forEach((td,i)=>{
-        if(td.tagName!=='TD')return;
-        td.dataset.label=td.colSpan>1?'':(labels[i]||'');
-      });
-    });
-  });
+function mNode(id){return document.getElementById(id)}
+function mobileScreen(name,{scroll=true}={}){
+  ['mobileHome','mobileListPage','mobileDetailPage'].forEach(id=>mNode(id)?.classList.toggle('on',id===name));
+  if(scroll)window.scrollTo({top:0,behavior:'smooth'});
 }
-function updateMobileBatchSpotlight(){
+function mobileBadgeClass(v){
+  const s=String(v||'').toUpperCase();
+  if(['READY','CURRENT','DONE','MATCH','HEALTHY','QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'].includes(s))return 'good';
+  if(['QA_HOLD','HIGH','CRITICAL','REVIEW','ACTIONABLE','PROCESSING','PHASE3_QA_HOLD'].includes(s))return 'warn';
+  return '';
+}
+function mobileMetric(label,value,sub){
+  return '<div class="m-metric"><small>'+esc(label)+'</small><b>'+esc(value??'—')+'</b>'+(sub?'<span>'+esc(sub)+'</span>':'')+'</div>';
+}
+function mobileRow(key,code,name,meta,badge,cn){
+  return '<button type="button" class="m-row" data-mobile-key="'+esc(key)+'"><div class="m-row-main"><div class="m-row-copy"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><div class="m-row-code">'+esc(code||'—')+'</div>'+(badge?'<span class="m-badge '+mobileBadgeClass(badge)+'">'+esc(badge)+'</span>':'')+'</div>'+(name?'<div class="m-row-name">'+esc(name)+'</div>':'')+(cn?'<div class="m-row-cn">'+esc(cn)+'</div>':'')+(meta?'<div class="m-row-meta">'+esc(meta)+'</div>':'')+'</div><span class="m-arrow">›</span></div></button>';
+}
+function mobileModuleConfig(module){
+  const map={
+    quick:{title:'Quick Check',sub:'Most actively selling items first',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
+    qa:{title:'QA Holds',sub:'Choose one issue, review it, then fix',chips:[['all','All'],['fixable','Fixable'],['view_only','Review only'],['high','High / Critical']]},
+    price:{title:'Price Overview',sub:'Current price, source and qualified review',chips:[['all','All'],['actionable','Actionable'],['review_only','Review only'],['qa_hold','QA Hold']]},
+    uploads:{title:'Uploads',sub:'New source batch and recent upload history',chips:[]},
+    performance:{title:'Performance',sub:'Latest completed canonical sales date',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
+    pi:{title:'PI / OH',sub:'Family True Stock and OH review',chips:[['all','All'],['positive','OH > 0'],['zero','OH ≤ 0']]},
+    batches:{title:'Batches',sub:'Current processing first, then completed history',chips:[['all','All'],['current','Current'],['completed','Completed']]},
+    freshness:{title:'Data Health',sub:'Serving status and freshness evidence',chips:[]}
+  };
+  return map[module]||{title:'Backoffice',sub:'',chips:[]};
+}
+function mobileRenderChips(){
+  const cfg=mobileModuleConfig(mobileState.module),box=mNode('mobileListChips');
+  if(!box)return;
+  box.innerHTML=cfg.chips.map(x=>'<button type="button" class="m-chip '+(mobileState.filter===x[0]?'on':'')+'" data-m-filter="'+esc(x[0])+'">'+esc(x[1])+'</button>').join('');
+  box.style.display=cfg.chips.length?'flex':'none';
+  box.querySelectorAll('[data-m-filter]').forEach(b=>b.onclick=()=>{mobileState.filter=b.dataset.mFilter;mobileRenderChips();mobileRenderList()});
+}
+async function mobileRefreshHome(){
   if(!isMobileBackoffice())return;
-  const title=$('#mobileBatchTitle'),meta=$('#mobileBatchMeta');
-  if(!title||!meta)return;
-  const a=state.active;
-  const latest=state.recent[0]||null;
-  if(a){
-    title.textContent='Batch #'+(a.batch_id||a.id||'—')+' · '+(a.processing_status||a.status||'PROCESSING');
-    meta.textContent=(a.file_count??'—')+' file(s) · active processing';
-  }else if(latest){
-    title.textContent='Latest Batch #'+(latest.batch_id||'—')+' · '+(latest.phase3_status||latest.processing_status||'COMPLETE');
-    meta.textContent=(latest.quick_check_ready_rows??'—')+' ready · '+(latest.quick_check_hold_rows??'—')+' hold';
-  }else{
-    title.textContent='No active batch';
-    meta.textContent='Tap to open Processing history';
+  try{
+    const res=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
+    const h=res[0]||{},a=res[1]||{},r=res[2]||{},q=res[3]||{};
+    state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
+    const sp=mNode('mServicePill');if(sp){sp.textContent=h.ok?'● ONLINE':'SERVICE ISSUE';sp.className='m-status '+(h.ok?'good':'bad')}
+    const title=mNode('mobileBatchTitle'),meta=mNode('mobileBatchMeta'),latest=state.recent[0]||null;
+    if(state.active){title.textContent='Batch #'+(state.active.batch_id||state.active.id||'—')+' · '+(state.active.processing_status||state.active.status||'PROCESSING');meta.textContent=(state.active.file_count??'—')+' file(s) · active processing'}
+    else if(latest){title.textContent='Latest Batch #'+(latest.batch_id||'—')+' · '+(latest.phase3_status||latest.processing_status||'COMPLETE');meta.textContent=(latest.quick_check_ready_rows??'—')+' ready · '+(latest.quick_check_hold_rows??'—')+' hold'}
+    else{title.textContent='No active batch';meta.textContent='Tap to open batch history'}
+    const qm=mNode('mQaModuleMeta');if(qm)qm.textContent=state.qaIssues.length?state.qaIssues.length+' open · '+state.qaIssues.filter(x=>x.can_fix).length+' fixable':'No open QA issues';
+  }catch(e){
+    const sp=mNode('mServicePill');if(sp){sp.textContent='CHECK FAILED';sp.className='m-status bad'}
   }
 }
 function showMobileHome({scroll=true}={}){
   if(!isMobileBackoffice())return;
-  document.body.classList.add('mobile-home-mode');
-  document.body.classList.remove('mobile-subpage');
-  $('#mobileHome')?.classList.remove('hidden');
-  $('#mobilePageBar')?.classList.remove('on');
   closeDrawer();
-  if(scroll)window.scrollTo({top:0,behavior:'smooth'});
-  loadBatches().then(()=>{updateMobileBatchSpotlight();labelMobileTables()}).catch(()=>{});
+  mobileState.module=null;mobileState.filter='all';mobileState.query='';
+  mobileScreen('mobileHome',{scroll});
+  mobileRefreshHome();
 }
-function openMobileModule(view,dbTab=null,title='',sub=''){
-  if(!isMobileBackoffice()){show(view,{dbTab});return}
-  document.body.classList.remove('mobile-home-mode');
-  document.body.classList.add('mobile-subpage');
-  $('#mobileHome')?.classList.add('hidden');
-  $('#mobilePageBar')?.classList.add('on');
-  if($('#mobilePageTitle'))$('#mobilePageTitle').textContent=title||'Backoffice';
-  if($('#mobilePageSub'))$('#mobilePageSub').textContent=sub||'';
-  show(view,{dbTab});
-  setTimeout(labelMobileTables,0);
+async function mobileOpenModule(module,{query=''}={}){
+  if(!isMobileBackoffice())return;
+  closeDrawer();
+  mobileState.module=module;mobileState.filter='all';mobileState.query=String(query||'').trim();
+  const cfg=mobileModuleConfig(module);
+  mNode('mobileListTitle').textContent=cfg.title;
+  mNode('mobileListSub').textContent=mobileState.query&&module==='quick'?'Search: '+mobileState.query:cfg.sub;
+  mNode('mobileListContent').innerHTML='<div class="m-loading">Loading…</div>';
+  mobileScreen('mobileListPage');
+  mobileRenderChips();
+  try{
+    if(module==='quick'){
+      state.inventorySearch=mobileState.query;state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
+    }else if(module==='qa'){
+      state.qaFilter='ALL';await loadQA();
+    }else if(module==='price'){
+      state.priceCat='ALL';state.priceStatus='ALL';state.priceSort='opportunity';state.priceText='';await loadPrices();
+    }else if(module==='performance'){
+      state.salesCat='ALL';state.salesTrend='ALL';state.salesText='';state.salesSort='sales_desc';await loadSell();
+    }else if(module==='pi'){
+      state.inventorySearch='';state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
+    }else if(module==='batches'||module==='uploads'){
+      await loadBatches();
+    }else if(module==='freshness'){
+      await mobileLoadFreshness();
+    }
+    mobileRenderList();
+  }catch(e){mNode('mobileListContent').innerHTML='<div class="m-error">'+esc(e.message||'Unable to load this section')+'</div>'}
 }
-$$('[data-mobile-view]').forEach(b=>b.onclick=()=>openMobileModule(b.dataset.mobileView,b.dataset.mobileDbtab||null,b.dataset.mobileTitle||'',b.dataset.mobileSub||''));
-$('#mobileBack').onclick=()=>showMobileHome();
-$('#mobileBatchSpotlight').onclick=()=>openMobileModule('database','dbbatches','Batches','Current processing and history');
-const mobileTableObserver=new MutationObserver(()=>labelMobileTables());
-mobileTableObserver.observe($('.shell'),{subtree:true,childList:true});
+function mobileRows(){
+  const mod=mobileState.module,f=mobileState.filter;
+  if(mod==='quick'){
+    let a=filteredInventoryRows();
+    if(f!=='all')a=a.filter(r=>String(r.category||'').toLowerCase()===f);
+    return a;
+  }
+  if(mod==='qa'){
+    let a=[...state.qaIssues];
+    if(f==='fixable')a=a.filter(x=>x.can_fix);
+    if(f==='view_only')a=a.filter(x=>!x.can_fix);
+    if(f==='high')a=a.filter(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
+    return a;
+  }
+  if(mod==='price'){
+    let a=filteredPrices();
+    if(f!=='all')a=a.filter(x=>String(x.review_status||'').toLowerCase()===f);
+    return a;
+  }
+  if(mod==='performance'){
+    let a=filteredSalesRows();
+    if(f!=='all')a=a.filter(r=>String(r.category||'').toLowerCase()===f);
+    return a;
+  }
+  if(mod==='pi'){
+    const map=new Map();
+    filteredInventoryRows().forEach(r=>{const k=String(r.family_article||r.upc||'');if(!k)return;const old=map.get(k);if(!old||Number(r.velocity_7d||0)>Number(old.velocity_7d||0))map.set(k,r)});
+    let a=[...map.values()];
+    if(f==='positive')a=a.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)>0);
+    if(f==='zero')a=a.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)<=0);
+    return a;
+  }
+  if(mod==='batches'){
+    const a=[];
+    if(state.active)a.push(Object.assign({_mobileActive:true},state.active));
+    state.recent.forEach(b=>{if(!state.active||String(b.batch_id)!==String(state.active.batch_id))a.push(Object.assign({_mobileActive:false},b))});
+    if(f==='current')return a.filter(x=>x._mobileActive);
+    if(f==='completed')return a.filter(x=>!x._mobileActive);
+    return a;
+  }
+  if(mod==='uploads'){
+    const a=[{_mobileNewUpload:true}];
+    if(state.active)a.push(Object.assign({_mobileActive:true},state.active));
+    state.recent.slice(0,8).forEach(b=>{if(!state.active||String(b.batch_id)!==String(state.active.batch_id))a.push(Object.assign({_mobileActive:false},b))});
+    return a;
+  }
+  if(mod==='freshness')return mobileState.freshness;
+  return [];
+}
+function mobileRenderList(){
+  const box=mNode('mobileListContent');if(!box)return;
+  const rows=mobileRows();let html='';
+  if(mobileState.module==='quick'){
+    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc||r.family_article,r.name||r.family_name,(r.family_article?'Family '+r.family_article+' · ':'')+fmt(r.qty_7d)+' 7D · '+money(r.price)+' '+(r.price_type||''),r.readiness||r.category,r.chinese_name||'')).join('');
+  }else if(mobileState.module==='qa'){
+    html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,x.issue_summary||'',x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
+  }else if(mobileState.module==='price'){
+    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:''),r.review_status||'REVIEW','')).join('');
+  }else if(mobileState.module==='performance'){
+    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.sales_amount)+' sales · '+fmt(r.sold_quantity)+' '+(r.qty_uom||'')+' · '+money(r.current_price)+' current',r.category||'READY','')).join('');
+  }else if(mobileState.module==='pi'){
+    html=rows.map(r=>mobileRow(String(r.family_article||r.upc||''),r.family_article||r.upc,r.family_name||r.name,fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' OH · '+fmt(r.qty_7d)+' 7D · DOS '+fmt(r.dos),'OH',r.chinese_name||'')).join('');
+  }else if(mobileState.module==='batches'){
+    html=rows.map(b=>mobileRow((b._mobileActive?'active:':'batch:')+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Completed batch'),(b.file_count??'—')+' file(s) · '+(b.quick_check_ready_rows??'—')+' ready · '+(b.quick_check_hold_rows??'—')+' hold',b._mobileActive?(b.processing_status||b.status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
+  }else if(mobileState.module==='uploads'){
+    html=rows.map(b=>b._mobileNewUpload?mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD',''):mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Upload history'),(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—'),b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
+  }else if(mobileState.module==='freshness'){
+    html=rows.map(r=>mobileRow(r.key,r.title,r.value,r.meta,r.badge||'INFO','')).join('');
+  }
+  box.innerHTML=html||'<div class="m-empty">No items match the current filter.</div>';
+  box.querySelectorAll('[data-mobile-key]').forEach(b=>b.onclick=()=>mobileOpenItem(b.dataset.mobileKey));
+}
+function mobileShowDetail(title,sub,html){
+  mNode('mobileDetailTitle').textContent=title||'Detail';mNode('mobileDetailSub').textContent=sub||'';mNode('mobileDetailContent').innerHTML=html;mobileScreen('mobileDetailPage');
+}
+function mobileOpenItem(key){
+  const mod=mobileState.module;
+  if(mod==='quick')return mobileQuickDetail(key,false);
+  if(mod==='qa')return openQAIssue(key);
+  if(mod==='price')return openPriceDetail(key);
+  if(mod==='performance')return mobilePerformanceDetail(key);
+  if(mod==='pi')return mobileQuickDetail(key,true);
+  if(mod==='batches'){
+    if(String(key).startsWith('active:'))return mobileActiveBatchDetail();
+    return openBatchDetail(String(key).replace(/^batch:/,''));
+  }
+  if(mod==='uploads'){
+    if(key==='new-upload')return mobileUploadDetail();
+    const id=String(key).replace(/^uploadbatch:/,'');
+    if(state.active&&String(state.active.batch_id||state.active.id)===id)return mobileActiveBatchDetail();
+    return openBatchDetail(id);
+  }
+  if(mod==='freshness')return mobileFreshnessDetail(key);
+}
+function mobileQuickDetail(key,piMode){
+  let r=null;
+  if(piMode)r=state.inventory.find(x=>String(x.family_article||x.upc)===String(key));
+  else r=state.inventory.find(x=>String(x.upc)===String(key));
+  if(!r)return;
+  const title=piMode?String(r.family_article||r.upc||'Item'):String(r.upc||r.family_article||'Item');
+  const sub=(piMode?(r.family_name||r.name):(r.name||r.family_name))+(r.chinese_name?' · '+r.chinese_name:'');
+  let html='<div class="m-detailcard"><div class="m-label">'+(piMode?'Family / PI Summary':'UPC Summary')+'</div><div class="m-detailgrid">';
+  html+=mobileMetric('Current Price',money(r.price),(r.price_type||'—')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''));
+  html+=mobileMetric('Cost',money(r.cost),'Current cost');
+  html+=mobileMetric('OH',fmt(r.family_oh)+' '+(r.family_oh_uom||''),'Current effective family OH');
+  html+=mobileMetric('7D Sold',fmt(r.qty_7d)+' '+(r.selling_uom||''),'POS quantity');
+  html+=mobileMetric('7D Velocity',fmt(r.velocity_7d),(r.selling_uom||'unit')+'/day');
+  html+=mobileMetric('GP%',pct(r.gp_pct),'At current price / cost');
+  html+=mobileMetric('DOS',fmt(r.dos),'Days of supply');
+  html+=mobileMetric('Family',r.family_article||'—',r.family_name||'');
+  html+='</div>';
+  if(r.family_article)html+='<button id="mAdjustOH" type="button" class="m-action primary">Update True Stock / OH</button>';
+  html+='</div>';
+  mobileShowDetail(title,sub,html);
+  const btn=mNode('mAdjustOH');if(btn)btn.onclick=()=>openOH({family:r.family_article,uom:r.family_oh_uom||'',oh:r.family_oh??'',name:r.family_name||r.name||''});
+}
+function mobilePerformanceDetail(key){
+  const r=state.salesRows.find(x=>String(x.upc)===String(key));if(!r)return;
+  let html='<div class="m-detailcard"><div class="m-label">Completed-day Performance</div><div class="m-detailgrid">';
+  html+=mobileMetric('Sales',money(r.sales_amount),'Report date');
+  html+=mobileMetric('Sold Qty',fmt(r.sold_quantity)+' '+(r.qty_uom||''),'POS');
+  html+=mobileMetric('Avg Sold Price',money(r.avg_sold_price),'Historical report-day average');
+  html+=mobileMetric('Current Price',money(r.current_price),(r.current_price_type||'—')+' · '+(r.current_price_source||'—')+(r.current_price_asof_date?' · '+r.current_price_asof_date:''));
+  html+=mobileMetric('7D Velocity',fmt(r.velocity_7d),'per day');
+  html+=mobileMetric('28D Velocity',fmt(r.velocity_28d),'per day');
+  html+='</div></div>';
+  mobileShowDetail(r.upc||'Performance',r.name||'',html);
+}
+function mobileActiveBatchDetail(){
+  const b=state.active;if(!b)return;
+  let html='<div class="m-detailcard"><div class="m-label">Current Batch</div><div class="m-detailgrid">';
+  html+=mobileMetric('Batch','#'+(b.batch_id||b.id||'—'),b.batch_label||'Active processing');
+  html+=mobileMetric('Files',String(b.file_count??'—'),'Source files');
+  html+=mobileMetric('Started',b.upload_started_at||'—','Upload start');
+  html+=mobileMetric('Status',b.processing_status||b.status||'PROCESSING','Current pipeline state');
+  html+='</div><div class="m-detailsection"><h3>Processing</h3><p>This batch is still active. Completed batch rebuild controls appear after Phase 2C / Phase 3 reaches an eligible state.</p></div></div>';
+  mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),b.processing_status||b.status||'PROCESSING',html);
+}
+async function mobileLoadFreshness(){
+  const res=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/app/v2/performance?category=ALL&limit=1'),api('/v1/backoffice/inventory?category=ALL&limit=300')]);
+  const h=res[0]||{},a=res[1]||{},r=res[2]||{},p=res[3]||{},inv=res[4]||{};
+  const latest=(r.batches||[])[0]||a.latest_batch||{};
+  const priceDates=(inv.rows||[]).map(x=>String(x.price_as_of||'')).filter(Boolean).sort();
+  const priceAsOf=priceDates.length?priceDates[priceDates.length-1]:'—';
+  mobileState.freshness=[
+    {key:'service',title:'Service',value:h.ok?'READY':'ISSUE',meta:'API '+(h.version||'—'),badge:h.ok?'READY':'ISSUE'},
+    {key:'worker',title:'Worker',value:h.worker_state||'—',meta:h.worker_healthy?'Worker healthy':'Worker needs review',badge:h.worker_healthy?'READY':'REVIEW'},
+    {key:'price',title:'Price',value:priceAsOf,meta:'Latest price as-of present in current serving rows',badge:'CURRENT'},
+    {key:'pos',title:'POS',value:p.report_date||'—',meta:'Latest completed canonical sales date',badge:'CURRENT'},
+    {key:'publish',title:'Latest Publish',value:latest.completed_at||latest.upload_started_at||'—',meta:latest.batch_id?('Batch #'+latest.batch_id+' · '+(latest.phase3_status||latest.processing_status||'')):'No completed batch',badge:latest.phase3_status||latest.processing_status||'INFO'},
+    {key:'active',title:'Active Batch',value:a.active_batch?('Batch #'+a.active_batch.batch_id):'None',meta:a.active_batch?(a.active_batch.processing_status||'Processing'):'Pipeline idle',badge:a.active_batch?'PROCESSING':'READY'}
+  ];
+}
+function mobileFreshnessDetail(key){
+  const r=mobileState.freshness.find(x=>x.key===key);if(!r)return;
+  const html='<div class="m-detailcard"><div class="m-label">Data Health Evidence</div><div class="m-detailgrid">'+mobileMetric('Status',r.value,r.meta)+mobileMetric('Type',r.title,'Live Backoffice check')+'</div><div class="m-detailsection"><h3>Interpretation</h3><p>'+esc(r.meta)+'</p></div></div>';
+  mobileShowDetail(r.title,'Serving / pipeline status',html);
+}
+function mobileUploadDetail(){
+  let html='<div class="m-detailcard"><div class="m-label">New Source Batch</div><div class="m-detailsection" style="border-top:0;padding-top:0;margin-top:9px"><p>Select XLSX / XLS / XLSM / CSV / TXT / TSV files. Files selected together create one immutable batch.</p></div><button id="mChooseUploadFiles" type="button" class="m-action secondary">Choose Files</button><div id="mUploadFileSummary" class="m-detailsection"><p>No files selected.</p></div><div class="formfield"><label>Optional batch note</label><input id="mUploadNote" placeholder="Daily seafood upload"></div><button id="mStartUpload" type="button" class="m-action primary">Upload & Start Processing</button><div id="mUploadResult" class="m-detailsection"><p>File type is detected automatically.</p></div></div>';
+  mobileShowDetail('New Upload','Create one source batch',html);
+  const fileInput=$('#uploadFiles');
+  mNode('mChooseUploadFiles').onclick=()=>fileInput.click();
+  fileInput.onchange=()=>{
+    const files=[...fileInput.files],box=mNode('mUploadFileSummary');
+    box.innerHTML=files.length?'<h3>Selected Files</h3><p>'+files.map(f=>esc(f.name)+' · '+fmt(f.size/1024/1024,2)+' MB').join('<br>')+'</p>':'<p>No files selected.</p>';
+  };
+  mNode('mStartUpload').onclick=mobileSubmitUpload;
+}
+async function mobileSubmitUpload(){
+  const files=[...$('#uploadFiles').files],result=mNode('mUploadResult'),btn=mNode('mStartUpload');
+  if(!files.length){toast('Select files first');return}
+  btn.disabled=true;result.innerHTML='<p>Creating batch…</p>';
+  try{
+    const label=(mNode('mUploadNote').value||'').trim()||('Mobile Backoffice upload '+new Date().toLocaleString());
+    const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
+    if(created.created===false){result.innerHTML='<p>An active batch is already processing. Upload was not started.</p>';toast('Active batch already processing');return}
+    const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');
+    for(let i=0;i<files.length;i++){
+      result.innerHTML='<p>Uploading '+(i+1)+' / '+files.length+' · '+esc(files[i].name)+'</p>';
+      const fd=new FormData();fd.append('file',files[i]);await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd});
+    }
+    result.innerHTML='<p>Committing batch and starting processing…</p>';
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});
+    $('#uploadFiles').value='';toast('Upload accepted; batch processing started');await mobileOpenModule('batches');
+  }catch(e){result.innerHTML='<p>'+esc(e.message)+'</p>';toast(e.message)}finally{const z=mNode('mStartUpload');if(z)z.disabled=false}
+}
+
+$$('[data-mobile-module]').forEach(b=>b.onclick=()=>mobileOpenModule(b.dataset.mobileModule));
+$$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
+mNode('mobileListBack').onclick=()=>showMobileHome();
+mNode('mobileDetailBack').onclick=()=>mobileScreen('mobileListPage');
+mNode('mobileBatchSpotlight').onclick=()=>mobileOpenModule('batches');
+mNode('mobileSearchForm').onsubmit=e=>{e.preventDefault();mobileOpenModule('quick',{query:mNode('mobileSearchInput').value})};
 mobileMedia.addEventListener?.('change',e=>{
   if(e.matches)showMobileHome({scroll:false});
-  else{
-    document.body.classList.remove('mobile-home-mode','mobile-subpage');
-    $('#mobileHome')?.classList.add('hidden');
-    $('#mobilePageBar')?.classList.remove('on');
-    restoreRoute();
-  }
+  else{closeDrawer();mobileScreen('',{scroll:false});restoreRoute()}
 });
 function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
@@ -852,8 +1071,8 @@ async function loadData(){try{const [h,a,r]=await Promise.all([api('/healthz'),a
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
 
-$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));if(isMobileBackoffice())openMobileModule('inventory',null,'Quick Check',state.inventorySearch?('Search: '+state.inventorySearch):'Family / Article / UPC lookup');else show('inventory')};
-async function boot(){await loadHealth().catch(()=>{});restoreRoute({replaceMissing:true});if(isMobileBackoffice())showMobileHome({scroll:false});labelMobileTables();setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
+$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
+async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice())showMobileHome({scroll:false});else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
 })();
 </script>
 </body></html>'''
