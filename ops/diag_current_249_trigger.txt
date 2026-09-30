@@ -1,0 +1,1 @@
+Trigger current 249 POS + SAP movement diagnostic.
