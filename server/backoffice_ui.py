@@ -975,6 +975,46 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-history7-row b{font-size:12px!important}
   .m-history7-row small,.m-history7-date span{font-size:8px!important}
 }
+
+/* Persistent mobile page identity: version remains visible at the top */
+@media(max-width:759px){
+  .mobile-listpage.on .m-pagehead,
+  .mobile-detailpage.on .m-pagehead{
+    position:sticky;
+    top:0;
+    z-index:75;
+    margin:0 -9px 10px;
+    padding:max(8px,env(safe-area-inset-top)) 9px 8px;
+    background:rgba(245,248,247,.96);
+    border-bottom:1px solid rgba(210,224,220,.9);
+    box-shadow:0 5px 14px rgba(9,49,54,.045);
+    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);
+  }
+  .m-pagecopy{min-width:0;flex:1}
+  .m-pageversion{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    min-height:28px;
+    max-width:42vw;
+    padding:5px 8px;
+    border:1px solid #cfe1de;
+    border-radius:999px;
+    background:#fff;
+    color:#37666a;
+    font-size:9px;
+    line-height:1;
+    font-weight:900;
+    letter-spacing:-.025em;
+    white-space:nowrap;
+  }
+  @media(max-width:380px){
+    .m-pagehead{gap:7px!important}
+    .m-pageversion{font-size:8px;padding:5px 6px;max-width:43vw}
+    .m-pagetitle{font-size:18px!important}
+  }
+}
 </style>
 </head>
 <body>
@@ -1014,7 +1054,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </section>
 
 <section id="mobileListPage" class="mobile-listpage" aria-label="Mobile Backoffice List">
-  <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div></div>
+  <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div class="m-pagecopy"><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div><span class="m-pageversion">v__VERSION__</span></div>
   <div id="mobileListChips" class="m-chipbar"></div>
   <div id="mobileQuickTools" class="m-quicktools">
     <input id="mobileQuickSearch" type="search" autocomplete="off" enterkeyhint="search" placeholder="Type UPC / Article / Family / Item">
@@ -1044,7 +1084,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </section>
 
 <section id="mobileDetailPage" class="mobile-detailpage" aria-label="Mobile Backoffice Detail">
-  <div class="m-pagehead"><button id="mobileDetailBack" class="m-back" type="button" aria-label="Back to List">←</button><div><div id="mobileDetailTitle" class="m-pagetitle">Detail</div><div id="mobileDetailSub" class="m-pagesub"></div></div></div>
+  <div class="m-pagehead"><button id="mobileDetailBack" class="m-back" type="button" aria-label="Back to List">←</button><div class="m-pagecopy"><div id="mobileDetailTitle" class="m-pagetitle">Detail</div><div id="mobileDetailSub" class="m-pagesub"></div></div><span class="m-pageversion">v__VERSION__</span></div>
   <div id="mobileDetailContent"></div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
     <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Quick</button><button type="button" data-mobile-module="price">$<br>Price</button><button type="button" data-mobile-module="data">▦<br>Data</button>
