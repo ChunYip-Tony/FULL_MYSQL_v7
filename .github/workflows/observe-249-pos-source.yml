@@ -1,16 +1,14 @@
 name: Observe 249 POS source evidence
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened]
+  push:
+    branches: [diag-current-249-live-20260930]
 
 permissions:
   contents: read
 
 jobs:
   observe:
-    if: startsWith(github.event.pull_request.title, 'diag: 249 POS source evidence')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -18,23 +16,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 30 https://seal-app-tkkkd.ondigitalocean.app/healthz
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/healthz"
           echo
+      - name: Current 249 serving summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 120 "$base/v1/backoffice/inventory?category=ALL&limit=500&q=249&lightweight=false" -o /tmp/inv.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/inv.json'))
+          rows=[]
+          for r in p.get('rows') or []:
+              upc=str(r.get('upc') or '')
+              if not upc.startswith('249'):
+                  continue
+              rows.append({
+                'upc':upc,
+                'name':r.get('name'),
+                'family_article':r.get('family_article'),
+                'pos_qty_7d':r.get('qty_7d'),
+                'pos_velocity_7d':r.get('velocity_7d'),
+                'sales_days_7d':r.get('sales_days_7d'),
+                'receiving_article':r.get('receiving_article'),
+                'receiving_mapping_status':r.get('receiving_article_mapping_status'),
+                'receiving_mapping_basis':r.get('receiving_article_mapping_basis'),
+                'receiving_mvt_7d':r.get('receiving_movement_7d'),
+                'receiving_mvt_uom':r.get('receiving_movement_uom'),
+                'family_mvt_7d':r.get('family_group_movement_7d'),
+                'family_source_article':r.get('family_source_article'),
+                'family_source_mvt_7d':r.get('family_source_movement_7d'),
+                'receiving_articles':[
+                    {
+                      'article_number':a.get('article_number'),
+                      'article_description':a.get('article_description'),
+                      'movement_7d':a.get('movement_7d'),
+                      'movement_uom':a.get('movement_uom'),
+                      'mapping_status':a.get('mapping_status'),
+                      'lineage_basis':a.get('lineage_basis')
+                    } for a in (r.get('receiving_articles') or [])
+                ]
+              })
+          print(json.dumps({'count':len(rows),'rows':rows},default=str,indent=2))
+          PY
       - name: 249528 actual raw POS evidence
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 120 'https://seal-app-tkkkd.ondigitalocean.app/v1/web-upload/diagnostics/249-source-evidence?upc=24952800000'
-          echo
-      - name: Current lineage audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS --max-time 120 'https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/lineage-audit'
-          echo
-      - name: Current 249528 serving state
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS --max-time 60 'https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=30&q=249528&lightweight=false'
-          echo
+          curl -fsS --max-time 120 'https://seal-app-tkkkd.ondigitalocean.app/v1/web-upload/diagnostics/249-source-evidence?upc=24952800000' | python -m json.tool
