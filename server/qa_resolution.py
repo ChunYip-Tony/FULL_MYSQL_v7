@@ -98,9 +98,10 @@ def _pipeline_busy(cur) -> bool:
 def _serving_row(cur, ean_upc: str) -> dict[str, Any] | None:
     cur.execute(
         """SELECT ean_upc,selling_description,article_number,main_article_number,
-                  family_id,quick_check_status,blocking_reason,selling_uom,
+                  family_id,family_description,quick_check_status,blocking_reason,selling_uom,
                   base_uom,base_qty_per_selling_unit,current_cost_per_selling_unit,
-                  current_price,pos_qty_7d,pos_qty_30d
+                  current_price,pos_qty_7d,pos_qty_30d,upc_velocity_7d,
+                  current_oh,current_oh_uom
            FROM quick_check_current
            WHERE ean_upc=%s
            LIMIT 1""",
@@ -358,8 +359,9 @@ def qa_review(limit: int = 250) -> dict[str, Any]:
         # Serving QA_HOLD rows can exist without a one-to-one current Phase-3 issue.
         cur.execute(
             """SELECT ean_upc,selling_description,article_number,main_article_number,
-                      family_id,quick_check_status,blocking_reason,selling_uom,
-                      base_uom,base_qty_per_selling_unit
+                      family_id,family_description,quick_check_status,blocking_reason,selling_uom,
+                      base_uom,base_qty_per_selling_unit,upc_velocity_7d,
+                      current_oh,current_oh_uom
                FROM quick_check_current
                WHERE quick_check_status='QA_HOLD'
                ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
