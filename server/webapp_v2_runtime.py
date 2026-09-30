@@ -4137,84 +4137,62 @@ def _gp_day_price_suggestion_from_batch(
     daily_by_upc: dict[int,dict[date,dict[str,Any]]],
     data_days: list[dict[str,Any]],
 ) -> dict[str,Any]:
+    """Select Pricing Review candidate under the two-path company-reference rule.
+
+    Path A — Company A/B/C exists:
+      * range = min(valid A/B/C) .. max(valid A/B/C)
+      * current price inside range => not a Pricing Review candidate
+      * current outside range => choose the best observed 14D GP$/day price
+        inside the range
+      * if 14D has no observed in-range price, clamp the historical Sweet Spot
+        into the company range
+
+    Path B — no Company A/B/C:
+      * normal candidate = observed 14D price with max GP$/day
+      * FRESH/LIVE DOH > 7 => clearance mode; among observed 14D prices below
+        the current price choose the one with the strongest sell-through
+        velocity.  If no lower observed price exists, do not invent a markdown.
+    """
     cost=(
         Decimal(str(row["current_cost_per_selling_unit"]))
         if row.get("current_cost_per_selling_unit") is not None else None
     )
-    observed_asof=_batch_observed_price_as_of(
-        daily_by_upc,data_days,upc_id,lookback_supported_days=28
-    )
-    # Same global Current Price authority as every other serving page.
     current=(
         Decimal(str(row["current_price"]))
         if row.get("current_price") is not None else None
     )
-    company_c=(
-        Decimal(str(row["company_price_c"]))
-        if row.get("company_price_c") is not None
-        and Decimal(str(row["company_price_c"]))>0
-        else None
-    )
-    if cost is None or current is None or current<=0:
-        return {
-            "status":"UNAVAILABLE",
-            "reason":"CURRENT_COST_OR_PRICE_UNAVAILABLE",
-            "suggested_price":None,
-            "company_c_floor":company_c,
-            "candidates":[],
-        }
-
-    candidates=_batch_observed_price_gp_day_candidates(
-        daily_by_upc,
-        data_days,
-        upc_id,
-        current_cost=cost,
-        supported_day_limit=90,
-        company_c_floor=company_c,
-    )
-    eligible=[x for x in candidates if x["meets_company_c_floor"]]
-    floor_constrained=False
-    basis="OBSERVED_PRICE_MAX_GP_PER_DAY"
-
-    if eligible:
-        best=eligible[0]
-        suggested=best["price"]
-        expected_gp_day=best["gp_per_observed_day_at_current_cost"]
-        expected_velocity=best["observed_velocity_per_day"]
-    elif company_c is not None:
-        floor_constrained=True
-        basis="COMPANY_C_FLOOR_NO_OBSERVED_DEMAND_AT_OR_ABOVE_FLOOR"
-        suggested=company_c
-        expected_gp_day=None
-        expected_velocity=None
-    else:
-        return {
-            "status":"UNAVAILABLE",
-            "reason":"NO_OBSERVED_PRICE_HISTORY",
-            "suggested_price":None,
-            "company_c_floor":None,
-            "candidates":candidates,
-        }
-
     sweet=(
         Decimal(str(row["sweet_spot_price"]))
-        if row.get("sweet_spot_price") is not None else None
+        if row.get("sweet_spot_price") is not None
+        and Decimal(str(row["sweet_spot_price"]))>0
+        else None
     )
-    if company_c is not None and sweet is not None and sweet<company_c:
-        floor_constrained=True
+    refs={}
+    for label,key in (
+        ("A","company_price_a"),
+        ("B","company_price_b"),
+        ("C","company_price_c"),
+    ):
+        raw=row.get(key)
+        if raw is None:
+            continue
+        value=Decimal(str(raw))
+        if value>0:
+            refs[label]=value
 
-    return {
-        "status":"READY",
-        "suggested_price":suggested,
-        "basis":basis,
-        "company_c_floor":company_c,
-        "company_c_applied":company_c is not None,
-        "floor_constrained":floor_constrained,
-        "expected_gp_per_day_from_observed_demand":expected_gp_day,
-        "expected_velocity_from_observed_price_days":expected_velocity,
+    company_low=min(refs.values()) if refs else None
+    company_high=max(refs.values()) if refs else None
+    observed_asof=_batch_observed_price_as_of(
+        daily_by_upc,data_days,upc_id,lookback_supported_days=14
+    )
+
+    base={
+        "company_prices":refs,
+        "company_range_low":company_low,
+        "company_range_high":company_high,
+        "has_company_reference":bool(refs),
+        "historical_window_supported_days":14,
         "sweet_spot_price":sweet,
-        "candidate_count":len(candidates),
-        "top_observed_candidates":candidates[:5],
         "current_price_used":current,
         "current_price_basis":"CANONICAL_QUICK_CHECK_CURRENT",
         "current_price_source":row.get("current_price_source"),
@@ -4223,6 +4201,149 @@ def _gp_day_price_suggestion_from_batch(
         "historical_observed_price_date":observed_asof.get("date"),
         "cost_basis":"CURRENT_AUTHORITATIVE_COST",
         "cost_date":row.get("cost_date"),
+    }
+
+    if cost is None or current is None or current<=0:
+        return {
+            **base,
+            "status":"UNAVAILABLE",
+            "reason":"CURRENT_COST_OR_PRICE_UNAVAILABLE",
+            "suggested_price":None,
+            "include_in_review":False,
+            "candidates":[],
+        }
+
+    candidates=_batch_observed_price_gp_day_candidates(
+        daily_by_upc,
+        data_days,
+        upc_id,
+        current_cost=cost,
+        supported_day_limit=14,
+        company_c_floor=None,
+    )
+    base["candidate_count"]=len(candidates)
+    base["top_observed_candidates"]=candidates[:5]
+
+    if refs:
+        in_range=bool(company_low<=current<=company_high)
+        base["current_within_company_range"]=in_range
+        if in_range:
+            return {
+                **base,
+                "status":"NO_REVIEW",
+                "reason":"CURRENT_PRICE_WITHIN_COMPANY_RANGE",
+                "suggested_price":None,
+                "include_in_review":False,
+                "basis":"CURRENT_PRICE_WITHIN_COMPANY_RANGE",
+                "expected_gp_per_day_from_observed_demand":None,
+                "expected_velocity_from_observed_price_days":None,
+            }
+
+        ranged=[
+            x for x in candidates
+            if company_low<=_d(x.get("price"))<=company_high
+        ]
+        if ranged:
+            # Candidate list is already sorted by max GP$/day.
+            best=ranged[0]
+            suggested=_d(best["price"])
+            basis="COMPANY_RANGE_14D_MAX_GP_PER_DAY"
+            expected_gp_day=best.get("gp_per_observed_day_at_current_cost")
+            expected_velocity=best.get("observed_velocity_per_day")
+            selection="14D_OBSERVED_IN_COMPANY_RANGE"
+        elif sweet is not None:
+            suggested=max(company_low,min(company_high,sweet))
+            basis="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT"
+            expected_gp_day=None
+            expected_velocity=None
+            selection="HISTORICAL_SWEET_SPOT_CLAMPED_TO_COMPANY_RANGE"
+        else:
+            return {
+                **base,
+                "status":"UNAVAILABLE",
+                "reason":"NO_14D_IN_RANGE_OR_HISTORICAL_SWEET_SPOT",
+                "suggested_price":None,
+                "include_in_review":True,
+                "basis":"COMPANY_RANGE_CANDIDATE_UNAVAILABLE",
+                "expected_gp_per_day_from_observed_demand":None,
+                "expected_velocity_from_observed_price_days":None,
+            }
+
+        return {
+            **base,
+            "status":"READY",
+            "suggested_price":suggested,
+            "include_in_review":True,
+            "basis":basis,
+            "selection_basis":selection,
+            "expected_gp_per_day_from_observed_demand":expected_gp_day,
+            "expected_velocity_from_observed_price_days":expected_velocity,
+        }
+
+    pclass=str(row.get("product_class") or "").upper()
+    doh=(
+        Decimal(str(row["doh"]))
+        if row.get("doh") is not None
+        else None
+    )
+    clearance=bool(pclass in {"FRESH","LIVE"} and doh is not None and doh>Decimal("7"))
+    base["clearance_due_to_doh"]=clearance
+    base["doh"]=doh
+
+    if not candidates:
+        return {
+            **base,
+            "status":"UNAVAILABLE",
+            "reason":"NO_14D_OBSERVED_PRICE_HISTORY",
+            "suggested_price":None,
+            "include_in_review":clearance,
+            "basis":"NO_COMPANY_REFERENCE_14D_HISTORY_UNAVAILABLE",
+            "expected_gp_per_day_from_observed_demand":None,
+            "expected_velocity_from_observed_price_days":None,
+        }
+
+    if clearance:
+        lower=[
+            x for x in candidates
+            if _d(x.get("price"))<current
+        ]
+        if not lower:
+            return {
+                **base,
+                "status":"UNAVAILABLE",
+                "reason":"CLEARANCE_LOWER_PRICE_HISTORY_UNAVAILABLE",
+                "suggested_price":None,
+                "include_in_review":True,
+                "basis":"DOH_GT_7_CLEARANCE_HISTORY_REQUIRED",
+                "expected_gp_per_day_from_observed_demand":None,
+                "expected_velocity_from_observed_price_days":None,
+            }
+        lower.sort(
+            key=lambda x:(
+                -float(x.get("observed_velocity_per_day") or 0),
+                float(x.get("price") or 0),
+                -float(x.get("gp_per_observed_day_at_current_cost") or 0),
+            )
+        )
+        best=lower[0]
+        suggested=_d(best["price"])
+        basis="DOH_GT_7_CLEARANCE_14D_MAX_SELL_THROUGH"
+        selection="14D_OBSERVED_LOWER_PRICE_MAX_VELOCITY"
+    else:
+        best=candidates[0]
+        suggested=_d(best["price"])
+        basis="NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY"
+        selection="14D_OBSERVED_MAX_GP_PER_DAY"
+
+    return {
+        **base,
+        "status":"READY",
+        "suggested_price":suggested,
+        "include_in_review":bool(clearance or abs(suggested-current)>=Decimal("0.01")),
+        "basis":basis,
+        "selection_basis":selection,
+        "expected_gp_per_day_from_observed_demand":best.get("gp_per_observed_day_at_current_cost"),
+        "expected_velocity_from_observed_price_days":best.get("observed_velocity_per_day"),
     }
 
 def performance_supported_dates(limit: int=180) -> dict[str,Any]:
