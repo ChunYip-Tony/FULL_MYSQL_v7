@@ -946,10 +946,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-quicktools>input{width:100%;min-height:52px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;font-size:17px;background:#fff}
 
 .m-q-family-group{
-  --q-bg:#dff3e6;
-  --q-head:#cdebd8;
-  --q-border:#9dceac;
-  --q-accent:#2f7a4c;
+  --q-bg:#fff4c7;
+  --q-head:#ffe89a;
+  --q-border:#dfbd55;
+  --q-accent:#846515;
   position:relative;
   display:grid;
   gap:5px;
@@ -964,7 +964,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-q-family-group.q-family-tone-2{--q-bg:#eee0ff;--q-head:#dcc6f6;--q-border:#bfa1e4;--q-accent:#7249ac}
 .m-q-family-group.q-family-tone-3{--q-bg:#ffe7d6;--q-head:#ffd4b7;--q-border:#efaf7a;--q-accent:#a95317}
 .m-q-family-group.q-family-tone-4{--q-bg:#d9f2ef;--q-head:#c4e6e1;--q-border:#92c9c1;--q-accent:#327b73}
-.m-q-family-group.q-family-tone-5{--q-bg:#fff0c8;--q-head:#f7dda0;--q-border:#ddbd68;--q-accent:#8a6b18}
+.m-q-family-group.q-family-tone-5{--q-bg:#dff3e6;--q-head:#cdebd8;--q-border:#9dceac;--q-accent:#2f7a4c}
 .m-q-family-group+.m-q-family-group{margin-top:28px}
 .m-q-family-group+.m-q-family-group:before{
   content:"NEXT FAMILY";
