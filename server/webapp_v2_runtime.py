@@ -4621,36 +4621,38 @@ def performance_report(
             m7=_batch_sales_metric(daily_history,history_days,upc_id,7)
             m14=_batch_sales_metric(daily_history,history_days,upc_id,14)
             m28=_batch_sales_metric(daily_history,history_days,upc_id,28)
+            q14=_d(m14.get("sold_quantity"))
             q28=_d(m28.get("sold_quantity"))
             pclass=str(row.get("product_class") or "").upper()
 
-            company_values=[]
-            for key in ("company_price_a","company_price_b","company_price_c"):
-                raw=row.get(key)
-                if raw is not None and _d(raw)>0:
-                    company_values.append(_d(raw))
-            current_for_gate=(
-                _d(row.get("current_price"))
-                if row.get("current_price") is not None else None
+            current_oh=(
+                _d(row.get("current_oh"))
+                if row.get("current_oh") is not None else None
             )
-            company_outside_gate=bool(
-                company_values
-                and current_for_gate is not None
-                and not (min(company_values)<=current_for_gate<=max(company_values))
-            )
+            has_oh=bool(current_oh is not None and current_oh>0)
             doh_for_gate=(
                 _d(row.get("doh")) if row.get("doh") is not None else None
             )
             clearance_gate=bool(
-                pclass in {"FRESH","LIVE"}
-                and doh_for_gate is not None
-                and doh_for_gate>Decimal("7")
+                (
+                    pclass in {"FRESH","LIVE"}
+                    and doh_for_gate is not None
+                    and doh_for_gate>Decimal("7")
+                )
+                or (
+                    pclass=="FROZEN"
+                    and doh_for_gate is not None
+                    and doh_for_gate>Decimal("60")
+                )
             )
+            history_gate=bool(q14>0)
 
-            # Keep zero-28D items out of ordinary review, but never hide:
-            # 1) a Company-range violation, or
-            # 2) Fresh/Live DOH > 7 clearance risk.
-            if q28<=0 and not company_outside_gate and not clearance_gate:
+            # Pricing Review qualification:
+            # - usable positive OH is required; no stock => no price action
+            # - recent 14 completed-day sales history qualifies normal review
+            # - Fresh/Live DOH > 7 or Frozen DOH > 60 qualifies clearance even
+            #   when recent demand is weak
+            if not has_oh or (not history_gate and not clearance_gate):
                 continue
 
             status=str(row.get("quick_check_status") or "")
@@ -4727,14 +4729,8 @@ def performance_report(
             company_low=price_opt.get("company_range_low")
             company_high=price_opt.get("company_range_high")
             clearance=bool(price_opt.get("clearance_due_to_doh"))
+            clearance_reason=price_opt.get("clearance_reason")
             doh_value=price_opt.get("doh")
-
-            # Pricing Review is now a true suggestion queue:
-            # - Company A/B/C items appear only when Current Price is outside range.
-            # - No-company items appear when a 14D sweet-spot change is indicated,
-            #   or when Fresh/Live DOH > 7 requires clearance review.
-            if not price_opt.get("include_in_review"):
-                continue
 
             report_day_types=set(
                 str(k).upper() for k in (day_obs.get("price_types") or {}).keys()
@@ -4746,21 +4742,18 @@ def performance_report(
             if current is not None and _d(current)>0 and suggested is not None:
                 price_gap_pct=abs(_d(suggested)-_d(current))/_d(current)
 
-            if has_company:
-                reasons.append("CURRENT_PRICE_OUTSIDE_COMPANY_RANGE")
-                if basis=="COMPANY_RANGE_14D_MAX_GP_PER_DAY":
-                    reasons.append("14D_IN_RANGE_MAX_GP_PER_DAY")
-                elif basis=="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT":
-                    reasons.append("HISTORICAL_SWEET_SPOT_CLAMPED_TO_COMPANY_RANGE")
-                score+=Decimal("45")
+            if clearance_reason=="FRESH_DOH_GT_7":
+                reasons.append("FRESH_DOH_GT_7_CLEARANCE")
+                score+=Decimal("70")
+            elif clearance_reason=="FROZEN_DOH_GT_60":
+                reasons.append("FROZEN_DOH_GT_60_MARKDOWN")
+                score+=Decimal("60")
+            elif has_company:
+                reasons.append("COMPANY_RANGE_CONSTRAINED_14D_OPTIMIZATION")
+                score+=Decimal("30")
             else:
-                reasons.append("NO_COMPANY_ABC_REFERENCE")
-                if clearance:
-                    reasons.append("DOH_GT_7_CLEARANCE")
-                    score+=Decimal("60")
-                elif basis=="NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY":
-                    reasons.append("14D_MAX_GP_PER_DAY")
-                    score+=Decimal("30")
+                reasons.append("14D_MAX_GP_PER_DAY")
+                score+=Decimal("25")
 
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 reasons.append("7D_VELOCITY_BELOW_28D")
@@ -4811,32 +4804,16 @@ def performance_report(
                 score+=min(Decimal("10"),gp_day_gain_pct*Decimal("10"))
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 score+=min(Decimal("10"),(Decimal("1")-trend_ratio)*Decimal("20"))
-            if gp is not None and target_gp is not None and gp<target_gp:
-                score+=min(Decimal("5"),(target_gp-gp)*Decimal("20"))
-            score+=min(Decimal("5"),_d(q28)/Decimal("20"))
+            score+=min(Decimal("5"),q14/Decimal("10"))
 
-            if has_company:
-                side=(
-                    "below" if current is not None and company_low is not None and _d(current)<_d(company_low)
-                    else "above"
-                )
-                if basis=="COMPANY_RANGE_14D_MAX_GP_PER_DAY":
-                    primary_reason=(
-                        f"Price {side} Company range; 14D GP$/day sweet spot"
-                    )
-                elif basis=="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT":
-                    primary_reason=(
-                        f"Price {side} Company range; sweet spot adjusted into range"
-                    )
-                else:
-                    primary_reason=f"Price {side} Company range; review candidate"
-            elif clearance:
-                doh_txt=(
-                    f"{_d(doh_value):.1f}" if doh_value is not None else ">7"
-                )
-                primary_reason=f"DOH {doh_txt} > 7; clearance for sell-through"
+            if clearance_reason=="FRESH_DOH_GT_7":
+                primary_reason=f"Fresh DOH {float(_d(doh_value)):.1f} > 7; clearance priority"
+            elif clearance_reason=="FROZEN_DOH_GT_60":
+                primary_reason=f"Frozen DOH {float(_d(doh_value)):.1f} > 60; markdown priority"
+            elif has_company:
+                primary_reason="14D max GP$/day within Company A/B/C range"
             else:
-                primary_reason="No Company A/B/C; 14D max GP$/day"
+                primary_reason="14D max GP$/day from sales history"
 
             review_status=(
                 "ACTIONABLE" if actionable
@@ -4884,7 +4861,10 @@ def performance_report(
                 "has_company_reference":has_company,
                 "current_within_company_range":price_opt.get("current_within_company_range"),
                 "clearance_due_to_doh":clearance,
+                "clearance_reason":clearance_reason,
                 "doh":doh_value,
+                "current_oh":current_oh,
+                "current_oh_uom":row.get("current_oh_uom"),
                 "pricing_rule_priority":(
                     0 if clearance else (1 if has_company else 2)
                 ),
