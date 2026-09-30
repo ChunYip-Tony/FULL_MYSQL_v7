@@ -270,6 +270,51 @@ function openQAIssue(key){
  const x=findQAIssue(key);if(!x)return;
  const cur=x.current||{},detail=x.detail||{};
  const detailJson=esc(JSON.stringify(detail,null,2));
+ if(x.fix_kind==='COST_CONVERSION'){
+   const sell=String(cur.selling_uom||detail.selling_uom||'').toUpperCase();
+   const costUom=String(detail.cost_uom||'').toUpperCase();
+   openDrawer('Confirm Cost Conversion',`${x.issue_code} · UPC ${x.entity_key}`,`
+     <div class="detailgrid">
+       <div class="detail"><small>UPC</small><b>${esc(x.entity_key)}</b></div>
+       <div class="detail"><small>Article</small><b>${esc(cur.article_number||cur.main_article_number||'—')}</b></div>
+       <div class="detail"><small>Selling UOM</small><b>${esc(sell||'Missing')}</b></div>
+       <div class="detail"><small>Cost UOM</small><b>${esc(costUom||'Unknown')}</b></div>
+     </div>
+     <div class="sectiontitle">Issue</div><div class="calc">${esc(x.issue_summary||'')}</div>
+     <div class="sectiontitle">User-confirmed conversion</div>
+     <div class="formfield"><label>Selling Quantity</label><input id="qaConvSellQty" type="number" min="0.0001" step="0.0001" value="1"></div>
+     <div class="formfield"><label>Selling UOM</label><input id="qaConvSellUom" value="${esc(sell)}" readonly></div>
+     <div class="formfield"><label>Cost Quantity represented by that selling quantity</label><input id="qaConvCostQty" type="number" min="0.0001" step="0.0001" placeholder="Example: 2"></div>
+     <div class="formfield"><label>Cost UOM</label><input id="qaConvCostUom" value="${esc(costUom)}" readonly></div>
+     <div class="formfield"><label>Resolution Note</label><textarea id="qaConvNote" placeholder="What you confirmed, e.g. 1 PACK = 2 LB"></textarea></div>
+     <label style="display:flex;gap:7px;align-items:flex-start;margin-top:10px;font-size:9px"><input id="qaConvConfirm" type="checkbox" style="margin-top:2px"><span>I confirm this exact cost-to-selling conversion. This does not change the source cost value or RAW data.</span></label>
+     <div class="calc">Write scope: conversion authority only. Existing cost, POS sales, receipts, and source files remain unchanged.</div>
+   `,`<button id="applyQACostConversion" class="btn primary">Apply Cost Conversion</button>`);
+   const btn=$('#applyQACostConversion');
+   if(!sell||!costUom){btn.disabled=true;toast('Selling UOM and Cost UOM must both be known before conversion can be confirmed');return}
+   btn.onclick=async()=>{
+     if(!$('#qaConvConfirm').checked){toast('Confirm the conversion first');return}
+     const sq=Number($('#qaConvSellQty').value),cq=Number($('#qaConvCostQty').value);
+     if(!(sq>0)||!(cq>0)){toast('Enter positive conversion quantities');return}
+     btn.disabled=true;
+     try{
+       await api('/v1/backoffice/qa-resolve-cost-conversion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+         issue_id:x.issue_id,
+         ean_upc:x.entity_key,
+         selling_qty:sq,
+         selling_uom:sell,
+         cost_qty:cq,
+         cost_uom:costUom,
+         note:($('#qaConvNote').value||'').trim()||null,
+         confirm:'APPLY_COST_CONVERSION_FIX'
+       })});
+       toast('Cost conversion applied');
+       closeDrawer();
+       await Promise.allSettled([loadQA(),loadInventory()]);
+     }catch(e){toast(e.message)}finally{const z=$('#applyQACostConversion');if(z)z.disabled=false}
+   };
+   return;
+ }
  if(!x.can_fix){
    openDrawer('QA Issue Details',`${x.issue_code} · ${x.entity_key}`,`<div class="detailgrid"><div class="detail"><small>Severity</small><b>${esc(x.severity)}</b></div><div class="detail"><small>Entity</small><b>${esc(x.entity_type)} · ${esc(x.entity_key)}</b></div><div class="detail"><small>Batch</small><b>#${esc(x.batch_id??'—')}</b></div><div class="detail"><small>Fix Scope</small><b>View only</b></div></div><div class="sectiontitle">Summary</div><div class="calc">${esc(x.issue_summary||'')}</div><div class="sectiontitle">Evidence / Detail</div><pre class="logconsole" style="white-space:pre-wrap">${detailJson}</pre>`,`<span class="pill blue">VIEW ONLY</span>`);
    return;
