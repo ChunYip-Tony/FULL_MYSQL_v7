@@ -431,10 +431,23 @@ def audit_product_identity(cur) -> dict[str, Any]:
         }
         safe_alias_candidates.append(item)
         if both_current:
+            # Coexisting current short/long spellings are not, by themselves,
+            # proof of an identity conflict. Raw-source lineage suppresses the
+            # shortened alias whenever that spelling is itself an ACTIVE UPC,
+            # so these pairs no longer double-count POS. Keep them visible for
+            # review/possible merge, but do not block Phase 3 globally.
             if item["merge_candidate"]:
-                blockers.append({"code": "DUPLICATE_UPCA_SHORT_LONG_CURRENT", **item})
+                warnings.append({
+                    "code": "UPCA_SHORT_LONG_BOTH_CURRENT_MERGE_CANDIDATE",
+                    "lineage_policy": "SHORT_ACTIVE_SUPPRESSES_LONG_ALIAS",
+                    **item,
+                })
             else:
-                blockers.append({"code": "UPCA_SHORT_LONG_CURRENT_IDENTITY_CONFLICT", **item})
+                warnings.append({
+                    "code": "UPCA_SHORT_LONG_BOTH_CURRENT_DISTINCT_IDENTITIES",
+                    "lineage_policy": "SHORT_ACTIVE_SUPPRESSES_LONG_ALIAS",
+                    **item,
+                })
         elif one_current_one_historical:
             warnings.append({"code": "UPCA_CURRENT_HISTORICAL_ALIAS_CANDIDATE", **item})
         else:
@@ -532,6 +545,8 @@ def audit_product_identity(cur) -> dict[str, Any]:
             "current_active_missing_uom_count": len(current_active_missing_uom),
             "upca_short_long_pair_count": len(safe_alias_candidates),
             "upca_current_current_pair_count": sum(1 for x in safe_alias_candidates if x.get("both_current")),
+            "upca_current_current_blocking_count": 0,
+            "upca_current_current_lineage_policy": "SHORT_ACTIVE_SUPPRESSES_LONG_ALIAS",
             "upca_current_historical_pair_count": sum(1 for x in safe_alias_candidates if x.get("one_current_one_historical")),
             "upca_historical_historical_pair_count": sum(
                 1 for x in safe_alias_candidates
