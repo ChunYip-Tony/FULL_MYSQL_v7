@@ -1908,7 +1908,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,quickPriceByUpc:{},quickPriceHealth:null,quickPriceLoadedAt:0,quickPriceLoading:false,quickPricePromise:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,quickPriceByUpc:{},quickPriceHealth:null,quickPriceLoadedAt:0,quickPriceLoading:false,quickPricePromise:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null,batchLoadWarning:''};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -2746,6 +2746,9 @@ function mobileRenderList(){
     html=rows.map(b=>b._mobileNewUpload?mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD',''):mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Upload history'),(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—'),b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
   }else if(mobileState.module==='freshness'){
     html=rows.map(r=>mobileDataHealthRow(r)).join('');
+  }
+  if(!html&&mobileState.module==='batches'&&state.batchLoadWarning){
+    html='<div class="m-error">'+esc(state.batchLoadWarning)+'</div>';
   }
   if(!html&&mobileState.module==='ordering'&&state.orderHealth?.blocked){
     const h=state.orderHealth;
@@ -4088,7 +4091,67 @@ async function rebuildPhase3(id){
   }
 }
 function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',runStatus=a.active_run_status||null,status=runStatus||a.processing_status||a.status||'PROCESSING',stage=a.active_stage_name||null;return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Active Run</small><b>${esc(a.active_pipeline_run_id||'—')}</b></div><div><small>Status</small><b>${esc(stage?(stage+' · '+status):status)}</b></div></div></div>`}
-async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];const activeEl=$('#activeBatch');if(activeEl){activeEl.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);wireRecoveryButtons(activeEl)}const overviewActive=$('#dbOverviewActive');if(overviewActive){overviewActive.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);wireRecoveryButtons(overviewActive)}const batchRows=$('#batchRows');if(batchRows){batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}const latest=state.recent[0]||null;const latestEl=$('#dbLatestBatch');if(latestEl){latestEl.innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';wireRecoveryButtons(latestEl)}const ps=$('#dbProcessingSummary');if(ps)ps.textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch')}catch(e){const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(e.message)}</div>`;const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+async function loadBatches(){
+  const [activeRes,recentRes]=await Promise.allSettled([
+    api('/v1/web-upload/active'),
+    api('/v1/web-upload/recent?limit=20')
+  ]);
+  const activeOk=activeRes.status==='fulfilled';
+  const recentOk=recentRes.status==='fulfilled';
+
+  state.active=activeOk?(activeRes.value.active_batch||null):null;
+  state.recent=recentOk?(recentRes.value.batches||[]):[];
+
+  if(!activeOk&&!recentOk){
+    state.batchLoadWarning='Unable to load live processing or completed batch history.';
+    const msg='Batch status failed: '+String(activeRes.reason?.message||activeRes.reason||'active unavailable')+
+      ' · '+String(recentRes.reason?.message||recentRes.reason||'history unavailable');
+    const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(msg)}</div>`;
+    const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(msg)}</div>`;
+    throw new Error(msg);
+  }
+
+  state.batchLoadWarning=!activeOk
+    ? 'Live processing status unavailable; completed history is still shown.'
+    : !recentOk
+      ? 'Completed history unavailable; live processing status is still shown.'
+      : '';
+
+  const activeEl=$('#activeBatch');
+  if(activeEl){
+    activeEl.innerHTML=activeOk
+      ? activeCard(state.active)+resumeActionHtml(state.active,true)
+      : '<div class="error">Live processing status unavailable.</div>';
+    wireRecoveryButtons(activeEl);
+  }
+  const overviewActive=$('#dbOverviewActive');
+  if(overviewActive){
+    overviewActive.innerHTML=activeOk
+      ? activeCard(state.active)+resumeActionHtml(state.active,true)
+      : '<div class="error">Live processing status unavailable.</div>';
+    wireRecoveryButtons(overviewActive);
+  }
+  const batchRows=$('#batchRows');
+  if(batchRows){
+    batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';
+    $('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id));
+  }
+  const latest=state.recent[0]||null;
+  const latestEl=$('#dbLatestBatch');
+  if(latestEl){
+    latestEl.innerHTML=latest
+      ? activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)
+      : '<div class="empty">No completed batch history.</div>';
+    wireRecoveryButtons(latestEl);
+  }
+  const ps=$('#dbProcessingSummary');
+  if(ps)ps.textContent=state.active
+    ? `Batch #${state.active.batch_id||'—'} is processing`
+    : latest
+      ? `Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`
+      : state.batchLoadWarning||'No active batch';
+  return {active_ok:activeOk,recent_ok:recentOk};
+}
 function openBatchDetail(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));if(!b)return;
   const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b),active=activePhase3RunForBatch(b.batch_id);
