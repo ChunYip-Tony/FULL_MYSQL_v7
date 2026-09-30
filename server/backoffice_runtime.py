@@ -648,7 +648,20 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
         if str(x.get("upc") or "").strip()
     ]
     live_by_upc: dict[str, dict[str, Any]] = {}
-    resolved_by_upc: dict[str, dict[str, Any]] = {}
+    # performance_report() already resolves CURRENT price at response time for
+    # every returned price-review row. Reuse that result instead of issuing a
+    # second per-UPC live price lookup pass.
+    resolved_by_upc: dict[str, dict[str, Any]] = {
+        str(x.get("upc") or ""): {
+            "price": x.get("current_price"),
+            "type": x.get("current_price_type"),
+            "source": x.get("current_price_source"),
+            "date": x.get("current_price_observed_date"),
+        }
+        for x in rows
+        if str(x.get("upc") or "").strip()
+        and x.get("current_price") is not None
+    }
     latest_acceptance_by_upc: dict[str, dict[str, Any]] = {}
     if upcs:
         with db_conn() as conn:
@@ -669,15 +682,6 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
                 str(r.get("ean_upc") or ""): r
                 for r in cur.fetchall()
             }
-            for _upc,_live in live_by_upc.items():
-                if _live.get("upc_id") is not None:
-                    _resolved=_live_current_price(
-                        cur,
-                        int(_live["upc_id"]),
-                        _live.get("ean_upc"),
-                    )
-                    if _resolved:
-                        resolved_by_upc[_upc]=_resolved
             latest_acceptance_by_upc=_latest_price_acceptances(cur,upcs)
             cur.close()
 
