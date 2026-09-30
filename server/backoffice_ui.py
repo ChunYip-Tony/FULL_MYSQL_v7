@@ -1550,7 +1550,11 @@ function mobileQuickDetail(key,piMode){
   const sub=(piMode?(r.family_name||r.name):(r.name||r.family_name))+(r.chinese_name?' · '+r.chinese_name:'');
   let html='<div class="m-detailcard"><div class="m-label">'+(piMode?'Family / PI Summary':'UPC Summary')+'</div><div class="m-detailgrid">';
   html+=mobileMetric('Current Price',money(r.price),(r.price_type||'—')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''));
-  html+=mobileMetric('Cost',money(r.cost),'Current cost');
+  html+=mobileMetric(
+    'Current Cost',
+    money(r.cost)+(r.cost_uom?' / '+r.cost_uom:''),
+    (r.cost_source||'Source unavailable')+(r.cost_date?' · '+r.cost_date:'')
+  );
   html+=mobileMetric('OH',fmt(r.family_oh)+' '+(r.family_oh_uom||''),'Current effective family OH');
   html+=mobileMetric('7D Sold',fmt(r.qty_7d)+' '+(r.selling_uom||''),'POS quantity');
   html+=mobileMetric('7D Velocity',fmt(r.velocity_7d),(r.selling_uom||'unit')+'/day');
