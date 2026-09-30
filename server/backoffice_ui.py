@@ -1192,7 +1192,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   html{scroll-behavior:smooth;overscroll-behavior-y:contain}
   body{color:var(--m-ink);text-rendering:optimizeLegibility}
   button,.m-row,.m-module,.m-chip{touch-action:manipulation}
-  .num,.m-metric b,.detail b,.kpi b,.m-row-code,.m-family-velocity b,.m-history7-row b{
+  .num,.m-metric b,.detail b,.kpi b,.m-row-code,.m-family-velocity b,.m-receiving-movement b,.m-history7-row b{
     font-variant-numeric:tabular-nums lining-nums;
   }
 
@@ -1296,7 +1296,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-family-velocity,.m-receiving-movement{
     min-width:96px;
     padding-left:10px;
-    border-left:1px solid color-mix(in srgb,var(--family-accent) 28%,transparent);
+    border-left:1px solid color-mix(in srgb,var(--recv-accent,var(--family-accent)) 28%,transparent);
   }
   .m-family-velocity b,.m-receiving-movement b{font-size:16px!important}
   .m-family-upcs,.m-receiving-upcs{gap:8px;padding-left:7px}
