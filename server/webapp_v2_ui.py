@@ -1715,11 +1715,11 @@ async function csearch(){
             : (isGroup?'<div class="upc-group-badge">UPC GROUP</div>':''));
       let members=isGroup
         ? '<div class="upc-group-members">'+(r.group_members||[]).map(x=>
-            '<div class="upc-group-member"><div><div class="u">'+esc(x.upc||'—')+'</div><div class="r">'+esc(x.group_role||x.upc_role||'RELATED')+'</div><div class="r">Current '+priceText(x.current_price,x.selling_uom)+' · '+esc(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+esc(x.current_price_asof_date):'')+'</div></div><div class="q">'+qv(x.pos_qty_7d,x.qty_28d_uom)+' 7D<br>'+qv(x.qty_28d,x.qty_28d_uom)+' 28D</div></div>'
+            '<div class="upc-group-member"><div><div class="u">'+esc(x.upc||'—')+'</div><div class="r">'+esc(x.group_role||x.upc_role||'RELATED')+'</div><div class="r">Current '+priceText(x.current_price,x.selling_uom)+' · '+esc(x.current_price_type||'—')+' · '+esc(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+esc(x.current_price_asof_date):'')+'</div></div><div class="q">'+qv(x.pos_qty_7d,x.qty_28d_uom)+' 7D<br>'+qv(x.qty_28d,x.qty_28d_uom)+' 28D</div></div>'
           ).join('')+'</div>'
         : '';
       let priceLine=(isGroup||isUpc)
-        ? '<div class="meta"><b>Current '+priceText(r.current_price,r.selling_uom||r.qty_28d_uom)+'</b> · '+esc(r.current_price_source||'NO PRICE EVIDENCE')+(r.current_price_asof_date?' · '+esc(r.current_price_asof_date):'')+'</div>'
+        ? '<div class="meta"><b>Current '+priceText(r.current_price,r.selling_uom||r.qty_28d_uom)+'</b> · '+esc(r.current_price_type||'—')+' · '+esc(r.current_price_source||'NO PRICE EVIDENCE')+(r.current_price_asof_date?' · '+esc(r.current_price_asof_date):'')+'</div>'
         : '';
       let qtyLine=isGroup
         ? '<div class="meta">Sales 7D '+money(r.sales_dollars_7d)+' · Qty 7D '+qv(r.pos_qty_7d,r.qty_28d_uom)+' · Group 28D Qty '+qv(r.qty_28d,r.qty_28d_uom)+(r.qty_28d_status==='MIXED_UOM'?' · mixed UOM, see UPC rows':'')+'</div>'
@@ -1785,7 +1785,7 @@ async function family(k){try{
   $('fu').innerHTML=(d.related_upcs||[]).map((x,i)=>
     '<div class="related-card" data-i="'+i+'">'+
       '<div class="row" style="justify-content:space-between"><div><div class="name">'+esc(x.name)+'</div><div class="related-upc">UPC '+esc(x.upc)+'</div></div>'+pill(x.readiness)+'</div>'+
-      mr('Price',priceText(x.current_price,x.selling_uom)+' · '+(x.current_price_type||'—'))+
+      mr('Price',priceText(x.current_price,x.selling_uom)+' · '+(x.current_price_type||'—')+' · '+(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_asof_date?' · '+x.current_price_asof_date:''))+
       mr('7D Qty',qv(x.qty_7d,x.selling_uom))+
       mr('28D Qty',qv(x.qty_28d,x.selling_uom))+
     '</div>'
@@ -1814,7 +1814,7 @@ async function upc(u,b='core'){try{
     '<div class="qc-status">'+pill(d.readiness)+'</div>';
 
   $('qcMetrics').innerHTML=[
-    qcMetric('💲 Price',priceText(c0.price,uom),trendNote(tc.price[0],tc.price[1],'money',uom)),
+    qcMetric('💲 Price',priceText(c0.price,uom),(c0.price_type||'—')+' · '+(c0.price_source||'NO PRICE EVIDENCE')+(c0.price_as_of?' · '+c0.price_as_of:'')+(trendNote(tc.price[0],tc.price[1],'money',uom)?' · '+trendNote(tc.price[0],tc.price[1],'money',uom):'')),
     qcMetric('🏷 Cost',priceText(c0.cost,c0.cost_uom||uom),trendNote(tc.cost[0],tc.cost[1],'money',uom)),
     qcMetric('📊 GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+'%',trendNote(tc.gpPct[0],tc.gpPct[1],'pct'),'green'),
     qcMetric('📈 GP$/Day',c0.gp_per_day_7d==null?'—':money(c0.gp_per_day_7d)+'/day',trendNote(tc.gpDay[0],tc.gpDay[1],'moneyday')),
@@ -1893,7 +1893,7 @@ async function price(u){try{
   let vel=(nv(s['7d']?.supported_day_count)>0&&nv(s['7d']?.sold_quantity)!==null)?nv(s['7d'].sold_quantity)/nv(s['7d'].supported_day_count):nv(c0.velocity_7d);
   $('pc').innerHTML=
     ms('Key Metrics · 7D','pink',[
-      mrh('Current Price',priceText(c0.price,uom)+' · '+(c0.price_type||'—'),trendNote(tc.price[0],tc.price[1],'money',uom)),
+      mrh('Current Price',priceText(c0.price,uom),(c0.price_type||'—')+' · '+(c0.price_source||'NO PRICE EVIDENCE')+(c0.price_as_of?' · '+c0.price_as_of:'')+(trendNote(tc.price[0],tc.price[1],'money',uom)?' · '+trendNote(tc.price[0],tc.price[1],'money',uom):'')),
       mrh('Cost',priceText(c0.cost,c0.cost_uom||uom),trendNote(tc.cost[0],tc.cost[1],'money',uom)),
       mrh('GP%',c0.gp_pct==null?'—':fmt(Number(c0.gp_pct)*100,1)+' %',trendNote(tc.gpPct[0],tc.gpPct[1],'pct')),
       mrh('GP$/Day',c0.gp_per_day_7d==null?'—':money(c0.gp_per_day_7d)+' / day',trendNote(tc.gpDay[0],tc.gpDay[1],'moneyday')),
@@ -2158,14 +2158,14 @@ async function priceChanges(){
       let gpopp=x.gp_per_day_opportunity!=null?money(x.gp_per_day_opportunity):'Unproven';
       return '<div class="promo report-item clickable '+cls+'" data-upc="'+esc(x.upc)+'">'+
         '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill '+(x.actionable?'ok':'warn')+' review-badge">'+esc(badge)+'</span></div>'+
-        '<div class="row" style="margin-top:8px"><div><div class="small">Current</div><div class="hero-number">'+money(x.current_price)+'</div></div><div class="price-arrow">→</div><div><div class="small">Suggested</div><div class="hero-number">'+suggestion+'</div></div></div>'+
+        '<div class="row" style="margin-top:8px"><div><div class="small">Current</div><div class="hero-number">'+money(x.current_price)+'</div><div class="meta">'+esc(x.current_price_type||'—')+' · '+esc(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_observed_date?' · '+esc(x.current_price_observed_date):'')+'</div></div><div class="price-arrow">→</div><div><div class="small">Suggested</div><div class="hero-number">'+suggestion+'</div></div></div>'+
         '<div class="grid" style="margin-top:8px">'+
           m('GP$/day Opportunity',gpopp)+
           m('7D Qty',qv(x.qty_7d,x.qty_uom))+
           m('28D Qty',qv(x.qty_28d,x.qty_uom))+
-          m('Company C Floor',money(x.company_price_c_floor))+
+          m('OH',qv(x.current_oh,x.qty_uom))+m('DOH',x.doh==null?'—':fmt(x.doh,1)+' d')+m('Company Range',x.has_company_reference?money(x.company_range_low)+'–'+money(x.company_range_high):'No Company range')+
         '</div>'+
-        '<div class="meta">Sales evidence through '+esc(x.report_date)+' · '+(x.review_blocker?'Reason: '+esc(x.review_blocker.replaceAll('_',' ')):'Price evidence supports action')+'</div>'+
+        '<div class="meta">'+esc(x.primary_reason_text||'Pricing review')+' · Sales evidence through '+esc(x.report_date)+'</div>'+
       '</div>';
     }).join('')||'<div class="card small">No active price change review items.</div>';
     document.querySelectorAll('#pcitems [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
