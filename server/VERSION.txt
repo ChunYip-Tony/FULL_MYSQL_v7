@@ -1,7 +1,7 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.233 Single-Service Edition
+Version: 7.0.234 Single-Service Edition
 
-v7.0.233 Live Current Price Serving Resolution:
+v7.0.234 Live Current Price Serving Resolution:
 - Current Price is re-resolved from canonical FULL MYSQL observations at response time instead of relying only on the last Phase 3 quick_check_current snapshot.
 - Authority remains: newest valid Price List snapshot vs newer eligible SINGLE_DATE POS sold event; same-date Price List wins.
 - Search results, Family related UPCs, UPC detail, Price detail, Performance rows, Inventory Review, and Pricing Review now receive the live price overlay.
