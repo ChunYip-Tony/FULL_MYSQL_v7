@@ -205,11 +205,11 @@ SEED_OVERRIDES = (
     },
     {
         "ean_upc": "75339325301",
-        "article_number": None,
+        "article_number": "1351605",
         "selling_uom_code": "PACK",
         "base_uom_code": "LB",
         "base_qty_per_selling_unit": Decimal("2"),
-        "source_note": "USER_CONFIRMED_UOM_20260929: exact UPC authority; sold by PACK and 1 PACK = 2 LB. This supersedes stale conflicting current/manual UOM rows without changing product identity.",
+        "source_note": "USER_CONFIRMED_UOM_20260929: UPC 75339325301 / Article 1351605 (16/20 H/L JUMBO WHITE SHRIMP 10/5LB); sold by PACK and 1 PACK = 2 LB. Article identity is the current resolved FULL MYSQL mapping; UOM/conversion is explicit user authority.",
     },
     {
         "ean_upc": "4029549384",
