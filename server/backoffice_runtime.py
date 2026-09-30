@@ -847,6 +847,121 @@ def _quick_check_fuzzy_rows(
     }
 
 
+def _quick_receiving_article_context(
+    cur,
+    qrows: list[dict[str, Any]],
+    movement_days_7: list[dict[str, Any]],
+) -> dict[int, dict[str, Any]]:
+    """Resolve the operational Receiving Article above Quick Check UPC groups.
+
+    Family Article remains relationship metadata. The displayed 251/252 movement
+    belongs to the Receiving Article: 251 sold minus 252 returns in Base UOM.
+    """
+    family_rows: dict[int, dict[str, Any]] = {}
+    for row in qrows:
+        if row.get("family_id") is None:
+            continue
+        fid=int(row["family_id"])
+        family_rows.setdefault(fid,row)
+    if not family_rows:
+        return {}
+
+    fids=sorted(family_rows)
+    ph=",".join(["%s"]*len(fids))
+    cur.execute(
+        f"""SELECT baf.family_id,a.article_number,baf.relationship_type,baf.is_primary
+            FROM bridge_article_family baf
+            JOIN article a ON a.article_id=baf.article_id
+            WHERE baf.family_id IN ({ph})
+              AND baf.mapping_status='CONFIRMED'
+              AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+            ORDER BY baf.family_id,
+                     CASE baf.relationship_type WHEN 'SUB' THEN 0 WHEN 'MAIN' THEN 1 ELSE 2 END,
+                     baf.is_primary DESC,a.article_number""",
+        tuple(fids),
+    )
+    receiving_by_family: dict[int,str] = {}
+    for r in cur.fetchall():
+        fid=int(r["family_id"])
+        art=str(r.get("article_number") or "").strip()
+        if art and fid not in receiving_by_family:
+            receiving_by_family[fid]=art
+
+    # Fail soft to the existing Family Article only when no confirmed Receiving
+    # Article mapping exists. The UI labels that fallback explicitly.
+    for fid,row in family_rows.items():
+        if fid not in receiving_by_family:
+            fallback=str(row.get("main_article_number") or "").strip()
+            if fallback:
+                receiving_by_family[fid]=fallback
+
+    article_numbers=sorted({x for x in receiving_by_family.values() if x})
+    movement_by_article: dict[str,dict[str,Any]] = {}
+    if article_numbers and movement_days_7:
+        aph=",".join(["%s"]*len(article_numbers))
+        clauses=[]
+        args: list[Any] = list(article_numbers)
+        for d in movement_days_7:
+            clauses.append("(file_id=%s AND posting_date=%s)")
+            args.extend([int(d["file_id"]),d["date"]])
+        cur.execute(
+            f"""SELECT article_number,base_uom_code,
+                       SUM(
+                         CASE
+                           WHEN movement_type='251' THEN ABS(COALESCE(base_quantity,0))
+                           WHEN movement_type='252' THEN -ABS(COALESCE(base_quantity,0))
+                           ELSE 0
+                         END
+                       ) AS qty_7d
+                FROM movement_history
+                WHERE article_number IN ({aph})
+                  AND movement_type IN ('251','252')
+                  AND ({' OR '.join(clauses)})
+                  AND base_quantity IS NOT NULL
+                GROUP BY article_number,base_uom_code""",
+            tuple(args),
+        )
+        grouped: dict[str,list[dict[str,Any]]] = {}
+        for r in cur.fetchall():
+            grouped.setdefault(str(r.get("article_number") or ""),[]).append(r)
+        for art,rows in grouped.items():
+            valid=[r for r in rows if r.get("qty_7d") is not None]
+            if len(valid)==1:
+                movement_by_article[art]={
+                    "quantity":_d(valid[0].get("qty_7d")),
+                    "uom":valid[0].get("base_uom_code"),
+                    "status":"READY",
+                }
+            elif len(valid)>1:
+                movement_by_article[art]={
+                    "quantity":None,
+                    "uom":None,
+                    "status":"MIXED_BASE_UOM",
+                }
+
+    day_count=len(movement_days_7)
+    out: dict[int,dict[str,Any]] = {}
+    for fid,row in family_rows.items():
+        receiving=receiving_by_family.get(fid)
+        mv=movement_by_article.get(str(receiving or ""),{})
+        qty=mv.get("quantity")
+        mapped=bool(receiving and str(receiving)!=str(row.get("main_article_number") or ""))
+        out[fid]={
+            "receiving_article":receiving,
+            "receiving_article_mapping_status":"CONFIRMED_RECEIVING_ARTICLE" if mapped else "FAMILY_ARTICLE_FALLBACK",
+            "receiving_movement_7d":qty,
+            "receiving_movement_uom":mv.get("uom"),
+            "receiving_avg_qty_day":(
+                _d(qty)/Decimal(day_count)
+                if qty is not None and day_count>0
+                else None
+            ),
+            "receiving_movement_days_7d":day_count,
+            "receiving_movement_status":mv.get("status") or "NO_251_252_IN_WINDOW",
+        }
+    return out
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",
@@ -998,6 +1113,12 @@ def inventory_review(
                 pair_members.setdefault(sig,set()).add(prefix)
         confirmed_pairs = {sig for sig,prefixes in pair_members.items() if {"240","249"}.issubset(prefixes)}
 
+        receiving_context = _quick_receiving_article_context(
+            cur,
+            qrows,
+            movement_days_7,
+        )
+
         family_cache: dict[int, dict[str, Any]] = {}
         out = []
         for row in qrows:
@@ -1087,6 +1208,13 @@ def inventory_review(
                         "CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE" if pair_key else None
                     ),
                     "name": row.get("selling_description"),
+                    "receiving_article": receiving_context.get(fid or -1,{}).get("receiving_article"),
+                    "receiving_article_mapping_status": receiving_context.get(fid or -1,{}).get("receiving_article_mapping_status"),
+                    "receiving_movement_7d": receiving_context.get(fid or -1,{}).get("receiving_movement_7d"),
+                    "receiving_movement_uom": receiving_context.get(fid or -1,{}).get("receiving_movement_uom"),
+                    "receiving_avg_qty_day": receiving_context.get(fid or -1,{}).get("receiving_avg_qty_day"),
+                    "receiving_movement_days_7d": receiving_context.get(fid or -1,{}).get("receiving_movement_days_7d"),
+                    "receiving_movement_status": receiving_context.get(fid or -1,{}).get("receiving_movement_status"),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),
                     "family_name": row.get("family_description"),
@@ -1137,7 +1265,7 @@ def inventory_review(
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V3",
+        "contract_version": "BACKOFFICE_INVENTORY_V4",
         "category": cat,
         "query": q or None,
         "count": len(out),
@@ -1147,7 +1275,11 @@ def inventory_review(
             "write_enabled": "OH_TRUE_STOCK_ONLY",
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
-            "family_qty_basis": "MOVEMENT_251_MINUS_252_BASE_UOM",
+            "quick_check_group_leader": "RECEIVING_ARTICLE",
+            "family_article_role": "RELATIONSHIP_METADATA_NOT_PRIMARY_GROUP_HEADER",
+            "receiving_qty_basis": "RECEIVING_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
+            "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
+            "family_qty_basis": "LEGACY_RELATIONSHIP_METRIC_ONLY",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
             "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",
