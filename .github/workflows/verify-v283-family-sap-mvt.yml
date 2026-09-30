@@ -1,0 +1,125 @@
+name: Verify v7.0.283 Family SAP movement
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    if: startsWith(github.event.head_commit.message, 'diag: v7.0.283 Family SAP movement verify')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for deployed server with v7.0.283 fix or newer
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            body="$(curl -fsS --max-time 20 "$base/healthz" || true)"
+            echo "$body"
+            pass="$(BODY="$body" python - <<'PY'
+          import json, os, re
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          def patch(v):
+              m=re.search(r'7\.0\.(\d+)', str(v or ''))
+              return int(m.group(1)) if m else -1
+          ok=(
+              p.get('ok') is True
+              and patch(p.get('version')) >= 283
+              and patch(p.get('worker_version')) >= 283
+              and p.get('worker_healthy') is True
+              and p.get('worker_ready') is True
+          )
+          print('1' if ok else '0')
+          PY
+            )"
+            if [ "$pass" = "1" ]; then
+              echo "DEPLOY_VERSION_GATE=PASS"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "DEPLOY_VERSION_GATE=TIMEOUT"
+          exit 1
+
+      - name: Verify family 1351311 / UPC 240816 SAP movement hierarchy
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=240816&lightweight=true" -o /tmp/quick.json
+          python - <<'PY'
+          import json
+          from decimal import Decimal
+
+          p=json.load(open('/tmp/quick.json', encoding='utf-8'))
+          rows=p.get('rows') or []
+          def digits(v):
+              s=''.join(ch for ch in str(v or '') if ch.isdigit()).lstrip('0')
+              return s
+          target=next((r for r in rows if digits(r.get('upc'))=='24081600000'), None)
+          if not target:
+              raise SystemExit('UPC_240816_NOT_RETURNED')
+
+          family_total=target.get('family_group_movement_7d')
+          family_uom=str(target.get('family_group_movement_uom') or '').upper()
+          legacy_total=target.get('family_qty_7d')
+          legacy_uom=str(target.get('family_qty_uom') or '').upper()
+          if family_total is None:
+              raise SystemExit('FAMILY_GROUP_MOVEMENT_MISSING')
+          if legacy_total is None:
+              raise SystemExit('LEGACY_FAMILY_MOVEMENT_MISSING')
+          if family_uom != legacy_uom:
+              raise SystemExit(f'FAMILY_UOM_MISMATCH {family_uom} != {legacy_uom}')
+          if abs(Decimal(str(family_total))-Decimal(str(legacy_total))) > Decimal('0.0001'):
+              raise SystemExit(
+                  f'FAMILY_TOTAL_MISMATCH group={family_total} legacy={legacy_total} {family_uom}'
+              )
+
+          articles=target.get('receiving_articles') or []
+          active=[
+              {
+                  'article_number':a.get('article_number'),
+                  'article_description':a.get('article_description'),
+                  'movement_7d':a.get('movement_7d'),
+                  'movement_uom':a.get('movement_uom'),
+                  'mapping_status':a.get('mapping_status'),
+                  'lineage_basis':a.get('lineage_basis'),
+              }
+              for a in articles
+              if a.get('movement_7d') is not None
+              and abs(Decimal(str(a.get('movement_7d')))) > Decimal('0')
+          ]
+          assigned=str(target.get('receiving_article') or '')
+          assigned_row=next(
+              (a for a in articles if str(a.get('article_number') or '')==assigned),
+              None,
+          )
+          summary={
+              'upc':target.get('upc'),
+              'upc_pos_qty_7d':target.get('qty_7d'),
+              'family_article':target.get('family_article'),
+              'family_group_movement_7d':family_total,
+              'family_group_movement_uom':family_uom,
+              'legacy_family_movement_7d':legacy_total,
+              'assigned_sap_selling_article':assigned or None,
+              'assigned_article_movement_7d':(
+                  assigned_row.get('movement_7d') if assigned_row else None
+              ),
+              'assigned_article_movement_uom':(
+                  assigned_row.get('movement_uom') if assigned_row else None
+              ),
+              'active_sap_selling_articles':active,
+              'all_sap_articles':articles,
+              'rules':p.get('rules'),
+          }
+          print(json.dumps(summary, indent=2, default=str))
+          if not active:
+              raise SystemExit('NO_ACTIVE_SAP_SELLING_ARTICLE_DISCOVERED')
+          print('FAMILY_SAP_MOVEMENT_REGRESSION=PASS')
+          PY
