@@ -138,6 +138,21 @@ def confirmed_operational_uom_basis(cur, family_id: int | None) -> dict[str, Any
             return dict(basis)
     return None
 
+USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930 = (
+    # Shrimp Family 1351311 — confirmed directly from Article Manual Table 1.
+    # These are operational Selling-Article relationships, not Receiving-Article
+    # ownership and not fuzzy description matches.
+    {"family_article":"1351311","ean_upc":"4816","selling_article":"1351311",
+     "source_note":"USER_CONFIRMED_20260930: UPC 4816 Selling Article=1351311; POS UOM EA; 1 EA=4 LB."},
+    {"family_article":"1351311","ean_upc":"24081600000","selling_article":"1351311",
+     "source_note":"USER_CONFIRMED_20260930: UPC 24081600000 Selling Article=1351311."},
+    {"family_article":"1351311","ean_upc":"24581600000","selling_article":"1351311",
+     "source_note":"USER_CONFIRMED_20260930: UPC 24581600000 Selling Article=1351311."},
+    {"family_article":"1351311","ean_upc":"24981600000","selling_article":"2045590",
+     "source_note":"USER_CONFIRMED_20260930: UPC 24981600000 Selling Article=2045590."},
+)
+
+
 SEED_OVERRIDES = (
     {
         "ean_upc": "4816",
