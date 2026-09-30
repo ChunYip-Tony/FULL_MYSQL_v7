@@ -1089,11 +1089,20 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
     }
 
 
-def _family_receipt_events(cur, family_id: int, data_day_limit: int = 180) -> list[dict[str,Any]]:
-    days=source_data_days(
-        cur,"movement",limit=max(1,min(int(data_day_limit),365)),
-        up_to=completed_through_date(),
-    )
+def _family_receipt_events(
+    cur,
+    family_id: int,
+    data_day_limit: int = 180,
+    data_days: list[dict[str,Any]]|None=None,
+) -> list[dict[str,Any]]:
+    if data_days is None:
+        days=source_data_days(
+            cur,"movement",limit=max(1,min(int(data_day_limit),365)),
+            up_to=completed_through_date(),
+        )
+    else:
+        requested=max(1,min(int(data_day_limit),365))
+        days=sorted(list(data_days),key=lambda x:x["date"])[-requested:]
     canonical={x["date"]:int(x["file_id"]) for x in days}
     if not canonical:
         return []
@@ -1140,13 +1149,18 @@ def _family_receipt_events(cur, family_id: int, data_day_limit: int = 180) -> li
 
         entry_uoms={str(x.get("entry_uom_code") or "").upper() for x in chosen if x.get("entry_uom_code")}
         base_uoms={str(x.get("base_uom_code") or "").upper() for x in chosen if x.get("base_uom_code")}
+        base_qty=None; base_uom=None
+        if len(base_uoms)==1 and any(x.get("base_quantity") is not None for x in chosen):
+            base_qty=sum((_d(x.get("base_quantity")) for x in chosen),Decimal("0"))
+            base_uom=next(iter(base_uoms))
+
         qty=None; uom=None; qty_basis=None
         if len(entry_uoms)==1 and any(x.get("entry_quantity") is not None for x in chosen):
             qty=sum((_d(x.get("entry_quantity")) for x in chosen),Decimal("0"))
             uom=next(iter(entry_uoms)); qty_basis="ENTRY"
-        elif len(base_uoms)==1 and any(x.get("base_quantity") is not None for x in chosen):
-            qty=sum((_d(x.get("base_quantity")) for x in chosen),Decimal("0"))
-            uom=next(iter(base_uoms)); qty_basis="BASE"
+        elif base_qty is not None:
+            qty=base_qty
+            uom=base_uom; qty_basis="BASE"
 
         events.append({
             "posting_date":key[0],
@@ -1157,6 +1171,8 @@ def _family_receipt_events(cur, family_id: int, data_day_limit: int = 180) -> li
             "vendor_code":next((x.get("vendor_code") for x in chosen if x.get("vendor_code")),None),
             "receipt_quantity":qty,
             "receipt_uom":uom,
+            "base_receipt_quantity":base_qty,
+            "base_receipt_uom":base_uom,
             "quantity_basis":qty_basis,
             "receipt_stage_basis":basis,
             "receipt_status":(
@@ -1969,8 +1985,14 @@ def _family_sales_series(
     cur,
     upc_rows: list[dict[str,Any]],
     supported_day_count: int,
+    data_days: list[dict[str,Any]]|None=None,
 ) -> dict[str,Any]:
-    days=_canonical_sales_days(cur,limit=max(1,min(int(supported_day_count),365)))
+    requested=max(1,min(int(supported_day_count),365))
+    if data_days is None:
+        days=_canonical_sales_days(cur,limit=requested)
+    else:
+        ordered=sorted(list(data_days),key=lambda x:x["date"])
+        days=ordered[-requested:]
     selling_uoms={
         str(x.get("selling_uom") or "").strip().upper()
         for x in upc_rows if x.get("selling_uom")
@@ -2019,12 +2041,37 @@ def _family_sales_series(
     }
 
 
+def _family_sales_tail(
+    series: dict[str,Any],
+    supported_day_count: int,
+) -> dict[str,Any]:
+    requested=max(1,min(int(supported_day_count),365))
+    if series.get("status")!="READY":
+        return {
+            **series,
+            "supported_day_count":min(int(series.get("supported_day_count") or 0),requested),
+        }
+    rows=sorted(list(series.get("rows") or []),key=lambda x:x["date"])[-requested:]
+    qty=sum((_d(x.get("sold_quantity")) for x in rows),Decimal("0"))
+    n=len(rows)
+    return {
+        "status":"READY",
+        "uom":series.get("uom"),
+        "supported_day_count":n,
+        "coverage_status":"COMPLETE" if n>=requested else "PARTIAL",
+        "rows":rows,
+        "sold_quantity":qty,
+        "velocity_per_supported_day":(qty/Decimal(n) if n else None),
+    }
+
+
 def _family_regular_baseline(
     cur,
     upc_rows: list[dict[str,Any]],
     supported_day_limit: int=28,
+    prepared_series: dict[str,Any]|None=None,
 ) -> dict[str,Any]:
-    s=_family_sales_series(cur,upc_rows,supported_day_limit)
+    s=prepared_series if prepared_series is not None else _family_sales_series(cur,upc_rows,supported_day_limit)
     if s.get("status")!="READY":
         return {
             **s,
@@ -2263,8 +2310,8 @@ def bulk_ordering_suggestions(
             if not rows:
                 continue
 
-            m28=_family_sales_series(cur,rows,28)
-            m7=_family_sales_series(cur,rows,7)
+            m28=_family_sales_series(cur,rows,28,data_days=shared_sales_days_28)
+            m7=_family_sales_tail(m28,7)
             if m28.get("status")!="READY" or m7.get("status")!="READY":
                 skipped.append({
                     "family_id":fid,
@@ -2303,7 +2350,7 @@ def bulk_ordering_suggestions(
             if not active_28 or dos is None or dos>=Decimal("7"):
                 continue
 
-            regular=_family_regular_baseline(cur,rows,28)
+            regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
             reg_vel=regular.get("regular_velocity_per_supported_day")
             if reg_vel is None:
                 skipped.append({
@@ -3029,6 +3076,10 @@ def bulk_ordering_suggestions(
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
+        # One canonical 28-day window is reused across every family. This
+        # prevents the Ordering overview from re-reading the same POS coverage
+        # and UPC history three times per family (28D, 7D, regular baseline).
+        shared_sales_days_28=_canonical_sales_days(cur,limit=28)
 
         # Resolve every selected promotion item to one canonical UPC.
         promo_by_family: dict[int,list[dict[str,Any]]] = {}
