@@ -75,7 +75,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-modgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
   .m-module{min-height:112px;border:1px solid var(--line);background:#fff;border-radius:17px;padding:14px;text-align:left;box-shadow:0 4px 14px rgba(9,49,54,.025)}
   .m-module:active,.m-row:active{transform:scale(.987)}
-  .m-module .ico{display:block;font-size:23px;line-height:1}.m-module b{display:block;font-size:15px;line-height:1.18;margin-top:10px}.m-module span:last-child{display:block;font-size:10px;line-height:1.35;color:var(--muted);margin-top:5px}
+  .m-module .ico{display:block;font-size:23px;line-height:1}.m-module b{display:block;font-size:15px;line-height:1.18;margin-top:10px}.m-module .m-desc{display:block;font-size:10px;line-height:1.35;color:var(--muted);margin-top:5px}
   .m-module-meta{font-weight:850;color:var(--sea)!important}
 
   .m-pagehead{display:flex;align-items:center;gap:10px;margin:2px 0 10px}
@@ -125,7 +125,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-spotlight b{font-size:14px}.m-spotlight em{font-size:9px}
   .m-modgrid{gap:8px;margin-top:9px}
   .m-module{min-height:102px;border-radius:15px;padding:12px;box-shadow:0 5px 18px rgba(9,49,54,.035);transition:transform .08s ease,border-color .08s ease,background .08s ease}
-  .m-module .ico{font-size:21px}.m-module b{font-size:14px;margin-top:8px}.m-module span:last-child{font-size:9px;margin-top:4px}
+  .m-module .ico{font-size:21px}.m-module b{font-size:14px;margin-top:8px}.m-module .m-desc{font-size:9px;margin-top:4px}
   .m-module:active,.m-row:active,.m-spotlight:active{transform:scale(.985);background:#fbfdfc}
   .m-pagehead{position:sticky;top:0;z-index:12;margin:0 -1px 9px;padding:7px 1px;background:linear-gradient(180deg,#f5f8f7 82%,rgba(245,248,247,0));backdrop-filter:blur(8px)}
   .m-back{width:44px;height:44px;min-width:44px;border-radius:12px;box-shadow:0 2px 8px rgba(9,49,54,.035)}
@@ -214,7 +214,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     font-size:21px;background:#eaf6f4
   }
   .m-module b{font-size:15px;margin-top:11px;letter-spacing:-.015em}
-  .m-module span:last-child{font-size:10px}
+  .m-module .m-desc{font-size:10px}
   .m-module:nth-child(1) .ico{background:#e8f6ee}
   .m-module:nth-child(2) .ico{background:#fff4df}
   .m-module:nth-child(3) .ico{background:#edf3ff}
@@ -340,7 +340,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     font-size:17px;line-height:1.18;margin:0;
     padding-right:25px;letter-spacing:-.02em
   }
-  .m-module span:last-child{
+  .m-module .m-desc{
     font-size:11px;line-height:1.42;margin-top:8px;padding:0 5px 0 0;
     display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden
   }
@@ -404,7 +404,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     margin-bottom:clamp(10px,3vw,16px)
   }
   .m-module b{font-size:clamp(14px,4.1vw,17px)}
-  .m-module span:last-child{font-size:clamp(9px,2.7vw,11px);overflow-wrap:anywhere}
+  .m-module .m-desc{font-size:clamp(9px,2.7vw,11px);overflow-wrap:anywhere}
   .m-brand strong{font-size:clamp(20px,6vw,24px)}
   .m-brand span{font-size:clamp(9px,2.7vw,11px)}
   .m-bottomnav{width:auto}
@@ -414,7 +414,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .m-module .ico{width:40px;height:40px;font-size:20px;margin-bottom:9px}
     .m-module:after{right:8px;top:8px;width:25px;height:25px}
     .m-module b{font-size:14px}
-    .m-module span:last-child{font-size:9px;line-height:1.32}
+    .m-module .m-desc{font-size:9px;line-height:1.32}
     .m-status{padding:5px 8px;font-size:9px}
   }
 
@@ -468,7 +468,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .mobilehome.on .m-module b{
     font-size:clamp(13px,2.05dvh,17px);
   }
-  .mobilehome.on .m-module span:last-child{
+  .mobilehome.on .m-module .m-desc{
     font-size:clamp(8px,1.35dvh,11px);
     line-height:1.3;
     margin-top:clamp(4px,.8dvh,8px);
@@ -481,7 +481,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .mobilehome.on .m-module{padding:8px 9px 12px}
     .mobilehome.on .m-module .ico{width:36px;height:36px;font-size:18px;margin-bottom:6px}
     .mobilehome.on .m-module b{font-size:13px}
-    .mobilehome.on .m-module span:last-child{font-size:8px;margin-top:3px}
+    .mobilehome.on .m-module .m-desc{font-size:8px;margin-top:3px}
   }
 
   /* Final Home polish: stronger header and vertically balanced cards */
@@ -554,7 +554,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     font-weight:950;
     letter-spacing:-.025em;
   }
-  .mobilehome.on .m-module span:last-child{
+  .mobilehome.on .m-module .m-desc{
     color:#6a7f80;
     font-weight:650;
   }
@@ -690,7 +690,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     font-weight:950!important;
     letter-spacing:-.025em!important;
   }
-  .mobilehome.on .m-module span:last-child{
+  .mobilehome.on .m-module .m-desc{
     color:#6b7f81!important;
     font-weight:650!important;
   }
@@ -723,7 +723,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     font-size:clamp(15px,2.3dvh,19px)!important;
     line-height:1.12!important;
   }
-  .mobilehome.on .m-module span:last-child{
+  .mobilehome.on .m-module .m-desc{
     font-size:clamp(10px,1.55dvh,12px)!important;
     line-height:1.28!important;
     -webkit-line-clamp:2!important;
@@ -731,8 +731,120 @@ BACKOFFICE_HTML = r'''<!doctype html>
   @media(max-height:700px) and (max-width:759px){
     .mobilehome.on .m-brand strong{font-size:22px!important}
     .mobilehome.on .m-module b{font-size:15px!important}
-    .mobilehome.on .m-module span:last-child{font-size:10px!important}
+    .mobilehome.on .m-module .m-desc{font-size:10px!important}
     .mobilehome.on .m-status{font-size:10px!important}
+  }
+
+
+  /* Mock v2: premium seafood-market display cards */
+  .mobilehome.on .m-topbar{
+    min-height:clamp(92px,12.5dvh,118px);
+    align-items:flex-start;
+    overflow:hidden;
+  }
+  .mobilehome.on .m-brand{position:relative;z-index:3;min-width:0}
+  .mobilehome.on .m-market-title{
+    padding:0!important;
+    margin-top:7px!important;
+    border:0!important;
+    background:transparent!important;
+    backdrop-filter:none!important;
+    color:#dff9f6!important;
+    font-size:clamp(12px,1.7dvh,15px)!important;
+    letter-spacing:.18em!important;
+    font-weight:850!important;
+  }
+  .mobilehome.on .m-storeline{
+    display:block;
+    margin-top:6px;
+    color:rgba(255,255,255,.82);
+    font-size:clamp(10px,1.4dvh,12px);
+    font-weight:700;
+    letter-spacing:.01em;
+  }
+  .mobilehome.on .m-header-fish{
+    position:absolute;
+    right:clamp(52px,14vw,72px);
+    bottom:-18px;
+    z-index:1;
+    font-size:clamp(62px,10dvh,88px);
+    line-height:1;
+    opacity:.30;
+    transform:rotate(-4deg);
+    filter:saturate(.8) drop-shadow(0 8px 12px rgba(0,0,0,.10));
+    pointer-events:none;
+  }
+  .mobilehome.on .m-status{position:relative;z-index:4}
+
+  .mobilehome.on .m-module{
+    justify-content:flex-start!important;
+    padding-top:clamp(12px,1.75dvh,17px)!important;
+    padding-bottom:clamp(36px,5.8dvh,54px)!important;
+    isolation:isolate;
+  }
+  .mobilehome.on .m-module .ico{
+    position:relative;
+    z-index:4;
+    margin-bottom:clamp(8px,1.25dvh,12px)!important;
+  }
+  .mobilehome.on .m-module b{
+    position:relative;
+    z-index:4;
+    max-width:88%;
+  }
+  .mobilehome.on .m-module .m-desc{
+    position:relative;
+    z-index:4;
+    max-width:82%;
+    margin-top:clamp(5px,.8dvh,8px)!important;
+  }
+  .mobilehome.on .m-module:before{
+    z-index:1;
+    height:clamp(29px,5.2dvh,46px)!important;
+    bottom:-2px!important;
+    border:0!important;
+    border-radius:48% 55% 19px 19px / 48% 46% 19px 19px!important;
+    background:
+      linear-gradient(135deg,var(--market-accent),color-mix(in srgb,var(--market-accent) 45%,white))!important;
+    opacity:.82!important;
+    clip-path:polygon(0 46%,18% 61%,39% 46%,62% 65%,81% 45%,100% 57%,100% 100%,0 100%);
+  }
+  .mobilehome.on .m-module:after{
+    z-index:6;
+  }
+  .mobilehome.on .seafood-art{
+    position:absolute;
+    right:clamp(8px,2.2vw,13px);
+    bottom:clamp(16px,2.5dvh,23px);
+    z-index:3;
+    display:block;
+    font-size:clamp(38px,6.8dvh,62px);
+    line-height:1;
+    transform:rotate(-6deg);
+    filter:drop-shadow(0 8px 9px rgba(8,64,72,.14));
+    pointer-events:none;
+  }
+  .mobilehome.on .m-module:nth-child(even) .seafood-art{transform:rotate(5deg)}
+  .mobilehome.on .m-module:nth-child(1) .seafood-art{font-size:clamp(42px,7.4dvh,68px)}
+  .mobilehome.on .m-module:nth-child(2) .seafood-art{font-size:clamp(40px,7.1dvh,65px)}
+  .mobilehome.on .m-module:nth-child(4) .seafood-art{font-size:clamp(43px,7.5dvh,70px)}
+  .mobilehome.on .m-module:nth-child(5) .seafood-art{font-size:clamp(39px,6.9dvh,64px)}
+  .mobilehome.on .m-module:nth-child(6) .seafood-art{font-size:clamp(40px,7dvh,66px)}
+
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on .m-topbar{min-height:72px}
+    .mobilehome.on .m-storeline{font-size:9px;margin-top:3px}
+    .mobilehome.on .m-market-title{font-size:10px!important;margin-top:4px!important}
+    .mobilehome.on .m-header-fish{font-size:48px;right:50px;bottom:-12px}
+    .mobilehome.on .m-module{
+      padding-top:8px!important;
+      padding-bottom:29px!important;
+    }
+    .mobilehome.on .seafood-art{
+      font-size:34px!important;
+      bottom:11px;
+    }
+    .mobilehome.on .m-module:before{height:26px!important}
   }
 
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
@@ -784,16 +896,21 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </header>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
   <div class="m-topbar">
-    <div class="m-brand"><strong>FULL MYSQL</strong><span>🐟 SEAFOOD MARKET · v__VERSION__</span></div>
+    <div class="m-brand">
+      <strong>FULL MYSQL</strong>
+      <span class="m-market-title">SEAFOOD MARKET · v__VERSION__</span>
+      <small class="m-storeline">Store #1032 · Las Vegas</small>
+    </div>
+    <span class="m-header-fish" aria-hidden="true">🐟</span>
     <span id="mServicePill" class="m-status">Checking…</span>
   </div>
   <div class="m-modgrid">
-    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span>Check price, cost and recent sales</span></button>
-    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">💲</span><b>Price Change</b><span>Review and accept price changes</span></button>
-    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span>Analyze sales, velocity and GP$</span></button>
-    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span>Review family-level order suggestions</span></button>
-    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span>View stock, OH and DOS</span></button>
-    <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span id="mDataModuleMeta">Uploads, QA, processing and data health</span></button>
+    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span class="m-desc">Check price, cost and recent sales</span><span class="seafood-art" aria-hidden="true">🐟</span></button>
+    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">🏷️</span><b>Price Change</b><span class="m-desc">Review and accept price changes</span><span class="seafood-art" aria-hidden="true">🦐</span></button>
+    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span class="m-desc">Analyze sales, velocity and GP$</span><span class="seafood-art" aria-hidden="true">🐚</span></button>
+    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span class="m-desc">Review family-level order suggestions</span><span class="seafood-art" aria-hidden="true">🦀</span></button>
+    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span class="m-desc">View stock, OH and DOS</span><span class="seafood-art" aria-hidden="true">🦪</span></button>
+    <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span class="m-desc" id="mDataModuleMeta">Uploads, QA, processing and data health</span><span class="seafood-art" aria-hidden="true">🐠</span></button>
   </div>
 </section>
 
