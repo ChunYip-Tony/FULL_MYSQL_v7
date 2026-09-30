@@ -940,6 +940,17 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-history7-row>div:nth-child(4),.m-history7-row>div:nth-child(5){grid-column:auto}
   .m-trendwrap{margin-left:-3px;margin-right:-3px}
 }
+
+/* Quick Check live-search family grouping */
+.m-quicktools.on{display:grid!important;grid-template-columns:1fr!important}
+.m-quicktools>input{width:100%;min-height:52px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;font-size:17px;background:#fff}
+.m-family-group{display:grid;gap:7px;margin-bottom:4px}
+.m-family-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;border:1px solid #eadfae;border-radius:15px;background:#fff9dd}
+.m-family-head small,.m-family-velocity small{display:block;font-size:9px;color:#7e7455;font-weight:900;letter-spacing:.04em}
+.m-family-head b{display:block;font-size:16px;line-height:1.2;margin-top:2px;color:#403b2a}
+.m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:#1a6a72}
+.m-family-upcs{display:grid;gap:7px;padding-left:5px}
+.m-family-upcs .m-row{border-left:4px solid #b7ddd7}
 </style>
 </head>
 <body>
@@ -982,8 +993,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   <div class="m-pagehead"><button id="mobileListBack" class="m-back" type="button" aria-label="Back to Home">←</button><div><div id="mobileListTitle" class="m-pagetitle">Backoffice</div><div id="mobileListSub" class="m-pagesub"></div></div></div>
   <div id="mobileListChips" class="m-chipbar"></div>
   <div id="mobileQuickTools" class="m-quicktools">
-    <div class="m-quickrow"><input id="mobileQuickSearch" placeholder="UPC / Article / Family / Item"><button id="mobileQuickSearchBtn" type="button" class="btn primary">Search</button></div>
-    <button id="mobileQuickClear" type="button" class="btn secondary">Clear Search</button>
+    <input id="mobileQuickSearch" type="search" autocomplete="off" enterkeyhint="search" placeholder="Type UPC / Article / Family / Item">
+    <div class="m-hint">Results update automatically · grouped by Family · highest recent velocity first</div>
   </div>
   <div id="mobileQaTools" class="m-qatools"><input id="mobileQaSearch" placeholder="Search UPC / Article / item / reason"><select id="mobileQaSort"><option value="oh_vel_desc">OH ↓, then Velocity ↓</option><option value="vel_oh_desc">Velocity ↓, then OH ↓</option><option value="severity">Severity</option><option value="name">Item A → Z</option><option value="upc">UPC</option></select></div>
   <div id="mobilePerformanceTools" class="m-perftools">
@@ -1238,6 +1249,8 @@ window.addEventListener('hashchange',()=>restoreRoute());
 const mobileMedia=window.matchMedia('(max-width:759px)');
 const mobileState={module:null,parentModule:null,filter:'all',query:'',freshness:[]};
 let mobilePendingTopModule=null;
+let mobileQuickSearchTimer=null;
+let mobileQuickSearchSeq=0;
 const MOBILE_HISTORY_KEY='fullmysql_mobile_v1';
 let mobileHistoryReady=false;
 let mobileRestoringHistory=false;
@@ -1307,19 +1320,37 @@ function mobileRenderQuickTools(){
  const box=mNode('mobileQuickTools');if(!box)return;
  const on=mobileState.module==='quick';box.classList.toggle('on',on);
  if(!on)return;
- const input=mNode('mobileQuickSearch'),search=mNode('mobileQuickSearchBtn'),clear=mNode('mobileQuickClear');
+ const input=mNode('mobileQuickSearch');
  input.value=state.inventorySearch||mobileState.query||'';
  const run=async()=>{
-   state.inventorySearch=input.value.trim();
-   mobileState.query=state.inventorySearch;
-   await loadInventory();
-   mobileRenderList();
+   const q=input.value.trim();
+   state.inventorySearch=q;
+   mobileState.query=q;
+   const seq=++mobileQuickSearchSeq;
+   mNode('mobileListSub').textContent=q?'Searching: '+q:'Most actively selling Families first';
+   mNode('mobileListContent').innerHTML='<div class="m-loading">'+(q?'Searching…':'Loading recent activity…')+'</div>';
+   try{
+     await loadInventory();
+     if(seq!==mobileQuickSearchSeq)return;
+     mobileRenderList();
+     mNode('mobileListSub').textContent=q
+       ? 'Results for “'+q+'” · Family grouped · 7D velocity ↓'
+       : 'Family grouped · recent 7D velocity ↓';
+   }catch(e){
+     if(seq!==mobileQuickSearchSeq)return;
+     mNode('mobileListContent').innerHTML='<div class="m-error">'+esc(e.message||String(e))+'</div>';
+   }
  };
- search.onclick=run;
- input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();run()}};
- clear.onclick=async()=>{
-   input.value='';state.inventorySearch='';mobileState.query='';
-   await loadInventory();mobileRenderList();
+ input.oninput=()=>{
+   clearTimeout(mobileQuickSearchTimer);
+   mobileQuickSearchTimer=setTimeout(run,220);
+ };
+ input.onkeydown=e=>{
+   if(e.key==='Enter'){
+     e.preventDefault();
+     clearTimeout(mobileQuickSearchTimer);
+     run();
+   }
  };
 }
 function mobileRenderQaTools(){
@@ -1511,11 +1542,55 @@ function mobileDataHealthRow(r){
   const chips=items.map(([label,x])=>{const st=mobileDataHealthStatus(x);return '<span class="m-dh-chip '+st.cls+'"><span>'+esc(label)+'</span><b>'+esc(st.text)+'</b></span>'}).join('');
   return '<button type="button" class="m-row" data-mobile-key="date:'+esc(r.date)+'"><div class="m-row-main"><div class="m-row-copy"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><div class="m-row-code">'+esc(r.date||'—')+'</div><span class="m-badge '+mobileBadgeClass(overall)+'">'+esc(overall||'INFO')+'</span></div><div class="m-row-name">'+esc(r.weekday||'')+'</div><div class="m-dh-grid">'+chips+'</div></div><span class="m-arrow">›</span></div></button>';
 }
+function mobileQuickFamilyGroups(rows){
+  const groups=new Map();
+  (rows||[]).forEach(r=>{
+    const key=String(r.family_id??r.family_article??('UPC:'+String(r.upc||'')));
+    if(!groups.has(key))groups.set(key,{
+      key,
+      family_id:r.family_id,
+      family_article:r.family_article,
+      family_name:r.family_name||'Unmapped Family',
+      category:r.category||'',
+      rows:[],
+      max_velocity:Number.NEGATIVE_INFINITY,
+      qty_7d:0
+    });
+    const g=groups.get(key),v=Number(r.velocity_7d);
+    g.rows.push(r);
+    if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
+    g.qty_7d+=Number(r.qty_7d||0);
+  });
+  const out=[...groups.values()];
+  out.forEach(g=>g.rows.sort((a,b)=>{
+    const av=Number(a.velocity_7d),bv=Number(b.velocity_7d);
+    const aa=Number.isFinite(av)?av:Number.NEGATIVE_INFINITY;
+    const bb=Number.isFinite(bv)?bv:Number.NEGATIVE_INFINITY;
+    return bb-aa||Number(b.qty_7d||0)-Number(a.qty_7d||0)||String(a.upc||'').localeCompare(String(b.upc||''));
+  }));
+  out.sort((a,b)=>b.max_velocity-a.max_velocity||b.qty_7d-a.qty_7d||String(a.family_name||'').localeCompare(String(b.family_name||'')));
+  return out;
+}
+function mobileQuickGroupedHtml(rows){
+  return mobileQuickFamilyGroups(rows).map(g=>{
+    const vel=Number.isFinite(g.max_velocity)?fmt(g.max_velocity):'—';
+    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Top 7D Vel</small><b>'+esc(vel)+'/day</b></div></div>';
+    const children=g.rows.map(r=>mobileRow(
+      String(r.upc||''),
+      r.upc||r.family_article,
+      r.name||r.family_name,
+      '7D Vel '+fmt(r.velocity_7d)+' '+(r.selling_uom||'unit')+'/day · '+fmt(r.qty_7d)+' 7D · '+money(r.price)+' '+(r.price_type||'')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''),
+      r.readiness||r.category,
+      r.chinese_name||''
+    )).join('');
+    return '<section class="m-family-group">'+header+'<div class="m-family-upcs">'+children+'</div></section>';
+  }).join('');
+}
 function mobileRenderList(){
   const box=mNode('mobileListContent');if(!box)return;
   const rows=mobileRows();let html='';
   if(mobileState.module==='quick'){
-    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc||r.family_article,r.name||r.family_name,(r.family_article?'Family '+r.family_article+' · ':'')+fmt(r.qty_7d)+' 7D · '+money(r.price)+' '+(r.price_type||'')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''),r.readiness||r.category,r.chinese_name||'')).join('');
+    html=mobileQuickGroupedHtml(rows);
   }else if(mobileState.module==='qa'){
     html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,'OH '+fmt(cur.current_oh)+' '+(cur.current_oh_uom||'')+' · 7D Vel '+fmt(cur.upc_velocity_7d)+'/'+(cur.selling_uom||'unit')+' · '+qaFixKindLabel(x.fix_kind)+' · '+(x.issue_summary||''),x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
   }else if(mobileState.module==='price'){
