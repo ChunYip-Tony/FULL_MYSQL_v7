@@ -33,36 +33,31 @@ def _fallback_selling_article_compatible(
     article_number: str,
     article_description: str,
 ) -> bool:
-    """Reject impossible Seafood UPC -> Selling Article heuristic matches.
+    """Reject only deterministic Seafood fallback channel conflicts.
 
-    Exact Article Manual or user-confirmed mappings are resolved before this
-    helper. These restrictions apply only to fallback scoring.
+    Exact Article Manual / user-confirmed mappings are resolved before this
+    helper. Fallback guards are intentionally conservative: 240 and 245 are
+    regular selling channels and cannot inherit another structural channel or a
+    SERVICE article. 249 is not hard-restricted because valid service lineage
+    can legitimately resolve to several SAP Article number families (1549xxx,
+    20xxxxx, Family/Main, etc.) when supported by 317/318 or other evidence.
     """
     p = str(prefix or "")
     art = str(article_number or "")
     raw = str(article_description or "").upper()
     desc = " ".join("".join(ch if ch.isalnum() else " " for ch in raw).split())
-    is_service_desc = ("FRIED" in desc) or ("SERVICE" in desc)
+    is_service_desc = "SERVICE" in desc
 
-    structural_prefix = None
-    if art.startswith("1540"):
-        structural_prefix = "240"
-    elif art.startswith("1545"):
-        structural_prefix = "245"
-    elif art.startswith("1549"):
-        structural_prefix = "249"
-
-    if structural_prefix and p in {"240", "245", "249"}:
-        if structural_prefix != p:
+    if p == "240":
+        if art.startswith("1545") or art.startswith("1549"):
+            return False
+        if is_service_desc:
             return False
 
-    if p in {"240", "245"} and is_service_desc:
-        return False
-
-    if p == "249":
-        if art.startswith("1549"):
-            return True
-        if not is_service_desc:
+    if p == "245":
+        if art.startswith("1540") or art.startswith("1549"):
+            return False
+        if is_service_desc:
             return False
 
     return True
