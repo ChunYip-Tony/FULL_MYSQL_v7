@@ -2015,8 +2015,8 @@ function syncRouteHash(view,dbTab=null,{replace=false}={}){
 }
 function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
   const actualView=view==='quick'?'inventory':view;
-  $('.view').forEach(x=>x.classList.toggle('on',x.id===actualView));
-  $('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
+  document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id===actualView));
+  document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
   const invTitle=document.querySelector('#inventory .title');
   const invSub=document.querySelector('#inventory .sub');
   if(invTitle)invTitle.textContent=view==='quick'?'Quick Check':'Inventory Ledger';
@@ -3598,8 +3598,8 @@ function renderInventory(){
     return '<tr class="pair-subgroup-head"><td colspan="11">240 / 249 SUBGROUP · Family '+esc(fam)+'</td></tr>'+
       rowHtml(unit.rows[0],'pair-subgroup-main')+rowHtml(unit.rows[1],'pair-subgroup-service');
   }).join('')||`<tr><td colspan="11" class="empty">${state.inventorySearch?'No matching rows after current Inventory filters for: '+esc(state.inventorySearch):'No inventory rows match the current filters.'}</td></tr>`;
-  $('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset));
-  $('.quickdetailbtn').forEach(b=>b.onclick=()=>openDesktopQuickDetail(b.dataset.upc));
+  document.querySelectorAll('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset));
+  document.querySelectorAll('.quickdetailbtn').forEach(b=>b.onclick=()=>openDesktopQuickDetail(b.dataset.upc));
 }
 $$('.invfilter').forEach(b=>b.onclick=()=>{state.invCat=b.dataset.cat;$$('.invfilter').forEach(x=>x.classList.toggle('on',x===b));loadInventory()});
 $('#invStatusFilter').onchange=e=>{state.invStatus=e.target.value;renderInventory()};
@@ -4565,7 +4565,7 @@ function openDataHealthDetail(dateKey){
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
 
-$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('quick')};
+$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';document.querySelectorAll('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('quick')};
 async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
 })();
 </script>
