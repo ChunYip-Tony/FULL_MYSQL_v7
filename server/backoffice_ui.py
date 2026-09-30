@@ -1810,7 +1810,7 @@ function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number
 // Current Price is live serving evidence; "Report-Day Avg Sold Price" remains a separate historical POS concept.
 function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);if(Math.abs(n)<=1.5)n*=100;return Number.isFinite(n)?n.toFixed(1)+'%':esc(v)}
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
-function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
+function toast(t,ms=2200){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),Math.max(1200,Number(ms||2200)))}
 async function api(url,opts={}){
   const o={...opts};const timeoutMs=Number(o.timeoutMs||0);delete o.timeoutMs;
   let ctl=null,timer=null;
@@ -3839,20 +3839,27 @@ async function republishChatgptAnalysis(batchId,btn=null){
 
 async function rebuildPhase3(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));
-  if(!b){toast('Batch detail is not loaded yet');return}
-  if(!batchRebuildEligible(b)){toast('This batch is not currently eligible for Phase 3 rebuild');return}
+  if(!b){toast('Batch detail is not loaded yet',5000);return}
+  if(!batchRebuildEligible(b)){toast('This batch is not currently eligible for Phase 3 rebuild',5000);return}
   if(!window.confirm(`Rebuild Phase 3 / QA for Batch #${b.batch_id}?\n\nRAW files will not be re-uploaded. The current Quick Check snapshot remains active until the rebuild commits.`))return;
   const buttons=[...document.querySelectorAll(`.batch-rebuild-btn[data-batch="${CSS.escape(String(b.batch_id))}"]`)];
+  const err=$('#dbOverviewError');
+  if(err)err.innerHTML='<div class="calc"><b>Submitting Phase 3 rebuild…</b> Batch #'+esc(b.batch_id)+'</div>';
   buttons.forEach(x=>{x.disabled=true;x.textContent='Queuing Rebuild…'});
+  toast('Submitting Phase 3 rebuild for Batch #'+b.batch_id+'…',5000);
   try{
-    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id)}/rebuild-phase3`,{method:'POST'});
-    toast(d.already_active?'Phase 3 rebuild is already active':'Phase 3 / QA rebuild queued');
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id)}/rebuild-phase3`,{method:'POST',timeoutMs:15000});
+    if(err)err.innerHTML='<div class="calc"><b>'+(d.already_active?'Rebuild already active':'Rebuild queued')+'</b> · Batch #'+esc(b.batch_id)+' · Run #'+esc(d.pipeline_run_id||'—')+' · '+esc(d.status||'QUEUED')+'</div>';
+    toast(d.already_active?'Phase 3 rebuild is already active':'Phase 3 / QA rebuild queued',6000);
     closeDrawer();
     showDbTab('dboverview');
     await loadBatches();
   }catch(e){
-    toast(e.message);
+    const msg=String(e?.message||e||'Rebuild request failed');
+    if(err)err.innerHTML='<div class="error"><b>Rebuild request did not complete.</b><br>'+esc(msg)+'<br><span class="meta">Status was refreshed below. Do not keep pressing Rebuild repeatedly.</span></div>';
+    toast(msg,8000);
     buttons.forEach(x=>{x.disabled=false;x.textContent='🔄 Rebuild Phase 3 / QA'});
+    try{await loadBatches()}catch(_){}
   }
 }
 function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',status=a.processing_status||a.status||'PROCESSING';return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Started</small><b>${esc(a.upload_started_at||'—')}</b></div><div><small>Status</small><b>${esc(status)}</b></div></div></div>`}
