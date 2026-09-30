@@ -567,6 +567,143 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .mobilehome.on .m-module{border-radius:18px}
   }
 
+  /* Seafood Market Home theme */
+  body.mobile-home-active{
+    background:
+      linear-gradient(30deg,rgba(19,118,128,.025) 12%,transparent 12.5%,transparent 87%,rgba(19,118,128,.025) 87.5%,rgba(19,118,128,.025)),
+      linear-gradient(150deg,rgba(19,118,128,.025) 12%,transparent 12.5%,transparent 87%,rgba(19,118,128,.025) 87.5%,rgba(19,118,128,.025)),
+      linear-gradient(30deg,rgba(19,118,128,.025) 12%,transparent 12.5%,transparent 87%,rgba(19,118,128,.025) 87.5%,rgba(19,118,128,.025)),
+      linear-gradient(180deg,#eaf7f7 0%,#f8fbfb 39%,#f2f7f6 100%)!important;
+    background-size:28px 49px,28px 49px,28px 49px,auto!important;
+    background-position:0 0,0 0,14px 24px,0 0!important;
+  }
+  .mobilehome.on:before{
+    height:clamp(122px,16.5dvh,158px)!important;
+    border-radius:0 0 34px 34px!important;
+    background:
+      radial-gradient(ellipse at 18% -12%,rgba(134,235,232,.28) 0%,transparent 42%),
+      radial-gradient(ellipse at 92% 4%,rgba(47,173,188,.34) 0%,transparent 38%),
+      linear-gradient(145deg,#052f38 0%,#07515e 48%,#0a7480 100%)!important;
+    box-shadow:0 18px 38px rgba(4,48,57,.20)!important;
+  }
+  .mobilehome.on:after{
+    content:"";
+    position:absolute;
+    left:-4%;
+    right:-4%;
+    top:clamp(94px,12.8dvh,122px);
+    height:32px;
+    z-index:1;
+    pointer-events:none;
+    opacity:.55;
+    background:
+      radial-gradient(ellipse at 18% 100%,rgba(255,255,255,.18) 0 43%,transparent 45%),
+      radial-gradient(ellipse at 52% 100%,rgba(255,255,255,.12) 0 45%,transparent 47%),
+      radial-gradient(ellipse at 84% 100%,rgba(255,255,255,.15) 0 42%,transparent 44%);
+  }
+  .mobilehome.on .m-topbar{
+    padding-left:8px;
+    padding-right:8px;
+  }
+  .mobilehome.on .m-brand strong{
+    font-weight:950;
+    letter-spacing:-.05em;
+  }
+  .mobilehome.on .m-brand span{
+    display:inline-flex;
+    align-items:center;
+    width:max-content;
+    margin-top:6px;
+    padding:4px 8px;
+    border:1px solid rgba(200,246,242,.20);
+    border-radius:999px;
+    background:rgba(255,255,255,.10);
+    color:#d7f7f4;
+    font-weight:800;
+    letter-spacing:.04em;
+    backdrop-filter:blur(6px);
+  }
+  .mobilehome.on .m-status{
+    min-height:32px;
+    background:rgba(255,255,255,.13)!important;
+    border-color:rgba(255,255,255,.24)!important;
+    box-shadow:0 6px 18px rgba(0,0,0,.08)!important;
+    backdrop-filter:blur(8px);
+  }
+  .mobilehome.on .m-status.good:before{
+    box-shadow:0 0 0 4px rgba(131,239,184,.10),0 0 10px rgba(131,239,184,.35);
+    border-radius:50%;
+  }
+
+  .mobilehome.on .m-module{
+    --market-accent:#167f8b;
+    --market-soft:#e9f7f7;
+    --market-line:#d5eaea;
+    justify-content:center;
+    overflow:hidden;
+    background:
+      radial-gradient(circle at 96% 2%,var(--market-soft) 0%,transparent 33%),
+      linear-gradient(180deg,#ffffff 0%,#fcfefe 100%)!important;
+    border:1px solid var(--market-line)!important;
+    border-radius:21px!important;
+    box-shadow:
+      0 12px 28px rgba(5,59,67,.085),
+      0 2px 5px rgba(5,59,67,.035),
+      inset 0 1px 0 rgba(255,255,255,.95)!important;
+  }
+  .mobilehome.on .m-module:nth-child(1){--market-accent:#1677c8;--market-soft:#e8f4ff;--market-line:#d8e8f4}
+  .mobilehome.on .m-module:nth-child(2){--market-accent:#df5b55;--market-soft:#fff0ee;--market-line:#f2deda}
+  .mobilehome.on .m-module:nth-child(3){--market-accent:#20a36a;--market-soft:#e9f8ef;--market-line:#d8eddf}
+  .mobilehome.on .m-module:nth-child(4){--market-accent:#df8a28;--market-soft:#fff4e5;--market-line:#f0e2cc}
+  .mobilehome.on .m-module:nth-child(5){--market-accent:#6550c7;--market-soft:#f0ecff;--market-line:#e2dcf6}
+  .mobilehome.on .m-module:nth-child(6){--market-accent:#118f94;--market-soft:#e5f8f7;--market-line:#d3ecea}
+
+  .mobilehome.on .m-module .ico{
+    background:var(--market-soft)!important;
+    color:var(--market-accent)!important;
+    border:1px solid var(--market-line);
+    box-shadow:
+      0 7px 16px rgba(12,89,98,.08),
+      inset 0 1px 0 rgba(255,255,255,.9)!important;
+  }
+  .mobilehome.on .m-module:after{
+    color:var(--market-accent)!important;
+    background:rgba(255,255,255,.78)!important;
+    border:1px solid var(--market-line);
+    box-shadow:0 3px 9px rgba(8,70,78,.06)!important;
+  }
+  .mobilehome.on .m-module:before{
+    height:14px!important;
+    opacity:1!important;
+    border-radius:55% 55% 18px 18px / 100% 100% 18px 18px!important;
+    background:
+      repeating-linear-gradient(
+        115deg,
+        var(--market-soft) 0 12px,
+        #ffffff 12px 20px,
+        var(--market-soft) 20px 32px
+      )!important;
+    border-top:1px solid var(--market-line);
+  }
+  .mobilehome.on .m-module b{
+    color:#123c42!important;
+    font-weight:950!important;
+    letter-spacing:-.025em!important;
+  }
+  .mobilehome.on .m-module span:last-child{
+    color:#6b7f81!important;
+    font-weight:650!important;
+  }
+  .mobilehome.on .m-module:active{
+    transform:scale(.975);
+    box-shadow:0 7px 18px rgba(5,59,67,.08)!important;
+  }
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on:before{height:106px!important}
+    .mobilehome.on:after{top:78px;height:26px}
+    .mobilehome.on .m-brand span{display:none}
+  }
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -616,7 +753,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </header>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
   <div class="m-topbar">
-    <div class="m-brand"><strong>FULL MYSQL</strong><span>Backoffice · Seafood · v__VERSION__</span></div>
+    <div class="m-brand"><strong>FULL MYSQL</strong><span>🐟 SEAFOOD MARKET · v__VERSION__</span></div>
     <span id="mServicePill" class="m-status">Checking…</span>
   </div>
   <div class="m-modgrid">
