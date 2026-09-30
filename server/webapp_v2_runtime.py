@@ -20,7 +20,7 @@ from quick_check_app import (
     ensure_true_stock_tables,
 )
 from inventory_position import latest_canonical_movement_day
-from upc_aliases import service_249_source_prefix
+from upc_aliases import source_ean_predicate
 from phase3 import _current_price as _live_current_price
 
 
@@ -79,28 +79,17 @@ def _sales_lineage_pred(
     column_upc_id: str = "upc_id",
     column_ean: str = "ean_upc",
 ) -> tuple[str, tuple[Any, ...]]:
-    """Read sales by canonical UPC id OR raw POS EAN/UPC lineage."""
+    """Read sales by canonical UPC id OR every safe raw EAN/UPC alias."""
     cur.execute("SELECT ean_upc FROM selling_upc WHERE upc_id=%s LIMIT 1",(int(upc_id),))
     row=cur.fetchone()
     ean=str((row or {}).get("ean_upc") or "").strip()
     if not ean:
         return f"{column_upc_id}=%s",(int(upc_id),)
-    key=_numeric_key(ean)
-    service_prefix=service_249_source_prefix(ean)
-    numeric_only=f"({column_ean}<>'' AND {column_ean} NOT REGEXP '[^0-9]')"
-    if service_prefix:
-        return (
-            f"({column_upc_id}=%s OR {column_ean}=%s OR "
-            f"({numeric_only} AND TRIM(LEADING '0' FROM {column_ean})=%s) OR "
-            f"{column_ean} LIKE %s)",
-            (int(upc_id),ean,key,service_prefix+'%'),
-        )
+    ean_pred,ean_args=source_ean_predicate(column_ean,ean)
     return (
-        f"({column_upc_id}=%s OR {column_ean}=%s OR "
-        f"({numeric_only} AND TRIM(LEADING '0' FROM {column_ean})=%s))",
-        (int(upc_id),ean,key),
+        f"({column_upc_id}=%s OR {ean_pred})",
+        (int(upc_id),*ean_args),
     )
-
 
 def _readiness_rank(status: Any) -> int:
     return {
