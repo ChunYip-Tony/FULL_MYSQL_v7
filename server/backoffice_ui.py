@@ -40,7 +40,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav">
     <button class="navbtn on" data-view="inventory">Inventory</button>
-    <button class="navbtn" data-view="ordering">Ordering Review</button>
+    <button class="navbtn" data-view="sales">Sales Performance</button>
+    <button class="navbtn" data-view="ordering">Ordering Overview</button>
     <button class="navbtn" data-view="pricing">Pricing Review</button>
     <button class="navbtn" data-view="database">Database Center</button>
   </nav>
@@ -54,21 +55,20 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 
 <section id="ordering" class="view"><div class="panel">
- <div class="panelhead"><div><div class="title">Ordering Review</div><div class="sub">Receiving / Ordering Article + Family Article decision level. Selling UPCs appear only inside Details.</div></div><span class="pill blue">READ ONLY</span></div>
+ <div class="panelhead"><div><div class="title">Ordering Overview</div><div class="sub">Receiving / Ordering Article + Family Article decision level. Selling UPCs appear only inside Details.</div></div><span class="pill blue">READ ONLY</span></div>
  <div class="toolrow"><div class="filters"><button class="filter ordfilter on" data-filter="ALL">All</button><button class="filter ordfilter" data-filter="FRESH">Fresh</button><button class="filter ordfilter" data-filter="FROZEN">Frozen</button><button class="filter ordfilter" data-filter="ATTENTION">Needs Attention</button></div><div class="tools"><select id="orderSort" class="select"><option value="suggested">Highest Suggested Qty</option><option value="receipt">Most Recent Receipt</option><option value="oh">Lowest OH</option><option value="frequency">Ordering Frequency</option><option value="family">Family A → Z</option></select><span id="orderCount" class="pill sea">—</span></div></div>
  <div id="orderError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Family Name</th><th>Receiving Article</th><th>Family Article</th><th>OH</th><th>Last Receipt Date</th><th>Last Receipt Qty · Base UOM</th><th>Ordering Frequency</th><th>Coming Delivery Qty Suggestion</th><th></th></tr></thead><tbody id="orderRows"></tbody></table></div>
 </div></section>
 
+<section id="sales" class="view">
+<div class="panel">
+ <div class="panelhead"><div><div class="title">Sales Performance</div><div class="sub">Latest completed canonical sales date, item movement, sales, selling price, and velocity performance.</div></div><span class="pill blue">READ ONLY</span></div>
+ <div id="sellKpi" class="grid"></div><div id="sellError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Sales</th><th>Avg Sold Price</th><th>7D Vel</th><th>28D Vel</th></tr></thead><tbody id="sellRows"></tbody></table></div>
+</div>
+</section>
+
 <section id="pricing" class="view">
-  <div class="panel">
-    <div class="toolrow" style="border-bottom:1px solid var(--line)">
-      <div class="filters">
-        <button class="filter pricingtab on" data-pricingtab="pricepane">Price Suggestions</button>
-        <button class="filter pricingtab" data-pricingtab="sellpane">Sell-through</button>
-      </div>
-    </div>
-  </div>
-  <div id="pricepane" class="subview on"><div class="panel">
+<div class="panel">
  <div class="panelhead"><div><div class="title">Pricing Review</div><div class="sub">Explainable price suggestions. No staging, approval, or system price changes.</div></div><span class="pill blue">READ ONLY</span></div>
  <div class="toolrow">
    <div class="filters"><button class="filter pricefilter on" data-cat="ALL">All</button><button class="filter pricefilter" data-cat="FRESH">Fresh</button><button class="filter pricefilter" data-cat="LIVE">Live</button><button class="filter pricefilter" data-cat="FROZEN">Frozen</button></div>
@@ -95,20 +95,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
    </div>
  </div>
  <div id="priceError"></div><div class="tablewrap"><table class="table" style="min-width:1150px"><thead><tr><th>Item</th><th>UPC</th><th>Current</th><th>Candidate</th><th>Cost</th><th>GP%</th><th>7D Qty</th><th>28D Qty</th><th>Review Status</th><th>Primary Reason</th><th></th></tr></thead><tbody id="priceRows"></tbody></table></div>
-</div></div>
-  <div id="sellpane" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">Sell-through</div><div class="sub">Latest completed canonical sales date and active selling performance.</div></div><span class="pill blue">READ ONLY</span></div>
- <div id="sellKpi" class="grid"></div><div id="sellError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Sales</th><th>Avg Sold Price</th><th>7D Vel</th><th>28D Vel</th></tr></thead><tbody id="sellRows"></tbody></table></div>
-</div></div>
+</div>
 </section>
-
-
-
-
-
-
-
-
 
 <section id="database" class="view">
   <div class="panel">
@@ -171,12 +159,10 @@ function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
 async function api(url,opts={}){const r=await fetch(url,{cache:'no-store',...opts});let data=null;try{data=await r.json()}catch{data={detail:await r.text()}}if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}return data}
-function show(view){$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='ordering')loadOrders();if(view==='pricing'){showPricingTab('pricepane');loadPrices()}if(view==='database'){showDbTab('dbupload');loadBatches()}window.scrollTo({top:0,behavior:'smooth'})}
-function showPricingTab(tab){$('.subview#pricepane,.subview#sellpane').forEach(x=>x.classList.toggle('on',x.id===tab));$('.pricingtab').forEach(x=>x.classList.toggle('on',x.dataset.pricingtab===tab));if(tab==='pricepane')loadPrices();if(tab==='sellpane')loadSell()}
-function showDbTab(tab){$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));if(tab==='dbupload'||tab==='dbbatches')loadBatches();if(tab==='dbqa')loadQA();if(tab==='dbdata')loadData()}
-$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
-$('.pricingtab').forEach(b=>b.onclick=()=>showPricingTab(b.dataset.pricingtab));
-$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
+function show(view){$$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='sales')loadSell();if(view==='ordering')loadOrders();if(view==='pricing')loadPrices();if(view==='database'){showDbTab('dbupload');loadBatches()}window.scrollTo({top:0,behavior:'smooth'})}
+function showDbTab(tab){$$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));$$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));if(tab==='dbupload'||tab==='dbbatches')loadBatches();if(tab==='dbqa')loadQA();if(tab==='dbdata')loadData()}
+$$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
+$$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
 function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
