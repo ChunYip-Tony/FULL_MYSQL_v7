@@ -4566,7 +4566,7 @@ def _performance_narrative(
         f"and {int(summary.get('upcs_sold_report_date') or 0)} UPCs recorded sales on the report date. "
         f"{int(summary.get('slowing_items') or 0)} items have 7-day velocity below 80% of their 28-day rate, which identifies products where recent demand has softened. "
         f"{int(summary.get('low_gp_items') or 0)} items are below their current category GP reference. "
-        f"{int(summary.get('price_review_candidates') or 0)} items currently qualify for price review based on positive observed GP$/day opportunity; "
+        f"{int(summary.get('price_review_candidates') or 0)} items currently qualify for price review under the Company-range, 14-day GP$/day, or freshness-clearance rules; "
         "pricing actions are intentionally separated from this performance report. "
         f"Data quality also matters: {int(summary.get('ready_upcs') or 0)} UPCs are READY and "
         f"{int(summary.get('qa_hold_upcs') or 0)} are on QA HOLD. "
@@ -5098,7 +5098,7 @@ def performance_report(
             },
             {
                 "type":"PRICE_REVIEW",
-                "message":f"{summary['price_review_candidates']} items have positive GP$/day price opportunity using sales evidence through {anchor.isoformat()}.",
+                "message":f"{summary['price_review_candidates']} items are actionable under Company-range, 14-day GP$/day, or freshness-clearance pricing rules using sales evidence through {anchor.isoformat()}.",
             },
         ]
         narrative_analysis=_performance_narrative(
@@ -5110,7 +5110,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V9",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V10",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
@@ -5134,16 +5134,19 @@ def performance_report(
         "price_suggestion_rules":{
             "execution":"ANALYSIS_ONLY_NO_SAVE",
             "sales_evidence_cutoff":anchor,
-            "primary_objective":"MAXIMIZE_OBSERVED_GP_DOLLARS_PER_DAY",
+            "historical_window_supported_days":14,
+            "company_reference_rule":"RANGE_IS_MIN_TO_MAX_OF_AVAILABLE_POSITIVE_A_B_C; INCLUDE_ONLY_WHEN_CURRENT_PRICE_IS_OUTSIDE_RANGE",
+            "company_candidate_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY_WITHIN_COMPANY_RANGE; FALLBACK_CLAMP_HISTORICAL_SWEET_SPOT_TO_RANGE",
+            "no_company_reference_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY",
+            "freshness_rule":"FRESH_OR_LIVE_DOH_GT_7_USES_CLEARANCE_MODE_TO_AVOID_DUMPING",
+            "clearance_candidate_rule":"LOWER_14D_OBSERVED_PRICE_WITH_HIGHEST_SELL_THROUGH_VELOCITY; NO_INVENTED_MARKDOWN_WITHOUT_HISTORY",
             "candidate_demand_basis":"ACTUAL_HISTORICAL_SALES_RESPONSE_AT_OBSERVED_PRICE",
-            "company_price_c_rule":"HARD_BOTTOM_LINE_WHEN_AVAILABLE",
             "cost_basis":"CURRENT_AUTHORITATIVE_COST",
             "cost_caveat":"Historical daily cost lineage is not yet exposed in V2 Performance; suggestions use current authoritative cost while sales evidence is cut off at report date.",
-            "minimum_price_gap_pct":Decimal("0.03"),
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
-            "review_queue":"TOP_ACTIVE_ITEMS_ALWAYS_VISIBLE; SPECIFIC_PRICE_ONLY_WHEN_EVIDENCE_SUPPORTS_IT",
-            "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_GP_DOLLARS_PER_DAY_OPPORTUNITY_THEN_REVIEW_SCORE",
+            "review_queue":"COMPANY_RANGE_VIOLATIONS_PLUS_NO_COMPANY_14D_SWEET_SPOT_CHANGES_PLUS_FRESHNESS_CLEARANCE",
+            "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_CLEARANCE_THEN_COMPANY_RANGE_THEN_NO_COMPANY_GP_DAY",
         },
     }
 
