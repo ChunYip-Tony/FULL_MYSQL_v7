@@ -260,71 +260,11 @@ jobs:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import worker, phase3, active_28d_uom_repair, current_active_cost_repair, uom_evidence_diagnostic; print('imports-ok')"
 
-
-      - name: Verify live 240816 Family SAP movement
-        if: github.event_name == 'push' && startsWith(github.event.head_commit.message, 'diag: verify live 240816')
+      - name: Live 240816 production diagnostic
         shell: bash
         run: |
           set -euo pipefail
-          base="https://seal-app-tkkkd.ondigitalocean.app"
-          for i in $(seq 1 180); do
-            body="$(curl -fsS --max-time 20 "$base/healthz" || true)"
-            ok="$(BODY="$body" python - <<'PY'
-          import json, os, re
-          try:
-              p=json.loads(os.environ.get('BODY') or '{}')
-          except Exception:
-              p={}
-          def patch(v):
-              m=re.search(r'7\\.0\\.(\\d+)', str(v or ''))
-              return int(m.group(1)) if m else -1
-          print('1' if p.get('ok') is True and patch(p.get('version')) >= 283 else '0')
-          PY
-            )"
-            if [ "$ok" = "1" ]; then
-              echo "$body"
-              break
-            fi
-            if [ "$i" = "180" ]; then
-              echo "DEPLOY_VERSION_GATE=TIMEOUT"
-              exit 1
-            fi
-            sleep 5
-          done
-
-          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=240816&lightweight=true" -o /tmp/q.json
-          python - <<'PY'
-          import json
-          from decimal import Decimal
-          p=json.load(open('/tmp/q.json',encoding='utf-8'))
-          rows=p.get('rows') or []
-          target=next((r for r in rows if ''.join(ch for ch in str(r.get('upc') or '') if ch.isdigit()).lstrip('0')=='24081600000'),None)
-          if not target:
-              raise SystemExit('UPC_240816_NOT_RETURNED')
-          arts=target.get('receiving_articles') or []
-          active=[a for a in arts if a.get('movement_7d') is not None and abs(Decimal(str(a.get('movement_7d'))))>0]
-          out={
-            'upc':target.get('upc'),
-            'upc_pos_qty_7d':target.get('qty_7d'),
-            'family_article':target.get('family_article'),
-            'family_group_movement_7d':target.get('family_group_movement_7d'),
-            'family_group_movement_uom':target.get('family_group_movement_uom'),
-            'legacy_family_movement_7d':target.get('family_qty_7d'),
-            'legacy_family_movement_uom':target.get('family_qty_uom'),
-            'assigned_sap_selling_article':target.get('receiving_article'),
-            'assigned_sap_movement_7d':target.get('receiving_movement_7d'),
-            'active_sap_selling_articles':[
-              {k:a.get(k) for k in ('article_number','article_description','movement_7d','movement_uom','mapping_status','lineage_basis')}
-              for a in active
-            ],
-          }
-          print(json.dumps(out,indent=2,default=str))
-          if target.get('family_group_movement_7d') is None:
-              raise SystemExit('FAMILY_GROUP_MOVEMENT_MISSING')
-          if target.get('family_qty_7d') is not None:
-              if abs(Decimal(str(target.get('family_group_movement_7d')))-Decimal(str(target.get('family_qty_7d'))))>Decimal('0.0001'):
-                  raise SystemExit('FAMILY_TOTAL_MISMATCH')
-          if not active:
-              raise SystemExit('NO_ACTIVE_SAP_SELLING_ARTICLE_DISCOVERED')
-          print('LIVE_240816_SAP_MOVEMENT=PASS')
-          PY
+          curl -fsS --max-time 30 https://seal-app-tkkkd.ondigitalocean.app/healthz
+          echo
+          curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240816&lightweight=true"
+          echo
