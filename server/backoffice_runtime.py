@@ -852,7 +852,19 @@ def _manual_selling_article_map(
     family_main_by_id: dict[int, str],
     family_qrows: list[dict[str, Any]],
 ) -> dict[tuple[int, str], str]:
-    """Article Manual authority: Column D UPC -> Column B Selling Article."""
+    """Resolve operational UPC -> Selling Article from the raw Article Manual.
+
+    User-confirmed schemas:
+      Fresh Fish / Live Fish / Shrimp / Fish Ball / Frozen Fish:
+        A=Family/Main, B=Selling Article, C=Toledo#, D=EAN/UPC,
+        G=receiving pack size. Blank B on a D-UPC row means Selling Article=A.
+      Frozen Pack:
+        A=Family/Main, D=EAN/UPC, E=receiving pack size, G=Selling UOM;
+        Selling Article=A.
+
+    Raw Article Manual is read directly so Quick Check is not dependent on stale
+    phase2c_row_state created before these tab semantics were corrected.
+    """
     targets: dict[str, set[int]] = {}
     for row in family_qrows:
         if row.get("family_id") is None:
@@ -865,86 +877,103 @@ def _manual_selling_article_map(
     if not targets:
         return {}
 
-    keys = sorted(targets)
-    ph = ",".join(["%s"] * len(keys))
+    standard_tabs = {
+        "fresh fish", "live fish", "shrimp", "fish ball", "frozen fish"
+    }
+    recognized_tabs = standard_tabs | {"frozen pack"}
+    mains = sorted({
+        str(main or "").strip()
+        for main in family_main_by_id.values()
+        if str(main or "").strip()
+    })
+    if not mains:
+        return {}
+    mph = ",".join(["%s"] * len(mains))
     cur.execute(
-        f"""SELECT
-                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) AS ean_upc,
-                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.article')) AS selling_article,
-                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.canonical_main_article')) AS canonical_main_article,
-                  batch_id,raw_id
-            FROM phase2c_row_state
-            WHERE raw_table_name='raw_article_manual'
-              AND normalization_status IN ('NORMALIZED','QA_HOLD')
-              AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) IS NOT NULL
-              AND TRIM(LEADING '0' FROM JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc'))) IN ({ph})
-            ORDER BY batch_id DESC,raw_id DESC""",
-        tuple(keys),
+        f"""SELECT f.file_id,sh.sheet_name,r.raw_id,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A')) AS col_a,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.B')) AS col_b,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.C')) AS col_c,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.D')) AS col_d,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.E')) AS col_e,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.G')) AS col_g
+            FROM ingest_file f
+            JOIN ingest_sheet sh ON sh.file_id=f.file_id
+            JOIN raw_article_manual r ON r.sheet_id=sh.sheet_id
+            WHERE f.source_type='article_manual'
+              AND f.processing_status='INGESTED'
+              AND LOWER(TRIM(sh.sheet_name)) IN
+                  ('fresh fish','live fish','shrimp','fish ball','frozen fish','frozen pack')
+              AND r.source_row_number>COALESCE(sh.header_row_number,0)
+              AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A'))) IN ({mph})
+            ORDER BY f.file_id DESC,r.raw_id DESC""",
+        tuple(mains),
     )
 
     out: dict[tuple[int, str], str] = {}
     for row in cur.fetchall():
-        raw_upc = str(row.get("ean_upc") or "").strip()
-        article = str(row.get("selling_article") or "").strip()
-        main = str(row.get("canonical_main_article") or "").strip()
-        if not raw_upc or not article or not main:
+        tab = str(row.get("sheet_name") or "").strip().lower()
+        if tab not in recognized_tabs:
             continue
-        key = _numeric_key(raw_upc) or raw_upc
+        main = str(row.get("col_a") or "").strip()
+        raw_upc = str(row.get("col_d") or "").strip()
+        compact = raw_upc.replace(" ", "").replace("-", "")
+        if not compact.isdigit():
+            continue
+        key = _numeric_key(compact) or compact
+        if key not in targets:
+            continue
+
+        selling = (
+            str(row.get("col_b") or "").strip() or main
+            if tab in standard_tabs
+            else main
+        )
+        if not selling.isdigit() or not main.isdigit():
+            continue
         for fid in targets.get(key, set()):
             if str(family_main_by_id.get(fid) or "") != main:
                 continue
-            # Explicit Table 1 Column B always wins.
-            out.setdefault((fid, key), article)
+            out.setdefault((fid, key), selling)
 
-    # Table 1 convention: when a UPC row has Column B blank, the Selling Article
-    # is the Family/Main Article in Column A. Confirm that fallback only through
-    # an Article-Manual-backed UPC -> Main bridge; never infer it from name/suffix.
-    missing_keys = sorted({
+    # Toledo-only internal POS codes such as 4816 have no D EAN/UPC row. Keep
+    # them eligible only through explicit confirmed user authority; never turn
+    # every Toledo# into a UPC automatically.
+    unresolved_keys = sorted({
         key
         for key, fids_for_key in targets.items()
         if any((fid, key) not in out for fid in fids_for_key)
     })
-    if missing_keys:
-        mph = ",".join(["%s"] * len(missing_keys))
+    if unresolved_keys:
         cur.execute(
-            f"""SELECT su.ean_upc,pf.main_article_number
-                FROM selling_upc su
-                JOIN bridge_article_upc bau
-                  ON bau.upc_id=su.upc_id
-                 AND bau.mapping_status='CONFIRMED'
-                 AND bau.is_primary=TRUE
-                 AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
-                JOIN article a ON a.article_id=bau.article_id
-                JOIN bridge_article_family baf
-                  ON baf.article_id=a.article_id
-                 AND baf.mapping_status='CONFIRMED'
-                 AND baf.is_primary=TRUE
-                 AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
-                JOIN product_family pf ON pf.family_id=baf.family_id
-                WHERE su.record_status='ACTIVE'
-                  AND TRIM(LEADING '0' FROM su.ean_upc) IN ({mph})
-                  AND EXISTS (
-                      SELECT 1
-                      FROM normalized_source_evidence nse
-                      WHERE nse.object_type='ARTICLE_UPC'
-                        AND nse.object_id=bau.article_upc_id
-                        AND nse.raw_table_name='raw_article_manual'
-                  )
-                ORDER BY su.upc_id""",
-            tuple(missing_keys),
+            """SELECT m.ean_upc,m.article_number,baf.family_id,pf.main_article_number
+               FROM manual_upc_override m
+               JOIN article a ON a.article_number=m.article_number
+               JOIN bridge_article_family baf
+                 ON baf.article_id=a.article_id
+                AND baf.mapping_status='CONFIRMED'
+                AND baf.is_primary=TRUE
+                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+               JOIN product_family pf ON pf.family_id=baf.family_id
+               WHERE m.override_status='CONFIRMED'"""
         )
+        unresolved = set(unresolved_keys)
         for row in cur.fetchall():
-            raw_upc = str(row.get("ean_upc") or "").strip()
-            main = str(row.get("main_article_number") or "").strip()
-            key = _numeric_key(raw_upc) or raw_upc
-            if not key or not main:
+            ean = str(row.get("ean_upc") or "").strip()
+            key = _numeric_key(ean) or ean
+            if key not in unresolved:
                 continue
-            for fid in targets.get(key, set()):
-                if str(family_main_by_id.get(fid) or "") != main:
-                    continue
-                out.setdefault((fid, key), main)
-    return out
+            fid = int(row["family_id"])
+            if fid not in targets.get(key, set()):
+                continue
+            main = str(row.get("main_article_number") or "")
+            if str(family_main_by_id.get(fid) or "") != main:
+                continue
+            article = str(row.get("article_number") or "").strip()
+            if article:
+                out.setdefault((fid, key), article)
 
+    return out
 
 def _quick_receiving_article_context(
     cur,
