@@ -50,8 +50,92 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .detailgrid.qa-detailgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.qa-detailgrid .detail small{font-size:9px}.qa-detailgrid .detail b{font-size:12px}
 .qa-cn-list{font-size:10px;color:var(--muted);margin-top:2px}
 @media(max-width:620px){.drawer{width:100vw}.drawerbody{padding:12px}.qa-detailgrid{grid-template-columns:1fr}.qa-name{font-size:17px}.qa-zh{font-size:14px}}
+
+/* Mobile-only Backoffice navigation: desktop remains unchanged */
+.mobilehome,.mobilepagebar{display:none}
+@media(max-width:759px){
+  html,body{overflow-x:hidden}
+  body{background:#f5f8f7}
+  .shell{padding:8px 8px 82px;max-width:520px}
+  .appbar{border-radius:16px;box-shadow:none}
+  .appbar .nav{display:none}
+  .top{padding:11px 12px 8px;gap:9px}
+  .mark{width:36px;height:36px;border-radius:11px;font-size:18px}
+  .brand{gap:9px}.brand strong{font-size:16px}.brand small{font-size:10px}
+  .topstat{gap:4px}.glass{font-size:9px;padding:5px 7px}
+  .searchbar{padding:0 10px 10px;gap:6px}
+  .searchbar input{min-height:46px;font-size:16px;padding:10px 11px}
+  .searchbar .btn{min-height:46px}
+  body.mobile-subpage .searchbar{display:none}
+  body.mobile-home-mode .view{display:none!important}
+  .mobilehome{display:block;margin-top:10px}
+  .mobilehome.hidden{display:none}
+  .mobile-home-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:3px 2px 10px}
+  .mobile-home-head b{font-size:19px;line-height:1.15}.mobile-home-head span{display:block;font-size:11px;color:var(--muted);margin-top:3px}
+  .mobile-spotlight{width:100%;border:1px solid #b8d7d2;background:linear-gradient(135deg,#f2fbf9,#fff);border-radius:16px;padding:13px 14px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:76px}
+  .mobile-spotlight small{display:block;color:var(--muted);font-size:9px;font-weight:850;text-transform:uppercase;letter-spacing:.05em}
+  .mobile-spotlight b{display:block;font-size:15px;margin-top:3px}.mobile-spotlight span{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+  .mobile-spotlight .arrow{font-size:22px;color:var(--sea);flex:0 0 auto}
+  .mobile-modgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:10px}
+  .mobile-module{border:1px solid var(--line);background:#fff;border-radius:16px;padding:14px;text-align:left;min-height:108px;box-shadow:0 4px 14px rgba(9,49,54,.025)}
+  .mobile-module:active{transform:scale(.985)}
+  .mobile-module .ico{display:block;font-size:22px;line-height:1}
+  .mobile-module b{display:block;font-size:15px;line-height:1.15;margin-top:10px}
+  .mobile-module span:last-child{display:block;color:var(--muted);font-size:10px;line-height:1.35;margin-top:5px}
+  .mobilepagebar{align-items:center;gap:10px;margin:10px 0 0;padding:10px 11px;background:#fff;border:1px solid var(--line);border-radius:15px}
+  .mobilepagebar.on{display:flex}
+  .mobileback{width:44px;height:44px;min-width:44px;border:1px solid var(--line);background:#fff;border-radius:12px;font-size:20px;font-weight:900}
+  .mobilepagetitle{font-size:17px;font-weight:900;line-height:1.15}.mobilepagesub{font-size:10px;color:var(--muted);margin-top:3px}
+  .view.on>.panel,.subview.on>.panel{margin-top:9px}
+  #database>.panel:first-child{display:none}
+  .panel{border-radius:15px;box-shadow:none}
+  .panelhead{padding:13px 12px}.title{font-size:18px}.sub{font-size:11px;line-height:1.4}
+  .toolrow{display:block;padding:9px 10px}
+  .filters{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+  .filters::-webkit-scrollbar{display:none}
+  .filter{flex:0 0 auto;min-height:40px;padding:8px 12px}
+  .tools{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;margin-top:8px}
+  .select{width:100%;min-height:44px;font-size:16px;padding:8px 10px}
+  .btn{min-height:44px;padding:9px 11px}.btn.small{min-height:40px;font-size:11px}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px;gap:8px}
+  .kpi{padding:10px;border-radius:12px}.kpi small{font-size:9px}.kpi b{font-size:16px}.kpi span{font-size:9px}
+  .dbcardgrid{grid-template-columns:1fr;padding:10px}.dbcard{min-height:72px;padding:12px;border-radius:14px}
+  .dboverviewgrid{padding:0 10px 10px}.dbsummary{border-radius:13px}
+  .uploadgrid{padding:10px}.drop{padding:15px 12px}.drop input{font-size:16px;min-height:44px}
+  .batchgrid{padding:10px}.batch{padding:11px;border-radius:13px}.batchid{font-size:13px}.batchmeta{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .tablewrap{overflow:visible}
+  .table{display:block;width:100%;min-width:0!important;font-size:12px}
+  .table thead{display:none}
+  .table tbody{display:grid;gap:9px;padding:10px}
+  .table tbody tr{display:block;border:1px solid var(--line);border-radius:15px;background:#fff;overflow:hidden}
+  .table tbody tr:hover td,.table tbody tr.velocity-active td,.table tbody tr.velocity-active:hover td{background:#fff}
+  .table tbody tr.velocity-active{border-left:4px solid #6aaea4}
+  .table tbody tr.velocity-active td:first-child{box-shadow:none}
+  .table td{display:grid;grid-template-columns:minmax(92px,34%) minmax(0,1fr);gap:9px;align-items:start;padding:9px 11px;border-bottom:1px solid #edf2f0;min-width:0;overflow-wrap:anywhere}
+  .table td:last-child{border-bottom:0}
+  .table td::before{content:attr(data-label);font-size:9px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.035em}
+  .table td[data-label=""]{display:block}.table td[data-label=""]::before{display:none}
+  .table td[colspan]{display:block;text-align:center}.table td[colspan]::before{display:none}
+  .table .name{font-size:14px}.table .meta{font-size:10px;line-height:1.35}
+  .table td .btn{width:100%;margin-top:2px}
+  .sectiontitle{font-size:11px}
+  .detailgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .detail{padding:10px;border-radius:11px}.detail small{font-size:9px}.detail b{font-size:12px}
+  .drawerback.on{display:none!important}
+  .drawer{display:none;left:0;right:0;top:0;bottom:0;width:100vw!important;max-width:none;transform:none!important;transition:none;box-shadow:none;z-index:80}
+  .drawer.on{display:flex}
+  .drawerhead{padding:12px 13px;align-items:center;background:#fff;position:sticky;top:0;z-index:2}
+  .drawertitle{font-size:18px}.drawersub{font-size:11px}
+  .drawerhead .btn{min-width:64px}
+  .drawerbody{padding:12px;background:#f7faf9}
+  .drawerfoot{padding:10px 12px;gap:7px;flex-direction:column;align-items:stretch}
+  .drawerfoot .btn{width:100%}
+  .qa-step{padding:12px}.qa-name{font-size:17px}.qa-zh{font-size:14px}
+  .qa-detailgrid{grid-template-columns:1fr 1fr!important}
+  .toast{left:10px;right:10px;bottom:12px;text-align:center;font-size:11px}
+}
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:900px}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
+@media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:0}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
 </style>
 </head>
 <body>
@@ -70,6 +154,30 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <button class="navbtn" data-view="database">Database Center</button>
   </nav>
 </header>
+<section id="mobileHome" class="mobilehome hidden" aria-label="Mobile Backoffice Home">
+  <div class="mobile-home-head">
+    <div><b>Seafood Backoffice</b><span>Choose a task, then open its list and details.</span></div>
+    <span class="pill green">MOBILE</span>
+  </div>
+  <button id="mobileBatchSpotlight" class="mobile-spotlight" type="button">
+    <span><small>Current Batch</small><b id="mobileBatchTitle">Checking processing status…</b><span id="mobileBatchMeta">Tap to open Processing</span></span>
+    <span class="arrow">›</span>
+  </button>
+  <div class="mobile-modgrid">
+    <button class="mobile-module" type="button" data-mobile-view="inventory" data-mobile-title="Quick Check" data-mobile-sub="Family / Article / UPC lookup"><span class="ico">🔎</span><b>Quick Check</b><span>Search and review operational item details</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbqa" data-mobile-title="QA Holds" data-mobile-sub="Issue list → review → fix"><span class="ico">⚠️</span><b>QA Holds</b><span>UOM, mapping, cost and OH issues</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="pricing" data-mobile-title="Price Overview" data-mobile-sub="Current price, source and review"><span class="ico">💲</span><b>Price Overview</b><span>Latest prices and qualified review items</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbupload" data-mobile-title="Uploads" data-mobile-sub="Choose files and start processing"><span class="ico">⬆️</span><b>Uploads</b><span>Price, POS, MVT, OH and source files</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="sales" data-mobile-title="Performance" data-mobile-sub="Completed-day sales performance"><span class="ico">📊</span><b>Performance</b><span>Daily sales, GP and active sellers</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="inventory" data-mobile-title="PI / OH" data-mobile-sub="Inventory and True Stock review"><span class="ico">📦</span><b>PI / OH</b><span>OH, True Stock and discrepancy actions</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbbatches" data-mobile-title="Batches" data-mobile-sub="Current processing and history"><span class="ico">🧩</span><b>Batches</b><span>Current batch, rebuild and completed history</span></button>
+    <button class="mobile-module" type="button" data-mobile-view="database" data-mobile-dbtab="dbdata" data-mobile-title="Data Health" data-mobile-sub="Serving and pipeline status"><span class="ico">🕒</span><b>Data Health</b><span>Service, worker and latest publish status</span></button>
+  </div>
+</section>
+<div id="mobilePageBar" class="mobilepagebar">
+  <button id="mobileBack" class="mobileback" type="button" aria-label="Back to mobile home">←</button>
+  <div><div id="mobilePageTitle" class="mobilepagetitle">Backoffice</div><div id="mobilePageSub" class="mobilepagesub"></div></div>
+</div>
 <section id="inventory" class="view on"><div class="panel">
  <div class="panelhead"><div><div class="title">Inventory Ledger</div><div class="sub">Read-only system data. OH / True Stock is the only editable value.</div></div><span class="pill blue">OH WRITE ONLY</span></div>
  <div class="toolrow">
@@ -265,6 +373,73 @@ $$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
 $$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
 $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
 window.addEventListener('hashchange',()=>restoreRoute());
+
+const mobileMedia=window.matchMedia('(max-width:759px)');
+function isMobileBackoffice(){return mobileMedia.matches}
+function labelMobileTables(){
+  if(!isMobileBackoffice())return;
+  $$('.table').forEach(table=>{
+    const labels=[...table.querySelectorAll('thead th')].map(th=>(th.textContent||'').trim());
+    table.querySelectorAll('tbody tr').forEach(tr=>{
+      [...tr.children].forEach((td,i)=>{
+        if(td.tagName!=='TD')return;
+        td.dataset.label=td.colSpan>1?'':(labels[i]||'');
+      });
+    });
+  });
+}
+function updateMobileBatchSpotlight(){
+  if(!isMobileBackoffice())return;
+  const title=$('#mobileBatchTitle'),meta=$('#mobileBatchMeta');
+  if(!title||!meta)return;
+  const a=state.active;
+  const latest=state.recent[0]||null;
+  if(a){
+    title.textContent='Batch #'+(a.batch_id||a.id||'—')+' · '+(a.processing_status||a.status||'PROCESSING');
+    meta.textContent=(a.file_count??'—')+' file(s) · active processing';
+  }else if(latest){
+    title.textContent='Latest Batch #'+(latest.batch_id||'—')+' · '+(latest.phase3_status||latest.processing_status||'COMPLETE');
+    meta.textContent=(latest.quick_check_ready_rows??'—')+' ready · '+(latest.quick_check_hold_rows??'—')+' hold';
+  }else{
+    title.textContent='No active batch';
+    meta.textContent='Tap to open Processing history';
+  }
+}
+function showMobileHome({scroll=true}={}){
+  if(!isMobileBackoffice())return;
+  document.body.classList.add('mobile-home-mode');
+  document.body.classList.remove('mobile-subpage');
+  $('#mobileHome')?.classList.remove('hidden');
+  $('#mobilePageBar')?.classList.remove('on');
+  closeDrawer();
+  if(scroll)window.scrollTo({top:0,behavior:'smooth'});
+  loadBatches().then(()=>{updateMobileBatchSpotlight();labelMobileTables()}).catch(()=>{});
+}
+function openMobileModule(view,dbTab=null,title='',sub=''){
+  if(!isMobileBackoffice()){show(view,{dbTab});return}
+  document.body.classList.remove('mobile-home-mode');
+  document.body.classList.add('mobile-subpage');
+  $('#mobileHome')?.classList.add('hidden');
+  $('#mobilePageBar')?.classList.add('on');
+  if($('#mobilePageTitle'))$('#mobilePageTitle').textContent=title||'Backoffice';
+  if($('#mobilePageSub'))$('#mobilePageSub').textContent=sub||'';
+  show(view,{dbTab});
+  setTimeout(labelMobileTables,0);
+}
+$$('[data-mobile-view]').forEach(b=>b.onclick=()=>openMobileModule(b.dataset.mobileView,b.dataset.mobileDbtab||null,b.dataset.mobileTitle||'',b.dataset.mobileSub||''));
+$('#mobileBack').onclick=()=>showMobileHome();
+$('#mobileBatchSpotlight').onclick=()=>openMobileModule('database','dbbatches','Batches','Current processing and history');
+const mobileTableObserver=new MutationObserver(()=>labelMobileTables());
+mobileTableObserver.observe($('.shell'),{subtree:true,childList:true});
+mobileMedia.addEventListener?.('change',e=>{
+  if(e.matches)showMobileHome({scroll:false});
+  else{
+    document.body.classList.remove('mobile-home-mode','mobile-subpage');
+    $('#mobileHome')?.classList.add('hidden');
+    $('#mobilePageBar')?.classList.remove('on');
+    restoreRoute();
+  }
+});
 function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
@@ -677,8 +852,8 @@ async function loadData(){try{const [h,a,r]=await Promise.all([api('/healthz'),a
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
 
-$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
-async function boot(){await loadHealth().catch(()=>{});restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
+$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));if(isMobileBackoffice())openMobileModule('inventory',null,'Quick Check',state.inventorySearch?('Search: '+state.inventorySearch):'Family / Article / UPC lookup');else show('inventory')};
+async function boot(){await loadHealth().catch(()=>{});restoreRoute({replaceMissing:true});if(isMobileBackoffice())showMobileHome({scroll:false});labelMobileTables();setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
 })();
 </script>
 </body></html>'''
