@@ -2417,9 +2417,35 @@ function filteredPrices(){
   if(sort==='lowgp')a.sort((x,y)=>Number(x.current_gp_pct_reference??999)-Number(y.current_gp_pct_reference??999));
   if(sort==='currentprice')a.sort((x,y)=>Number(y.current_price||0)-Number(x.current_price||0));
   if(sort==='name')a.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  // Mandatory 240≠249 violations always stay above every other pricing review.
+  a.sort((x,y)=>Number(Boolean(y.priority_240_249_mismatch))-Number(Boolean(x.priority_240_249_mismatch)));
   return a;
 }
-function renderPrices(){const rows=filteredPrices();$('#priceCount').textContent=`${rows.length} shown · ${state.prices.length} loaded`;$('#priceRows').innerHTML=rows.map(r=>{const range=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'No A/B/C';return `<tr><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.family_name||'')}</div></td><td><div class="name">${esc(r.upc)}</div><div class="meta">${esc(r.name||'')}</div></td><td><b>${money(r.current_price)}</b><div class="meta">${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</div></td><td><b>${money(r.candidate_price)}</b><div class="meta">${esc(r.selection_basis||r.suggestion_basis||'')}</div></td><td><b>${fmt(r.current_oh)} ${esc(r.current_oh_uom||'')}</b><div class="meta">DOH ${fmt(r.doh)}</div></td><td><b>${esc(range)}</b><div class="meta">${r.has_company_reference?'Candidate constrained':'No company constraint'}</div></td><td><b>${money(r.current_cost)}</b><div class="meta">${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</div></td><td>${pct(r.current_gp_pct_reference)}</td><td>${fmt(r.qty_14d)}</td><td>${pill(r.review_status)}</td><td><div class="meta" style="max-width:240px">${esc(r.primary_reason_text||r.review_blocker||'Pricing review')}</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small pricedetail" data-upc="${esc(r.upc)}">Why?</button>${String(r.review_status||"").toUpperCase()==="ACTIONABLE"&&r.current_price!==null&&r.current_price!==undefined&&r.candidate_price!==null&&r.candidate_price!==undefined?`<button class="btn small primary priceaccept" data-upc="${esc(r.upc)}">Accepted</button>`:""}</div></td></tr>`}).join('')||'<tr><td colspan="12" class="empty">No pricing review rows match the current filters.</td></tr>';$$('.pricedetail').forEach(b=>b.onclick=()=>openPriceDetail(b.dataset.upc));$$('.priceaccept').forEach(b=>b.onclick=()=>acceptPriceSuggestion(b.dataset.upc,b))}
+function renderPrices(){
+  const rows=filteredPrices();
+  $('#priceCount').textContent=`${rows.length} shown · ${state.prices.length} loaded`;
+  $('#priceRows').innerHTML=rows.map(r=>{
+    const range=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'No A/B/C';
+    const rem=price249Reminder(r,false);
+    const remClass=r.price_240_249_equal===false?'pair249 mismatch':'pair249';
+    return `<tr>
+      <td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.family_name||'')}</div>${rem?'<div class="'+remClass+'">'+esc(rem)+'</div>':''}</td>
+      <td><div class="name">${esc(r.upc)}</div><div class="meta">${esc(r.name||'')}</div></td>
+      <td><b>${money(r.current_price)}</b><div class="meta">${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</div></td>
+      <td><b>${money(r.candidate_price)}</b><div class="meta">${esc(r.selection_basis||r.suggestion_basis||'')}</div></td>
+      <td><b>${fmt(r.current_oh)} ${esc(r.current_oh_uom||'')}</b><div class="meta">DOH ${fmt(r.doh)}</div></td>
+      <td><b>${esc(range)}</b><div class="meta">${r.has_company_reference?'Candidate constrained':'No company constraint'}</div></td>
+      <td><b>${money(r.current_cost)}</b><div class="meta">${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</div></td>
+      <td>${pct(r.current_gp_pct_reference)}</td><td>${fmt(r.qty_14d)}</td>
+      <td>${r.priority_240_249_mismatch?'<span class="pill red">MOST URGENT · 240≠249</span>':pill(r.review_status)}</td>
+      <td><div class="meta" style="max-width:240px">${esc(r.primary_reason_text||r.review_blocker||'Pricing review')}</div></td>
+      <td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small pricedetail" data-upc="${esc(r.upc)}">Why?</button>${String(r.review_status||"").toUpperCase()==="ACTIONABLE"&&r.current_price!==null&&r.current_price!==undefined&&r.candidate_price!==null&&r.candidate_price!==undefined?`<button class="btn small primary priceaccept" data-upc="${esc(r.upc)}">Accepted</button>`:""}</div></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="12" class="empty">No pricing review rows match the current filters.</td></tr>';
+  $$('.pricedetail').forEach(b=>b.onclick=()=>openPriceDetail(b.dataset.upc));
+  $$('.priceaccept').forEach(b=>b.onclick=()=>acceptPriceSuggestion(b.dataset.upc,b));
+}
+
 async function acceptPriceSuggestion(upc,button){
  const r=state.prices.find(x=>String(x.upc)===String(upc));if(!r)return;
  if(button){button.disabled=true;button.textContent='Saving…'}
@@ -2441,7 +2467,75 @@ $$('.pricefilter').forEach(b=>b.onclick=()=>{state.priceCat=b.dataset.cat;$$('.p
 $('#priceStatusFilter').onchange=e=>{state.priceStatus=e.target.value;renderPrices()};
 $('#priceSort').onchange=e=>{state.priceSort=e.target.value;renderPrices()};
 $('#priceTextFilter').oninput=e=>{state.priceText=e.target.value;renderPrices()};
-function openPriceDetail(upc){const r=state.prices.find(x=>String(x.upc)===String(upc));if(!r)return;const company=[['A',r.company_price_a],['B',r.company_price_b],['C',r.company_price_c]].filter(x=>x[1]!==null&&x[1]!==undefined);const companyText=company.length?company.map(x=>x[0]+' '+money(x[1])).join(' · '):'No Company A/B/C reference';const rangeText=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'—';openDrawer('Price Suggestion Explanation',`${r.name} · UPC ${r.upc}`,`<div class="detailgrid"><div class="detail"><small>Current Price</small><b>${money(r.current_price)}</b><span>${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</span></div><div class="detail"><small>Candidate Price</small><b>${money(r.candidate_price)}</b><span>${esc(r.selection_basis||r.suggestion_basis||'')}</span></div><div class="detail"><small>Current Cost</small><b>${money(r.current_cost)}</b><span>${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</span></div><div class="detail"><small>Current GP%</small><b>${pct(r.current_gp_pct_reference)}</b></div><div class="detail"><small>Candidate GP%</small><b>${pct(r.suggested_gp_pct_at_current_cost)}</b></div><div class="detail"><small>Company A/B/C</small><b>${esc(companyText)}</b><span>Range: ${esc(rangeText)}</span></div><div class="detail"><small>DOH</small><b>${fmt(r.doh)}</b><span>${r.clearance_due_to_doh?'Clearance mode':'Standard pricing mode'}</span></div><div class="detail"><small>14D Qty</small><b>${fmt(r.qty_14d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(r.velocity_7d)}</b></div><div class="detail"><small>14D Velocity</small><b>${fmt(r.velocity_14d)}</b></div><div class="detail"><small>GP$/Day Current</small><b>${money(r.current_gp_per_day_7d)}</b></div><div class="detail"><small>GP$/Day Candidate</small><b>${money(r.candidate_expected_gp_per_day)}</b></div></div><div class="sectiontitle">Primary reason</div><div class="calc">${esc(r.primary_reason_text||'Pricing review')}</div><div class="sectiontitle">Rule used</div><div class="calc">${r.clearance_reason==='FROZEN_DOH_GT_60'?'Frozen DOH > 60: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.':(r.clearance_due_to_doh?'Fresh DOH > 7: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.':(r.has_company_reference?'Qualified stocked item: candidate maximizes 14D GP$/day and must stay inside the Company A/B/C range.':'Qualified stocked item with no Company A/B/C: candidate maximizes 14D GP$/day from observed sales history.'))}</div><div class="calc">Current Price and Current Cost come from the live Quick Check serving row. Pricing Review is read-only.</div>`,`<span class="pill blue">READ ONLY</span>`)}
+async function loadPriceDetail7d(upc){
+  const box=mNode('priceDetail7d');if(!box)return;
+  try{
+    const d=await api('/v1/app/v2/upc/'+encodeURIComponent(upc)+'/price?trend_supported_days=7');
+    const trend=d.price_vs_sales_trend||{},rows=trend.rows||[];
+    box.innerHTML=
+      '<div class="m-detailcard m-trendcard">'+
+        '<div class="m-label">Past 7 Data Days · Sales History & Trend</div>'+
+        '<div class="m-chartnote">Same view as Quick Check · completed canonical POS data days only · missing source dates are not zeros</div>'+
+        mobileQuickTrendSvg(rows)+
+        '<div class="m-detailsection"><h3>Daily Sales History</h3>'+mobileQuick7dHistoryHtml(rows,d.qty_uom||trend.qty_uom)+'</div>'+
+      '</div>';
+  }catch(e){
+    box.innerHTML='<div class="m-error">7-day history unavailable: '+esc(e.message||String(e))+'</div>';
+  }
+}
+function openPriceDetail(upc){
+  const r=state.prices.find(x=>String(x.upc)===String(upc));if(!r)return;
+  const company=[['A',r.company_price_a],['B',r.company_price_b],['C',r.company_price_c]].filter(x=>x[1]!==null&&x[1]!==undefined);
+  const companyText=company.length?company.map(x=>x[0]+' '+money(x[1])).join(' · '):'No Company A/B/C reference';
+  const rangeText=(r.company_range_low!==null&&r.company_range_low!==undefined)?money(r.company_range_low)+' – '+money(r.company_range_high):'—';
+  const rem=price249Reminder(r,false);
+  const pairBlock=r.related_249_present
+    ? '<div class="sectiontitle">240 / 249 Price Rule</div>'+
+      '<div class="'+(r.price_240_249_equal===false?'pair249 mismatch':'pair249')+'">'+esc(rem)+'</div>'+
+      '<div class="detailgrid" style="margin-top:8px">'+
+        '<div class="detail"><small>240 Main UPC</small><b>'+esc(r.related_240_upc||'—')+' · '+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_current_price_type||'—')+' · '+esc(r.related_240_current_price_source||'—')+(r.related_240_current_price_asof_date?' · '+esc(r.related_240_current_price_asof_date):'')+'</span></div>'+
+        '<div class="detail"><small>249 Cook / Service UPC</small><b>'+esc(r.related_249_upc||'—')+' · '+money(r.related_249_current_price)+'</b><span>'+esc(r.related_249_current_price_type||'—')+' · '+esc(r.related_249_current_price_source||'—')+(r.related_249_current_price_asof_date?' · '+esc(r.related_249_current_price_asof_date):'')+'</span></div>'+
+      '</div>'+
+      (r.related_249_required_price!==null&&r.related_249_required_price!==undefined
+        ? '<div class="calc"><b>Reminder:</b> 249 must be '+money(r.related_249_required_price)+' when this price change is accepted.</div>'
+        : '')
+    : '';
+  const ruleText=r.priority_240_249_mismatch
+    ? 'Mandatory rule: related 240 main and 249 cook/service UPC prices must be equal. This mismatch is ranked above all other price suggestions.'
+    : (r.clearance_reason==='FROZEN_DOH_GT_60'
+      ? 'Frozen DOH > 60: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.'
+      : (r.clearance_due_to_doh
+        ? 'Fresh DOH > 7: qualified price review. Candidate maximizes supported 14D GP$/day; Company A/B/C range is enforced when available.'
+        : (r.has_company_reference
+          ? 'Qualified stocked item: candidate maximizes 14D GP$/day and must stay inside the Company A/B/C range.'
+          : 'Qualified stocked item with no Company A/B/C: candidate maximizes 14D GP$/day from observed sales history.')));
+  openDrawer(
+    'Price Suggestion Explanation',
+    `${r.name} · UPC ${r.upc}`,
+    '<div class="detailgrid">'+
+      '<div class="detail"><small>Current Price</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||'—')+' · '+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+'</span></div>'+
+      '<div class="detail"><small>Candidate Price</small><b>'+money(r.candidate_price)+'</b><span>'+esc(r.selection_basis||r.suggestion_basis||'')+'</span></div>'+
+      '<div class="detail"><small>Current Cost</small><b>'+money(r.current_cost)+'</b><span>'+esc(r.current_cost_source||r.cost_basis||'—')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span></div>'+
+      '<div class="detail"><small>Current GP%</small><b>'+pct(r.current_gp_pct_reference)+'</b></div>'+
+      '<div class="detail"><small>Candidate GP%</small><b>'+pct(r.suggested_gp_pct_at_current_cost)+'</b></div>'+
+      '<div class="detail"><small>Company A/B/C</small><b>'+esc(companyText)+'</b><span>Range: '+esc(rangeText)+'</span></div>'+
+      '<div class="detail"><small>DOH</small><b>'+fmt(r.doh)+'</b><span>'+(r.clearance_due_to_doh?'Clearance mode':'Standard pricing mode')+'</span></div>'+
+      '<div class="detail"><small>14D Qty</small><b>'+fmt(r.qty_14d)+'</b></div>'+
+      '<div class="detail"><small>7D Velocity</small><b>'+fmt(r.velocity_7d)+'</b></div>'+
+      '<div class="detail"><small>14D Velocity</small><b>'+fmt(r.velocity_14d)+'</b></div>'+
+      '<div class="detail"><small>GP$/Day Current</small><b>'+money(r.current_gp_per_day_7d)+'</b></div>'+
+      '<div class="detail"><small>GP$/Day Candidate</small><b>'+money(r.candidate_expected_gp_per_day)+'</b></div>'+
+    '</div>'+
+    pairBlock+
+    '<div class="sectiontitle">Primary reason</div><div class="calc">'+esc(r.primary_reason_text||'Pricing review')+'</div>'+
+    '<div class="sectiontitle">Rule used</div><div class="calc">'+esc(ruleText)+'</div>'+
+    '<div class="calc">Current Price and Current Cost come from the live Quick Check serving row. Pricing Review is read-only.</div>'+
+    '<div id="priceDetail7d" class="m-quick7d"><div class="m-loading">Loading 7-day sales history…</div></div>',
+    '<span class="pill blue">READ ONLY</span>'
+  );
+  loadPriceDetail7d(r.upc);
+}
+
 
 async function loadQA(){
  const err=$('#qaError');err.innerHTML='';$('#qaRows').innerHTML='<tr><td colspan="8" class="loading">Loading QA...</td></tr>';
