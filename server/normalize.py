@@ -196,6 +196,59 @@ def _build_column_map(header_payload: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+ARTICLE_MANUAL_RECEIVING_PACK_TABS = {
+    'fresh fish',
+    'live fish',
+    'shrimp',
+    'fish ball',
+    'frozen fish',
+}
+
+
+def _article_manual_column_map(
+    sheet_name: str | None,
+    header_payload: dict[str, Any],
+) -> dict[str, str]:
+    """Apply the user-confirmed per-tab Article Manual schema.
+
+    Fresh Fish / Live Fish / Shrimp / Fish Ball / Frozen Fish:
+      A = Family/Main Article
+      B = Selling Article (blank means Main Article for that UPC row)
+      D = EAN/UPC
+      G = Receiving pack size/dimension
+
+    Frozen Pack:
+      A = Family/Main Article
+      D = EAN/UPC
+      E = Receiving pack size/dimension
+      G = Selling UOM
+
+    Header aliases remain available for non-critical descriptive columns, but the
+    identity/UOM columns above are positional authority and cannot be reclassified
+    by a misleading header label.
+    """
+    result = _build_column_map(header_payload)
+    tab = _norm_header(sheet_name)
+
+    if tab in ARTICLE_MANUAL_RECEIVING_PACK_TABS:
+        result['main_article'] = 'A'
+        result['article'] = 'B'
+        result['upc'] = 'D'
+        result['pack'] = 'G'
+        if result.get('selling_uom') == 'G':
+            result.pop('selling_uom', None)
+    elif tab == 'frozen pack':
+        result['main_article'] = 'A'
+        # Frozen Pack has no separate Selling Article column in the confirmed
+        # schema; the Family/Main Article is the row Article anchor.
+        result['article'] = 'A'
+        result['upc'] = 'D'
+        result['pack'] = 'E'
+        result['selling_uom'] = 'G'
+
+    return result
+
+
 def _get(row: dict[str, Any], colmap: dict[str, str], field: str) -> Any:
     col = colmap.get(field)
     return row.get(col) if col else None
@@ -664,6 +717,17 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
     category = _text(_get(row, colmap, 'category'))
     pack = _text(_get(row, colmap, 'pack'))
 
+    # On the confirmed Article Manual roster tabs, a UPC row may leave Column B
+    # (Selling Article) blank. That means the Selling Article is the Column A
+    # Family/Main Article; it is not an unmapped product row.
+    if (
+        ctx.source_type == 'article_manual'
+        and not article_number
+        and source_main_article
+        and ean_upc
+    ):
+        article_number = source_main_article
+
     if not article_number:
         _mark_row_state(cur, ctx, 'SKIPPED_NON_PRODUCT_ROW', {'reason': 'no article identifier'})
         return 'SKIPPED_NON_PRODUCT_ROW'
@@ -856,7 +920,10 @@ def _preload_article_manual_authority(cur, batch_id: int) -> dict[str, Any]:
             h = cur.fetchone()
             if not h:
                 continue
-            colmap = _build_column_map(_json_obj(h['raw_payload']))
+            colmap = _article_manual_column_map(
+                sh['sheet_name'],
+                _json_obj(h['raw_payload']),
+            )
             sheet_infos.append({
                 'file_id': int(f['file_id']),
                 'sheet_id': int(sh['sheet_id']),
@@ -1032,7 +1099,14 @@ def normalize_batch(batch_id: int) -> dict[str, Any]:
                     h = cur.fetchone()
                     if not h:
                         continue
-                    colmap = _build_column_map(_json_obj(h['raw_payload']))
+                    colmap = (
+                        _article_manual_column_map(
+                            sh['sheet_name'],
+                            _json_obj(h['raw_payload']),
+                        )
+                        if f['source_type'] == 'article_manual'
+                        else _build_column_map(_json_obj(h['raw_payload']))
+                    )
                     # Only treat sheets with explicit Article + Main Article headers as product-identity sheets.
                     if 'article' not in colmap or 'main_article' not in colmap:
                         continue
