@@ -960,6 +960,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-family-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;border:1px solid var(--family-border);border-radius:15px;background:var(--family-bg)}
 .m-family-head small,.m-family-velocity small{display:block;font-size:9px;color:var(--muted);font-weight:900;letter-spacing:.04em}
 .m-family-head b{display:block;font-size:16px;line-height:1.2;margin-top:2px;color:var(--ink)}
+.m-family-head>div:first-child>small{font-size:11px}
+.m-family-head>div:first-child>b{font-size:18px;line-height:1.18}
 .m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:var(--sea)}.m-family-velocity small:last-child{margin-top:3px}
 .m-family-upcs{display:grid;gap:7px;padding-left:5px}
 .m-family-upcs .m-row{background:var(--family-bg);border-color:var(--family-border);border-left:4px solid var(--family-accent)}
