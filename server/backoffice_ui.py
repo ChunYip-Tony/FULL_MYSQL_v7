@@ -2501,6 +2501,7 @@ function mobileQuickFamilyGroups(rows){
       zero_sap_mvt_articles:Array.isArray(r.family_group_zero_sap_mvt_articles)?r.family_group_zero_sap_mvt_articles:[],
       source_article:r.family_source_article||r.family_article||null,
       source_movement_7d:r.family_source_movement_7d,
+      source_avg_qty_day:r.family_source_avg_qty_day,
       source_movement_uom:r.family_source_movement_uom||'',
       source_movement_status:r.family_source_movement_status||'',
       group_movement_basis:r.family_group_movement_basis||'',
@@ -2539,6 +2540,7 @@ function mobileQuickFamilyGroups(rows){
     if((!g.zero_sap_mvt_articles||!g.zero_sap_mvt_articles.length)&&Array.isArray(r.family_group_zero_sap_mvt_articles))g.zero_sap_mvt_articles=r.family_group_zero_sap_mvt_articles;
     if(!g.source_article&&r.family_source_article)g.source_article=String(r.family_source_article);
     if((g.source_movement_7d===null||g.source_movement_7d===undefined)&&r.family_source_movement_7d!==null&&r.family_source_movement_7d!==undefined)g.source_movement_7d=r.family_source_movement_7d;
+    if((g.source_avg_qty_day===null||g.source_avg_qty_day===undefined)&&r.family_source_avg_qty_day!==null&&r.family_source_avg_qty_day!==undefined)g.source_avg_qty_day=r.family_source_avg_qty_day;
     if(!g.source_movement_uom&&r.family_source_movement_uom)g.source_movement_uom=String(r.family_source_movement_uom);
     if(!g.source_movement_status&&r.family_source_movement_status)g.source_movement_status=String(r.family_source_movement_status);
     if(!g.group_movement_basis&&r.family_group_movement_basis)g.group_movement_basis=String(r.family_group_movement_basis);
@@ -2703,7 +2705,7 @@ function mobileQuickGroupedHtml(rows){
       ? fmt(g.conversion_317_318_7d)+(g.conversion_317_318_uom?' '+g.conversion_317_318_uom:'')
       : '—';
     const sourceMvtText=(sourceHasMvt||hasConversion)
-      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">REFERENCE ONLY · MAIN DIRECT 251−252 · '+esc(directText)+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERSION LINEAGE · '+esc(conversionText):'')+' · not added separately to Family total</div>'
+      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">MAIN 251−252 · '+esc(directText)+' · counted once when Main is an assigned Selling Article'+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERSION LINEAGE · '+esc(conversionText)+' · not counted as sale':'')+'</div>'
       : '';
     const familyPositiveMvt=Number.isFinite(Number(g.group_qty_7d))&&Number(g.group_qty_7d)>0;
     const recon=String(g.reconciliation||'').toUpperCase();
@@ -2739,8 +2741,20 @@ function mobileQuickGroupedHtml(rows){
           '<div class="m-q-upcs">'+sourceInactiveHtml+'</div>'+
         '</div></div>'
       : '';
+    const sourceMvtLabel=(g.source_movement_7d===null||g.source_movement_7d===undefined)
+      ? '—'
+      : fmt(g.source_movement_7d)+(g.source_movement_uom?' '+g.source_movement_uom:'');
+    const sourceAvgLabel=(g.source_avg_qty_day===null||g.source_avg_qty_day===undefined)
+      ? '—'
+      : fmt(g.source_avg_qty_day)+(g.source_movement_uom?' '+g.source_movement_uom:'');
     const sourceUpcSection=(sourceActiveHtml||sourceHiddenToggle)
-      ? '<div class="m-q-family-source-upcs"><div style="font-size:7px;font-weight:900;color:var(--muted);padding:3px 6px 1px">FAMILY ARTICLE IS ALSO SAP SELLING ARTICLE</div><div class="m-q-upcs">'+sourceActiveHtml+sourceHiddenToggle+'</div></div>'
+      ? '<div class="m-q-family-source-upcs">'+
+          '<div class="m-q-receiving-head'+(sourceHasMvt?' has-positive-mvt':'')+'">'+
+            '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY / SAP SELLING ARTICLE</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(g.source_article||g.family_article||'—')+'</div></div></div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">251−252 SELLING MVT</div></div>'+
+            '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(sourceMvtLabel)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(sourceAvgLabel)+'</b></div></div>'+
+          '</div>'+
+          '<div class="m-q-upcs">'+sourceActiveHtml+sourceHiddenToggle+'</div>'+
+        '</div>'
       : '';
 
     const receiving=Array.isArray(g.receiving)?g.receiving:[];
