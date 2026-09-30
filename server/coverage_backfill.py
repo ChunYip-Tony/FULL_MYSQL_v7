@@ -6,6 +6,7 @@ from typing import Any
 
 from data_coverage import source_data_days
 from db import db_conn
+from upc_aliases import numeric_digits, service_249_canonical_base, retail_barcode_alias_candidates
 
 
 def ensure_coverage_backfill_tables(cur) -> None:
@@ -524,86 +525,129 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
 
 
 
+def _active_upc_alias_index(cur) -> dict[str, Any]:
+    """Build one in-memory authoritative UPC roster index for raw-source relinking."""
+    cur.execute(
+        """SELECT upc_id,ean_upc
+           FROM selling_upc
+           WHERE record_status='ACTIVE'
+           ORDER BY CHAR_LENGTH(ean_upc),upc_id"""
+    )
+    rows=cur.fetchall()
+    exact: dict[str,int]={}
+    numeric: dict[str,int]={}
+    for row in rows:
+        ean=str(row.get("ean_upc") or "").strip()
+        if not ean:
+            continue
+        uid=int(row["upc_id"])
+        exact.setdefault(ean,uid)
+        key=numeric_digits(ean)
+        if key:
+            numeric.setdefault(key,uid)
+    return {"exact":exact,"numeric":numeric}
+
+
+def _resolve_source_upc_id(index: dict[str, Any], raw_ean: Any, fallback_upc_id: Any = None) -> int | None:
+    raw=str(raw_ean or "").strip()
+    exact=index["exact"]
+    numeric=index["numeric"]
+    if raw in exact:
+        return int(exact[raw])
+    key=numeric_digits(raw)
+    if key and key in numeric:
+        return int(numeric[key])
+    service=service_249_canonical_base(raw)
+    if service and service in exact:
+        return int(exact[service])
+    for candidate in retail_barcode_alias_candidates(raw):
+        if candidate in exact:
+            return int(exact[candidate])
+    if fallback_upc_id is not None:
+        return int(fallback_upc_id)
+    return None
+
+
 def canonical_pos_qty_by_upc(
     cur,
     data_days: list[dict[str, Any]],
 ) -> dict[int, Decimal]:
-    """Aggregate sold quantity by mapped UPC across canonical daily POS sources."""
-    out: dict[int, Decimal] = {}
+    """Aggregate POS quantity by current canonical UPC across all safe raw aliases.
+
+    Raw source EAN/UPC is authoritative lineage evidence. Derived upc_id is used
+    only as a fallback when the raw source spelling cannot resolve against the
+    current active roster.
+    """
+    out: dict[int, Decimal]={}
     if not data_days:
         return out
+    alias_index=_active_upc_alias_index(cur)
 
-    direct = [d for d in data_days if d.get("coverage_kind") != "DERIVED_PERIOD_RESIDUAL"]
+    def add_rows(rows: list[dict[str, Any]]) -> None:
+        for row in rows:
+            uid=_resolve_source_upc_id(alias_index,row.get("ean_upc"),row.get("upc_id"))
+            if uid is None:
+                continue
+            out[uid]=out.get(uid,Decimal("0"))+_decimal(row.get("qty"))
+
+    direct=[d for d in data_days if d.get("coverage_kind")!="DERIVED_PERIOD_RESIDUAL"]
     if direct:
-        clauses: list[str] = []
-        args: list[Any] = []
+        clauses=[]
+        args: list[Any]=[]
         for d in direct:
             clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
-            args.extend([int(d["file_id"]), d["date"], d["date"]])
+            args.extend([int(d["file_id"]),d["date"],d["date"]])
         cur.execute(
-            f"""SELECT upc_id,COALESCE(SUM(sold_quantity),0) AS qty
+            f"""SELECT ean_upc,upc_id,COALESCE(SUM(sold_quantity),0) AS qty
                 FROM sales_period_observation
                 WHERE temporal_grain='SINGLE_DATE'
-                  AND upc_id IS NOT NULL
                   AND ({' OR '.join(clauses)})
-                GROUP BY upc_id""",
+                GROUP BY ean_upc,upc_id""",
             tuple(args),
         )
-        for r in cur.fetchall():
-            out[int(r["upc_id"])] = _decimal(r["qty"])
+        add_rows(cur.fetchall())
 
-    derived = [d for d in data_days if d.get("coverage_kind") == "DERIVED_PERIOD_RESIDUAL"]
+    derived=[d for d in data_days if d.get("coverage_kind")=="DERIVED_PERIOD_RESIDUAL"]
     if derived:
-        clauses = []
-        args = []
+        clauses=[]
+        args=[]
         for d in derived:
             clauses.append("(source_file_id=%s AND business_date=%s)")
-            args.extend([int(d["file_id"]), d["date"]])
+            args.extend([int(d["file_id"]),d["date"]])
         cur.execute(
-            f"""SELECT upc_id,COALESCE(SUM(sold_quantity),0) AS qty
+            f"""SELECT ean_upc,upc_id,COALESCE(SUM(sold_quantity),0) AS qty
                 FROM pos_daily_backfill_observation
-                WHERE upc_id IS NOT NULL
-                  AND ({' OR '.join(clauses)})
-                GROUP BY upc_id""",
+                WHERE ({' OR '.join(clauses)})
+                GROUP BY ean_upc,upc_id""",
             tuple(args),
         )
-        for r in cur.fetchall():
-            upc_id = int(r["upc_id"])
-            out[upc_id] = out.get(upc_id, Decimal("0")) + _decimal(r["qty"])
+        add_rows(cur.fetchall())
 
     return out
 
 
 def relink_pos_backfill(cur) -> int:
-    # Raw EAN/UPC remains immutable source lineage. Repair its derived upc_id.
-    cur.execute(
-        """UPDATE pos_daily_backfill_observation b
-           JOIN selling_upc u ON u.ean_upc=b.ean_upc
-           SET b.upc_id=u.upc_id
-           WHERE b.upc_id IS NULL OR b.upc_id<>u.upc_id"""
-    )
-    updated = int(cur.rowcount)
-    cur.execute(
-        """UPDATE pos_period_residual_observation b
-           JOIN selling_upc u ON u.ean_upc=b.ean_upc
-           SET b.upc_id=u.upc_id
-           WHERE b.upc_id IS NULL OR b.upc_id<>u.upc_id"""
-    )
-    updated += int(cur.rowcount)
+    """Repair derived backfill UPC ids from immutable raw EAN/UPC lineage."""
+    index=_active_upc_alias_index(cur)
+    updated=0
     for table in ("pos_daily_backfill_observation","pos_period_residual_observation"):
-        cur.execute(
-            f"""UPDATE {table} b
-                JOIN selling_upc u
-                  ON u.ean_upc=CONCAT(LEFT(TRIM(LEADING '0' FROM b.ean_upc),6),'00000')
-                 AND u.record_status='ACTIVE'
-                SET b.upc_id=u.upc_id
-                WHERE TRIM(LEADING '0' FROM b.ean_upc) LIKE '249___%'
-                  AND TRIM(LEADING '0' FROM b.ean_upc) NOT REGEXP '[^0-9]'
-                  AND (b.upc_id IS NULL OR b.upc_id<>u.upc_id)"""
-        )
-        updated += int(cur.rowcount)
+        cur.execute(f"SELECT DISTINCT ean_upc,upc_id FROM {table} WHERE ean_upc IS NOT NULL")
+        for row in cur.fetchall():
+            resolved=_resolve_source_upc_id(index,row.get("ean_upc"),row.get("upc_id"))
+            if resolved is None:
+                continue
+            current=row.get("upc_id")
+            if current is not None and int(current)==resolved:
+                continue
+            cur.execute(
+                f"""UPDATE {table}
+                    SET upc_id=%s
+                    WHERE ean_upc=%s
+                      AND (upc_id IS NULL OR upc_id<>%s)""",
+                (resolved,str(row.get("ean_upc")),resolved),
+            )
+            updated+=int(cur.rowcount or 0)
     return updated
-
 
 def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
     """Read-only view of multi-date POS/MVT backfill behavior for one batch."""
