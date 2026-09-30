@@ -713,12 +713,14 @@ def inventory_review(
 
         family_cache: dict[int, dict[str, Any]] = {}
         out = []
-        bulk_prices = _bulk_live_current_prices(cur, qrows) if lightweight else {}
         for row in qrows:
-            if row.get("upc_id") is None:
+            # Mobile Quick Check search is identity + recent-velocity discovery.
+            # Do not make search wait for price-history resolution. Authoritative
+            # CURRENT price is resolved when the user opens the UPC detail.
+            if lightweight:
                 live_price = None
-            elif lightweight:
-                live_price = bulk_prices.get(int(row["upc_id"]))
+            elif row.get("upc_id") is None:
+                live_price = None
             else:
                 live_price = _live_current_price(
                     cur,
@@ -742,7 +744,10 @@ def inventory_review(
             else:
                 row["current_price"] = None
                 row["current_price_type"] = None
-                row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
+                row["current_price_source"] = (
+                    "OPEN_DETAIL_FOR_CURRENT_PRICE"
+                    if lightweight else "STALE_OR_MISSING_FRESH_PRICE"
+                )
                 row["current_price_asof_date"] = None
                 row["gp_pct_current"] = None
 
@@ -825,7 +830,7 @@ def inventory_review(
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
             "lightweight": bool(lightweight),
             "lightweight_skips": (
-                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD"]
+                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD","LIVE_CURRENT_PRICE_RESOLUTION"]
                 if lightweight
                 else []
             ),
