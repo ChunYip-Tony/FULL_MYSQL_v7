@@ -577,7 +577,7 @@ def _unique_alias_map(values: dict[str, set[int]]) -> dict[str, int]:
 
 
 def article_manual_pos_alias_index(cur) -> dict[str, Any]:
-    """Build authoritative 249 POS aliases from the newest valid Article Manual.
+    """Build authoritative Article Manual aliases used after RAW POS identity.
 
     User-confirmed Article Manual schemas:
       Fresh/Live/Shrimp/Fish Ball/Frozen Fish:
@@ -811,41 +811,61 @@ def _resolve_source_upc_id(
     fallback_upc_id: Any = None,
     description: Any = None,
 ) -> int | None:
+    """Resolve POS identity with RAW barcode authority before manual fallback.
+
+    Hybrid priority:
+      1) exact/numeric RAW POS UPC,
+      2) deterministic 249 product-code normalization,
+      3) newest Article Manual identity,
+      4) deterministic retail-barcode alias,
+      5) explicit service-description fallback,
+      6) stored derived upc_id fallback.
+
+    If RAW/product-code identity and Article Manual both resolve but disagree,
+    fail closed (None). Quantity always comes from POS; Article Manual is
+    identity evidence only and can never add or duplicate sold quantity.
+    """
     raw=str(raw_ean or "").strip()
     exact=index["exact"]
     numeric=index["numeric"]
 
-    # Article Manual is the primary identity authority for 249 Seafood POS.
-    # Quantity still comes only from this POS row; the manual never contributes
-    # sales quantity and therefore cannot create double counting.
+    raw_uid=None
+    if raw in exact:
+        raw_uid=int(exact[raw])
+    else:
+        key=numeric_digits(raw)
+        if key and key in numeric:
+            raw_uid=int(numeric[key])
+
+    if raw_uid is None:
+        service=service_249_canonical_base(raw)
+        if service and service in exact:
+            raw_uid=int(exact[service])
+
     manual_uid = resolve_article_manual_pos_upc_id(
         index.get("article_manual") or {},
         raw,
     )
+    if raw_uid is not None:
+        if manual_uid is not None and int(manual_uid) != int(raw_uid):
+            return None
+        return int(raw_uid)
+
     if manual_uid is not None:
         return int(manual_uid)
 
-    # A POS row explicitly labeled Fried/Cook Service is selling evidence for
-    # the service UPC. If its source barcode is not a canonical 249 spelling,
-    # use the unique ACTIVE 249 roster description before trusting another
-    # numeric alias. Quantity still comes from the POS row itself.
+    for candidate in retail_barcode_alias_candidates(raw):
+        if candidate in exact:
+            return int(exact[candidate])
+
+    # Description is a last-resort service identity aid only. It never supplies
+    # quantity and it is used only when barcode + Article Manual are unresolved.
     if looks_like_249_service_description(description):
         desc_key=normalize_selling_description(description)
         service_uid=index.get("service_desc",{}).get(desc_key)
         if service_uid is not None:
             return int(service_uid)
 
-    if raw in exact:
-        return int(exact[raw])
-    key=numeric_digits(raw)
-    if key and key in numeric:
-        return int(numeric[key])
-    service=service_249_canonical_base(raw)
-    if service and service in exact:
-        return int(exact[service])
-    for candidate in retail_barcode_alias_candidates(raw):
-        if candidate in exact:
-            return int(exact[candidate])
     if fallback_upc_id is not None:
         return int(fallback_upc_id)
     return None
