@@ -387,6 +387,67 @@ def _last_receipt_base_summary(cur, family_id: int) -> dict[str, Any]:
     }
 
 
+def _last_receipt_base_summary_from_events(events: list[dict[str,Any]]) -> dict[str,Any]:
+    """Build the Base-UOM last-receipt summary from already-loaded family events."""
+    valid=[
+        x for x in events
+        if x.get("posting_date") is not None
+        and x.get("base_receipt_quantity") is not None
+        and _d(x.get("base_receipt_quantity"))>0
+        and x.get("base_receipt_uom")
+    ]
+    if not valid:
+        return {
+            "date":None,
+            "quantity":None,
+            "base_uom":None,
+            "receiving_article":None,
+            "receiving_articles":[],
+            "status":"BASE_QTY_UNAVAILABLE",
+        }
+
+    last_date=max(x["posting_date"] for x in valid)
+    last=[x for x in valid if x.get("posting_date")==last_date]
+    article_groups: dict[str,dict[str,Any]] = {}
+    for x in last:
+        art=str(x.get("article_number") or "").strip() or "UNKNOWN"
+        slot=article_groups.setdefault(
+            art,
+            {
+                "article_number":art,
+                "quantity":Decimal("0"),
+                "base_uom":str(x.get("base_receipt_uom") or "").upper() or None,
+            },
+        )
+        uom=str(x.get("base_receipt_uom") or "").upper() or None
+        if slot.get("base_uom")==uom:
+            slot["quantity"]+=_d(x.get("base_receipt_quantity"))
+        else:
+            slot["quantity"]=None
+            slot["base_uom"]=None
+
+    articles=sorted(
+        article_groups.values(),
+        key=lambda x:(-float(x.get("quantity") or 0),str(x.get("article_number") or "")),
+    )
+    primary=articles[0] if articles else None
+    same_uom={x.get("base_uom") for x in articles if x.get("base_uom")}
+    total_qty=None
+    total_uom=None
+    if articles and len(same_uom)==1 and all(x.get("quantity") is not None for x in articles):
+        total_qty=sum((_d(x["quantity"]) for x in articles),Decimal("0"))
+        total_uom=next(iter(same_uom))
+
+    return {
+        "date":last_date,
+        "quantity":total_qty,
+        "base_uom":total_uom,
+        "receiving_article":primary.get("article_number") if primary else None,
+        "receiving_articles":articles,
+        "status":"READY" if total_qty is not None and total_uom else "MIXED_BASE_UOM",
+    }
+
+
 def _fallback_receiving_article(cur, family_id: int, family_article: str | None) -> str | None:
     cur.execute(
         """SELECT a.article_number
@@ -468,14 +529,22 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
+        # Reuse the same canonical movement window for every suggested family.
+        # The former path re-queried coverage and movement rows twice per family.
+        receipt_days=source_data_days(
+            cur,
+            "movement",
+            limit=180,
+            up_to=completed_through_date(),
+        )
         for kind in kinds:
             bulk = bulk_ordering_suggestions(kind)
             inputs[kind] = bulk.get("inputs")
             skipped.extend(bulk.get("skipped") or [])
             for s in bulk.get("suggestions") or []:
                 fid = int(s["family_id"])
-                receipt = _last_receipt_base_summary(cur, fid)
-                events = _family_receipt_events(cur, fid)
+                events = _family_receipt_events(cur, fid, data_days=receipt_days)
+                receipt = _last_receipt_base_summary_from_events(events)
                 pattern = _delivery_pattern(events)
                 receiving_article = receipt.get("receiving_article") or _fallback_receiving_article(
                     cur, fid, str(s.get("family_article_number") or "") or None
