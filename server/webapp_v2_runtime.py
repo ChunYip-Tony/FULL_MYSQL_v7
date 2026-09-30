@@ -427,6 +427,11 @@ def _fuzzy_name_relevance(query: str, name: Any) -> int:
 
 
 def _relevance(query: str, *, name: Any, number: Any, kind: str, matched_as: str | None = None) -> int:
+    """Flexible search relevance for item names and identifiers.
+
+    Exact match is not required. Supports identifier fragments, multi-word
+    terms in any order, partial word prefixes, and bounded typo tolerance.
+    """
     q = _norm_text(query)
     n = _norm_text(name)
     num = str(number or "").strip()
@@ -436,17 +441,28 @@ def _relevance(query: str, *, name: Any, number: Any, kind: str, matched_as: str
         if qk and qk == nk:
             return 1000 if kind in {"FAMILY","UPC"} else 980
         if qk and nk.startswith(qk):
-            return 860
+            return 880
+        if qk and nk.endswith(qk):
+            return 840
+        if qk and qk in nk:
+            return 800
         return 0
     if q and n == q:
         return 950
     if q and n.startswith(q):
-        return 850
+        return 870
+
     q_tokens = [x for x in q.split() if x]
+    n_tokens = [x for x in n.split() if x]
     if q_tokens and all(t in n for t in q_tokens):
+        return 790
+    if q_tokens and n_tokens and all(
+        any(nt.startswith(qt) for nt in n_tokens)
+        for qt in q_tokens
+    ):
         return 760
     if q and q in n:
-        return 700
+        return 720
     return _fuzzy_name_relevance(query, name)
 
 
@@ -545,7 +561,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                       OR main_article_number LIKE %s
                       OR ean_upc LIKE %s
                    LIMIT 120""",
-                (q,nk,q,q,f"{q}%",f"{q}%",f"{q}%"),
+                (q,nk,q,q,f"%{q}%",f"%{q}%",f"%{q}%"),
             )
         else:
             cur.execute(
@@ -594,7 +610,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                    WHERE a.article_number=%s
                       OR a.article_number LIKE %s
                    LIMIT 60""",
-                (q,f"{q}%"),
+                (q,f"%{q}%"),
             )
         else:
             cur.execute(

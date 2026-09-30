@@ -3350,9 +3350,9 @@ def backoffice_qa_resolve(
 
 
 @app.get('/v1/backoffice/inventory')
-def backoffice_inventory(category:str='ALL',limit:int=300):
+def backoffice_inventory(category:str='ALL',limit:int=300,q:str|None=None):
     try:
-        result=backoffice_inventory_review(limit=limit,category=category)
+        result=backoffice_inventory_review(limit=limit,category=category,query=q)
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
