@@ -23,10 +23,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .tablewrap{overflow:auto}.table{width:100%;min-width:980px;border-collapse:collapse;font-size:12px}.table th,.table td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}.table th{background:#f7faf9;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.035em}.table tbody tr:hover td{background:#fbfdfc}.name{font-weight:800;font-size:13px}.meta{font-size:10px;color:var(--muted);margin-top:2px}.num{font-variant-numeric:tabular-nums}.linkbtn{border:0;background:transparent;padding:2px 0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:850}.suggest{font-weight:900;color:var(--sea);font-size:11px}.empty{padding:28px;text-align:center;color:var(--muted);font-size:10px}.loading{padding:22px;color:var(--muted);font-size:10px}.error{padding:10px 12px;background:var(--redbg);color:var(--red);font-size:10px;border-bottom:1px solid #f0cac4}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:11px}.kpi{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.kpi small{display:block;color:var(--muted);font-size:8px}.kpi b{display:block;font-size:14px;margin-top:2px}.kpi span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
 .reasonlist{display:grid;gap:6px}.reason{display:grid;grid-template-columns:auto 1fr;gap:7px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.rdot{width:7px;height:7px;border-radius:50%;background:var(--sea);margin-top:4px}.reason b{display:block;font-size:10px}.reason span{display:block;color:var(--muted);font-size:9px;margin-top:1px}.sectiontitle{font-size:10px;font-weight:850;margin:13px 0 6px}.detailgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.detail{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fbfdfc}.detail small{display:block;color:var(--muted);font-size:8px}.detail b{display:block;font-size:10px;margin-top:2px}.calc{border:1px dashed #b9d4cf;background:#f4fbf9;border-radius:9px;padding:8px;margin-top:8px;font-size:9px;color:var(--deep)}.logconsole{background:#0b272b;color:#d8efec;border-radius:10px;padding:9px;font:9px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:230px;overflow:auto}
-.uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
+.dbcardgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px}.dbcard{border:1px solid var(--line);background:#fff;border-radius:13px;padding:13px;text-align:left;display:flex;gap:11px;align-items:flex-start;box-shadow:0 4px 14px rgba(9,49,54,.03)}.dbcard:hover{border-color:#a8cbc6;background:#fbfdfc}.dbcard .dbicon{font-size:24px;line-height:1}.dbcard span:last-child{display:block}.dbcard small{display:block;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase}.dbcard b{display:block;font-size:14px;margin-top:2px}.dbcard em{display:block;color:var(--muted);font-size:10px;font-style:normal;margin-top:3px}.dboverviewgrid{display:grid;grid-template-columns:1fr;gap:9px;padding:0 11px 11px}.dbsummary{border:1px solid var(--line);border-radius:12px;padding:0 10px 10px;background:#fbfdfc}.uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
 .batchgrid{display:grid;gap:7px;padding:10px}.batch{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.batchtop{display:flex;justify-content:space-between;gap:8px}.batchid{font-weight:850;font-size:11px}.progress{height:6px;border-radius:999px;background:#e7efeb;overflow:hidden;margin-top:7px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--sea),var(--sea2))}.batchmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px}.batchmeta div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px}.batchmeta small{display:block;color:var(--muted);font-size:7px}.batchmeta b{display:block;font-size:9px;margin-top:1px}
 .drawerback{position:fixed;inset:0;background:rgba(7,43,47,.24);z-index:30;display:none}.drawerback.on{display:block}.drawer{position:fixed;right:0;top:0;bottom:0;width:min(94vw,570px);background:#fff;z-index:31;transform:translateX(105%);transition:.18s;box-shadow:-20px 0 50px rgba(8,44,48,.18);display:flex;flex-direction:column}.drawer.on{transform:translateX(0)}.drawerhead{padding:12px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:9px}.drawertitle{font-size:15px;font-weight:850}.drawersub{font-size:9px;color:var(--muted);margin-top:2px}.drawerbody{padding:12px;overflow:auto;flex:1}.drawerfoot{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:6px}.formfield{margin-top:9px}.formfield label{display:block;font-size:9px;font-weight:800;margin-bottom:4px}.formfield input,.formfield textarea,.formfield select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}.toast{position:fixed;right:12px;bottom:12px;z-index:50;background:var(--deep);color:#fff;border-radius:9px;padding:9px 10px;font-size:10px;opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none}.toast.on{opacity:1;transform:none}
-@media(min-width:760px){.shell{padding:12px 12px 30px}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
+@media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:900px}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
 </style>
 </head>
@@ -101,48 +101,67 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="database" class="view">
   <div class="panel">
     <div class="panelhead">
-      <div><div class="title">Database Center</div><div class="sub">Upload, batch processing, QA resolution, and pipeline health in one workspace.</div></div>
+      <div><div class="title">Database Center</div><div class="sub">Upload → Processing → QA → Data Health. Start with Overview to see what needs attention.</div></div>
+      <button id="dbRefreshAll" class="btn small">Refresh All</button>
     </div>
     <div class="toolrow">
       <div class="filters">
-        <button class="filter dbtab on" data-dbtab="dbupload">Upload Center</button>
-        <button class="filter dbtab" data-dbtab="dbbatches">Batch Monitor</button>
-        <button class="filter dbtab" data-dbtab="dbqa">QA</button>
-        <button class="filter dbtab" data-dbtab="dbdata">Data Pipeline</button>
+        <button class="filter dbtab on" data-dbtab="dboverview">Overview</button>
+        <button class="filter dbtab" data-dbtab="dbupload">Upload Files</button>
+        <button class="filter dbtab" data-dbtab="dbbatches">Processing</button>
+        <button class="filter dbtab" data-dbtab="dbqa">QA Fixes</button>
+        <button class="filter dbtab" data-dbtab="dbdata">Data Health</button>
       </div>
     </div>
   </div>
-  <div id="dbupload" class="subview on"><div class="panel">
- <div class="panelhead"><div><div class="title">Upload Center</div><div class="sub">No staging. One upload action creates one batch, uploads all selected files, then commits immediately.</div></div><span class="pill sea">DIRECT UPLOAD</span></div>
- <div class="uploadgrid">
-  <div class="drop"><div class="ico">📤</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. All selected files are one immutable batch.</p><input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div class="formfield"><label>Optional batch note</label><input id="uploadNote" placeholder="Daily seafood upload"></div><div class="upload-actions"><button id="uploadBtn" class="btn primary">Upload & Start Batch</button></div></div>
-  <div><div class="sectiontitle">Latest Upload Result</div><div id="uploadResult" class="uploadresult"><span class="meta">No upload in this session.</span></div><div class="sectiontitle">Current Processing</div><div id="uploadActive" class="batchgrid" style="padding:0"></div></div>
- </div>
-</div></div>
+
+  <div id="dboverview" class="subview on">
+    <div class="panel">
+      <div class="panelhead">
+        <div><div class="title">Database Overview</div><div class="sub">What is happening now and where you need to go next.</div></div>
+        <span id="dbOverallStatus" class="pill blue">CHECKING</span>
+      </div>
+      <div id="dbOverviewError"></div>
+      <div class="dbcardgrid">
+        <button class="dbcard dbjump" data-target="dbupload"><span class="dbicon">📤</span><span><small>Step 1</small><b>Upload Files</b><em id="dbUploadSummary">Start a new source batch</em></span></button>
+        <button class="dbcard dbjump" data-target="dbbatches"><span class="dbicon">⚙️</span><span><small>Step 2</small><b>Processing</b><em id="dbProcessingSummary">Checking current batch…</em></span></button>
+        <button class="dbcard dbjump" data-target="dbqa"><span class="dbicon">🧩</span><span><small>Step 3</small><b>QA Fixes</b><em id="dbQASummary">Checking open issues…</em></span></button>
+        <button class="dbcard dbjump" data-target="dbdata"><span class="dbicon">🩺</span><span><small>Step 4</small><b>Data Health</b><em id="dbHealthSummary">Checking service health…</em></span></button>
+      </div>
+      <div class="dboverviewgrid">
+        <div class="dbsummary"><div class="sectiontitle">Current Processing</div><div id="dbOverviewActive" class="batchgrid" style="padding:0"></div></div>
+        <div class="dbsummary"><div class="sectiontitle">Latest Completed Batch</div><div id="dbLatestBatch" class="batchgrid" style="padding:0"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dbupload" class="subview"><div class="panel">
+    <div class="panelhead"><div><div class="title">Upload Files</div><div class="sub">Select all source files that belong together. One upload action creates one immutable batch and starts processing.</div></div><span class="pill sea">DIRECT UPLOAD</span></div>
+    <div class="uploadgrid" style="grid-template-columns:1fr">
+      <div class="drop"><div class="ico">📤</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. Files selected together are one batch.</p><input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div class="formfield"><label>Optional batch note</label><input id="uploadNote" placeholder="Daily seafood upload"></div><div class="upload-actions"><button id="uploadBtn" class="btn primary">Upload & Start Processing</button></div></div>
+      <div><div class="sectiontitle">Latest Upload Result</div><div id="uploadResult" class="uploadresult"><span class="meta">No upload in this session.</span></div></div>
+    </div>
+  </div></div>
+
   <div id="dbbatches" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">Batch Monitor</div><div class="sub">Active batch is separate from completed/failed history.</div></div><button id="refreshBatch" class="btn small">Refresh</button></div>
- <div class="sectiontitle" style="padding:0 11px">Current Active Batch</div><div id="activeBatch" class="batchgrid"></div>
- <div class="sectiontitle" style="padding:0 11px">Recent Batch History</div><div id="batchError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Batch</th><th>Status</th><th>Files</th><th>Started</th><th>Completed</th><th>Phase 3</th><th>QC Ready/Hold</th></tr></thead><tbody id="batchRows"></tbody></table></div>
-</div></div>
+    <div class="panelhead"><div><div class="title">Processing</div><div class="sub">Current batch first. Completed / failed batches stay in history below.</div></div><button id="refreshBatch" class="btn small">Refresh</button></div>
+    <div class="sectiontitle" style="padding:0 11px">Current Active Batch</div><div id="activeBatch" class="batchgrid"></div>
+    <div class="sectiontitle" style="padding:0 11px">Processing History</div><div id="batchError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Batch</th><th>Status</th><th>Files</th><th>Started</th><th>Completed</th><th>Publish</th><th>QC Ready / Hold</th></tr></thead><tbody id="batchRows"></tbody></table></div>
+  </div></div>
+
   <div id="dbqa" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">QA Review & Resolution</div><div class="sub">Controlled fixes for UPC identity / Selling UOM QA holds. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
- <div class="toolrow">
-   <div class="filters">
-     <button class="filter qafilter on" data-qafilter="ALL">All</button>
-     <button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button>
-     <button class="filter qafilter" data-qafilter="VIEW_ONLY">View Only</button>
-     <button class="filter qafilter" data-qafilter="HIGH">High / Critical</button>
-   </div>
-   <div class="tools"><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div>
- </div>
- <div id="qaError"></div>
- <div class="tablewrap"><table class="table" style="min-width:1050px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
- <div class="sectiontitle" style="padding:0 11px">Recent QA Resolution History</div>
- <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
-</div></div>
+    <div class="panelhead"><div><div class="title">QA Fixes</div><div class="sub">Only issues that require review or user-confirmed correction. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
+    <div class="toolrow"><div class="filters"><button class="filter qafilter on" data-qafilter="ALL">All Open</button><button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button><button class="filter qafilter" data-qafilter="VIEW_ONLY">Review Only</button><button class="filter qafilter" data-qafilter="HIGH">High / Critical</button></div><div class="tools"><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div></div>
+    <div id="qaError"></div>
+    <div class="tablewrap"><table class="table" style="min-width:1050px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
+    <div class="sectiontitle" style="padding:0 11px">Recent Resolution History</div>
+    <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
+  </div></div>
+
   <div id="dbdata" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">Data Pipeline</div><div class="sub">Service health, active processing, and latest publish status.</div></div><button id="refreshData" class="btn small">Refresh</button></div><div id="dataGrid" class="grid"></div><div id="dataEvents" class="batchgrid"></div>
-</div></div>
+    <div class="panelhead"><div><div class="title">Data Health</div><div class="sub">Service health, worker status, latest publish, and recent pipeline outcomes.</div></div><button id="refreshData" class="btn small">Refresh</button></div>
+    <div id="dataGrid" class="grid"></div><div id="dataEvents" class="batchgrid"></div>
+  </div></div>
 </section>
 
 <div id="drawerBack" class="drawerback"></div><aside id="drawer" class="drawer"><div class="drawerhead"><div><div id="drawerTitle" class="drawertitle">Details</div><div id="drawerSub" class="drawersub"></div></div><button id="drawerClose" class="btn small">Close</button></div><div id="drawerBody" class="drawerbody"></div><div id="drawerFoot" class="drawerfoot"></div></aside>
