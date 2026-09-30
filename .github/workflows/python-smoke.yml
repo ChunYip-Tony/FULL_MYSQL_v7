@@ -82,6 +82,20 @@ jobs:
           print('backoffice-dom-bindings=PASS')
           PY
 
+      - name: Validate Backoffice pricing and inventory contracts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          runtime = Path('backoffice_runtime.py').read_text(encoding='utf-8')
+          ui = Path('backoffice_ui.py').read_text(encoding='utf-8')
+          assert 'QUICK_CHECK_CURRENT_AT_RESPONSE_TIME' in runtime
+          assert 'upc_velocity_7d' in runtime
+          assert 'vel7_oh_desc' in ui
+          assert 'Highest 7D Velocity → Highest OH' in ui
+          assert 'money(r.current_cost)' in ui
+          print('backoffice-pricing-inventory-contract=PASS')
+          PY
+
       - name: Validate current price authority contract
         run: |
           python - <<'PY'
