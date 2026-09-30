@@ -4229,18 +4229,21 @@ def _gp_day_price_suggestion_from_batch(
     if clearance:
         lower=[x for x in pool if _d(x.get("price"))<current]
         if lower:
+            # Freshness-qualified items still optimize economics: among lower
+            # observed prices that can improve sell-through, choose the price
+            # with the highest observed GP$/day first, then velocity.
             lower.sort(key=lambda x:(
+                -float(x.get("gp_per_observed_day_at_current_cost") or Decimal("-999999")),
                 -float(x.get("observed_velocity_per_day") or 0),
-                -float(x.get("gp_per_observed_day_at_current_cost") or 0),
                 float(x.get("price") or 0),
             ))
             best=lower[0]
             suggested=_d(best["price"])
             basis=(
-                "COMPANY_RANGE_CLEARANCE_14D_SELL_THROUGH"
-                if refs else "CLEARANCE_14D_SELL_THROUGH"
+                "COMPANY_RANGE_CLEARANCE_14D_MAX_GP_PER_DAY"
+                if refs else "CLEARANCE_14D_MAX_GP_PER_DAY"
             )
-            selection="LOWER_14D_OBSERVED_PRICE_MAX_SELL_THROUGH"
+            selection="LOWER_14D_OBSERVED_PRICE_MAX_GP_PER_DAY"
             expected_gp=best.get("gp_per_observed_day_at_current_cost")
             expected_vel=best.get("observed_velocity_per_day")
         elif sweet is not None and clamp_company(sweet)<current:
@@ -4649,10 +4652,18 @@ def performance_report(
 
             # Pricing Review qualification:
             # - usable positive OH is required; no stock => no price action
-            # - recent 14 completed-day sales history qualifies normal review
-            # - Fresh DOH > 7 or Frozen DOH > 60 qualifies clearance even
-            #   when recent demand is weak
-            if not has_oh or (not history_gate and not clearance_gate):
+            # - usable recent completed-day sales history is required so the
+            #   suggestion is grounded in observed sales/price response
+            # - Fresh requires DOH > 7
+            # - Frozen requires DOH > 60
+            # - Live/other stocked UPCs can qualify from OH + history because
+            #   no additional DOH threshold was requested for those classes
+            freshness_qualified=(
+                (pclass=="FRESH" and doh_for_gate is not None and doh_for_gate>Decimal("7"))
+                or (pclass=="FROZEN" and doh_for_gate is not None and doh_for_gate>Decimal("60"))
+                or (pclass not in {"FRESH","FROZEN"})
+            )
+            if not has_oh or not history_gate or not freshness_qualified:
                 continue
 
             status=str(row.get("quick_check_status") or "")
@@ -5066,16 +5077,16 @@ def performance_report(
             "sales_evidence_cutoff":anchor,
             "historical_window_supported_days":14,
             "company_reference_rule":"RANGE_IS_MIN_TO_MAX_OF_AVAILABLE_POSITIVE_A_B_C; QUALIFIED_UPCS_MAY_BE_REVIEWED_REGARDLESS_OF_CURRENT_IN_RANGE",
-            "company_candidate_rule":"CANDIDATE_MUST_STAY_WITHIN_COMPANY_RANGE; NORMAL_MODE_MAX_14D_GP_DOLLARS_PER_DAY; CLEARANCE_MODE_LOWER_SELL_THROUGH_PRICE; FALLBACK_CLAMP_14D_OR_SWEET_SPOT_TO_RANGE",
+            "company_candidate_rule":"CANDIDATE_MUST_STAY_WITHIN_MIN_TO_MAX_OF_AVAILABLE_POSITIVE_COMPANY_A_B_C; MAX_14D_GP_DOLLARS_PER_DAY_IS_PRIMARY_SELECTION; FRESHNESS_QUALIFIED_ITEMS_ONLY_USE_LOWER_OBSERVED_PRICES_OR_CONSTRAINED_FALLBACKS",
             "no_company_reference_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY",
-            "freshness_rule":"FRESH_OR_LIVE_DOH_GT_7_AND_FROZEN_DOH_GT_60_USE_CLEARANCE_OR_MARKDOWN_MODE",
-            "clearance_candidate_rule":"LOWER_14D_OBSERVED_PRICE_WITH_HIGHEST_SELL_THROUGH_VELOCITY; NO_INVENTED_MARKDOWN_WITHOUT_HISTORY",
+            "freshness_rule":"FRESH_REQUIRES_DOH_GT_7; FROZEN_REQUIRES_DOH_GT_60; LIVE_OR_OTHER_HAS_NO_EXTRA_DOH_GATE",
+            "clearance_candidate_rule":"LOWER_14D_OBSERVED_PRICE_WITH_HIGHEST_GP_DOLLARS_PER_DAY_THEN_VELOCITY; NO_INVENTED_MARKDOWN_WITHOUT_HISTORY",
             "candidate_demand_basis":"ACTUAL_HISTORICAL_SALES_RESPONSE_AT_OBSERVED_PRICE",
             "cost_basis":"CURRENT_AUTHORITATIVE_COST",
             "cost_caveat":"Historical daily cost lineage is not yet exposed in V2 Performance; suggestions use current authoritative cost while sales evidence is cut off at report date.",
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
-            "review_queue":"POSITIVE_OH_AND_EITHER_14D_SALES_HISTORY_OR_DOH_CLEARANCE_RISK",
+            "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY; FRESH_DOH_GT_7; FROZEN_DOH_GT_60; LIVE_OR_OTHER_NO_EXTRA_DOH_GATE",
             "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
         },
     }
