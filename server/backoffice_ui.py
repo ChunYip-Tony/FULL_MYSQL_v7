@@ -26,6 +26,30 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .dbcardgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px}.dbcard{border:1px solid var(--line);background:#fff;border-radius:13px;padding:13px;text-align:left;display:flex;gap:11px;align-items:flex-start;box-shadow:0 4px 14px rgba(9,49,54,.03)}.dbcard:hover{border-color:#a8cbc6;background:#fbfdfc}.dbcard .dbicon{font-size:24px;line-height:1}.dbcard span:last-child{display:block}.dbcard small{display:block;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase}.dbcard b{display:block;font-size:14px;margin-top:2px}.dbcard em{display:block;color:var(--muted);font-size:10px;font-style:normal;margin-top:3px}.dboverviewgrid{display:grid;grid-template-columns:1fr;gap:9px;padding:0 11px 11px}.dbsummary{border:1px solid var(--line);border-radius:12px;padding:0 10px 10px;background:#fbfdfc}.uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
 .batchgrid{display:grid;gap:7px;padding:10px}.batch{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.batchtop{display:flex;justify-content:space-between;gap:8px}.batchid{font-weight:850;font-size:11px}.progress{height:6px;border-radius:999px;background:#e7efeb;overflow:hidden;margin-top:7px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--sea),var(--sea2))}.batchmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px}.batchmeta div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px}.batchmeta small{display:block;color:var(--muted);font-size:7px}.batchmeta b{display:block;font-size:9px;margin-top:1px}
 .drawerback{position:fixed;inset:0;background:rgba(7,43,47,.24);z-index:30;display:none}.drawerback.on{display:block}.drawer{position:fixed;right:0;top:0;bottom:0;width:min(94vw,570px);background:#fff;z-index:31;transform:translateX(105%);transition:.18s;box-shadow:-20px 0 50px rgba(8,44,48,.18);display:flex;flex-direction:column}.drawer.on{transform:translateX(0)}.drawerhead{padding:12px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:9px}.drawertitle{font-size:15px;font-weight:850}.drawersub{font-size:9px;color:var(--muted);margin-top:2px}.drawerbody{padding:12px;overflow:auto;flex:1}.drawerfoot{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:6px}.formfield{margin-top:9px}.formfield label{display:block;font-size:9px;font-weight:800;margin-bottom:4px}.formfield input,.formfield textarea,.formfield select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}.toast{position:fixed;right:12px;bottom:12px;z-index:50;background:var(--deep);color:#fff;border-radius:9px;padding:9px 10px;font-size:10px;opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none}.toast.on{opacity:1;transform:none}
+
+/* QA detail readability */
+.drawer{width:min(96vw,680px)}
+.drawerhead{padding:15px 16px}.drawertitle{font-size:18px}.drawersub{font-size:11px;line-height:1.35}
+.drawerbody{padding:16px}.drawerfoot{padding:12px 16px;background:#fff;position:sticky;bottom:0}
+.formfield{margin-top:12px}.formfield label{font-size:11px;margin-bottom:6px}
+.formfield input,.formfield textarea,.formfield select{font-size:14px;line-height:1.3;padding:11px 12px;border-radius:10px}
+.formfield textarea{min-height:78px}.sectiontitle{font-size:12px;margin:16px 0 7px}
+.qa-identity{border:1px solid #b7d8d3;background:linear-gradient(135deg,#f2fbf9,#fff);border-radius:14px;padding:13px 14px;margin-bottom:12px}
+.qa-name{font-size:18px;font-weight:900;line-height:1.2}.qa-zh{font-size:15px;font-weight:750;margin-top:4px}
+.qa-idmeta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.qa-idmeta span{font-size:10px;font-weight:800;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 7px}
+.qa-step{border:1px solid var(--line);border-radius:13px;padding:13px;margin-top:11px;background:#fff}
+.qa-stephead{display:flex;gap:9px;align-items:flex-start;margin-bottom:8px}.qa-stepnum{display:grid;place-items:center;min-width:24px;height:24px;border-radius:50%;background:var(--sea);color:#fff;font-size:11px;font-weight:900}
+.qa-stephead b{display:block;font-size:13px}.qa-stephead span:last-child{display:block;color:var(--muted);font-size:10px;line-height:1.4;margin-top:2px}
+.qa-reasons{display:grid;gap:6px}.qa-reason{border-left:4px solid #d79b2e;background:#fff8e8;border-radius:8px;padding:9px 10px;font-size:11px;line-height:1.4}
+.qa-technical{margin-top:8px}.qa-technical summary,.qa-advanced summary{cursor:pointer;font-size:10px;font-weight:850;color:var(--muted)}
+.qa-technical .calc{font-size:9px;overflow-wrap:anywhere}.qa-required{display:inline-block;margin-left:6px;padding:2px 6px;border-radius:999px;background:#fff1d8;color:#8a5c00;font-size:8px;font-weight:900;vertical-align:middle}
+.qa-field-help{font-size:9px;color:var(--muted);line-height:1.4;margin-top:5px}
+.qa-advanced{margin-top:12px;border:1px dashed #bfd6d2;background:#f8fcfb;border-radius:10px;padding:10px}
+.qa-confirm{display:flex;gap:9px;align-items:flex-start;margin-top:8px;font-size:11px;line-height:1.45}.qa-confirm input{width:19px;height:19px;margin-top:0;flex:0 0 auto}
+.qa-scope{font-size:9px;color:var(--muted);line-height:1.45;margin-top:8px}
+.detailgrid.qa-detailgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.qa-detailgrid .detail small{font-size:9px}.qa-detailgrid .detail b{font-size:12px}
+.qa-cn-list{font-size:10px;color:var(--muted);margin-top:2px}
+@media(max-width:620px){.drawer{width:100vw}.drawerbody{padding:12px}.qa-detailgrid{grid-template-columns:1fr}.qa-name{font-size:17px}.qa-zh{font-size:14px}}
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:900px}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
 </style>
@@ -373,7 +397,7 @@ function renderQA(){
    return `<tr>
      <td>${pill(x.severity)}</td>
      <td><div class="name">${esc(x.issue_code)}</div><div class="meta" style="max-width:380px">${esc(x.issue_summary||'')}</div></td>
-     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.selling_description||'Item name unavailable'):(x.entity_type||''))}</div></td>
+     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.item_name||cur.selling_description||'Item name unavailable'):(cur.item_name||x.entity_type||''))}</div>${cur.chinese_name?`<div class="qa-cn-list">${esc(cur.chinese_name)}</div>`:''}</td>
      <td>${esc(stateText||'No current serving row')}</td>
      <td>${x.can_fix?'<span class="pill amber">USER CONFIRM</span>':'<span class="pill blue">VIEW ONLY</span>'}</td>
      <td><button class="btn small qadetail" data-key="${esc(String(x.issue_id??('QC:'+x.entity_key)))}">${x.can_fix?'Fix':'Details'}</button></td>
@@ -386,9 +410,34 @@ function findQAIssue(key){
  if(String(key).startsWith('QC:'))return state.qaIssues.find(x=>x.issue_id===null&&('QC:'+x.entity_key)===key);
  return state.qaIssues.find(x=>String(x.issue_id)===String(key));
 }
+function qaFixKindLabel(kind){
+ const k=String(kind||'').toUpperCase();
+ if(k==='UOM_OR_IDENTITY'||k==='IDENTITY_AND_UOM')return 'Selling unit / item link';
+ if(k==='COST_CONVERSION')return 'Cost conversion';
+ if(k==='ARTICLE_FAMILY_MAPPING')return 'Article → Family mapping';
+ return String(kind||'Review');
+}
+function qaFriendlyReasons(x,detail){
+ const codes=Array.isArray(detail?.reasons)?detail.reasons.map(v=>String(v||'').toUpperCase()):[];
+ const labels={
+  SELLING_UOM_MISSING:'Selling UOM is missing. Select the unit represented by POS Qty = 1 for this UPC.',
+  CURRENT_ACTIVE_SELLING_UOM_MISSING:'Selling UOM is missing for an actively selling UPC. Select the POS selling unit.',
+  COST_TO_SELLING_UOM_UNRESOLVED:'Cost cannot yet be converted to the selling unit. Confirm the Selling UOM first; a separate cost-conversion QA step may remain afterward.',
+  CURRENT_COST_MISSING:'Current cost is missing. This cannot be corrected from the identity/UOM form.',
+  CURRENT_PRICE_MISSING:'Current selling price is missing. This form does not edit price.',
+  OH_MOVEMENT_ROLLFORWARD_BLOCKED:'Current OH roll-forward has a movement/UOM blocker. Review the inventory lineage after the unit is corrected.'
+ };
+ const out=[];
+ codes.forEach(c=>{if(labels[c]&&!out.includes(labels[c]))out.push(labels[c])});
+ if(!out.length&&x.issue_summary)out.push(x.issue_summary);
+ if(!out.length)out.push('Review the current item identity and unit information before applying a correction.');
+ return out;
+}
 function openQAIssue(key){
  const x=findQAIssue(key);if(!x)return;
  const cur=x.current||{},detail=x.detail||{};
+ const itemName=cur.item_name||cur.selling_description||cur.article_description||(Array.isArray(detail.descriptions)&&detail.descriptions[0])||'Item name unavailable';
+ const chineseName=cur.chinese_name||detail.chinese_name||detail.chinese_description||'';
  const detailJson=esc(JSON.stringify(detail,null,2));
  if(x.fix_kind==='ARTICLE_FAMILY_MAPPING'){
    const article=String(x.entity_key||'').trim();
@@ -484,40 +533,71 @@ function openQAIssue(key){
  const sell=cur.selling_uom||'';
  const base=cur.base_uom||'';
  const factor=cur.base_qty_per_selling_unit??'';
- openDrawer('Fix QA',`${x.issue_code} · UPC ${x.entity_key}`,`
-   <div class="detailgrid">
-     <div class="detail"><small>UPC</small><b>${esc(x.entity_key)}</b></div>
-     <div class="detail"><small>Current Article</small><b>${esc(article||'—')}</b></div>
-     <div class="detail"><small>Current Selling UOM</small><b>${esc(sell||'Missing')}</b></div>
-     <div class="detail"><small>Fix Kind</small><b>${esc(x.fix_kind)}</b></div>
+ const friendlyReasons=qaFriendlyReasons(x,detail);
+ const advancedOpen=(base||factor!=='')?' open':'';
+ openDrawer('Fix QA',`${itemName} · UPC ${x.entity_key}`,`
+   <div class="qa-identity">
+     <div class="qa-name">${esc(itemName)}</div>
+     ${chineseName?`<div class="qa-zh">${esc(chineseName)}</div>`:''}
+     <div class="qa-idmeta">
+       <span>UPC ${esc(x.entity_key)}</span>
+       <span>Article ${esc(article||'Not linked')}</span>
+       <span>${esc(qaFixKindLabel(x.fix_kind))}</span>
+     </div>
    </div>
-   <div class="sectiontitle">Issue</div><div class="calc">${esc(x.issue_summary||'')}</div>
-   <div class="sectiontitle">User-confirmed resolution</div>
-   <div class="formfield"><label>Article Number</label><input id="qaArticle" value="${esc(article)}" placeholder="Required for unmapped UPC"></div>
-   <div class="formfield"><label>Selling UOM</label><select id="qaSellingUom"><option value="">Select...</option>${['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>`<option value="${u}" ${String(sell).toUpperCase()===u?'selected':''}>${u}</option>`).join('')}</select></div>
-   <div class="formfield"><label>Base UOM (optional; leave blank unless confirmed)</label><select id="qaBaseUom"><option value="">Not confirmed</option>${['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>`<option value="${u}" ${String(base).toUpperCase()===u?'selected':''}>${u}</option>`).join('')}</select></div>
-   <div class="formfield"><label>Base Qty per Selling Unit (required only when Base UOM is confirmed)</label><input id="qaFactor" type="number" min="0" step="0.0001" value="${esc(factor)}"></div>
-   <div class="formfield"><label>Resolution Note</label><textarea id="qaNote" placeholder="What you confirmed and why"></textarea></div>
-   <label style="display:flex;gap:7px;align-items:flex-start;margin-top:10px;font-size:9px"><input id="qaConfirm" type="checkbox" style="margin-top:2px"><span>I confirm this correction. It will create/update a user-confirmed override, refresh the affected serving data, and preserve the original source rows.</span></label>
-   <div class="calc">Allowed write scope: UPC identity / Selling UOM QA resolution only. Price, cost, sales, receipt quantities, and source files remain read-only.</div>
- `,`<button id="applyQAFix" class="btn primary">Apply QA Fix</button>`);
+
+   <div class="qa-step">
+     <div class="qa-stephead"><span class="qa-stepnum">1</span><div><b>What needs fixing</b><span>Start with the field that is blocking Quick Check.</span></div></div>
+     <div class="qa-reasons">${friendlyReasons.map(r=>`<div class="qa-reason">${esc(r)}</div>`).join('')}</div>
+     <details class="qa-technical"><summary>Show technical QA reason</summary><div class="calc">${esc(x.issue_summary||'')}</div></details>
+   </div>
+
+   <div class="qa-step">
+     <div class="qa-stephead"><span class="qa-stepnum">2</span><div><b>Enter the confirmed correction</b><span>Only change values you have verified. No price, cost, sales, receipt, or RAW source value is edited here.</span></div></div>
+     <div class="detailgrid qa-detailgrid">
+       <div class="detail"><small>Current Selling UOM</small><b>${esc(sell||'Missing')}</b></div>
+       <div class="detail"><small>Current Article</small><b>${esc(article||'Not linked')}</b></div>
+     </div>
+     <div class="formfield"><label>Selling UOM <span class="qa-required">REQUIRED</span></label><select id="qaSellingUom"><option value="">Select how this UPC is sold...</option>${['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>`<option value="${u}" ${String(sell).toUpperCase()===u?'selected':''}>${u}</option>`).join('')}</select><div class="qa-field-help">Choose the unit represented by POS Qty = 1. Example: weighted seafood sold by the pound = LB; one retail bag = BAG or PACK only when confirmed.</div></div>
+     <div class="formfield"><label>Article Number</label><input id="qaArticle" value="${esc(article)}" placeholder="Required if the UPC is not linked to an Article"><div class="qa-field-help">Keep the current Article unless you have confirmed the UPC is linked to a different Article.</div></div>
+
+     <details class="qa-advanced"${advancedOpen}><summary>Advanced: Base UOM / conversion (optional)</summary>
+       <div class="qa-field-help">Leave this section blank unless the Base UOM and conversion are specifically confirmed.</div>
+       <div class="formfield"><label>Base UOM</label><select id="qaBaseUom"><option value="">Not confirmed</option>${['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>`<option value="${u}" ${String(base).toUpperCase()===u?'selected':''}>${u}</option>`).join('')}</select></div>
+       <div class="formfield"><label>Base Qty per Selling Unit</label><input id="qaFactor" type="number" min="0" step="0.0001" value="${esc(factor)}" placeholder="Example: 2"><div class="qa-field-help">Example only when confirmed: 1 PACK = 2 LB → Base UOM LB and quantity 2.</div></div>
+     </details>
+
+     <div class="formfield"><label>Resolution Note</label><textarea id="qaNote" placeholder="Optional: what you confirmed and the source of the confirmation"></textarea></div>
+   </div>
+
+   <div class="qa-step">
+     <div class="qa-stephead"><span class="qa-stepnum">3</span><div><b>Confirm and apply</b><span>The original source rows stay unchanged. The system records an audited user-confirmed override and refreshes the affected serving data.</span></div></div>
+     <label class="qa-confirm"><input id="qaConfirm" type="checkbox"><span>I confirmed the item link and Selling UOM entered above.</span></label>
+     <div class="qa-scope">Write scope: UPC identity / Selling UOM QA resolution only. Price, cost, sales, receipt quantities, and source files remain read-only.</div>
+   </div>
+ `,`<button id="applyQAFix" class="btn primary">Apply Confirmed QA Fix</button>`);
  $('#applyQAFix').onclick=async()=>{
    if(!$('#qaConfirm').checked){toast('Confirm the QA correction first');return}
+   const sellingUom=$('#qaSellingUom').value;
+   if(!sellingUom){toast('Select the Selling UOM first');return}
+   const baseUom=$('#qaBaseUom').value||null;
+   const factorRaw=($('#qaFactor').value||'').trim();
+   if(baseUom&&factorRaw===''){toast('Enter Base Qty per Selling Unit, or leave Base UOM unconfirmed');return}
    const body={
      issue_id:x.issue_id,
      ean_upc:x.entity_key,
      article_number:($('#qaArticle').value||'').trim()||null,
-     selling_uom:$('#qaSellingUom').value,
-     base_uom:$('#qaBaseUom').value||null,
-     base_qty_per_selling_unit:($('#qaFactor').value||'').trim()===''?null:Number($('#qaFactor').value),
+     selling_uom:sellingUom,
+     base_uom:baseUom,
+     base_qty_per_selling_unit:factorRaw===''?null:Number(factorRaw),
      note:($('#qaNote').value||'').trim()||null,
      confirm:'APPLY_QA_FIX'
    };
-   const btn=$('#applyQAFix');btn.disabled=true;
+   const btn=$('#applyQAFix');btn.disabled=true;btn.textContent='Applying…';
    try{
      const r=await api('/v1/backoffice/qa-resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
      toast(`QA fix applied · resolution #${r.resolution_id}`);closeDrawer();await Promise.allSettled([loadQA(),loadInventory()]);
-   }catch(e){toast(e.message)}finally{const z=$('#applyQAFix');if(z)z.disabled=false}
+   }catch(e){toast(e.message)}finally{const z=$('#applyQAFix');if(z){z.disabled=false;z.textContent='Apply Confirmed QA Fix'}}
  };
 }
 $$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
