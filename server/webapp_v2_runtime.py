@@ -2284,6 +2284,7 @@ def bulk_ordering_suggestions(
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
+        shared_sales_days_28=_canonical_sales_days(cur,limit=28)
         classes=("FRESH",) if kind=="FRESH" else ("FROZEN",)
         ph=",".join(["%s"]*len(classes))
         cur.execute(
@@ -3170,8 +3171,8 @@ def bulk_ordering_suggestions(
             if not rows:
                 continue
 
-            m28=_family_sales_series(cur,rows,28)
-            m7=_family_sales_series(cur,rows,7)
+            m28=_family_sales_series(cur,rows,28,data_days=shared_sales_days_28)
+            m7=_family_sales_tail(m28,7)
             if m28.get("status")!="READY" or m7.get("status")!="READY":
                 skipped.append({
                     "family_id":fid,
@@ -3212,7 +3213,7 @@ def bulk_ordering_suggestions(
             if not active_28 or dos is None or dos>=Decimal("7"):
                 continue
 
-            regular=_family_regular_baseline(cur,rows,28)
+            regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
             reg_vel=regular.get("regular_velocity_per_supported_day")
             if reg_vel is None:
                 skipped.append({
