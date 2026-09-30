@@ -209,7 +209,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 <section id="pricing" class="view">
 <div class="panel">
- <div class="panelhead"><div><div class="title">Pricing Review</div><div class="sub">Explainable price suggestions. No staging, approval, or system price changes.</div></div><span class="pill blue">READ ONLY</span></div>
+ <div class="panelhead"><div><div class="title">Pricing Review</div><div class="sub">Explainable price suggestions. Accepted records your decision only; change the actual price on the other computer.</div></div><span class="pill blue">REVIEW / ACCEPT</span></div>
  <div class="toolrow">
    <div class="filters"><button class="filter pricefilter on" data-cat="ALL">All</button><button class="filter pricefilter" data-cat="FRESH">Fresh</button><button class="filter pricefilter" data-cat="LIVE">Live</button><button class="filter pricefilter" data-cat="FROZEN">Frozen</button></div>
    <div class="tools">
