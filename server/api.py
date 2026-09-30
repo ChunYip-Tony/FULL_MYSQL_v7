@@ -36,6 +36,7 @@ from backoffice_runtime import (
 from qa_resolution import (
     qa_review as backoffice_qa_review,
     resolve_qa_issue as backoffice_resolve_qa_issue,
+    resolve_cost_conversion_issue as backoffice_resolve_cost_conversion_issue,
 )
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 from version import VERSION
@@ -3312,6 +3313,16 @@ class BackofficeQAResolveRequest(BaseModel):
     note: str | None = None
     confirm: str
 
+class BackofficeQACostConversionRequest(BaseModel):
+    issue_id: int | None = None
+    ean_upc: str
+    selling_qty: Decimal
+    selling_uom: str
+    cost_qty: Decimal
+    cost_uom: str
+    note: str | None = None
+    confirm: str
+
 
 @app.get('/v1/backoffice/qa-review')
 def backoffice_qa(limit:int=250):
@@ -3346,6 +3357,33 @@ def backoffice_qa_resolve(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice QA resolution failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/backoffice/qa-resolve-cost-conversion')
+def backoffice_qa_resolve_cost_conversion(
+    body: BackofficeQACostConversionRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=backoffice_resolve_cost_conversion_issue(
+            issue_id=body.issue_id,
+            ean_upc=body.ean_upc,
+            selling_qty=body.selling_qty,
+            selling_uom=body.selling_uom,
+            cost_qty=body.cost_qty,
+            cost_uom=body.cost_uom,
+            note=body.note,
+            actor=actor,
+            confirm=body.confirm,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice QA cost conversion resolution failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
