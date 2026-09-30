@@ -167,6 +167,26 @@ jobs:
           print('pricing-overview-v225=PASS')
           PY
 
+      - name: Validate final Pricing Review rules
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          runtime = Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          backoffice = Path('backoffice_ui.py').read_text(encoding='utf-8')
+          v2ui = Path('webapp_v2_ui.py').read_text(encoding='utf-8')
+          assert 'pclass=="FRESH"' in runtime
+          assert 'doh_for_gate>Decimal("7")' in runtime
+          assert 'pclass=="FROZEN"' in runtime
+          assert 'doh_for_gate>Decimal("60")' in runtime
+          assert 'has_oh=bool(current_oh is not None and current_oh>0)' in runtime
+          assert 'history_gate=bool(q14>0)' in runtime
+          assert 'company_low<=_d(x.get("price"))<=company_high' in runtime
+          assert 'COMPANY_RANGE_CLAMPED_14D_MAX_GP_PER_DAY' in runtime
+          assert 'current_price_source' in backoffice
+          assert 'current_price_source' in v2ui
+          print('final-pricing-review-rules=PASS')
+          PY
+
       - name: Import worker and Phase 3 modules
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token

@@ -4143,7 +4143,7 @@ def _gp_day_price_suggestion_from_batch(
     historical sales response. Company A/B/C constrains the candidate range but
     does not by itself exclude an otherwise qualified UPC.
 
-    Fresh/Live DOH > 7 and Frozen DOH > 60 enter clearance mode. Clearance
+    Fresh DOH > 7 and Frozen DOH > 60 enter clearance mode. Clearance
     prioritizes a historically observed lower price with stronger sell-through;
     normal mode maximizes observed GP$/day.
     """
@@ -4172,7 +4172,7 @@ def _gp_day_price_suggestion_from_batch(
     pclass=str(row.get("product_class") or "").upper()
     doh=(Decimal(str(row["doh"])) if row.get("doh") is not None else None)
     clearance_reason=None
-    if pclass in {"FRESH","LIVE"} and doh is not None and doh>Decimal("7"):
+    if pclass=="FRESH" and doh is not None and doh>Decimal("7"):
         clearance_reason="FRESH_DOH_GT_7"
     elif pclass=="FROZEN" and doh is not None and doh>Decimal("60"):
         clearance_reason="FROZEN_DOH_GT_60"
@@ -4635,7 +4635,7 @@ def performance_report(
             )
             clearance_gate=bool(
                 (
-                    pclass in {"FRESH","LIVE"}
+                    pclass=="FRESH"
                     and doh_for_gate is not None
                     and doh_for_gate>Decimal("7")
                 )
@@ -4650,7 +4650,7 @@ def performance_report(
             # Pricing Review qualification:
             # - usable positive OH is required; no stock => no price action
             # - recent 14 completed-day sales history qualifies normal review
-            # - Fresh/Live DOH > 7 or Frozen DOH > 60 qualifies clearance even
+            # - Fresh DOH > 7 or Frozen DOH > 60 qualifies clearance even
             #   when recent demand is weak
             if not has_oh or (not history_gate and not clearance_gate):
                 continue
