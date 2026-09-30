@@ -881,11 +881,13 @@ def _quick_receiving_article_context(
         tuple(fids),
     )
     receiving_by_family: dict[int,str] = {}
+    confirmed_receiving_families: set[int] = set()
     for r in cur.fetchall():
         fid=int(r["family_id"])
         art=str(r.get("article_number") or "").strip()
         if art and fid not in receiving_by_family:
             receiving_by_family[fid]=art
+            confirmed_receiving_families.add(fid)
 
     # Fail soft to the existing Family Article only when no confirmed Receiving
     # Article mapping exists. The UI labels that fallback explicitly.
@@ -945,7 +947,7 @@ def _quick_receiving_article_context(
         receiving=receiving_by_family.get(fid)
         mv=movement_by_article.get(str(receiving or ""),{})
         qty=mv.get("quantity")
-        mapped=bool(receiving and str(receiving)!=str(row.get("main_article_number") or ""))
+        mapped=fid in confirmed_receiving_families
         out[fid]={
             "receiving_article":receiving,
             "receiving_article_mapping_status":"CONFIRMED_RECEIVING_ARTICLE" if mapped else "FAMILY_ARTICLE_FALLBACK",
