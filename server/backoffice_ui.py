@@ -1622,7 +1622,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -2030,6 +2030,7 @@ async function mobileOpenModule(module,{query='',historyMode='push',parentModule
       state.qaFilter='ALL';state.qaText='';state.qaSort='oh_vel_desc';mobileRenderQaTools();await loadQA();
     }else if(module==='price'){
       state.priceCat='ALL';state.priceStatus='ALL';state.priceSort='opportunity';state.priceText='';await loadPrices();
+      if(state.priceLoadError)throw new Error(state.priceLoadError);
     }else if(module==='performance'){
       state.salesSort=state.salesSort||'gp_desc';await loadSell();mobileRenderPerformanceTools();
     }else if(module==='ordering'){
@@ -2223,6 +2224,15 @@ function mobileRenderList(){
     const h=state.orderHealth;
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
     html='<div class="m-error"><b>Ordering blocked — required data is not current.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing/currentness issue: '+esc(missing)+'.<br>Upload or finish ingestion for the missing completed day, then refresh Ordering.</div>';
+  }
+  if(!html&&mobileState.module==='price'&&state.priceHealth?.blocked){
+    const h=state.priceHealth;
+    const missing=(h.missing||[]).join(' + ')||'POS / MVT';
+    html='<div class="m-error"><b>Price Change blocked — required data is not current.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing/currentness issue: '+esc(missing)+'.<br>Upload or finish ingestion for the missing completed day, then refresh Price Change.</div>';
+  }
+  if(!html&&mobileState.module==='price'&&!state.priceHealth?.blocked&&!state.priceLoadError){
+    const suppressed=Number(state.priceMeta?.suppressedAccepted||0);
+    html='<div class="m-empty"><b>No qualified price changes in the current snapshot.</b>'+(suppressed?'<br><br>'+esc(suppressed)+' previously accepted suggestion(s) remain suppressed because the price evidence and candidate have not changed.':'')+'</div>';
   }
   box.innerHTML=html||'<div class="m-empty">No items match the current filter.</div>';
   box.querySelectorAll('[data-mobile-key]').forEach(b=>b.onclick=()=>mobileOpenItem(b.dataset.mobileKey));
@@ -2907,7 +2917,41 @@ function renderOrders(){
 $$('.ordfilter').forEach(b=>b.onclick=()=>{state.orderFilter=b.dataset.filter;$$('.ordfilter').forEach(x=>x.classList.toggle('on',x===b));renderOrders()});$('#orderSort').onchange=renderOrders;
 function openOrderDetail(fam){const r=state.orders.find(x=>String(x.family_article)===String(fam));if(!r)return;const d=r.details||{},reasons=d.reasons||[], recArts=d.receiving_articles_on_last_receipt||[];openDrawer('Ordering Detail / Why?',`${r.family_name} · Family ${r.family_article}`,`<div class="detailgrid"><div class="detail"><small>Receiving Article</small><b>${esc(r.receiving_article||'—')}</b></div><div class="detail"><small>Family OH</small><b>${fmt(r.oh)} ${esc(r.oh_uom||'')}</b></div><div class="detail"><small>Last Receipt</small><b>${esc(r.last_receipt_date||'—')}</b></div><div class="detail"><small>Receipt Qty · Base</small><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></div><div class="detail"><small>Family 7D Movement</small><b>${fmt(d.qty_7d)}</b></div><div class="detail"><small>Family 28D Movement</small><b>${fmt(d.qty_28d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(d.velocity_7d)}/day</b></div><div class="detail"><small>DOS</small><b>${fmt(d.dos)}</b></div></div><div class="sectiontitle">Why this suggestion?</div><div class="reasonlist">${reasons.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div></div>`).join('')}</div><div class="calc">Coming delivery suggestion ≈ expected family usage through coverage window − usable family OH + promotion/safety adjustment. Incoming is not used as a displayed Ordering Review field.</div>${recArts.length?`<div class="sectiontitle">Receiving Articles on Last Receipt</div><div class="reasonlist">${recArts.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.article_number)}</b><span>${fmt(x.quantity)} ${esc(x.base_uom||'')} · Base UOM</span></div></div>`).join('')}</div>`:''}`,`<span class="pill blue">READ ONLY</span>`)}
 
-async function loadPrices(){const err=$('#priceError');err.innerHTML='';$('#priceRows').innerHTML='<tr><td colspan="12" class="loading">Loading...</td></tr>';try{const d=await api(`/v1/backoffice/pricing-review?category=${encodeURIComponent(state.priceCat)}&limit=1000`);state.prices=d.rows||[];renderPrices()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#priceRows').innerHTML=''}}
+async function loadPrices(){
+  const err=$('#priceError');
+  err.innerHTML='';
+  state.priceLoadError='';
+  state.priceHealth=null;
+  state.priceMeta=null;
+  $('#priceRows').innerHTML='<tr><td colspan="12" class="loading">Loading...</td></tr>';
+  try{
+    const d=await api(`/v1/backoffice/pricing-review?category=${encodeURIComponent(state.priceCat)}&limit=1000`,{timeoutMs:30000});
+    const h=d.data_health||{};
+    state.priceHealth={
+      blocked:String(h.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA',
+      analysisStatus:String(h.status||'CURRENT').toUpperCase(),
+      expectedThrough:h.expected_through||null,
+      posThrough:h.pos_data_through||null,
+      movementThrough:h.movement_data_through||null,
+      missing:h.missing_required_sources||[]
+    };
+    state.priceMeta={
+      suppressedAccepted:Number(d.suppressed_accepted_count||0),
+      summary:d.summary||{},
+      reportDate:d.report_date||null
+    };
+    state.prices=state.priceHealth.blocked?[]:(d.rows||[]);
+    renderPrices();
+    return d
+  }catch(e){
+    state.prices=[];
+    state.priceLoadError=e.message||'Unable to load Price Change review';
+    err.innerHTML=`<div class="error"><b>Price Change failed to load.</b><br>${esc(state.priceLoadError)}</div>`;
+    $('#priceCount').textContent='ERROR';
+    $('#priceRows').innerHTML='<tr><td colspan="12" class="empty">Pricing review could not be loaded. Refresh to retry.</td></tr>';
+    return null
+  }
+}
 function filteredPrices(){
   let a=[...state.prices];
   const status=String(state.priceStatus||'ALL').toUpperCase();
@@ -2928,6 +2972,13 @@ function filteredPrices(){
   return a;
 }
 function renderPrices(){
+  const h=state.priceHealth||{};
+  if(h.blocked){
+    $('#priceCount').textContent='BLOCKED';
+    const missing=(h.missing||[]).join(' + ')||'POS / MVT';
+    $('#priceRows').innerHTML=`<tr><td colspan="12" class="empty"><b>Price Change is blocked by stale required data.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing/currentness issue: ${esc(missing)}. Upload/finish ingestion for the missing completed day, then refresh.</td></tr>`;
+    return
+  }
   const rows=filteredPrices();
   $('#priceCount').textContent=`${rows.length} shown · ${state.prices.length} loaded`;
   $('#priceRows').innerHTML=rows.map(r=>{
@@ -2947,7 +2998,7 @@ function renderPrices(){
       <td><div class="meta" style="max-width:240px">${esc(r.primary_reason_text||r.review_blocker||'Pricing review')}</div></td>
       <td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small pricedetail" data-upc="${esc(r.upc)}">Why?</button>${String(r.review_status||"").toUpperCase()==="ACTIONABLE"&&r.current_price!==null&&r.current_price!==undefined&&r.candidate_price!==null&&r.candidate_price!==undefined?`<button class="btn small primary priceaccept" data-upc="${esc(r.upc)}">Accepted</button>`:""}</div></td>
     </tr>`;
-  }).join('')||'<tr><td colspan="12" class="empty">No pricing review rows match the current filters.</td></tr>';
+  }).join('')||`<tr><td colspan="12" class="empty"><b>No qualified price changes in the current snapshot.</b>${Number(state.priceMeta?.suppressedAccepted||0)?'<br>'+esc(state.priceMeta.suppressedAccepted)+' accepted suggestion(s) remain suppressed until price evidence or the candidate changes.':''}</td></tr>`;
   $$('.pricedetail').forEach(b=>b.onclick=()=>openPriceDetail(b.dataset.upc));
   $$('.priceaccept').forEach(b=>b.onclick=()=>acceptPriceSuggestion(b.dataset.upc,b));
 }
