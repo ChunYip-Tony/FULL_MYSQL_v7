@@ -1081,6 +1081,64 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-q-upc-row .m-row-main{grid-template-columns:minmax(0,1fr) 54px 62px 12px}
 }
 
+.m-q-hidden-toggle{
+  width:100%;
+  margin-top:5px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:7px 9px;
+  border:1px dashed var(--q-border);
+  border-radius:10px;
+  background:rgba(255,255,255,.72);
+  color:var(--q-accent);
+  font-size:9px;
+  font-weight:950;
+  cursor:pointer;
+}
+.m-q-hidden-toggle .m-q-hidden-left{display:flex;align-items:center;gap:6px}
+.m-q-hidden-count{
+  min-width:19px;
+  height:19px;
+  padding:0 5px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--q-border);
+  border-radius:999px;
+  background:var(--q-head);
+  font-size:8px;
+}
+.m-q-hidden-chevron{font-size:14px;transition:transform .2s ease}
+.m-q-hidden-toggle.open .m-q-hidden-chevron{transform:rotate(180deg)}
+.m-q-hidden-wrap{
+  display:grid;
+  grid-template-rows:0fr;
+  opacity:0;
+  margin-top:0;
+  transition:grid-template-rows .24s ease,opacity .18s ease,margin-top .18s ease;
+}
+.m-q-hidden-wrap.open{grid-template-rows:1fr;opacity:1;margin-top:5px}
+.m-q-hidden-inner{overflow:hidden;display:grid;gap:5px}
+.m-q-receiving.is-inactive{
+  opacity:.72;
+  border-style:dashed;
+  background:rgba(255,255,255,.58);
+}
+.m-q-inactive-note{
+  padding:0 8px 6px;
+  color:#7d8688;
+  font-size:7px;
+  font-weight:850;
+}
+.m-q-recent-receipt-note{
+  padding:0 8px 6px;
+  color:#8b1018;
+  font-size:7px;
+  font-weight:900;
+}
+
 /* Global value hierarchy: operational values must visually outrank provenance */
 .m-metric b{font-size:21px!important;font-weight:950!important;line-height:1.08!important}
 .m-metric small{font-size:9px!important}
@@ -2351,6 +2409,11 @@ function mobileQuickUpcHtml(r){
 }
 
 function mobileQuickGroupedHtml(rows){
+  const hasNonZero=(v)=>{
+    const n=Number(v);
+    return Number.isFinite(n)&&Math.abs(n)>0.0000001;
+  };
+
   return mobileQuickFamilyGroups(rows).map((g,idx)=>{
     const guom=g.group_uom||'';
     const gqty=g.group_qty_7d===null?'—':fmt(g.group_qty_7d)+(guom?' '+guom:'');
@@ -2364,12 +2427,19 @@ function mobileQuickGroupedHtml(rows){
       '</div>'+
     '</div>';
 
-    const receivingHtml=(g.receiving||[]).map(a=>{
+    const receiving=Array.isArray(g.receiving)?g.receiving:[];
+    const verified=receiving
+      .filter(a=>a&&a.receipt_verified&&a.receipt_date)
+      .slice()
+      .sort((a,b)=>String(b.receipt_date||'').localeCompare(String(a.receipt_date||'')));
+    const recentVerifiedArticle=verified.length?String(verified[0].article_number||''):null;
+
+    const receivingCard=(a,{inactive=false,recentVerified=false}={})=>{
       const uom=String(a.movement_uom||'');
       const qty=(a.movement_7d===null||a.movement_7d===undefined)?'—':fmt(a.movement_7d)+(uom?' '+uom:'');
       const avg=(a.avg_qty_day===null||a.avg_qty_day===undefined)?'—':fmt(a.avg_qty_day)+(uom?' '+uom:'');
       const receiptO=a.receipt_verified?'<span class="m-q-receipt-o" title="101–109 receipt verified">O</span>':'';
-      const receiptCaption=a.receipt_verified?'<div class="m-q-receipt-caption">101–109 RECEIPT VERIFIED</div>':'';
+      const receiptCaption=a.receipt_verified?'<div class="m-q-receipt-caption">101–109 RECEIPT VERIFIED'+(recentVerified?' · RECENT':'')+'</div>':'';
       const receiptQty=(a.receipt_qty===null||a.receipt_qty===undefined)?'—':fmt(a.receipt_qty)+(a.receipt_uom?' '+a.receipt_uom:'');
       const receiptInfo=a.receipt_verified
         ? '<div class="m-q-receipt-info"><span><b>Latest receipt:</b> '+esc(a.receipt_movement_type||'101–109')+' · '+esc(a.receipt_date||'—')+'</span><span><b>Qty:</b> '+esc(receiptQty)+'</span><span><b>Source:</b> MVT</span></div>'
@@ -2379,11 +2449,39 @@ function mobileQuickGroupedHtml(rows){
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
       const upcs=(a.rows||[]).map(mobileQuickUpcHtml).join('');
-      return '<section class="m-q-receiving">'+recvHead+receiptInfo+(upcs?'<div class="m-q-upcs">'+upcs+'</div>':'')+'</section>';
-    }).join('');
+      const recentNote=recentVerified&&!hasNonZero(a.movement_7d)&&!(a.rows||[]).some(r=>hasNonZero(r?.qty_7d))
+        ? '<div class="m-q-recent-receipt-note">Kept visible: most recent 101–109 verified Receiving Article.</div>'
+        : '';
+      const inactiveNote=inactive
+        ? '<div class="m-q-inactive-note">Hidden by default · no 7D Receiving MVT and no related UPC 7D POS activity.</div>'
+        : '';
+      return '<section class="m-q-receiving'+(inactive?' is-inactive':'')+'">'+recvHead+receiptInfo+recentNote+inactiveNote+(upcs?'<div class="m-q-upcs">'+upcs+'</div>':'')+'</section>';
+    };
+
+    const visible=[],hidden=[];
+    receiving.forEach(a=>{
+      const article=String(a?.article_number||'');
+      const recentVerified=!!recentVerifiedArticle&&article===recentVerifiedArticle&&!!a?.receipt_verified;
+      const hasMvt=hasNonZero(a?.movement_7d);
+      const upcRows=Array.isArray(a?.rows)?a.rows:[];
+      const hasUpcActivity=upcRows.some(r=>hasNonZero(r?.qty_7d));
+      const shouldHide=!recentVerified&&!hasMvt&&!hasUpcActivity;
+      (shouldHide?hidden:visible).push({a,recentVerified});
+    });
+
+    const visibleHtml=visible.map(x=>receivingCard(x.a,{recentVerified:x.recentVerified})).join('');
+    const hiddenId='m-q-hidden-'+String(idx)+'-'+String(g.family_id??g.family_article??'family').replace(/[^A-Za-z0-9_-]/g,'');
+    const hiddenHtml=hidden.map(x=>receivingCard(x.a,{inactive:true,recentVerified:x.recentVerified})).join('');
+    const hiddenToggle=hidden.length
+      ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(hiddenId)+'" aria-expanded="false">'+
+          '<span class="m-q-hidden-left"><span class="m-q-hidden-count">'+hidden.length+'</span><span>Show inactive Receiving Article'+(hidden.length===1?'':'s')+'</span></span>'+
+          '<span class="m-q-hidden-chevron">⌄</span>'+
+        '</button>'+
+        '<div class="m-q-hidden-wrap" id="'+esc(hiddenId)+'"><div class="m-q-hidden-inner">'+hiddenHtml+'</div></div>'
+      : '';
 
     const statusLine=gstatus?'<div style="font-size:7px;color:var(--muted);font-weight:850;padding:0 3px">'+esc(gstatus)+'</div>':'';
-    return '<section class="m-q-family-group q-family-tone-'+(idx%6)+'">'+familyHead+statusLine+'<div class="m-q-receiving-list">'+receivingHtml+'</div></section>';
+    return '<section class="m-q-family-group q-family-tone-'+(idx%6)+'">'+familyHead+statusLine+'<div class="m-q-receiving-list">'+visibleHtml+hiddenToggle+'</div></section>';
   }).join('');
 }
 function mobileRenderList(){
@@ -2434,6 +2532,17 @@ function mobileRenderList(){
   }
   box.innerHTML=html||'<div class="m-empty">No items match the current filter.</div>';
   box.querySelectorAll('[data-mobile-key]').forEach(b=>b.onclick=()=>mobileOpenItem(b.dataset.mobileKey));
+  box.querySelectorAll('.m-q-hidden-toggle').forEach(btn=>btn.onclick=()=>{
+    const id=btn.dataset.hiddenTarget;
+    const wrap=id?document.getElementById(id):null;
+    if(!wrap)return;
+    const open=wrap.classList.toggle('open');
+    btn.classList.toggle('open',open);
+    btn.setAttribute('aria-expanded',open?'true':'false');
+    const label=btn.querySelector('.m-q-hidden-left span:last-child');
+    const n=Number(btn.querySelector('.m-q-hidden-count')?.textContent||0);
+    if(label)label.textContent=(open?'Hide':'Show')+' inactive Receiving Article'+(n===1?'':'s');
+  });
 }
 function mobileShowDetail(title,sub,html,{historyMode='push'}={}){
   mNode('mobileDetailTitle').textContent=title||'Detail';mNode('mobileDetailSub').textContent=sub||'';mNode('mobileDetailContent').innerHTML=html;mobileScreen('mobileDetailPage');
