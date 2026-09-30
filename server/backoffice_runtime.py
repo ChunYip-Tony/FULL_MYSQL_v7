@@ -467,6 +467,13 @@ def inventory_review(
                         (_d(live_price.get("price")) - _d(row.get("current_cost_per_selling_unit")))
                         / _d(live_price.get("price"))
                     )
+            else:
+                # A stale Quick Check snapshot must never leak through as CURRENT.
+                row["current_price"] = None
+                row["current_price_type"] = None
+                row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
+                row["current_price_asof_date"] = None
+                row["gp_pct_current"] = None
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
             if fid is not None and fid not in family_cache:
                 cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc", (fid,))
