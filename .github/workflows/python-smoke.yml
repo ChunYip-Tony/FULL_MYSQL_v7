@@ -183,11 +183,12 @@ jobs:
           assert "JSON_EXTRACT(detail_json,'$.article')" in runtime
           assert 'SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' in runtime
           assert 'READY_SELLING_ARTICLE_SUM_RECONCILED' in runtime
-          assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' in runtime
-          assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' in runtime
+          assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' not in runtime
+          assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' not in runtime
           assert '7D FAMILY MVT' in ui
           assert 'RECONCILED' in ui
-          assert 'Family Selling UOM' in ui
+          assert 'Family Selling UOM' not in ui
+          assert 'SAP MVT UOM' in ui
           assert '317/318 CONVERSION LINEAGE' in ui
           assert "Column B blank" in runtime
           assert "raw_table_name='raw_article_manual'" in runtime
