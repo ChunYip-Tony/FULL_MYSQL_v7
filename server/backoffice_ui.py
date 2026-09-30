@@ -4134,7 +4134,7 @@ async function loadBatches(){
   const batchRows=$('#batchRows');
   if(batchRows){
     batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';
-    $('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id));
+    document.querySelectorAll('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id));
   }
   const latest=state.recent[0]||null;
   const latestEl=$('#dbLatestBatch');
