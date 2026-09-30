@@ -419,6 +419,71 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 
 
+  /* Home fits the visible mobile window: header + equal 2×3 grid */
+  body.mobile-home-active{
+    overflow-y:hidden;
+  }
+  body.mobile-home-active .shell{
+    height:100dvh;
+    min-height:100dvh;
+    max-height:100dvh;
+    padding-top:max(8px,env(safe-area-inset-top));
+    padding-bottom:max(8px,env(safe-area-inset-bottom));
+    box-sizing:border-box;
+    overflow:hidden;
+  }
+  .mobilehome.on{
+    height:100%;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .mobilehome.on .m-topbar{
+    flex:0 0 auto;
+    margin-bottom:clamp(6px,1.4dvh,12px);
+  }
+  .mobilehome.on .m-modgrid{
+    flex:1 1 auto;
+    min-height:0;
+    margin-top:clamp(6px,1.3dvh,12px);
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:repeat(3,minmax(0,1fr));
+    gap:clamp(7px,1.25dvh,12px);
+  }
+  .mobilehome.on .m-module{
+    height:100%;
+    min-height:0;
+    padding:
+      clamp(9px,1.6dvh,15px)
+      clamp(9px,2.8vw,14px)
+      clamp(13px,1.8dvh,18px);
+  }
+  .mobilehome.on .m-module .ico{
+    width:clamp(38px,5.4dvh,50px);
+    height:clamp(38px,5.4dvh,50px);
+    font-size:clamp(19px,2.8dvh,23px);
+    margin-bottom:clamp(7px,1.25dvh,14px);
+  }
+  .mobilehome.on .m-module b{
+    font-size:clamp(13px,2.05dvh,17px);
+  }
+  .mobilehome.on .m-module span:last-child{
+    font-size:clamp(8px,1.35dvh,11px);
+    line-height:1.3;
+    margin-top:clamp(4px,.8dvh,8px);
+    -webkit-line-clamp:2;
+  }
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on .m-topbar{margin-bottom:4px}
+    .mobilehome.on .m-brand span{display:none}
+    .mobilehome.on .m-modgrid{margin-top:4px;gap:7px}
+    .mobilehome.on .m-module{padding:8px 9px 12px}
+    .mobilehome.on .m-module .ico{width:36px;height:36px;font-size:18px;margin-bottom:6px}
+    .mobilehome.on .m-module b{font-size:13px}
+    .mobilehome.on .m-module span:last-child{font-size:8px;margin-top:3px}
+  }
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -767,6 +832,7 @@ function mobileInitHistory(){
 }
 function mobileScreen(name,{scroll=true}={}){
   ['mobileHome','mobileListPage','mobileDetailPage'].forEach(id=>mNode(id)?.classList.toggle('on',id===name));
+  document.body.classList.toggle('mobile-home-active',name==='mobileHome'&&isMobileBackoffice());
   if(scroll)window.scrollTo({top:0,behavior:'smooth'});
 }
 function mobileBadgeClass(v){
