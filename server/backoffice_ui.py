@@ -51,6 +51,40 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .qa-cn-list{font-size:10px;color:var(--muted);margin-top:2px}
 @media(max-width:620px){.drawer{width:100vw}.drawerbody{padding:12px}.qa-detailgrid{grid-template-columns:1fr}.qa-name{font-size:17px}.qa-zh{font-size:14px}}
 
+
+/* Desktop Backoffice: same six main modules as mobile, optimized for mouse/keyboard */
+@media(min-width:760px){
+  body{background:#f4f7f6}
+  .shell{max-width:none;margin:0;padding:12px;display:grid;grid-template-columns:228px minmax(0,1fr);gap:12px;align-items:start}
+  .appbar{grid-column:1;position:sticky;top:12px;height:calc(100vh - 24px);border-radius:16px;display:flex;flex-direction:column;overflow:auto}
+  .appbar .top{display:block;padding:16px 14px 10px}
+  .appbar .brand{align-items:flex-start}.appbar .mark{width:38px;height:38px}
+  .appbar .topstat{display:grid;grid-template-columns:1fr;margin-top:12px}
+  .appbar .glass{border-radius:9px;padding:7px 9px}
+  .appbar .searchbar{display:grid;grid-template-columns:1fr;padding:4px 12px 10px}
+  .appbar .searchbar input{width:100%;border-radius:10px}
+  .appbar .searchbar button{width:100%;min-height:36px}
+  .appbar .nav{display:grid;gap:4px;padding:4px 10px 14px;overflow:visible}
+  .appbar .nav button{width:100%;text-align:left;padding:10px 11px;border-radius:9px;font-size:12px}
+  .appbar .nav button.on{background:#fff;color:var(--deep);font-weight:900}
+  .view{grid-column:2;min-width:0;margin:0}
+  .view>.panel{margin-top:0}
+  .panel{border-radius:14px}
+  .panelhead{padding:13px 14px}.title{font-size:20px}
+  .toolrow{padding:9px 12px}
+  .drawer{width:min(46vw,720px)}
+  .drawerbody{padding:15px}
+  .desktop-detail-section{margin-top:13px;padding-top:12px;border-top:1px solid var(--line)}
+  .desktop-detail-section:first-child{margin-top:0;padding-top:0;border-top:0}
+  .desktop-detail-section h3{font-size:12px;margin:0 0 7px}
+  .desktop-related-grid{display:grid;gap:5px}
+  .desktop-related-row{display:grid;grid-template-columns:1.2fr .8fr .7fr;gap:8px;border:1px solid var(--line);border-radius:8px;padding:7px 8px;background:#fbfdfc;font-size:10px}
+  .desktop-oh-bottom{margin-top:16px;padding:12px;border:1px solid #b8d7d2;border-radius:12px;background:#f2fbf9}
+  .desktop-oh-bottom h3{margin:0 0 6px;font-size:12px}
+  .desktop-item-btn{border:0;background:transparent;padding:0;text-align:left;color:inherit}
+  .desktop-item-btn:hover{text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+}
+
 /* Mobile-only Backoffice: independent Home → List → Detail; desktop remains unchanged */
 .mobilehome,.mobile-listpage,.mobile-detailpage{display:none}
 @media(max-width:759px){
@@ -1686,12 +1720,13 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div class="topstat"><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
   </div>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
-  <nav class="nav">
-    <button class="navbtn on" data-view="inventory">Inventory</button>
-    <button class="navbtn" data-view="sales">Sales Performance</button>
-    <button class="navbtn" data-view="ordering">Ordering Overview</button>
-    <button class="navbtn" data-view="pricing">Pricing Review</button>
-    <button class="navbtn" data-view="database">Database Center</button>
+  <nav class="nav" aria-label="Desktop Backoffice main menu">
+    <button class="navbtn on" data-view="quick">🔎 Quick Check</button>
+    <button class="navbtn" data-view="pricing">🏷️ Price Change</button>
+    <button class="navbtn" data-view="sales">📊 Performance</button>
+    <button class="navbtn" data-view="ordering">🛒 Ordering</button>
+    <button class="navbtn" data-view="inventory">📦 Inventory</button>
+    <button class="navbtn" data-view="database">🗄️ Data</button>
   </nav>
 </header>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
@@ -1962,11 +1997,11 @@ const DB_TAB_HASH={dboverview:'home',dbdata:'health',dbqa:'qa'};
 const HASH_DB_TAB={home:'dboverview',overview:'dboverview',upload:'dboverview',processing:'dboverview',qa:'dbqa',health:'dbdata'};
 function routeFromHash(){
   const raw=decodeURIComponent((location.hash||'').replace(/^#/,'').trim().toLowerCase());
-  if(!raw)return {view:'inventory',dbTab:null};
+  if(!raw)return {view:'quick',dbTab:null};
   const [view,sub]=raw.split('/');
-  if(['inventory','sales','ordering','pricing'].includes(view))return {view,dbTab:null};
+  if(['quick','inventory','sales','ordering','pricing'].includes(view))return {view,dbTab:null};
   if(view==='database')return {view:'database',dbTab:HASH_DB_TAB[sub]||'dboverview'};
-  return {view:'inventory',dbTab:null};
+  return {view:'quick',dbTab:null};
 }
 function routeHash(view,dbTab=null){
   if(view==='database')return '#database/'+(DB_TAB_HASH[dbTab]||'overview');
@@ -1979,14 +2014,21 @@ function syncRouteHash(view,dbTab=null,{replace=false}={}){
   else history.pushState(null,'',next);
 }
 function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
-  $$('.view').forEach(x=>x.classList.toggle('on',x.id===view));
-  $$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
-  if(view==='inventory')loadInventory();
-  if(view==='sales')loadSell();
-  if(view==='ordering')loadOrders();
-  if(view==='pricing')loadPrices();
-  if(view==='database')showDbTab(dbTab||'dboverview',{syncHash:false});
-  if(syncHash)syncRouteHash(view,view==='database'?(dbTab||'dboverview'):null);
+  const actualView=view==='quick'?'inventory':view;
+  $('.view').forEach(x=>x.classList.toggle('on',x.id===actualView));
+  $('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
+  const invTitle=document.querySelector('#inventory .title');
+  const invSub=document.querySelector('#inventory .sub');
+  if(invTitle)invTitle.textContent=view==='quick'?'Quick Check':'Inventory Ledger';
+  if(invSub)invSub.textContent=view==='quick'
+    ?'Search or select an item. Most active items first; open details on the right.'
+    :'Read-only system data. OH / True Stock is the only editable value.';
+  if(actualView==='inventory')loadInventory();
+  if(actualView==='sales')loadSell();
+  if(actualView==='ordering')loadOrders();
+  if(actualView==='pricing')loadPrices();
+  if(actualView==='database')showDbTab(dbTab||'dboverview',{syncHash:false});
+  if(syncHash)syncRouteHash(view,actualView==='database'?(dbTab||'dboverview'):null);
   if(scroll)window.scrollTo({top:0,behavior:'smooth'});
 }
 function showDbTab(tab,{syncHash=true}={}){
@@ -3549,14 +3591,15 @@ function filteredInventoryRows(){
 function renderInventory(){
   const rows=filteredInventoryRows();
   $('#invCount').textContent=`${rows.length} shown · ${state.inventory.length} loaded`;
-  const rowHtml=(r,cls='')=>`<tr class="${cls} ${Number(r.velocity_7d||0)>0?'velocity-active':''}"><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td><b>${fmt(r.velocity_7d)}</b><div class="meta">${esc(r.selling_uom||'unit')}/day</div></td><td><b>${money(r.price)}</b><div class="meta">${esc(r.price_type||'—')} · ${esc(r.price_source||'—')} ${r.price_as_of?'· '+esc(r.price_as_of):''}</div></td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`;
+  const rowHtml=(r,cls='')=>`<tr class="${cls} ${Number(r.velocity_7d||0)>0?'velocity-active':''}"><td><button type="button" class="desktop-item-btn quickdetailbtn" data-upc="${esc(r.upc||'')}"><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></button></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td><b>${fmt(r.velocity_7d)}</b><div class="meta">${esc(r.selling_uom||'unit')}/day</div></td><td><b>${money(r.price)}</b><div class="meta">${esc(r.price_type||'—')} · ${esc(r.price_source||'—')} ${r.price_as_of?'· '+esc(r.price_as_of):''}</div></td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`;
   $('#invRows').innerHTML=subgroup240249Units(rows).map(unit=>{
     if(unit.type!=='pair')return rowHtml(unit.row);
     const fam=unit.rows[0]?.family_article||'—';
     return '<tr class="pair-subgroup-head"><td colspan="11">240 / 249 SUBGROUP · Family '+esc(fam)+'</td></tr>'+
       rowHtml(unit.rows[0],'pair-subgroup-main')+rowHtml(unit.rows[1],'pair-subgroup-service');
   }).join('')||`<tr><td colspan="11" class="empty">${state.inventorySearch?'No matching rows after current Inventory filters for: '+esc(state.inventorySearch):'No inventory rows match the current filters.'}</td></tr>`;
-  $$('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset));
+  $('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset));
+  $('.quickdetailbtn').forEach(b=>b.onclick=()=>openDesktopQuickDetail(b.dataset.upc));
 }
 $$('.invfilter').forEach(b=>b.onclick=()=>{state.invCat=b.dataset.cat;$$('.invfilter').forEach(x=>x.classList.toggle('on',x===b));loadInventory()});
 $('#invStatusFilter').onchange=e=>{state.invStatus=e.target.value;renderInventory()};
@@ -3564,6 +3607,50 @@ $('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
 $('#invSalesFilter').onchange=e=>{state.invSales=e.target.value;renderInventory()};
 $('#invSort').onchange=e=>{state.invSort=e.target.value;renderInventory()};
 $('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';loadInventory()};
+
+
+function openDesktopQuickDetail(upc){
+  const r=state.inventory.find(x=>String(x.upc||'')===String(upc||''));
+  if(!r)return;
+  const family=String(r.family_article||'');
+  const related=state.inventory
+    .filter(x=>family&&String(x.family_article||'')===family)
+    .sort((a,b)=>Number(b.qty_7d||0)-Number(a.qty_7d||0))
+    .slice(0,12);
+  const priceMeta=(r.price_type||'—')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:'');
+  const costMeta=(r.cost_source||'Source unavailable')+(r.cost_date?' · '+r.cost_date:'');
+  const relatedHtml=related.length
+    ?'<div class="desktop-related-grid">'+related.map(x=>
+       '<div class="desktop-related-row"><div><b>'+esc(x.upc||'—')+'</b><div class="meta">'+esc(x.name||'')+'</div></div>'+
+       '<div><b>'+fmt(x.qty_7d)+' '+esc(x.selling_uom||'')+'</b><div class="meta">7D Qty</div></div>'+
+       '<div><b>'+money(x.price)+'</b><div class="meta">'+esc(x.price_type||'—')+'</div></div></div>'
+      ).join('')+'</div>'
+    :'<div class="empty">No related UPCs loaded.</div>';
+  const body=
+    '<div class="desktop-detail-section"><h3>1. Current Price</h3><div class="detailgrid">'+
+      '<div class="detail"><small>Current Price</small><b>'+money(r.price)+'</b><span class="meta">'+esc(priceMeta)+'</span></div>'+
+      '<div class="detail"><small>GP%</small><b>'+pct(r.gp_pct)+'</b><span class="meta">Current price / cost</span></div>'+
+    '</div></div>'+
+    '<div class="desktop-detail-section"><h3>2. Cost / Receipt</h3><div class="detailgrid">'+
+      '<div class="detail"><small>Current Cost</small><b>'+money(r.cost)+(r.cost_uom?' / '+esc(r.cost_uom):'')+'</b><span class="meta">'+esc(costMeta)+'</span></div>'+
+      '<div class="detail"><small>Family Article</small><b>'+esc(r.family_article||'—')+'</b><span class="meta">'+esc(r.family_name||'')+'</span></div>'+
+    '</div></div>'+
+    '<div class="desktop-detail-section"><h3>3. 7D Sales / Supply</h3><div class="detailgrid">'+
+      '<div class="detail"><small>7D Sold</small><b>'+fmt(r.qty_7d)+' '+esc(r.selling_uom||'')+'</b></div>'+
+      '<div class="detail"><small>7D Velocity</small><b>'+fmt(r.velocity_7d)+' '+esc(r.selling_uom||'unit')+'/day</b></div>'+
+      '<div class="detail"><small>DOS</small><b>'+fmt(r.dos)+'</b></div>'+
+      '<div class="detail"><small>Status</small><b>'+esc(r.readiness||'—')+'</b></div>'+
+    '</div></div>'+
+    '<div class="desktop-detail-section"><h3>4. Related UPCs</h3>'+relatedHtml+'</div>'+
+    '<div class="desktop-oh-bottom"><h3>5. Inventory / True Stock</h3>'+
+      '<div class="detailgrid"><div class="detail"><small>Effective Family OH</small><b>'+fmt(r.family_oh)+' '+esc(r.family_oh_uom||'')+'</b></div>'+
+      '<div class="detail"><small>Family</small><b>'+esc(r.family_article||'—')+'</b></div></div>'+
+      (r.family_article?'<button id="desktopAdjustOH" type="button" class="btn primary" style="width:100%;margin-top:9px">Update True Stock / OH</button>':'')+
+    '</div>';
+  openDrawer(r.name||r.upc||'Quick Check',String(r.upc||'')+(r.chinese_name?' · '+r.chinese_name:''),body,'');
+  const btn=$('#desktopAdjustOH');
+  if(btn)btn.onclick=()=>openOH({family:r.family_article,uom:r.family_oh_uom||'',oh:r.family_oh??'',name:r.family_name||r.name||''});
+}
 
 function openOH(d){if(!d.family){toast('Family Article unavailable');return}const current=d.oh||'';openDrawer('OH / True Stock Adjustment',`${d.name} · Family ${d.family}`,`<div class="detailgrid"><div class="detail"><small>Family Article</small><b>${esc(d.family)}</b></div><div class="detail"><small>System / Effective OH</small><b>${fmt(current)} ${esc(d.uom)}</b></div></div><div class="formfield"><label>True Stock</label><input id="trueStockInput" type="number" min="0" step="0.01" value="${esc(current)}"></div><div class="formfield"><label>UOM</label><input id="trueStockUom" value="${esc(d.uom)}" readonly></div><div class="formfield"><label>Note</label><textarea id="trueStockNote" placeholder="Physical count / OH adjustment"></textarea></div><div id="ohPreview" class="calc">Difference: 0</div>`,`<button id="saveOH" class="btn primary">Save OH Adjustment</button>`);const inp=$('#trueStockInput');inp.oninput=()=>{const n=Number(inp.value||0),o=Number(current||0),diff=n-o;$('#ohPreview').textContent=`Difference: ${diff>=0?'+':''}${diff.toFixed(2)}${diff<0?' · shortage / pending dumping '+Math.abs(diff).toFixed(2):''}`};$('#saveOH').onclick=async()=>{try{$('#saveOH').disabled=true;await api(`/v1/app/v2/pi/${encodeURIComponent(d.family)}/true-stock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:Number(inp.value),uom:d.uom,note:$('#trueStockNote').value||null})});toast('OH / True Stock saved');closeDrawer();await loadInventory()}catch(e){toast(e.message)}finally{const x=$('#saveOH');if(x)x.disabled=false}}}
 
