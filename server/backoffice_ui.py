@@ -1125,8 +1125,8 @@ async function mobileSubmitUpload(){
   }catch(e){result.innerHTML='<p>'+esc(e.message)+'</p>';toast(e.message)}finally{const z=mNode('mStartUpload');if(z)z.disabled=false}
 }
 
-$('[data-mobile-module]').forEach(b=>b.onclick=()=>mobileOpenModule(b.dataset.mobileModule));
-$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
+$$('[data-mobile-module]').forEach(b=>b.onclick=()=>mobileOpenModule(b.dataset.mobileModule));
+$$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
 mNode('mobileListBack').onclick=()=>history.back();
 mNode('mobileDetailBack').onclick=()=>history.back();
 
