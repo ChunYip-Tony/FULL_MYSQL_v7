@@ -17,6 +17,16 @@ def numeric_digits(value: Any) -> str | None:
     return s or "0"
 
 
+def digits_only(value: Any) -> str | None:
+    """Return a digits-only source spelling while preserving leading zeroes."""
+    if value is None:
+        return None
+    s=str(value).strip()
+    if not re.fullmatch(r"\d+",s):
+        return None
+    return s
+
+
 def service_249_product_code(value: Any) -> str | None:
     """Return the six-digit 249 service product code.
 
@@ -67,7 +77,7 @@ def retail_barcode_alias_candidates(value: Any) -> list[str]:
     Candidates are never authority by themselves; callers must require an exact
     existing canonical roster hit before using one.
     """
-    s=numeric_digits(value)
+    s=digits_only(value)
     if not s:
         return []
     out: list[str]=[]
@@ -94,7 +104,7 @@ def source_barcode_aliases(canonical_value: Any) -> list[str]:
     deterministic missing-check-digit forms. Leading-zero equivalence is handled
     separately by the SQL lineage predicate.
     """
-    s=numeric_digits(canonical_value)
+    s=digits_only(canonical_value)
     if not s:
         return []
     out: list[str]=[]
