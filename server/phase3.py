@@ -50,6 +50,8 @@ from coverage_backfill import (
     ensure_coverage_backfill_tables,
     resolve_pos_period_backfill,
     relink_pos_backfill,
+    article_manual_pos_alias_index,
+    resolve_article_manual_pos_upc_id,
 )
 from analysis_layer import (
     DEPARTMENT_REGISTRY,
@@ -315,14 +317,28 @@ def _find_upc_id(cur, ean: str | None) -> int | None:
     return None
 
 
-def _find_pos_upc_id(cur, ean: str | None, description: str | None) -> int | None:
-    """Resolve one POS selling row to canonical UPC using source evidence.
+def _find_pos_upc_id(
+    cur,
+    ean: str | None,
+    description: str | None,
+    article_manual_index: dict[str, Any] | None = None,
+) -> int | None:
+    """Resolve one Seafood POS selling row to canonical UPC using source evidence.
 
-    Barcode lineage remains primary. For explicit Fried/Cook Service rows, a
-    unique ACTIVE canonical 249 roster-description match may override a
-    non-249/unresolved source code. This keeps quantity sourced from the actual
-    POS row while preventing family movement from being used as UPC sales.
+    Authority order:
+      1) newest valid Article Manual identity (A/B/C/D schema),
+      2) canonical/raw barcode lineage,
+      3) explicit Fried/Cook Service description fallback.
+
+    Article Manual supplies identity only. Sold quantity always comes from POS,
+    and 251/252 movement is never substituted for UPC sales.
     """
+    if article_manual_index is None:
+        article_manual_index = article_manual_pos_alias_index(cur)
+    manual_id = resolve_article_manual_pos_upc_id(article_manual_index, ean)
+    if manual_id is not None:
+        return int(manual_id)
+
     base_id=_find_upc_id(cur,ean)
     if not looks_like_249_service_description(description):
         return base_id
@@ -525,6 +541,9 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
         return 0
     temporal = 'SINGLE_DATE' if start == end else 'DATE_RANGE'
     inserted = 0
+    # Build once per POS file. Article Manual is the primary 249 identity
+    # authority; this does not contribute quantity, only the canonical upc_id.
+    article_manual_index = article_manual_pos_alias_index(cur)
     cur.execute('SELECT sheet_id FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
         cur.execute("SELECT raw_id,source_row_number,raw_payload FROM raw_sales_by_price_type WHERE sheet_id=%s ORDER BY source_row_number", (sh['sheet_id'],))
@@ -547,7 +566,7 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
             if not any(_num(p.get(c)) is not None for pair in SALES_COLS.values() for c in pair):
                 continue
             upc_id = (
-                _find_pos_upc_id(cur, ean, b)
+                _find_pos_upc_id(cur, ean, b, article_manual_index)
                 if current_dept == SEAFOOD_DEPT_CODE
                 else _find_upc_id(cur, ean)
             )
@@ -1709,9 +1728,10 @@ def relink_history(cur) -> None:
                    WHERE d.ean_upc IS NOT NULL
                      AND (d.upc_id IS NULL OR d.upc_id<>u.upc_id)""")
 
-    # Second pass: sales history is description-aware for explicit 249
-    # Fried/Cook Service rows. Other sources continue to use barcode-only
-    # deterministic lineage.
+    # Second pass: rebuild Seafood POS identity with Article Manual first.
+    # This repairs historical rows whose raw POS code was previously attached
+    # to a stale/non-249 upc_id. Description matching remains last-resort only.
+    article_manual_index = article_manual_pos_alias_index(cur)
     cur.execute(
         """SELECT DISTINCT ean_upc,description
            FROM sales_period_observation
@@ -1720,7 +1740,7 @@ def relink_history(cur) -> None:
     for row in cur.fetchall():
         ean=row['ean_upc']
         description=row.get('description')
-        upc_id=_find_pos_upc_id(cur,ean,description)
+        upc_id=_find_pos_upc_id(cur,ean,description,article_manual_index)
         if upc_id is not None:
             cur.execute(
                 """UPDATE sales_period_observation
