@@ -1483,9 +1483,14 @@ def relink_history(cur) -> None:
                    SET c.upc_id=u.upc_id
                    WHERE c.ean_upc IS NOT NULL
                      AND (c.upc_id IS NULL OR c.upc_id<>u.upc_id)""")
+    cur.execute("""UPDATE upc_department_observation d JOIN selling_upc u ON u.ean_upc=d.ean_upc
+                   SET d.upc_id=u.upc_id
+                   WHERE d.ean_upc IS NOT NULL
+                     AND (d.upc_id IS NULL OR d.upc_id<>u.upc_id)""")
 
-    # Second pass: resolve numeric/UPC-A aliases and repair stale derived links.
-    for table in ('sales_period_observation','price_list_observation','inventory_observation','company_price_observation'):
+    # Second pass: resolve numeric/service/short-barcode aliases and repair
+    # every derived identity surface used by current-active logic.
+    for table in ('sales_period_observation','price_list_observation','inventory_observation','company_price_observation','upc_department_observation'):
         cur.execute(f"SELECT DISTINCT ean_upc FROM {table} WHERE ean_upc IS NOT NULL")
         for row in cur.fetchall():
             ean = row['ean_upc']
