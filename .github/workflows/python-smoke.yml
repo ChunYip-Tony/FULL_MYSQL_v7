@@ -124,6 +124,16 @@ jobs:
           pos_resolver=inspect.getsource(phase3._find_pos_upc_id)
           assert 'looks_like_249_service_description' in pos_resolver
           assert "su.ean_upc LIKE '249%'" in pos_resolver
+          # Hybrid 249 rule: RAW POS / product-code identity is evaluated before
+          # Article Manual fallback, and disagreement fails closed.
+          assert pos_resolver.index('base_id=_find_upc_id') < pos_resolver.index('manual_id =')
+          source_resolver=inspect.getsource(coverage_backfill._resolve_source_upc_id)
+          assert source_resolver.index('if raw in exact') < source_resolver.index('manual_uid =')
+          assert source_resolver.index('service_249_canonical_base') < source_resolver.index('manual_uid =')
+          assert 'int(manual_uid) != int(raw_uid)' in source_resolver
+          assert phase3._department_from_pos_section('400') == '400'
+          assert phase3._department_from_pos_section('401') == '400'
+          assert '_department_from_pos_section(a)' in inspect.getsource(phase3._process_sales)
           history_relink=inspect.getsource(phase3.relink_history)
           assert '_find_pos_upc_id' in history_relink
           assert "COALESCE(description,'')" in history_relink
