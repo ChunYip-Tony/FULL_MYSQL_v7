@@ -358,22 +358,37 @@ def _find_pos_upc_id(cur, ean: str | None, description: str | None) -> int | Non
     return base_id
 
 
-def _upc_identity_ready(cur, ean: str | None) -> bool:
-    upc_id = _find_upc_id(cur, ean)
+def _upc_id_identity_ready(cur, upc_id: int | None) -> bool:
+    """Return whether one canonical UPC has one current confirmed Article/Family path."""
     if upc_id is None:
         return False
     cur.execute(
         """SELECT 1
-           FROM bridge_article_upc bau
-           JOIN bridge_article_family baf ON baf.article_id=bau.article_id
-             AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
-             AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
-           WHERE bau.upc_id=%s AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
-             AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+           FROM selling_upc su
+           JOIN bridge_article_upc bau
+             ON bau.upc_id=su.upc_id
+            AND bau.mapping_status='CONFIRMED'
+            AND bau.is_primary=TRUE
+            AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN bridge_article_family baf
+             ON baf.article_id=bau.article_id
+            AND baf.mapping_status='CONFIRMED'
+            AND baf.is_primary=TRUE
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           LEFT JOIN manual_upc_retirement mur
+             ON mur.ean_upc=su.ean_upc
+            AND mur.retirement_status='CONFIRMED'
+           WHERE su.upc_id=%s
+             AND su.record_status='ACTIVE'
+             AND mur.retirement_id IS NULL
            LIMIT 1""",
-        (upc_id,),
+        (int(upc_id),),
     )
     return bool(cur.fetchone())
+
+
+def _upc_identity_ready(cur, ean: str | None) -> bool:
+    return _upc_id_identity_ready(cur, _find_upc_id(cur, ean))
 
 
 def _find_article(cur, article_number: str | None) -> tuple[int | None, int | None]:
@@ -1852,6 +1867,65 @@ def classify_unmapped_sales_activity_scope(cur, batch_id: int) -> dict[str, int]
     return counts
 
 
+def _recent_pos_canonical_ids_for_raw_ean(
+    cur,
+    raw_ean: str,
+    pos_days: list[dict[str, Any]],
+) -> set[int]:
+    """Return canonical UPC ids actually carried by one raw POS EAN on selected days.
+
+    This intentionally uses the normalized POS row's current upc_id after
+    relink_history()/relink_pos_backfill().  It is the bridge between immutable
+    raw EAN evidence and the current canonical selling UPC.  Exact raw EAN is
+    required here; no second alias expansion is performed.
+    """
+    ids: set[int] = set()
+    direct_days=[
+        d for d in pos_days
+        if d.get('coverage_kind')!='DERIVED_PERIOD_RESIDUAL'
+    ]
+    if direct_days:
+        clauses=[]
+        args: list[Any]=[]
+        for d in direct_days:
+            clauses.append('(file_id=%s AND period_start_date=%s AND period_end_date=%s)')
+            args.extend([int(d['file_id']),d['date'],d['date']])
+        cur.execute(
+            f"""SELECT DISTINCT upc_id
+                FROM sales_period_observation
+                WHERE temporal_grain='SINGLE_DATE'
+                  AND ({' OR '.join(clauses)})
+                  AND ean_upc=%s
+                  AND upc_id IS NOT NULL
+                  AND sold_quantity<>0""",
+            tuple(args)+(str(raw_ean),),
+        )
+        ids.update(int(r['upc_id']) for r in cur.fetchall() if r.get('upc_id') is not None)
+
+    derived_days=[
+        d for d in pos_days
+        if d.get('coverage_kind')=='DERIVED_PERIOD_RESIDUAL'
+    ]
+    if derived_days:
+        clauses=[]
+        args=[]
+        for d in derived_days:
+            clauses.append('(source_file_id=%s AND business_date=%s)')
+            args.extend([int(d['file_id']),d['date']])
+        cur.execute(
+            f"""SELECT DISTINCT upc_id
+                FROM pos_daily_backfill_observation
+                WHERE ({' OR '.join(clauses)})
+                  AND ean_upc=%s
+                  AND upc_id IS NOT NULL
+                  AND sold_quantity<>0""",
+            tuple(args)+(str(raw_ean),),
+        )
+        ids.update(int(r['upc_id']) for r in cur.fetchall() if r.get('upc_id') is not None)
+
+    return ids
+
+
 def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str, Any]:
     """Recompute current Seafood sold-but-unmapped blockers from all retained POS history.
 
@@ -1886,6 +1960,9 @@ def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str,
         'active_unmapped_count': 0,
         'inactive_or_historical_count': 0,
         'mapped_count': 0,
+        'mapped_by_raw_ean_count': 0,
+        'mapped_by_relinked_pos_upc_id_count': 0,
+        'ambiguous_relinked_pos_alias_count': 0,
         'active_unmapped_upcs': [],
         'activity_rule': 'POS_POSITIVE_LATEST_UP_TO_28_VALID_COMPLETED_DATA_DAYS',
         'department_code': SEAFOOD_DEPT_CODE,
@@ -1894,6 +1971,7 @@ def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str,
     for ean in candidates:
         if _upc_identity_ready(cur, ean):
             result['mapped_count'] += 1
+            result['mapped_by_raw_ean_count'] += 1
             continue
 
         evidence = _active_selling_evidence_for_unmapped(
@@ -1905,6 +1983,21 @@ def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str,
         if evidence['activity_scope'] != 'ACTIVE_SELLING':
             result['inactive_or_historical_count'] += 1
             continue
+
+        # A raw POS service/scale code may not itself exist in selling_upc.
+        # If the actual recent POS rows for this exact raw EAN have already
+        # been deterministically relinked to exactly one canonical UPC, and
+        # that canonical UPC has a confirmed current Article/Family identity,
+        # the row is mapped and must not become a false global blocker.
+        canonical_ids=_recent_pos_canonical_ids_for_raw_ean(cur,ean,pos_days)
+        if len(canonical_ids)==1:
+            canonical_upc_id=next(iter(canonical_ids))
+            if _upc_id_identity_ready(cur,canonical_upc_id):
+                result['mapped_count'] += 1
+                result['mapped_by_relinked_pos_upc_id_count'] += 1
+                continue
+        elif len(canonical_ids)>1:
+            result['ambiguous_relinked_pos_alias_count'] += 1
 
         _issue(
             cur,
