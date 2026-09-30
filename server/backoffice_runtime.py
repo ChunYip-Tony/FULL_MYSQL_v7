@@ -847,6 +847,56 @@ def _quick_check_fuzzy_rows(
     }
 
 
+def _manual_selling_article_map(
+    cur,
+    family_main_by_id: dict[int, str],
+    family_qrows: list[dict[str, Any]],
+) -> dict[tuple[int, str], str]:
+    """Article Manual authority: Column D UPC -> Column B Selling Article."""
+    targets: dict[str, set[int]] = {}
+    for row in family_qrows:
+        if row.get("family_id") is None:
+            continue
+        upc = str(row.get("ean_upc") or "").strip()
+        if not upc:
+            continue
+        key = _numeric_key(upc) or upc
+        targets.setdefault(key, set()).add(int(row["family_id"]))
+    if not targets:
+        return {}
+
+    keys = sorted(targets)
+    ph = ",".join(["%s"] * len(keys))
+    cur.execute(
+        f"""SELECT
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) AS ean_upc,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.article')) AS selling_article,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.canonical_main_article')) AS canonical_main_article,
+                  batch_id,raw_id
+            FROM phase2c_row_state
+            WHERE raw_table_name='raw_article_manual'
+              AND normalization_status IN ('NORMALIZED','QA_HOLD')
+              AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) IS NOT NULL
+              AND TRIM(LEADING '0' FROM JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc'))) IN ({ph})
+            ORDER BY batch_id DESC,raw_id DESC""",
+        tuple(keys),
+    )
+
+    out: dict[tuple[int, str], str] = {}
+    for row in cur.fetchall():
+        raw_upc = str(row.get("ean_upc") or "").strip()
+        article = str(row.get("selling_article") or "").strip()
+        main = str(row.get("canonical_main_article") or "").strip()
+        if not raw_upc or not article or not main:
+            continue
+        key = _numeric_key(raw_upc) or raw_upc
+        for fid in targets.get(key, set()):
+            if str(family_main_by_id.get(fid) or "") != main:
+                continue
+            out.setdefault((fid, key), article)
+    return out
+
+
 def _quick_receiving_article_context(
     cur,
     qrows: list[dict[str, Any]],
@@ -902,6 +952,24 @@ def _quick_receiving_article_context(
         art: fid for fid, art in source_by_family.items() if art
     }
 
+    # A search can return only one UPC. Family usage must still reconcile every
+    # UPC in that Family with positive 7D POS activity.
+    fph_all = ",".join(["%s"] * len(fids))
+    cur.execute(
+        f"""SELECT family_id,ean_upc,selling_description,pos_qty_7d,upc_velocity_7d,
+                   selling_uom,main_article_number
+            FROM quick_check_current
+            WHERE family_id IN ({fph_all})
+            ORDER BY family_id,ean_upc""",
+        tuple(fids),
+    )
+    family_qrows = cur.fetchall()
+    manual_selling_by_upc = _manual_selling_article_map(
+        cur,
+        source_by_family,
+        family_qrows,
+    )
+
     # Start with confirmed bridge lineage, but do not duplicate the Family/source
     # Article as a second-level selling Article. It stays in the Family header.
     ph = ",".join(["%s"] * len(fids))
@@ -939,6 +1007,26 @@ def _quick_receiving_article_context(
             "lineage_latest_date": None,
             "lineage_movement_types": None,
         }
+
+    # Preserve the explicit Table 1 / Article Manual Selling Article relation.
+    # 317/318 is lineage evidence only and must never replace this authority.
+    manual_upcs_by_article: dict[tuple[int, str], list[str]] = {}
+    for (fid, upc_key), art in manual_selling_by_upc.items():
+        manual_upcs_by_article.setdefault((fid, art), []).append(upc_key)
+        if art == source_by_family.get(fid):
+            continue
+        existing = candidates[fid].get(art, {})
+        existing.update(
+            {
+                "article_number": art,
+                "relationship_type": existing.get("relationship_type") or "ARTICLE_MANUAL_SELLING",
+                "is_primary": bool(existing.get("is_primary")),
+                "mapping_status": "ARTICLE_MANUAL_SELLING_EXACT",
+                "lineage_basis": "ARTICLE_MANUAL_COLUMN_B_TO_D",
+                "manual_selling_upcs": sorted(set(manual_upcs_by_article[(fid, art)])),
+            }
+        )
+        candidates[fid][art] = existing
 
     # Discover actual SAP output/selling Articles from 317/318 conversion pairs:
     # same canonical file/date + same SAP document + same absolute quantity/UOM
@@ -1302,6 +1390,13 @@ def _quick_receiving_article_context(
         row: dict[str, Any],
         articles: list[dict[str, Any]],
     ) -> tuple[str | None, str]:
+        fid = int(row["family_id"]) if row.get("family_id") is not None else None
+        upc_text = str(row.get("ean_upc") or "")
+        upc_key = _numeric_key(upc_text) or upc_text
+        exact_manual = manual_selling_by_upc.get((fid, upc_key)) if fid is not None else None
+        if exact_manual:
+            return exact_manual, "ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT"
+
         if not articles:
             return None, "NO_SAP_SELLING_ARTICLE_CANDIDATE"
 
