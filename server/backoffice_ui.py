@@ -2477,13 +2477,13 @@ function mobileQuickGroupedHtml(rows){
         ? '<div class="m-q-upcs">'+activeUpcs+upcHiddenToggle+'</div>'
         : '';
 
-      const recentNote=recentVerified&&!hasNonZero(a.movement_7d)&&!allUpcRows.some(r=>hasNonZero(r?.qty_7d))
-        ? '<div class="m-q-recent-receipt-note">Kept visible: most recent 101–109 verified Receiving Article.</div>'
+      const receiptKeepNote=a.receipt_verified&&!hasNonZero(a.movement_7d)&&!allUpcRows.some(r=>hasNonZero(r?.qty_7d))
+        ? '<div class="m-q-recent-receipt-note">Kept visible: 101–109 verified Receiving Article'+(recentVerified?' · most recent receipt':'')+'.</div>'
         : '';
       const inactiveNote=inactive
         ? '<div class="m-q-inactive-note">Hidden by default · no 7D Receiving MVT and no related UPC 7D POS activity.</div>'
         : '';
-      return '<section class="m-q-receiving'+(inactive?' is-inactive':'')+'">'+recvHead+receiptInfo+recentNote+inactiveNote+upcSection+'</section>';
+      return '<section class="m-q-receiving'+(inactive?' is-inactive':'')+'">'+recvHead+receiptInfo+receiptKeepNote+inactiveNote+upcSection+'</section>';
     };
 
     const visible=[],hidden=[];
@@ -2493,7 +2493,9 @@ function mobileQuickGroupedHtml(rows){
       const hasMvt=hasNonZero(a?.movement_7d);
       const upcRows=Array.isArray(a?.rows)?a.rows:[];
       const hasUpcActivity=upcRows.some(r=>hasNonZero(r?.qty_7d));
-      const shouldHide=!recentVerified&&!hasMvt&&!hasUpcActivity;
+      // Any Receiving Article with 101–109 history stays visible.
+      // Only non-receipt articles with no 7D MVT and no related UPC POS activity are hidden.
+      const shouldHide=!a?.receipt_verified&&!hasMvt&&!hasUpcActivity;
       (shouldHide?hidden:visible).push({a,recentVerified});
     });
 
