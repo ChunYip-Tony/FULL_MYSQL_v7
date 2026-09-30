@@ -1,0 +1,204 @@
+name: One-time v7.0.265 global UPC lineage rebuild
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  rebuild:
+    if: startsWith(github.event.head_commit.message, 'v7.0.265 · Global UPC lineage consistency')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Wait for v7.0.265 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          consecutive=0
+          for i in $(seq 1 180); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            pass="$(BODY="$body" python - <<'PY'
+          import json, os
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          ok=(
+              p.get('ok') is True
+              and p.get('version') == '7.0.265-single-service'
+              and p.get('worker_version') == '7.0.265-single-service'
+              and p.get('worker_healthy') is True
+              and p.get('worker_ready') is True
+          )
+          print('1' if ok else '0')
+          PY
+          )"
+            if [ "$pass" = "1" ]; then
+              consecutive=$((consecutive+1))
+              if [ "$consecutive" -ge 3 ]; then
+                echo "API_WORKER_VERSION_GATE=PASS"
+                exit 0
+              fi
+            else
+              consecutive=0
+            fi
+            sleep 5
+          done
+          echo "API_WORKER_VERSION_GATE=TIMEOUT"
+          exit 1
+
+      - name: Wait until upload pipeline is idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+            cat /tmp/active.json
+            echo
+            active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json', encoding='utf-8'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+            if [ "$active" = "0" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "ACTIVE_BATCH_DID_NOT_CLEAR"
+          exit 1
+
+      - name: Resolve latest completed batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=20" -o /tmp/recent.json
+          cat /tmp/recent.json
+          echo
+          batch_id="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/recent.json', encoding='utf-8'))
+          allowed={'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','COMPLETED','READY'}
+          row=next((
+              x for x in (p.get('batches') or [])
+              if str(x.get('phase3_status') or '').upper() in allowed
+              or str(x.get('processing_status') or '').upper() in allowed
+          ), None)
+          if not row:
+              raise SystemExit('NO_COMPLETED_BATCH_AVAILABLE')
+          print(int(row['batch_id']))
+          PY
+          )"
+          echo "BATCH_ID=$batch_id" | tee -a "$GITHUB_ENV"
+
+      - name: Rebuild all serving rows with global lineage rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          accepted=0
+          run_id=""
+          session_id=""
+          for i in $(seq 1 120); do
+            set +e
+            http_code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/$BATCH_ID/rebuild-phase3")"
+            curl_rc=$?
+            set -e
+            echo "ATTEMPT=$i CURL_RC=$curl_rc HTTP=$http_code"
+            test ! -s /tmp/rebuild.json || cat /tmp/rebuild.json
+            echo
+            if [ "$curl_rc" = "0" ] && [ "$http_code" = "200" ]; then
+              read -r version_ok run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          ok=(
+              p.get('code_version') == '7.0.265-single-service'
+              and p.get('version_fence_pass') is True
+          )
+          print('1' if ok else '0', p.get('pipeline_run_id') or '', p.get('session_id') or '')
+          PY
+          )
+              if [ "$version_ok" = "1" ] && [ -n "$run_id" ] && [ -n "$session_id" ]; then
+                accepted=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$accepted" = "1"
+          echo "RUN_ID=$run_id" | tee -a "$GITHUB_ENV"
+          echo "SESSION_ID=$session_id" | tee -a "$GITHUB_ENV"
+
+      - name: Wait for rebuild completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$SESSION_ID" -o /tmp/session.json
+            state="$(RUN_ID="$RUN_ID" python - <<'PY'
+          import json, os
+          rid=int(os.environ['RUN_ID'])
+          p=json.load(open('/tmp/session.json', encoding='utf-8'))
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid), None)
+          if not run:
+              print('MISSING||')
+          else:
+              print(str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
+          PY
+          )"
+            echo "$state"
+            status="${state%%|*}"
+            rest="${state#*|}"
+            code_version="${rest%%|*}"
+            if [ "$status" != "MISSING" ] && [ "$code_version" != "7.0.265-single-service" ]; then
+              echo "RUN_VERSION_FENCE_BROKEN=$state"
+              exit 1
+            fi
+            case "$status" in
+              COMPLETED) exit 0 ;;
+              QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED)
+                echo "REBUILD_NOT_COMPLETED=$state"
+                cat /tmp/session.json
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+          echo "REBUILD_TIMEOUT"
+          exit 1
+
+      - name: Audit every Seafood UPC lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 120 "$base/v1/backoffice/lineage-audit" -o /tmp/audit.json
+          cat /tmp/audit.json
+          echo
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/audit.json', encoding='utf-8'))
+          if p.get('pass') is not True:
+              raise SystemExit(
+                  'GLOBAL_UPC_LINEAGE_AUDIT_FAILED '
+                  f"qty={p.get('qty_mismatch_count')} "
+                  f"historical_with_sales={p.get('historical_with_sales_count')} "
+                  f"velocity={p.get('velocity_mismatch_count')}"
+              )
+          if int(p.get('seafood_upcs_checked') or 0) <= 0:
+              raise SystemExit('GLOBAL_UPC_LINEAGE_AUDIT_EMPTY')
+          print('GLOBAL_UPC_LINEAGE_AUDIT=PASS')
+          PY
+
+      - name: Print 249528 post-rebuild state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249528&lightweight=false" || true
+          echo
