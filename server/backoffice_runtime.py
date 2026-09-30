@@ -1733,23 +1733,78 @@ def _quick_receiving_article_context(
         conversion_uom = conversion_mv.get("uom")
         conversion_status = conversion_mv.get("status") or "NO_PAIRED_317_318_IN_WINDOW"
 
-        # Canonical Family usage contract:
-        #   7D POS-active UPC -> Article Manual Column B Selling Article
-        #   -> that unique Selling Article's SAP 251 minus 252.
-        # 309 and 317/318 are internal conversion lineage and are not sales.
         family_rows_all = [
             x for x in family_qrows
             if x.get("family_id") is not None and int(x["family_id"]) == fid
         ]
         active_pos_rows = [x for x in family_rows_all if _d(x.get("pos_qty_7d")) > 0]
+
+        # Build the complete assignment surface first. The Family/Main Article is
+        # itself a legitimate Selling Article whenever it owns 251/252 movement
+        # or explicit UPC Selling-Article authority. Receiving-only SUB Articles
+        # remain candidates for receipt display but are penalized for UPC assignment.
+        upc_map: dict[str, dict[str, Any]] = {}
+        article_lookup = {
+            str(a.get("article_number") or ""): a for a in articles
+        }
+        assignable_articles = list(articles)
+        source_manual_upcs = sorted(
+            set(manual_upcs_by_article.get((fid, str(source_article or "")), []))
+        )
+        if source_article and (source_qty is not None or source_manual_upcs):
+            source_assignable = {
+                "article_number": str(source_article),
+                "article_description": (
+                    source_mv.get("article_description")
+                    or row.get("selling_description")
+                    or row.get("family_description")
+                ),
+                "relationship_type": "MAIN",
+                "is_primary": True,
+                "mapping_status": (
+                    "ARTICLE_MANUAL_SELLING_EXACT"
+                    if source_manual_upcs
+                    else "FAMILY_SOURCE_251_252_ACTIVE"
+                ),
+                "lineage_basis": (
+                    "ARTICLE_MANUAL_COLUMN_B_TO_D"
+                    if source_manual_upcs
+                    else "FAMILY_SOURCE_251_252"
+                ),
+                "article_role": "FAMILY_AND_SAP_SELLING_ARTICLE",
+                "movement_7d": source_qty if source_qty is not None else Decimal("0"),
+                "movement_uom": source_uom,
+                "manual_selling_upcs": source_manual_upcs,
+            }
+            assignable_articles.append(source_assignable)
+            article_lookup[str(source_article)] = source_assignable
+
+        for qrow in family_rows_all:
+            upc = str(qrow.get("ean_upc") or "")
+            assigned, basis = _assign_upc(qrow, assignable_articles)
+            assigned_row = article_lookup.get(str(assigned or ""), {})
+            upc_map[upc] = {
+                "article_number": assigned,
+                "mapping_basis": basis,
+                "mapping_status": (
+                    assigned_row.get("mapping_status")
+                    if assigned
+                    else "UNRESOLVED"
+                ),
+            }
+
+        # Canonical Family usage contract:
+        #   each 7D POS-active UPC -> its final Selling Article assignment
+        #   -> sum each UNIQUE Selling Article's SAP 251 minus 252 exactly once.
+        # This lets several UPCs share one Selling Article without double count.
+        # 309 and 317/318 are conversion lineage only and are never added as sales.
         active_selling_articles: set[str] = set()
         unmapped_active_pos_upcs: list[str] = []
         for pos_row in active_pos_rows:
             upc_text = str(pos_row.get("ean_upc") or "")
-            upc_key = _numeric_key(upc_text) or upc_text
-            selling_article = manual_selling_by_upc.get((fid, upc_key))
-            if selling_article:
-                active_selling_articles.add(str(selling_article))
+            assigned = (upc_map.get(upc_text) or {}).get("article_number")
+            if assigned:
+                active_selling_articles.add(str(assigned))
             else:
                 unmapped_active_pos_upcs.append(upc_text)
 
@@ -1800,44 +1855,7 @@ def _quick_receiving_article_context(
                 if zero_sap_mvt_articles
                 else "READY_SELLING_ARTICLE_SUM_RECONCILED"
             )
-        family_basis = "SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS"
-
-        upc_map: dict[str, dict[str, Any]] = {}
-        article_lookup = {
-            str(a.get("article_number") or ""): a for a in articles
-        }
-
-        # Keep the Family/Main article in the header. It is considered a Selling
-        # Article only when Table 1 explicitly maps a UPC to that same article.
-        assignable_articles = list(articles)
-        source_manual_upcs = sorted(set(manual_upcs_by_article.get((fid, str(source_article or "")), [])))
-        if source_article and source_manual_upcs:
-            source_assignable = {
-                "article_number": str(source_article),
-                "article_description": row.get("family_description"),
-                "relationship_type": "MAIN",
-                "is_primary": True,
-                "mapping_status": "ARTICLE_MANUAL_SELLING_EXACT",
-                "lineage_basis": "ARTICLE_MANUAL_COLUMN_B_TO_D",
-                "movement_7d": source_qty if source_qty is not None else Decimal("0"),
-                "manual_selling_upcs": source_manual_upcs,
-            }
-            assignable_articles.append(source_assignable)
-            article_lookup[str(source_article)] = source_assignable
-
-        for qrow in family_rows_all:
-            upc = str(qrow.get("ean_upc") or "")
-            assigned, basis = _assign_upc(qrow, assignable_articles)
-            assigned_row = article_lookup.get(str(assigned or ""), {})
-            upc_map[upc] = {
-                "article_number": assigned,
-                "mapping_basis": basis,
-                "mapping_status": (
-                    assigned_row.get("mapping_status")
-                    if assigned
-                    else "UNRESOLVED"
-                ),
-            }
+        family_basis = "SUM_UNIQUE_ASSIGNED_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS"
 
         out[fid] = {
             "family_article": source_article,
