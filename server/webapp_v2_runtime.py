@@ -5415,7 +5415,13 @@ def performance_report(
         # queue and suppress a duplicate normal 249 suggestion for the same UPC.
         suggestions = pair_mismatch_suggestions + [
             x for x in suggestions
-            if str(x.get("upc") or "") not in pair_mismatch_service_upcs
+            if (
+                str(x.get("upc") or "") not in pair_mismatch_service_upcs
+                and not (
+                    _numeric_key(x.get("upc")).startswith("249")
+                    and str(x.get("upc") or "") in price_pair_meta
+                )
+            )
         ]
         for suggestion in suggestions:
             upc_key=str(suggestion.get("upc") or "")
