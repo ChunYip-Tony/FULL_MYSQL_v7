@@ -497,16 +497,93 @@ def inventory_review(
 
 
 def pricing_review(category: str = "ALL", limit: int = 100) -> dict[str, Any]:
+    """Pricing Review with serving-current price/cost overlaid from Quick Check.
+
+    The analysis engine creates the candidate/reasoning, but every field labeled
+    CURRENT on the Backoffice must come from quick_check_current at response
+    time.  This prevents a stale or historical analysis value from being shown
+    as the live Current Price / Cost.
+    """
     report = performance_report(category=category, limit=limit)
+    rows = [dict(x) for x in (report.get("top_urgent_price_suggestions") or [])]
+
+    upcs = [str(x.get("upc") or "").strip() for x in rows if str(x.get("upc") or "").strip()]
+    serving_by_upc: dict[str, dict[str, Any]] = {}
+    if upcs:
+        with db_conn() as conn:
+            cur = conn.cursor(dictionary=True)
+            placeholders = ",".join(["%s"] * len(upcs))
+            cur.execute(
+                f"""SELECT ean_upc,current_price,current_price_type,
+                           current_price_source,current_price_asof_date,
+                           current_cost_per_selling_unit,cost_source,cost_date,
+                           gp_pct_current,gp_per_day_7d,quick_check_status,
+                           published_at,publish_batch_id
+                    FROM quick_check_current
+                    WHERE ean_upc IN ({placeholders})""",
+                tuple(upcs),
+            )
+            serving_by_upc = {
+                str(r.get("ean_upc") or ""): r
+                for r in cur.fetchall()
+            }
+            cur.close()
+
+    for row in rows:
+        upc = str(row.get("upc") or "")
+        live = serving_by_upc.get(upc)
+        if not live:
+            row["current_serving_overlay_status"] = "MISSING_QUICK_CHECK_CURRENT"
+            continue
+
+        current_price = live.get("current_price")
+        current_cost = live.get("current_cost_per_selling_unit")
+        row["current_price"] = current_price
+        row["current_price_type"] = live.get("current_price_type")
+        row["current_price_source"] = live.get("current_price_source")
+        row["current_price_observed_date"] = live.get("current_price_asof_date")
+        row["current_price_basis"] = "CANONICAL_QUICK_CHECK_CURRENT"
+
+        row["current_cost"] = current_cost
+        row["current_cost_source"] = live.get("cost_source")
+        row["cost_date"] = live.get("cost_date")
+        row["cost_basis"] = "CURRENT_AUTHORITATIVE_COST"
+
+        row["current_gp_pct_reference"] = live.get("gp_pct_current")
+        row["current_gp_per_day_7d"] = live.get("gp_per_day_7d")
+        row["readiness"] = live.get("quick_check_status")
+        row["serving_publish_batch_id"] = live.get("publish_batch_id")
+        row["serving_published_at"] = live.get("published_at")
+        row["current_serving_overlay_status"] = "READY"
+
+        candidate = row.get("candidate_price")
+        if candidate is not None and current_cost is not None and _d(candidate) > 0:
+            row["suggested_gp_pct_at_current_cost"] = (
+                (_d(candidate) - _d(current_cost)) / _d(candidate)
+            )
+
+        if current_price is not None and candidate is not None and _d(current_price) > 0:
+            row["price_gap_pct"] = (
+                abs(_d(candidate) - _d(current_price))
+                / _d(current_price)
+                * Decimal("100")
+            )
+            row["direction"] = (
+                "INCREASE" if _d(candidate) > _d(current_price)
+                else ("DECREASE" if _d(candidate) < _d(current_price) else "KEEP")
+            )
+
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V1",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V2",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
-        "rows": report.get("top_urgent_price_suggestions") or [],
+        "rows": rows,
         "rules": {
             "write_enabled": False,
             "price_changes_are_review_only": True,
+            "current_price_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
+            "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
             "source_contract": report.get("price_suggestion_rules"),
         },
     }
