@@ -2160,12 +2160,12 @@ async function priceChanges(){
         '<div class="row" style="justify-content:space-between"><div><div class="name">#'+(i+1)+' · '+esc(x.name)+'</div><div class="result-upc">UPC '+esc(x.upc)+'</div><div class="meta">'+esc(x.category)+' · Family '+esc(x.family_article_number||'—')+'</div></div><span class="pill '+(x.actionable?'ok':'warn')+' review-badge">'+esc(badge)+'</span></div>'+
         '<div class="row" style="margin-top:8px"><div><div class="small">Current Price</div><div class="hero-number">'+money(x.current_price)+'</div><div class="small">'+esc(x.current_price_source||'NO PRICE EVIDENCE')+(x.current_price_observed_date?' · '+esc(x.current_price_observed_date):'')+'</div></div><div class="price-arrow">→</div><div><div class="small">Suggested</div><div class="hero-number">'+suggestion+'</div></div></div>'+
         '<div class="grid" style="margin-top:8px">'+
-          m('GP$/day Opportunity',gpopp)+
-          m('7D Qty',qv(x.qty_7d,x.qty_uom))+
-          m('28D Qty',qv(x.qty_28d,x.qty_uom))+
-          m('Company C Floor',money(x.company_price_c_floor))+
+          m('OH',qv(x.current_oh,x.current_oh_uom||x.qty_uom))+
+          m('DOH',x.doh==null?'—':fmt(x.doh,1)+' days')+
+          m('14D Qty',qv(x.qty_14d,x.qty_uom))+
+          m('Company Range',(x.company_range_low!=null&&x.company_range_high!=null)?money(x.company_range_low)+' – '+money(x.company_range_high):'No A/B/C')+
         '</div>'+
-        '<div class="meta">Sales evidence through '+esc(x.report_date)+' · '+(x.review_blocker?'Reason: '+esc(x.review_blocker.replaceAll('_',' ')):'Price evidence supports action')+'</div>'+
+        '<div class="meta">'+esc(x.primary_reason_text||'Pricing review')+' · Sales evidence through '+esc(x.report_date)+'</div>'+
       '</div>';
     }).join('')||'<div class="card small">No active price change review items.</div>';
     document.querySelectorAll('#pcitems [data-upc]').forEach(e=>e.onclick=()=>price(e.dataset.upc));
