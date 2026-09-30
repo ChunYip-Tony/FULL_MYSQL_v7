@@ -245,7 +245,7 @@ def _attach_display_names(
         candidates.append(name_index["upc"].get(entity_key.lstrip("0") or "0") or {})
     if article_number:
         candidates.append(name_index["article"].get(article_number) or {})
-    if main_article_number:
+    if main_article_number and main_article_number == article_number:
         candidates.append(name_index["main_article"].get(main_article_number) or {})
 
     manual_item_name = next(
