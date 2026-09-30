@@ -1027,13 +1027,21 @@ def web_upload_recent(request:Request,response:Response,limit:int=8):
                              'RELEASED',
                              'PHASE2C_READY'
                          )
-                     AND NOT EXISTS (
-                         SELECT 1
-                         FROM pipeline_run active
-                         WHERE active.batch_id=ib.batch_id
-                           AND active.pipeline_name=%s
-                           AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                           AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                     AND (
+                         ib.processing_status IN (
+                           'QUICK_CHECK_READY',
+                           'QUICK_CHECK_READY_WITH_HOLDS',
+                           'PHASE3_QA_HOLD',
+                           'API_ABORTED'
+                         )
+                         OR NOT EXISTS (
+                           SELECT 1
+                           FROM pipeline_run active
+                           WHERE active.batch_id=ib.batch_id
+                             AND active.pipeline_name=%s
+                             AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                             AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                         )
                      )
                    ORDER BY ib.batch_id DESC
                    LIMIT %s""",
