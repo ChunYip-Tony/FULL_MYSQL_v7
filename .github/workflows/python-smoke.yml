@@ -66,6 +66,22 @@ jobs:
           print('249-service-alias-smoke=PASS')
           PY
 
+
+      - name: Validate Backoffice DOM collection bindings
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path('backoffice_ui.py').read_text(encoding='utf-8')
+          bad = re.findall(
+              r"(?<!\$)\$\([^)]*\)\.(?:forEach|map|filter|find|some|every|reduce)\b",
+              text,
+          )
+          assert not bad, f"Single-element $() used as collection: {bad}"
+          print('backoffice-dom-bindings=PASS')
+          PY
+
       - name: Import worker and Phase 3 modules
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
