@@ -4864,6 +4864,7 @@ def performance_report(
             "slowing_items":0,
             "low_gp_items":0,
             "price_review_candidates":0,
+            "price_tolerance_suppressed":0,
         }
         suggestions=[]
         day_items=[]
@@ -5045,6 +5046,16 @@ def performance_report(
                 if gp_day_gain is not None and current_gp_day not in (None,Decimal("0"))
                 else None
             )
+
+            # No price-change suggestion is needed when the live current
+            # price is already within +/- $0.25 of the supported candidate.
+            if (
+                current is not None
+                and suggested is not None
+                and abs(_d(suggested)-_d(current)) <= Decimal("0.25")
+            ):
+                summary["price_tolerance_suppressed"]+=1
+                continue
 
             blocked_reason=None
             if status!="READY":
@@ -5340,6 +5351,7 @@ def performance_report(
             "cost_caveat":"Historical daily cost lineage is not yet exposed in V2 Performance; suggestions use current authoritative cost while sales evidence is cut off at report date.",
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
+            "price_change_tolerance":"SUPPRESS_WHEN_ABS_CURRENT_MINUS_SUGGESTED_LE_0.25",
             "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY; FRESH_DOH_GT_7; FROZEN_DOH_GT_60; LIVE_OR_OTHER_NO_EXTRA_DOH_GATE",
             "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
         },
