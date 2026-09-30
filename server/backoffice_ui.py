@@ -2488,6 +2488,10 @@ function mobileQuickFamilyGroups(rows){
       group_avg_qty_day:null,
       group_uom:'',
       group_status:'',
+      source_article:r.family_source_article||r.family_article||null,
+      source_movement_7d:r.family_source_movement_7d,
+      source_movement_uom:r.family_source_movement_uom||'',
+      source_movement_status:r.family_source_movement_status||'',
       family_receipt_verified:!!r.family_receipt_verified,
       family_receipt_movement_type:r.family_receipt_movement_type||'',
       family_receipt_date:r.family_receipt_date||'',
@@ -2509,6 +2513,10 @@ function mobileQuickFamilyGroups(rows){
     }
     if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
     if(!g.group_status&&r.family_group_movement_status)g.group_status=String(r.family_group_movement_status);
+    if(!g.source_article&&r.family_source_article)g.source_article=String(r.family_source_article);
+    if((g.source_movement_7d===null||g.source_movement_7d===undefined)&&r.family_source_movement_7d!==null&&r.family_source_movement_7d!==undefined)g.source_movement_7d=r.family_source_movement_7d;
+    if(!g.source_movement_uom&&r.family_source_movement_uom)g.source_movement_uom=String(r.family_source_movement_uom);
+    if(!g.source_movement_status&&r.family_source_movement_status)g.source_movement_status=String(r.family_source_movement_status);
     if(!g.family_receipt_verified&&r.family_receipt_verified)g.family_receipt_verified=true;
     if(!g.family_receipt_movement_type&&r.family_receipt_movement_type)g.family_receipt_movement_type=String(r.family_receipt_movement_type);
     if(!g.family_receipt_date&&r.family_receipt_date)g.family_receipt_date=String(r.family_receipt_date);
@@ -2645,8 +2653,12 @@ function mobileQuickGroupedHtml(rows){
       g.family_receipt_history,
       {movement_type:g.family_receipt_movement_type,date:g.family_receipt_date,quantity:g.family_receipt_qty,uom:g.family_receipt_uom}
     );
+    const sourceHasMvt=hasNonZero(g.source_movement_7d);
+    const sourceMvtText=sourceHasMvt
+      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">SAP 251−252 SOURCE · '+esc(g.source_article||g.family_article||'—')+' · '+esc(fmt(g.source_movement_7d)+(g.source_movement_uom?' '+g.source_movement_uom:''))+'</div>'
+      : '';
     const familyHead='<div class="m-q-family-head">'+
-      '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+familyReceiptCaption+'</div>'+
+      '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+sourceMvtText+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
         '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
@@ -2671,8 +2683,12 @@ function mobileQuickGroupedHtml(rows){
         a.receipt_history,
         {movement_type:a.receipt_movement_type,date:a.receipt_date,quantity:a.receipt_qty,uom:a.receipt_uom}
       );
+      const articleHasMvt=hasNonZero(a.movement_7d);
+      const articleRole=a.receipt_verified&&articleHasMvt
+        ? 'RECEIVING / SAP SELLING ARTICLE'
+        : (a.receipt_verified?'RECEIVING ARTICLE':(articleHasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE'));
       const recvHead='<div class="m-q-receiving-head">'+
-        '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">SAP SELLING ARTICLE</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">251−252 MVT</div>'+receiptCaption+'</div>'+
+        '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">'+esc(articleRole)+'</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">'+(articleHasMvt?'251−252 MVT':'No 251−252 on this Article')+'</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
 
@@ -2697,7 +2713,7 @@ function mobileQuickGroupedHtml(rows){
         : '';
 
       const receiptKeepNote=a.receipt_verified&&!hasNonZero(a.movement_7d)&&!allUpcRows.some(r=>hasNonZero(r?.qty_7d))
-        ? '<div class="m-q-recent-receipt-note">Kept visible: 101–109 verified SAP Selling Article'+(recentVerified?' · most recent receipt':'')+'.</div>'
+        ? '<div class="m-q-recent-receipt-note">Kept visible: 101–109 verified Receiving Article'+(recentVerified?' · most recent receipt':'')+'.</div>'
         : '';
       const inactiveNote=inactive
         ? '<div class="m-q-inactive-note">Hidden by default · no 7D Receiving MVT and no related UPC 7D POS activity.</div>'
