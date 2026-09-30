@@ -475,6 +475,367 @@ QC_COLUMNS = [
 
 DERIVED_QC_COLUMNS = ["negative_stock", "stock_status"]
 
+LATEST_DAILY_COLUMNS = [
+    "latest_daily_business_date",
+    "latest_daily_sales_dollars",
+    "latest_daily_pos_qty",
+    "latest_daily_avg_sold_price",
+    "latest_daily_price_type",
+    "latest_daily_cost_per_selling_unit",
+    "latest_daily_cost_source",
+    "latest_daily_cost_date",
+    "latest_daily_cogs",
+    "latest_daily_gp_dollars",
+    "latest_daily_gp_pct",
+    "latest_daily_cost_status",
+    "latest_daily_source_file",
+    "latest_daily_coverage_kind",
+]
+
+
+def _norm_uom(value: Any) -> str | None:
+    text = str(value or "").strip().upper()
+    if not text:
+        return None
+    return "PACK" if text in {"PAC", "PACK"} else text
+
+
+def _family_cost_as_of(
+    cur,
+    row: dict[str, Any],
+    business_date: date,
+) -> dict[str, Any]:
+    """Resolve the family cost that was applicable on a completed POS business date.
+
+    Authority mirrors Phase 3:
+      1) valid receipt valuation
+      2) official Live/Fresh/Frozen cost
+      3) OH explicit-cost fallback
+      4) already-resolved user-confirmed fallback when it predates the day
+    """
+    family_id = row.get("family_id")
+    if family_id is None:
+        return {"status": "NO_FAMILY"}
+
+    cur.execute(
+        """SELECT co.cost_per_base_uom,co.cost_amount,co.business_date,co.source_type,
+                  bu.uom_code AS base_uom,cu.uom_code AS cost_uom
+           FROM article_cost_observation co
+           LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
+           LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+           WHERE co.family_id=%s
+             AND co.business_date<=%s
+             AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
+             AND co.source_type IN (
+                 'MOVEMENT_RECEIPT_VALUATION',
+                 'FROZEN_INVENTORY_OFFICIAL_COST',
+                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST',
+                 'ON_HAND_EXPLICIT_COST_FALLBACK'
+             )
+           ORDER BY CASE co.source_type
+                      WHEN 'MOVEMENT_RECEIPT_VALUATION' THEN 1
+                      WHEN 'FROZEN_INVENTORY_OFFICIAL_COST' THEN 2
+                      WHEN 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST' THEN 2
+                      WHEN 'ON_HAND_EXPLICIT_COST_FALLBACK' THEN 3
+                      ELSE 9
+                    END,
+                    co.business_date DESC,
+                    co.cost_observation_id DESC
+           LIMIT 1""",
+        (family_id, business_date),
+    )
+    cost = cur.fetchone()
+    if not cost:
+        current_cost = row.get("current_cost_per_selling_unit")
+        current_cost_date = row.get("cost_date")
+        if (
+            current_cost is not None
+            and current_cost_date is not None
+            and current_cost_date <= business_date
+            and str(row.get("cost_source") or "").upper() == "USER_CONFIRMED_FAMILY_COST"
+        ):
+            return {
+                "status": "RESOLVED",
+                "cost_per_selling_unit": Decimal(str(current_cost)),
+                "source": row.get("cost_source"),
+                "date": current_cost_date,
+            }
+        return {"status": "NO_COST_ASOF"}
+
+    cost_per_base = cost.get("cost_per_base_uom")
+    if cost_per_base is None:
+        cost_per_base = cost.get("cost_amount")
+    if cost_per_base is None:
+        return {"status": "NO_COST_ASOF"}
+
+    cost_per_base = Decimal(str(cost_per_base))
+    source_uom = _norm_uom(cost.get("base_uom") or cost.get("cost_uom"))
+    row_base_uom = _norm_uom(row.get("base_uom"))
+    selling_uom = _norm_uom(row.get("selling_uom"))
+    factor_raw = row.get("base_qty_per_selling_unit")
+
+    if source_uom and row_base_uom and source_uom == row_base_uom:
+        if factor_raw not in (None, ""):
+            factor = Decimal(str(factor_raw))
+        elif selling_uom == row_base_uom:
+            factor = Decimal("1")
+        else:
+            return {
+                "status": "FACTOR_MISSING",
+                "source": cost.get("source_type"),
+                "date": cost.get("business_date"),
+            }
+        return {
+            "status": "RESOLVED",
+            "cost_per_selling_unit": cost_per_base * factor,
+            "source": cost.get("source_type"),
+            "date": cost.get("business_date"),
+        }
+
+    if source_uom and selling_uom and source_uom == selling_uom:
+        return {
+            "status": "RESOLVED",
+            "cost_per_selling_unit": cost_per_base,
+            "source": cost.get("source_type"),
+            "date": cost.get("business_date"),
+        }
+
+    return {
+        "status": "UOM_MISMATCH",
+        "source": cost.get("source_type"),
+        "date": cost.get("business_date"),
+    }
+
+
+def _fetch_latest_daily_sales(
+    cur,
+    batch_id: int,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach exact latest completed canonical Seafood POS-day metrics to Quick Check rows."""
+    # coverage_summary is bounded to the latest completed business day.
+    coverage = coverage_summary(cur, "sales_by_price_type", include_batch_id=int(batch_id))
+    target_date = coverage.get("latest_valid_date")
+    if target_date is None:
+        return {
+            "business_date": None,
+            "coverage_kind": None,
+            "source_file": None,
+            "sales_dollars": Decimal("0"),
+            "pos_qty": Decimal("0"),
+            "cogs": Decimal("0"),
+            "gp_dollars": Decimal("0"),
+            "gp_pct": None,
+            "gp_status": "NO_DAILY_POS",
+            "cost_unresolved_sales": Decimal("0"),
+            "unmapped_sales": Decimal("0"),
+            "sales_row_count": 0,
+        }
+    canonical = [
+        d for d in source_data_days(
+            cur,
+            "sales_by_price_type",
+            include_batch_id=int(batch_id),
+            up_to=target_date,
+        )
+        if d.get("date") == target_date
+    ]
+    if not canonical:
+        return {
+            "business_date": target_date,
+            "coverage_kind": None,
+            "source_file": None,
+            "sales_dollars": Decimal("0"),
+            "pos_qty": Decimal("0"),
+            "cogs": Decimal("0"),
+            "gp_dollars": Decimal("0"),
+            "gp_pct": None,
+            "gp_status": "NO_CANONICAL_DAY",
+            "cost_unresolved_sales": Decimal("0"),
+            "unmapped_sales": Decimal("0"),
+            "sales_row_count": 0,
+        }
+
+    day = canonical[0]
+    file_id = int(day["file_id"])
+    coverage_kind = str(day.get("coverage_kind") or "")
+    source_file = str(day.get("original_filename") or "")
+
+    if coverage_kind == "DERIVED_PERIOD_RESIDUAL":
+        cur.execute(
+            """SELECT b.ean_upc,MAX(b.upc_id) AS upc_id,MAX(b.description) AS description,
+                      COALESCE(SUM(b.sales_amount),0) AS sales_dollars,
+                      COALESCE(SUM(b.sold_quantity),0) AS pos_qty,
+                      COUNT(DISTINCT UPPER(TRIM(b.price_type))) AS price_type_count,
+                      GROUP_CONCAT(DISTINCT UPPER(TRIM(b.price_type))
+                                   ORDER BY UPPER(TRIM(b.price_type)) SEPARATOR '+') AS price_types
+               FROM pos_daily_backfill_observation b
+               WHERE b.source_file_id=%s
+                 AND b.business_date=%s
+                 AND EXISTS (
+                     SELECT 1
+                     FROM upc_department_observation d
+                     WHERE d.file_id=b.source_file_id
+                       AND d.ean_upc=b.ean_upc
+                       AND d.source_type='POS'
+                       AND UPPER(TRIM(d.department_name))='SEAFOOD'
+                 )
+               GROUP BY b.ean_upc
+               ORDER BY b.ean_upc""",
+            (file_id, target_date),
+        )
+    else:
+        cur.execute(
+            """SELECT s.ean_upc,MAX(s.upc_id) AS upc_id,MAX(s.description) AS description,
+                      COALESCE(SUM(s.sales_amount),0) AS sales_dollars,
+                      COALESCE(SUM(s.sold_quantity),0) AS pos_qty,
+                      COUNT(DISTINCT UPPER(TRIM(s.price_type))) AS price_type_count,
+                      GROUP_CONCAT(DISTINCT UPPER(TRIM(s.price_type))
+                                   ORDER BY UPPER(TRIM(s.price_type)) SEPARATOR '+') AS price_types
+               FROM sales_period_observation s
+               WHERE s.file_id=%s
+                 AND s.period_start_date=%s
+                 AND s.period_end_date=%s
+                 AND s.temporal_grain='SINGLE_DATE'
+                 AND EXISTS (
+                     SELECT 1
+                     FROM upc_department_observation d
+                     WHERE d.file_id=s.file_id
+                       AND d.sheet_id=s.sheet_id
+                       AND d.source_row_number=s.source_row_number
+                       AND d.ean_upc=s.ean_upc
+                       AND d.source_type='POS'
+                       AND UPPER(TRIM(d.department_name))='SEAFOOD'
+                 )
+               GROUP BY s.ean_upc
+               ORDER BY s.ean_upc""",
+            (file_id, target_date, target_date),
+        )
+    observed = list(cur.fetchall())
+
+    by_upc_id = {
+        int(r["upc_id"]): r for r in rows if r.get("upc_id") is not None
+    }
+    by_ean = {
+        str(r.get("ean_upc") or "").strip(): r
+        for r in rows
+        if str(r.get("ean_upc") or "").strip()
+    }
+
+    row_obs: dict[int, dict[str, Any]] = {}
+    unmapped_sales = Decimal("0")
+    total_sales = Decimal("0")
+    total_qty = Decimal("0")
+    for obs in observed:
+        sales = Decimal(str(obs.get("sales_dollars") or 0))
+        qty = Decimal(str(obs.get("pos_qty") or 0))
+        total_sales += sales
+        total_qty += qty
+        row = None
+        if obs.get("upc_id") is not None:
+            row = by_upc_id.get(int(obs["upc_id"]))
+        if row is None:
+            row = by_ean.get(str(obs.get("ean_upc") or "").strip())
+        if row is None:
+            unmapped_sales += sales
+            continue
+        key = int(row["upc_id"])
+        agg = row_obs.setdefault(
+            key,
+            {
+                "sales": Decimal("0"),
+                "qty": Decimal("0"),
+                "price_types": set(),
+            },
+        )
+        agg["sales"] += sales
+        agg["qty"] += qty
+        for pt in str(obs.get("price_types") or "").split("+"):
+            pt = pt.strip()
+            if pt:
+                agg["price_types"].add(pt)
+
+    cost_cache: dict[Any, dict[str, Any]] = {}
+    total_cogs = Decimal("0")
+    total_gp = Decimal("0")
+    unresolved_sales = Decimal("0")
+    sales_row_count = 0
+
+    for row in rows:
+        row["latest_daily_business_date"] = target_date
+        row["latest_daily_source_file"] = source_file
+        row["latest_daily_coverage_kind"] = coverage_kind
+        obs = row_obs.get(int(row["upc_id"])) if row.get("upc_id") is not None else None
+        if not obs:
+            row["latest_daily_sales_dollars"] = Decimal("0")
+            row["latest_daily_pos_qty"] = Decimal("0")
+            row["latest_daily_avg_sold_price"] = None
+            row["latest_daily_price_type"] = None
+            row["latest_daily_cost_per_selling_unit"] = None
+            row["latest_daily_cost_source"] = None
+            row["latest_daily_cost_date"] = None
+            row["latest_daily_cogs"] = Decimal("0")
+            row["latest_daily_gp_dollars"] = Decimal("0")
+            row["latest_daily_gp_pct"] = None
+            row["latest_daily_cost_status"] = "ZERO_SALES"
+            continue
+
+        sales = obs["sales"]
+        qty = obs["qty"]
+        sales_row_count += 1
+        row["latest_daily_sales_dollars"] = sales
+        row["latest_daily_pos_qty"] = qty
+        row["latest_daily_avg_sold_price"] = (sales / qty) if qty != 0 else None
+        pts = sorted(obs["price_types"])
+        row["latest_daily_price_type"] = pts[0] if len(pts) == 1 else ("MIXED" if pts else None)
+
+        family_key = row.get("family_id")
+        cost = cost_cache.get(family_key)
+        if cost is None:
+            cost = _family_cost_as_of(cur, row, target_date)
+            cost_cache[family_key] = cost
+
+        row["latest_daily_cost_status"] = cost.get("status")
+        row["latest_daily_cost_per_selling_unit"] = cost.get("cost_per_selling_unit")
+        row["latest_daily_cost_source"] = cost.get("source")
+        row["latest_daily_cost_date"] = cost.get("date")
+        if cost.get("status") == "RESOLVED" and qty != 0:
+            cogs = qty * Decimal(str(cost["cost_per_selling_unit"]))
+            gp = sales - cogs
+            row["latest_daily_cogs"] = cogs
+            row["latest_daily_gp_dollars"] = gp
+            row["latest_daily_gp_pct"] = (gp / sales) if sales != 0 else None
+            total_cogs += cogs
+            total_gp += gp
+        elif cost.get("status") == "RESOLVED":
+            row["latest_daily_cogs"] = Decimal("0")
+            row["latest_daily_gp_dollars"] = sales
+            row["latest_daily_gp_pct"] = (Decimal("1") if sales != 0 else None)
+            total_gp += sales
+        else:
+            row["latest_daily_cogs"] = None
+            row["latest_daily_gp_dollars"] = None
+            row["latest_daily_gp_pct"] = None
+            unresolved_sales += abs(sales)
+
+    unresolved_sales += abs(unmapped_sales)
+    gp_complete = unresolved_sales <= Decimal("0.0001")
+    return {
+        "business_date": target_date,
+        "coverage_kind": coverage_kind,
+        "source_file": source_file,
+        "sales_dollars": total_sales,
+        "pos_qty": total_qty,
+        "cogs": total_cogs if gp_complete else None,
+        "gp_dollars": total_gp if gp_complete else None,
+        "gp_pct": (total_gp / total_sales) if gp_complete and total_sales != 0 else None,
+        "gp_status": "COMPLETE" if gp_complete else "PARTIAL_COST_OR_MAPPING",
+        "cost_unresolved_sales": unresolved_sales,
+        "unmapped_sales": unmapped_sales,
+        "sales_row_count": sales_row_count,
+    }
+
 
 def _fetch_quick_rows(cur) -> list[dict[str, Any]]:
     cur.execute("SELECT " + ",".join(QC_COLUMNS) + " FROM quick_check_current ORDER BY ean_upc")
@@ -504,7 +865,7 @@ def _build_lookup(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def _build_quick(rows: list[dict[str, Any]]) -> list[list[Any]]:
-    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS
+    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS + LATEST_DAILY_COLUMNS
     return [["Sheet_Row"] + export_columns] + [
         [sheet_row] + [row.get(col) for col in export_columns]
         for sheet_row, row in enumerate(rows, start=2)
@@ -532,10 +893,12 @@ def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
         row for row in rows
         if str(row.get("quick_check_status") or "").upper() == "READY"
     ]
-    out = [["Sheet_Row"] + ANALYSIS_COLUMNS + ["Analysis_Source"]]
+    out = [["Sheet_Row"] + ANALYSIS_COLUMNS + LATEST_DAILY_COLUMNS + ["Analysis_Source"]]
     for sheet_row, row in enumerate(ready, start=2):
         out.append(
-            [sheet_row] + [row.get(col) for col in ANALYSIS_COLUMNS]
+            [sheet_row]
+            + [row.get(col) for col in ANALYSIS_COLUMNS]
+            + [row.get(col) for col in LATEST_DAILY_COLUMNS]
             + ["FULL_MYSQL_PHASE3_READY_ONLY"]
         )
     return out
@@ -694,6 +1057,7 @@ def _source_status(
     analysis_ready_rows: int,
     analysis_family_rows: int,
     freshness: dict[str, Any],
+    latest_daily: dict[str, Any],
 ) -> list[list[Any]]:
     fields = [
         ("Snapshot_Status","MYSQL_PUBLISH_READY"),("MySQL_Batch_ID",batch.get("batch_id")),
@@ -715,6 +1079,18 @@ def _source_status(
         ("Analysis_Family_Rows",analysis_family_rows),
         ("Analysis_Excluded_HOLD_Rows",phase3.get("quick_check_hold_rows")),
         ("Analysis_Input_Policy","READY_ONLY"),
+        ("Latest_Daily_Business_Date",latest_daily.get("business_date")),
+        ("Latest_Daily_Coverage_Kind",latest_daily.get("coverage_kind")),
+        ("Latest_Daily_Source",latest_daily.get("source_file")),
+        ("Latest_Daily_Seafood_Sales",latest_daily.get("sales_dollars")),
+        ("Latest_Daily_Seafood_POS_Qty",latest_daily.get("pos_qty")),
+        ("Latest_Daily_Seafood_COGS",latest_daily.get("cogs")),
+        ("Latest_Daily_Seafood_GP_Dollars",latest_daily.get("gp_dollars")),
+        ("Latest_Daily_Seafood_GP_Pct",latest_daily.get("gp_pct")),
+        ("Latest_Daily_GP_Status",latest_daily.get("gp_status")),
+        ("Latest_Daily_Cost_Unresolved_Sales",latest_daily.get("cost_unresolved_sales")),
+        ("Latest_Daily_Unmapped_Sales",latest_daily.get("unmapped_sales")),
+        ("Latest_Daily_Sales_Row_Count",latest_daily.get("sales_row_count")),
         ("Snapshot_Published_At_UTC",datetime.now(timezone.utc).isoformat()),
         ("Publisher","FULL_MYSQL_CHATGPT_SHEET_BRIDGE"),("Active_ChatGPT_Source",_active_source()),
         ("Analysis_Cutover_Status","READY_ONLY_SAFE_PARTIAL"),
@@ -847,6 +1223,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                             "reason":"Phase 3 blocking_issue_count is non-zero."}
                 rows = _fetch_quick_rows(cur)
                 freshness = _canonical_freshness(cur, batch_id)
+                latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
             finally:
                 cur.close()
 
@@ -902,6 +1279,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 analysis_ready_rows=analysis_row_count,
                 analysis_family_rows=analysis_family_count,
                 freshness=freshness,
+                latest_daily=latest_daily,
             ),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
