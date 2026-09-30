@@ -1211,7 +1211,8 @@ $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
 window.addEventListener('hashchange',()=>restoreRoute());
 
 const mobileMedia=window.matchMedia('(max-width:759px)');
-const mobileState={module:null,filter:'all',query:'',freshness:[]};
+const mobileState={module:null,parentModule:null,filter:'all',query:'',freshness:[]};
+let mobilePendingTopModule=null;
 const MOBILE_HISTORY_KEY='fullmysql_mobile_v1';
 let mobileHistoryReady=false;
 let mobileRestoringHistory=false;
@@ -1369,21 +1370,23 @@ async function mobileRefreshHome(){
 function showMobileHome({scroll=true,historyMode='push'}={}){
   if(!isMobileBackoffice())return;
   closeDrawer();
-  mobileState.module=null;mobileState.filter='all';mobileState.query='';
+  mobileState.module=null;mobileState.parentModule=null;mobileState.filter='all';mobileState.query='';
   mobileScreen('mobileHome',{scroll});
   if(historyMode==='push')mobilePushHistory('home');
+  else if(historyMode==='replace')history.replaceState(mobileHistoryState('home'),'',location.href);
   mobileRefreshHome();
 }
-async function mobileOpenModule(module,{query='',historyMode='push'}={}){
+async function mobileOpenModule(module,{query='',historyMode='push',parentModule=null}={}){
   if(!isMobileBackoffice())return;
   closeDrawer();
-  mobileState.module=module;mobileState.filter='all';mobileState.query=String(query||'').trim();
+  mobileState.module=module;mobileState.parentModule=parentModule;mobileState.filter='all';mobileState.query=String(query||'').trim();
   const cfg=mobileModuleConfig(module);
   mNode('mobileListTitle').textContent=cfg.title;
   mNode('mobileListSub').textContent=mobileState.query&&module==='quick'?'Search: '+mobileState.query:cfg.sub;
   mNode('mobileListContent').innerHTML='<div class="m-loading">Loading…</div>';
   mobileScreen('mobileListPage');
-  if(historyMode==='push')mobilePushHistory('list',{module,query:mobileState.query});
+  if(historyMode==='push')mobilePushHistory('list',{module,query:mobileState.query,parentModule:mobileState.parentModule});
+  else if(historyMode==='replace')history.replaceState(mobileHistoryState('list',{module,query:mobileState.query,parentModule:mobileState.parentModule}),'',location.href);
   mobileRenderChips();
   mobileRenderQuickTools();
   mobileRenderQaTools();
@@ -1514,7 +1517,7 @@ function mobileRenderList(){
 }
 function mobileShowDetail(title,sub,html,{historyMode='push'}={}){
   mNode('mobileDetailTitle').textContent=title||'Detail';mNode('mobileDetailSub').textContent=sub||'';mNode('mobileDetailContent').innerHTML=html;mobileScreen('mobileDetailPage');
-  if(historyMode==='push')mobilePushHistory('detail',{module:mobileState.module});
+  if(historyMode==='push')mobilePushHistory('detail',{module:mobileState.module,parentModule:mobileState.parentModule});
 }
 function mobileOpenItem(key){
   const mod=mobileState.module;
@@ -1526,7 +1529,7 @@ function mobileOpenItem(key){
   if(mod==='inventory')return mobileQuickDetail(key,false);
   if(mod==='data'){
     const target=String(key).replace(/^data:/,'');
-    return mobileOpenModule(target);
+    return mobileOpenModule(target,{parentModule:'data'});
   }
   if(mod==='pi')return mobileQuickDetail(key,true);
   if(mod==='batches'){
@@ -1660,8 +1663,39 @@ async function mobileSubmitUpload(){
   }catch(e){result.innerHTML='<p>'+esc(e.message)+'</p>';toast(e.message)}finally{const z=mNode('mStartUpload');if(z)z.disabled=false}
 }
 
-$$('[data-mobile-module]').forEach(b=>b.onclick=()=>mobileOpenModule(b.dataset.mobileModule));
-$$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
+function mobileCurrentDepthToHome(){
+  if(mNode('mobileHome')?.classList.contains('on'))return 0;
+  let depth=1; // top-level list
+  if(mobileState.parentModule)depth+=1; // Data -> child list
+  if(mNode('mobileDetailPage')?.classList.contains('on'))depth+=1; // list -> detail
+  return depth;
+}
+function mobileNavigateTopModule(module){
+  if(!isMobileBackoffice())return;
+  if(mNode('mobileHome')?.classList.contains('on')){
+    mobileOpenModule(module,{historyMode:'push',parentModule:null});
+    return;
+  }
+  const depth=mobileCurrentDepthToHome();
+  mobilePendingTopModule=module;
+  if(depth>0)history.go(-depth);
+  else{
+    mobilePendingTopModule=null;
+    mobileOpenModule(module,{historyMode:'push',parentModule:null});
+  }
+}
+function mobileNavigateHome(){
+  if(!isMobileBackoffice())return;
+  const depth=mobileCurrentDepthToHome();
+  if(depth>0)history.go(-depth);
+  else showMobileHome({historyMode:'none'});
+}
+$$('[data-mobile-module]').forEach(b=>b.onclick=()=>{
+  const module=b.dataset.mobileModule;
+  if(b.closest('.m-bottomnav'))mobileNavigateTopModule(module);
+  else mobileOpenModule(module,{historyMode:'push',parentModule:null});
+});
+$$('[data-mobile-home]').forEach(b=>b.onclick=()=>mobileNavigateHome());
 mNode('mobileListBack').onclick=()=>history.back();
 mNode('mobileDetailBack').onclick=()=>history.back();
 
@@ -1669,6 +1703,16 @@ window.addEventListener('popstate',async e=>{
   if(!isMobileBackoffice())return;
   const s=e.state||{};
   if(!s[MOBILE_HISTORY_KEY])return;
+
+  if(mobilePendingTopModule&&s.screen==='home'){
+    const target=mobilePendingTopModule;
+    mobilePendingTopModule=null;
+    mobileRestoringHistory=true;
+    try{showMobileHome({scroll:false,historyMode:'none'})}
+    finally{mobileRestoringHistory=false}
+    await mobileOpenModule(target,{historyMode:'push',parentModule:null});
+    return;
+  }
 
   if(s.screen==='exit-guard'){
     const leave=window.confirm('Exit FULL MYSQL app?');
@@ -1691,8 +1735,10 @@ window.addEventListener('popstate',async e=>{
     if(s.screen==='home'){
       showMobileHome({scroll:false,historyMode:'none'});
     }else if(s.screen==='list'&&s.module){
-      await mobileOpenModule(s.module,{query:s.query||'',historyMode:'none'});
+      await mobileOpenModule(s.module,{query:s.query||'',historyMode:'none',parentModule:s.parentModule||null});
     }else if(s.screen==='detail'){
+      mobileState.module=s.module||mobileState.module;
+      mobileState.parentModule=s.parentModule||null;
       mobileScreen('mobileDetailPage',{scroll:false});
     }
   }finally{
