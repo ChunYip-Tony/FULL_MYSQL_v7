@@ -7,6 +7,7 @@ from typing import Any
 from business_clock import completed_through_date
 from data_coverage import source_data_days
 from db import db_conn
+from phase3 import _current_price as _live_current_price
 from webapp_v2_runtime import (
     _delivery_pattern,
     _family_effective_oh,
@@ -447,6 +448,25 @@ def inventory_review(
         family_cache: dict[int, dict[str, Any]] = {}
         out = []
         for row in qrows:
+            live_price = _live_current_price(
+                cur,
+                int(row["upc_id"]),
+                row.get("ean_upc"),
+            ) if row.get("upc_id") is not None else None
+            if live_price:
+                row["current_price"] = live_price.get("price")
+                row["current_price_type"] = live_price.get("type")
+                row["current_price_source"] = live_price.get("source")
+                row["current_price_asof_date"] = live_price.get("date")
+                if (
+                    row.get("current_cost_per_selling_unit") is not None
+                    and live_price.get("price") is not None
+                    and _d(live_price.get("price")) > 0
+                ):
+                    row["gp_pct_current"] = (
+                        (_d(live_price.get("price")) - _d(row.get("current_cost_per_selling_unit")))
+                        / _d(live_price.get("price"))
+                    )
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
             if fid is not None and fid not in family_cache:
                 cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc", (fid,))
@@ -513,7 +533,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
             cur = conn.cursor(dictionary=True)
             placeholders = ",".join(["%s"] * len(upcs))
             cur.execute(
-                f"""SELECT ean_upc,current_price,current_price_type,
+                f"""SELECT upc_id,ean_upc,current_price,current_price_type,
                            current_price_source,current_price_asof_date,
                            current_cost_per_selling_unit,cost_source,cost_date,
                            current_oh,current_oh_uom,doh,
@@ -536,14 +556,28 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
             row["current_serving_overlay_status"] = "MISSING_QUICK_CHECK_CURRENT"
             continue
 
-        current_price = live.get("current_price")
+        resolved_price = _live_current_price(
+            cur,
+            int(live["upc_id"]),
+            live.get("ean_upc"),
+        ) if live.get("upc_id") is not None else None
+        current_price = (
+            resolved_price.get("price")
+            if resolved_price else live.get("current_price")
+        )
         current_cost = live.get("current_cost_per_selling_unit")
 
         row["current_price"] = current_price
-        row["current_price_type"] = live.get("current_price_type")
-        row["current_price_source"] = live.get("current_price_source")
-        row["current_price_observed_date"] = live.get("current_price_asof_date")
-        row["current_price_basis"] = "CANONICAL_QUICK_CHECK_CURRENT"
+        row["current_price_type"] = (
+            resolved_price.get("type") if resolved_price else live.get("current_price_type")
+        )
+        row["current_price_source"] = (
+            resolved_price.get("source") if resolved_price else live.get("current_price_source")
+        )
+        row["current_price_observed_date"] = (
+            resolved_price.get("date") if resolved_price else live.get("current_price_asof_date")
+        )
+        row["current_price_basis"] = "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME"
 
         row["current_cost"] = current_cost
         row["current_cost_source"] = live.get("cost_source")
@@ -587,7 +621,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
         "rules": {
             "write_enabled": False,
             "price_changes_are_review_only": True,
-            "current_price_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
+            "current_price_display_authority": "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
             "current_price_rule": "NEWEST_VALID_PRICE_LIST_VS_NEWER_SINGLE_DATE_POS_SOLD_EVENT; MULTI_DAY_POS_AVERAGES_ARE_HISTORICAL_ONLY",
             "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
             "source_contract": report.get("price_suggestion_rules"),
