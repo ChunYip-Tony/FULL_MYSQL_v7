@@ -352,11 +352,18 @@ function renderQA(){
  const a=filteredQA();$('#qaCount').textContent=`${a.length} shown · ${state.qaIssues.length} open`;
  $('#qaRows').innerHTML=a.map(x=>{
    const cur=x.current||{};
-   const stateText=[
+   const entityType=String(x.entity_type||'').toUpperCase();
+   const code=String(x.issue_code||'').toUpperCase();
+   const stateParts=[
      cur.article_number?('Article '+cur.article_number):'',
-     cur.main_article_number?('Family '+cur.main_article_number):'',
-     cur.selling_uom?('UOM '+cur.selling_uom):'UOM missing'
-   ].filter(Boolean).join(' · ');
+     cur.main_article_number?('Family '+cur.main_article_number):''
+   ];
+   if(entityType==='UPC'){
+     stateParts.push(cur.selling_uom?('UOM '+cur.selling_uom):'UOM missing');
+   }else if(entityType==='ARTICLE' && code.includes('ARTICLE_UNMAPPED')){
+     stateParts.push('Family mapping missing');
+   }
+   const stateText=stateParts.filter(Boolean).join(' · ');
    return `<tr>
      <td>${pill(x.severity)}</td>
      <td><div class="name">${esc(x.issue_code)}</div><div class="meta" style="max-width:380px">${esc(x.issue_summary||'')}</div></td>
