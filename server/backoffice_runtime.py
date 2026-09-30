@@ -1425,12 +1425,13 @@ def inventory_review(
         )
 
         family_cache: dict[int, dict[str, Any]] = {}
-        live_prices = _bulk_live_current_prices(cur, qrows)
+        # Keep mobile Quick Check search on the identity / movement fast path.
+        # Live current-price resolution can touch Price List + POS lineage and is
+        # intentionally deferred to the asynchronous Pricing Review overlay in
+        # the UI. Full/non-lightweight Inventory still resolves price here.
+        live_prices = {} if lightweight else _bulk_live_current_prices(cur, qrows)
         out = []
         for row in qrows:
-            # Current price is light enough to resolve in bulk, so mobile Quick
-            # Check can show the same live price authority as Pricing Review
-            # without waiting for expensive family OH roll-forward.
             live_price = (
                 live_prices.get(int(row["upc_id"]))
                 if row.get("upc_id") is not None
@@ -1616,7 +1617,7 @@ def inventory_review(
             "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",
             "lightweight": bool(lightweight),
             "lightweight_skips": (
-                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD"]
+                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD","LIVE_CURRENT_PRICE_RESOLUTION_DEFERRED_TO_UI"]
                 if lightweight
                 else []
             ),
