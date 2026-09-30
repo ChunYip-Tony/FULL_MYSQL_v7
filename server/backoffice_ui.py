@@ -1421,6 +1421,7 @@ const mobileState={module:null,parentModule:null,currentDetailKey:null,filter:'a
 let mobilePendingTopModule=null;
 let mobileQuickSearchTimer=null;
 let mobileQuickSearchSeq=0;
+let inventoryLoadSeq=0;
 const MOBILE_HISTORY_KEY='fullmysql_mobile_v1';
 let mobileHistoryReady=false;
 let mobileRestoringHistory=false;
@@ -2166,7 +2167,43 @@ function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
 async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').textContent=h.ok?'SERVICE READY':'SERVICE ISSUE';$('#readyPill').style.color=h.ok?'#bff3d2':'#ffd0c8'}catch(e){$('#readyPill').textContent='SERVICE ERROR'}}
-async function loadInventory(){const err=$('#invError');err.innerHTML='';$('#invRows').innerHTML='<tr><td colspan="11" class="loading">Loading...</td></tr>';try{const q=state.inventorySearch.trim();const url=`/v1/backoffice/inventory?category=${encodeURIComponent(state.invCat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;const d=await api(url);state.inventory=d.rows||[];const badge=$('#invSearchState'),clear=$('#clearInventorySearch');if(q){badge.textContent=`Search: ${q}`;badge.style.display='inline-flex';clear.style.display='inline-flex'}else{badge.style.display='none';clear.style.display='none'}renderInventory()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#invRows').innerHTML=''}}
+async function loadInventory(){
+ const requestSeq=++inventoryLoadSeq;
+ const q=String(state.inventorySearch||'').trim();
+ const cat=String(state.invCat||'ALL');
+ const err=$('#invError');
+ err.innerHTML='';
+ $('#invRows').innerHTML='<tr><td colspan="11" class="loading">Loading...</td></tr>';
+ try{
+   const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;
+   const d=await api(url);
+
+   // A slower previous live-search response must never overwrite the newest
+   // query's results. The server echoes its query so we validate both request
+   // sequence and query identity before mutating shared Inventory state.
+   if(requestSeq!==inventoryLoadSeq)return false;
+   if(String(state.inventorySearch||'').trim()!==q)return false;
+   if(String(d.query||'').trim()!==q)return false;
+
+   state.inventory=d.rows||[];
+   const badge=$('#invSearchState'),clear=$('#clearInventorySearch');
+   if(q){
+     badge.textContent=`Search: ${q}`;
+     badge.style.display='inline-flex';
+     clear.style.display='inline-flex';
+   }else{
+     badge.style.display='none';
+     clear.style.display='none';
+   }
+   renderInventory();
+   return true;
+ }catch(e){
+   if(requestSeq!==inventoryLoadSeq)return false;
+   err.innerHTML=`<div class="error">${esc(e.message)}</div>`;
+   $('#invRows').innerHTML='';
+   throw e;
+ }
+}
 function filteredInventoryRows(){
   let rows=[...state.inventory];
   const status=String(state.invStatus||'ALL').toUpperCase();
