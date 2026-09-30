@@ -900,7 +900,16 @@ function mobilePerformanceDetail(key){
   const range=state.salesRange||{};
   let html='<div class="m-detailcard"><div class="m-label">Range Performance</div><div class="m-detailgrid">';
   html+=mobileMetric('Sales',money(r.sales_amount),(range.start_date||'—')+' → '+(range.end_date||'—'));
-  html+=mobileMetric('GP
+  html+=mobileMetric('GP'+'$',money(r.gp_dollars),r.gp_cost_complete?'Historical applicable cost':'Cost missing on '+(r.gp_missing_cost_days||[]).length+' sold day(s)');
+  html+=mobileMetric('GP%',pct(r.gp_pct),'Range gross margin');
+  html+=mobileMetric('Sold Qty',fmt(r.sold_quantity)+' '+(r.qty_uom||''),'POS range total');
+  html+=mobileMetric('Velocity',fmt(r.velocity)+' '+(r.qty_uom||'')+'/day',(r.supported_day_count||0)+' completed data days');
+  html+=mobileMetric('Avg Sold Price',money(r.avg_sold_price),'Weighted range average');
+  html+=mobileMetric('GP'+'$/Data Day',money(r.gp_per_supported_day),'Completed canonical days');
+  html+=mobileMetric('Sold Days',fmt(r.sold_supported_day_count,0),'Days with positive POS qty');
+  html+='</div></div>';
+  mobileShowDetail(r.upc||'Performance',r.name||'',html);
+}
 function mobileActiveBatchDetail(){
   const b=state.active;if(!b)return;
   const waiting=batchResumeEligible(b);
