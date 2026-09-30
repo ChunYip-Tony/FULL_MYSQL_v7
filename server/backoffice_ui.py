@@ -428,7 +428,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     min-height:100dvh;
     max-height:100dvh;
     padding-top:max(8px,env(safe-area-inset-top));
-    padding-bottom:max(8px,env(safe-area-inset-bottom));
+    padding-bottom:max(24px,calc(env(safe-area-inset-bottom) + 14px));
     box-sizing:border-box;
     overflow:hidden;
   }
