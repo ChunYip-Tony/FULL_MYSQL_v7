@@ -190,12 +190,43 @@ jobs:
           assert 'Family Selling UOM' not in ui
           assert 'SAP MVT UOM' in ui
           assert '317/318 CONVERSION LINEAGE' in ui
-          assert "Column B blank" in runtime
-          assert "raw_table_name='raw_article_manual'" in runtime
-          assert "out.setdefault((fid, key), main)" in runtime
+          assert "Raw Article Manual is read directly" in runtime
+          assert "fresh fish" in runtime and "frozen pack" in runtime
+          assert "str(row.get(\"col_b\") or \"\").strip() or main" in runtime
+          assert "manual_upc_override" in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
+
+      - name: Validate Article Manual tab schemas
+        run: |
+          python - <<'PY'
+          import inspect
+          import normalize
+          import article_manual_multitab_repair as amr
+
+          fresh = normalize._article_manual_column_map('Fresh fish', {})
+          assert fresh['main_article']=='A'
+          assert fresh['article']=='B'
+          assert fresh['sales_set']=='C'
+          assert fresh['upc']=='D'
+          assert fresh['pack']=='G'
+          assert 'selling_uom' not in fresh
+
+          frozen = normalize._article_manual_column_map('Frozen Pack', {})
+          assert frozen['main_article']=='A'
+          assert frozen['article']=='A'
+          assert frozen['upc']=='D'
+          assert frozen['pack']=='E'
+          assert frozen['selling_uom']=='G'
+
+          nsrc=inspect.getsource(normalize._normalize_identity_row)
+          assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in nsrc
+          assert "and ean_upc" in nsrc and "and sales_set" in nsrc
+          rsrc=inspect.getsource(amr._load_roster)
+          assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in rsrc
+          print('article-manual-tab-schema=PASS')
+          PY
 
       - name: Validate 4816 EA authority
         run: |
