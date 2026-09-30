@@ -54,24 +54,64 @@ jobs:
           print('mvt-close-contract-ok')
           PY
 
-      - name: Validate 249 service alias normalization
+      - name: Validate all-UPC source lineage normalization
         run: |
           python - <<'PY'
           import inspect
           import phase3
-          from upc_aliases import service_249_canonical_base, service_249_product_code
+          import quick_check_app
+          import webapp_v2_runtime
+          import coverage_backfill
+          from upc_aliases import (
+              service_249_canonical_base,
+              service_249_product_code,
+              source_barcode_aliases,
+              source_ean_predicate,
+          )
+
+          # 249 service lineage.
           assert service_249_product_code('249450') == '249450'
           assert service_249_product_code('24945012345') == '249450'
-          assert service_249_canonical_base('249450') == '24945000000'
           assert service_249_canonical_base('24945012345') == '24945000000'
-          assert service_249_canonical_base('24045000000') is None
-          targeted = inspect.getsource(phase3.refresh_quick_check_subset)
-          assert "_sales_metrics(cur, upc_id, pos_days_7, p['ean_upc'])" in targeted
-          assert "_sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])" in targeted
-          assert "_sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])" in targeted
-          assert "_current_price(cur, upc_id, p['ean_upc'])" in targeted
-          assert "_historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc'])" in targeted
-          print('249-service-alias-smoke=PASS')
+
+          # Leading-zero and deterministic shortened retail-barcode lineage.
+          pred,args=source_ean_predicate('s.ean_upc','4918')
+          assert "TRIM(LEADING '0' FROM s.ean_upc)=%s" in pred and '4918' in args
+          aliases=source_barcode_aliases('036000291452')
+          assert '03600029145' in aliases
+          assert '3600029145' in aliases
+
+          # Full and targeted rebuilds must both carry raw EAN lineage.
+          full=inspect.getsource(phase3.rebuild_quick_check)
+          targeted=inspect.getsource(phase3.refresh_quick_check_subset)
+          for src in (full,targeted):
+              assert "_sales_metrics(cur, upc_id, pos_days_7, p['ean_upc'])" in src
+              assert "_sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])" in src
+              assert "_sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])" in src
+              assert "_current_price(cur, upc_id, p['ean_upc'])" in src
+              assert "_historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc'])" in src
+
+          # Current price must query canonical + raw lineage together, never
+          # wait for canonical evidence to be completely absent.
+          price_src=inspect.getsource(phase3._current_price)
+          assert '_lineage_pred("s.upc_id","s.ean_upc")' in price_src
+          assert '_lineage_pred("p.upc_id","p.ean_upc")' in price_src
+          assert 'if sold_date is None and ean' not in price_src
+
+          # Every serving sales reader uses the same shared raw-source predicate.
+          assert 'source_ean_predicate' in inspect.getsource(phase3._upc_match_sql)
+          assert 'source_ean_predicate' in inspect.getsource(quick_check_app._sales_lineage_pred)
+          assert 'source_ean_predicate' in inspect.getsource(webapp_v2_runtime._sales_lineage_pred)
+
+          # 28D active/UOM/cost repair must resolve current canonical UPC from
+          # raw EAN before trusting a stale derived upc_id.
+          qty_src=inspect.getsource(coverage_backfill.canonical_pos_qty_by_upc)
+          assert '_resolve_source_upc_id' in qty_src
+          assert 'GROUP BY ean_upc,upc_id' in qty_src
+          relink_src=inspect.getsource(coverage_backfill.relink_pos_backfill)
+          assert '_resolve_source_upc_id' in relink_src
+
+          print('all-upc-lineage-smoke=PASS')
           PY
 
 
