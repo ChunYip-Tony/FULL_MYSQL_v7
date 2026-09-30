@@ -140,10 +140,12 @@ def _fix_kind(issue_code: str, summary: str, detail: dict[str, Any]) -> str:
             json.dumps(detail or {}, ensure_ascii=False, default=str),
         ]
     ).upper()
-    if "COST_TO_SELLING_UOM_UNRESOLVED" in blob:
-        return "COST_CONVERSION"
+    # Missing Selling UOM must be resolved first. A cost conversion cannot be
+    # safely confirmed until the UPC's selling unit is authoritative.
     if any(token in blob for token in UOM_TOKENS):
         return "UOM_OR_IDENTITY"
+    if "COST_TO_SELLING_UOM_UNRESOLVED" in blob:
+        return "COST_CONVERSION"
     if code in FIXABLE_IDENTITY_CODES:
         return "IDENTITY_AND_UOM"
     return "VIEW_ONLY"
