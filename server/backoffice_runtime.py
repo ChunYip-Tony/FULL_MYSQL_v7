@@ -661,6 +661,13 @@ def inventory_review(
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
+        movement_days_7 = source_data_days(
+            cur,
+            "movement",
+            limit=7,
+            up_to=completed_through_date(),
+        )
+        family_movement_day_count = len(movement_days_7)
 
         # Fast path for normal Quick Check typing. Direct text / identifier
         # matches should never invoke the heavyweight V2 fuzzy aggregation.
@@ -830,6 +837,16 @@ def inventory_review(
                     "gp_pct": row.get("gp_pct_current"),
                     "qty_7d": row.get("pos_qty_7d"),
                     "velocity_7d": row.get("upc_velocity_7d"),
+                    # Family quantities are Movement 251-252 metrics and are
+                    # expressed in the movement Base UOM, not summed UPC POS units.
+                    "family_qty_7d": row.get("family_movement_7d"),
+                    "family_qty_uom": row.get("family_movement_uom"),
+                    "family_avg_qty_day": (
+                        _d(row.get("family_movement_7d")) / Decimal(family_movement_day_count)
+                        if row.get("family_movement_7d") is not None and family_movement_day_count > 0
+                        else None
+                    ),
+                    "family_movement_days_7d": family_movement_day_count,
                     "dos": row.get("dos"),
                     "doh": row.get("doh"),
                     "family_oh": family_oh.get("quantity"),
@@ -855,6 +872,8 @@ def inventory_review(
             "write_enabled": "OH_TRUE_STOCK_ONLY",
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
+            "family_qty_basis": "MOVEMENT_251_MINUS_252_BASE_UOM",
+            "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "lightweight": bool(lightweight),
             "lightweight_skips": (
                 ["FAMILY_EFFECTIVE_OH_ROLLFORWARD","LIVE_CURRENT_PRICE_RESOLUTION"]
