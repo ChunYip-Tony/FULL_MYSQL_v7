@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from difflib import SequenceMatcher
 from decimal import Decimal
 from typing import Any
 
@@ -18,7 +19,6 @@ from webapp_v2_runtime import (
     _family_receipt_events,
     bulk_ordering_suggestions,
     performance_report,
-    search_items,
 )
 
 
@@ -542,6 +542,110 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
     }
 
 
+
+def _quick_check_fuzzy_rows(
+    cur,
+    query: str,
+    category: str,
+    limit: int,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Fast typo-tolerant fallback over the already-built Quick Check serving table.
+
+    This intentionally avoids the heavier V2 search aggregation used elsewhere.
+    Quick Check only needs identity discovery here; the result list is then
+    ordered by recent UPC velocity, matching the mobile search contract.
+    """
+    q = " ".join(
+        "".join(ch if ch.isalnum() else " " for ch in str(query or "").upper()).split()
+    )
+    q_tokens = [x for x in q.split() if x]
+    if not q_tokens:
+        return [], {
+            "query": query,
+            "mode": "LIGHTWEIGHT_TYPO_MATCH",
+            "count": 0,
+        }
+
+    if category == "ALL":
+        cur.execute(
+            """SELECT *
+               FROM quick_check_current
+               ORDER BY COALESCE(upc_velocity_7d,0) DESC,
+                        COALESCE(pos_qty_7d,0) DESC,
+                        ean_upc
+               LIMIT 2500"""
+        )
+    else:
+        cur.execute(
+            """SELECT *
+               FROM quick_check_current
+               WHERE UPPER(COALESCE(product_class,''))=%s
+               ORDER BY COALESCE(upc_velocity_7d,0) DESC,
+                        COALESCE(pos_qty_7d,0) DESC,
+                        ean_upc
+               LIMIT 2500""",
+            (category,),
+        )
+
+    corpus = cur.fetchall()
+
+    def _threshold(token: str) -> float:
+        n = len(token)
+        if n <= 2:
+            return 1.0
+        if n <= 4:
+            return 0.78
+        if n <= 6:
+            return 0.72
+        return 0.68
+
+    ranked: list[tuple[float, float, float, str, dict[str, Any]]] = []
+    for row in corpus:
+        text = " ".join(
+            str(x or "")
+            for x in (
+                row.get("selling_description"),
+                row.get("family_description"),
+            )
+        ).upper()
+        normalized = " ".join(
+            "".join(ch if ch.isalnum() else " " for ch in text).split()
+        )
+        tokens = [x for x in normalized.split() if x]
+        if not tokens:
+            continue
+
+        token_scores: list[float] = []
+        matched = True
+        for needle in q_tokens:
+            best = max(
+                (SequenceMatcher(None, needle, candidate).ratio() for candidate in tokens),
+                default=0.0,
+            )
+            if best < _threshold(needle):
+                matched = False
+                break
+            token_scores.append(best)
+
+        if not matched or not token_scores:
+            continue
+
+        min_score = min(token_scores)
+        avg_score = sum(token_scores) / len(token_scores)
+        velocity = float(row.get("upc_velocity_7d") or 0)
+        upc = str(row.get("ean_upc") or "")
+        ranked.append((-velocity, -min_score, -avg_score, upc, row))
+
+    ranked.sort(key=lambda x: (x[0], x[1], x[2], x[3]))
+    rows = [x[4] for x in ranked[:limit]]
+    return rows, {
+        "query": query,
+        "mode": "LIGHTWEIGHT_TYPO_MATCH",
+        "count": len(rows),
+        "sort": "RECENT_VELOCITY_FIRST",
+    }
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",
@@ -603,92 +707,15 @@ def inventory_review(
                     "count": len(qrows),
                 }
             else:
-                # Typo-tolerant fallback only when direct search produced zero
-                # rows. This preserves SALMOM -> SALMON without making normal
-                # live search scan the full V2 serving corpus.
-                search_meta = search_items(q, min(limit, 100))
-                ranked_upcs: list[str] = []
-                ranked_families: list[int] = []
-                ranked_articles: list[str] = []
-                relevance_by_upc: dict[str, int] = {}
-                relevance_by_family: dict[int, int] = {}
-                relevance_by_article: dict[str, int] = {}
-
-                for result in search_meta.get("results") or []:
-                    rtype = str(result.get("result_type") or "").upper()
-                    rel = int(result.get("relevance") or 0)
-                    if rtype == "UPC":
-                        upc = str(result.get("number") or "").strip()
-                        if upc and upc not in relevance_by_upc:
-                            ranked_upcs.append(upc)
-                            relevance_by_upc[upc] = rel
-                    elif rtype == "UPC_GROUP":
-                        for member in result.get("group_members") or []:
-                            upc = str(member.get("upc") or "").strip()
-                            if upc and upc not in relevance_by_upc:
-                                ranked_upcs.append(upc)
-                                relevance_by_upc[upc] = rel
-                        fid = result.get("family_id")
-                        if fid is not None:
-                            fid = int(fid)
-                            if fid not in relevance_by_family:
-                                ranked_families.append(fid)
-                                relevance_by_family[fid] = rel
-                    elif rtype == "FAMILY":
-                        fid = result.get("family_id")
-                        if fid is not None:
-                            fid = int(fid)
-                            if fid not in relevance_by_family:
-                                ranked_families.append(fid)
-                                relevance_by_family[fid] = rel
-                    elif rtype == "ARTICLE":
-                        article = str(result.get("number") or "").strip()
-                        if article and article not in relevance_by_article:
-                            ranked_articles.append(article)
-                            relevance_by_article[article] = rel
-
-                clauses: list[str] = []
-                args: list[Any] = []
-                if ranked_upcs:
-                    ph = ",".join(["%s"] * len(ranked_upcs))
-                    clauses.append(f"ean_upc IN ({ph})")
-                    args.extend(ranked_upcs)
-                if ranked_families:
-                    ph = ",".join(["%s"] * len(ranked_families))
-                    clauses.append(f"family_id IN ({ph})")
-                    args.extend(ranked_families)
-                if ranked_articles:
-                    ph = ",".join(["%s"] * len(ranked_articles))
-                    clauses.append(f"article_number IN ({ph})")
-                    args.extend(ranked_articles)
-
-                if not clauses:
-                    qrows = []
-                else:
-                    fallback_sql = f"""SELECT *
-                                      FROM quick_check_current
-                                      WHERE ({' OR '.join(clauses)})"""
-                    if cat != "ALL":
-                        fallback_sql += " AND UPPER(COALESCE(product_class,''))=%s"
-                        args.append(cat)
-                    fallback_sql += " LIMIT %s"
-                    args.append(limit)
-                    cur.execute(fallback_sql, tuple(args))
-                    qrows = cur.fetchall()
-
-                    def _search_rank(row: dict[str, Any]) -> tuple[int, float, str]:
-                        upc = str(row.get("ean_upc") or "")
-                        fid = int(row["family_id"]) if row.get("family_id") is not None else None
-                        article = str(row.get("article_number") or "")
-                        rel = max(
-                            relevance_by_upc.get(upc, 0),
-                            relevance_by_family.get(fid, 0) if fid is not None else 0,
-                            relevance_by_article.get(article, 0),
-                        )
-                        vel = float(row.get("upc_velocity_7d") or 0)
-                        return (-rel, -vel, upc)
-
-                    qrows.sort(key=_search_rank)
+                # A misspelling such as SALMOM should stay on the lightweight
+                # Quick Check serving table. The former search_items() fallback
+                # could exceed the mobile 8-second request timeout.
+                qrows, search_meta = _quick_check_fuzzy_rows(
+                    cur,
+                    q,
+                    cat,
+                    limit,
+                )
         else:
             if cat == "ALL":
                 cur.execute(
