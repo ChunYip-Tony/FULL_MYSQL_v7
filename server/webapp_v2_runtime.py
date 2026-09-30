@@ -4203,23 +4203,36 @@ def _gp_day_price_suggestion_from_batch(
         "cost_date":row.get("cost_date"),
     }
 
-    if cost is None or current is None or current<=0:
+    if current is None or current<=0:
         return {
             **base,
             "status":"UNAVAILABLE",
-            "reason":"CURRENT_COST_OR_PRICE_UNAVAILABLE",
+            "reason":"CURRENT_PRICE_UNAVAILABLE",
             "suggested_price":None,
             "include_in_review":False,
             "candidates":[],
         }
 
-    candidates=_batch_observed_price_gp_day_candidates(
-        daily_by_upc,
-        data_days,
-        upc_id,
-        current_cost=cost,
-        supported_day_limit=14,
-        company_c_floor=None,
+    pclass=str(row.get("product_class") or "").upper()
+    doh=(
+        Decimal(str(row["doh"]))
+        if row.get("doh") is not None
+        else None
+    )
+    clearance=bool(pclass in {"FRESH","LIVE"} and doh is not None and doh>Decimal("7"))
+    base["clearance_due_to_doh"]=clearance
+    base["doh"]=doh
+
+    candidates=(
+        _batch_observed_price_gp_day_candidates(
+            daily_by_upc,
+            data_days,
+            upc_id,
+            current_cost=cost,
+            supported_day_limit=14,
+            company_c_floor=None,
+        )
+        if cost is not None else []
     )
     base["candidate_count"]=len(candidates)
     base["top_observed_candidates"]=candidates[:5]
@@ -4280,21 +4293,14 @@ def _gp_day_price_suggestion_from_batch(
             "expected_velocity_from_observed_price_days":expected_velocity,
         }
 
-    pclass=str(row.get("product_class") or "").upper()
-    doh=(
-        Decimal(str(row["doh"]))
-        if row.get("doh") is not None
-        else None
-    )
-    clearance=bool(pclass in {"FRESH","LIVE"} and doh is not None and doh>Decimal("7"))
-    base["clearance_due_to_doh"]=clearance
-    base["doh"]=doh
-
     if not candidates:
         return {
             **base,
             "status":"UNAVAILABLE",
-            "reason":"NO_14D_OBSERVED_PRICE_HISTORY",
+            "reason":(
+                "CURRENT_COST_UNAVAILABLE"
+                if cost is None else "NO_14D_OBSERVED_PRICE_HISTORY"
+            ),
             "suggested_price":None,
             "include_in_review":clearance,
             "basis":"NO_COMPANY_REFERENCE_14D_HISTORY_UNAVAILABLE",
@@ -4839,6 +4845,8 @@ def performance_report(
                 blocked_reason="REPORT_DATE_ACTIVE_SALE"
             elif current is None or _d(current)<=0:
                 blocked_reason="CURRENT_PRICE_UNAVAILABLE"
+            elif cost is None:
+                blocked_reason="CURRENT_COST_UNAVAILABLE"
             elif price_opt.get("status")!="READY" or suggested is None:
                 blocked_reason=price_opt.get("reason") or "PRICING_CANDIDATE_UNAVAILABLE"
 
