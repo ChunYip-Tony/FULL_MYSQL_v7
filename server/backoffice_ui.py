@@ -3948,12 +3948,25 @@ function batchRebuildEligible(b){
   const p3=String(b?.phase3_status||b?.processing_status||'').toUpperCase();
   return p2==='READY' && ['QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','PHASE3_QA_HOLD'].includes(p3);
 }
+function activePhase3RunForBatch(batchId){
+  const a=state.active;
+  if(!a||String(a.batch_id||a.id)!==String(batchId))return null;
+  const stage=String(a.active_stage_name||'').toUpperCase();
+  const status=String(a.active_run_status||'').toUpperCase();
+  if(!['PHASE3_RERUN','POST_RAW_PIPELINE'].includes(stage))return null;
+  if(!['QUEUED','STARTED','PAUSE_REQUESTED'].includes(status))return null;
+  return a;
+}
 function resumeActionHtml(b,compact=false){
   if(!b||!batchResumeEligible(b))return '';
   return `<div style="${compact?'margin-top:8px':'margin-top:10px'}"><div class="calc" style="margin:0 0 8px"><b>Past:</b> Phase 2C complete ✅ &nbsp; <b>Current:</b> Waiting for Phase 3 ⚠️ &nbsp; <b>Next:</b> Phase 3 rebuild → QA → Quick Check</div><div style="display:flex;justify-content:flex-end"><button class="btn primary batch-resume-btn" data-batch="${esc(b.batch_id||b.id)}">▶ Retry Phase 3</button></div></div>`;
 }
 function rebuildActionHtml(b,compact=false){
   if(!b||!batchRebuildEligible(b))return '';
+  const active=activePhase3RunForBatch(b.batch_id);
+  if(active){
+    return `<div style="${compact?'margin-top:8px':'margin-top:10px'}"><div class="calc" style="margin:0"><b>Phase 3 rebuild active</b> · Run #${esc(active.active_pipeline_run_id||'—')} · ${esc(active.active_run_status||'ACTIVE')}</div><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn primary" disabled>⏳ Rebuild Active</button></div></div>`;
+  }
   return `<div style="${compact?'margin-top:8px':'margin-top:10px'};display:flex;justify-content:flex-end"><button class="btn primary batch-rebuild-btn" data-batch="${esc(b.batch_id)}">🔄 Rebuild Phase 3 / QA</button></div>`;
 }
 function wireRecoveryButtons(root=document){
@@ -3981,6 +3994,38 @@ async function resumePhase3(id){
     buttons.forEach(x=>{x.disabled=false;x.textContent='▶ Retry Phase 3'});
   }
 }
+async function loadBatchQaSummary(batchId){
+  const box=$('#batchQaSummary');if(!box)return;
+  box.innerHTML='<div class="meta">Checking Phase 3 blockers…</div>';
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(batchId)}/qa-summary`);
+    const p=d.phase3||{}, blockers=d.batch_blockers||[];
+    const active=activePhase3RunForBatch(batchId);
+    let html='';
+    if(active){
+      html+=`<div class="calc"><b>Phase 3 rebuild active</b> · Run #${esc(active.active_pipeline_run_id||'—')} · ${esc(active.active_run_status||'ACTIVE')} · ${esc(active.active_code_version||'')}</div>`;
+    }
+    html+=`<div class="detailgrid">
+      <div class="detail"><small>Phase 3</small><b>${esc(p.result_status||'—')}</b></div>
+      <div class="detail"><small>Batch Blockers</small><b>${fmt(p.blocking_issue_count,0)}</b></div>
+      <div class="detail"><small>QC Ready</small><b>${fmt(p.quick_check_ready_rows,0)}</b></div>
+      <div class="detail"><small>QC Hold</small><b>${fmt(p.quick_check_hold_rows,0)}</b></div>
+    </div>`;
+    if(blockers.length){
+      html+='<div class="sectiontitle">Blocker Breakdown</div><div class="reasonlist">'+blockers.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.issue_code||'UNKNOWN')}</b><span>${esc(x.severity||'')} · ${fmt(x.issue_count,0)}</span></div></div>`).join('')+'</div>';
+    }else if(Number(p.blocking_issue_count||0)>0){
+      html+='<div class="calc">Blocker count exists, but no open HIGH/CRITICAL issue-code rows were returned. Refresh after the current rebuild finishes.</div>';
+    }else{
+      html+='<div class="calc"><b>No batch-level HIGH/CRITICAL blockers.</b></div>';
+    }
+    const g=d.current_active_unmapped_guard||{};
+    if(g.active_unmapped_count!==null&&g.active_unmapped_count!==undefined){
+      html+=`<div class="calc" style="margin-top:8px">Current active unmapped: <b>${fmt(g.active_unmapped_count,0)}</b> · candidates ${fmt(g.candidate_count,0)} · mapped ${fmt(g.mapped_count,0)}</div>`;
+    }
+    box.innerHTML=html;
+  }catch(e){box.innerHTML=`<div class="error" style="margin:0">${esc(e.message)}</div>`}
+}
+
 async function loadChatgptBridgeStatus(batchId){
   const box=$('#batchBridgeStatus');if(!box)return;
   box.innerHTML='<div class="meta">Checking ChatGPT analysis bridge…</div>';
@@ -3998,7 +4043,10 @@ async function loadChatgptBridgeStatus(batchId){
     </div>
     <div class="calc" style="margin-top:8px">${ok?'<b>Bridge PASS.</b> ChatGPT analysis snapshot is published.':'<b>Bridge not PASS.</b> MySQL Quick Check remains live; republish affects only the ChatGPT/Google Sheet analysis snapshot.'}</div>
     <div style="display:flex;justify-content:flex-end;margin-top:8px"><button id="republishChatgptBtn" class="btn ${ok?'soft':'primary'}">↻ Republish ChatGPT Analysis</button></div>`;
-    const rb=$('#republishChatgptBtn');if(rb)rb.onclick=()=>republishChatgptAnalysis(batchId,rb);
+    const rb=$('#republishChatgptBtn');
+    const active=activePhase3RunForBatch(batchId);
+    if(rb&&active){rb.disabled=true;rb.textContent='Wait for Phase 3 Rebuild'}
+    else if(rb)rb.onclick=()=>republishChatgptAnalysis(batchId,rb);
   }catch(e){box.innerHTML=`<div class="error" style="margin:0">${esc(e.message)}</div>`}
 }
 async function republishChatgptAnalysis(batchId,btn=null){
@@ -4039,21 +4087,24 @@ async function rebuildPhase3(id){
     try{await loadBatches()}catch(_){}
   }
 }
-function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',status=a.processing_status||a.status||'PROCESSING';return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Started</small><b>${esc(a.upload_started_at||'—')}</b></div><div><small>Status</small><b>${esc(status)}</b></div></div></div>`}
+function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',runStatus=a.active_run_status||null,status=runStatus||a.processing_status||a.status||'PROCESSING',stage=a.active_stage_name||null;return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Active Run</small><b>${esc(a.active_pipeline_run_id||'—')}</b></div><div><small>Status</small><b>${esc(stage?(stage+' · '+status):status)}</b></div></div></div>`}
 async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];const activeEl=$('#activeBatch');if(activeEl){activeEl.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);wireRecoveryButtons(activeEl)}const overviewActive=$('#dbOverviewActive');if(overviewActive){overviewActive.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);wireRecoveryButtons(overviewActive)}const batchRows=$('#batchRows');if(batchRows){batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}const latest=state.recent[0]||null;const latestEl=$('#dbLatestBatch');if(latestEl){latestEl.innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';wireRecoveryButtons(latestEl)}const ps=$('#dbProcessingSummary');if(ps)ps.textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch')}catch(e){const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(e.message)}</div>`;const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(e.message)}</div>`}}
 function openBatchDetail(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));if(!b)return;
-  const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b);
-  const foot=eligible
-    ? `<span class="meta" style="margin-right:auto">Uses current OH / UOM / cost / identity / QA rules. RAW is not re-uploaded.</span><button id="rebuildPhase3Btn" class="btn primary">🔄 Rebuild Phase 3 / QA</button>`
-    : `<span class="pill blue">READ ONLY</span>`;
+  const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b),active=activePhase3RunForBatch(b.batch_id);
+  const foot=active
+    ? `<span class="meta" style="margin-right:auto">Phase 3 rebuild is active. Do not submit another rebuild.</span><button class="btn primary" disabled>⏳ Run #${esc(active.active_pipeline_run_id||'—')} · ${esc(active.active_run_status||'ACTIVE')}</button>`
+    : eligible
+      ? `<span class="meta" style="margin-right:auto">Uses current OH / UOM / cost / identity / QA rules. RAW is not re-uploaded.</span><button id="rebuildPhase3Btn" class="btn primary">🔄 Rebuild Phase 3 / QA</button>`
+      : `<span class="pill blue">READ ONLY</span>`;
   openDrawer(
     `Batch #${b.batch_id}`,
     `${b.processing_status||''} · ${b.phase3_status||''}`,
-    `<div class="detailgrid"><div class="detail"><small>Files</small><b>${fmt(b.file_count,0)}</b></div><div class="detail"><small>Rows</small><b>${fmt(b.source_row_count,0)}</b></div><div class="detail"><small>Errors</small><b>${fmt(b.error_count,0)}</b></div><div class="detail"><small>Completed</small><b>${esc(b.completed_at||'—')}</b></div><div class="detail"><small>QC Ready</small><b>${fmt(b.quick_check_ready_rows,0)}</b></div><div class="detail"><small>QC Hold</small><b>${fmt(b.quick_check_hold_rows,0)}</b></div></div><div class="sectiontitle">ChatGPT Analysis Bridge</div><div id="batchBridgeStatus"><div class="meta">Checking bridge status…</div></div><div class="sectiontitle">Source Files</div><div class="reasonlist">${files.map(f=>`<div class="reason"><span class="rdot"></span><div><b>${esc(f.original_filename||'')}</b><span>${esc(f.source_type||'Unknown')} · ${esc(f.processing_status||'')}</span></div></div>`).join('')||'<span class="meta">No file detail.</span>'}</div>${q.phase3?`<div class="sectiontitle">QA</div><div class="calc">${esc(q.phase3.result_status||'')} · blockers ${fmt(q.phase3.blocking_issue_count,0)} · hold rows ${fmt(q.phase3.quick_check_hold_rows,0)}</div>`:''}${eligible?'<div class="calc" style="margin-top:10px"><b>Rebuild available.</b> Re-runs Phase 3 / QA only; the previous Quick Check snapshot stays live until commit.</div>':''}`,
+    `<div class="detailgrid"><div class="detail"><small>Files</small><b>${fmt(b.file_count,0)}</b></div><div class="detail"><small>Rows</small><b>${fmt(b.source_row_count,0)}</b></div><div class="detail"><small>Errors</small><b>${fmt(b.error_count,0)}</b></div><div class="detail"><small>Completed</small><b>${esc(b.completed_at||'—')}</b></div><div class="detail"><small>QC Ready</small><b>${fmt(b.quick_check_ready_rows,0)}</b></div><div class="detail"><small>QC Hold</small><b>${fmt(b.quick_check_hold_rows,0)}</b></div></div><div class="sectiontitle">Phase 3 / QA Status</div><div id="batchQaSummary"><div class="meta">Checking Phase 3 blockers…</div></div><div class="sectiontitle">ChatGPT Analysis Bridge</div><div id="batchBridgeStatus"><div class="meta">Checking bridge status…</div></div><div class="sectiontitle">Source Files</div><div class="reasonlist">${files.map(f=>`<div class="reason"><span class="rdot"></span><div><b>${esc(f.original_filename||'')}</b><span>${esc(f.source_type||'Unknown')} · ${esc(f.processing_status||'')}</span></div></div>`).join('')||'<span class="meta">No file detail.</span>'}</div>${q.phase3?`<div class="sectiontitle">QA</div><div class="calc">${esc(q.phase3.result_status||'')} · blockers ${fmt(q.phase3.blocking_issue_count,0)} · hold rows ${fmt(q.phase3.quick_check_hold_rows,0)}</div>`:''}${eligible?'<div class="calc" style="margin-top:10px"><b>Rebuild available.</b> Re-runs Phase 3 / QA only; the previous Quick Check snapshot stays live until commit.</div>':''}`,
     foot
   );
   const rb=$('#rebuildPhase3Btn');if(rb)rb.onclick=()=>rebuildPhase3(b.batch_id);
+  loadBatchQaSummary(b.batch_id);
   loadChatgptBridgeStatus(b.batch_id);
 }
 $('#refreshBatch').onclick=loadBatches;
