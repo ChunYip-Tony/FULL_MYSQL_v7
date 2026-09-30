@@ -286,7 +286,67 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-qatools input,.m-qatools select{
     border:0;background:#fff;box-shadow:0 5px 14px rgba(9,49,54,.05)
   }
-}
+
+  /* Spacious mobile mode: readability over minimizing scroll */
+  .mobilehome.on:before{height:176px}
+  .m-topbar{padding:8px 5px 10px;margin-bottom:12px}
+  .m-brand strong{font-size:24px}.m-brand span{font-size:11px;margin-top:5px}
+  .m-status{min-height:34px;padding:6px 11px;font-size:10px}
+
+  .m-searchbox{padding:15px;border-radius:21px;margin-bottom:14px}
+  .m-label{font-size:11px}
+  .m-searchrow{gap:9px;margin-top:9px}
+  .m-searchrow input{min-height:52px;padding:12px 13px;font-size:17px;border-radius:13px}
+  .m-searchrow button{min-width:82px;min-height:52px;font-size:14px;border-radius:13px}
+  .m-hint{font-size:10px;margin-top:9px}
+
+  .m-spotlight{min-height:100px;padding:16px 17px;border-radius:20px;margin-top:14px}
+  .m-spotlight small{font-size:10px}.m-spotlight b{font-size:18px;margin-top:5px}.m-spotlight em{font-size:11px;margin-top:5px}
+  .m-spotlight .m-arrow{width:40px;height:40px;font-size:24px}
+
+  .m-modgrid{grid-template-columns:1fr;gap:12px;margin-top:15px}
+  .m-module{
+    min-height:108px;
+    border-radius:20px;
+    padding:16px 17px 15px 76px;
+    display:block
+  }
+  .m-module .ico{
+    position:absolute;left:16px;top:17px;
+    width:48px;height:48px;border-radius:15px;font-size:23px
+  }
+  .m-module:after{right:16px;top:50%;transform:translateY(-50%);width:32px;height:32px;font-size:22px}
+  .m-module b{font-size:17px;margin-top:1px;padding-right:38px}
+  .m-module span:last-child{font-size:11px;line-height:1.45;margin-top:7px;padding-right:35px}
+  .m-module-meta{font-size:10px!important;padding:4px 8px!important;margin-top:9px!important}
+
+  .m-pagehead{padding-bottom:13px;margin-bottom:13px}
+  .m-back{width:48px;height:48px;min-width:48px;font-size:22px}
+  .m-pagetitle{font-size:22px}.m-pagesub{font-size:11px;max-width:315px;margin-top:4px}
+
+  .m-chipbar{gap:8px;padding-bottom:12px}
+  .m-chip{min-height:42px;padding:8px 14px;font-size:11px}
+  .m-qatools{grid-template-columns:1fr;gap:8px;margin-bottom:12px}
+  .m-qatools input,.m-qatools select{min-height:48px;font-size:14px;padding:10px 12px}.m-qatools input{font-size:17px}
+
+  .m-list{gap:11px}
+  .m-row{min-height:92px;padding:15px 14px 14px 15px;border-radius:18px}
+  .m-row-main{gap:11px}.m-row-code{font-size:18px}.m-row-name{font-size:15px;line-height:1.35;margin-top:5px}.m-row-cn{font-size:12px;margin-top:3px}.m-row-meta{font-size:10px;line-height:1.5;padding:7px 8px;margin-top:8px}
+  .m-badge{min-height:25px;padding:4px 8px;font-size:9px}
+  .m-arrow{font-size:25px}
+
+  .m-detailcard{padding:16px;border-radius:20px}
+  .m-detailgrid{grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .m-metric{padding:13px;border-radius:15px}
+  .m-metric small{font-size:9px}.m-metric b{font-size:21px;margin-top:5px}.m-metric span{font-size:9px;margin-top:5px}
+  .m-detailsection{margin-top:17px;padding-top:15px}
+  .m-detailsection h3{font-size:13px;margin-bottom:8px}
+  .m-detailsection p{font-size:12px;line-height:1.6}
+  .m-action{min-height:54px;font-size:15px;margin-top:12px}
+
+  .m-bottomnav{margin-top:18px}
+  .m-bottomnav button{min-height:56px;font-size:10px}
+
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:0}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
 </style>
