@@ -6,12 +6,13 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from db import db_conn
 from data_coverage import source_data_days, coverage_summary
-from business_clock import business_today, completed_through_date
+from business_clock import BUSINESS_TIMEZONE, business_today, completed_through_date
 from manual_overrides import (
     ensure_override_table,
     ensure_retirement_table,
@@ -474,7 +475,10 @@ def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
     for sh in cur.fetchall():
         cur.execute("SELECT raw_id,source_row_number,raw_payload FROM raw_price_list WHERE sheet_id=%s ORDER BY source_row_number", (sh['sheet_id'],))
         rows = cur.fetchall()
-        snapshot = _printed_timestamp(rows) or f.get('report_generated_at') or f.get('upload_timestamp') or datetime.now()
+        # Price List is a point-in-time configured-price snapshot.  Per the
+        # serving contract, its freshness starts when the file is uploaded,
+        # not from a printed/report timestamp embedded in the workbook.
+        snapshot = f.get('upload_timestamp') or f.get('report_generated_at') or _printed_timestamp(rows) or datetime.now()
         current_dept = None
         for rr in rows:
             p = _j(rr['raw_payload'])
@@ -1981,6 +1985,25 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     return None
 
 
+def _price_list_upload_business_date(value: Any) -> date | None:
+    """Convert MySQL's UTC upload timestamp to the store business date."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value))
+        except Exception:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo('UTC'))
+    try:
+        return dt.astimezone(ZoneInfo(BUSINESS_TIMEZONE)).date()
+    except Exception:
+        return dt.date()
+
+
 def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] | None:
     """Resolve the authoritative CURRENT retail price for every serving surface.
 
@@ -2015,10 +2038,13 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
         sales_pred = 's.upc_id=%s'
         sales_args = (int(upc_id),)
 
-    # Newest valid Price List evidence for this UPC. Future-effective rows are
-    # not eligible until their source_since_date becomes active.
+    # Newest valid Price List evidence for this UPC.  Price List freshness is
+    # the file upload moment because the workbook is a point-in-time view of
+    # configured prices.  Use upload_timestamp at read time as well so already
+    # ingested Price Lists immediately obey this rule without requiring re-ingest.
+    # Future-effective rows are not eligible until source_since_date is active.
     cur.execute(
-        f"""SELECT MAX(p.snapshot_at) AS snapshot_at
+        f"""SELECT MAX(COALESCE(f.upload_timestamp,p.snapshot_at)) AS evidence_at
             FROM price_list_observation p
             JOIN ingest_file f ON f.file_id=p.file_id
             WHERE {price_pred}
@@ -2032,16 +2058,16 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
         (*price_args, current_day),
     )
     pr = cur.fetchone() or {}
-    price_snapshot = pr.get('snapshot_at')
+    price_evidence_at = pr.get('evidence_at')
     config = None
-    if price_snapshot is not None:
+    if price_evidence_at is not None:
         cur.execute(
             f"""SELECT p.configured_price,p.price_type,p.source_since_date,
-                       p.snapshot_at,p.file_id
+                       p.snapshot_at,p.file_id,f.upload_timestamp
                 FROM price_list_observation p
                 JOIN ingest_file f ON f.file_id=p.file_id
                 WHERE {price_pred}
-                  AND p.snapshot_at=%s
+                  AND COALESCE(f.upload_timestamp,p.snapshot_at)=%s
                   AND p.configured_price>0
                   AND (p.source_since_date IS NULL OR p.source_since_date<=%s)
                   AND f.source_type='price_list'
@@ -2049,7 +2075,7 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
                   AND f.error_count=0
                   AND f.duplicate_of_file_id IS NULL
                   AND f.date_semantics_status='RESOLVED'""",
-            (*price_args, price_snapshot, current_day),
+            (*price_args, price_evidence_at, current_day),
         )
         price_rows = cur.fetchall()
         if price_rows:
@@ -2123,7 +2149,11 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
                     'date': sold_date,
                 }
 
-    price_date = price_snapshot.date() if price_snapshot is not None else None
+    price_date = (
+        _price_list_upload_business_date(config.get('upload_timestamp'))
+        if config is not None and config.get('upload_timestamp') is not None
+        else (config.get('snapshot_at').date() if config is not None and config.get('snapshot_at') is not None else None)
+    )
     if config is not None and (pos is None or price_date >= pos['date']):
         return {
             'price': config['configured_price'],
