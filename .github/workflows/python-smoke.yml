@@ -107,8 +107,29 @@ jobs:
           assert "s.period_start_date=s.period_end_date" in src, src
           assert "POS_SINGLE_DATE" in src, src
           assert "POS_SOLD_AVG" not in src, src
-          assert "source_since_date<=DATE(p.snapshot_at)" in src, src
+          assert "source_since_date<=%s" in src, src
+          assert "business_today()" in src, src
+          assert "source_since_date<=DATE(p.snapshot_at)" not in src, src
           print('current-price-authority=PASS')
+          PY
+
+      - name: Validate all current-price display surfaces
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          backoffice = Path('backoffice_runtime.py').read_text(encoding='utf-8')
+          v2 = Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          ui = Path('backoffice_ui.py').read_text(encoding='utf-8')
+
+          assert 'row.get("current_price")' in backoffice
+          assert 'QUICK_CHECK_CURRENT_AT_RESPONSE_TIME' in backoffice
+          assert '"current_price":row.get("current_price")' in v2
+          assert '"current_price_source":row.get("current_price_source")' in v2
+          assert 'Report-Day Avg Sold Price' in ui
+          assert 'Current Price' in ui
+          assert 'POS_SINGLE_DATE' in ui or 'current_price_source' in ui
+          print('all-current-price-surfaces=PASS')
           PY
 
       - name: Import worker and Phase 3 modules
