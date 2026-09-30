@@ -214,8 +214,10 @@ def _article_manual_column_map(
     Fresh Fish / Live Fish / Shrimp / Fish Ball / Frozen Fish:
       A = Family/Main Article
       B = Selling Article (blank means Main Article for that UPC row)
+      C = Toledo #
       D = EAN/UPC
       G = Receiving pack size/dimension
+      D EAN/UPC + C Toledo# on the same row => Selling UOM LB
 
     Frozen Pack:
       A = Family/Main Article
@@ -233,6 +235,7 @@ def _article_manual_column_map(
     if tab in ARTICLE_MANUAL_RECEIVING_PACK_TABS:
         result['main_article'] = 'A'
         result['article'] = 'B'
+        result['sales_set'] = 'C'  # Toledo #
         result['upc'] = 'D'
         result['pack'] = 'G'
         if result.get('selling_uom') == 'G':
@@ -825,11 +828,40 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
             )
 
     selling_token = _source_token(_get(row, colmap, 'selling_uom'))
+    selling_rule = "EXPLICIT_SOURCE_UOM"
+    selling_source_field = 'selling_uom'
+    # User-confirmed Article Manual semantics for Fresh Fish / Live Fish /
+    # Shrimp / Fish Ball / Frozen Fish: when a numeric EAN/UPC exists in D and
+    # the same row has a Toledo# in C, that EAN/UPC is sold by pound. A Toledo-
+    # only row with no D EAN/UPC is NOT covered by this rule (e.g. UPC 4816 has
+    # separate explicit user authority: EA, 1 EA = 4 LB).
+    if (
+        ctx.source_type == 'article_manual'
+        and _norm_header(ctx.sheet_name) in ARTICLE_MANUAL_RECEIVING_PACK_TABS
+        and ean_upc
+        and sales_set
+    ):
+        selling_token = 'LB'
+        selling_rule = "ARTICLE_MANUAL_TOLEDO_EAN_LB"
+        selling_source_field = 'C_TOLEDO_PLUS_D_EAN'
+
     if selling_token:
         selling_uom_id, canonical = _canonical_uom(cur, ctx.source_type, selling_token)
         target_type, target_id = ('SELLING_UPC', upc_id) if upc_id else ('ARTICLE', article_id)
-        _insert_evidence(cur, target_type, int(target_id), 'SELLING_UOM_OBSERVED', ctx, 'selling_uom', selling_token,
-                         {'canonical_exact_match': canonical})
+        _insert_evidence(
+            cur,
+            target_type,
+            int(target_id),
+            'SELLING_UOM_OBSERVED',
+            ctx,
+            selling_source_field,
+            selling_token,
+            {
+                'canonical_exact_match': canonical,
+                'resolution_rule': selling_rule,
+                'toledo_number': sales_set if selling_rule == 'ARTICLE_MANUAL_TOLEDO_EAN_LB' else None,
+            },
+        )
         if upc_id is not None and selling_uom_id is not None:
             cur.execute("SELECT uom_dimension FROM dim_uom WHERE uom_id=%s", (selling_uom_id,))
             dimrow = cur.fetchone()
@@ -850,8 +882,8 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
                 cur.execute(
                     """INSERT INTO selling_upc_uom_history
                        (upc_id,selling_uom_id,base_uom_id,base_qty_per_selling_unit,mapping_status,confidence,resolution_method)
-                       VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,'EXPLICIT_SOURCE_UOM')""",
-                    (upc_id, selling_uom_id, base_uom_id, factor),
+                       VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,%s)""",
+                    (upc_id, selling_uom_id, base_uom_id, factor, selling_rule),
                 )
 
     if pack:
@@ -864,7 +896,9 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
     _mark_row_state(
         cur, ctx, status,
         {'article': article_number, 'source_main_article': source_main_article, 'canonical_main_article': canonical_main_article,
-         'upc': ean_upc, 'family_status': family_status, 'upc_status': upc_status},
+         'upc': ean_upc, 'sales_set': sales_set, 'pack': pack,
+         'selling_uom_rule': selling_rule if selling_token else None,
+         'family_status': family_status, 'upc_status': upc_status},
     )
     return status
 
