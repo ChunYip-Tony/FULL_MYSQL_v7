@@ -54,6 +54,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 /* Mobile-only Backoffice navigation: desktop remains unchanged */
 .mobilehome,.mobilepagebar{display:none}
 @media(max-width:759px){
+  html,body{overflow-x:hidden}
   body{background:#f5f8f7}
   .shell{padding:8px 8px 82px;max-width:520px}
   .appbar{border-radius:16px;box-shadow:none}
