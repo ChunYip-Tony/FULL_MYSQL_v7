@@ -14,6 +14,14 @@ from manual_overrides import (
     apply_manual_article_family_overrides,
 )
 from phase3 import relink_history, refresh_quick_check_subset
+from normalize import (
+    _article_manual_upc_identifier,
+    _build_column_map,
+    _get,
+    _json_obj,
+    _numeric_identifier,
+    _text,
+)
 
 
 FIXABLE_IDENTITY_CODES = {
@@ -131,6 +139,138 @@ def _active_identity(cur, ean_upc: str) -> dict[str, Any] | None:
         (str(ean_upc),),
     )
     return cur.fetchone()
+
+
+def _latest_article_manual_name_index(cur) -> dict[str, dict[str, dict[str, str | None]]]:
+    """Return display names from the newest Article Manual without changing canonical identity."""
+    index: dict[str, dict[str, dict[str, str | None]]] = {
+        "upc": {},
+        "article": {},
+        "main_article": {},
+    }
+    try:
+        cur.execute(
+            """SELECT file_id
+               FROM ingest_file
+               WHERE source_type='article_manual'
+               ORDER BY batch_id DESC,file_id DESC
+               LIMIT 1"""
+        )
+        file_row = cur.fetchone()
+        if not file_row:
+            return index
+
+        cur.execute(
+            """SELECT sheet_id,header_row_number
+               FROM ingest_sheet
+               WHERE file_id=%s
+                 AND header_row_number IS NOT NULL
+               ORDER BY sheet_index""",
+            (int(file_row["file_id"]),),
+        )
+        for sheet in cur.fetchall():
+            cur.execute(
+                """SELECT raw_payload
+                   FROM raw_article_manual
+                   WHERE sheet_id=%s AND source_row_number=%s
+                   LIMIT 1""",
+                (sheet["sheet_id"], sheet["header_row_number"]),
+            )
+            header_row = cur.fetchone()
+            if not header_row:
+                continue
+            colmap = _build_column_map(_json_obj(header_row.get("raw_payload")))
+            if "description" not in colmap and "chinese_description" not in colmap:
+                continue
+
+            cur.execute(
+                """SELECT raw_payload
+                   FROM raw_article_manual
+                   WHERE sheet_id=%s AND source_row_number>%s
+                   ORDER BY source_row_number""",
+                (sheet["sheet_id"], sheet["header_row_number"]),
+            )
+            for raw_row in cur.fetchall():
+                payload = _json_obj(raw_row.get("raw_payload"))
+                english_name = _text(_get(payload, colmap, "description"))
+                chinese_name = _text(_get(payload, colmap, "chinese_description"))
+                if not english_name and not chinese_name:
+                    continue
+
+                names = {
+                    "item_name": english_name,
+                    "chinese_name": chinese_name,
+                }
+                upc = _article_manual_upc_identifier(_get(payload, colmap, "upc"))
+                article = _numeric_identifier(_get(payload, colmap, "article"))
+                main_article = _numeric_identifier(_get(payload, colmap, "main_article"))
+
+                if upc:
+                    index["upc"].setdefault(upc, names)
+                    numeric_key = upc.lstrip("0") or "0"
+                    index["upc"].setdefault(numeric_key, names)
+                if article:
+                    index["article"].setdefault(article, names)
+                if main_article:
+                    index["main_article"].setdefault(main_article, names)
+    except Exception:
+        # Display names are optional metadata. QA review itself must remain available
+        # if an older deployment/database lacks one of the raw Article Manual objects.
+        return index
+    return index
+
+
+def _attach_display_names(
+    issue: dict[str, Any],
+    name_index: dict[str, dict[str, dict[str, str | None]]],
+) -> None:
+    current = issue.get("current")
+    if not isinstance(current, dict):
+        current = {}
+        issue["current"] = current
+
+    entity_key = str(issue.get("entity_key") or "").strip()
+    entity_type = str(issue.get("entity_type") or "").upper()
+    article_number = str(
+        current.get("article_number")
+        or current.get("main_article_number")
+        or (entity_key if entity_type == "ARTICLE" else "")
+        or ""
+    ).strip()
+    main_article_number = str(current.get("main_article_number") or "").strip()
+
+    candidates: list[dict[str, str | None]] = []
+    if entity_type == "UPC" and entity_key:
+        candidates.append(name_index["upc"].get(entity_key) or {})
+        candidates.append(name_index["upc"].get(entity_key.lstrip("0") or "0") or {})
+    if article_number:
+        candidates.append(name_index["article"].get(article_number) or {})
+    if main_article_number:
+        candidates.append(name_index["main_article"].get(main_article_number) or {})
+
+    manual_item_name = next(
+        (x.get("item_name") for x in candidates if x.get("item_name")),
+        None,
+    )
+    chinese_name = next(
+        (x.get("chinese_name") for x in candidates if x.get("chinese_name")),
+        None,
+    )
+    detail = issue.get("detail") if isinstance(issue.get("detail"), dict) else {}
+    descriptions = detail.get("descriptions") if isinstance(detail, dict) else None
+    evidence_name = (
+        str(descriptions[0]).strip()
+        if isinstance(descriptions, list) and descriptions and str(descriptions[0]).strip()
+        else None
+    )
+
+    current["item_name"] = (
+        current.get("selling_description")
+        or current.get("article_description")
+        or manual_item_name
+        or evidence_name
+    )
+    current["chinese_name"] = chinese_name
 
 
 def _fix_kind(issue_code: str, summary: str, detail: dict[str, Any]) -> str:
@@ -252,6 +392,10 @@ def qa_review(limit: int = 250) -> dict[str, Any]:
                     "current": row,
                 }
             )
+
+        name_index = _latest_article_manual_name_index(cur)
+        for issue in issues:
+            _attach_display_names(issue, name_index)
 
         history = []
         if _table_exists(cur, "qa_manual_resolution"):
