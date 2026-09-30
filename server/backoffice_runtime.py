@@ -852,13 +852,13 @@ def _quick_receiving_article_context(
     qrows: list[dict[str, Any]],
     movement_days_7: list[dict[str, Any]],
 ) -> dict[int, dict[str, Any]]:
-    """Build Family -> SAP selling article -> UPC lineage for Quick Check.
+    """Build Family -> classified SAP Article -> UPC lineage for Quick Check.
 
-    The Family/main Article owns the 101-109 receipt/source identity shown in the
-    Family header. SAP 317/318 document-level conversion pairs are used as strong
-    evidence that inventory moved between the Family/source Article and an output
-    Article. SAP selling movement is then measured only on those output/linked
-    Articles as 251 sold minus 252 returns. UPC sold quantity remains POS-only.
+    SAP Article roles are evidence-based, not inferred from hierarchy alone:
+    101-109 => Receiving Article, non-zero 251/252 => SAP Selling Article, both
+    => Receiving / SAP Selling Article. The Family/source Article may itself own
+    251/252 and stays in the Family header instead of being duplicated below.
+    UPC sold quantity remains POS-only.
     """
     family_rows: dict[int, dict[str, Any]] = {}
     for row in qrows:
@@ -868,6 +868,30 @@ def _quick_receiving_article_context(
         family_rows.setdefault(fid, row)
     if not family_rows:
         return {}
+
+    # Canonical Family movement metrics already published in quick_check_current
+    # carry the serving-layer Family UOM. Preserve them as a reconciliation
+    # authority when the raw canonical 251/252 total is numerically identical
+    # but the movement row's base_uom_code is inconsistent (for example a
+    # non-catchweight EA item mislabeled LB in raw MVT).
+    canonical_family_metric: dict[int, dict[str, Any]] = {}
+    canonical_family_conflict: set[int] = set()
+    for row in qrows:
+        if row.get("family_id") is None:
+            continue
+        fid = int(row["family_id"])
+        qty = row.get("family_movement_7d")
+        uom = str(row.get("family_movement_uom") or "").strip().upper()
+        if qty is None or not uom:
+            continue
+        candidate = {"quantity": _d(qty), "uom": uom}
+        current = canonical_family_metric.get(fid)
+        if current is None:
+            canonical_family_metric[fid] = candidate
+        elif current != candidate:
+            canonical_family_conflict.add(fid)
+    for fid in canonical_family_conflict:
+        canonical_family_metric.pop(fid, None)
 
     fids = sorted(family_rows)
     source_by_family = {
@@ -1259,8 +1283,24 @@ def _quick_receiving_article_context(
             qty = mv.get("quantity")
             uom = mv.get("uom")
             receipt = receipt_by_article.get(art, {})
+            has_article_movement = qty is not None and _d(qty) != 0
+            has_article_receipt = bool(receipt.get("verified"))
+            article_role = (
+                "RECEIVING_AND_SAP_SELLING_ARTICLE"
+                if has_article_receipt and has_article_movement
+                else (
+                    "RECEIVING_ARTICLE"
+                    if has_article_receipt
+                    else (
+                        "SAP_SELLING_ARTICLE"
+                        if has_article_movement
+                        else "RELATED_SAP_ARTICLE"
+                    )
+                )
+            )
             a.update(
                 {
+                    "article_role": article_role,
                     "movement_7d": qty,
                     "movement_uom": uom,
                     "avg_qty_day": (
@@ -1270,7 +1310,7 @@ def _quick_receiving_article_context(
                     ),
                     "movement_days_7d": day_count,
                     "movement_status": mv.get("status") or "NO_251_252_IN_WINDOW",
-                    "receipt_verified": bool(receipt.get("verified")),
+                    "receipt_verified": has_article_receipt,
                     "receipt_movement_type": receipt.get("movement_type"),
                     "receipt_date": receipt.get("date"),
                     "receipt_qty": receipt.get("quantity"),
@@ -1283,9 +1323,35 @@ def _quick_receiving_article_context(
 
         family_mv = family_movement_by_family.get(fid, {})
         family_qty = family_mv.get("quantity")
-        family_uom = family_mv.get("uom")
+        family_raw_uom = family_mv.get("uom")
+        family_uom = family_raw_uom
         family_status = family_mv.get("status") or "NO_251_252_IN_WINDOW"
+        canonical_metric = canonical_family_metric.get(fid)
+        family_uom_reconciled = False
+        if (
+            family_qty is not None
+            and canonical_metric is not None
+            and _d(canonical_metric.get("quantity")) == _d(family_qty)
+            and canonical_metric.get("uom")
+            and canonical_metric.get("uom") != family_uom
+        ):
+            family_uom = canonical_metric.get("uom")
+            family_status = "READY_UOM_RECONCILED_TO_CANONICAL_FAMILY_METRIC"
+            family_uom_reconciled = True
+
         source_mv = movement_by_article.get((fid, str(source_article or "")), {})
+        source_qty = source_mv.get("quantity")
+        source_raw_uom = source_mv.get("uom")
+        source_uom = source_raw_uom
+        source_status = source_mv.get("status") or "NO_251_252_IN_WINDOW"
+        if (
+            family_uom_reconciled
+            and source_qty is not None
+            and family_qty is not None
+            and _d(source_qty) == _d(family_qty)
+        ):
+            source_uom = family_uom
+            source_status = "READY_UOM_RECONCILED_TO_CANONICAL_FAMILY_METRIC"
 
         upc_map: dict[str, dict[str, Any]] = {}
         article_lookup = {
@@ -1321,6 +1387,8 @@ def _quick_receiving_article_context(
             "upc_map": upc_map,
             "family_group_movement_7d": family_qty,
             "family_group_movement_uom": family_uom,
+            "family_group_raw_movement_uom": family_raw_uom,
+            "family_group_uom_reconciled": family_uom_reconciled,
             "family_group_avg_qty_day": (
                 _d(family_qty) / Decimal(day_count)
                 if family_qty is not None and day_count > 0
@@ -1329,11 +1397,10 @@ def _quick_receiving_article_context(
             "family_group_movement_days_7d": day_count,
             "family_group_movement_status": family_status,
             "family_source_article": source_article,
-            "family_source_movement_7d": source_mv.get("quantity"),
-            "family_source_movement_uom": source_mv.get("uom"),
-            "family_source_movement_status": (
-                source_mv.get("status") or "NO_251_252_IN_WINDOW"
-            ),
+            "family_source_movement_7d": source_qty,
+            "family_source_movement_uom": source_uom,
+            "family_source_raw_movement_uom": source_raw_uom,
+            "family_source_movement_status": source_status,
         }
     return out
 
@@ -1602,12 +1669,15 @@ def inventory_review(
                     "receiving_articles": family_ctx.get("receiving_articles", []),
                     "family_group_movement_7d": family_ctx.get("family_group_movement_7d"),
                     "family_group_movement_uom": family_ctx.get("family_group_movement_uom"),
+                    "family_group_raw_movement_uom": family_ctx.get("family_group_raw_movement_uom"),
+                    "family_group_uom_reconciled": family_ctx.get("family_group_uom_reconciled"),
                     "family_group_avg_qty_day": family_ctx.get("family_group_avg_qty_day"),
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
                     "family_source_article": family_ctx.get("family_source_article"),
                     "family_source_movement_7d": family_ctx.get("family_source_movement_7d"),
                     "family_source_movement_uom": family_ctx.get("family_source_movement_uom"),
+                    "family_source_raw_movement_uom": family_ctx.get("family_source_raw_movement_uom"),
                     "family_source_movement_status": family_ctx.get("family_source_movement_status"),
                     "family_receipt_verified": family_ctx.get("family_receipt_verified"),
                     "family_receipt_movement_type": family_ctx.get("family_receipt_movement_type"),
@@ -1678,11 +1748,11 @@ def inventory_review(
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
             "quick_check_group_leader": "FAMILY_ARTICLE",
-            "quick_check_second_level": "SAP_SELLING_ARTICLES",
+            "quick_check_second_level": "SAP_ARTICLES_CLASSIFIED_BY_101_109_AND_251_252_EVIDENCE",
             "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
-            "receiving_qty_basis": "SAP_SELLING_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
+            "receiving_qty_basis": "ONLY_ARTICLES_WITH_NONZERO_251_252_ARE_SAP_SELLING_ARTICLES",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
-            "family_group_qty_basis": "ALL_FAMILY_251_MINUS_252_CANONICAL_MOVEMENT_ROWS_BASE_UOM",
+            "family_group_qty_basis": "ALL_FAMILY_251_MINUS_252_CANONICAL_ROWS_WITH_CANONICAL_FAMILY_UOM_RECONCILIATION",
             "sap_selling_article_discovery": "CONFIRMED_BRIDGE_OR_317_318_OR_ACTIVE_FAMILY_251_252",
             "receipt_verification": "FAMILY_SOURCE_AND_LINKED_ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
             "upc_receiving_display_link": "ACTIVE_251_252_PLUS_SAP_317_318_THEN_UPC_ARTICLE_PATTERN_OR_DESCRIPTION",
