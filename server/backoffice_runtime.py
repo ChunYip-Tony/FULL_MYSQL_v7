@@ -471,6 +471,7 @@ def inventory_review(
                     "cost": row.get("current_cost_per_selling_unit"),
                     "gp_pct": row.get("gp_pct_current"),
                     "qty_7d": row.get("pos_qty_7d"),
+                    "velocity_7d": row.get("upc_velocity_7d"),
                     "dos": row.get("dos"),
                     "doh": row.get("doh"),
                     "family_oh": family_oh.get("quantity"),
