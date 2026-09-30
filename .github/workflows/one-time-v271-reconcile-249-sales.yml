@@ -36,8 +36,8 @@ jobs:
               p={}
           ok=(
               p.get('ok') is True
-              and p.get('version') == '7.0.271-single-service'
-              and p.get('worker_version') == '7.0.271-single-service'
+              and p.get('version') == '7.0.272-single-service'
+              and p.get('worker_version') == '7.0.272-single-service'
               and p.get('worker_healthy') is True
               and p.get('worker_ready') is True
           )
@@ -124,7 +124,7 @@ jobs:
           import json
           p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
           ok=(
-              p.get('code_version') == '7.0.271-single-service'
+              p.get('code_version') == '7.0.272-single-service'
               and p.get('version_fence_pass') is True
           )
           print('1' if ok else '0', p.get('pipeline_run_id') or '', p.get('session_id') or '')
@@ -163,7 +163,7 @@ jobs:
             status="${state%%|*}"
             rest="${state#*|}"
             code_version="${rest%%|*}"
-            if [ "$status" != "MISSING" ] && [ "$code_version" != "7.0.271-single-service" ]; then
+            if [ "$status" != "MISSING" ] && [ "$code_version" != "7.0.272-single-service" ]; then
               echo "RUN_VERSION_FENCE_BROKEN=$state"
               exit 1
             fi
@@ -230,7 +230,7 @@ jobs:
               'batch_id':int(os.environ['BATCH_ID']),
               'pipeline_run_id':int(os.environ['RUN_ID']),
               'session_id':os.environ['SESSION_ID'],
-              'code_version':'7.0.271-single-service',
+              'code_version':'7.0.272-single-service',
               'authority':'ACTUAL_POS_RAW_EAN_LINEAGE',
               'family_movement_used_for_upc_qty':False,
               'lineage_audit':load('/tmp/audit.json'),
@@ -245,4 +245,4 @@ jobs:
           git commit -m "ops: record 249 sales reconcile result [skip ci]"
           git push
 
-# reconciliation trigger 2
+# v7.0.272 actual-POS service-description relink trigger
