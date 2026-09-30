@@ -363,6 +363,9 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-perftools.on{display:grid}.m-perftools label{display:grid;gap:5px;font-size:10px;font-weight:900;color:var(--muted)}
   .m-perftools select{width:100%;min-width:0;min-height:48px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:9px 10px;font-size:14px}
   .m-perf-dates{display:grid;grid-template-columns:1fr 1fr;gap:9px}.m-perftools .btn{min-height:50px;border-radius:12px}
+  .m-perftools.working{box-shadow:0 0 0 2px rgba(22,121,133,.15),0 8px 22px rgba(9,49,54,.06)}
+  .m-perftools.working .btn{opacity:.78}
+
 
   .m-list{gap:11px}
   .m-row{min-height:92px;padding:15px 14px 14px 15px;border-radius:18px}
@@ -1271,13 +1274,43 @@ function mobileRenderPerformanceTools(){
  const on=mobileState.module==='performance';box.classList.toggle('on',on);
  if(!on)return;
  syncPerformanceDateControls();
- const sort=mNode('mPerfSort');sort.value=state.salesSort||'gp_desc';
- sort.onchange=()=>{state.salesSort=sort.value;syncPerformanceDateControls();renderSales();mobileRenderList()};
- mNode('mPerfApply').onclick=async()=>{
-   state.salesStartDate=mNode('mPerfStart').value;
-   state.salesEndDate=mNode('mPerfEnd').value;
-   await loadSell();
+
+ const start=mNode('mPerfStart'),end=mNode('mPerfEnd'),sort=mNode('mPerfSort'),apply=mNode('mPerfApply');
+ sort.value=state.salesSort||'gp_desc';
+
+ start.onchange=()=>{state.salesStartDate=start.value};
+ end.onchange=()=>{state.salesEndDate=end.value};
+ sort.onchange=()=>{
+   state.salesSort=sort.value;
+   renderSales();
    mobileRenderList();
+ };
+
+ apply.onclick=async()=>{
+   state.salesStartDate=start.value;
+   state.salesEndDate=end.value;
+   state.salesSort=sort.value;
+   const oldLabel=apply.textContent;
+   apply.disabled=true;
+   apply.textContent='Analyzing…';
+   box.classList.add('working');
+   mNode('mobileListContent').innerHTML='<div class="m-loading">Analyzing '+esc(state.salesStartDate)+' → '+esc(state.salesEndDate)+'…</div>';
+   try{
+     const ok=await loadSell();
+     if(!ok)throw new Error(state.salesLastError||'Unable to analyze this date range.');
+     mobileRenderList();
+     mNode('mobileListSub').textContent='Showing '+state.salesStartDate+' → '+state.salesEndDate+' · '+(state.salesRows||[]).length+' items · '+sort.options[sort.selectedIndex].text;
+     apply.textContent='Updated ✓';
+     setTimeout(()=>{if(apply)apply.textContent='Analyze Range'},1000);
+   }catch(e){
+     state.salesLastError=e.message||String(e);
+     mNode('mobileListContent').innerHTML='<div class="m-error">'+esc(state.salesLastError)+'</div>';
+     apply.textContent='Try Again';
+   }finally{
+     apply.disabled=false;
+     box.classList.remove('working');
+     if(apply.textContent===oldLabel)apply.textContent='Analyze Range';
+   }
  };
 }
 async function mobileRefreshHome(){
@@ -1724,9 +1757,13 @@ async function loadSell(){
       '<div class="kpi"><small>GP$</small><b>'+money(s.gp_dollars)+'</b><span>'+(s.gp_dollars_complete?'Historical applicable cost':'Some item GP$ unavailable due to missing cost')+'</span></div>'+
       '<div class="kpi"><small>Items Sold</small><b>'+fmt(s.sold_item_count,0)+'</b><span>'+fmt(s.ready_item_count,0)+' READY · '+fmt(s.qa_hold_item_count,0)+' QA HOLD</span></div>';
     renderSales();
+    state.salesLastError='';
+    return true;
   }catch(e){
-    if(err)err.innerHTML='<div class="error">'+esc(e.message)+'</div>';
+    state.salesLastError=e.message||String(e);
+    if(err)err.innerHTML='<div class="error">'+esc(state.salesLastError)+'</div>';
     if(body)body.innerHTML='';
+    return false;
   }
 }
 function filteredSalesRows(){
