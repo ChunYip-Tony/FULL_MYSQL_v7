@@ -1357,6 +1357,23 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 }
 
+
+/* Canonical 240 / 249 display subgroup */
+.m-pair-subgroup{display:grid;gap:6px;padding:7px;border:1px solid #c6dfdb;border-radius:15px;background:rgba(232,247,244,.72)}
+.m-pair-label{display:flex;align-items:center;gap:6px;padding:2px 5px;font-size:9px;font-weight:950;letter-spacing:.055em;color:#0b6670;text-transform:uppercase}
+.m-pair-label:before{content:"↳";font-size:12px}
+.m-pair-subgroup .m-row{margin:0!important;box-shadow:none!important;border-left-width:4px!important}
+.m-pair-subgroup .m-row[data-pair-role="MAIN_240"]{border-left-color:#167985!important}
+.m-pair-subgroup .m-row[data-pair-role="COOK_SERVICE_249"]{border-left-color:#d18b2f!important}
+.m-pair-price-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}
+.m-pair-price-member{padding:8px;border:1px solid #dce9e6;border-radius:10px;background:#fff}
+.m-pair-price-member small{display:block;font-size:8px;font-weight:900;color:var(--muted)}
+.m-pair-price-member b{display:block;font-size:13px;margin-top:2px;color:var(--ink)}
+.pair-subgroup-head td{background:#eaf6f4!important;color:#0b6670!important;font-size:10px!important;font-weight:950!important;letter-spacing:.04em;text-transform:uppercase;border-top:2px solid #b9d9d4!important}
+.pair-subgroup-main td{background:#f7fcfb!important}.pair-subgroup-service td{background:#fffbf3!important}
+.pair-inline{margin-top:6px;padding:7px 8px;border:1px solid #c6dfdb;border-radius:9px;background:#eef9f7;font-size:9px;font-weight:850;line-height:1.45;color:#315f62}
+.pair-inline b{color:#0b6670}
+@media(max-width:759px){.m-pair-subgroup{padding:7px;border-radius:17px}.m-pair-label{font-size:9px}.m-pair-price-grid{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -1704,6 +1721,81 @@ function mobileMetric(label,value,sub){
 function mobileRow(key,code,name,meta,badge,cn){
   return '<button type="button" class="m-row" data-mobile-key="'+esc(key)+'"><div class="m-row-main"><div class="m-row-copy"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><div class="m-row-code">'+esc(code||'—')+'</div>'+(badge?'<span class="m-badge '+mobileBadgeClass(badge)+'">'+esc(badge)+'</span>':'')+'</div>'+(name?'<div class="m-row-name">'+esc(name)+'</div>':'')+(cn?'<div class="m-row-cn">'+esc(cn)+'</div>':'')+(meta?'<div class="m-row-meta">'+esc(meta)+'</div>':'')+'</div><span class="m-arrow">›</span></div></button>';
 }
+function numericUpcKey(v){
+  const digits=String(v??'').replace(/\D/g,'').replace(/^0+/,'');
+  return digits||'';
+}
+function seafood240249Identity(r,familyOverride=''){
+  if(!r)return null;
+  const upc=String(r.upc??r.number??r.ean_upc??'');
+  const key=numericUpcKey(upc);
+  if(key.length<6)return null;
+  const prefix=key.slice(0,3);
+  if(prefix!=='240'&&prefix!=='249')return null;
+  const family=String(
+    familyOverride||
+    r.family_id??r.family_article??r.family_article_number??r.main_article_number??''
+  );
+  if(!family)return null;
+  const product=key.slice(3,6);
+  const explicit=String(r.pair_240_249_key||'');
+  return {
+    key:explicit||family+':'+product,
+    prefix,
+    role:prefix==='240'?'MAIN_240':'COOK_SERVICE_249'
+  };
+}
+function subgroup240249Units(rows,familyOverride=''){
+  const list=Array.isArray(rows)?rows:[];
+  const groups=new Map();
+  list.forEach((r,i)=>{
+    const id=seafood240249Identity(r,familyOverride);
+    if(!id)return;
+    if(!groups.has(id.key))groups.set(id.key,{key:id.key,first:i,main:null,service:null});
+    const g=groups.get(id.key);
+    g.first=Math.min(g.first,i);
+    if(id.prefix==='240'&&!g.main)g.main=r;
+    if(id.prefix==='249'&&!g.service)g.service=r;
+  });
+  const valid=new Map([...groups].filter(([,g])=>g.main&&g.service));
+  const seen=new Set(),out=[];
+  list.forEach(r=>{
+    const id=seafood240249Identity(r,familyOverride);
+    const g=id?valid.get(id.key):null;
+    if(!g){out.push({type:'single',row:r});return}
+    if(seen.has(id.key))return;
+    seen.add(id.key);
+    out.push({type:'pair',key:id.key,rows:[g.main,g.service]});
+  });
+  return out;
+}
+function mobileRowWithPairRole(r,code,name,meta,badge,cn){
+  const id=seafood240249Identity(r);
+  const html=mobileRow(String(r.upc||''),code,name,meta,badge,cn);
+  return id?html.replace('class="m-row"','class="m-row" data-pair-role="'+id.role+'"'):html;
+}
+function pairPriceSummaryHtml(r){
+  if(!r||!r.related_249_present||!r.related_240_upc||!r.related_249_upc)return '';
+  const status=r.price_240_249_equal===false?' · PRICE MISMATCH':' · prices aligned';
+  return '<div class="pair-inline"><b>240 / 249 SUBGROUP'+esc(status)+'</b><br>'+
+    '240 MAIN · '+esc(r.related_240_upc)+' · '+money(r.related_240_current_price)+'<br>'+
+    '249 COOK / SERVICE · '+esc(r.related_249_upc)+' · '+money(r.related_249_current_price)+'</div>';
+}
+function mobilePriceResultHtml(r){
+  const rem=price249Reminder(r,true);
+  if(!r.related_249_present||!r.related_240_upc||!r.related_249_upc){
+    return mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:'')+(rem?' · '+rem:''),r.priority_240_249_mismatch?'MOST URGENT':(r.review_status||'REVIEW'),'');
+  }
+  return '<section class="m-pair-subgroup"><div class="m-pair-label">240 / 249 SUBGROUP'+(r.price_240_249_equal===false?' · PRICE MISMATCH':'')+'</div>'+
+    '<button type="button" class="m-row" data-mobile-key="'+esc(String(r.upc||''))+'">'+
+      '<div class="m-row-main"><div class="m-row-copy"><div class="m-row-name">'+esc(r.name||'240 / 249 price review')+'</div>'+
+      '<div class="m-pair-price-grid">'+
+        '<div class="m-pair-price-member"><small>240 MAIN</small><b>'+esc(r.related_240_upc)+' · '+money(r.related_240_current_price)+'</b></div>'+
+        '<div class="m-pair-price-member"><small>249 COOK / SERVICE</small><b>'+esc(r.related_249_upc)+' · '+money(r.related_249_current_price)+'</b></div>'+
+      '</div>'+
+      '<div class="m-row-meta">Suggestion '+esc(r.upc||'')+' · '+money(r.current_price)+' → '+money(r.candidate_price)+(rem?' · '+esc(rem):'')+'</div>'+
+      '</div><span class="m-arrow">›</span></div></button></section>';
+}
 function price249Reminder(r,short=false){
   if(!r||!r.related_249_present||!r.related_249_upc)return '';
   const p249=r.related_249_current_price;
@@ -2029,14 +2121,19 @@ function mobileQuickGroupedHtml(rows){
     const avgText=avg==='—'?'—':avg+(uom?' '+uom:'')+'/day';
     const totalText=total==='—'?'—':total+(uom?' '+uom:'');
     const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Avg Qty/Day</small><b>'+esc(avgText)+'</b><small>7D Qty · '+esc(totalText)+'</small></div></div>';
-    const children=g.rows.map(r=>mobileRow(
-      String(r.upc||''),
-      r.upc||r.family_article,
-      r.name||r.family_name,
-      '7D Vel '+fmt(r.velocity_7d)+' '+(r.selling_uom||'unit')+'/day · '+fmt(r.qty_7d)+' 7D · tap for current price / OH',
-      r.readiness||r.category,
-      r.chinese_name||''
-    )).join('');
+    const children=subgroup240249Units(g.rows,String(g.family_id??g.family_article??g.key)).map(unit=>{
+      const rowHtml=r=>mobileRowWithPairRole(
+        r,
+        r.upc||r.family_article,
+        r.name||r.family_name,
+        '7D Vel '+fmt(r.velocity_7d)+' '+(r.selling_uom||'unit')+'/day · '+fmt(r.qty_7d)+' 7D · tap for current price / OH',
+        r.readiness||r.category,
+        r.chinese_name||''
+      );
+      return unit.type==='pair'
+        ? '<section class="m-pair-subgroup"><div class="m-pair-label">240 / 249 SUBGROUP</div>'+unit.rows.map(rowHtml).join('')+'</section>'
+        : rowHtml(unit.row);
+    }).join('');
     return '<section class="m-family-group">'+header+'<div class="m-family-upcs">'+children+'</div></section>';
   }).join('');
 }
@@ -2048,13 +2145,19 @@ function mobileRenderList(){
   }else if(mobileState.module==='qa'){
     html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,'OH '+fmt(cur.current_oh)+' '+(cur.current_oh_uom||'')+' · 7D Vel '+fmt(cur.upc_velocity_7d)+'/'+(cur.selling_uom||'unit')+' · '+qaFixKindLabel(x.fix_kind)+' · '+(x.issue_summary||''),x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
   }else if(mobileState.module==='price'){
-    html=rows.map(r=>{const rem=price249Reminder(r,true);return mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:'')+(rem?' · '+rem:''),r.priority_240_249_mismatch?'MOST URGENT':(r.review_status||'REVIEW'),'')}).join('');
+    html=rows.map(r=>mobilePriceResultHtml(r)).join('');
   }else if(mobileState.module==='performance'){
-    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.sales_amount)+' Sales · '+money(r.gp_dollars)+' GP$ · '+fmt(r.velocity)+' '+(r.qty_uom||'')+'/day · '+fmt(r.sold_quantity)+' '+(r.qty_uom||''),r.gp_cost_complete?'GP READY':'GP HOLD','')).join('');
+    html=subgroup240249Units(rows).map(unit=>{
+      const rr=r=>mobileRowWithPairRole(r,r.upc,r.name,money(r.sales_amount)+' Sales · '+money(r.gp_dollars)+' GP$ · '+fmt(r.velocity)+' '+(r.qty_uom||'')+'/day · '+fmt(r.sold_quantity)+' '+(r.qty_uom||''),r.gp_cost_complete?'GP READY':'GP HOLD','');
+      return unit.type==='pair'?'<section class="m-pair-subgroup"><div class="m-pair-label">240 / 249 SUBGROUP</div>'+unit.rows.map(rr).join('')+'</section>':rr(unit.row);
+    }).join('');
   }else if(mobileState.module==='ordering'){
     html=rows.map(r=>mobileRow(String(r.family_article||''),r.family_article||r.receiving_article,r.family_name||'Family Article','OH '+fmt(r.oh)+' '+(r.oh_uom||'')+' · Last receipt '+(r.last_receipt_date||'—')+' · Suggested '+fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),r.attention?'REVIEW':'READY','')).join('');
   }else if(mobileState.module==='inventory'){
-    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name||r.family_name,'OH '+fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' · 7D Vel '+fmt(r.velocity_7d)+' · DOS '+fmt(r.dos)+' · '+money(r.price),r.readiness||r.category,r.chinese_name||'')).join('');
+    html=subgroup240249Units(rows).map(unit=>{
+      const rr=r=>mobileRowWithPairRole(r,r.upc,r.name||r.family_name,'OH '+fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' · 7D Vel '+fmt(r.velocity_7d)+' · DOS '+fmt(r.dos)+' · '+money(r.price),r.readiness||r.category,r.chinese_name||'');
+      return unit.type==='pair'?'<section class="m-pair-subgroup"><div class="m-pair-label">240 / 249 SUBGROUP</div>'+unit.rows.map(rr).join('')+'</section>':rr(unit.row);
+    }).join('');
   }else if(mobileState.module==='data'){
     html=rows.map(r=>mobileRow('data:'+r._dataMenu,r.code,r.name,r.meta,r.badge,'')).join('');
   }else if(mobileState.module==='pi'){
@@ -2598,7 +2701,18 @@ function filteredInventoryRows(){
   if(s==='name')rows.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
   return rows;
 }
-function renderInventory(){const rows=filteredInventoryRows();$('#invCount').textContent=`${rows.length} shown · ${state.inventory.length} loaded`;$('#invRows').innerHTML=rows.map(r=>`<tr class="${Number(r.velocity_7d||0)>0?'velocity-active':''}"><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td><b>${fmt(r.velocity_7d)}</b><div class="meta">${esc(r.selling_uom||'unit')}/day</div></td><td><b>${money(r.price)}</b><div class="meta">${esc(r.price_type||'—')} · ${esc(r.price_source||'—')} ${r.price_as_of?'· '+esc(r.price_as_of):''}</div></td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`).join('')||`<tr><td colspan="11" class="empty">${state.inventorySearch?'No matching rows after current Inventory filters for: '+esc(state.inventorySearch):'No inventory rows match the current filters.'}</td></tr>`;$$('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset))}
+function renderInventory(){
+  const rows=filteredInventoryRows();
+  $('#invCount').textContent=`${rows.length} shown · ${state.inventory.length} loaded`;
+  const rowHtml=(r,cls='')=>`<tr class="${cls} ${Number(r.velocity_7d||0)>0?'velocity-active':''}"><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td><b>${fmt(r.velocity_7d)}</b><div class="meta">${esc(r.selling_uom||'unit')}/day</div></td><td><b>${money(r.price)}</b><div class="meta">${esc(r.price_type||'—')} · ${esc(r.price_source||'—')} ${r.price_as_of?'· '+esc(r.price_as_of):''}</div></td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`;
+  $('#invRows').innerHTML=subgroup240249Units(rows).map(unit=>{
+    if(unit.type!=='pair')return rowHtml(unit.row);
+    const fam=unit.rows[0]?.family_article||'—';
+    return '<tr class="pair-subgroup-head"><td colspan="11">240 / 249 SUBGROUP · Family '+esc(fam)+'</td></tr>'+
+      rowHtml(unit.rows[0],'pair-subgroup-main')+rowHtml(unit.rows[1],'pair-subgroup-service');
+  }).join('')||`<tr><td colspan="11" class="empty">${state.inventorySearch?'No matching rows after current Inventory filters for: '+esc(state.inventorySearch):'No inventory rows match the current filters.'}</td></tr>`;
+  $$('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset));
+}
 $$('.invfilter').forEach(b=>b.onclick=()=>{state.invCat=b.dataset.cat;$$('.invfilter').forEach(x=>x.classList.toggle('on',x===b));loadInventory()});
 $('#invStatusFilter').onchange=e=>{state.invStatus=e.target.value;renderInventory()};
 $('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
@@ -2672,16 +2786,20 @@ function filteredSalesRows(){
 function renderSales(){
   const rows=filteredSalesRows();
   if($('#salesCount'))$('#salesCount').textContent=rows.length+' items';
-  if($('#sellRows'))$('#sellRows').innerHTML=rows.map(r=>
-    '<tr><td><div class="name">'+esc(r.name||'—')+'</div><div class="meta">Family '+esc(r.family_article_number||'—')+'</div></td>'+
+  const rowHtml=(r,cls='')=>'<tr class="'+cls+'"><td><div class="name">'+esc(r.name||'—')+'</div><div class="meta">Family '+esc(r.family_article_number||'—')+'</div></td>'+
     '<td>'+esc(r.upc||'—')+'</td>'+
     '<td>'+fmt(r.sold_quantity)+' '+esc(r.qty_uom||'')+'</td>'+
     '<td><b>'+fmt(r.velocity)+'</b><div class="meta">'+esc(r.qty_uom||'unit')+'/data day</div></td>'+
     '<td>'+money(r.sales_amount)+'</td>'+
     '<td><b>'+money(r.gp_dollars)+'</b><div class="meta">'+(r.gp_cost_complete?'historical cost complete':'cost unavailable on sold day(s)')+'</div></td>'+
     '<td>'+pct(r.gp_pct)+'</td>'+
-    '<td>'+money(r.avg_sold_price)+'</td></tr>'
-  ).join('')||'<tr><td colspan="8" class="empty">No sales in the selected analysis range.</td></tr>';
+    '<td>'+money(r.avg_sold_price)+'</td></tr>';
+  if($('#sellRows'))$('#sellRows').innerHTML=subgroup240249Units(rows).map(unit=>{
+    if(unit.type!=='pair')return rowHtml(unit.row);
+    const fam=unit.rows[0]?.family_article_number||'—';
+    return '<tr class="pair-subgroup-head"><td colspan="8">240 / 249 SUBGROUP · Family '+esc(fam)+'</td></tr>'+
+      rowHtml(unit.rows[0],'pair-subgroup-main')+rowHtml(unit.rows[1],'pair-subgroup-service');
+  }).join('')||'<tr><td colspan="8" class="empty">No sales in the selected analysis range.</td></tr>';
 }
 $('#salesSort').onchange=e=>{state.salesSort=e.target.value;renderSales();mobileRenderList()};
 $('#salesApplyRange').onclick=async()=>{state.salesStartDate=$('#salesStartDate').value;state.salesEndDate=$('#salesEndDate').value;await loadSell()};
@@ -2700,7 +2818,7 @@ function filteredPrices(){
   const status=String(state.priceStatus||'ALL').toUpperCase();
   const text=String(state.priceText||'').trim().toLowerCase();
   if(status!=='ALL')a=a.filter(r=>String(r.review_status||'').toUpperCase()===status);
-  if(text)a=a.filter(r=>[r.name,r.upc,r.family_name,r.family_article_number,r.review_status,r.review_blocker,r.primary_reason_text,...(r.reasons||[])].join(' ').toLowerCase().includes(text));
+  if(text)a=a.filter(r=>[r.name,r.upc,r.family_name,r.family_article_number,r.related_240_upc,r.related_240_name,r.related_249_upc,r.related_249_name,r.review_status,r.review_blocker,r.primary_reason_text,...(r.reasons||[])].join(' ').toLowerCase().includes(text));
   const sort=state.priceSort||'opportunity';
   if(sort==='opportunity')a.sort((x,y)=>Number(y.gp_per_day_opportunity||0)-Number(x.gp_per_day_opportunity||0)||Number(y.urgency_score||0)-Number(x.urgency_score||0));
   if(sort==='urgency')a.sort((x,y)=>Number(y.urgency_score||0)-Number(x.urgency_score||0)||Number(y.gp_per_day_opportunity||0)-Number(x.gp_per_day_opportunity||0));
@@ -2722,7 +2840,7 @@ function renderPrices(){
     const rem=price249Reminder(r,false);
     const remClass=r.price_240_249_equal===false?'pair249 mismatch':'pair249';
     return `<tr>
-      <td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.family_name||'')}</div>${rem?'<div class="'+remClass+'">'+esc(rem)+'</div>':''}</td>
+      <td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.family_name||'')}</div>${pairPriceSummaryHtml(r)}${rem?'<div class="'+remClass+'">'+esc(rem)+'</div>':''}</td>
       <td><div class="name">${esc(r.upc)}</div><div class="meta">${esc(r.name||'')}</div></td>
       <td><b>${money(r.current_price)}</b><div class="meta">${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</div></td>
       <td><b>${money(r.candidate_price)}</b><div class="meta">${esc(r.selection_basis||r.suggestion_basis||'')}</div></td>
