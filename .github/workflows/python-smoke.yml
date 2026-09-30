@@ -157,6 +157,10 @@ jobs:
           assert 'vel7_oh_desc' in ui
           assert 'Highest 7D Velocity → Highest OH' in ui
           assert 'money(r.current_cost)' in ui
+          assert 'FAMILY_251_252_ACTIVE' in runtime
+          assert 'ALL_FAMILY_251_MINUS_252_CANONICAL_MOVEMENT_ROWS_BASE_UOM' in runtime
+          assert 'movement_by_article.get((fid, art), {})' in runtime
+          assert 'SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES' not in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
