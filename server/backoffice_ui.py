@@ -2497,6 +2497,8 @@ function mobileQuickFamilyGroups(rows){
       reconciliation:r.family_group_reconciliation||'',
       active_pos_upc_count:r.family_group_active_pos_upc_count??null,
       active_selling_article_count:r.family_group_active_selling_article_count??null,
+      total_selling_article_count:r.family_group_total_selling_article_count??null,
+      total_selling_articles:Array.isArray(r.family_group_total_selling_articles)?r.family_group_total_selling_articles:[],
       unmapped_active_pos_upcs:Array.isArray(r.family_group_unmapped_active_pos_upcs)?r.family_group_unmapped_active_pos_upcs:[],
       zero_sap_mvt_articles:Array.isArray(r.family_group_zero_sap_mvt_articles)?r.family_group_zero_sap_mvt_articles:[],
       source_article:r.family_source_article||r.family_article||null,
@@ -2536,6 +2538,8 @@ function mobileQuickFamilyGroups(rows){
     if(!g.reconciliation&&r.family_group_reconciliation)g.reconciliation=String(r.family_group_reconciliation);
     if((g.active_pos_upc_count===null||g.active_pos_upc_count===undefined)&&r.family_group_active_pos_upc_count!==null&&r.family_group_active_pos_upc_count!==undefined)g.active_pos_upc_count=Number(r.family_group_active_pos_upc_count);
     if((g.active_selling_article_count===null||g.active_selling_article_count===undefined)&&r.family_group_active_selling_article_count!==null&&r.family_group_active_selling_article_count!==undefined)g.active_selling_article_count=Number(r.family_group_active_selling_article_count);
+    if((g.total_selling_article_count===null||g.total_selling_article_count===undefined)&&r.family_group_total_selling_article_count!==null&&r.family_group_total_selling_article_count!==undefined)g.total_selling_article_count=Number(r.family_group_total_selling_article_count);
+    if((!g.total_selling_articles||!g.total_selling_articles.length)&&Array.isArray(r.family_group_total_selling_articles))g.total_selling_articles=r.family_group_total_selling_articles;
     if((!g.unmapped_active_pos_upcs||!g.unmapped_active_pos_upcs.length)&&Array.isArray(r.family_group_unmapped_active_pos_upcs))g.unmapped_active_pos_upcs=r.family_group_unmapped_active_pos_upcs;
     if((!g.zero_sap_mvt_articles||!g.zero_sap_mvt_articles.length)&&Array.isArray(r.family_group_zero_sap_mvt_articles))g.zero_sap_mvt_articles=r.family_group_zero_sap_mvt_articles;
     if(!g.source_article&&r.family_source_article)g.source_article=String(r.family_source_article);
@@ -2705,22 +2709,23 @@ function mobileQuickGroupedHtml(rows){
       ? fmt(g.conversion_317_318_7d)+(g.conversion_317_318_uom?' '+g.conversion_317_318_uom:'')
       : '—';
     const sourceMvtText=(sourceHasMvt||hasConversion)
-      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">MAIN 251−252 · '+esc(directText)+' · counted once when Main is an assigned Selling Article'+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERSION LINEAGE · '+esc(conversionText)+' · not counted as sale':'')+'</div>'
+      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">MAIN 251−252 · '+esc(directText)+' · counted once when Main is a Selling Article'+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERSION LINEAGE · '+esc(conversionText)+' · not counted as sale':'')+'</div>'
       : '';
     const familyPositiveMvt=Number.isFinite(Number(g.group_qty_7d))&&Number(g.group_qty_7d)>0;
     const recon=String(g.reconciliation||'').toUpperCase();
-    const reconText=(recon==='PASS'?'✓ RECONCILED':'⚠ RECONCILIATION HOLD');
+    const reconText=(recon==='PASS'?'✓ TOTAL SELLING MVT RECONCILED':'⚠ TOTAL SELLING MVT HOLD');
+    const totalSellingCount=Number(g.total_selling_article_count??0);
     const reconMeta='<div style="font-size:7px;font-weight:900;color:var(--muted);margin-top:3px">'+
-      esc(reconText)+' · '+esc(String(g.active_selling_article_count??0))+' Selling Article'+(Number(g.active_selling_article_count||0)===1?'':'s')+
+      esc(reconText)+' · '+esc(String(totalSellingCount))+' unique Selling Article'+(totalSellingCount===1?'':'s')+
       ' · '+esc(String(g.active_pos_upc_count??0))+' POS-active UPC'+(Number(g.active_pos_upc_count||0)===1?'':'s')+
       (g.group_uom?' · SAP MVT UOM '+esc(g.group_uom):'')+
       (g.zero_sap_mvt_articles?.length?' · Zero SAP MVT: '+esc(g.zero_sap_mvt_articles.join(', ')):'')+
-      (g.unmapped_active_pos_upcs?.length?' · Unmapped UPC: '+esc(g.unmapped_active_pos_upcs.join(', ')):'')+
+      (g.unmapped_active_pos_upcs?.length?' · POS mapping warning: '+esc(g.unmapped_active_pos_upcs.join(', ')):'')+
     '</div>';
     const familyHead='<div class="m-q-family-head'+(familyPositiveMvt?' has-positive-mvt':'')+'">'+
       '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+reconMeta+sourceMvtText+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
-        '<div class="m-q-kpi"><small>7D FAMILY MVT</small><b>'+esc(gqty)+'</b></div>'+
+        '<div class="m-q-kpi"><small>7D TOTAL SELLING MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
       '</div>'+
     '</div>';
