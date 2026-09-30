@@ -467,6 +467,13 @@ def inventory_review(
                         (_d(live_price.get("price")) - _d(row.get("current_cost_per_selling_unit")))
                         / _d(live_price.get("price"))
                     )
+            else:
+                # A stale Quick Check snapshot must never leak through as CURRENT.
+                row["current_price"] = None
+                row["current_price_type"] = None
+                row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
+                row["current_price_asof_date"] = None
+                row["gp_pct_current"] = None
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
             if fid is not None and fid not in family_cache:
                 cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc", (fid,))
@@ -569,21 +576,21 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
         resolved_price = resolved_by_upc.get(upc)
         current_price = (
             resolved_price.get("price")
-            if resolved_price else live.get("current_price")
+            if resolved_price else None
         )
         current_cost = live.get("current_cost_per_selling_unit")
 
         row["current_price"] = current_price
         row["current_price_type"] = (
-            resolved_price.get("type") if resolved_price else live.get("current_price_type")
+            resolved_price.get("type") if resolved_price else None
         )
         row["current_price_source"] = (
-            resolved_price.get("source") if resolved_price else live.get("current_price_source")
+            resolved_price.get("source") if resolved_price else "STALE_OR_MISSING_FRESH_PRICE"
         )
         row["current_price_observed_date"] = (
-            resolved_price.get("date") if resolved_price else live.get("current_price_asof_date")
+            resolved_price.get("date") if resolved_price else None
         )
-        row["current_price_basis"] = "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME"
+        row["current_price_basis"] = "TODAY_PRICE_LIST_VS_LATEST_COMPLETED_DAY_POS_FRESHNESS_GATE"
 
         row["current_cost"] = current_cost
         row["current_cost_source"] = live.get("cost_source")
@@ -598,7 +605,9 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
         row["readiness"] = live.get("quick_check_status")
         row["serving_publish_batch_id"] = live.get("publish_batch_id")
         row["serving_published_at"] = live.get("published_at")
-        row["current_serving_overlay_status"] = "READY"
+        row["current_serving_overlay_status"] = (
+            "READY" if resolved_price else "STALE_OR_MISSING_CURRENT_PRICE"
+        )
 
         candidate = row.get("candidate_price")
         if candidate is not None and current_cost is not None and _d(candidate) > 0:
@@ -628,7 +637,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
             "write_enabled": False,
             "price_changes_are_review_only": True,
             "current_price_display_authority": "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
-            "current_price_rule": "NEWEST_VALID_PRICE_LIST_VS_NEWER_SINGLE_DATE_POS_SOLD_EVENT; MULTI_DAY_POS_AVERAGES_ARE_HISTORICAL_ONLY",
+            "current_price_rule": "TODAY_LATEST_VALID_PRICE_LIST_VS_LATEST_COMPLETED_BUSINESS_DAY_SINGLE_DATE_POS_SOLD_EVENT; OLDER PRICE EVIDENCE_IS_HISTORY_ONLY; SAME_DAY_PRICE_LIST_WINS",
             "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
             "source_contract": report.get("price_suggestion_rules"),
         },
