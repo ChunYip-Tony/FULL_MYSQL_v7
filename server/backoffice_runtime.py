@@ -524,8 +524,68 @@ def inventory_review(
     }
 
 
-def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
-    """Pricing suggestions with CURRENT fields from live Quick Check serving."""
+
+def _ensure_price_acceptance_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS backoffice_price_suggestion_acceptance (
+             acceptance_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             ean_upc VARCHAR(64) NOT NULL,
+             accepted_current_price DECIMAL(24,8) NULL,
+             accepted_current_price_source VARCHAR(64) NULL,
+             accepted_current_price_asof_date DATE NULL,
+             accepted_candidate_price DECIMAL(24,8) NULL,
+             accepted_by VARCHAR(128) NULL,
+             accepted_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+             INDEX ix_price_acceptance_upc_id (ean_upc,acceptance_id),
+             INDEX ix_price_acceptance_time (accepted_at)
+           )"""
+    )
+
+
+def _latest_price_acceptances(cur, upcs: list[str]) -> dict[str, dict[str, Any]]:
+    keys=sorted({str(x or "").strip() for x in upcs if str(x or "").strip()})
+    if not keys:
+        return {}
+    _ensure_price_acceptance_table(cur)
+    ph=",".join(["%s"]*len(keys))
+    cur.execute(
+        f"""SELECT a.*
+            FROM backoffice_price_suggestion_acceptance a
+            JOIN (
+              SELECT ean_upc,MAX(acceptance_id) AS acceptance_id
+              FROM backoffice_price_suggestion_acceptance
+              WHERE ean_upc IN ({ph})
+              GROUP BY ean_upc
+            ) x ON x.acceptance_id=a.acceptance_id
+            ORDER BY a.acceptance_id""",
+        tuple(keys),
+    )
+    return {str(r.get("ean_upc") or ""):r for r in cur.fetchall()}
+
+
+def _same_decimal(a: Any, b: Any) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    return Decimal(str(a)) == Decimal(str(b))
+
+
+def _accepted_snapshot_matches(row: dict[str, Any], accepted: dict[str, Any] | None) -> bool:
+    if not accepted:
+        return False
+    return (
+        _same_decimal(row.get("current_price"),accepted.get("accepted_current_price"))
+        and str(row.get("current_price_source") or "") == str(accepted.get("accepted_current_price_source") or "")
+        and str(row.get("current_price_observed_date") or "") == str(accepted.get("accepted_current_price_asof_date") or "")
+        and _same_decimal(row.get("candidate_price"),accepted.get("accepted_candidate_price"))
+    )
+
+def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted: bool = False) -> dict[str, Any]:
+    """Pricing suggestions with CURRENT fields from live Quick Check serving.
+
+    Accepted suggestions are suppressed only while the current-price evidence
+    and candidate-price fingerprint remain unchanged. New current price evidence
+    or a changed candidate automatically makes the UPC eligible to appear again.
+    """
     report = performance_report(category=category, limit=limit)
     rows = [dict(x) for x in (report.get("top_urgent_price_suggestions") or [])]
 
@@ -536,6 +596,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
     ]
     live_by_upc: dict[str, dict[str, Any]] = {}
     resolved_by_upc: dict[str, dict[str, Any]] = {}
+    latest_acceptance_by_upc: dict[str, dict[str, Any]] = {}
     if upcs:
         with db_conn() as conn:
             cur = conn.cursor(dictionary=True)
@@ -564,6 +625,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
                     )
                     if _resolved:
                         resolved_by_upc[_upc]=_resolved
+            latest_acceptance_by_upc=_latest_price_acceptances(cur,upcs)
             cur.close()
 
     for row in rows:
@@ -627,18 +689,92 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
                 else ("DECREASE" if _d(candidate) < _d(current_price) else "KEEP")
             )
 
+    suppressed_count=0
+    visible_rows=[]
+    for row in rows:
+        accepted=latest_acceptance_by_upc.get(str(row.get("upc") or ""))
+        accepted_match=_accepted_snapshot_matches(row,accepted)
+        row["accepted"] = accepted_match
+        row["accepted_at"] = accepted.get("accepted_at") if accepted_match and accepted else None
+        if accepted_match and not include_accepted:
+            suppressed_count+=1
+            continue
+        visible_rows.append(row)
+
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V4",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V5",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
-        "rows": rows,
+        "rows": visible_rows,
+        "suppressed_accepted_count": suppressed_count,
         "rules": {
-            "write_enabled": False,
+            "write_enabled": "ACCEPTED_STATUS_ONLY",
             "price_changes_are_review_only": True,
+            "accepted_rule": "SUPPRESS_ONLY_WHILE_CURRENT_PRICE_SOURCE_ASOF_VALUE_AND_CANDIDATE_FINGERPRINT_ARE_UNCHANGED",
             "current_price_display_authority": "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
             "current_price_rule": "TODAY_LATEST_VALID_PRICE_LIST_VS_LATEST_COMPLETED_BUSINESS_DAY_SINGLE_DATE_POS_SOLD_EVENT; OLDER PRICE EVIDENCE_IS_HISTORY_ONLY; SAME_DAY_PRICE_LIST_WINS",
             "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
             "source_contract": report.get("price_suggestion_rules"),
         },
+    }
+
+
+
+def accept_price_suggestion(
+    *,
+    ean_upc: str,
+    current_price: Decimal | None,
+    current_price_source: str | None,
+    current_price_asof_date: date | None,
+    candidate_price: Decimal | None,
+    actor: str | None,
+) -> dict[str, Any]:
+    upc=str(ean_upc or "").strip()
+    if not upc:
+        raise ValueError("UPC_REQUIRED")
+    if current_price is None or candidate_price is None:
+        raise ValueError("CURRENT_AND_CANDIDATE_PRICE_REQUIRED")
+
+    # Recompute including already accepted rows so the click is bound to the
+    # currently valid server-side suggestion rather than a stale browser row.
+    snapshot=pricing_review(category="ALL",limit=1000,include_accepted=True)
+    row=next((x for x in snapshot.get("rows",[]) if str(x.get("upc") or "")==upc),None)
+    if not row:
+        raise ValueError("PRICE_SUGGESTION_NOT_CURRENTLY_AVAILABLE")
+
+    if not (
+        _same_decimal(row.get("current_price"),current_price)
+        and str(row.get("current_price_source") or "")==str(current_price_source or "")
+        and str(row.get("current_price_observed_date") or "")==str(current_price_asof_date or "")
+        and _same_decimal(row.get("candidate_price"),candidate_price)
+    ):
+        raise RuntimeError("PRICE_SUGGESTION_CHANGED_REFRESH_REQUIRED")
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_price_acceptance_table(cur)
+        cur.execute(
+            """INSERT INTO backoffice_price_suggestion_acceptance
+               (ean_upc,accepted_current_price,accepted_current_price_source,
+                accepted_current_price_asof_date,accepted_candidate_price,accepted_by)
+               VALUES (%s,%s,%s,%s,%s,%s)""",
+            (
+                upc,row.get("current_price"),row.get("current_price_source"),
+                row.get("current_price_observed_date"),row.get("candidate_price"),
+                actor,
+            ),
+        )
+        acceptance_id=int(cur.lastrowid)
+        conn.commit()
+        cur.close()
+    return {
+        "status":"ACCEPTED",
+        "acceptance_id":acceptance_id,
+        "upc":upc,
+        "current_price":row.get("current_price"),
+        "current_price_source":row.get("current_price_source"),
+        "current_price_asof_date":row.get("current_price_observed_date"),
+        "candidate_price":row.get("candidate_price"),
+        "suppression_rule":"UNTIL_PRICE_EVIDENCE_OR_CANDIDATE_CHANGES",
     }
