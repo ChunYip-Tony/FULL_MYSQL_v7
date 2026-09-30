@@ -993,6 +993,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   background:var(--q-head);
 }
 .m-q-label{font-size:8px;color:var(--muted);font-weight:950;letter-spacing:.05em}
+.m-q-family-number-line{display:flex;align-items:center;gap:7px;min-width:0}
 .m-q-family-number{font-size:20px;font-weight:950;line-height:1;letter-spacing:-.025em;color:var(--ink)}
 .m-q-family-name{font-size:12px;font-weight:900;line-height:1.2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .m-q-family-kpis,.m-q-recv-kpis{display:flex;gap:7px;align-items:center}
@@ -2315,7 +2316,13 @@ function mobileQuickFamilyGroups(rows){
       group_qty_7d:null,
       group_avg_qty_day:null,
       group_uom:'',
-      group_status:''
+      group_status:'',
+      family_receipt_verified:!!r.family_receipt_verified,
+      family_receipt_movement_type:r.family_receipt_movement_type||'',
+      family_receipt_date:r.family_receipt_date||'',
+      family_receipt_qty:r.family_receipt_qty,
+      family_receipt_uom:r.family_receipt_uom||'',
+      family_receipt_source:r.family_receipt_source||''
     });
     const g=groups.get(familyKey);
     g.rows.push(r);
@@ -2330,6 +2337,12 @@ function mobileQuickFamilyGroups(rows){
     }
     if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
     if(!g.group_status&&r.family_group_movement_status)g.group_status=String(r.family_group_movement_status);
+    if(!g.family_receipt_verified&&r.family_receipt_verified)g.family_receipt_verified=true;
+    if(!g.family_receipt_movement_type&&r.family_receipt_movement_type)g.family_receipt_movement_type=String(r.family_receipt_movement_type);
+    if(!g.family_receipt_date&&r.family_receipt_date)g.family_receipt_date=String(r.family_receipt_date);
+    if((g.family_receipt_qty===null||g.family_receipt_qty===undefined)&&r.family_receipt_qty!==null&&r.family_receipt_qty!==undefined)g.family_receipt_qty=r.family_receipt_qty;
+    if(!g.family_receipt_uom&&r.family_receipt_uom)g.family_receipt_uom=String(r.family_receipt_uom);
+    if(!g.family_receipt_source&&r.family_receipt_source)g.family_receipt_source=String(r.family_receipt_source);
 
     (Array.isArray(r.receiving_articles)?r.receiving_articles:[]).forEach(a=>{
       const art=String(a?.article_number||'').trim();
@@ -2426,10 +2439,16 @@ function mobileQuickGroupedHtml(rows){
     const gqty=g.group_qty_7d===null?'—':fmt(g.group_qty_7d)+(guom?' '+guom:'');
     const gavg=g.group_avg_qty_day===null?'—':fmt(g.group_avg_qty_day)+(guom?' '+guom:'');
     const gstatus=g.group_qty_7d===null&&g.group_status?g.group_status:'';
+    const familyReceiptO=g.family_receipt_verified?'<span class="m-q-receipt-o" title="101–109 receipt verified">O</span>':'';
+    const familyReceiptCaption=g.family_receipt_verified?'<div class="m-q-receipt-caption">101–109 RECEIPT VERIFIED</div>':'';
+    const familyReceiptQty=(g.family_receipt_qty===null||g.family_receipt_qty===undefined)?'—':fmt(g.family_receipt_qty)+(g.family_receipt_uom?' '+g.family_receipt_uom:'');
+    const familyReceiptInfo=g.family_receipt_verified
+      ? '<div class="m-q-receipt-info"><span><b>Latest receipt:</b> '+esc(g.family_receipt_movement_type||'101–109')+' · '+esc(g.family_receipt_date||'—')+'</span><span><b>Qty:</b> '+esc(familyReceiptQty)+'</span><span><b>Source:</b> MVT</span></div>'
+      : '';
     const familyHead='<div class="m-q-family-head">'+
-      '<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div></div>'+
+      '<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
-        '<div class="m-q-kpi"><small>7D MVT</small><b>'+esc(gqty)+'</b></div>'+
+        '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
       '</div>'+
     '</div>';
@@ -2453,7 +2472,7 @@ function mobileQuickGroupedHtml(rows){
         ? '<div class="m-q-receipt-info"><span><b>Latest receipt:</b> '+esc(a.receipt_movement_type||'101–109')+' · '+esc(a.receipt_date||'—')+'</span><span><b>Qty:</b> '+esc(receiptQty)+'</span><span><b>Source:</b> MVT</span></div>'
         : '';
       const recvHead='<div class="m-q-receiving-head">'+
-        '<div><div class="m-q-label">RECEIVING ARTICLE</div><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div>'+receiptCaption+'</div>'+
+        '<div><div class="m-q-label">SAP SELLING ARTICLE</div><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div class="m-q-recv-name" style="font-size:7px;color:var(--muted)">251−252 selling movement</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
 
@@ -2511,7 +2530,7 @@ function mobileQuickGroupedHtml(rows){
       : '';
 
     const statusLine=gstatus?'<div style="font-size:7px;color:var(--muted);font-weight:850;padding:0 3px">'+esc(gstatus)+'</div>':'';
-    return '<section class="m-q-family-group q-family-tone-'+(idx%6)+'">'+familyHead+statusLine+'<div class="m-q-receiving-list">'+visibleHtml+hiddenToggle+'</div></section>';
+    return '<section class="m-q-family-group q-family-tone-'+(idx%6)+'">'+familyHead+familyReceiptInfo+statusLine+'<div class="m-q-receiving-list">'+visibleHtml+hiddenToggle+'</div></section>';
   }).join('');
 }
 function mobileRenderList(){
