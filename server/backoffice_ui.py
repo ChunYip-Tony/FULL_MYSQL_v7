@@ -869,6 +869,23 @@ BACKOFFICE_HTML = r'''<!doctype html>
     }
   }
 
+
+  /* Keep deployed Web App version on one line */
+  .mobilehome.on .m-version-title{
+    display:block;
+    white-space:nowrap;
+    font-size:clamp(16px,4.7vw,24px)!important;
+    line-height:1!important;
+    letter-spacing:-.035em!important;
+    max-width:calc(100vw - 112px);
+  }
+  @media(max-width:380px){
+    .mobilehome.on .m-version-title{
+      font-size:15px!important;
+      letter-spacing:-.045em!important;
+    }
+  }
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -919,7 +936,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
   <div class="m-topbar">
     <div class="m-brand">
-      <strong>WEBAPP v__VERSION__</strong>
+      <strong class="m-version-title">v__VERSION__</strong>
       <span class="m-market-title">SEAFOOD MARKET</span>
       <small class="m-storeline">Store #1032 · Las Vegas</small>
     </div>
