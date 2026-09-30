@@ -1132,6 +1132,13 @@ BACKOFFICE_HTML = r'''<!doctype html>
   font-size:7px;
   font-weight:850;
 }
+.m-q-upc-hidden-note{
+  padding:4px 6px 2px;
+  color:#7d8688;
+  font-size:7px;
+  font-weight:850;
+}
+.m-q-upc-hidden-wrap .m-q-hidden-inner{gap:3px}
 .m-q-recent-receipt-note{
   padding:0 8px 6px;
   color:#8b1018;
@@ -2433,6 +2440,7 @@ function mobileQuickGroupedHtml(rows){
       .slice()
       .sort((a,b)=>String(b.receipt_date||'').localeCompare(String(a.receipt_date||'')));
     const recentVerifiedArticle=verified.length?String(verified[0].article_number||''):null;
+    let receivingCardSeq=0;
 
     const receivingCard=(a,{inactive=false,recentVerified=false}={})=>{
       const uom=String(a.movement_uom||'');
@@ -2448,14 +2456,34 @@ function mobileQuickGroupedHtml(rows){
         '<div><div class="m-q-label">RECEIVING ARTICLE</div><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
-      const upcs=(a.rows||[]).map(mobileQuickUpcHtml).join('');
-      const recentNote=recentVerified&&!hasNonZero(a.movement_7d)&&!(a.rows||[]).some(r=>hasNonZero(r?.qty_7d))
+
+      const allUpcRows=Array.isArray(a.rows)?a.rows:[];
+      const activeUpcRows=allUpcRows.filter(r=>hasNonZero(r?.qty_7d));
+      const inactiveUpcRows=allUpcRows.filter(r=>!hasNonZero(r?.qty_7d));
+      const activeUpcs=activeUpcRows.map(mobileQuickUpcHtml).join('');
+      const inactiveUpcs=inactiveUpcRows.map(mobileQuickUpcHtml).join('');
+      const upcHiddenId='m-q-upc-hidden-'+String(idx)+'-'+String(receivingCardSeq++)+'-'+String(a.article_number||'unresolved').replace(/[^A-Za-z0-9_-]/g,'');
+      const upcHiddenToggle=inactiveUpcRows.length
+        ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(upcHiddenId)+'" data-hidden-noun="UPC" aria-expanded="false">'+
+            '<span class="m-q-hidden-left"><span class="m-q-hidden-count">'+inactiveUpcRows.length+'</span><span>Show inactive UPC'+(inactiveUpcRows.length===1?'':'s')+'</span></span>'+
+            '<span class="m-q-hidden-chevron">⌄</span>'+
+          '</button>'+
+          '<div class="m-q-hidden-wrap m-q-upc-hidden-wrap" id="'+esc(upcHiddenId)+'"><div class="m-q-hidden-inner">'+
+            '<div class="m-q-upc-hidden-note">Hidden by default · UPC 7D POS Qty = 0 / none.</div>'+
+            '<div class="m-q-upcs">'+inactiveUpcs+'</div>'+
+          '</div></div>'
+        : '';
+      const upcSection=(activeUpcs||upcHiddenToggle)
+        ? '<div class="m-q-upcs">'+activeUpcs+upcHiddenToggle+'</div>'
+        : '';
+
+      const recentNote=recentVerified&&!hasNonZero(a.movement_7d)&&!allUpcRows.some(r=>hasNonZero(r?.qty_7d))
         ? '<div class="m-q-recent-receipt-note">Kept visible: most recent 101–109 verified Receiving Article.</div>'
         : '';
       const inactiveNote=inactive
         ? '<div class="m-q-inactive-note">Hidden by default · no 7D Receiving MVT and no related UPC 7D POS activity.</div>'
         : '';
-      return '<section class="m-q-receiving'+(inactive?' is-inactive':'')+'">'+recvHead+receiptInfo+recentNote+inactiveNote+(upcs?'<div class="m-q-upcs">'+upcs+'</div>':'')+'</section>';
+      return '<section class="m-q-receiving'+(inactive?' is-inactive':'')+'">'+recvHead+receiptInfo+recentNote+inactiveNote+upcSection+'</section>';
     };
 
     const visible=[],hidden=[];
@@ -2473,7 +2501,7 @@ function mobileQuickGroupedHtml(rows){
     const hiddenId='m-q-hidden-'+String(idx)+'-'+String(g.family_id??g.family_article??'family').replace(/[^A-Za-z0-9_-]/g,'');
     const hiddenHtml=hidden.map(x=>receivingCard(x.a,{inactive:true,recentVerified:x.recentVerified})).join('');
     const hiddenToggle=hidden.length
-      ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(hiddenId)+'" aria-expanded="false">'+
+      ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(hiddenId)+'" data-hidden-noun="Receiving Article" aria-expanded="false">'+
           '<span class="m-q-hidden-left"><span class="m-q-hidden-count">'+hidden.length+'</span><span>Show inactive Receiving Article'+(hidden.length===1?'':'s')+'</span></span>'+
           '<span class="m-q-hidden-chevron">⌄</span>'+
         '</button>'+
@@ -2541,7 +2569,8 @@ function mobileRenderList(){
     btn.setAttribute('aria-expanded',open?'true':'false');
     const label=btn.querySelector('.m-q-hidden-left span:last-child');
     const n=Number(btn.querySelector('.m-q-hidden-count')?.textContent||0);
-    if(label)label.textContent=(open?'Hide':'Show')+' inactive Receiving Article'+(n===1?'':'s');
+    const noun=String(btn.dataset.hiddenNoun||'Receiving Article');
+    if(label)label.textContent=(open?'Hide':'Show')+' inactive '+noun+(n===1?'':'s');
   });
 }
 function mobileShowDetail(title,sub,html,{historyMode='push'}={}){
