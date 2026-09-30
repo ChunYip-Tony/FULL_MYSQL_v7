@@ -47,7 +47,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .qa-advanced{margin-top:12px;border:1px dashed #bfd6d2;background:#f8fcfb;border-radius:10px;padding:10px}
 .qa-confirm{display:flex;gap:9px;align-items:flex-start;margin-top:8px;font-size:11px;line-height:1.45}.qa-confirm input{width:19px;height:19px;margin-top:0;flex:0 0 auto}
 .qa-scope{font-size:9px;color:var(--muted);line-height:1.45;margin-top:8px}
-.qa-detailgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.qa-detailgrid .detail small{font-size:9px}.qa-detailgrid .detail b{font-size:12px}
+.detailgrid.qa-detailgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.qa-detailgrid .detail small{font-size:9px}.qa-detailgrid .detail b{font-size:12px}
 .qa-cn-list{font-size:10px;color:var(--muted);margin-top:2px}
 @media(max-width:620px){.drawer{width:100vw}.drawerbody{padding:12px}.qa-detailgrid{grid-template-columns:1fr}.qa-name{font-size:17px}.qa-zh{font-size:14px}}
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
