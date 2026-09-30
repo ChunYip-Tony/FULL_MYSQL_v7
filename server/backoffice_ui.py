@@ -1602,7 +1602,20 @@ function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number
 function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);if(Math.abs(n)<=1.5)n*=100;return Number.isFinite(n)?n.toFixed(1)+'%':esc(v)}
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
-async function api(url,opts={}){const r=await fetch(url,{cache:'no-store',...opts});let data=null;try{data=await r.json()}catch{data={detail:await r.text()}}if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}return data}
+async function api(url,opts={}){
+  const o={...opts};const timeoutMs=Number(o.timeoutMs||0);delete o.timeoutMs;
+  let ctl=null,timer=null;
+  if(timeoutMs>0&&!o.signal){ctl=new AbortController();o.signal=ctl.signal;timer=setTimeout(()=>ctl.abort(),timeoutMs)}
+  try{
+    const r=await fetch(url,{cache:'no-store',...o});let data=null;
+    try{data=await r.json()}catch{data={detail:await r.text()}}
+    if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}
+    return data
+  }catch(e){
+    if(e?.name==='AbortError')throw new Error(`Request timed out after ${Math.round(timeoutMs/1000)}s`);
+    throw e
+  }finally{if(timer)clearTimeout(timer)}
+}
 const DB_TAB_HASH={dboverview:'home',dbdata:'health',dbqa:'qa'};
 const HASH_DB_TAB={home:'dboverview',overview:'dboverview',upload:'dboverview',processing:'dboverview',qa:'dbqa',health:'dbdata'};
 function routeFromHash(){
@@ -2688,7 +2701,25 @@ $('#salesApplyRange').onclick=async()=>{state.salesStartDate=$('#salesStartDate'
 $('#salesStartDate').onchange=e=>{state.salesStartDate=e.target.value};
 $('#salesEndDate').onchange=e=>{state.salesEndDate=e.target.value};
 
-async function loadOrders(){const err=$('#orderError');err.innerHTML='';$('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';try{const d=await api('/v1/backoffice/ordering-review?category=ALL');state.orders=d.rows||[];renderOrders()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#orderRows').innerHTML=''}}
+async function loadOrders(){
+  const err=$('#orderError');err.innerHTML='';state.orderLoadError='';
+  $('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';
+  try{
+    // FRESH and FROZEN are independent workloads. Loading them concurrently
+    // avoids making the mobile ALL view wait for two heavyweight reviews in sequence.
+    const [fresh,frozen]=await Promise.all([
+      api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
+      api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000})
+    ]);
+    state.orders=[...(fresh.rows||[]),...(frozen.rows||[])];
+    renderOrders()
+  }catch(e){
+    state.orderLoadError=e.message||'Unable to load ordering review';
+    err.innerHTML=`<div class="error">${esc(state.orderLoadError)}</div>`;
+    $('#orderRows').innerHTML='';
+    if(isMobileBackoffice())throw e
+  }
+}
 function orderRows(){let a=[...state.orders];if(state.orderFilter==='FRESH')a=a.filter(x=>String(x.category).toUpperCase()==='FRESH');if(state.orderFilter==='FROZEN')a=a.filter(x=>String(x.category).toUpperCase()==='FROZEN');if(state.orderFilter==='ATTENTION')a=a.filter(x=>x.attention);const s=$('#orderSort').value;if(s==='suggested')a.sort((x,y)=>Number(y.suggested_delivery_qty||0)-Number(x.suggested_delivery_qty||0));if(s==='receipt')a.sort((x,y)=>String(y.last_receipt_date||'').localeCompare(String(x.last_receipt_date||'')));if(s==='oh')a.sort((x,y)=>Number(x.oh??1e18)-Number(y.oh??1e18));if(s==='frequency')a.sort((x,y)=>String(x.ordering_frequency||'').localeCompare(String(y.ordering_frequency||'')));if(s==='family')a.sort((x,y)=>String(x.family_name||'').localeCompare(String(y.family_name||'')));return a}
 function renderOrders(){const a=orderRows();$('#orderCount').textContent=`${a.length} families`;$('#orderRows').innerHTML=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span></td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No ordering suggestions match this filter.</td></tr>';$$('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))}
 $$('.ordfilter').forEach(b=>b.onclick=()=>{state.orderFilter=b.dataset.filter;$$('.ordfilter').forEach(x=>x.classList.toggle('on',x===b));renderOrders()});$('#orderSort').onchange=renderOrders;
