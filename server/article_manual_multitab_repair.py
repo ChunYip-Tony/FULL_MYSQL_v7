@@ -8,6 +8,7 @@ from typing import Any
 
 from normalize import (
     RowContext,
+    _article_manual_column_map,
     _build_column_map,
     _canonical_uom,
     _ensure_article,
@@ -203,7 +204,10 @@ def _load_roster(cur, preferred_batch_id: int | None = None) -> tuple[list[dict[
             h = cur.fetchone()
             if not h:
                 continue
-            colmap = _build_column_map(_json_obj(h['raw_payload']))
+            colmap = _article_manual_column_map(
+                sh['sheet_name'],
+                _json_obj(h['raw_payload']),
+            )
             if 'upc' not in colmap or ('article' not in colmap and 'main_article' not in colmap):
                 continue
             stats['sheets_scanned'] += 1
