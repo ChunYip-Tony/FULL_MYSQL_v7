@@ -704,6 +704,37 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .mobilehome.on .m-brand span{display:none}
   }
 
+
+  /* Larger Home typography while preserving 2×3 viewport fit */
+  .mobilehome.on .m-brand strong{
+    font-size:clamp(24px,3.25dvh,29px)!important;
+    line-height:1!important;
+  }
+  .mobilehome.on .m-brand span{
+    font-size:clamp(10px,1.35dvh,12px)!important;
+    line-height:1.15;
+  }
+  .mobilehome.on .m-status{
+    font-size:clamp(10px,1.4dvh,12px)!important;
+    font-weight:950!important;
+    padding:6px 10px!important;
+  }
+  .mobilehome.on .m-module b{
+    font-size:clamp(15px,2.3dvh,19px)!important;
+    line-height:1.12!important;
+  }
+  .mobilehome.on .m-module span:last-child{
+    font-size:clamp(10px,1.55dvh,12px)!important;
+    line-height:1.28!important;
+    -webkit-line-clamp:2!important;
+  }
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on .m-brand strong{font-size:22px!important}
+    .mobilehome.on .m-module b{font-size:15px!important}
+    .mobilehome.on .m-module span:last-child{font-size:10px!important}
+    .mobilehome.on .m-status{font-size:10px!important}
+  }
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -1138,7 +1169,7 @@ async function mobileRefreshHome(){
     const res=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
     const h=res[0]||{},a=res[1]||{},r=res[2]||{},q=res[3]||{};
     state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
-    const sp=mNode('mServicePill');if(sp){sp.textContent=h.ok?'● ONLINE':'SERVICE ISSUE';sp.className='m-status '+(h.ok?'good':'bad')}
+    const sp=mNode('mServicePill');if(sp){sp.textContent=h.ok?'ONLINE':'SERVICE ISSUE';sp.className='m-status '+(h.ok?'good':'bad')}
     const dm=mNode('mDataModuleMeta'),latest=state.recent[0]||null;
     if(dm){
       const qa=state.qaIssues.length?state.qaIssues.length+' QA open':'No QA holds';
