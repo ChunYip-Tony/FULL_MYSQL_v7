@@ -516,7 +516,7 @@ function mobileRenderList(){
   if(mobileState.module==='quick'){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc||r.family_article,r.name||r.family_name,(r.family_article?'Family '+r.family_article+' · ':'')+fmt(r.qty_7d)+' 7D · '+money(r.price)+' '+(r.price_type||'')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''),r.readiness||r.category,r.chinese_name||'')).join('');
   }else if(mobileState.module==='qa'){
-    html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,x.issue_summary||'',x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
+    html=rows.map(x=>{const cur=x.current||{};const key=(x.issue_id===null||x.issue_id===undefined)?'QC:'+String(x.entity_key||''):String(x.issue_id);return mobileRow(key,x.entity_key||x.issue_code,cur.item_name||cur.selling_description||x.issue_code,qaFixKindLabel(x.fix_kind)+' · '+(x.issue_summary||''),x.severity||x.fix_kind,cur.chinese_name||'')}).join('');
   }else if(mobileState.module==='price'){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:''),r.review_status||'REVIEW','')).join('');
   }else if(mobileState.module==='performance'){
@@ -833,6 +833,23 @@ function qaApplyFeedback(msg,kind=''){
  toast(String(msg||''));
 }
 function qaClearFeedback(){const el=$('#qaApplyFeedback');if(el)el.remove()}
+function qaRemainingForEntity(entityKey){return state.qaIssues.filter(x=>String(x.entity_key||'')===String(entityKey||''))}
+function qaRemainingMessage(entityKey,savedLabel='QA fix saved'){
+ const remaining=qaRemainingForEntity(entityKey);
+ if(!remaining.length)return savedLabel+' · no QA issues remain';
+ const first=remaining[0];
+ const kind=qaFixKindLabel(first.fix_kind);
+ const code=String(first.issue_code||first.issue_summary||'QA HOLD');
+ return savedLabel+' · '+remaining.length+' QA '+(remaining.length===1?'issue':'issues')+' remain · '+kind+' · '+code;
+}
+async function qaRefreshAfterApply(entityKey,{withInventory=true,withBatches=false}={}){
+ const jobs=[loadQA()];
+ if(withInventory)jobs.push(loadInventory());
+ if(withBatches)jobs.push(loadBatches());
+ await Promise.allSettled(jobs);
+ if(isMobileBackoffice()&&mobileState.module==='qa')mobileRenderList();
+ return qaRemainingForEntity(entityKey);
+}
 function openQAIssue(key){
  qaClearFeedback();
  const x=findQAIssue(key);if(!x)return;
@@ -875,9 +892,9 @@ function openQAIssue(key){
          confirm:'APPLY_ARTICLE_FAMILY_FIX'
        })});
        qaApplyFeedback('Family mapping saved. Refreshing QA and batch status…','success');
-       toast('Article → Family mapping applied. Rebuild Phase 3 / QA to recalculate family movement.');
        closeDrawer();
-       await Promise.allSettled([loadQA(),loadBatches()]);
+       await qaRefreshAfterApply(article,{withInventory:false,withBatches:true});
+       toast(qaRemainingMessage(article,'Family mapping saved')+' · Rebuild Phase 3 / QA to recalculate family movement.');
      }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAArticleFamily');if(z){z.disabled=false;z.textContent='Apply Family Mapping'}}
    };
    return;
@@ -921,9 +938,9 @@ function openQAIssue(key){
          confirm:'APPLY_COST_CONVERSION_FIX'
        })});
        qaApplyFeedback('Cost conversion saved. Refreshing QA and inventory…','success');
-       toast('Cost conversion applied');
        closeDrawer();
-       await Promise.allSettled([loadQA(),loadInventory()]);
+       await qaRefreshAfterApply(x.entity_key);
+       toast(qaRemainingMessage(x.entity_key,'Cost conversion saved'));
      }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQACostConversion');if(z){z.disabled=false;z.textContent='Apply Cost Conversion'}}
    };
    return;
@@ -999,7 +1016,7 @@ function openQAIssue(key){
    const btn=$('#applyQAFix');btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying confirmed QA correction…','working');
    try{
      const r=await api('/v1/backoffice/qa-resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-     qaApplyFeedback(`Saved · resolution #${r.resolution_id}. Refreshing QA and inventory…`,'success');toast(`QA fix applied · resolution #${r.resolution_id}`);closeDrawer();await Promise.allSettled([loadQA(),loadInventory()]);
+     qaApplyFeedback(`Saved · resolution #${r.resolution_id}. Refreshing QA and inventory…`,'success');closeDrawer();await qaRefreshAfterApply(x.entity_key);toast(qaRemainingMessage(x.entity_key,`QA fix saved · resolution #${r.resolution_id}`));
    }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAFix');if(z){z.disabled=false;z.textContent='Apply Confirmed QA Fix'}}
  };
 }
