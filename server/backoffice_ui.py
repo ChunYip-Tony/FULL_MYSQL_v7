@@ -381,21 +381,16 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div class="m-searchrow"><input id="mobileSearchInput" placeholder="UPC / Article / Family / Item"><button class="btn primary" type="submit">Search</button></div>
     <div class="m-hint"><span>Most active items first</span><span>Typo tolerant</span></div>
   </form>
-  <button id="mobileBatchSpotlight" class="m-spotlight" type="button">
-    <span><small>Current Batch</small><b id="mobileBatchTitle">Checking processing status…</b><em id="mobileBatchMeta">Tap to open batch list</em></span><span class="m-arrow">›</span>
-  </button>
   <div class="m-modgrid">
     <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span>Family, Article and UPC lookup</span></button>
-    <button class="m-module" type="button" data-mobile-module="qa"><span class="ico">⚠️</span><b>QA Holds</b><span id="mQaModuleMeta" class="m-module-meta">Review unresolved issues</span></button>
-    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">💲</span><b>Price Overview</b><span>Current price, source and review</span></button>
-    <button class="m-module" type="button" data-mobile-module="uploads"><span class="ico">⬆️</span><b>Uploads</b><span>New batch and upload history</span></button>
-    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span>Completed-day sales performance</span></button>
-    <button class="m-module" type="button" data-mobile-module="pi"><span class="ico">📦</span><b>PI / OH</b><span>True Stock and OH discrepancy</span></button>
-    <button class="m-module" type="button" data-mobile-module="batches"><span class="ico">🧩</span><b>Batches</b><span>Current processing and history</span></button>
-    <button class="m-module" type="button" data-mobile-module="freshness"><span class="ico">🕒</span><b>Data Health</b><span>Serving and pipeline freshness</span></button>
+    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">💲</span><b>Price Change</b><span>Current price, suggestions and accepted changes</span></button>
+    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span>Date-range sales, velocity and GP$ analysis</span></button>
+    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span>Family / Receiving Article ordering review</span></button>
+    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span>OH, DOS, velocity and stock review</span></button>
+    <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span id="mDataModuleMeta">Uploads, QA, processing and data health</span></button>
   </div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
-    <button class="on" type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Search</button><button type="button" data-mobile-module="uploads">⇧<br>Uploads</button><button type="button" data-mobile-module="qa">⚠<br>QA</button>
+    <button class="on" type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Quick</button><button type="button" data-mobile-module="price">$<br>Price</button><button type="button" data-mobile-module="data">▦<br>Data</button>
   </nav>
 </section>
 
@@ -421,7 +416,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   </div>
   <div id="mobileListContent" class="m-list"></div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
-    <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Search</button><button type="button" data-mobile-module="uploads">⇧<br>Uploads</button><button type="button" data-mobile-module="qa">⚠<br>QA</button>
+    <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Quick</button><button type="button" data-mobile-module="price">$<br>Price</button><button type="button" data-mobile-module="data">▦<br>Data</button>
   </nav>
 </section>
 
@@ -674,11 +669,13 @@ function mobileRow(key,code,name,meta,badge,cn){
 function mobileModuleConfig(module){
   const map={
     quick:{title:'Quick Check',sub:'Most actively selling items first',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
-    qa:{title:'QA Holds',sub:'Choose one issue, review it, then fix',chips:[['all','All'],['fixable','Fixable'],['view_only','Review only'],['high','High / Critical']]},
-    price:{title:'Price Overview',sub:'Current price, source and qualified review',chips:[['all','All'],['actionable','Actionable'],['review_only','Review only'],['qa_hold','QA Hold']]},
-    uploads:{title:'Uploads',sub:'New source batch and recent upload history',chips:[]},
+    price:{title:'Price Change',sub:'Current price, source and qualified price-change review',chips:[['all','All'],['actionable','Actionable'],['review_only','Review only'],['qa_hold','QA Hold']]},
     performance:{title:'Performance',sub:'Choose analysis dates · all Seafood together · sort by the metric you need',chips:[]},
-    pi:{title:'PI / OH',sub:'Family True Stock and OH review',chips:[['all','All'],['positive','OH > 0'],['zero','OH ≤ 0']]},
+    ordering:{title:'Ordering',sub:'Family / Receiving Article ordering review',chips:[['all','All'],['fresh','Fresh'],['frozen','Frozen'],['attention','Needs Attention']]},
+    inventory:{title:'Inventory',sub:'Current stock, velocity, DOS and inventory status',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
+    data:{title:'Data',sub:'Uploads, QA fixes, processing and data health',chips:[]},
+    qa:{title:'QA Holds',sub:'Choose one issue, review it, then fix',chips:[['all','All'],['fixable','Fixable'],['view_only','Review only'],['high','High / Critical']]},
+    uploads:{title:'Uploads',sub:'New source batch and recent upload history',chips:[]},
     batches:{title:'Batches',sub:'Current processing first, then completed history',chips:[['all','All'],['current','Current'],['completed','Completed']]},
     freshness:{title:'Data Health',sub:'Last 14 days · newest first · tap a date for source details',chips:[]}
   };
@@ -721,11 +718,12 @@ async function mobileRefreshHome(){
     const h=res[0]||{},a=res[1]||{},r=res[2]||{},q=res[3]||{};
     state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
     const sp=mNode('mServicePill');if(sp){sp.textContent=h.ok?'● ONLINE':'SERVICE ISSUE';sp.className='m-status '+(h.ok?'good':'bad')}
-    const title=mNode('mobileBatchTitle'),meta=mNode('mobileBatchMeta'),latest=state.recent[0]||null;
-    if(state.active){title.textContent='Batch #'+(state.active.batch_id||state.active.id||'—')+' · '+(state.active.processing_status||state.active.status||'PROCESSING');meta.textContent=(state.active.file_count??'—')+' file(s) · active processing'}
-    else if(latest){title.textContent='Latest Batch #'+(latest.batch_id||'—')+' · '+(latest.phase3_status||latest.processing_status||'COMPLETE');meta.textContent=(latest.quick_check_ready_rows??'—')+' ready · '+(latest.quick_check_hold_rows??'—')+' hold'}
-    else{title.textContent='No active batch';meta.textContent='Tap to open batch history'}
-    const qm=mNode('mQaModuleMeta');if(qm)qm.textContent=state.qaIssues.length?state.qaIssues.length+' open · '+state.qaIssues.filter(x=>x.can_fix).length+' fixable':'No open QA issues';
+    const dm=mNode('mDataModuleMeta'),latest=state.recent[0]||null;
+    if(dm){
+      const qa=state.qaIssues.length?state.qaIssues.length+' QA open':'No QA holds';
+      const batch=state.active?'Batch #'+(state.active.batch_id||state.active.id||'—')+' processing':(latest?'Latest batch #'+(latest.batch_id||'—'):'No recent batch');
+      dm.textContent=batch+' · '+qa;
+    }
   }catch(e){
     const sp=mNode('mServicePill');if(sp){sp.textContent='CHECK FAILED';sp.className='m-status bad'}
   }
@@ -758,8 +756,12 @@ async function mobileOpenModule(module,{query=''}={}){
       state.priceCat='ALL';state.priceStatus='ALL';state.priceSort='opportunity';state.priceText='';await loadPrices();
     }else if(module==='performance'){
       state.salesSort=state.salesSort||'gp_desc';await loadSell();mobileRenderPerformanceTools();
-    }else if(module==='pi'){
+    }else if(module==='ordering'){
+      state.orderFilter='ALL';await loadOrders();
+    }else if(module==='inventory'){
       state.inventorySearch='';state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
+    }else if(module==='data'){
+      await Promise.all([loadBatches(),loadQA(),mobileLoadFreshness()]);
     }else if(module==='batches'||module==='uploads'){
       await loadBatches();
     }else if(module==='freshness'){
@@ -790,13 +792,25 @@ function mobileRows(){
     return a;
   }
   if(mod==='performance')return filteredSalesRows();
-  if(mod==='pi'){
-    const map=new Map();
-    filteredInventoryRows().forEach(r=>{const k=String(r.family_article||r.upc||'');if(!k)return;const old=map.get(k);if(!old||Number(r.velocity_7d||0)>Number(old.velocity_7d||0))map.set(k,r)});
-    let a=[...map.values()];
-    if(f==='positive')a=a.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)>0);
-    if(f==='zero')a=a.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)<=0);
+  if(mod==='ordering'){
+    let a=orderRows();
+    if(f==='fresh')a=a.filter(x=>String(x.category||'').toLowerCase()==='fresh');
+    if(f==='frozen')a=a.filter(x=>String(x.category||'').toLowerCase()==='frozen');
+    if(f==='attention')a=a.filter(x=>x.attention);
     return a;
+  }
+  if(mod==='inventory'){
+    let a=filteredInventoryRows();
+    if(f!=='all')a=a.filter(r=>String(r.category||'').toLowerCase()===f);
+    return a;
+  }
+  if(mod==='data'){
+    return [
+      {_dataMenu:'uploads',code:'Uploads',name:'Upload New Files',meta:'Create a source batch and review recent uploads',badge:'DATA'},
+      {_dataMenu:'qa',code:'QA Holds',name:'Fix Data Issues',meta:(state.qaIssues.length?state.qaIssues.length+' open issue(s)':'No open QA issues'),badge:state.qaIssues.length?'REVIEW':'READY'},
+      {_dataMenu:'batches',code:'Processing',name:'Batches',meta:state.active?'Current batch is processing':'Current and completed batch history',badge:state.active?'PROCESSING':'READY'},
+      {_dataMenu:'freshness',code:'Data Health',name:'14-Day Coverage',meta:'POS, MVT, Price, OH, Live/Fresh and Frozen freshness',badge:'DATA'}
+    ];
   }
   if(mod==='batches'){
     const a=[];
@@ -839,6 +853,12 @@ function mobileRenderList(){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.current_price)+' current · '+money(r.candidate_price)+' candidate · '+(r.current_price_source||'—')+(r.current_price_observed_date?' · '+r.current_price_observed_date:''),r.review_status||'REVIEW','')).join('');
   }else if(mobileState.module==='performance'){
     html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name,money(r.sales_amount)+' Sales · '+money(r.gp_dollars)+' GP$ · '+fmt(r.velocity)+' '+(r.qty_uom||'')+'/day · '+fmt(r.sold_quantity)+' '+(r.qty_uom||''),r.gp_cost_complete?'GP READY':'GP HOLD','')).join('');
+  }else if(mobileState.module==='ordering'){
+    html=rows.map(r=>mobileRow(String(r.family_article||''),r.family_article||r.receiving_article,r.family_name||'Family Article','OH '+fmt(r.oh)+' '+(r.oh_uom||'')+' · Last receipt '+(r.last_receipt_date||'—')+' · Suggested '+fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),r.attention?'REVIEW':'READY','')).join('');
+  }else if(mobileState.module==='inventory'){
+    html=rows.map(r=>mobileRow(String(r.upc||''),r.upc,r.name||r.family_name,'OH '+fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' · 7D Vel '+fmt(r.velocity_7d)+' · DOS '+fmt(r.dos)+' · '+money(r.price),r.readiness||r.category,r.chinese_name||'')).join('');
+  }else if(mobileState.module==='data'){
+    html=rows.map(r=>mobileRow('data:'+r._dataMenu,r.code,r.name,r.meta,r.badge,'')).join('');
   }else if(mobileState.module==='pi'){
     html=rows.map(r=>mobileRow(String(r.family_article||r.upc||''),r.family_article||r.upc,r.family_name||r.name,fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' OH · '+fmt(r.qty_7d)+' 7D · DOS '+fmt(r.dos),'OH',r.chinese_name||'')).join('');
   }else if(mobileState.module==='batches'){
@@ -860,6 +880,12 @@ function mobileOpenItem(key){
   if(mod==='qa')return openQAIssue(key);
   if(mod==='price')return openPriceDetail(key);
   if(mod==='performance')return mobilePerformanceDetail(key);
+  if(mod==='ordering')return mobileOrderingDetail(key);
+  if(mod==='inventory')return mobileQuickDetail(key,false);
+  if(mod==='data'){
+    const target=String(key).replace(/^data:/,'');
+    return mobileOpenModule(target);
+  }
   if(mod==='pi')return mobileQuickDetail(key,true);
   if(mod==='batches'){
     if(String(key).startsWith('active:'))return mobileActiveBatchDetail();
@@ -909,6 +935,21 @@ function mobilePerformanceDetail(key){
   html+=mobileMetric('Sold Days',fmt(r.sold_supported_day_count,0),'Days with positive POS qty');
   html+='</div></div>';
   mobileShowDetail(r.upc||'Performance',r.name||'',html);
+}
+function mobileOrderingDetail(key){
+  const r=state.orders.find(x=>String(x.family_article||'')===String(key));if(!r)return;
+  const d=r.details||{};
+  let html='<div class="m-detailcard"><div class="m-label">Family / Receiving Article Order Review</div><div class="m-detailgrid">';
+  html+=mobileMetric('Family Article',r.family_article||'—',r.family_name||'');
+  html+=mobileMetric('Receiving Article',r.receiving_article||'—','Ordering / receiving level');
+  html+=mobileMetric('OH',fmt(r.oh)+' '+(r.oh_uom||''),'Current family OH');
+  html+=mobileMetric('Last Receipt',r.last_receipt_date||'—',fmt(r.last_receipt_qty_base)+' '+(r.last_receipt_base_uom||''));
+  html+=mobileMetric('Frequency',r.ordering_frequency||'—','Observed ordering cadence');
+  html+=mobileMetric('Coming Delivery Suggestion',fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),'Family-level suggestion');
+  html+='</div>';
+  if((d.reasons||[]).length)html+='<div class="m-detailsection"><h3>Why?</h3><p>'+esc((d.reasons||[]).join(' · '))+'</p></div>';
+  html+='</div>';
+  mobileShowDetail(r.family_article||'Ordering',r.family_name||'',html);
 }
 function mobileActiveBatchDetail(){
   const b=state.active;if(!b)return;
@@ -977,7 +1018,7 @@ $$('[data-mobile-module]').forEach(b=>b.onclick=()=>mobileOpenModule(b.dataset.m
 $$('[data-mobile-home]').forEach(b=>b.onclick=()=>showMobileHome());
 mNode('mobileListBack').onclick=()=>showMobileHome();
 mNode('mobileDetailBack').onclick=()=>mobileScreen('mobileListPage');
-mNode('mobileBatchSpotlight').onclick=()=>mobileOpenModule('batches');
+
 mNode('mobileSearchForm').onsubmit=e=>{e.preventDefault();mobileOpenModule('quick',{query:mNode('mobileSearchInput').value})};
 mobileMedia.addEventListener?.('change',e=>{
   if(e.matches)showMobileHome({scroll:false});
