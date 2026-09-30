@@ -2733,10 +2733,13 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
     active_rows = active_ready = active_hold = historical_rows = 0
     for p in products:
         upc_id = int(p['upc_id']); family_id = int(p['family_id'])
-        m7 = _sales_metrics(cur, upc_id, pos_days_7)
-        m28 = _sales_metrics(cur, upc_id, pos_days_28)
-        m30 = _sales_metrics(cur, upc_id, pos_days_30)
-        price = _current_price(cur, upc_id)
+        # Targeted refresh must preserve the same raw-EAN lineage fallback as
+        # the full rebuild. This is essential for 249 cook/service POS aliases,
+        # whose source rows may not carry the current canonical upc_id.
+        m7 = _sales_metrics(cur, upc_id, pos_days_7, p['ean_upc'])
+        m28 = _sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])
+        m30 = _sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])
+        price = _current_price(cur, upc_id, p['ean_upc'])
         cost = _latest_cost(cur, family_id)
         cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'107\',\'109\')', (family_id,))
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
@@ -2823,7 +2826,7 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
         if cost_sell is not None and pclass in {'LIVE', 'FRESH', 'FROZEN'}:
             target = {'LIVE': Decimal('0.15'), 'FRESH': Decimal('0.30'), 'FROZEN': Decimal('0.44')}[pclass]
             wgpm = (cost_sell / (Decimal('1') - target)).quantize(Decimal('0.01'))
-        sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30) if cost else None
+        sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc']) if cost else None
         reasons = []
         activity_scope, activity_basis = _mapped_current_activity_scope(m28)
         # Only positive sales in the latest up-to-28 VALID POS data days make
