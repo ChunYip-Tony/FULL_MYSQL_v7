@@ -182,11 +182,15 @@ jobs:
           # A=Family, D=EAN/UPC, E=receiving pack size, G=Selling UOM.
           # 317/318 and 309 are lineage/conversion only, never added as sold usage.
           assert 'ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT' in runtime
-          assert 'SUM_UNIQUE_ASSIGNED_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' in runtime
-          assert 'READY_SELLING_ARTICLE_SUM_RECONCILED' in runtime
+          assert 'SUM_UNIQUE_ALL_SELLING_ARTICLE_251_MINUS_252_IN_FAMILY' in runtime
+          assert 'all_selling_articles: set[str] = set()' in runtime
+          assert 'for art in sorted(all_selling_articles)' in runtime
+          assert 'SUM_UNIQUE_ASSIGNED_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' not in runtime
+          assert 'READY_TOTAL_SELLING_MVT_RECONCILED' in runtime
           assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' not in runtime
           assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' not in runtime
-          assert '7D FAMILY MVT' in ui
+          assert '7D TOTAL SELLING MVT' in ui
+          assert 'TOTAL SELLING MVT RECONCILED' in ui
           assert 'RECONCILED' in ui
           assert 'Family Selling UOM' not in ui
           assert 'SAP MVT UOM' in ui
@@ -363,11 +367,13 @@ jobs:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import worker, phase3, active_28d_uom_repair, current_active_cost_repair, uom_evidence_diagnostic; print('imports-ok')"
 
-      - name: Live 240816 production diagnostic
+      - name: Live Selling MVT production diagnostics
         shell: bash
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 https://seal-app-tkkkd.ondigitalocean.app/healthz
           echo
           curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240816&lightweight=true"
+          echo
+          curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240533&lightweight=true"
           echo
