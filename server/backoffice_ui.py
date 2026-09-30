@@ -418,6 +418,34 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .m-status{padding:5px 8px;font-size:9px}
   }
 
+
+  /* Non-home mobile navigation: always pinned to the viewing-window bottom */
+  .mobile-listpage.on,.mobile-detailpage.on{
+    padding-bottom:calc(82px + env(safe-area-inset-bottom));
+  }
+  .mobile-listpage .m-bottomnav,
+  .mobile-detailpage .m-bottomnav{
+    position:fixed!important;
+    left:50%;
+    right:auto;
+    bottom:0;
+    transform:translateX(-50%);
+    z-index:60;
+    width:min(520px,100vw)!important;
+    max-width:520px!important;
+    margin:0!important;
+    padding:7px 8px calc(7px + env(safe-area-inset-bottom))!important;
+    border-top:1px solid rgba(219,230,226,.95);
+    border-radius:18px 18px 0 0;
+    background:rgba(255,255,255,.97);
+    backdrop-filter:blur(14px);
+    box-shadow:0 -10px 30px rgba(9,49,54,.12);
+  }
+  .mobile-listpage .m-bottomnav button,
+  .mobile-detailpage .m-bottomnav button{
+    min-height:54px;
+  }
+
 @media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:0}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
 </style>
@@ -451,9 +479,6 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span>View stock, OH and DOS</span></button>
     <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span id="mDataModuleMeta">Uploads, QA, processing and data health</span></button>
   </div>
-  <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
-    <button class="on" type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Quick</button><button type="button" data-mobile-module="price">$<br>Price</button><button type="button" data-mobile-module="data">▦<br>Data</button>
-  </nav>
 </section>
 
 <section id="mobileListPage" class="mobile-listpage" aria-label="Mobile Backoffice List">
@@ -489,6 +514,9 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="mobileDetailPage" class="mobile-detailpage" aria-label="Mobile Backoffice Detail">
   <div class="m-pagehead"><button id="mobileDetailBack" class="m-back" type="button" aria-label="Back to List">←</button><div><div id="mobileDetailTitle" class="m-pagetitle">Detail</div><div id="mobileDetailSub" class="m-pagesub"></div></div></div>
   <div id="mobileDetailContent"></div>
+  <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
+    <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Quick</button><button type="button" data-mobile-module="price">$<br>Price</button><button type="button" data-mobile-module="data">▦<br>Data</button>
+  </nav>
 </section>
 <section id="inventory" class="view on"><div class="panel">
  <div class="panelhead"><div><div class="title">Inventory Ledger</div><div class="sub">Read-only system data. OH / True Stock is the only editable value.</div></div><span class="pill blue">OH WRITE ONLY</span></div>
