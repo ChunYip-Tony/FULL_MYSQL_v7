@@ -497,7 +497,7 @@ def inventory_review(
     }
 
 
-def pricing_review(category: str = "ALL", limit: int = 100) -> dict[str, Any]:
+def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
     """Pricing suggestions with CURRENT fields from live Quick Check serving."""
     report = performance_report(category=category, limit=limit)
     rows = [dict(x) for x in (report.get("top_urgent_price_suggestions") or [])]
@@ -579,7 +579,7 @@ def pricing_review(category: str = "ALL", limit: int = 100) -> dict[str, Any]:
             )
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V3",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V4",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
