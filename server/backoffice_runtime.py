@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from datetime import date
 from difflib import SequenceMatcher
 from decimal import Decimal
@@ -532,13 +533,46 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
+        expected_through=completed_through_date()
+        pos_latest_days=source_data_days(
+            cur,
+            "sales_by_price_type",
+            limit=1,
+            up_to=expected_through,
+        )
+        mvt_latest_days=source_data_days(
+            cur,
+            "movement",
+            limit=1,
+            up_to=expected_through,
+        )
+        pos_through=pos_latest_days[0]["date"] if pos_latest_days else None
+        mvt_through=mvt_latest_days[0]["date"] if mvt_latest_days else None
+        missing_required_sources=[]
+        if pos_through!=expected_through:
+            missing_required_sources.append("POS")
+        if mvt_through!=expected_through:
+            missing_required_sources.append("MVT")
+        ordering_data_health={
+            "status":(
+                "CURRENT"
+                if not missing_required_sources
+                else "BLOCKED_STALE_REQUIRED_DATA"
+            ),
+            "expected_through":expected_through,
+            "pos_data_through":pos_through,
+            "movement_data_through":mvt_through,
+            "missing_required_sources":missing_required_sources,
+            "rule":"ORDERING_REQUIRES_CURRENT_COMPLETED_POS_AND_MVT",
+        }
+
         # Reuse the same canonical movement window for every suggested family.
         # The former path re-queried coverage and movement rows twice per family.
         receipt_days=source_data_days(
             cur,
             "movement",
             limit=180,
-            up_to=completed_through_date(),
+            up_to=expected_through,
         )
         for kind in kinds:
             bulk = bulk_ordering_suggestions(kind)
@@ -597,12 +631,23 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
             str(x.get("family_name") or ""),
         )
     )
+    skipped_breakdown=dict(
+        Counter(str(x.get("reason") or "UNKNOWN") for x in skipped)
+    )
+    analysis_status=(
+        ordering_data_health["status"]
+        if ordering_data_health["status"]!="CURRENT"
+        else ("READY" if rows else "READY_NO_ELIGIBLE_ITEMS")
+    )
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V1",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V2",
         "category": cat,
+        "analysis_status": analysis_status,
+        "data_health": ordering_data_health,
         "count": len(rows),
         "rows": rows,
         "skipped": skipped,
+        "skipped_breakdown": skipped_breakdown,
         "inputs": inputs,
         "rules": {
             "decision_level": "FAMILY_ARTICLE_AND_RECEIVING_ARTICLE",
