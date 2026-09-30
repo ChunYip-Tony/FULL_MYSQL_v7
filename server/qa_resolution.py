@@ -133,19 +133,36 @@ def _active_identity(cur, ean_upc: str) -> dict[str, Any] | None:
 
 def _fix_kind(issue_code: str, summary: str, detail: dict[str, Any]) -> str:
     code = str(issue_code or "").upper()
+    detail = detail or {}
+    explicit_reasons = {
+        str(x or "").strip().upper()
+        for x in (detail.get("reasons") or [])
+        if str(x or "").strip()
+    }
     blob = " ".join(
         [
             code,
             str(summary or ""),
-            json.dumps(detail or {}, ensure_ascii=False, default=str),
+            json.dumps(detail, ensure_ascii=False, default=str),
         ]
     ).upper()
-    # Missing Selling UOM must be resolved first. A cost conversion cannot be
-    # safely confirmed until the UPC's selling unit is authoritative.
-    if any(token in blob for token in UOM_TOKENS):
+
+    # Selling UOM is always the first fix when it is missing. Do not let the
+    # simultaneous cost-conversion blocker downgrade the row to a disabled
+    # conversion workflow.
+    if (
+        "SELLING_UOM_MISSING" in explicit_reasons
+        or "CURRENT_ACTIVE_SELLING_UOM_MISSING" in explicit_reasons
+        or any(token in blob for token in UOM_TOKENS)
+    ):
         return "UOM_OR_IDENTITY"
-    if "COST_TO_SELLING_UOM_UNRESOLVED" in blob:
+
+    if (
+        "COST_TO_SELLING_UOM_UNRESOLVED" in explicit_reasons
+        or "COST_TO_SELLING_UOM_UNRESOLVED" in blob
+    ):
         return "COST_CONVERSION"
+
     if code in FIXABLE_IDENTITY_CODES:
         return "IDENTITY_AND_UOM"
     return "VIEW_ONLY"
