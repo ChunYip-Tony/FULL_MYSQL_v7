@@ -1,4 +1,4 @@
-name: One-time v7.0.265 global UPC lineage rebuild
+name: One-time v7.0.299 global UPC lineage rebuild
 
 on:
   push:
@@ -7,11 +7,11 @@ on:
 
 jobs:
   rebuild:
-    if: startsWith(github.event.head_commit.message, 'v7.0.265 · Global UPC lineage consistency')
+    if: startsWith(github.event.head_commit.message, 'ops: reconcile hybrid 249 POS v299c')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
-      - name: Wait for v7.0.265 API and worker
+      - name: Wait for v7.0.299 API and worker
         shell: bash
         run: |
           set -euo pipefail
@@ -28,8 +28,8 @@ jobs:
               p={}
           ok=(
               p.get('ok') is True
-              and p.get('version') == '7.0.265-single-service'
-              and p.get('worker_version') == '7.0.265-single-service'
+              and p.get('version') == '7.0.299-single-service'
+              and p.get('worker_version') == '7.0.299-single-service'
               and p.get('worker_healthy') is True
               and p.get('worker_ready') is True
           )
@@ -116,7 +116,7 @@ jobs:
           import json
           p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
           ok=(
-              p.get('code_version') == '7.0.265-single-service'
+              p.get('code_version') == '7.0.299-single-service'
               and p.get('version_fence_pass') is True
           )
           print('1' if ok else '0', p.get('pipeline_run_id') or '', p.get('session_id') or '')
@@ -155,7 +155,7 @@ jobs:
             status="${state%%|*}"
             rest="${state#*|}"
             code_version="${rest%%|*}"
-            if [ "$status" != "MISSING" ] && [ "$code_version" != "7.0.265-single-service" ]; then
+            if [ "$status" != "MISSING" ] && [ "$code_version" != "7.0.299-single-service" ]; then
               echo "RUN_VERSION_FENCE_BROKEN=$state"
               exit 1
             fi
@@ -195,10 +195,25 @@ jobs:
           print('GLOBAL_UPC_LINEAGE_AUDIT=PASS')
           PY
 
-      - name: Print 249528 post-rebuild state
+      - name: Verify 249580 post-rebuild state
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
-          curl -fsS --max-time 60 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249528&lightweight=false" || true
+          curl -fsS --max-time 60 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249580&lightweight=false" -o /tmp/q249580.json
+          cat /tmp/q249580.json
           echo
+          python - <<'PY'
+          import json
+          from decimal import Decimal
+          p=json.load(open('/tmp/q249580.json', encoding='utf-8'))
+          target=next((r for r in (p.get('rows') or [])
+                       if ''.join(ch for ch in str(r.get('upc') or '') if ch.isdigit()).lstrip('0')=='24958000000'),None)
+          if not target:
+              raise SystemExit('UPC_249580_NOT_RETURNED')
+          qty=Decimal(str(target.get('qty_7d') or 0))
+          print('UPC_249580_QTY_7D='+str(qty))
+          if qty <= 0:
+              raise SystemExit('UPC_249580_STILL_ZERO')
+          print('UPC_249580_POS=PASS')
+          PY
