@@ -2240,6 +2240,18 @@ function mobileQuickDetail(key,piMode,{historyMode='push'}={}){
   html+=mobileMetric('DOS',fmt(r.dos),'Days of supply');
   html+=mobileMetric('Family',r.family_article||'—',r.family_name||'');
   html+='</div>';
+  html+='<div class="m-detailsection"><h3>Pricing References</h3><div class="m-detailgrid">';
+  html+=mobileMetric(
+    'Sweet Spot',
+    money(r.sweet_spot_price),
+    r.sweet_spot_price===null||r.sweet_spot_price===undefined
+      ? 'Not enough validated history'
+      : 'Highest historical avg GP$/completed POS data day · latest 30 completed POS data days'
+  );
+  html+=mobileMetric('Company A',money(r.company_price_a),r.company_price_a===null||r.company_price_a===undefined?'No reference':'Company reference price');
+  html+=mobileMetric('Company B',money(r.company_price_b),r.company_price_b===null||r.company_price_b===undefined?'No reference':'Company reference price');
+  html+=mobileMetric('Company C',money(r.company_price_c),r.company_price_c===null||r.company_price_c===undefined?'No reference':'Company reference price');
+  html+='</div></div>';
   if(r.family_article)html+='<button id="mAdjustOH" type="button" class="m-action primary">Update True Stock / OH</button>';
   html+='</div>';
   if(!piMode&&r.upc)html+='<div id="mQuick7dSection" class="m-quick7d"><div class="m-loading">Loading 7-day sales history…</div></div>';
