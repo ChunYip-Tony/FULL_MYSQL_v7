@@ -3836,8 +3836,8 @@ def _gp_day_price_suggestion(
         if as_of_date is not None else None
     )
     # "Current Price" is global/current-state data, never a report-date
-    # historical reconstruction. Phase 3 resolves quick_check_current using
-    # newest valid Price List snapshot vs newest valid sold POS evidence.
+    # historical reconstruction. It must already be freshness-gated to today's
+    # latest valid Price List vs the latest completed business-day POS sold event.
     current=(
         Decimal(str(row["current_price"]))
         if row.get("current_price") is not None else None
@@ -3912,7 +3912,7 @@ def _gp_day_price_suggestion(
         "candidate_count":len(candidates),
         "top_observed_candidates":candidates[:5],
         "current_price_used":current,
-        "current_price_basis":"CANONICAL_QUICK_CHECK_CURRENT",
+        "current_price_basis":"TODAY_PRICE_LIST_VS_LATEST_COMPLETED_DAY_POS_FRESHNESS_GATE",
         "current_price_source":row.get("current_price_source"),
         "current_price_observed_date":row.get("current_price_asof_date"),
         "historical_observed_price_asof_report_date":(
@@ -4237,7 +4237,7 @@ def _gp_day_price_suggestion_from_batch(
         "historical_window_supported_days":14,
         "sweet_spot_price":sweet,
         "current_price_used":current,
-        "current_price_basis":"CANONICAL_QUICK_CHECK_CURRENT",
+        "current_price_basis":"TODAY_PRICE_LIST_VS_LATEST_COMPLETED_DAY_POS_FRESHNESS_GATE",
         "current_price_source":row.get("current_price_source"),
         "current_price_observed_date":row.get("current_price_asof_date"),
         "historical_observed_price_asof_report_date":observed_asof.get("price"),
