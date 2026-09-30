@@ -946,10 +946,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-quicktools>input{width:100%;min-height:44px;border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-size:16px;background:#fff}
 
 .m-q-family-group{
-  --q-bg:#fff6c9;
-  --q-head:#ffeda4;
-  --q-border:#d9b92d;
-  --q-accent:#806414;
+  --q-bg:#ffffff;
+  --q-head:#ffffff;
+  --q-border:#dfe5e5;
+  --q-accent:#4d6365;
   position:relative;
   display:grid;
   gap:3px;
@@ -965,10 +965,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-q-family-group.q-family-tone-3,
 .m-q-family-group.q-family-tone-4,
 .m-q-family-group.q-family-tone-5{
-  --q-bg:#fff6c9;
-  --q-head:#ffeda4;
-  --q-border:#d9b92d;
-  --q-accent:#806414;
+  --q-bg:#ffffff;
+  --q-head:#ffffff;
+  --q-border:#dfe5e5;
+  --q-accent:#4d6365;
 }
 .m-q-family-group+.m-q-family-group{margin-top:10px}
 .m-q-family-group+.m-q-family-group:before{display:none}
@@ -986,7 +986,12 @@ BACKOFFICE_HTML = r'''<!doctype html>
   border:1px solid var(--q-border);
   background:var(--q-head);
 }
-.m-q-receiving-head{background:rgba(255,247,205,.72)}
+.m-q-receiving-head{background:#fff}
+.m-q-family-head.has-positive-mvt,
+.m-q-receiving-head.has-positive-mvt{
+  background:#fff6c9!important;
+  box-shadow:inset 3px 0 0 #e7c84d;
+}
 .m-q-family-identity,
 .m-q-recv-identity{min-width:0}
 .m-q-titleline{display:flex;align-items:center;gap:5px;min-width:0;flex-wrap:wrap}
@@ -1032,16 +1037,16 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .m-q-recv-kpis .m-q-kpi b{font-size:11px;line-height:1.05;color:#d71920}
 
 .m-q-receiving-list{display:grid;gap:4px;padding-left:7px;position:relative}
-.m-q-receiving-list:before{content:"";position:absolute;left:2px;top:2px;bottom:6px;width:2px;background:#d9b92d;border-radius:999px}
+.m-q-receiving-list:before{content:"";position:absolute;left:2px;top:2px;bottom:6px;width:2px;background:#d7dfdf;border-radius:999px}
 .m-q-receiving{
   overflow:hidden;
   position:relative;
   border:1px solid var(--q-border);
-  border-left:3px solid #d9b92d;
+  border-left:3px solid #d7dfdf;
   border-radius:8px;
-  background:rgba(255,250,222,.90);
+  background:#fff;
 }
-.m-q-receiving:before{content:"";position:absolute;left:-7px;top:22px;width:7px;height:2px;background:#d9b92d}
+.m-q-receiving:before{content:"";position:absolute;left:-7px;top:22px;width:7px;height:2px;background:#d7dfdf}
 
 .m-q-receipt-o{
   display:inline-flex;
@@ -2659,7 +2664,8 @@ function mobileQuickGroupedHtml(rows){
     const sourceMvtText=sourceHasMvt
       ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">SAP 251−252 SOURCE · '+esc(g.source_article||g.family_article||'—')+' · '+esc(fmt(g.source_movement_7d)+(g.source_movement_uom?' '+g.source_movement_uom:''))+'</div>'
       : '';
-    const familyHead='<div class="m-q-family-head">'+
+    const familyPositiveMvt=Number.isFinite(Number(g.group_qty_7d))&&Number(g.group_qty_7d)>0;
+    const familyHead='<div class="m-q-family-head'+(familyPositiveMvt?' has-positive-mvt':'')+'">'+
       '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+sourceMvtText+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
         '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
@@ -2686,6 +2692,7 @@ function mobileQuickGroupedHtml(rows){
         {movement_type:a.receipt_movement_type,date:a.receipt_date,quantity:a.receipt_qty,uom:a.receipt_uom}
       );
       const articleHasMvt=hasNonZero(a.movement_7d);
+      const articlePositiveMvt=Number.isFinite(Number(a.movement_7d))&&Number(a.movement_7d)>0;
       const roleCode=String(a.article_role||'').toUpperCase();
       const articleRole=roleCode==='RECEIVING_AND_SAP_SELLING_ARTICLE'
         ? 'RECEIVING / SAP SELLING ARTICLE'
@@ -2698,7 +2705,7 @@ function mobileQuickGroupedHtml(rows){
               : (a.receipt_verified&&articleHasMvt
                 ? 'RECEIVING / SAP SELLING ARTICLE'
                 : (a.receipt_verified?'RECEIVING ARTICLE':(articleHasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE'))))));
-      const recvHead='<div class="m-q-receiving-head">'+
+      const recvHead='<div class="m-q-receiving-head'+(articlePositiveMvt?' has-positive-mvt':'')+'">'+
         '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">'+esc(articleRole)+'</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">'+(articleHasMvt?'251−252 MVT':'No 251−252 on this Article')+'</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';

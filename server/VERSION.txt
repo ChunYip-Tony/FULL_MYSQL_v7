@@ -1,3 +1,10 @@
+v7.0.286 Mobile Quick Check Search Result Background:
+- Mobile Quick Check search results now use white Family, SAP/Receiving Article, and UPC row backgrounds by default.
+- Family and SAP/Receiving Article headers are highlighted light yellow only when their displayed 7D SAP MVT is positive (> 0).
+- UPC rows remain white because UPC sales quantity is POS evidence, not SAP 251-252 movement.
+- Search grouping, sorting, 101-109 receipt indicators, hidden inactive rows, and desktop layout are unchanged.
+Version: 7.0.286 Single-Service Edition
+
 FULL MYSQL Secure API Architecture
 
 v7.0.240 Current Price = Newest UPC Price Evidence:
