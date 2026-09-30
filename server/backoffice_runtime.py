@@ -847,6 +847,95 @@ def _quick_check_fuzzy_rows(
     }
 
 
+def _manual_main_selling_uom_map(
+    cur,
+    family_main_by_id: dict[int, str],
+) -> dict[int, str]:
+    """Latest Article Manual Main-row Column G Selling UOM by Family."""
+    articles = sorted({str(x or "").strip() for x in family_main_by_id.values() if str(x or "").strip()})
+    if not articles:
+        return {}
+    ph = ",".join(["%s"] * len(articles))
+    cur.execute(
+        f"""SELECT a.article_number,nse.source_value_text,nse.batch_id,nse.raw_id
+            FROM article a
+            JOIN normalized_source_evidence nse
+              ON nse.object_type='ARTICLE'
+             AND nse.object_id=a.article_id
+             AND nse.evidence_role='SELLING_UOM_OBSERVED'
+             AND nse.raw_table_name='raw_article_manual'
+            JOIN ingest_file f ON f.file_id=nse.file_id
+            WHERE a.article_number IN ({ph})
+              AND f.source_type='article_manual'
+              AND f.processing_status='INGESTED'
+              AND nse.source_value_text IS NOT NULL
+              AND TRIM(nse.source_value_text)<>''
+            ORDER BY a.article_number,nse.batch_id DESC,nse.raw_id DESC""",
+        tuple(articles),
+    )
+    latest_by_article: dict[str, str] = {}
+    for row in cur.fetchall():
+        article = str(row.get("article_number") or "").strip()
+        uom = str(row.get("source_value_text") or "").strip().upper()
+        if article and uom:
+            latest_by_article.setdefault(article, uom)
+    return {
+        fid: latest_by_article[main]
+        for fid, main in family_main_by_id.items()
+        if main in latest_by_article
+    }
+
+
+def _manual_selling_article_map(
+    cur,
+    family_main_by_id: dict[int, str],
+    family_qrows: list[dict[str, Any]],
+) -> dict[tuple[int, str], str]:
+    """Article Manual authority: Column D UPC -> Column B Selling Article."""
+    targets: dict[str, set[int]] = {}
+    for row in family_qrows:
+        if row.get("family_id") is None:
+            continue
+        upc = str(row.get("ean_upc") or "").strip()
+        if not upc:
+            continue
+        key = _numeric_key(upc) or upc
+        targets.setdefault(key, set()).add(int(row["family_id"]))
+    if not targets:
+        return {}
+
+    keys = sorted(targets)
+    ph = ",".join(["%s"] * len(keys))
+    cur.execute(
+        f"""SELECT
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) AS ean_upc,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.article')) AS selling_article,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.canonical_main_article')) AS canonical_main_article,
+                  batch_id,raw_id
+            FROM phase2c_row_state
+            WHERE raw_table_name='raw_article_manual'
+              AND normalization_status IN ('NORMALIZED','QA_HOLD')
+              AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) IS NOT NULL
+              AND TRIM(LEADING '0' FROM JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc'))) IN ({ph})
+            ORDER BY batch_id DESC,raw_id DESC""",
+        tuple(keys),
+    )
+
+    out: dict[tuple[int, str], str] = {}
+    for row in cur.fetchall():
+        raw_upc = str(row.get("ean_upc") or "").strip()
+        article = str(row.get("selling_article") or "").strip()
+        main = str(row.get("canonical_main_article") or "").strip()
+        if not raw_upc or not article or not main:
+            continue
+        key = _numeric_key(raw_upc) or raw_upc
+        for fid in targets.get(key, set()):
+            if str(family_main_by_id.get(fid) or "") != main:
+                continue
+            out.setdefault((fid, key), article)
+    return out
+
+
 def _quick_receiving_article_context(
     cur,
     qrows: list[dict[str, Any]],
@@ -902,6 +991,29 @@ def _quick_receiving_article_context(
         art: fid for fid, art in source_by_family.items() if art
     }
 
+    # A search can return only one UPC. Family usage must still reconcile every
+    # UPC in that Family with positive 7D POS activity.
+    fph_all = ",".join(["%s"] * len(fids))
+    cur.execute(
+        f"""SELECT family_id,ean_upc,selling_description,pos_qty_7d,upc_velocity_7d,
+                   selling_uom,main_article_number
+            FROM quick_check_current
+            WHERE family_id IN ({fph_all})
+            ORDER BY family_id,ean_upc""",
+        tuple(fids),
+    )
+    family_qrows = cur.fetchall()
+    manual_selling_by_upc = _manual_selling_article_map(
+        cur,
+        source_by_family,
+        family_qrows,
+    )
+    manual_main_selling_uom = _manual_main_selling_uom_map(
+        cur,
+        source_by_family,
+    )
+    manual_authoritative_fids = {fid for fid, _ in manual_selling_by_upc}
+
     # Start with confirmed bridge lineage, but do not duplicate the Family/source
     # Article as a second-level selling Article. It stays in the Family header.
     ph = ",".join(["%s"] * len(fids))
@@ -939,6 +1051,26 @@ def _quick_receiving_article_context(
             "lineage_latest_date": None,
             "lineage_movement_types": None,
         }
+
+    # Preserve the explicit Table 1 / Article Manual Selling Article relation.
+    # 317/318 is lineage evidence only and must never replace this authority.
+    manual_upcs_by_article: dict[tuple[int, str], list[str]] = {}
+    for (fid, upc_key), art in manual_selling_by_upc.items():
+        manual_upcs_by_article.setdefault((fid, art), []).append(upc_key)
+        if art == source_by_family.get(fid):
+            continue
+        existing = candidates[fid].get(art, {})
+        existing.update(
+            {
+                "article_number": art,
+                "relationship_type": existing.get("relationship_type") or "ARTICLE_MANUAL_SELLING",
+                "is_primary": bool(existing.get("is_primary")),
+                "mapping_status": "ARTICLE_MANUAL_SELLING_EXACT",
+                "lineage_basis": "ARTICLE_MANUAL_COLUMN_B_TO_D",
+                "manual_selling_upcs": sorted(set(manual_upcs_by_article[(fid, art)])),
+            }
+        )
+        candidates[fid][art] = existing
 
     # Discover actual SAP output/selling Articles from 317/318 conversion pairs:
     # same canonical file/date + same SAP document + same absolute quantity/UOM
@@ -1302,6 +1434,15 @@ def _quick_receiving_article_context(
         row: dict[str, Any],
         articles: list[dict[str, Any]],
     ) -> tuple[str | None, str]:
+        fid = int(row["family_id"]) if row.get("family_id") is not None else None
+        upc_text = str(row.get("ean_upc") or "")
+        upc_key = _numeric_key(upc_text) or upc_text
+        exact_manual = manual_selling_by_upc.get((fid, upc_key)) if fid is not None else None
+        if exact_manual:
+            return exact_manual, "ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT"
+        if fid is not None and fid in manual_authoritative_fids:
+            return None, "ARTICLE_MANUAL_COLUMN_B_TO_D_MISSING_FOR_UPC"
+
         if not articles:
             return None, "NO_SAP_SELLING_ARTICLE_CANDIDATE"
 
@@ -1411,6 +1552,33 @@ def _quick_receiving_article_context(
                     "receipt_history": receipt_history_by_article.get(art, []),
                 }
             )
+            explicit_upc_keys = sorted(set(manual_upcs_by_article.get((fid, art), [])))
+            active_explicit_upcs = []
+            for fq in family_qrows:
+                if fq.get("family_id") is None or int(fq["family_id"]) != fid:
+                    continue
+                fq_text = str(fq.get("ean_upc") or "")
+                fq_key = _numeric_key(fq_text) or fq_text
+                if fq_key in explicit_upc_keys and _d(fq.get("pos_qty_7d")) > 0:
+                    active_explicit_upcs.append(fq_text)
+            if explicit_upc_keys:
+                a["manual_selling_upcs"] = explicit_upc_keys
+                a["active_pos_upcs"] = sorted(set(active_explicit_upcs))
+                a["has_active_pos_upc"] = bool(active_explicit_upcs)
+                a["article_role"] = (
+                    "RECEIVING_AND_SAP_SELLING_ARTICLE"
+                    if has_article_receipt
+                    else "SAP_SELLING_ARTICLE"
+                )
+                # For a Table-1 Selling Article, absence of 251/252 rows across
+                # the selected completed movement days is a real 0 MVT, not an
+                # unknown relationship.
+                if qty is None:
+                    a["movement_7d"] = Decimal("0")
+                    a["avg_qty_day"] = (
+                        Decimal("0") if day_count > 0 else None
+                    )
+                    a["movement_status"] = "ZERO_251_252_IN_COMPLETED_MVT_WINDOW"
             articles.append(a)
 
         raw_family_mv = family_movement_by_family.get(fid, {})
@@ -1426,91 +1594,122 @@ def _quick_receiving_article_context(
         conversion_uom = conversion_mv.get("uom")
         conversion_status = conversion_mv.get("status") or "NO_PAIRED_317_318_IN_WINDOW"
 
-        # If this Family has paired 317/318 conversion evidence, its Family
-        # movement is source-Article direct 251/252 plus net converted-out
-        # 317/318. Child Article 251/252 remains Article-level actual sold and is
-        # deliberately NOT added again to the Family total.
-        if conversion_mv:
-            direct_qty = _d(source_qty) if source_qty is not None else Decimal("0")
-            direct_uom = str(source_raw_uom or "").strip().upper() or None
-            conv_uom = str(conversion_uom or "").strip().upper() or None
-            compatible_uom = (
-                (not direct_uom)
-                or (not conv_uom)
-                or direct_uom == conv_uom
-            )
-            if conversion_qty is not None and compatible_uom:
-                family_qty = direct_qty + _d(conversion_qty)
-                family_raw_uom = direct_uom or conv_uom
-                family_uom = family_raw_uom
-                family_status = "READY_DIRECT_251_252_PLUS_PAIRED_317_318"
-                family_basis = "SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT"
+        # Canonical Family usage contract:
+        #   7D POS-active UPC -> Article Manual Column B Selling Article
+        #   -> that unique Selling Article's SAP 251 minus 252.
+        # 309 and 317/318 are internal conversion lineage and are not sales.
+        family_rows_all = [
+            x for x in family_qrows
+            if x.get("family_id") is not None and int(x["family_id"]) == fid
+        ]
+        active_pos_rows = [x for x in family_rows_all if _d(x.get("pos_qty_7d")) > 0]
+        active_selling_articles: set[str] = set()
+        unmapped_active_pos_upcs: list[str] = []
+        for pos_row in active_pos_rows:
+            upc_text = str(pos_row.get("ean_upc") or "")
+            upc_key = _numeric_key(upc_text) or upc_text
+            selling_article = manual_selling_by_upc.get((fid, upc_key))
+            if selling_article:
+                active_selling_articles.add(str(selling_article))
             else:
-                family_qty = None
-                family_raw_uom = None
-                family_uom = None
-                family_status = (
-                    conversion_status
-                    if conversion_qty is None
-                    else "DIRECT_251_252_AND_317_318_UOM_MISMATCH"
-                )
-                family_basis = "SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT"
-        else:
-            family_qty = raw_family_mv.get("quantity")
-            family_raw_uom = raw_family_mv.get("uom")
-            family_uom = family_raw_uom
-            family_status = raw_family_mv.get("status") or "NO_251_252_IN_WINDOW"
-            family_basis = "ALL_FAMILY_251_252_FALLBACK_NO_PAIRED_317_318"
+                unmapped_active_pos_upcs.append(upc_text)
 
+        selected_movements: list[dict[str, Any]] = []
+        zero_sap_mvt_articles: list[str] = []
+        for art in sorted(active_selling_articles):
+            mv = movement_by_article.get((fid, art))
+            if mv and mv.get("quantity") is not None:
+                selected_movements.append({"article": art, **mv})
+            else:
+                zero_sap_mvt_articles.append(art)
+                selected_movements.append(
+                    {
+                        "article": art,
+                        "quantity": Decimal("0"),
+                        "uom": None,
+                        "status": "ZERO_251_252_IN_COMPLETED_MVT_WINDOW",
+                    }
+                )
+
+        movement_uoms = {
+            str(x.get("uom") or "").strip().upper()
+            for x in selected_movements
+            if str(x.get("uom") or "").strip()
+        }
         canonical_metric = canonical_family_metric.get(fid)
-        family_uom_reconciled = False
-        if (
-            not conversion_mv
-            and family_qty is not None
-            and canonical_metric is not None
-            and _d(canonical_metric.get("quantity")) == _d(family_qty)
-            and canonical_metric.get("uom")
-            and canonical_metric.get("uom") != family_uom
-        ):
-            family_uom = canonical_metric.get("uom")
-            family_status = "READY_UOM_RECONCILED_TO_CANONICAL_FAMILY_METRIC"
-            family_uom_reconciled = True
-        if (
-            family_uom_reconciled
-            and source_qty is not None
-            and family_qty is not None
-            and _d(source_qty) == _d(family_qty)
-        ):
-            source_uom = family_uom
-            source_status = "READY_UOM_RECONCILED_TO_CANONICAL_FAMILY_METRIC"
+        active_pos_uoms = {
+            str(x.get("selling_uom") or "").strip().upper()
+            for x in active_pos_rows
+            if str(x.get("selling_uom") or "").strip()
+        }
+        main_selling_uom = str(manual_main_selling_uom.get(fid) or "").strip().upper() or None
+        family_uom = (
+            main_selling_uom
+            or (
+                next(iter(movement_uoms))
+                if len(movement_uoms) == 1
+                else (
+                    str((canonical_metric or {}).get("uom") or "").strip().upper()
+                    or (next(iter(active_pos_uoms)) if len(active_pos_uoms) == 1 else None)
+                )
+            )
+        )
+        family_raw_uom = next(iter(movement_uoms)) if len(movement_uoms) == 1 else None
+        family_uom_reconciled = bool(
+            main_selling_uom
+            and family_raw_uom
+            and main_selling_uom == family_raw_uom
+        )
+        movement_uom_conflicts_main = sorted(
+            u for u in movement_uoms
+            if main_selling_uom and u != main_selling_uom
+        )
+
+        if unmapped_active_pos_upcs:
+            family_qty = None
+            family_status = "HOLD_POS_ACTIVE_UPC_SELLING_ARTICLE_UNMAPPED"
+        elif movement_uom_conflicts_main:
+            family_qty = None
+            family_status = "HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM"
+        elif len(movement_uoms) > 1:
+            family_qty = None
+            family_status = "HOLD_SELLING_ARTICLE_MIXED_MVT_UOM"
+        else:
+            family_qty = sum(
+                (_d(x.get("quantity")) for x in selected_movements),
+                Decimal("0"),
+            )
+            family_status = (
+                "READY_WITH_POS_ACTIVE_SELLING_ARTICLE_ZERO_SAP_MVT"
+                if zero_sap_mvt_articles
+                else "READY_SELLING_ARTICLE_SUM_RECONCILED"
+            )
+        family_basis = "SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS"
 
         upc_map: dict[str, dict[str, Any]] = {}
         article_lookup = {
             str(a.get("article_number") or ""): a for a in articles
         }
 
-        # The Family/source Article can itself be a true SAP Selling Article.
-        # Example: Family 1361120 directly sells LIVE MAINE LOBSTER-L, while
-        # sibling UPCs are sold through child Articles such as 1549569/2011726.
-        # Include the source Article in UPC assignment, but keep it rendered in
-        # the Family header rather than duplicating a second-level Article card.
+        # Keep the Family/Main article in the header. It is considered a Selling
+        # Article only when Table 1 explicitly maps a UPC to that same article.
         assignable_articles = list(articles)
-        if source_article:
+        source_manual_upcs = sorted(set(manual_upcs_by_article.get((fid, str(source_article or "")), [])))
+        if source_article and source_manual_upcs:
             source_assignable = {
                 "article_number": str(source_article),
                 "article_description": row.get("family_description"),
                 "relationship_type": "MAIN",
                 "is_primary": True,
-                "mapping_status": "FAMILY_SOURCE_SELLING_ARTICLE",
-                "lineage_basis": "FAMILY_SOURCE_ARTICLE",
-                "movement_7d": source_qty,
+                "mapping_status": "ARTICLE_MANUAL_SELLING_EXACT",
+                "lineage_basis": "ARTICLE_MANUAL_COLUMN_B_TO_D",
+                "movement_7d": source_qty if source_qty is not None else Decimal("0"),
+                "manual_selling_upcs": source_manual_upcs,
             }
             assignable_articles.append(source_assignable)
             article_lookup[str(source_article)] = source_assignable
 
-        for qrow in qrows:
-            if qrow.get("family_id") is None or int(qrow["family_id"]) != fid:
-                continue
+        for qrow in family_rows_all:
             upc = str(qrow.get("ean_upc") or "")
             assigned, basis = _assign_upc(qrow, assignable_articles)
             assigned_row = article_lookup.get(str(assigned or ""), {})
@@ -1548,6 +1747,28 @@ def _quick_receiving_article_context(
             "family_group_movement_days_7d": day_count,
             "family_group_movement_status": family_status,
             "family_group_movement_basis": family_basis,
+            "family_group_main_selling_uom": main_selling_uom,
+            "family_group_uom_source": (
+                "ARTICLE_MANUAL_MAIN_ROW_COLUMN_G"
+                if main_selling_uom
+                else "FALLBACK_MOVEMENT_OR_CANONICAL_METRIC"
+            ),
+            "family_group_mvt_uom_conflicts_main": movement_uom_conflicts_main,
+            "family_group_active_pos_upc_count": len(active_pos_rows),
+            "family_group_active_selling_article_count": len(active_selling_articles),
+            "family_group_active_selling_articles": sorted(active_selling_articles),
+            "family_group_unmapped_active_pos_upcs": sorted(set(unmapped_active_pos_upcs)),
+            "family_group_zero_sap_mvt_articles": sorted(set(zero_sap_mvt_articles)),
+            "family_group_reconciliation": (
+                "PASS"
+                if family_qty is not None
+                and not unmapped_active_pos_upcs
+                and not movement_uom_conflicts_main
+                and len(movement_uoms) <= 1
+                else "HOLD"
+            ),
+            "family_all_251_252_7d_reference": raw_family_mv.get("quantity"),
+            "family_all_251_252_uom_reference": raw_family_mv.get("uom"),
             "family_direct_251_252_7d": source_qty,
             "family_direct_251_252_uom": source_uom,
             "family_conversion_317_318_7d": conversion_qty,
@@ -1832,6 +2053,17 @@ def inventory_review(
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
                     "family_group_movement_basis": family_ctx.get("family_group_movement_basis"),
+                    "family_group_main_selling_uom": family_ctx.get("family_group_main_selling_uom"),
+                    "family_group_uom_source": family_ctx.get("family_group_uom_source"),
+                    "family_group_mvt_uom_conflicts_main": family_ctx.get("family_group_mvt_uom_conflicts_main", []),
+                    "family_group_active_pos_upc_count": family_ctx.get("family_group_active_pos_upc_count"),
+                    "family_group_active_selling_article_count": family_ctx.get("family_group_active_selling_article_count"),
+                    "family_group_active_selling_articles": family_ctx.get("family_group_active_selling_articles", []),
+                    "family_group_unmapped_active_pos_upcs": family_ctx.get("family_group_unmapped_active_pos_upcs", []),
+                    "family_group_zero_sap_mvt_articles": family_ctx.get("family_group_zero_sap_mvt_articles", []),
+                    "family_group_reconciliation": family_ctx.get("family_group_reconciliation"),
+                    "family_all_251_252_7d_reference": family_ctx.get("family_all_251_252_7d_reference"),
+                    "family_all_251_252_uom_reference": family_ctx.get("family_all_251_252_uom_reference"),
                     "family_direct_251_252_7d": family_ctx.get("family_direct_251_252_7d"),
                     "family_direct_251_252_uom": family_ctx.get("family_direct_251_252_uom"),
                     "family_conversion_317_318_7d": family_ctx.get("family_conversion_317_318_7d"),
@@ -1911,14 +2143,14 @@ def inventory_review(
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
             "quick_check_group_leader": "FAMILY_ARTICLE",
-            "quick_check_second_level": "SAP_ARTICLES_CLASSIFIED_BY_101_109_AND_251_252_EVIDENCE",
+            "quick_check_second_level": "TABLE1_SELLING_ARTICLES_PLUS_MAIN_SUB_101_109_RECEIVING_ARTICLES",
             "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
-            "receiving_qty_basis": "ONLY_ARTICLES_WITH_NONZERO_251_252_ARE_SAP_SELLING_ARTICLES",
+            "receiving_qty_basis": "TABLE1_COLUMN_B_SELLING_ARTICLES_SHOW_251_MINUS_252_EVEN_WHEN_ZERO",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
-            "family_group_qty_basis": "SOURCE_DIRECT_251_252_PLUS_PAIRED_317_318_NET_CONVERTED_OUT_WHEN_CONVERSION_EXISTS_ELSE_ALL_FAMILY_251_252",
-            "sap_selling_article_discovery": "CONFIRMED_BRIDGE_OR_317_318_OR_ACTIVE_FAMILY_251_252",
+            "family_group_qty_basis": "SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS",
+            "sap_selling_article_discovery": "ARTICLE_MANUAL_COLUMN_B_TO_D_AUTHORITY;317_318_LINEAGE_ONLY",
             "receipt_verification": "FAMILY_SOURCE_AND_LINKED_ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
-            "upc_receiving_display_link": "FAMILY_SOURCE_OR_ACTIVE_251_252_PLUS_SAP_317_318_THEN_UPC_ARTICLE_PATTERN_OR_DESCRIPTION",
+            "upc_receiving_display_link": "ARTICLE_MANUAL_COLUMN_D_UPC_TO_COLUMN_B_SELLING_ARTICLE_EXACT;FALLBACK_ONLY_WITHOUT_MANUAL_AUTHORITY",
             "family_qty_basis": "LEGACY_RELATIONSHIP_METRIC_ONLY",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
