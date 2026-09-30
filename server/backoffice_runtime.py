@@ -852,62 +852,101 @@ def _quick_receiving_article_context(
     qrows: list[dict[str, Any]],
     movement_days_7: list[dict[str, Any]],
 ) -> dict[int, dict[str, Any]]:
-    """Resolve the operational Receiving Article above Quick Check UPC groups.
+    """Build Family -> Receiving Article lineage for Quick Check search.
 
-    Family Article remains relationship metadata. The displayed 251/252 movement
-    belongs to the Receiving Article: 251 sold minus 252 returns in Base UOM.
+    Family Article is the visible group leader. Every confirmed article linked to
+    the family is retained as a Receiving Article candidate. 251/252 movement is
+    measured on each candidate article independently. Receipt verification is
+    based on that article having Movement 101-109 history.
+
+    A selling UPC is assigned to one candidate for display only, using confirmed
+    family lineage plus deterministic article/description evidence. No 251/252
+    quantity is ever distributed to UPCs; UPC quantity remains POS-only.
     """
     family_rows: dict[int, dict[str, Any]] = {}
     for row in qrows:
         if row.get("family_id") is None:
             continue
-        fid=int(row["family_id"])
-        family_rows.setdefault(fid,row)
+        fid = int(row["family_id"])
+        family_rows.setdefault(fid, row)
     if not family_rows:
         return {}
 
-    fids=sorted(family_rows)
-    ph=",".join(["%s"]*len(fids))
+    fids = sorted(family_rows)
+    ph = ",".join(["%s"] * len(fids))
     cur.execute(
-        f"""SELECT baf.family_id,a.article_number,baf.relationship_type,baf.is_primary
+        f"""SELECT baf.family_id,
+                   a.article_number,
+                   a.article_description,
+                   baf.relationship_type,
+                   baf.is_primary
             FROM bridge_article_family baf
             JOIN article a ON a.article_id=baf.article_id
             WHERE baf.family_id IN ({ph})
               AND baf.mapping_status='CONFIRMED'
               AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
             ORDER BY baf.family_id,
+                     baf.is_primary DESC,
                      CASE baf.relationship_type WHEN 'SUB' THEN 0 WHEN 'MAIN' THEN 1 ELSE 2 END,
-                     baf.is_primary DESC,a.article_number""",
+                     a.article_number""",
         tuple(fids),
     )
-    receiving_by_family: dict[int,str] = {}
-    confirmed_receiving_families: set[int] = set()
+
+    articles_by_family: dict[int, list[dict[str, Any]]] = {fid: [] for fid in fids}
+    seen_by_family: dict[int, set[str]] = {fid: set() for fid in fids}
     for r in cur.fetchall():
-        fid=int(r["family_id"])
-        art=str(r.get("article_number") or "").strip()
-        if art and fid not in receiving_by_family:
-            receiving_by_family[fid]=art
-            confirmed_receiving_families.add(fid)
+        fid = int(r["family_id"])
+        art = str(r.get("article_number") or "").strip()
+        if not art or art in seen_by_family[fid]:
+            continue
+        seen_by_family[fid].add(art)
+        articles_by_family[fid].append(
+            {
+                "article_number": art,
+                "article_description": r.get("article_description"),
+                "relationship_type": r.get("relationship_type"),
+                "is_primary": bool(r.get("is_primary")),
+                "mapping_status": "CONFIRMED",
+            }
+        )
 
-    # Fail soft to the existing Family Article only when no confirmed Receiving
-    # Article mapping exists. The UI labels that fallback explicitly.
-    for fid,row in family_rows.items():
-        if fid not in receiving_by_family:
-            fallback=str(row.get("main_article_number") or "").strip()
-            if fallback:
-                receiving_by_family[fid]=fallback
+    # Keep the Family Article as an explicit fallback only when the confirmed
+    # bridge has no usable article rows.
+    for fid, row in family_rows.items():
+        if articles_by_family[fid]:
+            continue
+        fallback = str(row.get("main_article_number") or "").strip()
+        if fallback:
+            articles_by_family[fid].append(
+                {
+                    "article_number": fallback,
+                    "article_description": row.get("family_description"),
+                    "relationship_type": "FAMILY_FALLBACK",
+                    "is_primary": True,
+                    "mapping_status": "FALLBACK",
+                }
+            )
 
-    article_numbers=sorted({x for x in receiving_by_family.values() if x})
-    movement_by_article: dict[str,dict[str,Any]] = {}
+    article_numbers = sorted(
+        {
+            str(a["article_number"])
+            for rows in articles_by_family.values()
+            for a in rows
+            if a.get("article_number")
+        }
+    )
+
+    movement_by_article: dict[str, dict[str, Any]] = {}
     if article_numbers and movement_days_7:
-        aph=",".join(["%s"]*len(article_numbers))
-        clauses=[]
+        aph = ",".join(["%s"] * len(article_numbers))
+        clauses = []
         args: list[Any] = list(article_numbers)
         for d in movement_days_7:
             clauses.append("(file_id=%s AND posting_date=%s)")
-            args.extend([int(d["file_id"]),d["date"]])
+            args.extend([int(d["file_id"]), d["date"]])
         cur.execute(
-            f"""SELECT article_number,base_uom_code,
+            f"""SELECT article_number,
+                       base_uom_code,
                        SUM(
                          CASE
                            WHEN movement_type='251' THEN ABS(COALESCE(base_quantity,0))
@@ -923,46 +962,211 @@ def _quick_receiving_article_context(
                 GROUP BY article_number,base_uom_code""",
             tuple(args),
         )
-        grouped: dict[str,list[dict[str,Any]]] = {}
+        grouped: dict[str, list[dict[str, Any]]] = {}
         for r in cur.fetchall():
-            grouped.setdefault(str(r.get("article_number") or ""),[]).append(r)
-        for art,rows in grouped.items():
-            valid=[r for r in rows if r.get("qty_7d") is not None]
-            if len(valid)==1:
-                movement_by_article[art]={
-                    "quantity":_d(valid[0].get("qty_7d")),
-                    "uom":valid[0].get("base_uom_code"),
-                    "status":"READY",
+            grouped.setdefault(str(r.get("article_number") or ""), []).append(r)
+        for art, rows in grouped.items():
+            valid = [r for r in rows if r.get("qty_7d") is not None]
+            if len(valid) == 1:
+                movement_by_article[art] = {
+                    "quantity": _d(valid[0].get("qty_7d")),
+                    "uom": valid[0].get("base_uom_code"),
+                    "status": "READY",
                 }
-            elif len(valid)>1:
-                movement_by_article[art]={
-                    "quantity":None,
-                    "uom":None,
-                    "status":"MIXED_BASE_UOM",
+            elif len(valid) > 1:
+                movement_by_article[art] = {
+                    "quantity": None,
+                    "uom": None,
+                    "status": "MIXED_BASE_UOM",
                 }
 
-    day_count=len(movement_days_7)
-    out: dict[int,dict[str,Any]] = {}
-    for fid,row in family_rows.items():
-        receiving=receiving_by_family.get(fid)
-        mv=movement_by_article.get(str(receiving or ""),{})
-        qty=mv.get("quantity")
-        mapped=fid in confirmed_receiving_families
-        out[fid]={
-            "receiving_article":receiving,
-            "receiving_article_mapping_status":"CONFIRMED_RECEIVING_ARTICLE" if mapped else "FAMILY_ARTICLE_FALLBACK",
-            "receiving_movement_7d":qty,
-            "receiving_movement_uom":mv.get("uom"),
-            "receiving_avg_qty_day":(
-                _d(qty)/Decimal(day_count)
-                if qty is not None and day_count>0
+    # 101-109 history is verification evidence for the actual receiving article.
+    # Prefer 109 when multiple receipt/cost rows share the latest date.
+    receipt_by_article: dict[str, dict[str, Any]] = {}
+    if article_numbers:
+        aph = ",".join(["%s"] * len(article_numbers))
+        receipt_types = tuple(str(x) for x in range(101, 110))
+        tph = ",".join(["%s"] * len(receipt_types))
+        cur.execute(
+            f"""SELECT article_number,movement_type,posting_date,
+                       base_quantity,base_uom_code,file_id
+                FROM movement_history
+                WHERE article_number IN ({aph})
+                  AND movement_type IN ({tph})
+                ORDER BY article_number,
+                         posting_date DESC,
+                         CASE movement_type
+                           WHEN '109' THEN 0
+                           WHEN '107' THEN 1
+                           ELSE 2
+                         END,
+                         file_id DESC""",
+            tuple(article_numbers) + receipt_types,
+        )
+        for r in cur.fetchall():
+            art = str(r.get("article_number") or "")
+            if not art or art in receipt_by_article:
+                continue
+            receipt_by_article[art] = {
+                "verified": True,
+                "movement_type": r.get("movement_type"),
+                "date": r.get("posting_date"),
+                "quantity": (
+                    abs(_d(r.get("base_quantity")))
+                    if r.get("base_quantity") is not None
+                    else None
+                ),
+                "uom": r.get("base_uom_code"),
+                "source": "MVT_101_109",
+            }
+
+    day_count = len(movement_days_7)
+
+    def _norm_desc(value: Any) -> str:
+        raw = str(value or "").upper()
+        return " ".join(
+            "".join(ch if ch.isalnum() else " " for ch in raw).split()
+        )
+
+    def _assign_upc(
+        row: dict[str, Any],
+        articles: list[dict[str, Any]],
+    ) -> tuple[str | None, str]:
+        if not articles:
+            return None, "NO_RECEIVING_ARTICLE_CANDIDATE"
+        if len(articles) == 1:
+            return str(articles[0]["article_number"]), "ONLY_CONFIRMED_FAMILY_ARTICLE"
+
+        digits = _numeric_key(row.get("ean_upc"))
+        prefix = digits[:3]
+        product_code = digits[3:6] if len(digits) >= 6 else ""
+        sell_desc = _norm_desc(row.get("selling_description"))
+        scored: list[tuple[float, str, dict[str, Any]]] = []
+
+        for a in articles:
+            art = str(a.get("article_number") or "")
+            desc = _norm_desc(a.get("article_description"))
+            score = SequenceMatcher(None, sell_desc, desc).ratio() * 60.0 if (sell_desc and desc) else 0.0
+
+            if sell_desc and desc and sell_desc == desc:
+                score += 100.0
+            if product_code and art.endswith(product_code):
+                score += 40.0
+
+            if prefix == "249":
+                if "FRIED" in desc:
+                    score += 18.0
+                if "SERVICE" in desc:
+                    score += 22.0
+            elif prefix == "247":
+                if "FRIED" in sell_desc and "FRIED" in desc:
+                    score += 24.0
+            elif prefix == "240":
+                if "FRIED" not in desc and "SERVICE" not in desc:
+                    score += 8.0
+
+            if a.get("is_primary"):
+                score += 2.0
+            if str(a.get("relationship_type") or "").upper() == "SUB":
+                score += 1.0
+            scored.append((score, art, a))
+
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        best = scored[0]
+        basis = (
+            "FAMILY_LINEAGE_PLUS_UPC_PRODUCT_CODE_OR_DESCRIPTION"
+            if best[0] >= 40
+            else "FAMILY_LINEAGE_BEST_AVAILABLE"
+        )
+        return best[1], basis
+
+    out: dict[int, dict[str, Any]] = {}
+    for fid, row in family_rows.items():
+        articles: list[dict[str, Any]] = []
+        movement_uoms: set[str] = set()
+        movement_values: list[Decimal] = []
+
+        for base in articles_by_family.get(fid, []):
+            a = dict(base)
+            art = str(a.get("article_number") or "")
+            mv = movement_by_article.get(art, {})
+            qty = mv.get("quantity")
+            uom = mv.get("uom")
+            receipt = receipt_by_article.get(art, {})
+
+            a.update(
+                {
+                    "movement_7d": qty,
+                    "movement_uom": uom,
+                    "avg_qty_day": (
+                        _d(qty) / Decimal(day_count)
+                        if qty is not None and day_count > 0
+                        else None
+                    ),
+                    "movement_days_7d": day_count,
+                    "movement_status": mv.get("status") or "NO_251_252_IN_WINDOW",
+                    "receipt_verified": bool(receipt.get("verified")),
+                    "receipt_movement_type": receipt.get("movement_type"),
+                    "receipt_date": receipt.get("date"),
+                    "receipt_qty": receipt.get("quantity"),
+                    "receipt_uom": receipt.get("uom"),
+                    "receipt_source": receipt.get("source"),
+                }
+            )
+            articles.append(a)
+
+            if qty is not None:
+                movement_values.append(_d(qty))
+                if uom:
+                    movement_uoms.add(str(uom))
+
+        if movement_values and len(movement_uoms) == 1:
+            family_qty: Decimal | None = sum(movement_values, Decimal("0"))
+            family_uom: str | None = next(iter(movement_uoms))
+            family_status = "READY"
+        elif movement_values and len(movement_uoms) > 1:
+            family_qty = None
+            family_uom = None
+            family_status = "MIXED_BASE_UOM"
+        else:
+            family_qty = None
+            family_uom = None
+            family_status = "NO_251_252_IN_WINDOW"
+
+        upc_map: dict[str, dict[str, Any]] = {}
+        article_lookup = {str(a.get("article_number") or ""): a for a in articles}
+        for qrow in qrows:
+            if qrow.get("family_id") is None or int(qrow["family_id"]) != fid:
+                continue
+            upc = str(qrow.get("ean_upc") or "")
+            assigned, basis = _assign_upc(qrow, articles)
+            assigned_row = article_lookup.get(str(assigned or ""), {})
+            upc_map[upc] = {
+                "article_number": assigned,
+                "mapping_basis": basis,
+                "mapping_status": (
+                    "CONFIRMED_RECEIVING_ARTICLE"
+                    if assigned_row.get("mapping_status") == "CONFIRMED"
+                    else "FAMILY_ARTICLE_FALLBACK"
+                ),
+            }
+
+        out[fid] = {
+            "family_article": row.get("main_article_number"),
+            "family_name": row.get("family_description"),
+            "receiving_articles": articles,
+            "upc_map": upc_map,
+            "family_group_movement_7d": family_qty,
+            "family_group_movement_uom": family_uom,
+            "family_group_avg_qty_day": (
+                _d(family_qty) / Decimal(day_count)
+                if family_qty is not None and day_count > 0
                 else None
             ),
-            "receiving_movement_days_7d":day_count,
-            "receiving_movement_status":mv.get("status") or "NO_251_252_IN_WINDOW",
+            "family_group_movement_days_7d": day_count,
+            "family_group_movement_status": family_status,
         }
     return out
-
 
 def inventory_review(
     limit: int = 200,
@@ -1198,6 +1402,17 @@ def inventory_review(
                 if pair_sig in confirmed_pairs and pair_prefix in {"240","249"}
                 else None
             )
+            family_ctx = receiving_context.get(fid or -1, {})
+            upc_ctx = family_ctx.get("upc_map", {}).get(str(row.get("ean_upc") or ""), {})
+            assigned_receiving = upc_ctx.get("article_number")
+            assigned_receiving_row = next(
+                (
+                    a for a in family_ctx.get("receiving_articles", [])
+                    if str(a.get("article_number") or "") == str(assigned_receiving or "")
+                ),
+                {},
+            )
+
             out.append(
                 {
                     "upc": row.get("ean_upc"),
@@ -1210,13 +1425,20 @@ def inventory_review(
                         "CONFIRMED_FAMILY_PLUS_SEAFOOD_PRODUCT_CODE" if pair_key else None
                     ),
                     "name": row.get("selling_description"),
-                    "receiving_article": receiving_context.get(fid or -1,{}).get("receiving_article"),
-                    "receiving_article_mapping_status": receiving_context.get(fid or -1,{}).get("receiving_article_mapping_status"),
-                    "receiving_movement_7d": receiving_context.get(fid or -1,{}).get("receiving_movement_7d"),
-                    "receiving_movement_uom": receiving_context.get(fid or -1,{}).get("receiving_movement_uom"),
-                    "receiving_avg_qty_day": receiving_context.get(fid or -1,{}).get("receiving_avg_qty_day"),
-                    "receiving_movement_days_7d": receiving_context.get(fid or -1,{}).get("receiving_movement_days_7d"),
-                    "receiving_movement_status": receiving_context.get(fid or -1,{}).get("receiving_movement_status"),
+                    "receiving_article": assigned_receiving,
+                    "receiving_article_mapping_status": upc_ctx.get("mapping_status"),
+                    "receiving_article_mapping_basis": upc_ctx.get("mapping_basis"),
+                    "receiving_movement_7d": assigned_receiving_row.get("movement_7d"),
+                    "receiving_movement_uom": assigned_receiving_row.get("movement_uom"),
+                    "receiving_avg_qty_day": assigned_receiving_row.get("avg_qty_day"),
+                    "receiving_movement_days_7d": assigned_receiving_row.get("movement_days_7d"),
+                    "receiving_movement_status": assigned_receiving_row.get("movement_status"),
+                    "receiving_articles": family_ctx.get("receiving_articles", []),
+                    "family_group_movement_7d": family_ctx.get("family_group_movement_7d"),
+                    "family_group_movement_uom": family_ctx.get("family_group_movement_uom"),
+                    "family_group_avg_qty_day": family_ctx.get("family_group_avg_qty_day"),
+                    "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
+                    "family_group_movement_status": family_ctx.get("family_group_movement_status"),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),
                     "family_name": row.get("family_description"),
@@ -1267,7 +1489,7 @@ def inventory_review(
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V4",
+        "contract_version": "BACKOFFICE_INVENTORY_V5",
         "category": cat,
         "query": q or None,
         "count": len(out),
@@ -1277,10 +1499,14 @@ def inventory_review(
             "write_enabled": "OH_TRUE_STOCK_ONLY",
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
-            "quick_check_group_leader": "RECEIVING_ARTICLE",
-            "family_article_role": "RELATIONSHIP_METADATA_NOT_PRIMARY_GROUP_HEADER",
-            "receiving_qty_basis": "RECEIVING_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
+            "quick_check_group_leader": "FAMILY_ARTICLE",
+            "quick_check_second_level": "RECEIVING_ARTICLES",
+            "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
+            "receiving_qty_basis": "EACH_LINKED_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
+            "family_group_qty_basis": "SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES",
+            "receipt_verification": "ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
+            "upc_receiving_display_link": "CONFIRMED_FAMILY_LINEAGE_PLUS_PRODUCT_CODE_OR_DESCRIPTION",
             "family_qty_basis": "LEGACY_RELATIONSHIP_METRIC_ONLY",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
