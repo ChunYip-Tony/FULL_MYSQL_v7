@@ -37,6 +37,7 @@ from qa_resolution import (
     qa_review as backoffice_qa_review,
     resolve_qa_issue as backoffice_resolve_qa_issue,
     resolve_cost_conversion_issue as backoffice_resolve_cost_conversion_issue,
+    resolve_article_family_issue as backoffice_resolve_article_family_issue,
 )
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 from version import VERSION
@@ -3331,6 +3332,13 @@ class BackofficeQACostConversionRequest(BaseModel):
     note: str | None = None
     confirm: str
 
+class BackofficeQAArticleFamilyRequest(BaseModel):
+    issue_id: int
+    article_number: str
+    main_article_number: str
+    note: str | None = None
+    confirm: str
+
 
 @app.get('/v1/backoffice/qa-review')
 def backoffice_qa(limit:int=250):
@@ -3392,6 +3400,30 @@ def backoffice_qa_resolve_cost_conversion(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice QA cost conversion resolution failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/backoffice/qa-resolve-article-family')
+def backoffice_qa_resolve_article_family(
+    body: BackofficeQAArticleFamilyRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=backoffice_resolve_article_family_issue(
+            issue_id=body.issue_id,
+            article_number=body.article_number,
+            main_article_number=body.main_article_number,
+            note=body.note,
+            actor=actor,
+            confirm=body.confirm,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice QA Article-Family resolution failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
