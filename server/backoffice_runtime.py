@@ -1130,14 +1130,84 @@ def _accepted_snapshot_matches(row: dict[str, Any], accepted: dict[str, Any] | N
         and _same_decimal(row.get("candidate_price"),accepted.get("accepted_candidate_price"))
     )
 
+def _pricing_review_data_health() -> dict[str, Any]:
+    """Required-source freshness gate for operational price-change decisions.
+
+    Price suggestions depend on completed POS history plus current OH/DOH, which
+    in turn depends on movement roll-forward. If either required daily source is
+    behind the latest completed business day, do not present an older queue as
+    current.
+    """
+    expected_through = completed_through_date()
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        pos_days = source_data_days(
+            cur,
+            "sales_by_price_type",
+            limit=1,
+            up_to=expected_through,
+        )
+        mvt_days = source_data_days(
+            cur,
+            "movement",
+            limit=1,
+            up_to=expected_through,
+        )
+        cur.close()
+    pos_through = pos_days[0]["date"] if pos_days else None
+    mvt_through = mvt_days[0]["date"] if mvt_days else None
+    missing = []
+    if pos_through != expected_through:
+        missing.append("POS")
+    if mvt_through != expected_through:
+        missing.append("MVT")
+    return {
+        "status": "CURRENT" if not missing else "BLOCKED_STALE_REQUIRED_DATA",
+        "expected_through": expected_through,
+        "pos_data_through": pos_through,
+        "movement_data_through": mvt_through,
+        "missing_required_sources": missing,
+        "rule": "PRICE_REVIEW_REQUIRES_CURRENT_COMPLETED_POS_AND_MVT",
+    }
+
+
 def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted: bool = False) -> dict[str, Any]:
     """Pricing suggestions with CURRENT fields from live Quick Check serving.
 
     Accepted suggestions are suppressed only while the current-price evidence
     and candidate-price fingerprint remain unchanged. New current price evidence
     or a changed candidate automatically makes the UPC eligible to appear again.
+
+    Operational review fails closed when completed POS or MVT coverage is stale.
     """
-    report = performance_report(category=category, limit=limit)
+    cat = str(category or "ALL").strip().upper()
+    if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
+        raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
+
+    data_health = _pricing_review_data_health()
+    if data_health["status"] != "CURRENT":
+        return {
+            "contract_version": "BACKOFFICE_PRICING_REVIEW_V6",
+            "category": cat,
+            "report_date": None,
+            "summary": {
+                "price_review_candidates": 0,
+                "blocked_by_stale_required_data": True,
+            },
+            "rows": [],
+            "suppressed_accepted_count": 0,
+            "data_health": data_health,
+            "rules": {
+                "write_enabled": "BLOCKED_STALE_REQUIRED_DATA",
+                "price_changes_are_review_only": True,
+                "current_price_display_authority": "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
+                "current_price_rule": "TODAY_LATEST_VALID_PRICE_LIST_VS_LATEST_COMPLETED_BUSINESS_DAY_SINGLE_DATE_POS_SOLD_EVENT; OLDER_PRICE_EVIDENCE_IS_HISTORY_ONLY; SAME_DAY_PRICE_LIST_WINS",
+                "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
+                "freshness_gate": "CURRENT_COMPLETED_POS_AND_MVT_REQUIRED_BEFORE_OPERATIONAL_PRICE_REVIEW",
+            },
+        }
+
+    report = performance_report(category=cat, limit=limit)
     rows = [dict(x) for x in (report.get("top_urgent_price_suggestions") or [])]
 
     upcs = [
@@ -1257,12 +1327,13 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
         visible_rows.append(row)
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V5",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V6",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
         "rows": visible_rows,
         "suppressed_accepted_count": suppressed_count,
+        "data_health": data_health,
         "rules": {
             "write_enabled": "ACCEPTED_STATUS_ONLY",
             "price_changes_are_review_only": True,
