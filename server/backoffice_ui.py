@@ -2186,7 +2186,14 @@ async function loadInventory(){
  $('#invRows').innerHTML='<tr><td colspan="11" class="loading">Loading...</td></tr>';
  try{
    const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;
-   const d=await api(url);
+   const controller=new AbortController();
+   const timeout=setTimeout(()=>controller.abort(),8000);
+   let d;
+   try{
+     d=await api(url,{signal:controller.signal});
+   }finally{
+     clearTimeout(timeout);
+   }
 
    // A slower previous live-search response must never overwrite the newest
    // query's results. The server echoes its query so we validate both request
@@ -2209,9 +2216,12 @@ async function loadInventory(){
    return true;
  }catch(e){
    if(requestSeq!==inventoryLoadSeq)return false;
-   err.innerHTML=`<div class="error">${esc(e.message)}</div>`;
+   const msg=e?.name==='AbortError'
+     ? 'Search timed out. Please retry or refine the search.'
+     : (e.message||String(e));
+   err.innerHTML=`<div class="error">${esc(msg)}</div>`;
    $('#invRows').innerHTML='';
-   throw e;
+   throw new Error(msg);
  }
 }
 function filteredInventoryRows(){
