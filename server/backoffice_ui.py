@@ -378,7 +378,7 @@ const mobileMedia=window.matchMedia('(max-width:759px)');
 function isMobileBackoffice(){return mobileMedia.matches}
 function labelMobileTables(){
   if(!isMobileBackoffice())return;
-  $('.table').forEach(table=>{
+  $$('.table').forEach(table=>{
     const labels=[...table.querySelectorAll('thead th')].map(th=>(th.textContent||'').trim());
     table.querySelectorAll('tbody tr').forEach(tr=>{
       [...tr.children].forEach((td,i)=>{
@@ -426,7 +426,7 @@ function openMobileModule(view,dbTab=null,title='',sub=''){
   show(view,{dbTab});
   setTimeout(labelMobileTables,0);
 }
-$('[data-mobile-view]').forEach(b=>b.onclick=()=>openMobileModule(b.dataset.mobileView,b.dataset.mobileDbtab||null,b.dataset.mobileTitle||'',b.dataset.mobileSub||''));
+$$('[data-mobile-view]').forEach(b=>b.onclick=()=>openMobileModule(b.dataset.mobileView,b.dataset.mobileDbtab||null,b.dataset.mobileTitle||'',b.dataset.mobileSub||''));
 $('#mobileBack').onclick=()=>showMobileHome();
 $('#mobileBatchSpotlight').onclick=()=>openMobileModule('database','dbbatches','Batches','Current processing and history');
 const mobileTableObserver=new MutationObserver(()=>labelMobileTables());
@@ -852,7 +852,7 @@ async function loadData(){try{const [h,a,r]=await Promise.all([api('/healthz'),a
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
 
-$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));if(isMobileBackoffice())openMobileModule('inventory',null,'Quick Check',state.inventorySearch?('Search: '+state.inventorySearch):'Family / Article / UPC lookup');else show('inventory')};
+$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));if(isMobileBackoffice())openMobileModule('inventory',null,'Quick Check',state.inventorySearch?('Search: '+state.inventorySearch):'Family / Article / UPC lookup');else show('inventory')};
 async function boot(){await loadHealth().catch(()=>{});restoreRoute({replaceMissing:true});if(isMobileBackoffice())showMobileHome({scroll:false});labelMobileTables();setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
 })();
 </script>
