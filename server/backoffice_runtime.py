@@ -847,6 +847,45 @@ def _quick_check_fuzzy_rows(
     }
 
 
+def _manual_main_selling_uom_map(
+    cur,
+    family_main_by_id: dict[int, str],
+) -> dict[int, str]:
+    """Latest Article Manual Main-row Column G Selling UOM by Family."""
+    articles = sorted({str(x or "").strip() for x in family_main_by_id.values() if str(x or "").strip()})
+    if not articles:
+        return {}
+    ph = ",".join(["%s"] * len(articles))
+    cur.execute(
+        f"""SELECT a.article_number,nse.source_value_text,nse.batch_id,nse.raw_id
+            FROM article a
+            JOIN normalized_source_evidence nse
+              ON nse.object_type='ARTICLE'
+             AND nse.object_id=a.article_id
+             AND nse.evidence_role='SELLING_UOM_OBSERVED'
+             AND nse.raw_table_name='raw_article_manual'
+            JOIN ingest_file f ON f.file_id=nse.file_id
+            WHERE a.article_number IN ({ph})
+              AND f.source_type='article_manual'
+              AND f.processing_status='INGESTED'
+              AND nse.source_value_text IS NOT NULL
+              AND TRIM(nse.source_value_text)<>''
+            ORDER BY a.article_number,nse.batch_id DESC,nse.raw_id DESC""",
+        tuple(articles),
+    )
+    latest_by_article: dict[str, str] = {}
+    for row in cur.fetchall():
+        article = str(row.get("article_number") or "").strip()
+        uom = str(row.get("source_value_text") or "").strip().upper()
+        if article and uom:
+            latest_by_article.setdefault(article, uom)
+    return {
+        fid: latest_by_article[main]
+        for fid, main in family_main_by_id.items()
+        if main in latest_by_article
+    }
+
+
 def _manual_selling_article_map(
     cur,
     family_main_by_id: dict[int, str],
@@ -968,6 +1007,10 @@ def _quick_receiving_article_context(
         cur,
         source_by_family,
         family_qrows,
+    )
+    manual_main_selling_uom = _manual_main_selling_uom_map(
+        cur,
+        source_by_family,
     )
     manual_authoritative_fids = {fid for fid, _ in manual_selling_by_upc}
 
@@ -1599,20 +1642,35 @@ def _quick_receiving_article_context(
             for x in active_pos_rows
             if str(x.get("selling_uom") or "").strip()
         }
+        main_selling_uom = str(manual_main_selling_uom.get(fid) or "").strip().upper() or None
         family_uom = (
-            next(iter(movement_uoms))
-            if len(movement_uoms) == 1
-            else (
-                str((canonical_metric or {}).get("uom") or "").strip().upper()
-                or (next(iter(active_pos_uoms)) if len(active_pos_uoms) == 1 else None)
+            main_selling_uom
+            or (
+                next(iter(movement_uoms))
+                if len(movement_uoms) == 1
+                else (
+                    str((canonical_metric or {}).get("uom") or "").strip().upper()
+                    or (next(iter(active_pos_uoms)) if len(active_pos_uoms) == 1 else None)
+                )
             )
         )
         family_raw_uom = next(iter(movement_uoms)) if len(movement_uoms) == 1 else None
-        family_uom_reconciled = False
+        family_uom_reconciled = bool(
+            main_selling_uom
+            and family_raw_uom
+            and main_selling_uom == family_raw_uom
+        )
+        movement_uom_conflicts_main = sorted(
+            u for u in movement_uoms
+            if main_selling_uom and u != main_selling_uom
+        )
 
         if unmapped_active_pos_upcs:
             family_qty = None
             family_status = "HOLD_POS_ACTIVE_UPC_SELLING_ARTICLE_UNMAPPED"
+        elif movement_uom_conflicts_main:
+            family_qty = None
+            family_status = "HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM"
         elif len(movement_uoms) > 1:
             family_qty = None
             family_status = "HOLD_SELLING_ARTICLE_MIXED_MVT_UOM"
@@ -1689,6 +1747,13 @@ def _quick_receiving_article_context(
             "family_group_movement_days_7d": day_count,
             "family_group_movement_status": family_status,
             "family_group_movement_basis": family_basis,
+            "family_group_main_selling_uom": main_selling_uom,
+            "family_group_uom_source": (
+                "ARTICLE_MANUAL_MAIN_ROW_COLUMN_G"
+                if main_selling_uom
+                else "FALLBACK_MOVEMENT_OR_CANONICAL_METRIC"
+            ),
+            "family_group_mvt_uom_conflicts_main": movement_uom_conflicts_main,
             "family_group_active_pos_upc_count": len(active_pos_rows),
             "family_group_active_selling_article_count": len(active_selling_articles),
             "family_group_active_selling_articles": sorted(active_selling_articles),
@@ -1698,6 +1763,7 @@ def _quick_receiving_article_context(
                 "PASS"
                 if family_qty is not None
                 and not unmapped_active_pos_upcs
+                and not movement_uom_conflicts_main
                 and len(movement_uoms) <= 1
                 else "HOLD"
             ),
@@ -1987,6 +2053,9 @@ def inventory_review(
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
                     "family_group_movement_basis": family_ctx.get("family_group_movement_basis"),
+                    "family_group_main_selling_uom": family_ctx.get("family_group_main_selling_uom"),
+                    "family_group_uom_source": family_ctx.get("family_group_uom_source"),
+                    "family_group_mvt_uom_conflicts_main": family_ctx.get("family_group_mvt_uom_conflicts_main", []),
                     "family_group_active_pos_upc_count": family_ctx.get("family_group_active_pos_upc_count"),
                     "family_group_active_selling_article_count": family_ctx.get("family_group_active_selling_article_count"),
                     "family_group_active_selling_articles": family_ctx.get("family_group_active_selling_articles", []),
