@@ -384,6 +384,47 @@ function openQAIssue(key){
  const x=findQAIssue(key);if(!x)return;
  const cur=x.current||{},detail=x.detail||{};
  const detailJson=esc(JSON.stringify(detail,null,2));
+ if(x.fix_kind==='ARTICLE_FAMILY_MAPPING'){
+   const article=String(x.entity_key||'').trim();
+   const descriptions=Array.isArray(detail.descriptions)?detail.descriptions.join(' · '):'';
+   const dates=Array.isArray(detail.posting_dates)?detail.posting_dates.join(', '):'';
+   const movements=Array.isArray(detail.movement_types)?detail.movement_types.join(', '):'';
+   openDrawer('Map Article to Family',`Article ${esc(article)} · movement mapping`,`
+     <div class="detailgrid">
+       <div class="detail"><small>Unmapped Article</small><b>${esc(article)}</b></div>
+       <div class="detail"><small>Movement Rows</small><b>${fmt(detail.row_count,0)}</b></div>
+       <div class="detail"><small>Movement Types</small><b>${esc(movements||'—')}</b></div>
+       <div class="detail"><small>Posting Dates</small><b>${esc(dates||'—')}</b></div>
+     </div>
+     <div class="sectiontitle">Movement evidence</div>
+     <div class="calc">${esc(descriptions||x.issue_summary||'No description evidence available.')}</div>
+     <div class="sectiontitle">User-confirmed Family mapping</div>
+     <div class="formfield"><label>Article Number</label><input id="qaMapArticle" value="${esc(article)}" readonly></div>
+     <div class="formfield"><label>Main / Family Article Number</label><input id="qaMapFamily" placeholder="Enter the confirmed Main/Family Article"></div>
+     <div class="formfield"><label>Resolution Note</label><textarea id="qaMapNote" placeholder="How the Article → Family relationship was confirmed"></textarea></div>
+     <label style="display:flex;gap:7px;align-items:flex-start;margin-top:10px;font-size:9px"><input id="qaMapConfirm" type="checkbox" style="margin-top:2px"><span>I confirm this Article belongs to the Family/Main Article entered above. This affects family movement and downstream family calculations after Phase 3 rebuild.</span></label>
+     <div class="calc"><b>Fail-closed.</b> The target Family must already exist, and an Article already mapped to a different confirmed Family will be blocked. RAW movement values are never changed.</div>
+   `,`<button id="applyQAArticleFamily" class="btn primary">Apply Family Mapping</button>`);
+   $('#applyQAArticleFamily').onclick=async()=>{
+     if(!$('#qaMapConfirm').checked){toast('Confirm the Article → Family mapping first');return}
+     const main=($('#qaMapFamily').value||'').trim();
+     if(!main){toast('Enter the Main / Family Article number');return}
+     const btn=$('#applyQAArticleFamily');btn.disabled=true;
+     try{
+       const d=await api('/v1/backoffice/qa-resolve-article-family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+         issue_id:x.issue_id,
+         article_number:article,
+         main_article_number:main,
+         note:($('#qaMapNote').value||'').trim()||null,
+         confirm:'APPLY_ARTICLE_FAMILY_FIX'
+       })});
+       toast('Article → Family mapping applied. Rebuild Phase 3 / QA to recalculate family movement.');
+       closeDrawer();
+       await Promise.allSettled([loadQA(),loadBatches()]);
+     }catch(e){toast(e.message)}finally{const z=$('#applyQAArticleFamily');if(z)z.disabled=false}
+   };
+   return;
+ }
  if(x.fix_kind==='COST_CONVERSION'){
    const sell=String(cur.selling_uom||detail.selling_uom||'').toUpperCase();
    const costUom=String(detail.cost_uom||'').toUpperCase();
