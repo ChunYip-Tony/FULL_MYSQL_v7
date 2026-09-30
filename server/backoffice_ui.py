@@ -23,10 +23,10 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .tablewrap{overflow:auto}.table{width:100%;min-width:980px;border-collapse:collapse;font-size:12px}.table th,.table td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}.table th{background:#f7faf9;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.035em}.table tbody tr:hover td{background:#fbfdfc}.name{font-weight:800;font-size:13px}.meta{font-size:10px;color:var(--muted);margin-top:2px}.num{font-variant-numeric:tabular-nums}.linkbtn{border:0;background:transparent;padding:2px 0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:850}.suggest{font-weight:900;color:var(--sea);font-size:11px}.empty{padding:28px;text-align:center;color:var(--muted);font-size:10px}.loading{padding:22px;color:var(--muted);font-size:10px}.error{padding:10px 12px;background:var(--redbg);color:var(--red);font-size:10px;border-bottom:1px solid #f0cac4}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:11px}.kpi{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.kpi small{display:block;color:var(--muted);font-size:8px}.kpi b{display:block;font-size:14px;margin-top:2px}.kpi span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
 .reasonlist{display:grid;gap:6px}.reason{display:grid;grid-template-columns:auto 1fr;gap:7px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.rdot{width:7px;height:7px;border-radius:50%;background:var(--sea);margin-top:4px}.reason b{display:block;font-size:10px}.reason span{display:block;color:var(--muted);font-size:9px;margin-top:1px}.sectiontitle{font-size:10px;font-weight:850;margin:13px 0 6px}.detailgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.detail{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fbfdfc}.detail small{display:block;color:var(--muted);font-size:8px}.detail b{display:block;font-size:10px;margin-top:2px}.calc{border:1px dashed #b9d4cf;background:#f4fbf9;border-radius:9px;padding:8px;margin-top:8px;font-size:9px;color:var(--deep)}.logconsole{background:#0b272b;color:#d8efec;border-radius:10px;padding:9px;font:9px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:230px;overflow:auto}
-.uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
+.dbcardgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px}.dbcard{border:1px solid var(--line);background:#fff;border-radius:13px;padding:13px;text-align:left;display:flex;gap:11px;align-items:flex-start;box-shadow:0 4px 14px rgba(9,49,54,.03)}.dbcard:hover{border-color:#a8cbc6;background:#fbfdfc}.dbcard .dbicon{font-size:24px;line-height:1}.dbcard span:last-child{display:block}.dbcard small{display:block;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase}.dbcard b{display:block;font-size:14px;margin-top:2px}.dbcard em{display:block;color:var(--muted);font-size:10px;font-style:normal;margin-top:3px}.dboverviewgrid{display:grid;grid-template-columns:1fr;gap:9px;padding:0 11px 11px}.dbsummary{border:1px solid var(--line);border-radius:12px;padding:0 10px 10px;background:#fbfdfc}.uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
 .batchgrid{display:grid;gap:7px;padding:10px}.batch{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.batchtop{display:flex;justify-content:space-between;gap:8px}.batchid{font-weight:850;font-size:11px}.progress{height:6px;border-radius:999px;background:#e7efeb;overflow:hidden;margin-top:7px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--sea),var(--sea2))}.batchmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px}.batchmeta div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px}.batchmeta small{display:block;color:var(--muted);font-size:7px}.batchmeta b{display:block;font-size:9px;margin-top:1px}
 .drawerback{position:fixed;inset:0;background:rgba(7,43,47,.24);z-index:30;display:none}.drawerback.on{display:block}.drawer{position:fixed;right:0;top:0;bottom:0;width:min(94vw,570px);background:#fff;z-index:31;transform:translateX(105%);transition:.18s;box-shadow:-20px 0 50px rgba(8,44,48,.18);display:flex;flex-direction:column}.drawer.on{transform:translateX(0)}.drawerhead{padding:12px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:9px}.drawertitle{font-size:15px;font-weight:850}.drawersub{font-size:9px;color:var(--muted);margin-top:2px}.drawerbody{padding:12px;overflow:auto;flex:1}.drawerfoot{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:6px}.formfield{margin-top:9px}.formfield label{display:block;font-size:9px;font-weight:800;margin-bottom:4px}.formfield input,.formfield textarea,.formfield select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}.toast{position:fixed;right:12px;bottom:12px;z-index:50;background:var(--deep);color:#fff;border-radius:9px;padding:9px 10px;font-size:10px;opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none}.toast.on{opacity:1;transform:none}
-@media(min-width:760px){.shell{padding:12px 12px 30px}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
+@media(min-width:760px){.shell{padding:12px 12px 30px}.dbcardgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.dboverviewgrid{grid-template-columns:1fr 1fr}.statusstrip{grid-template-columns:repeat(4,minmax(0,1fr))}.grid{grid-template-columns:repeat(4,minmax(0,1fr))}.detailgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.uploadgrid{grid-template-columns:1fr 1fr}}
 @media(max-width:620px){.shell{padding:7px 7px 76px}.appbar{border-radius:13px}.nav button{font-size:10px}.statusstrip{grid-template-columns:1fr 1fr}.table{min-width:900px}.panel{border-radius:13px}.searchbar{padding-left:10px;padding-right:10px}}
 </style>
 </head>
@@ -101,48 +101,67 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="database" class="view">
   <div class="panel">
     <div class="panelhead">
-      <div><div class="title">Database Center</div><div class="sub">Upload, batch processing, QA resolution, and pipeline health in one workspace.</div></div>
+      <div><div class="title">Database Center</div><div class="sub">Upload → Processing → QA → Data Health. Start with Overview to see what needs attention.</div></div>
+      <button id="dbRefreshAll" class="btn small">Refresh All</button>
     </div>
     <div class="toolrow">
       <div class="filters">
-        <button class="filter dbtab on" data-dbtab="dbupload">Upload Center</button>
-        <button class="filter dbtab" data-dbtab="dbbatches">Batch Monitor</button>
-        <button class="filter dbtab" data-dbtab="dbqa">QA</button>
-        <button class="filter dbtab" data-dbtab="dbdata">Data Pipeline</button>
+        <button class="filter dbtab on" data-dbtab="dboverview">Overview</button>
+        <button class="filter dbtab" data-dbtab="dbupload">Upload Files</button>
+        <button class="filter dbtab" data-dbtab="dbbatches">Processing</button>
+        <button class="filter dbtab" data-dbtab="dbqa">QA Fixes</button>
+        <button class="filter dbtab" data-dbtab="dbdata">Data Health</button>
       </div>
     </div>
   </div>
-  <div id="dbupload" class="subview on"><div class="panel">
- <div class="panelhead"><div><div class="title">Upload Center</div><div class="sub">No staging. One upload action creates one batch, uploads all selected files, then commits immediately.</div></div><span class="pill sea">DIRECT UPLOAD</span></div>
- <div class="uploadgrid">
-  <div class="drop"><div class="ico">📤</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. All selected files are one immutable batch.</p><input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div class="formfield"><label>Optional batch note</label><input id="uploadNote" placeholder="Daily seafood upload"></div><div class="upload-actions"><button id="uploadBtn" class="btn primary">Upload & Start Batch</button></div></div>
-  <div><div class="sectiontitle">Latest Upload Result</div><div id="uploadResult" class="uploadresult"><span class="meta">No upload in this session.</span></div><div class="sectiontitle">Current Processing</div><div id="uploadActive" class="batchgrid" style="padding:0"></div></div>
- </div>
-</div></div>
+
+  <div id="dboverview" class="subview on">
+    <div class="panel">
+      <div class="panelhead">
+        <div><div class="title">Database Overview</div><div class="sub">What is happening now and where you need to go next.</div></div>
+        <span id="dbOverallStatus" class="pill blue">CHECKING</span>
+      </div>
+      <div id="dbOverviewError"></div>
+      <div class="dbcardgrid">
+        <button class="dbcard dbjump" data-target="dbupload"><span class="dbicon">📤</span><span><small>Step 1</small><b>Upload Files</b><em id="dbUploadSummary">Start a new source batch</em></span></button>
+        <button class="dbcard dbjump" data-target="dbbatches"><span class="dbicon">⚙️</span><span><small>Step 2</small><b>Processing</b><em id="dbProcessingSummary">Checking current batch…</em></span></button>
+        <button class="dbcard dbjump" data-target="dbqa"><span class="dbicon">🧩</span><span><small>Step 3</small><b>QA Fixes</b><em id="dbQASummary">Checking open issues…</em></span></button>
+        <button class="dbcard dbjump" data-target="dbdata"><span class="dbicon">🩺</span><span><small>Step 4</small><b>Data Health</b><em id="dbHealthSummary">Checking service health…</em></span></button>
+      </div>
+      <div class="dboverviewgrid">
+        <div class="dbsummary"><div class="sectiontitle">Current Processing</div><div id="dbOverviewActive" class="batchgrid" style="padding:0"></div></div>
+        <div class="dbsummary"><div class="sectiontitle">Latest Completed Batch</div><div id="dbLatestBatch" class="batchgrid" style="padding:0"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="dbupload" class="subview"><div class="panel">
+    <div class="panelhead"><div><div class="title">Upload Files</div><div class="sub">Select all source files that belong together. One upload action creates one immutable batch and starts processing.</div></div><span class="pill sea">DIRECT UPLOAD</span></div>
+    <div class="uploadgrid" style="grid-template-columns:1fr">
+      <div class="drop"><div class="ico">📤</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. Files selected together are one batch.</p><input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div class="formfield"><label>Optional batch note</label><input id="uploadNote" placeholder="Daily seafood upload"></div><div class="upload-actions"><button id="uploadBtn" class="btn primary">Upload & Start Processing</button></div></div>
+      <div><div class="sectiontitle">Latest Upload Result</div><div id="uploadResult" class="uploadresult"><span class="meta">No upload in this session.</span></div></div>
+    </div>
+  </div></div>
+
   <div id="dbbatches" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">Batch Monitor</div><div class="sub">Active batch is separate from completed/failed history.</div></div><button id="refreshBatch" class="btn small">Refresh</button></div>
- <div class="sectiontitle" style="padding:0 11px">Current Active Batch</div><div id="activeBatch" class="batchgrid"></div>
- <div class="sectiontitle" style="padding:0 11px">Recent Batch History</div><div id="batchError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Batch</th><th>Status</th><th>Files</th><th>Started</th><th>Completed</th><th>Phase 3</th><th>QC Ready/Hold</th></tr></thead><tbody id="batchRows"></tbody></table></div>
-</div></div>
+    <div class="panelhead"><div><div class="title">Processing</div><div class="sub">Current batch first. Completed / failed batches stay in history below.</div></div><button id="refreshBatch" class="btn small">Refresh</button></div>
+    <div class="sectiontitle" style="padding:0 11px">Current Active Batch</div><div id="activeBatch" class="batchgrid"></div>
+    <div class="sectiontitle" style="padding:0 11px">Processing History</div><div id="batchError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Batch</th><th>Status</th><th>Files</th><th>Started</th><th>Completed</th><th>Publish</th><th>QC Ready / Hold</th></tr></thead><tbody id="batchRows"></tbody></table></div>
+  </div></div>
+
   <div id="dbqa" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">QA Review & Resolution</div><div class="sub">Controlled fixes for UPC identity / Selling UOM QA holds. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
- <div class="toolrow">
-   <div class="filters">
-     <button class="filter qafilter on" data-qafilter="ALL">All</button>
-     <button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button>
-     <button class="filter qafilter" data-qafilter="VIEW_ONLY">View Only</button>
-     <button class="filter qafilter" data-qafilter="HIGH">High / Critical</button>
-   </div>
-   <div class="tools"><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div>
- </div>
- <div id="qaError"></div>
- <div class="tablewrap"><table class="table" style="min-width:1050px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
- <div class="sectiontitle" style="padding:0 11px">Recent QA Resolution History</div>
- <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
-</div></div>
+    <div class="panelhead"><div><div class="title">QA Fixes</div><div class="sub">Only issues that require review or user-confirmed correction. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
+    <div class="toolrow"><div class="filters"><button class="filter qafilter on" data-qafilter="ALL">All Open</button><button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button><button class="filter qafilter" data-qafilter="VIEW_ONLY">Review Only</button><button class="filter qafilter" data-qafilter="HIGH">High / Critical</button></div><div class="tools"><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div></div>
+    <div id="qaError"></div>
+    <div class="tablewrap"><table class="table" style="min-width:1050px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
+    <div class="sectiontitle" style="padding:0 11px">Recent Resolution History</div>
+    <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
+  </div></div>
+
   <div id="dbdata" class="subview"><div class="panel">
- <div class="panelhead"><div><div class="title">Data Pipeline</div><div class="sub">Service health, active processing, and latest publish status.</div></div><button id="refreshData" class="btn small">Refresh</button></div><div id="dataGrid" class="grid"></div><div id="dataEvents" class="batchgrid"></div>
-</div></div>
+    <div class="panelhead"><div><div class="title">Data Health</div><div class="sub">Service health, worker status, latest publish, and recent pipeline outcomes.</div></div><button id="refreshData" class="btn small">Refresh</button></div>
+    <div id="dataGrid" class="grid"></div><div id="dataEvents" class="batchgrid"></div>
+  </div></div>
 </section>
 
 <div id="drawerBack" class="drawerback"></div><aside id="drawer" class="drawer"><div class="drawerhead"><div><div id="drawerTitle" class="drawertitle">Details</div><div id="drawerSub" class="drawersub"></div></div><button id="drawerClose" class="btn small">Close</button></div><div id="drawerBody" class="drawerbody"></div><div id="drawerFoot" class="drawerfoot"></div></aside>
@@ -159,10 +178,11 @@ function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
 async function api(url,opts={}){const r=await fetch(url,{cache:'no-store',...opts});let data=null;try{data=await r.json()}catch{data={detail:await r.text()}}if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}return data}
-function show(view){$$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='sales')loadSell();if(view==='ordering')loadOrders();if(view==='pricing')loadPrices();if(view==='database'){showDbTab('dbupload');loadBatches()}window.scrollTo({top:0,behavior:'smooth'})}
-function showDbTab(tab){$$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));$$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));if(tab==='dbupload'||tab==='dbbatches')loadBatches();if(tab==='dbqa')loadQA();if(tab==='dbdata')loadData()}
+function show(view){$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='sales')loadSell();if(view==='ordering')loadOrders();if(view==='pricing')loadPrices();if(view==='database')showDbTab('dboverview');window.scrollTo({top:0,behavior:'smooth'})}
+function showDbTab(tab){$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));if(tab==='dboverview')loadDatabaseOverview();if(tab==='dbbatches')loadBatches();if(tab==='dbqa')loadQA();if(tab==='dbdata')loadData()}
 $$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
-$$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
+$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
+$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
 function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
@@ -297,31 +317,25 @@ function openQAIssue(key){
 $$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
 $('#qaRefresh').onclick=loadQA;
 
-function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',status=a.processing_status||a.status||'PROCESSING';return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Started</small><b>${esc(a.upload_started_at||'—')}</b></div><div><small>Status</small><b>${esc(status)}</b></div></div></div>`}
-async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];$('#activeBatch').innerHTML=activeCard(state.active);$('#uploadActive').innerHTML=activeCard(state.active);$('#batchRows').innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}catch(e){$('#batchError').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
-function batchRebuildEligible(b){
-  const p2=String(b?.phase2c_status||'').toUpperCase();
-  const p3=String(b?.phase3_status||b?.processing_status||'').toUpperCase();
-  return p2==='READY' && ['QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','PHASE3_QA_HOLD'].includes(p3);
-}
-async function rebuildPhase3(id){
-  const b=state.recent.find(x=>String(x.batch_id)===String(id));
-  if(!b)return;
-  if(!batchRebuildEligible(b)){toast('This batch is not currently eligible for Phase 3 rebuild');return}
-  if(!window.confirm(`Rebuild Phase 3 / QA for Batch #${b.batch_id}?\n\nRAW files will not be re-uploaded. The current Quick Check snapshot remains active until the rebuild commits.`))return;
-  const btn=$('#rebuildPhase3Btn');
-  if(btn){btn.disabled=true;btn.textContent='Queuing Rebuild…'}
+async function loadDatabaseOverview(){
+  const err=$('#dbOverviewError');if(err)err.innerHTML='';
   try{
-    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id)}/rebuild-phase3`,{method:'POST'});
-    toast(d.already_active?'Phase 3 rebuild is already active':'Phase 3 / QA rebuild queued');
-    closeDrawer();
-    await loadBatches();
-    showDbTab('dbbatches');
-  }catch(e){
-    toast(e.message);
-    if(btn){btn.disabled=false;btn.textContent='🔄 Rebuild Phase 3 / QA'}
-  }
+    const [h,a,r,q]=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
+    state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
+    const latest=state.recent[0]||null;
+    $('#dbOverviewActive').innerHTML=activeCard(state.active);
+    $('#dbLatestBatch').innerHTML=latest?activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'}):'<div class="empty">No completed batch history.</div>';
+    $('#dbProcessingSummary').textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch');
+    const fixable=state.qaIssues.filter(x=>x.can_fix).length;
+    $('#dbQASummary').textContent=state.qaIssues.length?`${state.qaIssues.length} open · ${fixable} fixable`:'No open QA issues';
+    $('#dbHealthSummary').textContent=h.ok?`Service healthy · ${h.version||''}`:'Service health needs attention';
+    $('#dbUploadSummary').textContent=state.active?'Wait for current batch to finish':'Ready for a new source batch';
+    const hasProblem=!h.ok||state.qaIssues.some(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
+    const status=$('#dbOverallStatus');status.textContent=hasProblem?'ATTENTION':(state.active?'PROCESSING':'READY');status.className='pill '+(hasProblem?'amber':state.active?'sea':'green');
+  }catch(e){if(err)err.innerHTML=`<div class="error">${esc(e.message)}</div>`;const st=$('#dbOverallStatus');if(st){st.textContent='CHECK FAILED';st.className='pill red'}}
 }
+function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',status=a.processing_status||a.status||'PROCESSING';return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Started</small><b>${esc(a.upload_started_at||'—')}</b></div><div><small>Status</small><b>${esc(status)}</b></div></div></div>`}
+async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];const activeEl=$('#activeBatch');if(activeEl)activeEl.innerHTML=activeCard(state.active);const overviewActive=$('#dbOverviewActive');if(overviewActive)overviewActive.innerHTML=activeCard(state.active);const batchRows=$('#batchRows');if(batchRows){batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}const latest=state.recent[0]||null;const latestEl=$('#dbLatestBatch');if(latestEl)latestEl.innerHTML=latest?activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'}):'<div class="empty">No completed batch history.</div>';const ps=$('#dbProcessingSummary');if(ps)ps.textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch')}catch(e){const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(e.message)}</div>`;const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(e.message)}</div>`}}
 function openBatchDetail(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));if(!b)return;
   const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b);
@@ -338,13 +352,14 @@ function openBatchDetail(id){
 }
 $('#refreshBatch').onclick=loadBatches;
 
-$('#uploadBtn').onclick=async()=>{const files=[...$('#uploadFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#uploadBtn');btn.disabled=true;$('#uploadResult').innerHTML='<span class="meta">Creating batch...</span>';try{const label=($('#uploadNote').value||'').trim()||`Web direct upload ${new Date().toLocaleString()}`;const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});if(created.created===false){$('#uploadResult').innerHTML='<b>Upload not started</b><div class="meta">A batch is already active. Wait for it to finish before uploading another batch.</div>';toast('Active batch already processing');await loadBatches();return}const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');const uploaded=[];for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('#uploadResult').innerHTML=`<span class="meta">Uploading ${i+1}/${files.length}: ${esc(files[i].name)}</span>`;const u=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/files`,{method:'POST',body:fd});uploaded.push(u)}$('#uploadResult').innerHTML='<span class="meta">Committing batch and starting processing...</span>';const commit=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/commit`,{method:'POST'});$('#uploadResult').innerHTML=`<b>Upload accepted</b><div class="meta">${files.length} file(s) · processing started</div><div class="filelist">${files.map(f=>`<div class="filerow"><span>${esc(f.name)}</span><span>${fmt(f.size/1024/1024,2)} MB</span></div>`).join('')}</div>`;$('#uploadFiles').value='';$('#uploadNote').value='';toast('Upload complete; batch processing started');await loadBatches()}catch(e){$('#uploadResult').innerHTML=`<div class="error" style="margin:-9px">${esc(e.message)}</div>`;toast(e.message)}finally{btn.disabled=false}};
+$('#uploadBtn').onclick=async()=>{const files=[...$('#uploadFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#uploadBtn');btn.disabled=true;$('#uploadResult').innerHTML='<span class="meta">Creating batch...</span>';try{const label=($('#uploadNote').value||'').trim()||`Web direct upload ${new Date().toLocaleString()}`;const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});if(created.created===false){$('#uploadResult').innerHTML='<b>Upload not started</b><div class="meta">A batch is already active. Wait for it to finish before uploading another batch.</div>';toast('Active batch already processing');showDbTab('dbbatches');await loadBatches();return}const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');const uploaded=[];for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('#uploadResult').innerHTML=`<span class="meta">Uploading ${i+1}/${files.length}: ${esc(files[i].name)}</span>`;const u=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/files`,{method:'POST',body:fd});uploaded.push(u)}$('#uploadResult').innerHTML='<span class="meta">Committing batch and starting processing...</span>';const commit=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/commit`,{method:'POST'});$('#uploadResult').innerHTML=`<b>Upload accepted</b><div class="meta">${files.length} file(s) · processing started</div><div class="filelist">${files.map(f=>`<div class="filerow"><span>${esc(f.name)}</span><span>${fmt(f.size/1024/1024,2)} MB</span></div>`).join('')}</div>`;$('#uploadFiles').value='';$('#uploadNote').value='';toast('Upload complete; batch processing started');showDbTab('dbbatches');await loadBatches()}catch(e){$('#uploadResult').innerHTML=`<div class="error" style="margin:-9px">${esc(e.message)}</div>`;toast(e.message)}finally{btn.disabled=false}};
 
 async function loadData(){try{const [h,a,r]=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5')]);const latest=(r.batches||[])[0]||a.latest_batch||{};$('#dataGrid').innerHTML=`<div class="kpi"><small>API Version</small><b>${esc(h.version||'—')}</b><span>${h.ok?'Healthy':'Issue'}</span></div><div class="kpi"><small>Worker</small><b>${esc(h.worker_state||'—')}</b><span>${h.worker_healthy?'Healthy':'Check worker'}</span></div><div class="kpi"><small>Serving / Latest Batch</small><b>#${esc(latest.batch_id||'—')}</b><span>${esc(latest.processing_status||latest.phase3_status||'')}</span></div><div class="kpi"><small>Active Batch</small><b>${a.active_batch?'Yes':'No'}</b><span>${a.active_batch?('#'+a.active_batch.batch_id):'Idle'}</span></div>`;$('#dataEvents').innerHTML=(r.batches||[]).map(b=>`<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(b.batch_id)}</div><div class="meta">${esc(b.completed_at||b.upload_started_at||'')}</div></div>${pill(b.phase3_status||b.processing_status)}</div></div>`).join('')}catch(e){$('#dataEvents').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
 $('#refreshData').onclick=loadData;
+$('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
 
 $('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
-async function boot(){await Promise.allSettled([loadHealth(),loadInventory(),loadBatches()]);setInterval(()=>{if(!document.hidden)loadBatches()},15000)}boot();
+async function boot(){await Promise.allSettled([loadHealth(),loadInventory()]);setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
 })();
 </script>
 </body></html>'''
