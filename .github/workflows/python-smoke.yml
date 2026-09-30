@@ -362,3 +362,26 @@ jobs:
           print("FAMILY_NO_MVT="+json.dumps(family_no_mvt[:300]))
           print("FAMILY_MISMATCH="+json.dumps(mismatch[:100]))
           PY
+
+
+      - name: Inspect live Oyster Jar 1348438 UOM
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=1348438&lightweight=true" -o /tmp/oyster.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/oyster.json',encoding='utf-8'))
+          for r in p.get('rows') or []:
+              print("OYSTER_ROW="+json.dumps({
+                  k:r.get(k) for k in (
+                      'upc','name','family_id','family_article','family_name',
+                      'selling_uom','qty_uom','qty_7d','family_qty_7d','family_qty_uom',
+                      'family_group_movement_7d','family_group_movement_uom',
+                      'family_source_article','family_source_movement_7d','family_source_movement_uom',
+                      'receiving_article','receiving_movement_7d','receiving_movement_uom'
+                  )
+              },default=str))
+              print("OYSTER_ARTICLES="+json.dumps(r.get('receiving_articles') or [],default=str))
+          PY
