@@ -1071,7 +1071,7 @@ async function loadData(){try{const [h,a,r]=await Promise.all([api('/healthz'),a
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
 
-$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
+$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
 async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice())showMobileHome({scroll:false});else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
 })();
 </script>
