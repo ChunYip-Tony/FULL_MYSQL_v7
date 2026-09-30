@@ -182,7 +182,7 @@ jobs:
           # A=Family, D=EAN/UPC, E=receiving pack size, G=Selling UOM.
           # 317/318 and 309 are lineage/conversion only, never added as sold usage.
           assert 'ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT' in runtime
-          assert 'SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' in runtime
+          assert 'SUM_UNIQUE_ASSIGNED_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' in runtime
           assert 'READY_SELLING_ARTICLE_SUM_RECONCILED' in runtime
           assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' not in runtime
           assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' not in runtime
@@ -195,6 +195,10 @@ jobs:
           assert "fresh fish" in runtime and "frozen pack" in runtime
           assert "str(row.get(\"col_b\") or \"\").strip() or main" in runtime
           assert "manual_upc_override" in runtime
+          assert 'USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930' in runtime
+          assert 'READY_ORPHAN_251_252_RESCUED_BY_UNIQUE_SELLING_LINEAGE' in runtime
+          assert 'm.family_id IS NULL' in runtime
+          assert 'FAMILY / SAP SELLING ARTICLE' in ui
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
@@ -251,6 +255,14 @@ jobs:
           assert conv[0]['selling_uom_code']=='EA'
           assert Decimal(str(conv[0]['cost_qty']))==Decimal('4')
           assert conv[0]['cost_uom_code']=='LB'
+          selling={
+              (str(x['family_article']),str(x['ean_upc'])):str(x['selling_article'])
+              for x in m.USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930
+          }
+          assert selling[('1351311','4816')]=='1351311'
+          assert selling[('1351311','24081600000')]=='1351311'
+          assert selling[('1351311','24581600000')]=='1351311'
+          assert selling[('1351311','24981600000')]=='2045590'
           print('upc-4816-ea-authority=PASS')
           PY
 
