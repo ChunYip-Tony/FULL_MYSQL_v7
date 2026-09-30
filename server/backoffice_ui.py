@@ -941,30 +941,59 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-trendwrap{margin-left:-3px;margin-right:-3px}
 }
 
-/* Quick Check live-search family grouping */
+/* Quick Check live-search Receiving Article grouping */
 .m-quicktools.on{display:grid!important;grid-template-columns:1fr!important}
 .m-quicktools>input{width:100%;min-height:52px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;font-size:17px;background:#fff}
-.m-family-group{
-  --family-bg:#eef9f2;
-  --family-border:#cfe9d8;
-  --family-accent:#5f9c72;
+.m-receiving-group{
+  --recv-bg:#eef9f2;
+  --recv-bg-strong:#e4f5ea;
+  --recv-border:#c6e3d0;
+  --recv-accent:#4f9468;
   display:grid;
-  gap:7px;
-  margin-bottom:9px;
+  gap:8px;
+  margin-bottom:14px;
+  padding:8px;
+  border:2px solid var(--recv-border);
+  border-radius:19px;
+  background:var(--recv-bg);
+  box-shadow:0 5px 14px rgba(7,55,62,.045);
 }
-.m-family-group:nth-child(6n+2){--family-bg:#eef6ff;--family-border:#d2e4f6;--family-accent:#5e8fb9}
-.m-family-group:nth-child(6n+3){--family-bg:#f5f0ff;--family-border:#e2d6f5;--family-accent:#8970b8}
-.m-family-group:nth-child(6n+4){--family-bg:#fff3ea;--family-border:#f1d8c6;--family-accent:#bf8056}
-.m-family-group:nth-child(6n+5){--family-bg:#ecf9f8;--family-border:#cce9e6;--family-accent:#559f98}
-.m-family-group:nth-child(6n+6){--family-bg:#fff9e8;--family-border:#ecdfb2;--family-accent:#ad9142}
-.m-family-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;border:1px solid var(--family-border);border-radius:15px;background:var(--family-bg)}
-.m-family-head small,.m-family-velocity small{display:block;font-size:9px;color:var(--muted);font-weight:900;letter-spacing:.04em}
-.m-family-head b{display:block;font-size:16px;line-height:1.2;margin-top:2px;color:var(--ink)}
-.m-family-head>div:first-child>small{font-size:11px}
-.m-family-head>div:first-child>b{font-size:18px;line-height:1.18}
-.m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:var(--sea)}.m-family-velocity small:last-child{margin-top:3px}
-.m-family-upcs{display:grid;gap:7px;padding-left:5px}
-.m-family-upcs .m-row{background:var(--family-bg);border-color:var(--family-border);border-left:4px solid var(--family-accent)}
+.m-receiving-group.recv-tone-1{--recv-bg:#edf6ff;--recv-bg-strong:#e1effc;--recv-border:#c8deef;--recv-accent:#4f86b0}
+.m-receiving-group.recv-tone-2{--recv-bg:#f5efff;--recv-bg-strong:#ece3fb;--recv-border:#decef1;--recv-accent:#8066ae}
+.m-receiving-group.recv-tone-3{--recv-bg:#fff3e9;--recv-bg-strong:#fbe7d7;--recv-border:#edd1bd;--recv-accent:#b9754c}
+.m-receiving-group.recv-tone-4{--recv-bg:#ebf9f7;--recv-bg-strong:#ddf1ee;--recv-border:#c4e5e1;--recv-accent:#478f88}
+.m-receiving-group.recv-tone-5{--recv-bg:#fff9e7;--recv-bg-strong:#f7edc9;--recv-border:#eadca7;--recv-accent:#9f8435}
+.m-receiving-head{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+  padding:12px 13px;
+  border:1px solid var(--recv-border);
+  border-radius:15px;
+  background:var(--recv-bg-strong);
+}
+.m-receiving-head small,.m-receiving-movement small{display:block;font-size:9px;color:var(--muted);font-weight:900;letter-spacing:.04em}
+.m-receiving-head>div:first-child>small{font-size:11px}
+.m-receiving-head>div:first-child>b{display:block;font-size:20px;line-height:1.16;margin-top:2px;color:var(--ink)}
+.m-receiving-head .recv-map{font-size:9px;color:var(--muted);font-weight:800;margin-top:3px}
+.m-receiving-movement{text-align:right;flex:0 0 auto;min-width:112px;padding-left:10px;border-left:1px solid var(--recv-border)}
+.m-receiving-movement b{display:block;font-size:15px;margin-top:2px;color:var(--recv-accent)}
+.m-receiving-movement small:last-child{margin-top:3px}
+.m-receiving-upcs{display:grid;gap:8px;padding-left:2px}
+.m-receiving-group .m-row{
+  background:color-mix(in srgb,var(--recv-bg) 84%,#fff)!important;
+  border-color:var(--recv-border)!important;
+  border-left:4px solid var(--recv-accent)!important;
+  box-shadow:0 3px 10px rgba(7,55,62,.035)!important;
+}
+.m-receiving-group .m-pair-subgroup{
+  background:color-mix(in srgb,var(--recv-bg-strong) 78%,#fff)!important;
+  border-color:var(--recv-border)!important;
+}
+.m-receiving-group .m-pair-label{color:var(--recv-accent)!important}
+.m-receiving-group .m-pair-subgroup .m-row[data-pair-role="MAIN_240"]{border-left-color:var(--recv-accent)!important}
+.m-receiving-group .m-pair-subgroup .m-row[data-pair-role="COOK_SERVICE_249"]{border-left-color:color-mix(in srgb,var(--recv-accent) 58%,#c47b1e)!important}
 
 /* Global value hierarchy: operational values must visually outrank provenance */
 .m-metric b{font-size:21px!important;font-weight:950!important;line-height:1.08!important}
@@ -1245,32 +1274,32 @@ BACKOFFICE_HTML = r'''<!doctype html>
     outline-offset:2px;
   }
 
-  .m-family-group{
+  .m-family-group,.m-receiving-group{
     gap:8px;
     margin-bottom:12px;
     content-visibility:auto;
     contain-intrinsic-size:360px;
   }
-  .m-family-head{
+  .m-family-head,.m-receiving-head{
     padding:13px 14px;
     border-radius:17px;
     box-shadow:0 5px 14px rgba(7,55,62,.045);
   }
-  .m-family-head>div:first-child>small{
+  .m-family-head>div:first-child>small,.m-receiving-head>div:first-child>small{
     font-size:11px!important;
     letter-spacing:.02em;
   }
-  .m-family-head>div:first-child>b{
+  .m-family-head>div:first-child>b,.m-receiving-head>div:first-child>b{
     font-size:20px!important;
     letter-spacing:-.025em;
   }
-  .m-family-velocity{
+  .m-family-velocity,.m-receiving-movement{
     min-width:96px;
     padding-left:10px;
     border-left:1px solid color-mix(in srgb,var(--family-accent) 28%,transparent);
   }
-  .m-family-velocity b{font-size:16px!important}
-  .m-family-upcs{gap:8px;padding-left:7px}
+  .m-family-velocity b,.m-receiving-movement b{font-size:16px!important}
+  .m-family-upcs,.m-receiving-upcs{gap:8px;padding-left:7px}
 
   .m-detailcard{
     border:1px solid rgba(214,230,226,.9)!important;
@@ -1342,9 +1371,9 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 
   @media(max-width:380px){
-    .m-family-head>div:first-child>b{font-size:18px!important}
-    .m-family-velocity{min-width:86px}
-    .m-family-velocity b{font-size:15px!important}
+    .m-family-head>div:first-child>b,.m-receiving-head>div:first-child>b{font-size:18px!important}
+    .m-family-velocity,.m-receiving-movement{min-width:86px}
+    .m-family-velocity b,.m-receiving-movement b{font-size:15px!important}
   }
 }
 
@@ -2119,57 +2148,71 @@ function mobileDataHealthRow(r){
   const chips=items.map(([label,x])=>{const st=mobileDataHealthStatus(x);return '<span class="m-dh-chip '+st.cls+'"><span>'+esc(label)+'</span><b>'+esc(st.text)+'</b></span>'}).join('');
   return '<button type="button" class="m-row" data-mobile-key="date:'+esc(r.date)+'"><div class="m-row-main"><div class="m-row-copy"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><div class="m-row-code">'+esc(r.date||'—')+'</div><span class="m-badge '+mobileBadgeClass(overall)+'">'+esc(overall||'INFO')+'</span></div><div class="m-row-name">'+esc(r.weekday||'')+'</div><div class="m-dh-grid">'+chips+'</div></div><span class="m-arrow">›</span></div></button>';
 }
-function mobileQuickFamilyGroups(rows){
+function mobileQuickReceivingGroups(rows){
   const groups=new Map();
   (rows||[]).forEach(r=>{
-    const key=String(r.family_id??r.family_article??('UPC:'+String(r.upc||'')));
+    const mapped=String(r.receiving_article_mapping_status||'')==='CONFIRMED_RECEIVING_ARTICLE';
+    const receiving=String(r.receiving_article||'').trim();
+    const fallbackKey=String(r.family_id??r.family_article??('UPC:'+String(r.upc||'')));
+    const key=receiving?('RECV:'+receiving):('UNRESOLVED:'+fallbackKey);
     if(!groups.has(key))groups.set(key,{
       key,
-      family_id:r.family_id,
-      family_article:r.family_article,
-      family_name:r.family_name||'Unmapped Family',
-      category:r.category||'',
+      receiving_article:receiving||null,
+      receiving_mapped:mapped,
       rows:[],
       max_velocity:Number.NEGATIVE_INFINITY,
-      family_avg_qty_day:null,
-      family_qty_7d:null,
-      family_qty_uom:'',
-      family_movement_days_7d:null
+      receiving_avg_qty_day:null,
+      receiving_qty_7d:null,
+      receiving_qty_uom:'',
+      receiving_movement_days_7d:null,
+      receiving_movement_status:'',
+      category:r.category||''
     });
     const g=groups.get(key),v=Number(r.velocity_7d);
     g.rows.push(r);
     if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
-    if(g.family_qty_7d===null&&r.family_qty_7d!==null&&r.family_qty_7d!==undefined){
-      g.family_qty_7d=Number(r.family_qty_7d);
+    if(g.receiving_qty_7d===null&&r.receiving_movement_7d!==null&&r.receiving_movement_7d!==undefined){
+      g.receiving_qty_7d=Number(r.receiving_movement_7d);
     }
-    if(g.family_avg_qty_day===null&&r.family_avg_qty_day!==null&&r.family_avg_qty_day!==undefined){
-      g.family_avg_qty_day=Number(r.family_avg_qty_day);
+    if(g.receiving_avg_qty_day===null&&r.receiving_avg_qty_day!==null&&r.receiving_avg_qty_day!==undefined){
+      g.receiving_avg_qty_day=Number(r.receiving_avg_qty_day);
     }
-    if(!g.family_qty_uom&&r.family_qty_uom)g.family_qty_uom=String(r.family_qty_uom);
-    if(g.family_movement_days_7d===null&&r.family_movement_days_7d!==null&&r.family_movement_days_7d!==undefined){
-      g.family_movement_days_7d=Number(r.family_movement_days_7d);
+    if(!g.receiving_qty_uom&&r.receiving_movement_uom)g.receiving_qty_uom=String(r.receiving_movement_uom);
+    if(g.receiving_movement_days_7d===null&&r.receiving_movement_days_7d!==null&&r.receiving_movement_days_7d!==undefined){
+      g.receiving_movement_days_7d=Number(r.receiving_movement_days_7d);
     }
+    if(!g.receiving_movement_status&&r.receiving_movement_status)g.receiving_movement_status=String(r.receiving_movement_status);
   });
   const out=[...groups.values()];
-  // UPCs inside every family are always highest recent velocity first.
+  // UPCs inside a Receiving Article stay sorted by actual recent POS velocity.
   out.forEach(g=>g.rows.sort((a,b)=>{
     const av=Number(a.velocity_7d),bv=Number(b.velocity_7d);
     const aa=Number.isFinite(av)?av:Number.NEGATIVE_INFINITY;
     const bb=Number.isFinite(bv)?bv:Number.NEGATIVE_INFINITY;
     return bb-aa||Number(b.qty_7d||0)-Number(a.qty_7d||0)||String(a.upc||'').localeCompare(String(b.upc||''));
   }));
-  out.sort((a,b)=>b.max_velocity-a.max_velocity||(Number(b.family_qty_7d||0)-Number(a.family_qty_7d||0))||String(a.family_name||'').localeCompare(String(b.family_name||'')));
+  // Keep the most actively selling Receiving Article groups first.
+  out.sort((a,b)=>b.max_velocity-a.max_velocity||(Number(b.receiving_qty_7d||0)-Number(a.receiving_qty_7d||0))||String(a.receiving_article||'').localeCompare(String(b.receiving_article||'')));
   return out;
 }
 function mobileQuickGroupedHtml(rows){
-  return mobileQuickFamilyGroups(rows).map(g=>{
-    const avg=g.family_avg_qty_day===null?'—':fmt(g.family_avg_qty_day);
-    const total=g.family_qty_7d===null?'—':fmt(g.family_qty_7d);
-    const uom=g.family_qty_uom||'';
+  return mobileQuickReceivingGroups(rows).map((g,idx)=>{
+    const avg=g.receiving_avg_qty_day===null?'—':fmt(g.receiving_avg_qty_day);
+    const total=g.receiving_qty_7d===null?'—':fmt(g.receiving_qty_7d);
+    const uom=g.receiving_qty_uom||'';
     const avgText=avg==='—'?'—':avg+(uom?' '+uom:'')+'/day';
     const totalText=total==='—'?'—':total+(uom?' '+uom:'');
-    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Family MVT Avg/Day</small><b>'+esc(avgText)+'</b><small>251−252 · 7D Qty · '+esc(totalText)+'</small></div></div>';
-    const children=subgroup240249Units(g.rows,String(g.family_id??g.family_article??g.key)).map(unit=>{
+    const receivingLabel=g.receiving_mapped
+      ? esc(g.receiving_article||'—')
+      : 'UNRESOLVED';
+    const mapText=g.receiving_mapped
+      ? 'Group leader for linked selling UPCs'
+      : 'Receiving Article mapping required';
+    const movementSub=g.receiving_qty_7d===null
+      ? esc(g.receiving_movement_status||'251−252 unavailable')
+      : '251−252 · 7D MVT · '+esc(totalText);
+    const header='<div class="m-receiving-head"><div><small>RECEIVING ARTICLE</small><b>'+receivingLabel+'</b><div class="recv-map">'+mapText+'</div></div><div class="m-receiving-movement"><small>MVT Avg Qty/Day</small><b>'+esc(avgText)+'</b><small>'+movementSub+'</small></div></div>';
+    const children=subgroup240249Units(g.rows).map(unit=>{
       const rowHtml=r=>mobileRowWithPairRole(
         r,
         r.upc||r.family_article,
@@ -2185,7 +2228,7 @@ function mobileQuickGroupedHtml(rows){
         : '<div class="m-pair-stats"><small>POS 7D Qty</small><b>See UPC rows</b><small>Mixed / unresolved UOM</small></div>';
       return '<section class="m-pair-subgroup"><div class="m-pair-label"><div class="m-pair-name">↳ 240 / 249 SUBGROUP</div>'+stats+'</div>'+unit.rows.map(rowHtml).join('')+'</section>';
     }).join('');
-    return '<section class="m-family-group">'+header+'<div class="m-family-upcs">'+children+'</div></section>';
+    return '<section class="m-receiving-group recv-tone-'+(idx%6)+'">'+header+'<div class="m-receiving-upcs">'+children+'</div></section>';
   }).join('');
 }
 function mobileRenderList(){
