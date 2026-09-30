@@ -48,7 +48,40 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </header>
 <section id="inventory" class="view on"><div class="panel">
  <div class="panelhead"><div><div class="title">Inventory Ledger</div><div class="sub">Read-only system data. OH / True Stock is the only editable value.</div></div><span class="pill blue">OH WRITE ONLY</span></div>
- <div class="toolrow"><div class="filters"><button class="filter invfilter on" data-cat="ALL">All</button><button class="filter invfilter" data-cat="FRESH">Fresh</button><button class="filter invfilter" data-cat="LIVE">Live</button><button class="filter invfilter" data-cat="FROZEN">Frozen</button></div><div class="tools"><span id="invSearchState" class="pill blue" style="display:none"></span><button id="clearInventorySearch" class="btn small" style="display:none">Clear Search</button><span id="invCount" class="pill sea">—</span></div></div>
+ <div class="toolrow">
+   <div class="filters"><button class="filter invfilter on" data-cat="ALL">All</button><button class="filter invfilter" data-cat="FRESH">Fresh</button><button class="filter invfilter" data-cat="LIVE">Live</button><button class="filter invfilter" data-cat="FROZEN">Frozen</button></div>
+   <div class="tools">
+     <select id="invStatusFilter" class="select">
+       <option value="ALL">All Status</option>
+       <option value="READY">READY</option>
+       <option value="QA_HOLD">QA HOLD</option>
+       <option value="HISTORICAL_ONLY">Historical Only</option>
+     </select>
+     <select id="invOHFilter" class="select">
+       <option value="ALL">All OH</option>
+       <option value="POSITIVE">OH &gt; 0</option>
+       <option value="ZERO_NEGATIVE">OH ≤ 0</option>
+       <option value="UNKNOWN">OH Unknown</option>
+     </select>
+     <select id="invSalesFilter" class="select">
+       <option value="ALL">All 7D Sales</option>
+       <option value="SOLD">Sold in 7D</option>
+       <option value="NO_SALES">No Sales 7D</option>
+     </select>
+     <select id="invSort" class="select">
+       <option value="qty7_desc">Highest 7D Qty</option>
+       <option value="oh_asc">Lowest OH</option>
+       <option value="oh_desc">Highest OH</option>
+       <option value="dos_asc">Lowest DOS</option>
+       <option value="dos_desc">Highest DOS</option>
+       <option value="gp_asc">Lowest GP%</option>
+       <option value="gp_desc">Highest GP%</option>
+       <option value="price_desc">Highest Price</option>
+       <option value="name">Item A → Z</option>
+     </select>
+     <span id="invSearchState" class="pill blue" style="display:none"></span><button id="clearInventorySearch" class="btn small" style="display:none">Clear Search</button><span id="invCount" class="pill sea">—</span>
+   </div>
+ </div>
  <div id="invError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr></thead><tbody id="invRows"></tbody></table></div>
 </div></section>
 
@@ -63,6 +96,27 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <section id="sales" class="view">
 <div class="panel">
  <div class="panelhead"><div><div class="title">Sales Performance</div><div class="sub">Latest completed canonical sales date, item movement, sales, selling price, and velocity performance.</div></div><span class="pill blue">READ ONLY</span></div>
+ <div class="toolrow">
+   <div class="filters"><button class="filter salescat on" data-cat="ALL">All</button><button class="filter salescat" data-cat="FRESH">Fresh</button><button class="filter salescat" data-cat="LIVE">Live</button><button class="filter salescat" data-cat="FROZEN">Frozen</button></div>
+   <div class="tools">
+     <input id="salesTextFilter" class="select" style="min-width:150px" placeholder="Filter item / UPC">
+     <select id="salesTrendFilter" class="select">
+       <option value="ALL">All Velocity</option>
+       <option value="SLOWING">Slowing</option>
+       <option value="STABLE_GROWING">Stable / Growing</option>
+     </select>
+     <select id="salesSort" class="select">
+       <option value="sales_desc">Highest Sales $</option>
+       <option value="qty_desc">Highest Qty</option>
+       <option value="price_desc">Highest Avg Sold Price</option>
+       <option value="vel7_desc">Highest 7D Velocity</option>
+       <option value="vel28_desc">Highest 28D Velocity</option>
+       <option value="drop_desc">Largest Velocity Drop</option>
+       <option value="name">Item A → Z</option>
+     </select>
+     <span id="salesCount" class="pill sea">—</span>
+   </div>
+ </div>
  <div id="sellKpi" class="grid"></div><div id="sellError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Sales</th><th>Avg Sold Price</th><th>7D Vel</th><th>28D Vel</th></tr></thead><tbody id="sellRows"></tbody></table></div>
 </div>
 </section>
@@ -170,7 +224,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'qty7_desc',salesCat:'ALL',salesTrend:'ALL',salesText:'',salesSort:'sales_desc',salesRows:[],orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -187,13 +241,62 @@ function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
 async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').textContent=h.ok?'SERVICE READY':'SERVICE ISSUE';$('#readyPill').style.color=h.ok?'#bff3d2':'#ffd0c8'}catch(e){$('#readyPill').textContent='SERVICE ERROR'}}
-async function loadInventory(){const err=$('#invError');err.innerHTML='';$('#invRows').innerHTML='<tr><td colspan="10" class="loading">Loading...</td></tr>';try{const q=state.inventorySearch.trim();const url=`/v1/backoffice/inventory?category=${encodeURIComponent(state.invCat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;const d=await api(url);state.inventory=d.rows||[];$('#invCount').textContent=`${d.count||0} items`;const badge=$('#invSearchState'),clear=$('#clearInventorySearch');if(q){badge.textContent=`Search: ${q}`;badge.style.display='inline-flex';clear.style.display='inline-flex'}else{badge.style.display='none';clear.style.display='none'}renderInventory()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#invRows').innerHTML=''}}
-function renderInventory(){const rows=state.inventory;$('#invRows').innerHTML=rows.map(r=>`<tr><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td>${money(r.price)}</td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`).join('')||`<tr><td colspan="10" class="empty">${state.inventorySearch?'No FULL MYSQL matches for: '+esc(state.inventorySearch):'No inventory rows available.'}</td></tr>`;$$('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset))}
-$$('.invfilter').forEach(b=>b.onclick=()=>{state.invCat=b.dataset.cat;$$('.invfilter').forEach(x=>x.classList.toggle('on',x===b));loadInventory()});$('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';loadInventory()};
+async function loadInventory(){const err=$('#invError');err.innerHTML='';$('#invRows').innerHTML='<tr><td colspan="10" class="loading">Loading...</td></tr>';try{const q=state.inventorySearch.trim();const url=`/v1/backoffice/inventory?category=${encodeURIComponent(state.invCat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;const d=await api(url);state.inventory=d.rows||[];const badge=$('#invSearchState'),clear=$('#clearInventorySearch');if(q){badge.textContent=`Search: ${q}`;badge.style.display='inline-flex';clear.style.display='inline-flex'}else{badge.style.display='none';clear.style.display='none'}renderInventory()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#invRows').innerHTML=''}}
+function filteredInventoryRows(){
+  let rows=[...state.inventory];
+  const status=String(state.invStatus||'ALL').toUpperCase();
+  if(status!=='ALL')rows=rows.filter(r=>String(r.readiness||'').toUpperCase()===status);
+  if(state.invOH==='POSITIVE')rows=rows.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)>0);
+  if(state.invOH==='ZERO_NEGATIVE')rows=rows.filter(r=>r.family_oh!==null&&r.family_oh!==undefined&&Number(r.family_oh)<=0);
+  if(state.invOH==='UNKNOWN')rows=rows.filter(r=>r.family_oh===null||r.family_oh===undefined||r.family_oh==='');
+  if(state.invSales==='SOLD')rows=rows.filter(r=>Number(r.qty_7d||0)>0);
+  if(state.invSales==='NO_SALES')rows=rows.filter(r=>Number(r.qty_7d||0)<=0);
+  const s=state.invSort||'qty7_desc';
+  const num=(v,fallback)=>v===null||v===undefined||v===''?fallback:Number(v);
+  if(s==='qty7_desc')rows.sort((x,y)=>num(y.qty_7d,-1)-num(x.qty_7d,-1));
+  if(s==='oh_asc')rows.sort((x,y)=>num(x.family_oh,Number.POSITIVE_INFINITY)-num(y.family_oh,Number.POSITIVE_INFINITY));
+  if(s==='oh_desc')rows.sort((x,y)=>num(y.family_oh,Number.NEGATIVE_INFINITY)-num(x.family_oh,Number.NEGATIVE_INFINITY));
+  if(s==='dos_asc')rows.sort((x,y)=>num(x.dos,Number.POSITIVE_INFINITY)-num(y.dos,Number.POSITIVE_INFINITY));
+  if(s==='dos_desc')rows.sort((x,y)=>num(y.dos,Number.NEGATIVE_INFINITY)-num(x.dos,Number.NEGATIVE_INFINITY));
+  if(s==='gp_asc')rows.sort((x,y)=>num(x.gp_pct,Number.POSITIVE_INFINITY)-num(y.gp_pct,Number.POSITIVE_INFINITY));
+  if(s==='gp_desc')rows.sort((x,y)=>num(y.gp_pct,Number.NEGATIVE_INFINITY)-num(x.gp_pct,Number.NEGATIVE_INFINITY));
+  if(s==='price_desc')rows.sort((x,y)=>num(y.price,Number.NEGATIVE_INFINITY)-num(x.price,Number.NEGATIVE_INFINITY));
+  if(s==='name')rows.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  return rows;
+}
+function renderInventory(){const rows=filteredInventoryRows();$('#invCount').textContent=`${rows.length} shown · ${state.inventory.length} loaded`;$('#invRows').innerHTML=rows.map(r=>`<tr><td><div class="name">${esc(r.name)}</div><div class="meta">${esc(r.category||'')} · ${esc(r.price_type||'')}</div></td><td>${esc(r.upc)}</td><td><b>${esc(r.family_article||'—')}</b><div class="meta">${esc(r.family_name||'')}</div></td><td><button class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.family_oh_uom||'')}" data-oh="${esc(r.family_oh??'')}" data-name="${esc(r.family_name||r.name)}">${fmt(r.family_oh)} ${esc(r.family_oh_uom||'')}</button></td><td>${fmt(r.qty_7d)}</td><td>${money(r.price)}</td><td>${money(r.cost)}</td><td>${pct(r.gp_pct)}</td><td>${fmt(r.dos)}</td><td>${pill(r.readiness)}</td></tr>`).join('')||`<tr><td colspan="10" class="empty">${state.inventorySearch?'No matching rows after current Inventory filters for: '+esc(state.inventorySearch):'No inventory rows match the current filters.'}</td></tr>`;$$('.ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset))}
+$$('.invfilter').forEach(b=>b.onclick=()=>{state.invCat=b.dataset.cat;$$('.invfilter').forEach(x=>x.classList.toggle('on',x===b));loadInventory()});
+$('#invStatusFilter').onchange=e=>{state.invStatus=e.target.value;renderInventory()};
+$('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
+$('#invSalesFilter').onchange=e=>{state.invSales=e.target.value;renderInventory()};
+$('#invSort').onchange=e=>{state.invSort=e.target.value;renderInventory()};
+$('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';loadInventory()};
 
 function openOH(d){if(!d.family){toast('Family Article unavailable');return}const current=d.oh||'';openDrawer('OH / True Stock Adjustment',`${d.name} · Family ${d.family}`,`<div class="detailgrid"><div class="detail"><small>Family Article</small><b>${esc(d.family)}</b></div><div class="detail"><small>System / Effective OH</small><b>${fmt(current)} ${esc(d.uom)}</b></div></div><div class="formfield"><label>True Stock</label><input id="trueStockInput" type="number" min="0" step="0.01" value="${esc(current)}"></div><div class="formfield"><label>UOM</label><input id="trueStockUom" value="${esc(d.uom)}" readonly></div><div class="formfield"><label>Note</label><textarea id="trueStockNote" placeholder="Physical count / OH adjustment"></textarea></div><div id="ohPreview" class="calc">Difference: 0</div>`,`<button id="saveOH" class="btn primary">Save OH Adjustment</button>`);const inp=$('#trueStockInput');inp.oninput=()=>{const n=Number(inp.value||0),o=Number(current||0),diff=n-o;$('#ohPreview').textContent=`Difference: ${diff>=0?'+':''}${diff.toFixed(2)}${diff<0?' · shortage / pending dumping '+Math.abs(diff).toFixed(2):''}`};$('#saveOH').onclick=async()=>{try{$('#saveOH').disabled=true;await api(`/v1/app/v2/pi/${encodeURIComponent(d.family)}/true-stock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:Number(inp.value),uom:d.uom,note:$('#trueStockNote').value||null})});toast('OH / True Stock saved');closeDrawer();await loadInventory()}catch(e){toast(e.message)}finally{const x=$('#saveOH');if(x)x.disabled=false}}}
 
-async function loadSell(){try{const d=await api('/v1/app/v2/performance?category=ALL&limit=100');const s=d.summary||{};$('#sellKpi').innerHTML=`<div class="kpi"><small>Report Date</small><b>${esc(d.report_date||'—')}</b><span>${esc(d.report_date_weekday||'')}</span></div><div class="kpi"><small>Sales</small><b>${money(s.report_date_sales_dollars)}</b><span>Canonical report date</span></div><div class="kpi"><small>Active UPCs 28D</small><b>${fmt(s.active_upcs_28d,0)}</b><span>Seafood scope</span></div><div class="kpi"><small>Slowing Items</small><b>${fmt(s.slowing_items,0)}</b><span>7D below 80% of 28D</span></div>`;$('#sellRows').innerHTML=(d.report_date_top_sellers||[]).map(r=>`<tr><td><div class="name">${esc(r.name)}</div><div class="meta">Family ${esc(r.family_article_number||'')}</div></td><td>${esc(r.upc)}</td><td>${esc(r.category)}</td><td>${fmt(r.sold_quantity)} ${esc(r.qty_uom||'')}</td><td>${money(r.sales_amount)}</td><td>${money(r.avg_sold_price)}</td><td>${fmt(r.velocity_7d)}</td><td>${fmt(r.velocity_28d)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">No report rows.</td></tr>'}catch(e){$('#sellError').innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+async function loadSell(){const err=$('#sellError');err.innerHTML='';$('#sellRows').innerHTML='<tr><td colspan="8" class="loading">Loading...</td></tr>';try{const d=await api(`/v1/app/v2/performance?category=${encodeURIComponent(state.salesCat)}&limit=100`);const s=d.summary||{};state.salesRows=d.report_date_items||d.report_date_top_sellers||[];$('#sellKpi').innerHTML=`<div class="kpi"><small>Report Date</small><b>${esc(d.report_date||'—')}</b><span>${esc(d.report_date_weekday||'')}</span></div><div class="kpi"><small>Sales</small><b>${money(s.report_date_sales_dollars)}</b><span>${esc(state.salesCat)} · canonical report date</span></div><div class="kpi"><small>Active UPCs 28D</small><b>${fmt(s.active_upcs_28d,0)}</b><span>Selected category scope</span></div><div class="kpi"><small>Slowing Items</small><b>${fmt(s.slowing_items,0)}</b><span>7D below 80% of 28D</span></div>`;renderSales()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#sellRows').innerHTML=''}}
+function filteredSalesRows(){
+  let rows=[...state.salesRows];
+  const text=String(state.salesText||'').trim().toLowerCase();
+  if(text)rows=rows.filter(r=>[r.name,r.upc,r.family_article_number,r.category].join(' ').toLowerCase().includes(text));
+  if(state.salesTrend==='SLOWING')rows=rows.filter(r=>Number(r.velocity_28d||0)>0&&Number(r.velocity_7d||0)<Number(r.velocity_28d||0)*0.8);
+  if(state.salesTrend==='STABLE_GROWING')rows=rows.filter(r=>Number(r.velocity_28d||0)>0&&Number(r.velocity_7d||0)>=Number(r.velocity_28d||0)*0.8);
+  const s=state.salesSort||'sales_desc';
+  const n=v=>Number(v||0);
+  if(s==='sales_desc')rows.sort((x,y)=>n(y.sales_amount)-n(x.sales_amount));
+  if(s==='qty_desc')rows.sort((x,y)=>n(y.sold_quantity)-n(x.sold_quantity));
+  if(s==='price_desc')rows.sort((x,y)=>n(y.avg_sold_price)-n(x.avg_sold_price));
+  if(s==='vel7_desc')rows.sort((x,y)=>n(y.velocity_7d)-n(x.velocity_7d));
+  if(s==='vel28_desc')rows.sort((x,y)=>n(y.velocity_28d)-n(x.velocity_28d));
+  if(s==='drop_desc')rows.sort((x,y)=>(n(y.velocity_28d)-n(y.velocity_7d))-(n(x.velocity_28d)-n(x.velocity_7d)));
+  if(s==='name')rows.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  return rows;
+}
+function renderSales(){const rows=filteredSalesRows();$('#salesCount').textContent=`${rows.length} shown · ${state.salesRows.length} loaded`;$('#sellRows').innerHTML=rows.map(r=>`<tr><td><div class="name">${esc(r.name)}</div><div class="meta">Family ${esc(r.family_article_number||'')}</div></td><td>${esc(r.upc)}</td><td>${esc(r.category)}</td><td>${fmt(r.sold_quantity)} ${esc(r.qty_uom||'')}</td><td>${money(r.sales_amount)}</td><td>${money(r.avg_sold_price)}</td><td>${fmt(r.velocity_7d)}</td><td>${fmt(r.velocity_28d)}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">No sales rows match the current filters.</td></tr>'}
+$$('.salescat').forEach(b=>b.onclick=()=>{state.salesCat=b.dataset.cat;$$('.salescat').forEach(x=>x.classList.toggle('on',x===b));loadSell()});
+$('#salesTextFilter').oninput=e=>{state.salesText=e.target.value;renderSales()};
+$('#salesTrendFilter').onchange=e=>{state.salesTrend=e.target.value;renderSales()};
+$('#salesSort').onchange=e=>{state.salesSort=e.target.value;renderSales()};
 
 async function loadOrders(){const err=$('#orderError');err.innerHTML='';$('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';try{const d=await api('/v1/backoffice/ordering-review?category=ALL');state.orders=d.rows||[];renderOrders()}catch(e){err.innerHTML=`<div class="error">${esc(e.message)}</div>`;$('#orderRows').innerHTML=''}}
 function orderRows(){let a=[...state.orders];if(state.orderFilter==='FRESH')a=a.filter(x=>String(x.category).toUpperCase()==='FRESH');if(state.orderFilter==='FROZEN')a=a.filter(x=>String(x.category).toUpperCase()==='FROZEN');if(state.orderFilter==='ATTENTION')a=a.filter(x=>x.attention);const s=$('#orderSort').value;if(s==='suggested')a.sort((x,y)=>Number(y.suggested_delivery_qty||0)-Number(x.suggested_delivery_qty||0));if(s==='receipt')a.sort((x,y)=>String(y.last_receipt_date||'').localeCompare(String(x.last_receipt_date||'')));if(s==='oh')a.sort((x,y)=>Number(x.oh??1e18)-Number(y.oh??1e18));if(s==='frequency')a.sort((x,y)=>String(x.ordering_frequency||'').localeCompare(String(y.ordering_frequency||'')));if(s==='family')a.sort((x,y)=>String(x.family_name||'').localeCompare(String(y.family_name||'')));return a}
