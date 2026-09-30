@@ -1617,6 +1617,28 @@ def _quick_receiving_article_context(
             desc = _norm_desc(a.get("article_description"))
             if not _fallback_selling_article_compatible(prefix, art, desc):
                 continue
+
+            has_selling_mvt = (
+                a.get("movement_7d") is not None
+                and _d(a.get("movement_7d")) != 0
+            )
+            role = str(a.get("article_role") or "").upper()
+            lineage = str(a.get("lineage_basis") or "").upper()
+
+            # A receiving/related Article with no 251/252 and no explicit
+            # selling lineage must never win heuristic UPC assignment. This
+            # prevents cases such as 240739 being moved from a Fried-Service
+            # Article onto a 101-109-only Receiving Article.
+            if (
+                not has_selling_mvt
+                and role in {"RECEIVING_ARTICLE", "RELATED_SAP_ARTICLE"}
+                and lineage not in {
+                    "ARTICLE_MANUAL_COLUMN_B_TO_D",
+                    "SAP_DOCUMENT_317_318",
+                }
+            ):
+                continue
+
             score = (
                 SequenceMatcher(None, sell_desc, desc).ratio() * 60.0
                 if sell_desc and desc
@@ -1650,22 +1672,8 @@ def _quick_receiving_article_context(
 
             if str(a.get("lineage_basis") or "") == "SAP_DOCUMENT_317_318":
                 score += 12.0
-            has_selling_mvt = (
-                a.get("movement_7d") is not None
-                and _d(a.get("movement_7d")) != 0
-            )
             if has_selling_mvt:
                 score += 18.0
-            role = str(a.get("article_role") or "").upper()
-            if (
-                not has_selling_mvt
-                and role in {"RECEIVING_ARTICLE", "RELATED_SAP_ARTICLE"}
-                and str(a.get("lineage_basis") or "") not in {
-                    "ARTICLE_MANUAL_COLUMN_B_TO_D",
-                    "SAP_DOCUMENT_317_318",
-                }
-            ):
-                score -= 100.0
             scored.append((score, art, a))
 
         scored.sort(key=lambda x: (-x[0], x[1]))

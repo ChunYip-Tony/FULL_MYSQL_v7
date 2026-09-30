@@ -209,6 +209,7 @@ jobs:
           assert 'Place its UPCs directly underneath' in ui
           assert '_fallback_selling_article_compatible' in runtime
           assert 'NO_PREFIX_COMPATIBLE_SAP_SELLING_ARTICLE' in runtime
+          assert 'must never win heuristic UPC assignment' in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
@@ -408,6 +409,7 @@ jobs:
           curl -fsS --max-time 120 "$base/v1/backoffice/inventory?category=ALL&limit=500&lightweight=true" -o /tmp/all.json
           python - <<'PY'
           import json,re
+          from version import VERSION
           health=json.load(open('/tmp/health.json'))
           payload=json.load(open('/tmp/all.json'))
           rows=payload.get('rows') or []
@@ -467,18 +469,38 @@ jobs:
                       'reason':reason,
                   })
 
+          by_upc={str(r.get('upc') or ''):r for r in rows}
+          regression={}
+          for target in ('24073900000','24518400000'):
+              r=by_upc.get(target)
+              regression[target]=None if r is None else {
+                  'family_article':r.get('family_article'),
+                  'assigned_article':r.get('receiving_article'),
+                  'basis':r.get('receiving_article_mapping_basis'),
+                  'qty_7d':r.get('qty_7d'),
+              }
+
           out={
               'production_version':health.get('version'),
+              'expected_version':VERSION,
               'rows_scanned':len(rows),
               'exact_rows':exact_rows,
               'fallback_rows':fallback_rows,
               'mismatch_count':len(mismatches),
               'mismatches':mismatches[:100],
               '249_fallback_review_count':len(review_249_fallbacks),
+              'regression_targets':regression,
           }
           print(json.dumps(out,indent=2,default=str))
-          if health.get('version')=='7.0.295-single-service' and mismatches:
-              raise SystemExit('GLOBAL_SELLING_ARTICLE_MAPPING_AUDIT_FAILED')
+          if health.get('version')==VERSION:
+              if mismatches:
+                  raise SystemExit('GLOBAL_SELLING_ARTICLE_MAPPING_AUDIT_FAILED')
+              saba=regression.get('24073900000')
+              if saba and str(saba.get('assigned_article') or '')!='1341297':
+                  raise SystemExit('REGRESSION_240739_NOT_MAPPED_TO_FAMILY_SELLING_ARTICLE')
+              roe=regression.get('24518400000')
+              if roe and not str(roe.get('assigned_article') or ''):
+                  raise SystemExit('REGRESSION_245184_WAS_OVERBLOCKED')
           PY
 
       - name: Live Selling MVT production diagnostics
