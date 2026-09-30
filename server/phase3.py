@@ -2055,8 +2055,9 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
             config["upload_timestamp"]=pf.get("upload_timestamp")
         break
 
-    # POS authority: newest completed SINGLE_DATE sold event anywhere in the
-    # same canonical/raw lineage. Do not stop at an older canonical-id event.
+    # POS_SINGLE_DATE authority: newest completed SINGLE_DATE sold event
+    # anywhere in the same canonical/raw lineage. Do not stop at an older
+    # canonical-id event.
     pos=None
     if completed_day is not None:
         sales_pred,sales_args,pos_match_mode=_lineage_pred("s.upc_id","s.ean_upc")
