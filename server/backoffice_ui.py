@@ -2493,6 +2493,12 @@ function mobileQuickFamilyGroups(rows){
       group_avg_qty_day:null,
       group_uom:'',
       group_status:'',
+      group_basis:r.family_group_movement_basis||'',
+      reconciliation:r.family_group_reconciliation||'',
+      active_pos_upc_count:r.family_group_active_pos_upc_count??null,
+      active_selling_article_count:r.family_group_active_selling_article_count??null,
+      unmapped_active_pos_upcs:Array.isArray(r.family_group_unmapped_active_pos_upcs)?r.family_group_unmapped_active_pos_upcs:[],
+      zero_sap_mvt_articles:Array.isArray(r.family_group_zero_sap_mvt_articles)?r.family_group_zero_sap_mvt_articles:[],
       source_article:r.family_source_article||r.family_article||null,
       source_movement_7d:r.family_source_movement_7d,
       source_movement_uom:r.family_source_movement_uom||'',
@@ -2525,6 +2531,12 @@ function mobileQuickFamilyGroups(rows){
     }
     if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
     if(!g.group_status&&r.family_group_movement_status)g.group_status=String(r.family_group_movement_status);
+    if(!g.group_basis&&r.family_group_movement_basis)g.group_basis=String(r.family_group_movement_basis);
+    if(!g.reconciliation&&r.family_group_reconciliation)g.reconciliation=String(r.family_group_reconciliation);
+    if((g.active_pos_upc_count===null||g.active_pos_upc_count===undefined)&&r.family_group_active_pos_upc_count!==null&&r.family_group_active_pos_upc_count!==undefined)g.active_pos_upc_count=Number(r.family_group_active_pos_upc_count);
+    if((g.active_selling_article_count===null||g.active_selling_article_count===undefined)&&r.family_group_active_selling_article_count!==null&&r.family_group_active_selling_article_count!==undefined)g.active_selling_article_count=Number(r.family_group_active_selling_article_count);
+    if((!g.unmapped_active_pos_upcs||!g.unmapped_active_pos_upcs.length)&&Array.isArray(r.family_group_unmapped_active_pos_upcs))g.unmapped_active_pos_upcs=r.family_group_unmapped_active_pos_upcs;
+    if((!g.zero_sap_mvt_articles||!g.zero_sap_mvt_articles.length)&&Array.isArray(r.family_group_zero_sap_mvt_articles))g.zero_sap_mvt_articles=r.family_group_zero_sap_mvt_articles;
     if(!g.source_article&&r.family_source_article)g.source_article=String(r.family_source_article);
     if((g.source_movement_7d===null||g.source_movement_7d===undefined)&&r.family_source_movement_7d!==null&&r.family_source_movement_7d!==undefined)g.source_movement_7d=r.family_source_movement_7d;
     if(!g.source_movement_uom&&r.family_source_movement_uom)g.source_movement_uom=String(r.family_source_movement_uom);
@@ -2557,6 +2569,9 @@ function mobileQuickFamilyGroups(rows){
         movement_uom:a.movement_uom||'',
         avg_qty_day:a.avg_qty_day,
         movement_status:a.movement_status||'',
+        has_active_pos_upc:!!a.has_active_pos_upc,
+        active_pos_upcs:Array.isArray(a.active_pos_upcs)?a.active_pos_upcs:[],
+        manual_selling_upcs:Array.isArray(a.manual_selling_upcs)?a.manual_selling_upcs:[],
         receipt_verified:!!a.receipt_verified,
         receipt_movement_type:a.receipt_movement_type||'',
         receipt_date:a.receipt_date||'',
@@ -2691,10 +2706,18 @@ function mobileQuickGroupedHtml(rows){
       ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">DIRECT 251−252 · '+esc(directText)+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERTED · '+esc(conversionText):'')+'</div>'
       : '';
     const familyPositiveMvt=Number.isFinite(Number(g.group_qty_7d))&&Number(g.group_qty_7d)>0;
+    const recon=String(g.reconciliation||'').toUpperCase();
+    const reconText=(recon==='PASS'?'✓ RECONCILED':'⚠ RECONCILIATION HOLD');
+    const reconMeta='<div style="font-size:7px;font-weight:900;color:var(--muted);margin-top:3px">'+
+      esc(reconText)+' · '+esc(String(g.active_selling_article_count??0))+' Selling Article'+(Number(g.active_selling_article_count||0)===1?'':'s')+
+      ' · '+esc(String(g.active_pos_upc_count??0))+' POS-active UPC'+(Number(g.active_pos_upc_count||0)===1?'':'s')+
+      (g.zero_sap_mvt_articles?.length?' · Zero SAP MVT: '+esc(g.zero_sap_mvt_articles.join(', ')):'')+
+      (g.unmapped_active_pos_upcs?.length?' · Unmapped UPC: '+esc(g.unmapped_active_pos_upcs.join(', ')):'')+
+    '</div>';
     const familyHead='<div class="m-q-family-head'+(familyPositiveMvt?' has-positive-mvt':'')+'">'+
-      '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+sourceMvtText+familyReceiptCaption+'</div>'+
+      '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+reconMeta+sourceMvtText+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
-        '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
+        '<div class="m-q-kpi"><small>7D FAMILY MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
       '</div>'+
     '</div>';
@@ -2752,7 +2775,7 @@ function mobileQuickGroupedHtml(rows){
                 ? 'RECEIVING / SAP SELLING ARTICLE'
                 : (a.receipt_verified?'RECEIVING ARTICLE':(articleHasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE'))))));
       const recvHead='<div class="m-q-receiving-head'+(articlePositiveMvt?' has-positive-mvt':'')+'">'+
-        '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">'+esc(articleRole)+'</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">'+(articleHasMvt?'251−252 MVT':'No 251−252 on this Article')+'</div>'+receiptCaption+'</div>'+
+        '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">'+esc(articleRole)+'</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div></div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">'+(articleHasMvt?'251−252 SELLING MVT':(a.manual_selling_upcs?.length?'251−252 SELLING MVT · 0':'No 251−252 on this Article'))+'</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
 
@@ -2791,9 +2814,10 @@ function mobileQuickGroupedHtml(rows){
       const recentVerified=!!recentVerifiedArticle&&article===recentVerifiedArticle&&!!a?.receipt_verified;
       const hasMvt=hasNonZero(a?.movement_7d);
       const upcRows=Array.isArray(a?.rows)?a.rows:[];
-      const hasUpcActivity=upcRows.some(r=>hasNonZero(r?.qty_7d));
-      // Any Article with 101–109 receipt evidence stays visible.
-      // Only non-receipt articles with no 7D MVT and no related UPC POS activity are hidden.
+      const hasUpcActivity=upcRows.some(r=>hasNonZero(r?.qty_7d))||!!a?.has_active_pos_upc;
+      // Any Article with 101–109 receipt evidence stays visible. An authoritative
+      // Table-1 Selling Article with a POS-active UPC also stays visible even when
+      // its 7D SAP 251/252 is zero, because that mismatch is operationally useful.
       const shouldHide=!a?.receipt_verified&&!hasMvt&&!hasUpcActivity;
       (shouldHide?hidden:visible).push({a,recentVerified});
     });
