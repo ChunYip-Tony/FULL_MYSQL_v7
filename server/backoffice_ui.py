@@ -14,13 +14,13 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <title>FULL MYSQL · Dockside Backoffice</title>
 <style>
 :root{--bg:#f2f5f4;--paper:#fff;--ink:#153638;--muted:#6c7e7d;--line:#dbe6e2;--deep:#0b343a;--deep2:#103f46;--sea:#167985;--sea2:#2ca0a8;--foam:#e9f5f3;--green:#116b49;--greenbg:#e8f6ee;--amber:#946000;--amberbg:#fff4df;--red:#bd4f44;--redbg:#fff0ed;--blue:#275bb5;--bluebg:#edf3ff;--shadow:0 10px 28px rgba(9,49,54,.06)}
-*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}body{font-size:14px;line-height:1.4}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(44,160,168,.18);outline-offset:2px}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}body{font-size:16px;line-height:1.45}button,input,select,textarea{font:inherit;color:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid rgba(44,160,168,.18);outline-offset:2px}
 .shell{max-width:1720px;margin:auto;padding:10px 10px 70px}.appbar{background:linear-gradient(135deg,var(--deep),var(--deep2));color:#fff;border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px 14px}.brand{display:flex;gap:10px;align-items:center}.mark{width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.1);display:grid;place-items:center;font-size:20px}.brand strong{display:block;font-size:15px}.brand small{display:block;color:rgba(255,255,255,.67);margin-top:2px}.topstat{display:flex;gap:6px;flex-wrap:wrap}.glass{border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.08);border-radius:999px;padding:6px 9px;font-size:10px;font-weight:800}.searchbar{display:flex;gap:7px;padding:0 14px 10px}.searchbar input{flex:1;min-width:0;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.13);color:#fff;border-radius:11px;padding:10px 12px}.searchbar input::placeholder{color:rgba(255,255,255,.55)}
-.nav{display:flex;gap:3px;overflow:auto;padding:0 10px 10px}.nav button{border:0;background:transparent;color:#d2e6e6;border-radius:8px;padding:7px 9px;white-space:nowrap;font-size:11px}.nav button.on{background:#fff;color:var(--deep);font-weight:800}.btn{min-height:36px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 10px;font-weight:750}.btn.primary{background:var(--sea);border-color:var(--sea);color:#fff}.btn.soft{background:var(--foam);border-color:transparent;color:var(--sea)}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.btn.small{min-height:29px;font-size:10px;padding:5px 8px}.btn:disabled{opacity:.5;cursor:not-allowed}
+.nav{display:flex;gap:3px;overflow:auto;padding:0 10px 10px}.nav button{border:0;background:transparent;color:#d2e6e6;border-radius:8px;padding:9px 11px;white-space:nowrap;font-size:13px}.nav button.on{background:#fff;color:var(--deep);font-weight:800}.btn{min-height:36px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:7px 10px;font-weight:750}.btn.primary{background:var(--sea);border-color:var(--sea);color:#fff}.btn.soft{background:var(--foam);border-color:transparent;color:var(--sea)}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}.btn.small{min-height:32px;font-size:11px;padding:6px 9px}.btn:disabled{opacity:.5;cursor:not-allowed}
 .pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;font-size:9px;font-weight:800;white-space:nowrap}.pill.green{background:var(--greenbg);color:var(--green)}.pill.amber{background:var(--amberbg);color:var(--amber)}.pill.red{background:var(--redbg);color:var(--red)}.pill.blue{background:var(--bluebg);color:var(--blue)}.pill.sea{background:var(--foam);color:var(--sea)}
 .statusstrip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}.stat{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 10px}.stat small{display:block;color:var(--muted);font-size:8px}.stat b{display:block;font-size:17px;margin-top:2px}.stat span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
-.view{display:none}.view.on{display:block}.panel{margin-top:9px;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}.panelhead{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;flex-wrap:wrap;padding:11px 12px;border-bottom:1px solid var(--line)}.title{font-size:16px;font-weight:850}.sub{font-size:9px;color:var(--muted);margin-top:2px}.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.toolrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 11px;border-bottom:1px solid var(--line)}.filters{display:flex;gap:5px;flex-wrap:wrap}.filter{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 8px;font-size:9px}.filter.on{background:var(--foam);border-color:transparent;color:var(--sea);font-weight:800}.select{border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 8px;font-size:10px}
-.tablewrap{overflow:auto}.table{width:100%;min-width:980px;border-collapse:collapse;font-size:10px}.table th,.table td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}.table th{background:#f7faf9;color:var(--muted);font-size:8px;text-transform:uppercase;letter-spacing:.035em}.table tbody tr:hover td{background:#fbfdfc}.name{font-weight:800;font-size:11px}.meta{font-size:8px;color:var(--muted);margin-top:2px}.num{font-variant-numeric:tabular-nums}.linkbtn{border:0;background:transparent;padding:2px 0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:850}.suggest{font-weight:900;color:var(--sea);font-size:11px}.empty{padding:28px;text-align:center;color:var(--muted);font-size:10px}.loading{padding:22px;color:var(--muted);font-size:10px}.error{padding:10px 12px;background:var(--redbg);color:var(--red);font-size:10px;border-bottom:1px solid #f0cac4}
+.view{display:none}.view.on{display:block}.subview{display:none}.subview.on{display:block}.panel{margin-top:9px;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}.panelhead{display:flex;align-items:flex-start;justify-content:space-between;gap:9px;flex-wrap:wrap;padding:11px 12px;border-bottom:1px solid var(--line)}.title{font-size:19px;font-weight:850}.sub{font-size:11px;color:var(--muted);margin-top:3px}.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.toolrow{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 11px;border-bottom:1px solid var(--line)}.filters{display:flex;gap:5px;flex-wrap:wrap}.filter{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 10px;font-size:11px}.filter.on{background:var(--foam);border-color:transparent;color:var(--sea);font-weight:800}.select{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 9px;font-size:12px}
+.tablewrap{overflow:auto}.table{width:100%;min-width:980px;border-collapse:collapse;font-size:12px}.table th,.table td{padding:8px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}.table th{background:#f7faf9;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.035em}.table tbody tr:hover td{background:#fbfdfc}.name{font-weight:800;font-size:13px}.meta{font-size:10px;color:var(--muted);margin-top:2px}.num{font-variant-numeric:tabular-nums}.linkbtn{border:0;background:transparent;padding:2px 0;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px;font-weight:850}.suggest{font-weight:900;color:var(--sea);font-size:11px}.empty{padding:28px;text-align:center;color:var(--muted);font-size:10px}.loading{padding:22px;color:var(--muted);font-size:10px}.error{padding:10px 12px;background:var(--redbg);color:var(--red);font-size:10px;border-bottom:1px solid #f0cac4}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:11px}.kpi{border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.kpi small{display:block;color:var(--muted);font-size:8px}.kpi b{display:block;font-size:14px;margin-top:2px}.kpi span{display:block;color:var(--muted);font-size:8px;margin-top:2px}
 .reasonlist{display:grid;gap:6px}.reason{display:grid;grid-template-columns:auto 1fr;gap:7px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.rdot{width:7px;height:7px;border-radius:50%;background:var(--sea);margin-top:4px}.reason b{display:block;font-size:10px}.reason span{display:block;color:var(--muted);font-size:9px;margin-top:1px}.sectiontitle{font-size:10px;font-weight:850;margin:13px 0 6px}.detailgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.detail{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fbfdfc}.detail small{display:block;color:var(--muted);font-size:8px}.detail b{display:block;font-size:10px;margin-top:2px}.calc{border:1px dashed #b9d4cf;background:#f4fbf9;border-radius:9px;padding:8px;margin-top:8px;font-size:9px;color:var(--deep)}.logconsole{background:#0b272b;color:#d8efec;border-radius:10px;padding:9px;font:9px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:230px;overflow:auto}
 .uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
@@ -40,13 +40,9 @@ BACKOFFICE_HTML = r'''<!doctype html>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav">
     <button class="navbtn on" data-view="inventory">Inventory</button>
-    <button class="navbtn" data-view="sellthrough">Sell-through</button>
     <button class="navbtn" data-view="ordering">Ordering Review</button>
     <button class="navbtn" data-view="pricing">Pricing Review</button>
-    <button class="navbtn" data-view="qa">QA</button>
-    <button class="navbtn" data-view="upload">Upload Center</button>
-    <button class="navbtn" data-view="batches">Batch Monitor</button>
-    <button class="navbtn" data-view="data">Data Pipeline</button>
+    <button class="navbtn" data-view="database">Database Center</button>
   </nav>
 </header>
 <section id="inventory" class="view on"><div class="panel">
@@ -55,10 +51,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
  <div id="invError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr></thead><tbody id="invRows"></tbody></table></div>
 </div></section>
 
-<section id="sellthrough" class="view"><div class="panel">
- <div class="panelhead"><div><div class="title">Sell-through</div><div class="sub">Latest completed canonical sales date and active selling performance.</div></div><span class="pill blue">READ ONLY</span></div>
- <div id="sellKpi" class="grid"></div><div id="sellError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Sales</th><th>Avg Sold Price</th><th>7D Vel</th><th>28D Vel</th></tr></thead><tbody id="sellRows"></tbody></table></div>
-</div></section>
+
 
 <section id="ordering" class="view"><div class="panel">
  <div class="panelhead"><div><div class="title">Ordering Review</div><div class="sub">Receiving / Ordering Article + Family Article decision level. Selling UPCs appear only inside Details.</div></div><span class="pill blue">READ ONLY</span></div>
@@ -66,7 +59,16 @@ BACKOFFICE_HTML = r'''<!doctype html>
  <div id="orderError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Family Name</th><th>Receiving Article</th><th>Family Article</th><th>OH</th><th>Last Receipt Date</th><th>Last Receipt Qty · Base UOM</th><th>Ordering Frequency</th><th>Coming Delivery Qty Suggestion</th><th></th></tr></thead><tbody id="orderRows"></tbody></table></div>
 </div></section>
 
-<section id="pricing" class="view"><div class="panel">
+<section id="pricing" class="view">
+  <div class="panel">
+    <div class="toolrow" style="border-bottom:1px solid var(--line)">
+      <div class="filters">
+        <button class="filter pricingtab on" data-pricingtab="pricepane">Price Suggestions</button>
+        <button class="filter pricingtab" data-pricingtab="sellpane">Sell-through</button>
+      </div>
+    </div>
+  </div>
+  <div id="pricepane" class="subview on"><div class="panel">
  <div class="panelhead"><div><div class="title">Pricing Review</div><div class="sub">Explainable price suggestions. No staging, approval, or system price changes.</div></div><span class="pill blue">READ ONLY</span></div>
  <div class="toolrow">
    <div class="filters"><button class="filter pricefilter on" data-cat="ALL">All</button><button class="filter pricefilter" data-cat="FRESH">Fresh</button><button class="filter pricefilter" data-cat="LIVE">Live</button><button class="filter pricefilter" data-cat="FROZEN">Frozen</button></div>
@@ -93,9 +95,48 @@ BACKOFFICE_HTML = r'''<!doctype html>
    </div>
  </div>
  <div id="priceError"></div><div class="tablewrap"><table class="table" style="min-width:1150px"><thead><tr><th>Item</th><th>UPC</th><th>Current</th><th>Candidate</th><th>Cost</th><th>GP%</th><th>7D Qty</th><th>28D Qty</th><th>Review Status</th><th>Primary Reason</th><th></th></tr></thead><tbody id="priceRows"></tbody></table></div>
-</div></section>
+</div></div>
+  <div id="sellpane" class="subview"><div class="panel">
+ <div class="panelhead"><div><div class="title">Sell-through</div><div class="sub">Latest completed canonical sales date and active selling performance.</div></div><span class="pill blue">READ ONLY</span></div>
+ <div id="sellKpi" class="grid"></div><div id="sellError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Category</th><th>Qty</th><th>Sales</th><th>Avg Sold Price</th><th>7D Vel</th><th>28D Vel</th></tr></thead><tbody id="sellRows"></tbody></table></div>
+</div></div>
+</section>
 
-<section id="qa" class="view"><div class="panel">
+
+
+
+
+
+
+
+
+<section id="database" class="view">
+  <div class="panel">
+    <div class="panelhead">
+      <div><div class="title">Database Center</div><div class="sub">Upload, batch processing, QA resolution, and pipeline health in one workspace.</div></div>
+    </div>
+    <div class="toolrow">
+      <div class="filters">
+        <button class="filter dbtab on" data-dbtab="dbupload">Upload Center</button>
+        <button class="filter dbtab" data-dbtab="dbbatches">Batch Monitor</button>
+        <button class="filter dbtab" data-dbtab="dbqa">QA</button>
+        <button class="filter dbtab" data-dbtab="dbdata">Data Pipeline</button>
+      </div>
+    </div>
+  </div>
+  <div id="dbupload" class="subview on"><div class="panel">
+ <div class="panelhead"><div><div class="title">Upload Center</div><div class="sub">No staging. One upload action creates one batch, uploads all selected files, then commits immediately.</div></div><span class="pill sea">DIRECT UPLOAD</span></div>
+ <div class="uploadgrid">
+  <div class="drop"><div class="ico">📤</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. All selected files are one immutable batch.</p><input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div class="formfield"><label>Optional batch note</label><input id="uploadNote" placeholder="Daily seafood upload"></div><div class="upload-actions"><button id="uploadBtn" class="btn primary">Upload & Start Batch</button></div></div>
+  <div><div class="sectiontitle">Latest Upload Result</div><div id="uploadResult" class="uploadresult"><span class="meta">No upload in this session.</span></div><div class="sectiontitle">Current Processing</div><div id="uploadActive" class="batchgrid" style="padding:0"></div></div>
+ </div>
+</div></div>
+  <div id="dbbatches" class="subview"><div class="panel">
+ <div class="panelhead"><div><div class="title">Batch Monitor</div><div class="sub">Active batch is separate from completed/failed history.</div></div><button id="refreshBatch" class="btn small">Refresh</button></div>
+ <div class="sectiontitle" style="padding:0 11px">Current Active Batch</div><div id="activeBatch" class="batchgrid"></div>
+ <div class="sectiontitle" style="padding:0 11px">Recent Batch History</div><div id="batchError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Batch</th><th>Status</th><th>Files</th><th>Started</th><th>Completed</th><th>Phase 3</th><th>QC Ready/Hold</th></tr></thead><tbody id="batchRows"></tbody></table></div>
+</div></div>
+  <div id="dbqa" class="subview"><div class="panel">
  <div class="panelhead"><div><div class="title">QA Review & Resolution</div><div class="sub">Controlled fixes for UPC identity / Selling UOM QA holds. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
  <div class="toolrow">
    <div class="filters">
@@ -110,25 +151,11 @@ BACKOFFICE_HTML = r'''<!doctype html>
  <div class="tablewrap"><table class="table" style="min-width:1050px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
  <div class="sectiontitle" style="padding:0 11px">Recent QA Resolution History</div>
  <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
-</div></section>
-
-<section id="upload" class="view"><div class="panel">
- <div class="panelhead"><div><div class="title">Upload Center</div><div class="sub">No staging. One upload action creates one batch, uploads all selected files, then commits immediately.</div></div><span class="pill sea">DIRECT UPLOAD</span></div>
- <div class="uploadgrid">
-  <div class="drop"><div class="ico">📤</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. All selected files are one immutable batch.</p><input id="uploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div class="formfield"><label>Optional batch note</label><input id="uploadNote" placeholder="Daily seafood upload"></div><div class="upload-actions"><button id="uploadBtn" class="btn primary">Upload & Start Batch</button></div></div>
-  <div><div class="sectiontitle">Latest Upload Result</div><div id="uploadResult" class="uploadresult"><span class="meta">No upload in this session.</span></div><div class="sectiontitle">Current Processing</div><div id="uploadActive" class="batchgrid" style="padding:0"></div></div>
- </div>
-</div></section>
-
-<section id="batches" class="view"><div class="panel">
- <div class="panelhead"><div><div class="title">Batch Monitor</div><div class="sub">Active batch is separate from completed/failed history.</div></div><button id="refreshBatch" class="btn small">Refresh</button></div>
- <div class="sectiontitle" style="padding:0 11px">Current Active Batch</div><div id="activeBatch" class="batchgrid"></div>
- <div class="sectiontitle" style="padding:0 11px">Recent Batch History</div><div id="batchError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Batch</th><th>Status</th><th>Files</th><th>Started</th><th>Completed</th><th>Phase 3</th><th>QC Ready/Hold</th></tr></thead><tbody id="batchRows"></tbody></table></div>
-</div></section>
-
-<section id="data" class="view"><div class="panel">
+</div></div>
+  <div id="dbdata" class="subview"><div class="panel">
  <div class="panelhead"><div><div class="title">Data Pipeline</div><div class="sub">Service health, active processing, and latest publish status.</div></div><button id="refreshData" class="btn small">Refresh</button></div><div id="dataGrid" class="grid"></div><div id="dataEvents" class="batchgrid"></div>
-</div></section>
+</div></div>
+</section>
 
 <div id="drawerBack" class="drawerback"></div><aside id="drawer" class="drawer"><div class="drawerhead"><div><div id="drawerTitle" class="drawertitle">Details</div><div id="drawerSub" class="drawersub"></div></div><button id="drawerClose" class="btn small">Close</button></div><div id="drawerBody" class="drawerbody"></div><div id="drawerFoot" class="drawerfoot"></div></aside>
 <div id="toast" class="toast"></div>
@@ -144,8 +171,12 @@ function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
 async function api(url,opts={}){const r=await fetch(url,{cache:'no-store',...opts});let data=null;try{data=await r.json()}catch{data={detail:await r.text()}}if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}return data}
-function show(view){$$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='sellthrough')loadSell();if(view==='ordering')loadOrders();if(view==='pricing')loadPrices();if(view==='qa')loadQA();if(view==='upload')loadBatches();if(view==='batches')loadBatches();if(view==='data')loadData();window.scrollTo({top:0,behavior:'smooth'})}
-$$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
+function show(view){$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='ordering')loadOrders();if(view==='pricing'){showPricingTab('pricepane');loadPrices()}if(view==='database'){showDbTab('dbupload');loadBatches()}window.scrollTo({top:0,behavior:'smooth'})}
+function showPricingTab(tab){$('.subview#pricepane,.subview#sellpane').forEach(x=>x.classList.toggle('on',x.id===tab));$('.pricingtab').forEach(x=>x.classList.toggle('on',x.dataset.pricingtab===tab));if(tab==='pricepane')loadPrices();if(tab==='sellpane')loadSell()}
+function showDbTab(tab){$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));if(tab==='dbupload'||tab==='dbbatches')loadBatches();if(tab==='dbqa')loadQA();if(tab==='dbdata')loadData()}
+$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
+$('.pricingtab').forEach(b=>b.onclick=()=>showPricingTab(b.dataset.pricingtab));
+$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
 function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
