@@ -6,7 +6,13 @@ from typing import Any
 
 from data_coverage import source_data_days
 from db import db_conn
-from upc_aliases import numeric_digits, service_249_canonical_base, retail_barcode_alias_candidates
+from upc_aliases import (
+    numeric_digits,
+    service_249_canonical_base,
+    retail_barcode_alias_candidates,
+    normalize_selling_description,
+    looks_like_249_service_description,
+)
 
 
 def ensure_coverage_backfill_tables(cur) -> None:
@@ -528,7 +534,7 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
 def _active_upc_alias_index(cur) -> dict[str, Any]:
     """Build one in-memory authoritative UPC roster index for raw-source relinking."""
     cur.execute(
-        """SELECT upc_id,ean_upc
+        """SELECT upc_id,ean_upc,selling_description
            FROM selling_upc
            WHERE record_status='ACTIVE'
            ORDER BY CHAR_LENGTH(ean_upc),upc_id"""
@@ -536,6 +542,7 @@ def _active_upc_alias_index(cur) -> dict[str, Any]:
     rows=cur.fetchall()
     exact: dict[str,int]={}
     numeric: dict[str,int]={}
+    service_desc_ids: dict[str,set[int]]={}
     for row in rows:
         ean=str(row.get("ean_upc") or "").strip()
         if not ean:
@@ -545,13 +552,40 @@ def _active_upc_alias_index(cur) -> dict[str, Any]:
         key=numeric_digits(ean)
         if key:
             numeric.setdefault(key,uid)
-    return {"exact":exact,"numeric":numeric}
+        if ean.startswith("249") and looks_like_249_service_description(row.get("selling_description")):
+            desc_key=normalize_selling_description(row.get("selling_description"))
+            if desc_key:
+                service_desc_ids.setdefault(desc_key,set()).add(uid)
+    # Description is authority only when exactly one ACTIVE canonical 249 row
+    # owns the normalized service description. Ambiguous names fail closed.
+    service_desc={
+        key: next(iter(ids))
+        for key,ids in service_desc_ids.items()
+        if len(ids)==1
+    }
+    return {"exact":exact,"numeric":numeric,"service_desc":service_desc}
 
 
-def _resolve_source_upc_id(index: dict[str, Any], raw_ean: Any, fallback_upc_id: Any = None) -> int | None:
+def _resolve_source_upc_id(
+    index: dict[str, Any],
+    raw_ean: Any,
+    fallback_upc_id: Any = None,
+    description: Any = None,
+) -> int | None:
     raw=str(raw_ean or "").strip()
     exact=index["exact"]
     numeric=index["numeric"]
+
+    # A POS row explicitly labeled Fried/Cook Service is selling evidence for
+    # the service UPC. If its source barcode is not a canonical 249 spelling,
+    # use the unique ACTIVE 249 roster description before trusting another
+    # numeric alias. Quantity still comes from the POS row itself.
+    if looks_like_249_service_description(description):
+        desc_key=normalize_selling_description(description)
+        service_uid=index.get("service_desc",{}).get(desc_key)
+        if service_uid is not None:
+            return int(service_uid)
+
     if raw in exact:
         return int(exact[raw])
     key=numeric_digits(raw)
@@ -585,7 +619,12 @@ def canonical_pos_qty_by_upc(
 
     def add_rows(rows: list[dict[str, Any]]) -> None:
         for row in rows:
-            uid=_resolve_source_upc_id(alias_index,row.get("ean_upc"),row.get("upc_id"))
+            uid=_resolve_source_upc_id(
+                alias_index,
+                row.get("ean_upc"),
+                row.get("upc_id"),
+                row.get("description"),
+            )
             if uid is None:
                 continue
             out[uid]=out.get(uid,Decimal("0"))+_decimal(row.get("qty"))
@@ -598,11 +637,11 @@ def canonical_pos_qty_by_upc(
             clauses.append("(file_id=%s AND period_start_date=%s AND period_end_date=%s)")
             args.extend([int(d["file_id"]),d["date"],d["date"]])
         cur.execute(
-            f"""SELECT ean_upc,upc_id,COALESCE(SUM(sold_quantity),0) AS qty
+            f"""SELECT ean_upc,upc_id,description,COALESCE(SUM(sold_quantity),0) AS qty
                 FROM sales_period_observation
                 WHERE temporal_grain='SINGLE_DATE'
                   AND ({' OR '.join(clauses)})
-                GROUP BY ean_upc,upc_id""",
+                GROUP BY ean_upc,upc_id,description""",
             tuple(args),
         )
         add_rows(cur.fetchall())
@@ -615,10 +654,10 @@ def canonical_pos_qty_by_upc(
             clauses.append("(source_file_id=%s AND business_date=%s)")
             args.extend([int(d["file_id"]),d["date"]])
         cur.execute(
-            f"""SELECT ean_upc,upc_id,COALESCE(SUM(sold_quantity),0) AS qty
+            f"""SELECT ean_upc,upc_id,description,COALESCE(SUM(sold_quantity),0) AS qty
                 FROM pos_daily_backfill_observation
                 WHERE ({' OR '.join(clauses)})
-                GROUP BY ean_upc,upc_id""",
+                GROUP BY ean_upc,upc_id,description""",
             tuple(args),
         )
         add_rows(cur.fetchall())
@@ -631,9 +670,16 @@ def relink_pos_backfill(cur) -> int:
     index=_active_upc_alias_index(cur)
     updated=0
     for table in ("pos_daily_backfill_observation","pos_period_residual_observation"):
-        cur.execute(f"SELECT DISTINCT ean_upc,upc_id FROM {table} WHERE ean_upc IS NOT NULL")
+        cur.execute(
+            f"SELECT DISTINCT ean_upc,upc_id,description FROM {table} WHERE ean_upc IS NOT NULL"
+        )
         for row in cur.fetchall():
-            resolved=_resolve_source_upc_id(index,row.get("ean_upc"),row.get("upc_id"))
+            resolved=_resolve_source_upc_id(
+                index,
+                row.get("ean_upc"),
+                row.get("upc_id"),
+                row.get("description"),
+            )
             if resolved is None:
                 continue
             current=row.get("upc_id")
@@ -643,8 +689,9 @@ def relink_pos_backfill(cur) -> int:
                 f"""UPDATE {table}
                     SET upc_id=%s
                     WHERE ean_upc=%s
+                      AND COALESCE(description,'')=COALESCE(%s,'')
                       AND (upc_id IS NULL OR upc_id<>%s)""",
-                (resolved,str(row.get("ean_upc")),resolved),
+                (resolved,str(row.get("ean_upc")),row.get("description"),resolved),
             )
             updated+=int(cur.rowcount or 0)
     return updated
