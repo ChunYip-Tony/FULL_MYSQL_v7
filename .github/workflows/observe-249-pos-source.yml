@@ -2,8 +2,11 @@ name: Observe 249 POS source evidence
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
 
 jobs:
   observe:
