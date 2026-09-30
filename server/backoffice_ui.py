@@ -1622,7 +1622,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -2218,6 +2218,11 @@ function mobileRenderList(){
     html=rows.map(b=>b._mobileNewUpload?mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD',''):mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Upload history'),(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—'),b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
   }else if(mobileState.module==='freshness'){
     html=rows.map(r=>mobileDataHealthRow(r)).join('');
+  }
+  if(!html&&mobileState.module==='ordering'&&state.orderHealth?.blocked){
+    const h=state.orderHealth;
+    const missing=(h.missing||[]).join(' + ')||'POS / MVT';
+    html='<div class="m-error"><b>Ordering blocked — required data is not current.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing/currentness issue: '+esc(missing)+'.<br>Upload or finish ingestion for the missing completed day, then refresh Ordering.</div>';
   }
   box.innerHTML=html||'<div class="m-empty">No items match the current filter.</div>';
   box.querySelectorAll('[data-mobile-key]').forEach(b=>b.onclick=()=>mobileOpenItem(b.dataset.mobileKey));
@@ -2857,7 +2862,7 @@ $('#salesStartDate').onchange=e=>{state.salesStartDate=e.target.value};
 $('#salesEndDate').onchange=e=>{state.salesEndDate=e.target.value};
 
 async function loadOrders(){
-  const err=$('#orderError');err.innerHTML='';state.orderLoadError='';
+  const err=$('#orderError');err.innerHTML='';state.orderLoadError='';state.orderHealth=null;
   $('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';
   try{
     // FRESH and FROZEN are independent workloads. Loading them concurrently
@@ -2866,7 +2871,20 @@ async function loadOrders(){
       api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
       api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000})
     ]);
-    state.orders=[...(fresh.rows||[]),...(frozen.rows||[])];
+    const health=fresh.data_health||frozen.data_health||{};
+    const blocked=[fresh,frozen].some(x=>String(x.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA');
+    const skipped={};
+    [fresh.skipped_breakdown||{},frozen.skipped_breakdown||{}].forEach(m=>Object.entries(m).forEach(([k,v])=>skipped[k]=(skipped[k]||0)+Number(v||0)));
+    state.orderHealth={
+      blocked,
+      analysisStatus:blocked?'BLOCKED_STALE_REQUIRED_DATA':'CURRENT',
+      expectedThrough:health.expected_through||null,
+      posThrough:health.pos_data_through||null,
+      movementThrough:health.movement_data_through||null,
+      missing:health.missing_required_sources||[],
+      skipped
+    };
+    state.orders=blocked?[]:[...(fresh.rows||[]),...(frozen.rows||[])];
     renderOrders()
   }catch(e){
     state.orderLoadError=e.message||'Unable to load ordering review';
@@ -2876,7 +2894,16 @@ async function loadOrders(){
   }
 }
 function orderRows(){let a=[...state.orders];if(state.orderFilter==='FRESH')a=a.filter(x=>String(x.category).toUpperCase()==='FRESH');if(state.orderFilter==='FROZEN')a=a.filter(x=>String(x.category).toUpperCase()==='FROZEN');if(state.orderFilter==='ATTENTION')a=a.filter(x=>x.attention);const s=$('#orderSort').value;if(s==='suggested')a.sort((x,y)=>Number(y.suggested_delivery_qty||0)-Number(x.suggested_delivery_qty||0));if(s==='receipt')a.sort((x,y)=>String(y.last_receipt_date||'').localeCompare(String(x.last_receipt_date||'')));if(s==='oh')a.sort((x,y)=>Number(x.oh??1e18)-Number(y.oh??1e18));if(s==='frequency')a.sort((x,y)=>String(x.ordering_frequency||'').localeCompare(String(y.ordering_frequency||'')));if(s==='family')a.sort((x,y)=>String(x.family_name||'').localeCompare(String(y.family_name||'')));return a}
-function renderOrders(){const a=orderRows();$('#orderCount').textContent=`${a.length} families`;$('#orderRows').innerHTML=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span></td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No ordering suggestions match this filter.</td></tr>';$$('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))}
+function renderOrders(){
+  const h=state.orderHealth||{};
+  if(h.blocked){
+    $('#orderCount').textContent='BLOCKED';
+    const missing=(h.missing||[]).join(' + ')||'POS / MVT';
+    $('#orderRows').innerHTML=`<tr><td colspan="9" class="empty"><b>Ordering is blocked by stale required data.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing/currentness issue: ${esc(missing)}. Upload/finish ingestion for the missing completed day, then refresh.</td></tr>`;
+    return
+  }
+  const a=orderRows();$('#orderCount').textContent=`${a.length} families`;$('#orderRows').innerHTML=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span></td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No eligible families: none currently meet the Ordering rules.</td></tr>';$('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))
+}
 $$('.ordfilter').forEach(b=>b.onclick=()=>{state.orderFilter=b.dataset.filter;$$('.ordfilter').forEach(x=>x.classList.toggle('on',x===b));renderOrders()});$('#orderSort').onchange=renderOrders;
 function openOrderDetail(fam){const r=state.orders.find(x=>String(x.family_article)===String(fam));if(!r)return;const d=r.details||{},reasons=d.reasons||[], recArts=d.receiving_articles_on_last_receipt||[];openDrawer('Ordering Detail / Why?',`${r.family_name} · Family ${r.family_article}`,`<div class="detailgrid"><div class="detail"><small>Receiving Article</small><b>${esc(r.receiving_article||'—')}</b></div><div class="detail"><small>Family OH</small><b>${fmt(r.oh)} ${esc(r.oh_uom||'')}</b></div><div class="detail"><small>Last Receipt</small><b>${esc(r.last_receipt_date||'—')}</b></div><div class="detail"><small>Receipt Qty · Base</small><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></div><div class="detail"><small>Family 7D Movement</small><b>${fmt(d.qty_7d)}</b></div><div class="detail"><small>Family 28D Movement</small><b>${fmt(d.qty_28d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(d.velocity_7d)}/day</b></div><div class="detail"><small>DOS</small><b>${fmt(d.dos)}</b></div></div><div class="sectiontitle">Why this suggestion?</div><div class="reasonlist">${reasons.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div></div>`).join('')}</div><div class="calc">Coming delivery suggestion ≈ expected family usage through coverage window − usable family OH + promotion/safety adjustment. Incoming is not used as a displayed Ordering Review field.</div>${recArts.length?`<div class="sectiontitle">Receiving Articles on Last Receipt</div><div class="reasonlist">${recArts.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.article_number)}</b><span>${fmt(x.quantity)} ${esc(x.base_uom||'')} · Base UOM</span></div></div>`).join('')}</div>`:''}`,`<span class="pill blue">READ ONLY</span>`)}
 
