@@ -198,7 +198,8 @@ jobs:
           assert 'USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930' in runtime
           assert 'READY_ORPHAN_251_252_RESCUED_BY_UNIQUE_SELLING_LINEAGE' in runtime
           assert 'm.family_id IS NULL' in runtime
-          assert 'FAMILY / SAP SELLING ARTICLE' in ui
+          assert 'FAMILY / SAP SELLING ARTICLE' not in ui
+          assert 'Place its UPCs directly underneath' in ui
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
