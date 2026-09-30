@@ -1285,6 +1285,7 @@ def _quick_receiving_article_context(
         family_qty = family_mv.get("quantity")
         family_uom = family_mv.get("uom")
         family_status = family_mv.get("status") or "NO_251_252_IN_WINDOW"
+        source_mv = movement_by_article.get((fid, str(source_article or "")), {})
 
         upc_map: dict[str, dict[str, Any]] = {}
         article_lookup = {
@@ -1327,6 +1328,12 @@ def _quick_receiving_article_context(
             ),
             "family_group_movement_days_7d": day_count,
             "family_group_movement_status": family_status,
+            "family_source_article": source_article,
+            "family_source_movement_7d": source_mv.get("quantity"),
+            "family_source_movement_uom": source_mv.get("uom"),
+            "family_source_movement_status": (
+                source_mv.get("status") or "NO_251_252_IN_WINDOW"
+            ),
         }
     return out
 
@@ -1598,6 +1605,10 @@ def inventory_review(
                     "family_group_avg_qty_day": family_ctx.get("family_group_avg_qty_day"),
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
+                    "family_source_article": family_ctx.get("family_source_article"),
+                    "family_source_movement_7d": family_ctx.get("family_source_movement_7d"),
+                    "family_source_movement_uom": family_ctx.get("family_source_movement_uom"),
+                    "family_source_movement_status": family_ctx.get("family_source_movement_status"),
                     "family_receipt_verified": family_ctx.get("family_receipt_verified"),
                     "family_receipt_movement_type": family_ctx.get("family_receipt_movement_type"),
                     "family_receipt_date": family_ctx.get("family_receipt_date"),
