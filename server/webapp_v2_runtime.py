@@ -21,6 +21,7 @@ from quick_check_app import (
 )
 from inventory_position import latest_canonical_movement_day
 from upc_aliases import service_249_source_prefix
+from phase3 import _current_price as _live_current_price
 
 
 WEEKDAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
@@ -30,6 +31,30 @@ def _d(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
     return Decimal(str(value))
+
+
+def _overlay_live_current_price(cur, row: dict[str,Any]) -> dict[str,Any]:
+    """Refresh CURRENT price fields from canonical price/POS observations at read time.
+
+    quick_check_current remains the Phase 3 serving snapshot, but price is a
+    point-in-time fact that can advance after that snapshot. This overlay
+    prevents a later accepted Price List or later SINGLE_DATE POS sale from
+    being hidden until the next full rebuild.
+    """
+    if not row or row.get("upc_id") is None:
+        return row
+    live=_live_current_price(cur,int(row["upc_id"]),row.get("ean_upc"))
+    if not live:
+        return row
+    row["current_price"]=live.get("price")
+    row["current_price_type"]=live.get("type")
+    row["current_price_source"]=live.get("source")
+    row["current_price_asof_date"]=live.get("date")
+    cost=row.get("current_cost_per_selling_unit")
+    price=live.get("price")
+    if cost is not None and price is not None and _d(price)>0:
+        row["gp_pct_current"]=(_d(price)-_d(cost))/_d(price)
+    return row
 
 
 def _norm_text(value: Any) -> str:
@@ -684,6 +709,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
             if q.isdigit():
                 rel=max(rel,_relevance(q,name=row.get("selling_description"),number=row.get("article_number"),kind="ARTICLE"))
             if rel>0:
+                _overlay_live_current_price(cur,row)
                 m28=metric28(int(row["upc_id"]))
                 results.append({
                     "result_type":"UPC",
@@ -1229,6 +1255,8 @@ def family_info(family_key: str) -> dict[str,Any]:
 
         cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",(fid,))
         upcs=cur.fetchall()
+        for _row in upcs:
+            _overlay_live_current_price(cur,_row)
         categories=sorted({str(x.get("product_class")) for x in upcs if x.get("product_class")})
         category=categories[0] if len(categories)==1 else ("MIXED" if categories else None)
         effective_oh=_family_effective_oh(cur,upcs)
@@ -1360,6 +1388,7 @@ def upc_info(upc: str) -> dict[str,Any]:
         if not row:
             cur.close()
             raise KeyError("V2_UPC_NOT_FOUND")
+        _overlay_live_current_price(cur,row)
         m7=_sales_metric(cur,int(row["upc_id"]),7)
         m28=_sales_metric(cur,int(row["upc_id"]),28)
         effective_oh=_selling_equivalent_effective_oh(cur,row)
@@ -1505,6 +1534,7 @@ def price_analysis(upc: str, trend_supported_days: int = 28) -> dict[str,Any]:
         if not row:
             cur.close()
             raise KeyError("V2_UPC_NOT_FOUND")
+        _overlay_live_current_price(cur,row)
         upc_id=int(row["upc_id"])
         qty_uom=_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom"))
         current_cost=(
@@ -4627,6 +4657,11 @@ def performance_report(
             )
             if not has_oh or not history_gate or not freshness_qualified:
                 continue
+
+            # Price is re-resolved at serving time so a newer accepted Price
+            # List/SINGLE_DATE POS event is visible even before another full
+            # Phase 3 Quick Check rebuild.
+            _overlay_live_current_price(cur,row)
 
             status=str(row.get("quick_check_status") or "")
             if q28>0:
