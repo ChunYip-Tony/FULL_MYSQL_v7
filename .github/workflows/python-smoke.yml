@@ -189,9 +189,37 @@ jobs:
           assert 'RECONCILED' in ui
           assert 'Family Selling UOM' in ui
           assert '317/318 CONVERSION LINEAGE' in ui
+          assert "Column B blank" in runtime
+          assert "raw_table_name='raw_article_manual'" in runtime
+          assert "out.setdefault((fid, key), main)" in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
+
+      - name: Validate 4816 pack authority
+        run: |
+          python - <<'PY'
+          from decimal import Decimal
+          import manual_overrides as m
+
+          rows=[x for x in m.SEED_OVERRIDES if str(x.get('ean_upc'))=='4816']
+          assert len(rows)==1, rows
+          row=rows[0]
+          assert row['article_number']=='1351311'
+          assert row['selling_uom_code']=='PACK'
+          assert row['base_uom_code']=='LB'
+          assert Decimal(str(row['base_qty_per_selling_unit']))==Decimal('4')
+
+          conv=[
+              x for x in m.USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926
+              if str(x.get('ean_upc'))=='4816'
+          ]
+          assert len(conv)==1, conv
+          assert conv[0]['selling_uom_code']=='PACK'
+          assert Decimal(str(conv[0]['cost_qty']))==Decimal('4')
+          assert conv[0]['cost_uom_code']=='LB'
+          print('upc-4816-pack-authority=PASS')
+          PY
 
       - name: Validate current price authority contract
         run: |
