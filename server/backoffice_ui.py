@@ -1926,7 +1926,12 @@ async function api(url,opts={}){
     if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}
     return data
   }catch(e){
-    if(e?.name==='AbortError')throw new Error(`Request timed out after ${Math.round(timeoutMs/1000)}s`);
+    if(e?.name==='AbortError'){
+      if(timeoutMs>0)throw new Error(`Request timed out after ${Math.round(timeoutMs/1000)}s`);
+      const cancelled=new Error('Request cancelled');
+      cancelled.name='AbortError';
+      throw cancelled;
+    }
     throw e
   }finally{if(timer)clearTimeout(timer)}
 }
@@ -3234,14 +3239,8 @@ async function loadInventory(){
  try{
    const light=(isMobileBackoffice()&&mobileState.module==='quick');
    const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=${light?120:300}&lightweight=${light?'true':'false'}${q?'&q='+encodeURIComponent(q):''}`;
-   const controller=new AbortController();
-   const timeout=setTimeout(()=>controller.abort(),8000);
-   let d;
-   try{
-     d=await api(url,{signal:controller.signal});
-   }finally{
-     clearTimeout(timeout);
-   }
+   const requestTimeoutMs=light?12000:20000;
+   const d=await api(url,{timeoutMs:requestTimeoutMs});
 
    // A slower previous live-search response must never overwrite the newest
    // query's results. The server echoes its query so we validate both request
@@ -3264,9 +3263,10 @@ async function loadInventory(){
    return true;
  }catch(e){
    if(requestSeq!==inventoryLoadSeq)return false;
-   const msg=e?.name==='AbortError'
-     ? 'Search timed out. Please retry or refine the search.'
-     : (e.message||String(e));
+   const rawMsg=e?.message||String(e);
+   const msg=(e?.name==='AbortError'||/timed out/i.test(rawMsg))
+     ? 'Search timed out. Please retry.'
+     : rawMsg;
    err.innerHTML=`<div class="error">${esc(msg)}</div>`;
    $('#invRows').innerHTML='';
    throw new Error(msg);
