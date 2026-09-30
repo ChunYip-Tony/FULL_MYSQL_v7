@@ -4533,6 +4533,256 @@ def _performance_narrative(
         "target_words":200,
     }
 
+def _performance_range_cost_rows(
+    cur,
+    rows: list[dict[str,Any]],
+    end_date: date,
+) -> dict[int,list[dict[str,Any]]]:
+    """Load historical family cost observations once for range GP analysis."""
+    family_ids=sorted({
+        int(x["family_id"])
+        for x in rows
+        if x.get("family_id") is not None
+    })
+    if not family_ids:
+        return {}
+    ph=",".join(["%s"]*len(family_ids))
+    sources=(
+        "MOVEMENT_RECEIPT_VALUATION",
+        "ON_HAND_EXPLICIT_COST_FALLBACK",
+        "FROZEN_INVENTORY_OFFICIAL_COST",
+        "LIVE_FRESH_SUGGESTION_OFFICIAL_COST",
+        "USER_CONFIRMED_FAMILY_COST",
+    )
+    sph=",".join(["%s"]*len(sources))
+    cur.execute(
+        f"""SELECT co.family_id,co.business_date,co.source_type,
+                   COALESCE(co.cost_per_base_uom,co.cost_amount) AS cost_value,
+                   COALESCE(bu.uom_code,cu.uom_code) AS cost_uom,
+                   co.cost_observation_id
+            FROM article_cost_observation co
+            LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
+            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+            WHERE co.family_id IN ({ph})
+              AND co.business_date<=%s
+              AND co.source_type IN ({sph})
+              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+              AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
+            ORDER BY co.family_id,co.business_date DESC,co.cost_observation_id DESC""",
+        (*family_ids,end_date,*sources),
+    )
+    out: dict[int,list[dict[str,Any]]]={}
+    for x in cur.fetchall():
+        out.setdefault(int(x["family_id"]),[]).append(x)
+    return out
+
+
+def _performance_cost_for_day(
+    row: dict[str,Any],
+    observations: dict[int,list[dict[str,Any]]],
+    day: date,
+) -> dict[str,Any]|None:
+    fid=row.get("family_id")
+    if fid is None:
+        return None
+    selling=str(row.get("selling_uom") or "").strip().upper()
+    base=str(row.get("base_uom") or "").strip().upper()
+    factor=(
+        Decimal(str(row["base_qty_per_selling_unit"]))
+        if row.get("base_qty_per_selling_unit") is not None else None
+    )
+    precedence=(
+        {"MOVEMENT_RECEIPT_VALUATION"},
+        {"ON_HAND_EXPLICIT_COST_FALLBACK"},
+        {"FROZEN_INVENTORY_OFFICIAL_COST","LIVE_FRESH_SUGGESTION_OFFICIAL_COST"},
+        {"USER_CONFIRMED_FAMILY_COST"},
+    )
+    obs=observations.get(int(fid),[])
+    for group in precedence:
+        for x in obs:
+            if x.get("source_type") not in group:
+                continue
+            if x.get("business_date") is None or x["business_date"]>day:
+                continue
+            cost=_d(x.get("cost_value"))
+            cuom=str(x.get("cost_uom") or "").strip().upper()
+            if selling and cuom==selling:
+                sell_cost=cost
+            elif base and cuom==base and factor is not None and factor>0:
+                sell_cost=cost*factor
+            elif base and selling and base==selling and cuom==base:
+                sell_cost=cost
+            else:
+                continue
+            return {
+                "cost_per_selling_unit":sell_cost,
+                "cost_date":x.get("business_date"),
+                "cost_source":x.get("source_type"),
+                "cost_uom":selling or cuom or None,
+            }
+    return None
+
+
+def performance_range(
+    start_date: date|None=None,
+    end_date: date|None=None,
+    limit: int=1000,
+) -> dict[str,Any]:
+    """Aggregate Seafood performance over a user-selected canonical date range.
+
+    The range contains only completed canonical POS data days. Missing calendar
+    dates are ignored, not converted to zero. UPC velocity is quantity divided by
+    selected supported data days. GP$ uses the applicable historical cost as of
+    each selling day and is withheld when a sold day has no resolvable cost.
+    """
+    limit=max(1,min(int(limit or 1000),2000))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        all_days=_canonical_sales_days(cur,limit=365,up_to=end_date)
+        ordered=sorted(all_days,key=lambda x:x["date"])
+        if not ordered:
+            cur.close()
+            raise ValueError("NO_COMPLETED_SUPPORTED_SALES_DATE")
+
+        supported={x["date"] for x in ordered}
+        resolved_end=end_date or ordered[-1]["date"]
+        if resolved_end not in supported:
+            cur.close()
+            raise ValueError("END_DATE_NOT_SUPPORTED")
+        eligible=[x for x in ordered if x["date"]<=resolved_end]
+        if start_date is None:
+            default_days=eligible[-7:]
+            resolved_start=default_days[0]["date"]
+        else:
+            resolved_start=start_date
+        if resolved_start not in supported:
+            cur.close()
+            raise ValueError("START_DATE_NOT_SUPPORTED")
+        if resolved_start>resolved_end:
+            cur.close()
+            raise ValueError("START_DATE_AFTER_END_DATE")
+
+        selected=[x for x in ordered if resolved_start<=x["date"]<=resolved_end]
+        if not selected:
+            cur.close()
+            raise ValueError("NO_SUPPORTED_DATES_IN_RANGE")
+
+        cur.execute("SELECT * FROM quick_check_current")
+        rows=cur.fetchall()
+        daily=_batch_daily_sales_by_price_type(cur,rows,selected)
+        cost_obs=_performance_range_cost_rows(cur,rows,resolved_end)
+
+        items=[]
+        total_sales=Decimal("0")
+        total_gp=Decimal("0")
+        total_gp_complete=True
+        sold_item_count=0
+        ready_count=0
+        qa_hold_count=0
+        n_days=len(selected)
+
+        for row in rows:
+            uid=int(row["upc_id"])
+            by_day=daily.get(uid,{})
+            sales=Decimal("0")
+            qty=Decimal("0")
+            gp=Decimal("0")
+            missing_cost_days=[]
+            sold_days=0
+            price_types=set()
+
+            for entry in selected:
+                day=entry["date"]
+                obs=by_day.get(day,{})
+                day_sales=_d(obs.get("sales_amount"))
+                day_qty=_d(obs.get("sold_quantity"))
+                sales+=day_sales
+                qty+=day_qty
+                price_types.update(str(k).upper() for k in (obs.get("price_types") or {}).keys())
+                if day_qty<=0:
+                    continue
+                sold_days+=1
+                cost=_performance_cost_for_day(row,cost_obs,day)
+                if cost is None:
+                    missing_cost_days.append(day)
+                    continue
+                gp+=day_sales-(day_qty*_d(cost.get("cost_per_selling_unit")))
+
+            if qty<=0:
+                continue
+
+            sold_item_count+=1
+            status=str(row.get("quick_check_status") or "")
+            if status=="READY":
+                ready_count+=1
+            elif status=="QA_HOLD":
+                qa_hold_count+=1
+
+            gp_complete=not missing_cost_days
+            gp_value=gp if gp_complete else None
+            gp_pct=(gp/sales if gp_complete and sales>0 else None)
+            gp_per_day=(gp/Decimal(n_days) if gp_complete and n_days else None)
+            total_sales+=sales
+            if gp_complete:
+                total_gp+=gp
+            else:
+                total_gp_complete=False
+
+            items.append({
+                "upc":row.get("ean_upc"),
+                "name":row.get("selling_description"),
+                "family_article_number":row.get("main_article_number"),
+                "family_name":row.get("family_description"),
+                "category":str(row.get("product_class") or "").upper(),
+                "readiness":status,
+                "selling_uom":row.get("selling_uom"),
+                "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
+                "sales_amount":sales,
+                "sold_quantity":qty,
+                "velocity":qty/Decimal(n_days),
+                "avg_sold_price":sales/qty if qty else None,
+                "gp_dollars":gp_value,
+                "gp_pct":gp_pct,
+                "gp_per_supported_day":gp_per_day,
+                "gp_cost_complete":gp_complete,
+                "gp_missing_cost_days":missing_cost_days,
+                "sold_supported_day_count":sold_days,
+                "supported_day_count":n_days,
+                "price_types":sorted(price_types),
+            })
+
+        items.sort(
+            key=lambda x:(
+                -(float(x.get("gp_dollars")) if x.get("gp_dollars") is not None else float("-inf")),
+                -float(x.get("sales_amount") or 0),
+                str(x.get("name") or ""),
+            )
+        )
+        cur.close()
+
+    return {
+        "contract_version":"WEBAPP_V2_PERFORMANCE_RANGE_V1",
+        "start_date":resolved_start,
+        "end_date":resolved_end,
+        "supported_day_count":len(selected),
+        "supported_dates":[x["date"] for x in selected],
+        "supported_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
+        "missing_calendar_dates_are_zero":False,
+        "summary":{
+            "sales_dollars":total_sales,
+            "gp_dollars":total_gp if total_gp_complete else None,
+            "gp_dollars_complete":total_gp_complete,
+            "sold_item_count":sold_item_count,
+            "ready_item_count":ready_count,
+            "qa_hold_item_count":qa_hold_count,
+        },
+        "items":items[:limit],
+        "item_limit":limit,
+        "gp_basis":"HISTORICAL_APPLICABLE_COST_AS_OF_EACH_SUPPORTED_SELLING_DAY",
+        "gp_missing_cost_rule":"ITEM_GP_WITHHELD_IF_ANY_SOLD_SUPPORTED_DAY_HAS_NO_RESOLVABLE_COST",
+    }
+
+
 def performance_report(
     category: str="ALL",
     limit: int=100,
