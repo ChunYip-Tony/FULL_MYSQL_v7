@@ -37,7 +37,9 @@ def find_active_batch() -> dict[str,Any]|None:
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         cur.execute("""
-            SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,ib.upload_started_at,ib.completed_at,ib.notes
+            SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
+                   ib.upload_started_at,ib.completed_at,ib.file_count,ib.source_row_count,
+                   ib.error_count,ib.notes
             FROM ingest_batch ib
             WHERE ib.processing_status IN (
                       'API_UPLOADING',
@@ -46,12 +48,20 @@ def find_active_batch() -> dict[str,Any]|None:
                       'RELEASED',
                       'PHASE2C_READY'
                   )
-               OR EXISTS (
-                    SELECT 1 FROM pipeline_run pr
-                    WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
-                      AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                      AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
-               )
+               OR (
+                    ib.processing_status NOT IN (
+                      'QUICK_CHECK_READY',
+                      'QUICK_CHECK_READY_WITH_HOLDS',
+                      'PHASE3_QA_HOLD',
+                      'API_ABORTED'
+                    )
+                    AND EXISTS (
+                      SELECT 1 FROM pipeline_run pr
+                      WHERE pr.batch_id=ib.batch_id AND pr.pipeline_name=%s
+                        AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                        AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                    )
+                  )
             ORDER BY ib.batch_id DESC LIMIT 1
         """,(API_PIPELINE,))
         row=cur.fetchone(); cur.close()
