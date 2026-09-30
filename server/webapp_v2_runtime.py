@@ -4137,84 +4137,62 @@ def _gp_day_price_suggestion_from_batch(
     daily_by_upc: dict[int,dict[date,dict[str,Any]]],
     data_days: list[dict[str,Any]],
 ) -> dict[str,Any]:
+    """Select Pricing Review candidate under the two-path company-reference rule.
+
+    Path A — Company A/B/C exists:
+      * range = min(valid A/B/C) .. max(valid A/B/C)
+      * current price inside range => not a Pricing Review candidate
+      * current outside range => choose the best observed 14D GP$/day price
+        inside the range
+      * if 14D has no observed in-range price, clamp the historical Sweet Spot
+        into the company range
+
+    Path B — no Company A/B/C:
+      * normal candidate = observed 14D price with max GP$/day
+      * FRESH/LIVE DOH > 7 => clearance mode; among observed 14D prices below
+        the current price choose the one with the strongest sell-through
+        velocity.  If no lower observed price exists, do not invent a markdown.
+    """
     cost=(
         Decimal(str(row["current_cost_per_selling_unit"]))
         if row.get("current_cost_per_selling_unit") is not None else None
     )
-    observed_asof=_batch_observed_price_as_of(
-        daily_by_upc,data_days,upc_id,lookback_supported_days=28
-    )
-    # Same global Current Price authority as every other serving page.
     current=(
         Decimal(str(row["current_price"]))
         if row.get("current_price") is not None else None
     )
-    company_c=(
-        Decimal(str(row["company_price_c"]))
-        if row.get("company_price_c") is not None
-        and Decimal(str(row["company_price_c"]))>0
-        else None
-    )
-    if cost is None or current is None or current<=0:
-        return {
-            "status":"UNAVAILABLE",
-            "reason":"CURRENT_COST_OR_PRICE_UNAVAILABLE",
-            "suggested_price":None,
-            "company_c_floor":company_c,
-            "candidates":[],
-        }
-
-    candidates=_batch_observed_price_gp_day_candidates(
-        daily_by_upc,
-        data_days,
-        upc_id,
-        current_cost=cost,
-        supported_day_limit=90,
-        company_c_floor=company_c,
-    )
-    eligible=[x for x in candidates if x["meets_company_c_floor"]]
-    floor_constrained=False
-    basis="OBSERVED_PRICE_MAX_GP_PER_DAY"
-
-    if eligible:
-        best=eligible[0]
-        suggested=best["price"]
-        expected_gp_day=best["gp_per_observed_day_at_current_cost"]
-        expected_velocity=best["observed_velocity_per_day"]
-    elif company_c is not None:
-        floor_constrained=True
-        basis="COMPANY_C_FLOOR_NO_OBSERVED_DEMAND_AT_OR_ABOVE_FLOOR"
-        suggested=company_c
-        expected_gp_day=None
-        expected_velocity=None
-    else:
-        return {
-            "status":"UNAVAILABLE",
-            "reason":"NO_OBSERVED_PRICE_HISTORY",
-            "suggested_price":None,
-            "company_c_floor":None,
-            "candidates":candidates,
-        }
-
     sweet=(
         Decimal(str(row["sweet_spot_price"]))
-        if row.get("sweet_spot_price") is not None else None
+        if row.get("sweet_spot_price") is not None
+        and Decimal(str(row["sweet_spot_price"]))>0
+        else None
     )
-    if company_c is not None and sweet is not None and sweet<company_c:
-        floor_constrained=True
+    refs={}
+    for label,key in (
+        ("A","company_price_a"),
+        ("B","company_price_b"),
+        ("C","company_price_c"),
+    ):
+        raw=row.get(key)
+        if raw is None:
+            continue
+        value=Decimal(str(raw))
+        if value>0:
+            refs[label]=value
 
-    return {
-        "status":"READY",
-        "suggested_price":suggested,
-        "basis":basis,
-        "company_c_floor":company_c,
-        "company_c_applied":company_c is not None,
-        "floor_constrained":floor_constrained,
-        "expected_gp_per_day_from_observed_demand":expected_gp_day,
-        "expected_velocity_from_observed_price_days":expected_velocity,
+    company_low=min(refs.values()) if refs else None
+    company_high=max(refs.values()) if refs else None
+    observed_asof=_batch_observed_price_as_of(
+        daily_by_upc,data_days,upc_id,lookback_supported_days=14
+    )
+
+    base={
+        "company_prices":refs,
+        "company_range_low":company_low,
+        "company_range_high":company_high,
+        "has_company_reference":bool(refs),
+        "historical_window_supported_days":14,
         "sweet_spot_price":sweet,
-        "candidate_count":len(candidates),
-        "top_observed_candidates":candidates[:5],
         "current_price_used":current,
         "current_price_basis":"CANONICAL_QUICK_CHECK_CURRENT",
         "current_price_source":row.get("current_price_source"),
@@ -4223,6 +4201,155 @@ def _gp_day_price_suggestion_from_batch(
         "historical_observed_price_date":observed_asof.get("date"),
         "cost_basis":"CURRENT_AUTHORITATIVE_COST",
         "cost_date":row.get("cost_date"),
+    }
+
+    if current is None or current<=0:
+        return {
+            **base,
+            "status":"UNAVAILABLE",
+            "reason":"CURRENT_PRICE_UNAVAILABLE",
+            "suggested_price":None,
+            "include_in_review":False,
+            "candidates":[],
+        }
+
+    pclass=str(row.get("product_class") or "").upper()
+    doh=(
+        Decimal(str(row["doh"]))
+        if row.get("doh") is not None
+        else None
+    )
+    clearance=bool(pclass in {"FRESH","LIVE"} and doh is not None and doh>Decimal("7"))
+    base["clearance_due_to_doh"]=clearance
+    base["doh"]=doh
+
+    candidates=(
+        _batch_observed_price_gp_day_candidates(
+            daily_by_upc,
+            data_days,
+            upc_id,
+            current_cost=cost,
+            supported_day_limit=14,
+            company_c_floor=None,
+        )
+        if cost is not None else []
+    )
+    base["candidate_count"]=len(candidates)
+    base["top_observed_candidates"]=candidates[:5]
+
+    if refs:
+        in_range=bool(company_low<=current<=company_high)
+        base["current_within_company_range"]=in_range
+        if in_range:
+            return {
+                **base,
+                "status":"NO_REVIEW",
+                "reason":"CURRENT_PRICE_WITHIN_COMPANY_RANGE",
+                "suggested_price":None,
+                "include_in_review":False,
+                "basis":"CURRENT_PRICE_WITHIN_COMPANY_RANGE",
+                "expected_gp_per_day_from_observed_demand":None,
+                "expected_velocity_from_observed_price_days":None,
+            }
+
+        ranged=[
+            x for x in candidates
+            if company_low<=_d(x.get("price"))<=company_high
+        ]
+        if ranged:
+            # Candidate list is already sorted by max GP$/day.
+            best=ranged[0]
+            suggested=_d(best["price"])
+            basis="COMPANY_RANGE_14D_MAX_GP_PER_DAY"
+            expected_gp_day=best.get("gp_per_observed_day_at_current_cost")
+            expected_velocity=best.get("observed_velocity_per_day")
+            selection="14D_OBSERVED_IN_COMPANY_RANGE"
+        elif sweet is not None:
+            suggested=max(company_low,min(company_high,sweet))
+            basis="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT"
+            expected_gp_day=None
+            expected_velocity=None
+            selection="HISTORICAL_SWEET_SPOT_CLAMPED_TO_COMPANY_RANGE"
+        else:
+            return {
+                **base,
+                "status":"UNAVAILABLE",
+                "reason":"NO_14D_IN_RANGE_OR_HISTORICAL_SWEET_SPOT",
+                "suggested_price":None,
+                "include_in_review":True,
+                "basis":"COMPANY_RANGE_CANDIDATE_UNAVAILABLE",
+                "expected_gp_per_day_from_observed_demand":None,
+                "expected_velocity_from_observed_price_days":None,
+            }
+
+        return {
+            **base,
+            "status":"READY",
+            "suggested_price":suggested,
+            "include_in_review":True,
+            "basis":basis,
+            "selection_basis":selection,
+            "expected_gp_per_day_from_observed_demand":expected_gp_day,
+            "expected_velocity_from_observed_price_days":expected_velocity,
+        }
+
+    if not candidates:
+        return {
+            **base,
+            "status":"UNAVAILABLE",
+            "reason":(
+                "CURRENT_COST_UNAVAILABLE"
+                if cost is None else "NO_14D_OBSERVED_PRICE_HISTORY"
+            ),
+            "suggested_price":None,
+            "include_in_review":clearance,
+            "basis":"NO_COMPANY_REFERENCE_14D_HISTORY_UNAVAILABLE",
+            "expected_gp_per_day_from_observed_demand":None,
+            "expected_velocity_from_observed_price_days":None,
+        }
+
+    if clearance:
+        lower=[
+            x for x in candidates
+            if _d(x.get("price"))<current
+        ]
+        if not lower:
+            return {
+                **base,
+                "status":"UNAVAILABLE",
+                "reason":"CLEARANCE_LOWER_PRICE_HISTORY_UNAVAILABLE",
+                "suggested_price":None,
+                "include_in_review":True,
+                "basis":"DOH_GT_7_CLEARANCE_HISTORY_REQUIRED",
+                "expected_gp_per_day_from_observed_demand":None,
+                "expected_velocity_from_observed_price_days":None,
+            }
+        lower.sort(
+            key=lambda x:(
+                -float(x.get("observed_velocity_per_day") or 0),
+                float(x.get("price") or 0),
+                -float(x.get("gp_per_observed_day_at_current_cost") or 0),
+            )
+        )
+        best=lower[0]
+        suggested=_d(best["price"])
+        basis="DOH_GT_7_CLEARANCE_14D_MAX_SELL_THROUGH"
+        selection="14D_OBSERVED_LOWER_PRICE_MAX_VELOCITY"
+    else:
+        best=candidates[0]
+        suggested=_d(best["price"])
+        basis="NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY"
+        selection="14D_OBSERVED_MAX_GP_PER_DAY"
+
+    return {
+        **base,
+        "status":"READY",
+        "suggested_price":suggested,
+        "include_in_review":bool(clearance or abs(suggested-current)>=Decimal("0.01")),
+        "basis":basis,
+        "selection_basis":selection,
+        "expected_gp_per_day_from_observed_demand":best.get("gp_per_observed_day_at_current_cost"),
+        "expected_velocity_from_observed_price_days":best.get("observed_velocity_per_day"),
     }
 
 def performance_supported_dates(limit: int=180) -> dict[str,Any]:
@@ -4439,7 +4566,7 @@ def _performance_narrative(
         f"and {int(summary.get('upcs_sold_report_date') or 0)} UPCs recorded sales on the report date. "
         f"{int(summary.get('slowing_items') or 0)} items have 7-day velocity below 80% of their 28-day rate, which identifies products where recent demand has softened. "
         f"{int(summary.get('low_gp_items') or 0)} items are below their current category GP reference. "
-        f"{int(summary.get('price_review_candidates') or 0)} items currently qualify for price review based on positive observed GP$/day opportunity; "
+        f"{int(summary.get('price_review_candidates') or 0)} items currently qualify for price review under the Company-range, 14-day GP$/day, or freshness-clearance rules; "
         "pricing actions are intentionally separated from this performance report. "
         f"Data quality also matters: {int(summary.get('ready_upcs') or 0)} UPCs are READY and "
         f"{int(summary.get('qa_hold_upcs') or 0)} are on QA HOLD. "
@@ -4545,15 +4672,44 @@ def performance_report(
             m14=_batch_sales_metric(daily_history,history_days,upc_id,14)
             m28=_batch_sales_metric(daily_history,history_days,upc_id,28)
             q28=_d(m28.get("sold_quantity"))
-            if q28<=0:
+            pclass=str(row.get("product_class") or "").upper()
+
+            company_values=[]
+            for key in ("company_price_a","company_price_b","company_price_c"):
+                raw=row.get(key)
+                if raw is not None and _d(raw)>0:
+                    company_values.append(_d(raw))
+            current_for_gate=(
+                _d(row.get("current_price"))
+                if row.get("current_price") is not None else None
+            )
+            company_outside_gate=bool(
+                company_values
+                and current_for_gate is not None
+                and not (min(company_values)<=current_for_gate<=max(company_values))
+            )
+            doh_for_gate=(
+                _d(row.get("doh")) if row.get("doh") is not None else None
+            )
+            clearance_gate=bool(
+                pclass in {"FRESH","LIVE"}
+                and doh_for_gate is not None
+                and doh_for_gate>Decimal("7")
+            )
+
+            # Keep zero-28D items out of ordinary review, but never hide:
+            # 1) a Company-range violation, or
+            # 2) Fresh/Live DOH > 7 clearance risk.
+            if q28<=0 and not company_outside_gate and not clearance_gate:
                 continue
 
-            summary["active_upcs_28d"]+=1
             status=str(row.get("quick_check_status") or "")
-            if status=="READY":
-                summary["ready_upcs"]+=1
-            elif status=="QA_HOLD":
-                summary["qa_hold_upcs"]+=1
+            if q28>0:
+                summary["active_upcs_28d"]+=1
+                if status=="READY":
+                    summary["ready_upcs"]+=1
+                elif status=="QA_HOLD":
+                    summary["qa_hold_upcs"]+=1
 
             summary["sales_dollars_7d"]+=_d(m7.get("sales_amount"))
             summary["sales_dollars_14d"]+=_d(m14.get("sales_amount"))
@@ -4580,7 +4736,6 @@ def performance_report(
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 summary["slowing_items"]+=1
 
-            pclass=str(row.get("product_class") or "").upper()
             target_gp=targets.get(pclass)
             gp=(
                 Decimal(str(row["gp_pct_current"]))
@@ -4618,22 +4773,45 @@ def performance_report(
             current=price_opt.get("current_price_used")
             suggested=price_opt.get("suggested_price")
             basis=price_opt.get("basis")
-            company_c_floor=price_opt.get("company_c_floor")
-            current_types=price_opt.get("current_price_basis")
-            # If report-date UPC actually sold on SALE, suppress automated review.
-            report_day_types=set(str(k).upper() for k in (day_obs.get("price_types") or {}).keys())
+            has_company=bool(price_opt.get("has_company_reference"))
+            company_low=price_opt.get("company_range_low")
+            company_high=price_opt.get("company_range_high")
+            clearance=bool(price_opt.get("clearance_due_to_doh"))
+            doh_value=price_opt.get("doh")
+
+            # Pricing Review is now a true suggestion queue:
+            # - Company A/B/C items appear only when Current Price is outside range.
+            # - No-company items appear when a 14D sweet-spot change is indicated,
+            #   or when Fresh/Live DOH > 7 requires clearance review.
+            if not price_opt.get("include_in_review"):
+                continue
+
+            report_day_types=set(
+                str(k).upper() for k in (day_obs.get("price_types") or {}).keys()
+            )
 
             reasons=[]
             score=Decimal("0")
             price_gap_pct=None
             if current is not None and _d(current)>0 and suggested is not None:
                 price_gap_pct=abs(_d(suggested)-_d(current))/_d(current)
-                if price_gap_pct>=Decimal("0.03"):
-                    reasons.append(
-                        f"{basis}_PRICE_GAP_{(price_gap_pct*Decimal('100')).quantize(Decimal('0.1'))}PCT"
-                    )
-            if price_opt.get("floor_constrained"):
-                reasons.append("COMPANY_C_FLOOR_CONSTRAINED")
+
+            if has_company:
+                reasons.append("CURRENT_PRICE_OUTSIDE_COMPANY_RANGE")
+                if basis=="COMPANY_RANGE_14D_MAX_GP_PER_DAY":
+                    reasons.append("14D_IN_RANGE_MAX_GP_PER_DAY")
+                elif basis=="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT":
+                    reasons.append("HISTORICAL_SWEET_SPOT_CLAMPED_TO_COMPANY_RANGE")
+                score+=Decimal("45")
+            else:
+                reasons.append("NO_COMPANY_ABC_REFERENCE")
+                if clearance:
+                    reasons.append("DOH_GT_7_CLEARANCE")
+                    score+=Decimal("60")
+                elif basis=="NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY":
+                    reasons.append("14D_MAX_GP_PER_DAY")
+                    score+=Decimal("30")
+
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 reasons.append("7D_VELOCITY_BELOW_28D")
             if gp is not None and target_gp is not None and gp<target_gp:
@@ -4666,35 +4844,49 @@ def performance_report(
             elif "SALE" in report_day_types:
                 blocked_reason="REPORT_DATE_ACTIVE_SALE"
             elif current is None or _d(current)<=0:
-                blocked_reason="REPORT_DATE_PRICE_UNAVAILABLE"
+                blocked_reason="CURRENT_PRICE_UNAVAILABLE"
+            elif cost is None:
+                blocked_reason="CURRENT_COST_UNAVAILABLE"
             elif price_opt.get("status")!="READY" or suggested is None:
-                blocked_reason=price_opt.get("reason") or "GP_DAY_PRICE_OPTIMIZATION_UNAVAILABLE"
-            elif price_gap_pct is None or price_gap_pct<Decimal("0.03"):
-                blocked_reason="PRICE_GAP_BELOW_3PCT"
-            elif gp_day_gain is None:
-                blocked_reason="GP_DAY_OPPORTUNITY_UNPROVEN"
-            elif gp_day_gain<=0:
-                blocked_reason="NO_POSITIVE_GP_DAY_OPPORTUNITY"
+                blocked_reason=price_opt.get("reason") or "PRICING_CANDIDATE_UNAVAILABLE"
 
-            # Top 100 is a REVIEW queue, not only the subset with an immediately
-            # executable price.  This prevents an empty report when price
-            # evidence is incomplete while still refusing to fabricate a price.
             actionable=blocked_reason is None
             if actionable:
                 summary["price_review_candidates"]+=1
 
             if gp_day_gain is not None and gp_day_gain>0:
-                score+=min(Decimal("70"),gp_day_gain*Decimal("2"))
+                score+=min(Decimal("25"),gp_day_gain*Decimal("2"))
                 reasons.append("POSITIVE_OBSERVED_GP_DAY_OPPORTUNITY")
             if gp_day_gain_pct is not None and gp_day_gain_pct>0:
-                score+=min(Decimal("20"),gp_day_gain_pct*Decimal("20"))
+                score+=min(Decimal("10"),gp_day_gain_pct*Decimal("10"))
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
-                score+=min(Decimal("15"),(Decimal("1")-trend_ratio)*Decimal("25"))
+                score+=min(Decimal("10"),(Decimal("1")-trend_ratio)*Decimal("20"))
             if gp is not None and target_gp is not None and gp<target_gp:
-                score+=min(Decimal("10"),(target_gp-gp)*Decimal("35"))
-            # Active movement matters for urgency, but cannot dominate the
-            # GP$/day objective.
+                score+=min(Decimal("5"),(target_gp-gp)*Decimal("20"))
             score+=min(Decimal("5"),_d(q28)/Decimal("20"))
+
+            if has_company:
+                side=(
+                    "below" if current is not None and company_low is not None and _d(current)<_d(company_low)
+                    else "above"
+                )
+                if basis=="COMPANY_RANGE_14D_MAX_GP_PER_DAY":
+                    primary_reason=(
+                        f"Price {side} Company range; 14D GP$/day sweet spot"
+                    )
+                elif basis=="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT":
+                    primary_reason=(
+                        f"Price {side} Company range; sweet spot adjusted into range"
+                    )
+                else:
+                    primary_reason=f"Price {side} Company range; review candidate"
+            elif clearance:
+                doh_txt=(
+                    f"{_d(doh_value):.1f}" if doh_value is not None else ">7"
+                )
+                primary_reason=f"DOH {doh_txt} > 7; clearance for sell-through"
+            else:
+                primary_reason="No Company A/B/C; 14D max GP$/day"
 
             review_status=(
                 "ACTIONABLE" if actionable
@@ -4732,9 +4924,21 @@ def performance_report(
                 "suggested_price":actionable_price,
                 "candidate_price":suggested,
                 "suggestion_basis":basis,
-                "company_price_c_floor":company_c_floor,
-                "company_c_applied":price_opt.get("company_c_applied"),
-                "company_c_floor_constrained":price_opt.get("floor_constrained"),
+                "selection_basis":price_opt.get("selection_basis"),
+                "historical_window_supported_days":price_opt.get("historical_window_supported_days"),
+                "company_price_a":price_opt.get("company_prices",{}).get("A"),
+                "company_price_b":price_opt.get("company_prices",{}).get("B"),
+                "company_price_c":price_opt.get("company_prices",{}).get("C"),
+                "company_range_low":company_low,
+                "company_range_high":company_high,
+                "has_company_reference":has_company,
+                "current_within_company_range":price_opt.get("current_within_company_range"),
+                "clearance_due_to_doh":clearance,
+                "doh":doh_value,
+                "pricing_rule_priority":(
+                    0 if clearance else (1 if has_company else 2)
+                ),
+                "primary_reason_text":primary_reason,
                 "direction":(
                     (
                         "INCREASE" if _d(actionable_price)>_d(current)
@@ -4834,6 +5038,7 @@ def performance_report(
         suggestions.sort(
             key=lambda x:(
                 0 if x.get("actionable") else 1,
+                int(x.get("pricing_rule_priority") or 9),
                 -float(x.get("gp_per_day_opportunity") or 0),
                 -float(x.get("urgency_score") or 0),
                 -float(x.get("qty_28d") or 0),
@@ -4893,7 +5098,7 @@ def performance_report(
             },
             {
                 "type":"PRICE_REVIEW",
-                "message":f"{summary['price_review_candidates']} items have positive GP$/day price opportunity using sales evidence through {anchor.isoformat()}.",
+                "message":f"{summary['price_review_candidates']} items are actionable under Company-range, 14-day GP$/day, or freshness-clearance pricing rules using sales evidence through {anchor.isoformat()}.",
             },
         ]
         narrative_analysis=_performance_narrative(
@@ -4905,7 +5110,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V9",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V10",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
@@ -4929,16 +5134,19 @@ def performance_report(
         "price_suggestion_rules":{
             "execution":"ANALYSIS_ONLY_NO_SAVE",
             "sales_evidence_cutoff":anchor,
-            "primary_objective":"MAXIMIZE_OBSERVED_GP_DOLLARS_PER_DAY",
+            "historical_window_supported_days":14,
+            "company_reference_rule":"RANGE_IS_MIN_TO_MAX_OF_AVAILABLE_POSITIVE_A_B_C; INCLUDE_ONLY_WHEN_CURRENT_PRICE_IS_OUTSIDE_RANGE",
+            "company_candidate_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY_WITHIN_COMPANY_RANGE; FALLBACK_CLAMP_HISTORICAL_SWEET_SPOT_TO_RANGE",
+            "no_company_reference_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY",
+            "freshness_rule":"FRESH_OR_LIVE_DOH_GT_7_USES_CLEARANCE_MODE_TO_AVOID_DUMPING",
+            "clearance_candidate_rule":"LOWER_14D_OBSERVED_PRICE_WITH_HIGHEST_SELL_THROUGH_VELOCITY; NO_INVENTED_MARKDOWN_WITHOUT_HISTORY",
             "candidate_demand_basis":"ACTUAL_HISTORICAL_SALES_RESPONSE_AT_OBSERVED_PRICE",
-            "company_price_c_rule":"HARD_BOTTOM_LINE_WHEN_AVAILABLE",
             "cost_basis":"CURRENT_AUTHORITATIVE_COST",
             "cost_caveat":"Historical daily cost lineage is not yet exposed in V2 Performance; suggestions use current authoritative cost while sales evidence is cut off at report date.",
-            "minimum_price_gap_pct":Decimal("0.03"),
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
-            "review_queue":"TOP_ACTIVE_ITEMS_ALWAYS_VISIBLE; SPECIFIC_PRICE_ONLY_WHEN_EVIDENCE_SUPPORTS_IT",
-            "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_GP_DOLLARS_PER_DAY_OPPORTUNITY_THEN_REVIEW_SCORE",
+            "review_queue":"COMPANY_RANGE_VIOLATIONS_PLUS_NO_COMPANY_14D_SWEET_SPOT_CHANGES_PLUS_FRESHNESS_CLEARANCE",
+            "urgency_primary_sort":"ACTIONABLE_FIRST_THEN_CLEARANCE_THEN_COMPANY_RANGE_THEN_NO_COMPANY_GP_DAY",
         },
     }
 
