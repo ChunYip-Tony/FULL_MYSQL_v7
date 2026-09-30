@@ -45,6 +45,13 @@ def _overlay_live_current_price(cur, row: dict[str,Any]) -> dict[str,Any]:
         return row
     live=_live_current_price(cur,int(row["upc_id"]),row.get("ean_upc"))
     if not live:
+        # Never preserve a stale snapshot as CURRENT price. Historical price
+        # remains available in price/sales history, but current fields fail closed.
+        row["current_price"]=None
+        row["current_price_type"]=None
+        row["current_price_source"]="STALE_OR_MISSING_FRESH_PRICE"
+        row["current_price_asof_date"]=None
+        row["gp_pct_current"]=None
         return row
     row["current_price"]=live.get("price")
     row["current_price_type"]=live.get("type")
