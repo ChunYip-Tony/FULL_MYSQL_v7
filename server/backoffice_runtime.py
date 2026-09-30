@@ -1793,11 +1793,12 @@ def _quick_receiving_article_context(
                 ),
             }
 
-        # Canonical Family usage contract:
-        #   each 7D POS-active UPC -> its final Selling Article assignment
-        #   -> sum each UNIQUE Selling Article's SAP 251 minus 252 exactly once.
-        # This lets several UPCs share one Selling Article without double count.
-        # 309 and 317/318 are conversion lineage only and are never added as sales.
+        # Family Total Selling MVT contract:
+        # Sum SAP 251 minus 252 for EVERY UNIQUE Selling Article in the Family,
+        # regardless of recent POS activity. The Family/Main Article is included
+        # once when it is itself a Selling Article. Multiple UPCs that share one
+        # Selling Article never multiply that Article's movement. 309 and 317/318
+        # remain conversion lineage only and are never added as sales.
         active_selling_articles: set[str] = set()
         unmapped_active_pos_upcs: list[str] = []
         for pos_row in active_pos_rows:
@@ -1808,15 +1809,43 @@ def _quick_receiving_article_context(
             else:
                 unmapped_active_pos_upcs.append(upc_text)
 
-        selected_movements: list[dict[str, Any]] = []
+        all_selling_articles: set[str] = set()
+
+        for (movement_fid, movement_article), mv in movement_by_article.items():
+            if int(movement_fid) != fid:
+                continue
+            art = str(movement_article or "").strip()
+            if art and mv.get("quantity") is not None:
+                all_selling_articles.add(art)
+
+        for (manual_fid, _upc_key), selling_article in manual_selling_by_upc.items():
+            art = str(selling_article or "").strip()
+            if int(manual_fid) == fid and art:
+                all_selling_articles.add(art)
+
+        for a in articles:
+            art = str(a.get("article_number") or "").strip()
+            role = str(a.get("article_role") or "").upper()
+            lineage = str(a.get("lineage_basis") or "").upper()
+            if art and (
+                "SAP_SELLING_ARTICLE" in role
+                or lineage == "ARTICLE_MANUAL_COLUMN_B_TO_D"
+                or bool(a.get("manual_selling_upcs"))
+            ):
+                all_selling_articles.add(art)
+
+        if source_article and (source_qty is not None or source_manual_upcs):
+            all_selling_articles.add(str(source_article))
+
+        total_selling_movements: list[dict[str, Any]] = []
         zero_sap_mvt_articles: list[str] = []
-        for art in sorted(active_selling_articles):
+        for art in sorted(all_selling_articles):
             mv = movement_by_article.get((fid, art))
             if mv and mv.get("quantity") is not None:
-                selected_movements.append({"article": art, **mv})
+                total_selling_movements.append({"article": art, **mv})
             else:
                 zero_sap_mvt_articles.append(art)
-                selected_movements.append(
+                total_selling_movements.append(
                     {
                         "article": art,
                         "quantity": Decimal("0"),
@@ -1827,7 +1856,7 @@ def _quick_receiving_article_context(
 
         movement_uoms = {
             str(x.get("uom") or "").strip().upper()
-            for x in selected_movements
+            for x in total_selling_movements
             if str(x.get("uom") or "").strip()
         }
         canonical_metric = canonical_family_metric.get(fid)
@@ -1839,23 +1868,20 @@ def _quick_receiving_article_context(
         )
         family_uom_reconciled = bool(family_raw_uom)
 
-        if unmapped_active_pos_upcs:
+        if len(movement_uoms) > 1:
             family_qty = None
-            family_status = "HOLD_POS_ACTIVE_UPC_SELLING_ARTICLE_UNMAPPED"
-        elif len(movement_uoms) > 1:
-            family_qty = None
-            family_status = "HOLD_SELLING_ARTICLE_MIXED_MVT_UOM"
+            family_status = "HOLD_TOTAL_SELLING_ARTICLE_MIXED_MVT_UOM"
         else:
             family_qty = sum(
-                (_d(x.get("quantity")) for x in selected_movements),
+                (_d(x.get("quantity")) for x in total_selling_movements),
                 Decimal("0"),
             )
             family_status = (
-                "READY_WITH_POS_ACTIVE_SELLING_ARTICLE_ZERO_SAP_MVT"
+                "READY_TOTAL_SELLING_MVT_WITH_ZERO_ARTICLES"
                 if zero_sap_mvt_articles
-                else "READY_SELLING_ARTICLE_SUM_RECONCILED"
+                else "READY_TOTAL_SELLING_MVT_RECONCILED"
             )
-        family_basis = "SUM_UNIQUE_ASSIGNED_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS"
+        family_basis = "SUM_UNIQUE_ALL_SELLING_ARTICLE_251_MINUS_252_IN_FAMILY"
 
         out[fid] = {
             "family_article": source_article,
@@ -1884,13 +1910,13 @@ def _quick_receiving_article_context(
             "family_group_active_pos_upc_count": len(active_pos_rows),
             "family_group_active_selling_article_count": len(active_selling_articles),
             "family_group_active_selling_articles": sorted(active_selling_articles),
+            "family_group_total_selling_article_count": len(all_selling_articles),
+            "family_group_total_selling_articles": sorted(all_selling_articles),
             "family_group_unmapped_active_pos_upcs": sorted(set(unmapped_active_pos_upcs)),
             "family_group_zero_sap_mvt_articles": sorted(set(zero_sap_mvt_articles)),
             "family_group_reconciliation": (
                 "PASS"
-                if family_qty is not None
-                and not unmapped_active_pos_upcs
-                and len(movement_uoms) <= 1
+                if family_qty is not None and len(movement_uoms) <= 1
                 else "HOLD"
             ),
             "family_all_251_252_7d_reference": raw_family_mv.get("quantity"),
@@ -2200,6 +2226,8 @@ def inventory_review(
                     "family_group_active_pos_upc_count": family_ctx.get("family_group_active_pos_upc_count"),
                     "family_group_active_selling_article_count": family_ctx.get("family_group_active_selling_article_count"),
                     "family_group_active_selling_articles": family_ctx.get("family_group_active_selling_articles", []),
+                    "family_group_total_selling_article_count": family_ctx.get("family_group_total_selling_article_count"),
+                    "family_group_total_selling_articles": family_ctx.get("family_group_total_selling_articles", []),
                     "family_group_unmapped_active_pos_upcs": family_ctx.get("family_group_unmapped_active_pos_upcs", []),
                     "family_group_zero_sap_mvt_articles": family_ctx.get("family_group_zero_sap_mvt_articles", []),
                     "family_group_reconciliation": family_ctx.get("family_group_reconciliation"),
