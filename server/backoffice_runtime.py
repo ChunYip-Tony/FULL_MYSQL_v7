@@ -28,6 +28,46 @@ from webapp_v2_runtime import (
 )
 
 
+def _fallback_selling_article_compatible(
+    prefix: str,
+    article_number: str,
+    article_description: str,
+) -> bool:
+    """Reject impossible Seafood UPC -> Selling Article heuristic matches.
+
+    Exact Article Manual or user-confirmed mappings are resolved before this
+    helper. These restrictions apply only to fallback scoring.
+    """
+    p = str(prefix or "")
+    art = str(article_number or "")
+    raw = str(article_description or "").upper()
+    desc = " ".join("".join(ch if ch.isalnum() else " " for ch in raw).split())
+    is_service_desc = ("FRIED" in desc) or ("SERVICE" in desc)
+
+    structural_prefix = None
+    if art.startswith("1540"):
+        structural_prefix = "240"
+    elif art.startswith("1545"):
+        structural_prefix = "245"
+    elif art.startswith("1549"):
+        structural_prefix = "249"
+
+    if structural_prefix and p in {"240", "245", "249"}:
+        if structural_prefix != p:
+            return False
+
+    if p in {"240", "245"} and is_service_desc:
+        return False
+
+    if p == "249":
+        if art.startswith("1549"):
+            return True
+        if not is_service_desc:
+            return False
+
+    return True
+
+
 def _d(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
@@ -1580,6 +1620,8 @@ def _quick_receiving_article_context(
         for a in articles:
             art = str(a.get("article_number") or "")
             desc = _norm_desc(a.get("article_description"))
+            if not _fallback_selling_article_compatible(prefix, art, desc):
+                continue
             score = (
                 SequenceMatcher(None, sell_desc, desc).ratio() * 60.0
                 if sell_desc and desc
@@ -1632,6 +1674,8 @@ def _quick_receiving_article_context(
             scored.append((score, art, a))
 
         scored.sort(key=lambda x: (-x[0], x[1]))
+        if not scored:
+            return None, "NO_PREFIX_COMPATIBLE_SAP_SELLING_ARTICLE"
         best = scored[0]
         if best[0] < 30.0:
             return None, "NO_STRONG_SAP_SELLING_ARTICLE_MATCH"

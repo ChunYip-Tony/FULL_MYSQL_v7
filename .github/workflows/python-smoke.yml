@@ -207,9 +207,36 @@ jobs:
           assert 'm.family_id IS NULL' in runtime
           assert 'FAMILY / SAP SELLING ARTICLE' not in ui
           assert 'Place its UPCs directly underneath' in ui
+          assert '_fallback_selling_article_compatible' in runtime
+          assert 'NO_PREFIX_COMPATIBLE_SAP_SELLING_ARTICLE' in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
+
+      - name: Validate global Selling Article fallback guards
+        run: |
+          python - <<'PY'
+          import backoffice_runtime as b
+
+          ok=b._fallback_selling_article_compatible
+          # The production bug class: 240/245 regular UPC must never land on
+          # a 1549 Fried-Service article through heuristic fallback.
+          assert not ok('240','1549739','NORWEGIAN SABA(Fried Service)')
+          assert not ok('245','1549739','NORWEGIAN SABA(Fried Service)')
+          # Structural channels cannot cross.
+          assert ok('240','1540739','NORWEGIAN SABA')
+          assert not ok('240','1545739','NORWEGIAN SABA')
+          assert ok('245','1545739','NORWEGIAN SABA')
+          assert not ok('245','1540739','NORWEGIAN SABA')
+          assert ok('249','1549739','NORWEGIAN SABA(Fried Service)')
+          assert not ok('249','1540739','NORWEGIAN SABA')
+          assert not ok('249','1341297','SABA MACKEREL')
+          # Non-structural service articles remain valid for 249 when the
+          # description itself carries explicit Fried/Service semantics.
+          assert ok('249','2045590','30/40 H/O WHITE SHRIMP(Fried Service)')
+          # Exact manual authority is checked before this fallback guard.
+          print('global-selling-article-fallback-guard=PASS')
+          PY
 
       - name: Validate Article Manual tab schemas
         run: |
@@ -369,6 +396,83 @@ jobs:
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import worker, phase3, active_28d_uom_repair, current_active_cost_repair, uom_evidence_diagnostic; print('imports-ok')"
+
+      - name: Live global Selling Article mapping audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/healthz" -o /tmp/health.json
+          curl -fsS --max-time 120 "$base/v1/backoffice/inventory?category=ALL&limit=500&lightweight=true" -o /tmp/all.json
+          python - <<'PY'
+          import json,re
+          health=json.load(open('/tmp/health.json'))
+          payload=json.load(open('/tmp/all.json'))
+          rows=payload.get('rows') or []
+          mismatches=[]
+          fallback_rows=0
+          exact_rows=0
+
+          def desc_for(row,article):
+              if not article:
+                  return ''
+              if str(article)==str(row.get('family_source_article') or ''):
+                  return str(row.get('family_name') or row.get('name') or '')
+              for a in row.get('receiving_articles') or []:
+                  if str(a.get('article_number') or '')==str(article):
+                      return str(a.get('article_description') or '')
+              return ''
+
+          for row in rows:
+              digits=''.join(ch for ch in str(row.get('upc') or '') if ch.isdigit()).lstrip('0')
+              if len(digits)<3:
+                  continue
+              prefix=digits[:3]
+              if prefix not in {'240','245','249'}:
+                  continue
+              art=str(row.get('receiving_article') or '')
+              basis=str(row.get('receiving_article_mapping_basis') or '')
+              if basis=='ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT':
+                  exact_rows+=1
+                  continue
+              fallback_rows+=1
+              desc=desc_for(row,art).upper()
+              service=('FRIED' in desc) or ('SERVICE' in desc)
+              bad=False
+              reason=[]
+              if prefix=='240' and (art.startswith('1545') or art.startswith('1549')):
+                  bad=True; reason.append('240_TO_WRONG_154X_CHANNEL')
+              if prefix=='245' and (art.startswith('1540') or art.startswith('1549')):
+                  bad=True; reason.append('245_TO_WRONG_154X_CHANNEL')
+              if prefix=='249' and (art.startswith('1540') or art.startswith('1545')):
+                  bad=True; reason.append('249_TO_WRONG_154X_CHANNEL')
+              if prefix in {'240','245'} and service:
+                  bad=True; reason.append('REGULAR_UPC_TO_SERVICE_ARTICLE')
+              if prefix=='249' and art and not art.startswith('1549') and not service:
+                  bad=True; reason.append('249_TO_NON_SERVICE_FALLBACK')
+              if bad:
+                  mismatches.append({
+                      'family_article':row.get('family_article'),
+                      'upc':row.get('upc'),
+                      'name':row.get('name'),
+                      'assigned_article':art,
+                      'assigned_description':desc,
+                      'basis':basis,
+                      'reason':reason,
+                  })
+
+          out={
+              'production_version':health.get('version'),
+              'rows_scanned':len(rows),
+              'exact_rows':exact_rows,
+              'fallback_rows':fallback_rows,
+              'mismatch_count':len(mismatches),
+              'mismatches':mismatches[:100],
+          }
+          print(json.dumps(out,indent=2,default=str))
+          if health.get('version')=='7.0.295-single-service' and mismatches:
+              raise SystemExit('GLOBAL_SELLING_ARTICLE_MAPPING_AUDIT_FAILED')
+          PY
 
       - name: Live Selling MVT production diagnostics
         shell: bash
