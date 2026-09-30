@@ -4666,15 +4666,44 @@ def performance_report(
             m14=_batch_sales_metric(daily_history,history_days,upc_id,14)
             m28=_batch_sales_metric(daily_history,history_days,upc_id,28)
             q28=_d(m28.get("sold_quantity"))
-            if q28<=0:
+            pclass=str(row.get("product_class") or "").upper()
+
+            company_values=[]
+            for key in ("company_price_a","company_price_b","company_price_c"):
+                raw=row.get(key)
+                if raw is not None and _d(raw)>0:
+                    company_values.append(_d(raw))
+            current_for_gate=(
+                _d(row.get("current_price"))
+                if row.get("current_price") is not None else None
+            )
+            company_outside_gate=bool(
+                company_values
+                and current_for_gate is not None
+                and not (min(company_values)<=current_for_gate<=max(company_values))
+            )
+            doh_for_gate=(
+                _d(row.get("doh")) if row.get("doh") is not None else None
+            )
+            clearance_gate=bool(
+                pclass in {"FRESH","LIVE"}
+                and doh_for_gate is not None
+                and doh_for_gate>Decimal("7")
+            )
+
+            # Keep zero-28D items out of ordinary review, but never hide:
+            # 1) a Company-range violation, or
+            # 2) Fresh/Live DOH > 7 clearance risk.
+            if q28<=0 and not company_outside_gate and not clearance_gate:
                 continue
 
-            summary["active_upcs_28d"]+=1
             status=str(row.get("quick_check_status") or "")
-            if status=="READY":
-                summary["ready_upcs"]+=1
-            elif status=="QA_HOLD":
-                summary["qa_hold_upcs"]+=1
+            if q28>0:
+                summary["active_upcs_28d"]+=1
+                if status=="READY":
+                    summary["ready_upcs"]+=1
+                elif status=="QA_HOLD":
+                    summary["qa_hold_upcs"]+=1
 
             summary["sales_dollars_7d"]+=_d(m7.get("sales_amount"))
             summary["sales_dollars_14d"]+=_d(m14.get("sales_amount"))
@@ -4701,7 +4730,6 @@ def performance_report(
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 summary["slowing_items"]+=1
 
-            pclass=str(row.get("product_class") or "").upper()
             target_gp=targets.get(pclass)
             gp=(
                 Decimal(str(row["gp_pct_current"]))
