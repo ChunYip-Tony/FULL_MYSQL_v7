@@ -140,6 +140,14 @@ def confirmed_operational_uom_basis(cur, family_id: int | None) -> dict[str, Any
 
 SEED_OVERRIDES = (
     {
+        "ean_upc": "4816",
+        "article_number": "1351311",
+        "selling_uom_code": "PACK",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("4"),
+        "source_note": "USER_CONFIRMED_UOM_20260930: 30/40 H/O WHITE SHRIMP pack UPC 4816 belongs to Family/Main and Selling Article 1351311; sold by PACK and 1 PACK = 4 LB. Supersedes the earlier EA=4LB interpretation.",
+    },
+    {
         "ean_upc": "4918",
         "article_number": "3401602",
         "selling_uom_code": "LB",
@@ -250,10 +258,10 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
     {
         "ean_upc": "4816",
         "selling_qty": Decimal("1"),
-        "selling_uom_code": "EA",
+        "selling_uom_code": "PACK",
         "cost_qty": Decimal("4"),
         "cost_uom_code": "LB",
-        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 4 LB.",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260930: UPC 4816 sells by PACK; 1 PACK = 4 LB. Supersedes the earlier EA=4LB interpretation.",
     },
     {
         "ean_upc": "8231817551",
