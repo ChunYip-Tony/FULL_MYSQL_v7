@@ -10,6 +10,8 @@ from manual_overrides import (
     apply_manual_upc_overrides,
     ensure_cost_conversion_table,
     apply_manual_cost_conversions,
+    ensure_article_family_override_table,
+    apply_manual_article_family_overrides,
 )
 from phase3 import relink_history, refresh_quick_check_subset
 
@@ -162,6 +164,9 @@ def _fix_kind(issue_code: str, summary: str, detail: dict[str, Any]) -> str:
         or "COST_TO_SELLING_UOM_UNRESOLVED" in blob
     ):
         return "COST_CONVERSION"
+
+    if code == "SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED":
+        return "ARTICLE_FAMILY_MAPPING"
 
     if code in FIXABLE_IDENTITY_CODES:
         return "IDENTITY_AND_UOM"
@@ -764,5 +769,219 @@ def resolve_cost_conversion_issue(
             "authoritative_cost_value_modified": False,
             "write_scope": "USER_CONFIRMED_COST_TO_SELLING_CONVERSION_ONLY",
             "targeted_quick_check_refreshed": True,
+        },
+    }
+
+
+def resolve_article_family_issue(
+    *,
+    issue_id: int,
+    article_number: str,
+    main_article_number: str,
+    note: str | None,
+    actor: str,
+    confirm: str,
+) -> dict[str, Any]:
+    """Persist an explicit Article -> Family mapping authority.
+
+    This is deliberately user-confirmed. It never infers the family from the
+    article number, description, or movement quantity. A full Phase 3 rebuild is
+    required afterward so family movement and downstream aggregates are
+    regenerated under the new mapping.
+    """
+    if confirm != "APPLY_ARTICLE_FAMILY_FIX":
+        raise ValueError("CONFIRM_MUST_BE_APPLY_ARTICLE_FAMILY_FIX")
+
+    article = str(article_number or "").strip()
+    main = str(main_article_number or "").strip()
+    if not article:
+        raise ValueError("ARTICLE_NUMBER_REQUIRED")
+    if not main:
+        raise ValueError("MAIN_ARTICLE_NUMBER_REQUIRED")
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_article_family_override_table(cur)
+        _ensure_resolution_table(cur)
+        conn.commit()
+
+        if _pipeline_busy(cur):
+            cur.close()
+            raise RuntimeError("PIPELINE_BUSY_RETRY_AFTER_ACTIVE_BATCH_FINISHES")
+
+        cur.execute(
+            """SELECT issue_id,batch_id,issue_code,entity_type,entity_key,
+                      issue_summary,detail_json,issue_status
+               FROM qa_phase3_issue
+               WHERE issue_id=%s
+               LIMIT 1""",
+            (int(issue_id),),
+        )
+        issue = cur.fetchone()
+        if not issue:
+            cur.close()
+            raise ValueError("QA_ISSUE_NOT_FOUND")
+        if str(issue.get("issue_status") or "").upper() != "OPEN":
+            cur.close()
+            raise ValueError("QA_ISSUE_NOT_OPEN")
+        if str(issue.get("issue_code") or "").upper() != "SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED":
+            cur.close()
+            raise ValueError("QA_ISSUE_NOT_ARTICLE_FAMILY_MAPPING")
+        if str(issue.get("entity_type") or "").upper() != "ARTICLE":
+            cur.close()
+            raise ValueError("QA_ISSUE_ENTITY_TYPE_NOT_ARTICLE")
+        if str(issue.get("entity_key") or "") != article:
+            cur.close()
+            raise ValueError("QA_ISSUE_ENTITY_MISMATCH")
+
+        cur.execute(
+            "SELECT article_id,article_description FROM article WHERE article_number=%s LIMIT 1",
+            (article,),
+        )
+        ar = cur.fetchone()
+        if not ar:
+            cur.close()
+            raise ValueError("ARTICLE_NOT_PRESENT")
+
+        cur.execute(
+            """SELECT family_id,family_description
+               FROM product_family
+               WHERE main_article_number=%s
+               LIMIT 1""",
+            (main,),
+        )
+        fam = cur.fetchone()
+        if not fam:
+            cur.close()
+            raise ValueError("TARGET_MAIN_ARTICLE_FAMILY_NOT_FOUND")
+
+        cur.execute(
+            """SELECT pf.main_article_number
+               FROM bridge_article_family baf
+               JOIN product_family pf ON pf.family_id=baf.family_id
+               WHERE baf.article_id=%s
+                 AND baf.mapping_status='CONFIRMED'
+                 AND baf.is_primary=TRUE
+                 AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+               LIMIT 1""",
+            (int(ar["article_id"]),),
+        )
+        existing = cur.fetchone()
+        if existing and str(existing.get("main_article_number") or "") != main:
+            cur.close()
+            raise RuntimeError(
+                "ARTICLE_ALREADY_HAS_CONFIRMED_DIFFERENT_FAMILY:"
+                + str(existing.get("main_article_number") or "")
+            )
+
+        before = {
+            "issue": issue,
+            "article": {
+                "article_number": article,
+                "article_description": ar.get("article_description"),
+            },
+            "existing_family": existing,
+        }
+        source_note = (
+            "BACKOFFICE_QA_USER_CONFIRMED_ARTICLE_FAMILY: "
+            + (str(note or "").strip() or "User confirmed Article to Family mapping")
+        )[:512]
+
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """INSERT INTO manual_article_family_override
+                     (article_number,main_article_number,authority_status,source_note)
+                   VALUES (%s,%s,'CONFIRMED',%s)
+                   ON DUPLICATE KEY UPDATE
+                     main_article_number=VALUES(main_article_number),
+                     authority_status='CONFIRMED',
+                     source_note=VALUES(source_note)""",
+                (article, main, source_note),
+            )
+
+            applied = apply_manual_article_family_overrides(cur)
+            target_holds = [
+                x for x in (applied.get("held") or [])
+                if str(x.get("article_number") or "") == article
+            ]
+            if target_holds:
+                raise RuntimeError(
+                    "TARGET_ARTICLE_FAMILY_OVERRIDE_HELD:"
+                    + json.dumps(target_holds, default=str)
+                )
+
+            relink_history(cur)
+
+            cur.execute(
+                """UPDATE qa_phase3_issue
+                   SET issue_status='RESOLVED',
+                       detail_json=JSON_SET(
+                         COALESCE(detail_json,JSON_OBJECT()),
+                         '$.manual_resolution',
+                         CAST(%s AS JSON)
+                       )
+                   WHERE issue_id=%s
+                     AND issue_status='OPEN'""",
+                (
+                    json.dumps({
+                        "actor": actor,
+                        "note": note,
+                        "resolution_kind": "USER_CONFIRMED_ARTICLE_FAMILY_OVERRIDE",
+                        "article_number": article,
+                        "main_article_number": main,
+                        "requires_phase3_rebuild": True,
+                    }, ensure_ascii=False, default=str),
+                    int(issue_id),
+                ),
+            )
+
+            cur.execute(
+                """INSERT INTO qa_manual_resolution
+                     (issue_id,batch_id,issue_code,entity_type,entity_key,
+                      resolution_kind,actor,resolution_note,before_json,applied_json,after_json)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (
+                    int(issue_id),
+                    int(issue["batch_id"]),
+                    issue.get("issue_code"),
+                    "ARTICLE",
+                    article,
+                    "USER_CONFIRMED_ARTICLE_FAMILY_OVERRIDE",
+                    actor,
+                    str(note or "")[:512] or None,
+                    json.dumps(before, ensure_ascii=False, default=str),
+                    json.dumps({
+                        "article_number": article,
+                        "main_article_number": main,
+                        "manual_authority": applied,
+                        "requires_phase3_rebuild": True,
+                    }, ensure_ascii=False, default=str),
+                    json.dumps({
+                        "article_number": article,
+                        "main_article_number": main,
+                        "family_id": fam.get("family_id"),
+                        "family_description": fam.get("family_description"),
+                    }, ensure_ascii=False, default=str),
+                ),
+            )
+            resolution_id = int(cur.lastrowid)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+    return {
+        "status": "APPLIED",
+        "resolution_id": resolution_id,
+        "article_number": article,
+        "main_article_number": main,
+        "requires_phase3_rebuild": True,
+        "rules": {
+            "raw_source_rows_modified": False,
+            "movement_history_values_modified": False,
+            "write_scope": "USER_CONFIRMED_ARTICLE_TO_FAMILY_AUTHORITY_ONLY",
         },
     }
