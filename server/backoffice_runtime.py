@@ -24,6 +24,38 @@ def _d(value: Any) -> Decimal:
     return Decimal(str(value))
 
 
+def _published_family_oh_fallback(children: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Return the last published family OH only when child snapshots agree.
+
+    quick_check_current repeats a family-owned OH on each related UPC.  Around
+    midnight, read-time roll-forward can temporarily become blocked by the new
+    completed-day requirement before the prior day's MVT is uploaded.  In that
+    case, keep the last published effective family OH visible, but mark it as
+    LAST_PUBLISHED rather than pretending it is current-through-today.
+    """
+    values: list[tuple[Decimal, str, Any]] = []
+    for child in children:
+        qty = child.get('current_oh')
+        uom = str(child.get('current_oh_uom') or '').strip().upper()
+        if qty is None or not uom:
+            continue
+        values.append((_d(qty), uom, child.get('oh_date')))
+    if not values:
+        return None
+    uoms = {x[1] for x in values}
+    qtys = {x[0] for x in values}
+    if len(uoms) != 1 or len(qtys) != 1:
+        return None
+    dates = [str(x[2]) for x in values if x[2] is not None]
+    return {
+        'status': 'LAST_PUBLISHED',
+        'quantity': values[0][0],
+        'uom': values[0][1],
+        'source': 'QUICK_CHECK_CURRENT_PUBLISHED_EFFECTIVE_OH',
+        'as_of_date': max(dates) if dates else None,
+    }
+
+
 def _receipt_stage_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
     by_type: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
@@ -478,7 +510,21 @@ def inventory_review(
             if fid is not None and fid not in family_cache:
                 cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc", (fid,))
                 children = cur.fetchall()
-                family_cache[fid] = _family_effective_oh(cur, children)
+                live_family_oh = _family_effective_oh(cur, children)
+                if live_family_oh.get('status') == 'READY' and live_family_oh.get('quantity') is not None:
+                    live_family_oh['as_of_date'] = (
+                        live_family_oh.get('movement_through_date')
+                        or live_family_oh.get('anchor_date')
+                    )
+                    family_cache[fid] = live_family_oh
+                else:
+                    published = _published_family_oh_fallback(children)
+                    if published:
+                        published['live_status'] = live_family_oh.get('status')
+                        published['live_reason'] = live_family_oh.get('reason')
+                        family_cache[fid] = published
+                    else:
+                        family_cache[fid] = live_family_oh
             family_oh = family_cache.get(fid or -1, {})
             out.append(
                 {
@@ -507,6 +553,10 @@ def inventory_review(
                     "family_oh": family_oh.get("quantity"),
                     "family_oh_uom": family_oh.get("uom"),
                     "family_oh_source": family_oh.get("source"),
+                    "family_oh_status": family_oh.get("status"),
+                    "family_oh_as_of": family_oh.get("as_of_date"),
+                    "family_oh_live_status": family_oh.get("live_status"),
+                    "family_oh_reason": family_oh.get("live_reason") or family_oh.get("reason"),
                     "last_receipt_date": row.get("last_receipt_date"),
                 }
             )
