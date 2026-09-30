@@ -3444,9 +3444,14 @@ def backoffice_data_health(days:int=14):
 
 
 @app.get('/v1/backoffice/inventory')
-def backoffice_inventory(category:str='ALL',limit:int=300,q:str|None=None):
+def backoffice_inventory(category:str='ALL',limit:int=300,q:str|None=None,lightweight:bool=False):
     try:
-        result=backoffice_inventory_review(limit=limit,category=category,query=q)
+        result=backoffice_inventory_review(
+            limit=limit,
+            category=category,
+            query=q,
+            lightweight=lightweight,
+        )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
