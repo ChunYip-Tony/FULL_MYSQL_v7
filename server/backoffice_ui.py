@@ -2741,20 +2741,13 @@ function mobileQuickGroupedHtml(rows){
           '<div class="m-q-upcs">'+sourceInactiveHtml+'</div>'+
         '</div></div>'
       : '';
-    const sourceMvtLabel=(g.source_movement_7d===null||g.source_movement_7d===undefined)
-      ? '—'
-      : fmt(g.source_movement_7d)+(g.source_movement_uom?' '+g.source_movement_uom:'');
-    const sourceAvgLabel=(g.source_avg_qty_day===null||g.source_avg_qty_day===undefined)
-      ? '—'
-      : fmt(g.source_avg_qty_day)+(g.source_movement_uom?' '+g.source_movement_uom:'');
+    // When the Family/Main Article is also the Selling Article, do not render
+    // a second Article header. The Family header already owns the same Article
+    // number and the same 7D MVT / Avg-Day. Place its UPCs directly underneath.
     const sourceUpcSection=(sourceActiveHtml||sourceHiddenToggle)
-      ? '<div class="m-q-family-source-upcs">'+
-          '<div class="m-q-receiving-head'+(sourceHasMvt?' has-positive-mvt':'')+'">'+
-            '<div class="m-q-recv-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY / SAP SELLING ARTICLE</span><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(g.source_article||g.family_article||'—')+'</div></div></div><div style="font-size:6px;color:var(--muted);font-weight:850;margin-top:1px">251−252 SELLING MVT</div></div>'+
-            '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(sourceMvtLabel)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(sourceAvgLabel)+'</b></div></div>'+
-          '</div>'+
-          '<div class="m-q-upcs">'+sourceActiveHtml+sourceHiddenToggle+'</div>'+
-        '</div>'
+      ? '<div class="m-q-family-source-upcs"><div class="m-q-upcs">'+
+          sourceActiveHtml+sourceHiddenToggle+
+        '</div></div>'
       : '';
 
     const receiving=Array.isArray(g.receiving)?g.receiving:[];
