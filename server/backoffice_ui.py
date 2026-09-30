@@ -1015,6 +1015,69 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .m-pagetitle{font-size:18px!important}
   }
 }
+
+/* Stronger value > source typography hierarchy */
+.m-metric b{
+  font-size:24px!important;
+  font-weight:950!important;
+  line-height:1.05!important;
+}
+.m-metric small{
+  font-size:9px!important;
+  font-weight:850!important;
+}
+.m-metric span{
+  font-size:9px!important;
+  line-height:1.25!important;
+  color:var(--muted)!important;
+  font-weight:600!important;
+}
+.detail b{
+  font-size:18px!important;
+  font-weight:950!important;
+  line-height:1.1!important;
+}
+.detail small{
+  font-size:9px!important;
+  font-weight:850!important;
+  color:var(--muted)!important;
+}
+.detail span{
+  font-size:9px!important;
+  line-height:1.25!important;
+  color:var(--muted)!important;
+}
+.kpi b{
+  font-size:19px!important;
+  font-weight:950!important;
+}
+.kpi small,.kpi span{
+  font-size:9px!important;
+  color:var(--muted)!important;
+}
+.table td>b,.table td>.linkbtn{
+  font-size:15px!important;
+  font-weight:950!important;
+}
+.table .meta{
+  font-size:9px!important;
+  line-height:1.25!important;
+  color:var(--muted)!important;
+}
+.batchmeta b{font-size:13px!important;font-weight:950!important}
+.batchmeta small{font-size:8px!important;color:var(--muted)!important}
+.dbcard b{font-size:17px!important;font-weight:950!important}
+.dbcard small,.dbcard em{font-size:9px!important;color:var(--muted)!important}
+.m-history7-row b{font-size:13px!important;font-weight:900!important}
+.m-history7-row small,.m-history7-date span{font-size:8px!important;color:var(--muted)!important}
+
+@media(max-width:759px){
+  .m-metric b{font-size:clamp(22px,6.2vw,27px)!important}
+  .m-metric span{font-size:9px!important}
+  .detail b{font-size:18px!important}
+  .detail span{font-size:9px!important}
+  .m-history7-row b{font-size:13px!important}
+}
 </style>
 </head>
 <body>
