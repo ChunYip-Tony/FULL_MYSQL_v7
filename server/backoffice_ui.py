@@ -850,6 +850,25 @@ BACKOFFICE_HTML = r'''<!doctype html>
     .mobilehome.on .m-module:before{height:26px!important}
   }
 
+
+  /* Keep deployed Web App version on one line */
+  .mobilehome.on .m-brand{
+    max-width:calc(100% - 96px);
+  }
+  .mobilehome.on .m-brand strong{
+    display:block;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    font-size:clamp(18px,5.2vw,24px)!important;
+    letter-spacing:-.035em!important;
+  }
+  @media(max-width:380px){
+    .mobilehome.on .m-brand strong{
+      font-size:17px!important;
+    }
+  }
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
