@@ -4739,22 +4739,45 @@ def performance_report(
             current=price_opt.get("current_price_used")
             suggested=price_opt.get("suggested_price")
             basis=price_opt.get("basis")
-            company_c_floor=price_opt.get("company_c_floor")
-            current_types=price_opt.get("current_price_basis")
-            # If report-date UPC actually sold on SALE, suppress automated review.
-            report_day_types=set(str(k).upper() for k in (day_obs.get("price_types") or {}).keys())
+            has_company=bool(price_opt.get("has_company_reference"))
+            company_low=price_opt.get("company_range_low")
+            company_high=price_opt.get("company_range_high")
+            clearance=bool(price_opt.get("clearance_due_to_doh"))
+            doh_value=price_opt.get("doh")
+
+            # Pricing Review is now a true suggestion queue:
+            # - Company A/B/C items appear only when Current Price is outside range.
+            # - No-company items appear when a 14D sweet-spot change is indicated,
+            #   or when Fresh/Live DOH > 7 requires clearance review.
+            if not price_opt.get("include_in_review"):
+                continue
+
+            report_day_types=set(
+                str(k).upper() for k in (day_obs.get("price_types") or {}).keys()
+            )
 
             reasons=[]
             score=Decimal("0")
             price_gap_pct=None
             if current is not None and _d(current)>0 and suggested is not None:
                 price_gap_pct=abs(_d(suggested)-_d(current))/_d(current)
-                if price_gap_pct>=Decimal("0.03"):
-                    reasons.append(
-                        f"{basis}_PRICE_GAP_{(price_gap_pct*Decimal('100')).quantize(Decimal('0.1'))}PCT"
-                    )
-            if price_opt.get("floor_constrained"):
-                reasons.append("COMPANY_C_FLOOR_CONSTRAINED")
+
+            if has_company:
+                reasons.append("CURRENT_PRICE_OUTSIDE_COMPANY_RANGE")
+                if basis=="COMPANY_RANGE_14D_MAX_GP_PER_DAY":
+                    reasons.append("14D_IN_RANGE_MAX_GP_PER_DAY")
+                elif basis=="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT":
+                    reasons.append("HISTORICAL_SWEET_SPOT_CLAMPED_TO_COMPANY_RANGE")
+                score+=Decimal("45")
+            else:
+                reasons.append("NO_COMPANY_ABC_REFERENCE")
+                if clearance:
+                    reasons.append("DOH_GT_7_CLEARANCE")
+                    score+=Decimal("60")
+                elif basis=="NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY":
+                    reasons.append("14D_MAX_GP_PER_DAY")
+                    score+=Decimal("30")
+
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
                 reasons.append("7D_VELOCITY_BELOW_28D")
             if gp is not None and target_gp is not None and gp<target_gp:
@@ -4787,35 +4810,47 @@ def performance_report(
             elif "SALE" in report_day_types:
                 blocked_reason="REPORT_DATE_ACTIVE_SALE"
             elif current is None or _d(current)<=0:
-                blocked_reason="REPORT_DATE_PRICE_UNAVAILABLE"
+                blocked_reason="CURRENT_PRICE_UNAVAILABLE"
             elif price_opt.get("status")!="READY" or suggested is None:
-                blocked_reason=price_opt.get("reason") or "GP_DAY_PRICE_OPTIMIZATION_UNAVAILABLE"
-            elif price_gap_pct is None or price_gap_pct<Decimal("0.03"):
-                blocked_reason="PRICE_GAP_BELOW_3PCT"
-            elif gp_day_gain is None:
-                blocked_reason="GP_DAY_OPPORTUNITY_UNPROVEN"
-            elif gp_day_gain<=0:
-                blocked_reason="NO_POSITIVE_GP_DAY_OPPORTUNITY"
+                blocked_reason=price_opt.get("reason") or "PRICING_CANDIDATE_UNAVAILABLE"
 
-            # Top 100 is a REVIEW queue, not only the subset with an immediately
-            # executable price.  This prevents an empty report when price
-            # evidence is incomplete while still refusing to fabricate a price.
             actionable=blocked_reason is None
             if actionable:
                 summary["price_review_candidates"]+=1
 
             if gp_day_gain is not None and gp_day_gain>0:
-                score+=min(Decimal("70"),gp_day_gain*Decimal("2"))
+                score+=min(Decimal("25"),gp_day_gain*Decimal("2"))
                 reasons.append("POSITIVE_OBSERVED_GP_DAY_OPPORTUNITY")
             if gp_day_gain_pct is not None and gp_day_gain_pct>0:
-                score+=min(Decimal("20"),gp_day_gain_pct*Decimal("20"))
+                score+=min(Decimal("10"),gp_day_gain_pct*Decimal("10"))
             if trend_ratio is not None and trend_ratio<Decimal("0.80"):
-                score+=min(Decimal("15"),(Decimal("1")-trend_ratio)*Decimal("25"))
+                score+=min(Decimal("10"),(Decimal("1")-trend_ratio)*Decimal("20"))
             if gp is not None and target_gp is not None and gp<target_gp:
-                score+=min(Decimal("10"),(target_gp-gp)*Decimal("35"))
-            # Active movement matters for urgency, but cannot dominate the
-            # GP$/day objective.
+                score+=min(Decimal("5"),(target_gp-gp)*Decimal("20"))
             score+=min(Decimal("5"),_d(q28)/Decimal("20"))
+
+            if has_company:
+                side=(
+                    "below" if current is not None and company_low is not None and _d(current)<_d(company_low)
+                    else "above"
+                )
+                if basis=="COMPANY_RANGE_14D_MAX_GP_PER_DAY":
+                    primary_reason=(
+                        f"Price {side} Company range; 14D GP$/day sweet spot"
+                    )
+                elif basis=="COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT":
+                    primary_reason=(
+                        f"Price {side} Company range; sweet spot adjusted into range"
+                    )
+                else:
+                    primary_reason=f"Price {side} Company range; review candidate"
+            elif clearance:
+                doh_txt=(
+                    f"{_d(doh_value):.1f}" if doh_value is not None else ">7"
+                )
+                primary_reason=f"DOH {doh_txt} > 7; clearance for sell-through"
+            else:
+                primary_reason="No Company A/B/C; 14D max GP$/day"
 
             review_status=(
                 "ACTIONABLE" if actionable
@@ -4853,9 +4888,18 @@ def performance_report(
                 "suggested_price":actionable_price,
                 "candidate_price":suggested,
                 "suggestion_basis":basis,
-                "company_price_c_floor":company_c_floor,
-                "company_c_applied":price_opt.get("company_c_applied"),
-                "company_c_floor_constrained":price_opt.get("floor_constrained"),
+                "selection_basis":price_opt.get("selection_basis"),
+                "historical_window_supported_days":price_opt.get("historical_window_supported_days"),
+                "company_price_a":price_opt.get("company_prices",{}).get("A"),
+                "company_price_b":price_opt.get("company_prices",{}).get("B"),
+                "company_price_c":price_opt.get("company_prices",{}).get("C"),
+                "company_range_low":company_low,
+                "company_range_high":company_high,
+                "has_company_reference":has_company,
+                "current_within_company_range":price_opt.get("current_within_company_range"),
+                "clearance_due_to_doh":clearance,
+                "doh":doh_value,
+                "primary_reason_text":primary_reason,
                 "direction":(
                     (
                         "INCREASE" if _d(actionable_price)>_d(current)
