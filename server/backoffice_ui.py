@@ -1078,6 +1078,49 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .detail span{font-size:9px!important}
   .m-history7-row b{font-size:13px!important}
 }
+
+/* High-contrast sticky mobile page header */
+@media(max-width:759px){
+  .mobile-listpage.on .m-pagehead,
+  .mobile-detailpage.on .m-pagehead{
+    background:
+      radial-gradient(circle at 88% -25%,rgba(71,190,195,.32),transparent 38%),
+      linear-gradient(135deg,#073d46 0%,#0a5c67 58%,#0c737c 100%)!important;
+    border-bottom:1px solid rgba(255,255,255,.14)!important;
+    box-shadow:0 8px 22px rgba(4,48,57,.18)!important;
+    color:#fff!important;
+  }
+  .mobile-listpage.on .m-pagetitle,
+  .mobile-detailpage.on .m-pagetitle{
+    color:#fff!important;
+    font-size:clamp(23px,6.4vw,29px)!important;
+    font-weight:950!important;
+    line-height:1.05!important;
+    text-shadow:0 1px 1px rgba(0,0,0,.08);
+  }
+  .mobile-listpage.on .m-pagesub,
+  .mobile-detailpage.on .m-pagesub{
+    color:rgba(231,250,248,.88)!important;
+    font-size:clamp(11px,3vw,13px)!important;
+    line-height:1.35!important;
+    font-weight:650!important;
+    max-width:none!important;
+  }
+  .mobile-listpage.on .m-back,
+  .mobile-detailpage.on .m-back{
+    color:#fff!important;
+    background:rgba(255,255,255,.12)!important;
+    border:1px solid rgba(255,255,255,.18)!important;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.08)!important;
+  }
+  .mobile-listpage.on .m-pageversion,
+  .mobile-detailpage.on .m-pageversion{
+    background:rgba(255,255,255,.96)!important;
+    border-color:rgba(255,255,255,.9)!important;
+    color:#155b64!important;
+    box-shadow:0 3px 10px rgba(0,0,0,.10)!important;
+  }
+}
 </style>
 </head>
 <body>
