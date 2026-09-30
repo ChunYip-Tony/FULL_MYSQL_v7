@@ -960,11 +960,16 @@ BACKOFFICE_HTML = r'''<!doctype html>
   background:var(--q-bg);
   box-shadow:0 4px 10px rgba(7,55,62,.04);
 }
-.m-q-family-group.q-family-tone-1{--q-bg:#dcecff;--q-head:#c8def9;--q-border:#9fbfe6;--q-accent:#2f6fa8}
-.m-q-family-group.q-family-tone-2{--q-bg:#eee0ff;--q-head:#dcc6f6;--q-border:#bfa1e4;--q-accent:#7249ac}
-.m-q-family-group.q-family-tone-3{--q-bg:#ffe7d6;--q-head:#ffd4b7;--q-border:#efaf7a;--q-accent:#a95317}
-.m-q-family-group.q-family-tone-4{--q-bg:#d9f2ef;--q-head:#c4e6e1;--q-border:#92c9c1;--q-accent:#327b73}
-.m-q-family-group.q-family-tone-5{--q-bg:#dff3e6;--q-head:#cdebd8;--q-border:#9dceac;--q-accent:#2f7a4c}
+.m-q-family-group.q-family-tone-1,
+.m-q-family-group.q-family-tone-2,
+.m-q-family-group.q-family-tone-3,
+.m-q-family-group.q-family-tone-4,
+.m-q-family-group.q-family-tone-5{
+  --q-bg:#fff4c7;
+  --q-head:#ffe89a;
+  --q-border:#dfbd55;
+  --q-accent:#846515;
+}
 .m-q-family-group+.m-q-family-group{margin-top:28px}
 .m-q-family-group+.m-q-family-group:before{
   content:"NEXT FAMILY";
@@ -994,32 +999,37 @@ BACKOFFICE_HTML = r'''<!doctype html>
 }
 .m-q-label{font-size:8px;color:var(--muted);font-weight:950;letter-spacing:.05em}
 .m-q-family-number-line{display:flex;align-items:center;gap:7px;min-width:0}
-.m-q-family-number{font-size:20px;font-weight:950;line-height:1;letter-spacing:-.025em;color:var(--ink)}
-.m-q-family-name{font-size:12px;font-weight:900;line-height:1.2;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.m-q-family-kpis,.m-q-recv-kpis{display:flex;gap:7px;align-items:center}
-.m-q-kpi{min-width:68px;text-align:right}
+.m-q-family-number{font-size:14px;font-weight:900;line-height:1;color:#5e5227}
+.m-q-family-name{font-size:18px;font-weight:1000;line-height:1.08;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#102c42}
+.m-q-family-kpis,.m-q-recv-kpis{display:flex;gap:8px;align-items:center}
+.m-q-kpi{min-width:72px;text-align:right}
 .m-q-kpi small{display:block;font-size:7px;color:var(--muted);font-weight:950;text-transform:uppercase}
-.m-q-kpi b{display:block;font-size:12px;color:var(--q-accent);font-weight:950;margin-top:1px;white-space:nowrap}
+.m-q-kpi b{display:block;font-weight:1000;margin-top:1px;white-space:nowrap}
+.m-q-family-kpis .m-q-kpi b{font-size:28px;line-height:1;color:#d71920}
+.m-q-recv-kpis .m-q-kpi b{font-size:14px;line-height:1.05;color:#d71920}
 
-.m-q-receiving-list{display:grid;gap:5px}
+.m-q-receiving-list{display:grid;gap:7px;padding-left:11px;position:relative}
+.m-q-receiving-list:before{content:"";position:absolute;left:3px;top:3px;bottom:8px;width:2px;background:#d4aa29;border-radius:999px}
 .m-q-receiving{
   overflow:hidden;
+  position:relative;
   border:1px solid var(--q-border);
-  border-left:4px solid var(--q-accent);
+  border-left:4px solid #d4aa29;
   border-radius:11px;
-  background:rgba(255,255,255,.80);
+  background:rgba(255,249,213,.88);
 }
+.m-q-receiving:before{content:"";position:absolute;left:-11px;top:26px;width:10px;height:2px;background:#d4aa29}
 .m-q-receiving-head{
   display:grid;
   grid-template-columns:minmax(0,1fr) auto;
   gap:7px;
   align-items:center;
-  padding:7px 8px;
-  background:rgba(255,255,255,.50);
+  padding:8px 8px 7px;
+  background:rgba(255,244,199,.72);
 }
 .m-q-recv-number-line{display:flex;align-items:center;gap:7px;min-width:0}
-.m-q-recv-number{font-size:16px;font-weight:950;line-height:1.05;color:var(--ink)}
-.m-q-recv-name{font-size:10px;font-weight:850;color:#33595d;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-q-recv-number{font-size:13px;font-weight:900;line-height:1.05;color:#5e5227}
+.m-q-recv-name{font-size:17px;font-weight:1000;line-height:1.08;color:#102c42;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .m-q-receipt-o{
   display:inline-flex;
   align-items:center;
@@ -1046,40 +1056,67 @@ BACKOFFICE_HTML = r'''<!doctype html>
   font-weight:850;
 }
 .m-q-receipt-info b{color:#3f4e50}
+.m-q-receipt-history{display:grid;grid-template-columns:auto repeat(2,minmax(0,1fr));gap:5px;align-items:stretch;padding:0 8px 7px}
+.m-q-receipt-history-label{display:flex;align-items:center;font-size:7px;font-weight:900;color:#5b5a50;white-space:nowrap;padding:4px 2px}
+.m-q-receipt-card{display:grid;grid-template-columns:auto minmax(0,1fr);gap:5px;align-items:center;border:1px solid #e2d8a8;border-radius:8px;background:rgba(255,255,255,.88);padding:4px 5px;min-width:0}
+.m-q-receipt-type{display:grid;place-items:center;min-width:28px;height:25px;border:1px solid #e02020;border-radius:5px;color:#d71920;font-size:9px;font-weight:1000;background:#fff}
+.m-q-receipt-date{font-size:8px;font-weight:900;color:#264f76;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-q-receipt-qty{font-size:7px;font-weight:900;color:#18304a;margin-top:1px}
+@media(max-width:390px){.m-q-receipt-history{grid-template-columns:1fr 1fr}.m-q-receipt-history-label{grid-column:1/-1;padding-bottom:0}}
 
 .m-q-upcs{
   display:grid;
-  gap:3px;
-  padding:4px 5px 5px;
+  gap:4px;
+  padding:5px;
   border-top:1px solid var(--q-border);
-  background:rgba(250,253,252,.78);
+  background:transparent;
 }
 .m-q-upc-row.m-row{
   padding:6px 7px!important;
   min-height:0!important;
-  border:1px solid #dce8e5!important;
-  border-radius:9px!important;
+  border:1px solid #e0d7a6!important;
+  border-radius:10px!important;
   background:#fff!important;
   box-shadow:0 2px 7px rgba(7,55,62,.025)!important;
 }
-.m-q-upc-row .m-row-main{display:grid!important;grid-template-columns:minmax(0,1fr) 58px 68px 14px;gap:5px;align-items:center}
+.m-q-upc-row .m-row-main{display:grid!important;grid-template-columns:minmax(0,1fr) 62px 72px 14px;gap:6px;align-items:center}
 .m-q-upc-main{min-width:0}
+.m-q-upc-mainwrap{display:grid;grid-template-columns:58px minmax(0,1fr);gap:8px;align-items:center;min-width:0}
+.m-q-upc-photo{width:58px;height:58px;border:1px solid #d7dedc;border-radius:9px;overflow:hidden;background:#f3f5f4;display:grid;place-items:center;flex:0 0 58px}
+.m-q-upc-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.m-q-upc-photo-fallback{font-size:22px;opacity:.55}
 .m-q-upc-role{font-size:7px;color:var(--muted);font-weight:950;letter-spacing:.04em}
-.m-q-upc-code{font-size:12px;font-weight:950;line-height:1.05;color:var(--ink)}
+.m-q-upc-code{font-size:13px;font-weight:950;line-height:1.05;color:var(--ink)}
 .m-q-upc-name{font-size:9px;font-weight:800;color:#496467;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .m-q-upc-stat{text-align:right}
-.m-q-upc-stat small{display:block;font-size:6px;color:var(--muted);font-weight:950;text-transform:uppercase}
-.m-q-upc-stat b{display:block;font-size:10px;color:#0e5960;font-weight:950;margin-top:1px;white-space:nowrap}
-.m-q-upc-ready{font-size:6px;color:var(--q-accent);font-weight:950;margin-top:1px;white-space:nowrap}
+.m-q-upc-stat small{display:block;font-size:7px;color:var(--muted);font-weight:950;text-transform:uppercase}
+.m-q-upc-stat b{display:block;font-size:12px;color:#111827;font-weight:1000;margin-top:1px;white-space:nowrap}
+.m-q-upc-ready{font-size:6px;color:#167447;font-weight:950;margin-top:2px;white-space:nowrap}
 .m-q-upc-row .m-arrow{font-size:18px!important}
+.m-q-price-strip{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:4px;padding-top:6px;border-top:1px solid #e7e1c2}
+.m-q-price-cell{min-width:0;border:1px solid #e7e9e8;border-radius:8px;padding:5px 7px;background:#fbfcfc;text-align:left}
+.m-q-price-cell small{display:block;font-size:6px;color:var(--muted);font-weight:950;text-transform:uppercase}
+.m-q-price-cell b{display:block;font-size:13px;line-height:1.1;color:#102c42;margin-top:1px}
+.m-q-price-cell.suggested b{color:#0b6f46}
+.m-q-price-meta{font-size:6px;color:var(--muted);font-weight:800;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.m-q-company-prices{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.m-q-company-prices span{display:flex;justify-content:space-between;gap:4px;padding:3px 5px;border-radius:7px;background:#fff9df;border:1px solid #eadb9a;font-size:6px;color:#6e6540}
+.m-q-company-prices b{font-size:7px;color:#263238}
+.m-q-price-state{font-size:6px;font-weight:900;color:#8b6a00;margin-top:2px}
 
 @media(max-width:380px){
-  .m-q-family-number{font-size:19px}
-  .m-q-recv-number{font-size:15px}
+  .m-q-family-number{font-size:13px}
+  .m-q-family-name{font-size:16px}
+  .m-q-recv-number{font-size:12px}
+  .m-q-recv-name{font-size:15px}
+  .m-q-family-kpis .m-q-kpi b{font-size:24px}
+  .m-q-recv-kpis .m-q-kpi b{font-size:12px}
   .m-q-upc-code{font-size:11px}
   .m-q-family-kpis,.m-q-recv-kpis{gap:4px}
-  .m-q-kpi{min-width:59px}
+  .m-q-kpi{min-width:58px}
   .m-q-upc-row .m-row-main{grid-template-columns:minmax(0,1fr) 54px 62px 12px}
+  .m-q-upc-mainwrap{grid-template-columns:52px minmax(0,1fr);gap:6px}
+  .m-q-upc-photo{width:52px;height:52px}
 }
 
 .m-q-hidden-toggle{
@@ -1803,7 +1840,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,quickPriceByUpc:{},quickPriceHealth:null,quickPriceLoadedAt:0,quickPriceLoading:false,quickPricePromise:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null};
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function fmt(v,d=1){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?n.toLocaleString(undefined,{maximumFractionDigits:d}):esc(v)}
 function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number(v);return Number.isFinite(n)?'$'+n.toFixed(2):esc(v)}
@@ -2083,6 +2120,7 @@ function mobileRenderQuickTools(){
      const accepted=await loadInventory();
      if(seq!==mobileQuickSearchSeq||accepted===false)return;
      mobileRenderList();
+     loadQuickPricing().then(()=>{if(mobileState.module==='quick'&&seq===mobileQuickSearchSeq)mobileRenderList()});
      mNode('mobileListSub').textContent=q
        ? 'Results for “'+q+'” · Family grouped · 7D velocity ↓'
        : 'Family grouped · recent 7D velocity ↓';
@@ -2207,6 +2245,7 @@ async function mobileOpenModule(module,{query='',historyMode='push',parentModule
   try{
     if(module==='quick'){
       state.inventorySearch=mobileState.query;state.invCat='ALL';state.invStatus='ALL';state.invOH='ALL';state.invSales='ALL';state.invSort='vel7_oh_desc';await loadInventory();
+      loadQuickPricing().then(()=>{if(mobileState.module==='quick')mobileRenderList()});
     }else if(module==='qa'){
       state.qaFilter='ALL';state.qaText='';state.qaSort='oh_vel_desc';mobileRenderQaTools();await loadQA();
     }else if(module==='price'){
@@ -2300,6 +2339,76 @@ function mobileDataHealthRow(r){
   const chips=items.map(([label,x])=>{const st=mobileDataHealthStatus(x);return '<span class="m-dh-chip '+st.cls+'"><span>'+esc(label)+'</span><b>'+esc(st.text)+'</b></span>'}).join('');
   return '<button type="button" class="m-row" data-mobile-key="date:'+esc(r.date)+'"><div class="m-row-main"><div class="m-row-copy"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><div class="m-row-code">'+esc(r.date||'—')+'</div><span class="m-badge '+mobileBadgeClass(overall)+'">'+esc(overall||'INFO')+'</span></div><div class="m-row-name">'+esc(r.weekday||'')+'</div><div class="m-dh-grid">'+chips+'</div></div><span class="m-arrow">›</span></div></button>';
 }
+async function loadQuickPricing(force=false){
+  const now=Date.now();
+  if(!force&&state.quickPriceLoadedAt&&now-state.quickPriceLoadedAt<120000)return true;
+  if(state.quickPricePromise)return state.quickPricePromise;
+  state.quickPriceLoading=true;
+  state.quickPricePromise=(async()=>{
+    try{
+      const d=await api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000});
+      const map={};
+      (d.rows||[]).forEach(r=>{const key=String(r.upc||'').trim();if(key)map[key]=r});
+      state.quickPriceByUpc=map;
+      state.quickPriceHealth=d.data_health||null;
+      state.quickPriceLoadedAt=Date.now();
+      return true;
+    }catch(e){
+      state.quickPriceHealth={status:'ERROR',reason:e.message||String(e)};
+      return false;
+    }finally{
+      state.quickPriceLoading=false;
+      state.quickPricePromise=null;
+    }
+  })();
+  return state.quickPricePromise;
+}
+function quickPriceSuggestion(upc){
+  return state.quickPriceByUpc?.[String(upc||'').trim()]||null;
+}
+function mobileQuickReceiptHistoryHtml(history,fallback){
+  let rows=Array.isArray(history)?history.filter(Boolean).slice(0,2):[];
+  if(!rows.length&&fallback?.date){
+    rows=[{movement_type:fallback.movement_type,date:fallback.date,weekday:fallback.weekday,quantity:fallback.quantity,uom:fallback.uom}];
+  }
+  if(!rows.length)return '';
+  const cards=rows.map(x=>{
+    const date=String(x.date||'—');
+    const weekday=String(x.weekday||'').trim();
+    const qty=(x.quantity===null||x.quantity===undefined)?'—':fmt(x.quantity)+(x.uom?' '+x.uom:'');
+    return '<div class="m-q-receipt-card"><span class="m-q-receipt-type">'+esc(x.movement_type||'101–109')+'</span><div><div class="m-q-receipt-date">'+esc(date)+(weekday?' ('+esc(weekday.slice(0,3))+')':'')+'</div><div class="m-q-receipt-qty">'+esc(qty)+'</div></div></div>';
+  }).join('');
+  return '<div class="m-q-receipt-history"><div class="m-q-receipt-history-label">Latest 2 Receipts (101–109)</div>'+cards+'</div>';
+}
+function mobileQuickPhotoInfo(r){
+  const name=String(r?.name||r?.family_name||'').toUpperCase();
+  let file='';
+  if(name.includes('GROUPER')&&name.includes('HEAD'))file='Fish head.jpg';
+  else if(name.includes('GROUPER')&&name.includes('STEAK'))file='El Remo, La Palma, fish steak.jpg';
+  else if(name.includes('GROUPER'))file='Grouper (Epinephelus coioides).jpg';
+  else if(name.includes('SALMON'))file='Raw salmon fillets.jpg';
+  else if(name.includes('SHRIMP')||name.includes('PRAWN'))file='Raw shrimp.jpg';
+  else if(name.includes('TILAPIA'))file='Tilapia Fish.jpg';
+  else if(name.includes('CATFISH'))file='Catfish.jpg';
+  else if(name.includes('CRAB'))file='Crab Street Food in Cebu.jpg';
+  else if(name.includes('CLAM'))file='Taiwanese clam meat.jpg';
+  else if(name.includes('ABALONE'))file='Food abalones dinner.jpg';
+  else if(name.includes('OCTOPUS'))file='Frozen fresh octopus.jpg';
+  else if(name.includes('SCALLOP'))file='Scallops seafood pasta food dinner.jpg';
+  else if(name.includes('HEAD'))file='Fish head.jpg';
+  else if(name.includes('FISH')&&name.includes('STEAK'))file='El Remo, La Palma, fish steak.jpg';
+  if(!file)return null;
+  return {
+    src:'https://commons.wikimedia.org/wiki/Special:FilePath/'+encodeURIComponent(file)+'?width=320',
+    alt:String(r?.name||r?.family_name||'Seafood item')
+  };
+}
+function mobileQuickPhotoHtml(r){
+  const p=mobileQuickPhotoInfo(r);
+  if(!p)return '<div class="m-q-upc-photo"><span class="m-q-upc-photo-fallback">🐟</span></div>';
+  return '<div class="m-q-upc-photo"><img loading="lazy" decoding="async" referrerpolicy="no-referrer" src="'+esc(p.src)+'" alt="'+esc(p.alt)+'" onerror="this.replaceWith(document.createTextNode(\'🐟\'))"></div>';
+}
+
 function mobileQuickFamilyGroups(rows){
   const groups=new Map();
   (rows||[]).forEach(r=>{
@@ -2322,7 +2431,8 @@ function mobileQuickFamilyGroups(rows){
       family_receipt_date:r.family_receipt_date||'',
       family_receipt_qty:r.family_receipt_qty,
       family_receipt_uom:r.family_receipt_uom||'',
-      family_receipt_source:r.family_receipt_source||''
+      family_receipt_source:r.family_receipt_source||'',
+      family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]
     });
     const g=groups.get(familyKey);
     g.rows.push(r);
@@ -2343,6 +2453,7 @@ function mobileQuickFamilyGroups(rows){
     if((g.family_receipt_qty===null||g.family_receipt_qty===undefined)&&r.family_receipt_qty!==null&&r.family_receipt_qty!==undefined)g.family_receipt_qty=r.family_receipt_qty;
     if(!g.family_receipt_uom&&r.family_receipt_uom)g.family_receipt_uom=String(r.family_receipt_uom);
     if(!g.family_receipt_source&&r.family_receipt_source)g.family_receipt_source=String(r.family_receipt_source);
+    if((!g.family_receipt_history||!g.family_receipt_history.length)&&Array.isArray(r.family_receipt_history))g.family_receipt_history=r.family_receipt_history;
 
     (Array.isArray(r.receiving_articles)?r.receiving_articles:[]).forEach(a=>{
       const art=String(a?.article_number||'').trim();
@@ -2363,6 +2474,7 @@ function mobileQuickFamilyGroups(rows){
         receipt_qty:a.receipt_qty,
         receipt_uom:a.receipt_uom||'',
         receipt_source:a.receipt_source||'',
+        receipt_history:Array.isArray(a.receipt_history)?a.receipt_history:[],
         rows:[],
         max_velocity:Number.NEGATIVE_INFINITY
       });
@@ -2379,6 +2491,7 @@ function mobileQuickFamilyGroups(rows){
       avg_qty_day:r.receiving_avg_qty_day,
       movement_status:r.receiving_movement_status||'',
       receipt_verified:false,
+      receipt_history:Array.isArray(r.receiving_receipt_history)?r.receiving_receipt_history:[],
       rows:[],
       max_velocity:Number.NEGATIVE_INFINITY
     });
@@ -2414,16 +2527,42 @@ function mobileQuickUpcHtml(r){
   const qty=(r.qty_7d===null||r.qty_7d===undefined)?'—':fmt(r.qty_7d)+' '+uom;
   const avg=(r.velocity_7d===null||r.velocity_7d===undefined)?'—':fmt(r.velocity_7d)+' '+uom;
   const badge=String(r.readiness||r.category||'');
+  const pr=quickPriceSuggestion(r.upc);
+  const current=(pr&&pr.current_price!==null&&pr.current_price!==undefined)?pr.current_price:r.price;
+  const currentSource=(pr?.current_price_source||r.price_source||'—');
+  const currentAsOf=(pr?.current_price_observed_date||r.price_as_of||'');
+  const suggested=(pr?.candidate_price??pr?.suggested_price);
+  const priceHealth=String(state.quickPriceHealth?.status||'').toUpperCase();
+  const suggestedDisplay=(suggested!==null&&suggested!==undefined)
+    ? money(suggested)
+    : (state.quickPriceLoading?'Checking…':(priceHealth==='BLOCKED_STALE_REQUIRED_DATA'?'Blocked':'—'));
+  const suggestionBasis=pr?.selection_basis||pr?.suggestion_basis||pr?.primary_reason_text||'';
+  const companyA=pr?.company_price_a??r.company_price_a;
+  const companyB=pr?.company_price_b??r.company_price_b;
+  const companyC=pr?.company_price_c??r.company_price_c;
+  const hasCompany=[companyA,companyB,companyC].some(v=>v!==null&&v!==undefined&&v!=='');
+  const companyHtml=hasCompany
+    ? '<div class="m-q-company-prices">'+
+        '<span>A <b>'+money(companyA)+'</b></span>'+
+        '<span>B <b>'+money(companyB)+'</b></span>'+
+        '<span>C <b>'+money(companyC)+'</b></span>'+
+      '</div>'
+    : '';
   return '<button type="button" class="m-row m-q-upc-row" data-mobile-key="'+esc(String(r.upc||''))+'">'+
     '<div class="m-row-main">'+
-      '<div class="m-q-upc-main">'+
+      '<div class="m-q-upc-mainwrap">'+mobileQuickPhotoHtml(r)+'<div class="m-q-upc-main">'+
         '<div class="m-q-upc-role">'+esc(role)+'</div>'+
         '<div class="m-q-upc-code">'+esc(r.upc||'—')+'</div>'+
         '<div class="m-q-upc-name">'+esc(r.name||r.family_name||'')+'</div>'+
-      '</div>'+
+      '</div></div>'+
       '<div class="m-q-upc-stat"><small>7D Qty</small><b>'+esc(qty)+'</b></div>'+
       '<div class="m-q-upc-stat"><small>Avg/Day</small><b>'+esc(avg)+'</b><div class="m-q-upc-ready">'+esc(badge)+'</div></div>'+
       '<span class="m-arrow">›</span>'+
+      '<div class="m-q-price-strip">'+
+        '<div class="m-q-price-cell"><small>Current Price</small><b>'+money(current)+'</b><div class="m-q-price-meta">'+esc(currentSource)+(currentAsOf?' · '+esc(currentAsOf):'')+'</div></div>'+
+        '<div class="m-q-price-cell suggested"><small>Suggested Price</small><b>'+esc(suggestedDisplay)+'</b><div class="m-q-price-meta">'+esc(suggestionBasis||'Same rules as Price Suggestion')+'</div></div>'+
+        companyHtml+
+      '</div>'+
     '</div>'+
   '</button>';
 }
@@ -2441,12 +2580,12 @@ function mobileQuickGroupedHtml(rows){
     const gstatus=g.group_qty_7d===null&&g.group_status?g.group_status:'';
     const familyReceiptO=g.family_receipt_verified?'<span class="m-q-receipt-o" title="101–109 receipt verified">O</span>':'';
     const familyReceiptCaption=g.family_receipt_verified?'<div class="m-q-receipt-caption">101–109 RECEIPT VERIFIED</div>':'';
-    const familyReceiptQty=(g.family_receipt_qty===null||g.family_receipt_qty===undefined)?'—':fmt(g.family_receipt_qty)+(g.family_receipt_uom?' '+g.family_receipt_uom:'');
-    const familyReceiptInfo=g.family_receipt_verified
-      ? '<div class="m-q-receipt-info"><span><b>Latest receipt:</b> '+esc(g.family_receipt_movement_type||'101–109')+' · '+esc(g.family_receipt_date||'—')+'</span><span><b>Qty:</b> '+esc(familyReceiptQty)+'</span><span><b>Source:</b> MVT</span></div>'
-      : '';
+    const familyReceiptInfo=mobileQuickReceiptHistoryHtml(
+      g.family_receipt_history,
+      {movement_type:g.family_receipt_movement_type,date:g.family_receipt_date,quantity:g.family_receipt_qty,uom:g.family_receipt_uom}
+    );
     const familyHead='<div class="m-q-family-head">'+
-      '<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+familyReceiptCaption+'</div>'+
+      '<div><div class="m-q-label">FAMILY ARTICLE</div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div>'+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
         '<div class="m-q-kpi"><small>7D SAP MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
@@ -2467,12 +2606,12 @@ function mobileQuickGroupedHtml(rows){
       const avg=(a.avg_qty_day===null||a.avg_qty_day===undefined)?'—':fmt(a.avg_qty_day)+(uom?' '+uom:'');
       const receiptO=a.receipt_verified?'<span class="m-q-receipt-o" title="101–109 receipt verified">O</span>':'';
       const receiptCaption=a.receipt_verified?'<div class="m-q-receipt-caption">101–109 RECEIPT VERIFIED'+(recentVerified?' · RECENT':'')+'</div>':'';
-      const receiptQty=(a.receipt_qty===null||a.receipt_qty===undefined)?'—':fmt(a.receipt_qty)+(a.receipt_uom?' '+a.receipt_uom:'');
-      const receiptInfo=a.receipt_verified
-        ? '<div class="m-q-receipt-info"><span><b>Latest receipt:</b> '+esc(a.receipt_movement_type||'101–109')+' · '+esc(a.receipt_date||'—')+'</span><span><b>Qty:</b> '+esc(receiptQty)+'</span><span><b>Source:</b> MVT</span></div>'
-        : '';
+      const receiptInfo=mobileQuickReceiptHistoryHtml(
+        a.receipt_history,
+        {movement_type:a.receipt_movement_type,date:a.receipt_date,quantity:a.receipt_qty,uom:a.receipt_uom}
+      );
       const recvHead='<div class="m-q-receiving-head">'+
-        '<div><div class="m-q-label">SAP SELLING ARTICLE</div><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div class="m-q-recv-name" style="font-size:7px;color:var(--muted)">251−252 selling movement</div>'+receiptCaption+'</div>'+
+        '<div><div class="m-q-label">SAP SELLING ARTICLE</div><div class="m-q-recv-name">'+esc(a.article_description||'')+'</div><div class="m-q-recv-number-line"><div class="m-q-recv-number">'+esc(a.article_number||'UNRESOLVED')+'</div>'+receiptO+'</div><div class="m-q-recv-name" style="font-size:7px;color:var(--muted);font-weight:850">251−252 selling movement</div>'+receiptCaption+'</div>'+
         '<div class="m-q-recv-kpis"><div class="m-q-kpi"><small>7D MVT</small><b>'+esc(qty)+'</b></div><div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(avg)+'</b></div></div>'+
       '</div>';
 
