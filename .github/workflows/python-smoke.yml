@@ -132,28 +132,42 @@ jobs:
           print('all-current-price-surfaces=PASS')
           PY
 
-      - name: Validate Pricing Review company range and freshness rules
+      - name: Validate final Pricing Review and current-price display rules
         run: |
           python - <<'PY'
           import inspect
+          from pathlib import Path
           import webapp_v2_runtime as w
 
           src = inspect.getsource(w._gp_day_price_suggestion_from_batch)
           perf = inspect.getsource(w.performance_report)
+          v2ui = Path('webapp_v2_ui.py').read_text(encoding='utf-8')
+          backoffice = Path('backoffice_ui.py').read_text(encoding='utf-8')
 
           assert 'supported_day_limit=14' in src
+          assert 'current_oh' in src and 'NO_POSITIVE_OH' in src
+          assert 'pclass=="FRESH"' in src and 'doh>Decimal("7")' in src
+          assert 'pclass=="FROZEN"' in src and 'doh>Decimal("60")' in src
           assert 'company_price_a' in src and 'company_price_b' in src and 'company_price_c' in src
-          assert 'CURRENT_PRICE_WITHIN_COMPANY_RANGE' in src
-          assert 'COMPANY_RANGE_14D_MAX_GP_PER_DAY' in src
-          assert 'COMPANY_RANGE_CLAMPED_HISTORICAL_SWEET_SPOT' in src
-          assert 'NO_COMPANY_REFERENCE_14D_MAX_GP_PER_DAY' in src
-          assert 'DOH_GT_7_CLEARANCE_14D_MAX_SELL_THROUGH' in src
+          assert 'candidate_within_company_range' in src
+          assert 'CLEARANCE_LOWER_SUPPORTED_PRICE_UNAVAILABLE' in src
           assert 'include_in_review' in src
+
+          assert 'WEBAPP_V2_PERFORMANCE_V11' in perf
+          assert 'FRESH_DOH_GT_7_CLEARANCE' in perf
+          assert 'FROZEN_DOH_GT_60_CLEARANCE' in perf
+          assert 'COMPANY_PRICE_RANGE_APPLIED' in perf
           assert 'primary_reason_text' in perf
-          assert 'company_range_low' in perf and 'company_range_high' in perf
-          assert 'pricing_rule_priority' in perf
-          assert 'WEBAPP_V2_PERFORMANCE_V10' in perf
-          print('pricing-review-company-range=PASS')
+
+          # Every visible CURRENT price surface must expose source/as-of.
+          assert "c0.price_source" in v2ui and "c0.price_as_of" in v2ui
+          assert "x.current_price_source" in v2ui
+          assert "x.current_price_asof_date" in v2ui
+          assert "x.current_price_observed_date" in v2ui
+          assert "r.current_price_source" in backoffice
+          assert "r.current_price_observed_date" in backoffice
+          assert "r.price_source" in backoffice and "r.price_as_of" in backoffice
+          print('final-pricing-and-price-display=PASS')
           PY
 
       - name: Import worker and Phase 3 modules

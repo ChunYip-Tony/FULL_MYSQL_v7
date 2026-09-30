@@ -1,0 +1,175 @@
+name: One-time v7.0.225 price serving rebuild
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  rebuild:
+    if: startsWith(github.event.head_commit.message, 'Finalize price authority and Pricing Review rules')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for v7.0.225 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          consecutive=0
+          for i in $(seq 1 180); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            pass="$(BODY="$body" python - <<'PY'
+          import json, os
+          try: p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception: p={}
+          ok=(p.get('ok') is True
+              and p.get('version')=='7.0.225-single-service'
+              and p.get('worker_version')=='7.0.225-single-service'
+              and p.get('worker_healthy') is True
+              and p.get('worker_ready') is True)
+          print('1' if ok else '0')
+          PY
+          )"
+            if [ "$pass" = "1" ]; then
+              consecutive=$((consecutive+1))
+              [ "$consecutive" -ge 3 ] && exit 0
+            else
+              consecutive=0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Wait for idle upload pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+            active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+            [ "$active" = "0" ] && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Resolve latest completed batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=20" -o /tmp/recent.json
+          batch_id="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/recent.json'))
+          for x in p.get('batches') or []:
+              ps=str(x.get('processing_status') or '').upper()
+              p3=str(x.get('phase3_status') or '').upper()
+              if ps in {'COMPLETED','READY','QUICK_CHECK_READY_WITH_HOLDS'} or p3 in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','COMPLETED'}:
+                  print(int(x['batch_id']))
+                  break
+          else:
+              raise SystemExit('NO_COMPLETED_BATCH_AVAILABLE')
+          PY
+          )"
+          echo "BATCH_ID=$batch_id" >> "$GITHUB_ENV"
+
+      - name: Start Phase 3 rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 -X POST "$base/v1/web-upload/batches/$BATCH_ID/rebuild-phase3" -o /tmp/rebuild.json
+          cat /tmp/rebuild.json
+          read -r ok run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json'))
+          ok='1' if p.get('code_version')=='7.0.225-single-service' and p.get('version_fence_pass') is True else '0'
+          print(ok,p.get('pipeline_run_id') or '',p.get('session_id') or '')
+          PY
+          )
+          [ "$ok" = "1" ]
+          [ -n "$run_id" ]
+          [ -n "$session_id" ]
+          echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+      - name: Wait for rebuild completion
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$SESSION_ID" -o /tmp/session.json
+            state="$(RUN_ID="$RUN_ID" python - <<'PY'
+          import json,os
+          rid=int(os.environ['RUN_ID'])
+          p=json.load(open('/tmp/session.json'))
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid),None)
+          print('MISSING||' if not run else str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
+          PY
+          )"
+            echo "$state"
+            status="${state%%|*}"
+            rest="${state#*|}"
+            code_version="${rest%%|*}"
+            if [ "$status" != "MISSING" ] && [ "$code_version" != "7.0.225-single-service" ]; then
+              cat /tmp/session.json
+              exit 1
+            fi
+            case "$status" in
+              COMPLETED) cat /tmp/session.json; exit 0 ;;
+              QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED) cat /tmp/session.json; exit 1 ;;
+            esac
+            sleep 5
+          done
+          cat /tmp/session.json || true
+          exit 1
+
+      - name: Verify current prices and Pricing Review
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/backoffice/inventory?category=ALL&limit=300" -o /tmp/inventory.json
+          curl -fsS --max-time 60 "$base/v1/backoffice/pricing-review?category=ALL&limit=100" -o /tmp/pricing.json
+          curl -fsS --max-time 60 "$base/v1/app/v2/performance?category=ALL&limit=100" -o /tmp/performance.json
+          python - <<'PY'
+          import json
+          allowed={'PRICE_LIST','POS_SINGLE_DATE'}
+
+          inv=json.load(open('/tmp/inventory.json'))
+          rows=inv.get('rows') or []
+          if not rows: raise SystemExit('INVENTORY_EMPTY')
+          for x in rows:
+              if x.get('price') is not None and str(x.get('price_source') or '').upper() not in allowed:
+                  raise SystemExit('INVENTORY_BAD_PRICE_SOURCE')
+
+          pricing=json.load(open('/tmp/pricing.json'))
+          for x in pricing.get('rows') or []:
+              if x.get('current_price') is not None and str(x.get('current_price_source') or '').upper() not in allowed:
+                  raise SystemExit('PRICING_BAD_PRICE_SOURCE')
+              if not float(x.get('current_oh') or 0)>0:
+                  raise SystemExit('PRICING_NONPOSITIVE_OH')
+              if x.get('has_company_reference'):
+                  lo,hi,c=x.get('company_range_low'),x.get('company_range_high'),x.get('candidate_price')
+                  if lo is None or hi is None or c is None or not float(lo)<=float(c)<=float(hi):
+                      raise SystemExit('COMPANY_RANGE_VIOLATION')
+              cat=str(x.get('category') or '').upper()
+              doh=x.get('doh')
+              if x.get('fresh_clearance') and not (cat=='FRESH' and doh is not None and float(doh)>7):
+                  raise SystemExit('FRESH_CLEARANCE_THRESHOLD')
+              if x.get('frozen_clearance') and not (cat=='FROZEN' and doh is not None and float(doh)>60):
+                  raise SystemExit('FROZEN_CLEARANCE_THRESHOLD')
+
+          perf=json.load(open('/tmp/performance.json'))
+          if perf.get('contract_version')!='WEBAPP_V2_PERFORMANCE_V11':
+              raise SystemExit('PERFORMANCE_CONTRACT_NOT_UPDATED')
+          print('V70225_PRICE_AND_PRICING_REVIEW=PASS')
+          PY
