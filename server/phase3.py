@@ -2009,21 +2009,21 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
         sales_pred = 's.upc_id=%s'
         sales_args = (int(upc_id),)
 
-    # Latest eligible ACTIVE Price List point-in-time snapshot. Future-dated
-    # source_since_date rows are not treated as active at the snapshot time.
+    # Latest eligible ACTIVE Price List snapshot. Since Date is evaluated
+    # against the store business date, not the file snapshot date.
     cur.execute(
         f"""SELECT MAX(p.snapshot_at) AS snapshot_at
             FROM price_list_observation p
             JOIN ingest_file f ON f.file_id=p.file_id
             WHERE {price_pred}
               AND p.configured_price>0
-              AND (p.source_since_date IS NULL OR p.source_since_date<=DATE(p.snapshot_at))
+              AND (p.source_since_date IS NULL OR p.source_since_date<=%s)
               AND f.source_type='price_list'
               AND f.processing_status='INGESTED'
               AND f.error_count=0
               AND f.duplicate_of_file_id IS NULL
               AND f.date_semantics_status='RESOLVED'""",
-        price_args,
+        (*price_args, business_today()),
     )
     pr=cur.fetchone() or {}
     price_snapshot=pr.get('snapshot_at')
@@ -2037,13 +2037,13 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
                 WHERE {price_pred}
                   AND p.snapshot_at=%s
                   AND p.configured_price>0
-                  AND (p.source_since_date IS NULL OR p.source_since_date<=DATE(p.snapshot_at))
+                  AND (p.source_since_date IS NULL OR p.source_since_date<=%s)
                   AND f.source_type='price_list'
                   AND f.processing_status='INGESTED'
                   AND f.error_count=0
                   AND f.duplicate_of_file_id IS NULL
                   AND f.date_semantics_status='RESOLVED'""",
-            (*price_args, price_snapshot),
+            (*price_args, price_snapshot, business_today()),
         )
         price_rows=cur.fetchall()
         if price_rows:
