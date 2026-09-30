@@ -749,7 +749,7 @@ body{
   <div class="head"><button class="back" id="priceChangeBack" type="button">‹</button><div><div class="title">💲 Price Change Suggestions</div><div class="meta">Reports · Pricing review based on observed sales response and GP$/day opportunity.</div></div></div>
   <div class="card">
     <div><label>Report Date</label><select id="pcdate"><option value="">Loading supported dates…</option></select></div>
-    <div class="hint" style="margin-top:10px">Price suggestions use completed sales evidence through the selected date. QA HOLD and active SALE items remain blocked from automatic action.</div>
+    <div class="hint" style="margin-top:10px">Qualified stocked UPCs use OH, 14D sales response and max GP$/day. Fresh DOH &gt; 7 and Frozen DOH &gt; 60 trigger clearance priority. Company A/B/C, when available, constrains the suggested price range.</div>
     <button id="pcrun" class="primary" style="margin-top:12px;width:100%">Generate Price Change Suggestions</button>
     <div id="pcmsg" class="msg" style="margin-top:8px"></div>
   </div>
