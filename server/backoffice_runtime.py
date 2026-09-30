@@ -353,6 +353,7 @@ def inventory_review(
     limit: int = 200,
     category: str = "ALL",
     query: str | None = None,
+    lightweight: bool = False,
 ) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
@@ -547,29 +548,35 @@ def inventory_review(
                 row["gp_pct_current"] = None
 
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
-            if fid is not None and fid not in family_cache:
-                cur.execute(
-                    "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
-                    (fid,),
-                )
-                children = cur.fetchall()
-                live_family_oh = _family_effective_oh(cur, children)
-                if live_family_oh.get("status") == "READY" and live_family_oh.get("quantity") is not None:
-                    live_family_oh["as_of_date"] = (
-                        live_family_oh.get("movement_through_date")
-                        or live_family_oh.get("anchor_date")
-                    )
-                    family_cache[fid] = live_family_oh
-                else:
-                    published = _published_family_oh_fallback(children)
-                    if published:
-                        published["live_status"] = live_family_oh.get("status")
-                        published["live_reason"] = live_family_oh.get("reason")
-                        family_cache[fid] = published
-                    else:
-                        family_cache[fid] = live_family_oh
 
-            family_oh = family_cache.get(fid or -1, {})
+            # Live-search list mode intentionally skips the expensive family OH
+            # roll-forward. The list does not display OH; full current OH is
+            # resolved only when the user opens a UPC detail.
+            if lightweight:
+                family_oh = {}
+            else:
+                if fid is not None and fid not in family_cache:
+                    cur.execute(
+                        "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                        (fid,),
+                    )
+                    children = cur.fetchall()
+                    live_family_oh = _family_effective_oh(cur, children)
+                    if live_family_oh.get("status") == "READY" and live_family_oh.get("quantity") is not None:
+                        live_family_oh["as_of_date"] = (
+                            live_family_oh.get("movement_through_date")
+                            or live_family_oh.get("anchor_date")
+                        )
+                        family_cache[fid] = live_family_oh
+                    else:
+                        published = _published_family_oh_fallback(children)
+                        if published:
+                            published["live_status"] = live_family_oh.get("status")
+                            published["live_reason"] = live_family_oh.get("reason")
+                            family_cache[fid] = published
+                        else:
+                            family_cache[fid] = live_family_oh
+                family_oh = family_cache.get(fid or -1, {})
             out.append(
                 {
                     "upc": row.get("ean_upc"),
@@ -617,6 +624,12 @@ def inventory_review(
             "write_enabled": "OH_TRUE_STOCK_ONLY",
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
+            "lightweight": bool(lightweight),
+            "lightweight_skips": (
+                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD"]
+                if lightweight
+                else []
+            ),
         },
     }
 
