@@ -145,6 +145,10 @@ def source_ean_predicate(column: str, canonical_value: Any) -> tuple[str, tuple[
       - numeric leading-zero equivalence,
       - canonical 249 service prefix aliases,
       - deterministic shortened UPC-A/EAN forms.
+
+    A shortened retail spelling is NOT treated as an alias when that spelling
+    is itself an ACTIVE selling_upc. This prevents one active short UPC from
+    being counted again under a separate long/check-digit UPC.
     """
     ean=str(canonical_value or "").strip()
     if not ean:
@@ -161,6 +165,12 @@ def source_ean_predicate(column: str, canonical_value: Any) -> tuple[str, tuple[
         parts.append(f"{column} LIKE %s")
         args.append(service_prefix+"%")
     for alias in source_barcode_aliases(ean):
-        parts.append(f"{column}=%s")
-        args.append(alias)
+        parts.append(
+            f"({column}=%s AND NOT EXISTS ("
+            "SELECT 1 FROM selling_upc alias_su "
+            "WHERE alias_su.ean_upc=%s "
+            "AND alias_su.record_status='ACTIVE'"
+            "))"
+        )
+        args.extend([alias,alias])
     return "("+" OR ".join(parts)+")", tuple(args)
