@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from db import db_conn
-from business_clock import completed_through_date
+from business_clock import business_today, completed_through_date
 from movement_coverage_rules import movement_daily_close_filename_evidence
 
 DAILY_REQUIRED_SOURCES = {
@@ -424,7 +424,7 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
     informational updates: absence on a given day is not itself an error.
     """
     span = max(1, min(int(days or 14), 31))
-    today = date.today()
+    today = business_today()
     completed = completed_through_date()
     start = today - timedelta(days=span - 1)
 
