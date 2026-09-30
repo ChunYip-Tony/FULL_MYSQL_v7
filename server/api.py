@@ -1285,6 +1285,9 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         try:
+            # A manual rebuild must never leave the browser hanging behind a
+            # long InnoDB row lock. Fail quickly and let the UI show BUSY.
+            cur.execute("SET SESSION innodb_lock_wait_timeout=5")
             cur.execute(
                 """SELECT batch_id,batch_key,processing_status
                    FROM ingest_batch
@@ -1615,6 +1618,16 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
             raise
         except Exception as exc:
             conn.rollback()
+            if getattr(exc,'errno',None) in {1205,3572}:
+                raise HTTPException(
+                    409,
+                    detail={
+                        'status':'BUSY',
+                        'reason':'BATCH_ROW_BUSY',
+                        'batch_id':bid,
+                        'message':'Batch is temporarily locked by another pipeline transaction. Refresh status and retry after it clears.',
+                    },
+                )
             raise HTTPException(500,f'Phase 3 rebuild failed: {exc}')
         finally:
             cur.close()
