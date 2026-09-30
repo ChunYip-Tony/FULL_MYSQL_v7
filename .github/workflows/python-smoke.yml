@@ -176,22 +176,83 @@ jobs:
           assert 'movement_by_article.get((fid, art), {})' in runtime
           assert 'SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES' not in runtime
 
-          # Article Manual/Table 1 owns operational hierarchy:
-          # A=Family/Main, B=Selling Article, D=UPC, Main-row G=Family Selling UOM.
+          # Article Manual/Table 1 owns operational hierarchy. For Fresh/Live/
+          # Shrimp/Fish Ball/Frozen Fish: A=Family/Main, B=Selling Article,
+          # C=Toledo, D=EAN/UPC, G=receiving pack size. Frozen Pack uses
+          # A=Family, D=EAN/UPC, E=receiving pack size, G=Selling UOM.
           # 317/318 and 309 are lineage/conversion only, never added as sold usage.
           assert 'ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT' in runtime
-          assert "JSON_EXTRACT(detail_json,'$.article')" in runtime
           assert 'SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' in runtime
           assert 'READY_SELLING_ARTICLE_SUM_RECONCILED' in runtime
-          assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' in runtime
-          assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' in runtime
+          assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' not in runtime
+          assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' not in runtime
           assert '7D FAMILY MVT' in ui
           assert 'RECONCILED' in ui
-          assert 'Family Selling UOM' in ui
+          assert 'Family Selling UOM' not in ui
+          assert 'SAP MVT UOM' in ui
           assert '317/318 CONVERSION LINEAGE' in ui
+          assert "Raw Article Manual is read directly" in runtime
+          assert "fresh fish" in runtime and "frozen pack" in runtime
+          assert "str(row.get(\"col_b\") or \"\").strip() or main" in runtime
+          assert "manual_upc_override" in runtime
           print('backoffice-pricing-inventory-contract=PASS')
           PY
 
+
+      - name: Validate Article Manual tab schemas
+        run: |
+          python - <<'PY'
+          import inspect
+          import normalize
+          import article_manual_multitab_repair as amr
+
+          fresh = normalize._article_manual_column_map('Fresh fish', {})
+          assert fresh['main_article']=='A'
+          assert fresh['article']=='B'
+          assert fresh['sales_set']=='C'
+          assert fresh['upc']=='D'
+          assert fresh['pack']=='G'
+          assert 'selling_uom' not in fresh
+
+          frozen = normalize._article_manual_column_map('Frozen Pack', {})
+          assert frozen['main_article']=='A'
+          assert frozen['article']=='A'
+          assert frozen['upc']=='D'
+          assert frozen['pack']=='E'
+          assert frozen['selling_uom']=='G'
+
+          nsrc=inspect.getsource(normalize._normalize_identity_row)
+          assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in nsrc
+          assert "and ean_upc" in nsrc and "and sales_set" in nsrc
+          rsrc=inspect.getsource(amr._load_roster)
+          assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in rsrc
+          print('article-manual-tab-schema=PASS')
+          PY
+
+      - name: Validate 4816 EA authority
+        run: |
+          python - <<'PY'
+          from decimal import Decimal
+          import manual_overrides as m
+
+          rows=[x for x in m.SEED_OVERRIDES if str(x.get('ean_upc'))=='4816']
+          assert len(rows)==1, rows
+          row=rows[0]
+          assert row['article_number']=='1351311'
+          assert row['selling_uom_code']=='EA'
+          assert row['base_uom_code']=='LB'
+          assert Decimal(str(row['base_qty_per_selling_unit']))==Decimal('4')
+
+          conv=[
+              x for x in m.USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926
+              if str(x.get('ean_upc'))=='4816'
+          ]
+          assert len(conv)==1, conv
+          assert conv[0]['selling_uom_code']=='EA'
+          assert Decimal(str(conv[0]['cost_qty']))==Decimal('4')
+          assert conv[0]['cost_uom_code']=='LB'
+          print('upc-4816-ea-authority=PASS')
+          PY
 
       - name: Validate current price authority contract
         run: |

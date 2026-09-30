@@ -8,6 +8,8 @@ from typing import Any
 
 from normalize import (
     RowContext,
+    ARTICLE_MANUAL_RECEIVING_PACK_TABS,
+    _article_manual_column_map,
     _build_column_map,
     _canonical_uom,
     _ensure_article,
@@ -21,6 +23,7 @@ from normalize import (
     _manual_article_family,
     _numeric_identifier,
     _numeric_key,
+    _norm_header,
     _source_token,
     _text,
 )
@@ -203,7 +206,10 @@ def _load_roster(cur, preferred_batch_id: int | None = None) -> tuple[list[dict[
             h = cur.fetchone()
             if not h:
                 continue
-            colmap = _build_column_map(_json_obj(h['raw_payload']))
+            colmap = _article_manual_column_map(
+                sh['sheet_name'],
+                _json_obj(h['raw_payload']),
+            )
             if 'upc' not in colmap or ('article' not in colmap and 'main_article' not in colmap):
                 continue
             stats['sheets_scanned'] += 1
@@ -233,7 +239,16 @@ def _load_roster(cur, preferred_batch_id: int | None = None) -> tuple[list[dict[
 
                 description = _text(_get(payload, colmap, 'description'))
                 pack = _text(_get(payload, colmap, 'pack'))
+                sales_set = _numeric_identifier(_get(payload, colmap, 'sales_set'))
                 selling_uom = _source_token(_get(payload, colmap, 'selling_uom'))
+                selling_uom_rule = 'EXPLICIT_SOURCE_UOM' if selling_uom else None
+                if (
+                    _norm_header(sh['sheet_name']) in ARTICLE_MANUAL_RECEIVING_PACK_TABS
+                    and source_upc
+                    and sales_set
+                ):
+                    selling_uom = 'LB'
+                    selling_uom_rule = 'ARTICLE_MANUAL_TOLEDO_EAN_LB'
                 ctx = RowContext(
                     batch_id=int(f['batch_id']),
                     file_id=int(f['file_id']),
@@ -251,7 +266,9 @@ def _load_roster(cur, preferred_batch_id: int | None = None) -> tuple[list[dict[
                     'canonical_main': canonical_main,
                     'description': description,
                     'pack': pack,
+                    'sales_set': sales_set,
                     'selling_uom': selling_uom,
+                    'selling_uom_rule': selling_uom_rule,
                     'ctx': ctx,
                     'sheet_name': str(sh['sheet_name']),
                 })
@@ -325,12 +342,41 @@ def _apply_explicit_um(cur, upc_id: int, candidate: dict[str, Any]) -> str:
     token = _source_token(candidate.get('selling_uom'))
     if not token:
         return 'NO_EXPLICIT_UM'
-    if _has_current_uom(cur, upc_id):
-        return 'ALREADY_HAS_UOM'
 
     uom_id, canonical = _canonical_uom(cur, 'article_manual', token)
     if uom_id is None:
         return 'UOM_TOKEN_UNRESOLVED'
+
+    rule = str(candidate.get('selling_uom_rule') or 'EXPLICIT_SOURCE_UOM')
+    cur.execute(
+        """SELECT h.upc_uom_id,du.uom_code
+           FROM selling_upc_uom_history h
+           JOIN dim_uom du ON du.uom_id=h.selling_uom_id
+           WHERE h.upc_id=%s
+             AND h.mapping_status='CONFIRMED'
+             AND (h.effective_to IS NULL OR h.effective_to>CURRENT_TIMESTAMP(6))
+           ORDER BY h.upc_uom_id DESC""",
+        (upc_id,),
+    )
+    current = cur.fetchall()
+    if any(str(x.get('uom_code') or '').upper() == str(token).upper() for x in current):
+        return 'ALREADY_HAS_UOM'
+
+    # Toledo+D is explicit tab semantics confirmed by the user. It supersedes a
+    # stale automatically inferred active UOM. Ordinary source UOM rows remain
+    # non-destructive when another active UOM already exists.
+    if current and rule != 'ARTICLE_MANUAL_TOLEDO_EAN_LB':
+        return 'ALREADY_HAS_UOM'
+    if current and rule == 'ARTICLE_MANUAL_TOLEDO_EAN_LB':
+        cur.execute(
+            """UPDATE selling_upc_uom_history
+               SET mapping_status='SUPERSEDED',
+                   effective_to=COALESCE(effective_to,CURRENT_TIMESTAMP(6))
+               WHERE upc_id=%s
+                 AND mapping_status='CONFIRMED'
+                 AND (effective_to IS NULL OR effective_to>CURRENT_TIMESTAMP(6))""",
+            (upc_id,),
+        )
 
     cur.execute("SELECT uom_dimension FROM dim_uom WHERE uom_id=%s", (uom_id,))
     d = cur.fetchone()
@@ -342,8 +388,8 @@ def _apply_explicit_um(cur, upc_id: int, candidate: dict[str, Any]) -> str:
         """INSERT INTO selling_upc_uom_history
            (upc_id,selling_uom_id,base_uom_id,base_qty_per_selling_unit,
             mapping_status,confidence,resolution_method)
-           VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,'ARTICLE_MANUAL_MULTITAB_EXPLICIT_UM_V712')""",
-        (upc_id, uom_id, base_uom_id, factor),
+           VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,%s)""",
+        (upc_id, uom_id, base_uom_id, factor, rule),
     )
     _insert_evidence(
         cur,
@@ -351,16 +397,17 @@ def _apply_explicit_um(cur, upc_id: int, candidate: dict[str, Any]) -> str:
         upc_id,
         'SELLING_UOM_OBSERVED',
         candidate['ctx'],
-        'selling_uom',
+        'C_TOLEDO_PLUS_D_EAN' if rule == 'ARTICLE_MANUAL_TOLEDO_EAN_LB' else 'selling_uom',
         token,
         {
             'canonical_exact_match': canonical,
             'source_sheet': candidate['sheet_name'],
             'article_manual_source_upc': candidate['source_upc'],
+            'resolution_rule': rule,
+            'toledo_number': candidate.get('sales_set'),
         },
     )
     return 'UOM_REPAIRED'
-
 
 def _candidate_match(pos_upc: str, pos_desc: str | None, row: dict[str, Any]) -> tuple[float, str] | None:
     relation = _short_barcode_relation(pos_upc, row['source_upc'])

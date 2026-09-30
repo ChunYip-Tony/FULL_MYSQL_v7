@@ -1084,7 +1084,11 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
     cur.execute('SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
         hmap = _sheet_header_map(cur, 'raw_on_hand', sh['sheet_id'], sh['header_row_number'])
-        c_article = _pick_exact(hmap, ['Article', 'Article Number'])
+        # User-confirmed OH layout authority:
+        #   Column D = Family Article
+        #   Column H = Base UOM
+        # These two fields are positional and must not drift with header aliases.
+        c_article = 'D'
         # FULL MYSQL identity rule: Sales Set # is not a UPC join key.
         # Only explicit UPC/EAN/Barcode headers may populate selling identity.
         c_upc = _pick_exact(hmap, ['UPC', 'EAN', 'Barcode'])
@@ -1096,8 +1100,8 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
             hmap,
             ['Unrestr.', 'Unrestr', 'Unrestricted', 'Unrestricted Stock', 'On Hand', 'OH'],
         )
-        # SAP BUn is the Base Unit attached to the unrestricted quantity.
-        c_uom = _pick_exact(hmap, ['BUn', 'Base UOM', 'Base Unit', 'UOM', 'Unit'])
+        # OH Column H is the authoritative Base UOM attached to the quantity.
+        c_uom = 'H'
         c_date = _pick_exact(hmap, ['Date', 'Inventory Date', 'Count Date'])
         if not c_oh or (not c_article and not c_upc):
             continue

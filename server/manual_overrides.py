@@ -140,6 +140,14 @@ def confirmed_operational_uom_basis(cur, family_id: int | None) -> dict[str, Any
 
 SEED_OVERRIDES = (
     {
+        "ean_upc": "4816",
+        "article_number": "1351311",
+        "selling_uom_code": "EA",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("4"),
+        "source_note": "USER_CONFIRMED_UOM_20260930: UPC 4816 belongs to Family/Main and Selling Article 1351311; POS Selling UOM=EA and 1 EA = 4 LB.",
+    },
+    {
         "ean_upc": "4918",
         "article_number": "3401602",
         "selling_uom_code": "LB",
@@ -253,7 +261,7 @@ USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
         "selling_uom_code": "EA",
         "cost_qty": Decimal("4"),
         "cost_uom_code": "LB",
-        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260926: 1 EA = 4 LB.",
+        "source_note": "USER_CONFIRMED_COST_CONVERSION_20260930: UPC 4816 sells by EA; 1 EA = 4 LB.",
     },
     {
         "ean_upc": "8231817551",

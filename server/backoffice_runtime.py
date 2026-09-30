@@ -847,51 +847,24 @@ def _quick_check_fuzzy_rows(
     }
 
 
-def _manual_main_selling_uom_map(
-    cur,
-    family_main_by_id: dict[int, str],
-) -> dict[int, str]:
-    """Latest Article Manual Main-row Column G Selling UOM by Family."""
-    articles = sorted({str(x or "").strip() for x in family_main_by_id.values() if str(x or "").strip()})
-    if not articles:
-        return {}
-    ph = ",".join(["%s"] * len(articles))
-    cur.execute(
-        f"""SELECT a.article_number,nse.source_value_text,nse.batch_id,nse.raw_id
-            FROM article a
-            JOIN normalized_source_evidence nse
-              ON nse.object_type='ARTICLE'
-             AND nse.object_id=a.article_id
-             AND nse.evidence_role='SELLING_UOM_OBSERVED'
-             AND nse.raw_table_name='raw_article_manual'
-            JOIN ingest_file f ON f.file_id=nse.file_id
-            WHERE a.article_number IN ({ph})
-              AND f.source_type='article_manual'
-              AND f.processing_status='INGESTED'
-              AND nse.source_value_text IS NOT NULL
-              AND TRIM(nse.source_value_text)<>''
-            ORDER BY a.article_number,nse.batch_id DESC,nse.raw_id DESC""",
-        tuple(articles),
-    )
-    latest_by_article: dict[str, str] = {}
-    for row in cur.fetchall():
-        article = str(row.get("article_number") or "").strip()
-        uom = str(row.get("source_value_text") or "").strip().upper()
-        if article and uom:
-            latest_by_article.setdefault(article, uom)
-    return {
-        fid: latest_by_article[main]
-        for fid, main in family_main_by_id.items()
-        if main in latest_by_article
-    }
-
-
 def _manual_selling_article_map(
     cur,
     family_main_by_id: dict[int, str],
     family_qrows: list[dict[str, Any]],
 ) -> dict[tuple[int, str], str]:
-    """Article Manual authority: Column D UPC -> Column B Selling Article."""
+    """Resolve operational UPC -> Selling Article from the raw Article Manual.
+
+    User-confirmed schemas:
+      Fresh Fish / Live Fish / Shrimp / Fish Ball / Frozen Fish:
+        A=Family/Main, B=Selling Article, C=Toledo#, D=EAN/UPC,
+        G=receiving pack size. Blank B on a D-UPC row means Selling Article=A.
+      Frozen Pack:
+        A=Family/Main, D=EAN/UPC, E=receiving pack size, G=Selling UOM;
+        Selling Article=A.
+
+    Raw Article Manual is read directly so Quick Check is not dependent on stale
+    phase2c_row_state created before these tab semantics were corrected.
+    """
     targets: dict[str, set[int]] = {}
     for row in family_qrows:
         if row.get("family_id") is None:
@@ -904,37 +877,103 @@ def _manual_selling_article_map(
     if not targets:
         return {}
 
-    keys = sorted(targets)
-    ph = ",".join(["%s"] * len(keys))
+    standard_tabs = {
+        "fresh fish", "live fish", "shrimp", "fish ball", "frozen fish"
+    }
+    recognized_tabs = standard_tabs | {"frozen pack"}
+    mains = sorted({
+        str(main or "").strip()
+        for main in family_main_by_id.values()
+        if str(main or "").strip()
+    })
+    if not mains:
+        return {}
+    mph = ",".join(["%s"] * len(mains))
     cur.execute(
-        f"""SELECT
-                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) AS ean_upc,
-                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.article')) AS selling_article,
-                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.canonical_main_article')) AS canonical_main_article,
-                  batch_id,raw_id
-            FROM phase2c_row_state
-            WHERE raw_table_name='raw_article_manual'
-              AND normalization_status IN ('NORMALIZED','QA_HOLD')
-              AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc')) IS NOT NULL
-              AND TRIM(LEADING '0' FROM JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.upc'))) IN ({ph})
-            ORDER BY batch_id DESC,raw_id DESC""",
-        tuple(keys),
+        f"""SELECT f.file_id,sh.sheet_name,r.raw_id,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A')) AS col_a,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.B')) AS col_b,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.C')) AS col_c,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.D')) AS col_d,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.E')) AS col_e,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.G')) AS col_g
+            FROM ingest_file f
+            JOIN ingest_sheet sh ON sh.file_id=f.file_id
+            JOIN raw_article_manual r ON r.sheet_id=sh.sheet_id
+            WHERE f.source_type='article_manual'
+              AND f.processing_status='INGESTED'
+              AND LOWER(TRIM(sh.sheet_name)) IN
+                  ('fresh fish','live fish','shrimp','fish ball','frozen fish','frozen pack')
+              AND r.source_row_number>COALESCE(sh.header_row_number,0)
+              AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A'))) IN ({mph})
+            ORDER BY f.file_id DESC,r.raw_id DESC""",
+        tuple(mains),
     )
 
     out: dict[tuple[int, str], str] = {}
     for row in cur.fetchall():
-        raw_upc = str(row.get("ean_upc") or "").strip()
-        article = str(row.get("selling_article") or "").strip()
-        main = str(row.get("canonical_main_article") or "").strip()
-        if not raw_upc or not article or not main:
+        tab = str(row.get("sheet_name") or "").strip().lower()
+        if tab not in recognized_tabs:
             continue
-        key = _numeric_key(raw_upc) or raw_upc
+        main = str(row.get("col_a") or "").strip()
+        raw_upc = str(row.get("col_d") or "").strip()
+        compact = raw_upc.replace(" ", "").replace("-", "")
+        if not compact.isdigit():
+            continue
+        key = _numeric_key(compact) or compact
+        if key not in targets:
+            continue
+
+        selling = (
+            str(row.get("col_b") or "").strip() or main
+            if tab in standard_tabs
+            else main
+        )
+        if not selling.isdigit() or not main.isdigit():
+            continue
         for fid in targets.get(key, set()):
             if str(family_main_by_id.get(fid) or "") != main:
                 continue
-            out.setdefault((fid, key), article)
-    return out
+            out.setdefault((fid, key), selling)
 
+    # Toledo-only internal POS codes such as 4816 have no D EAN/UPC row. Keep
+    # them eligible only through explicit confirmed user authority; never turn
+    # every Toledo# into a UPC automatically.
+    unresolved_keys = sorted({
+        key
+        for key, fids_for_key in targets.items()
+        if any((fid, key) not in out for fid in fids_for_key)
+    })
+    if unresolved_keys:
+        cur.execute(
+            """SELECT m.ean_upc,m.article_number,baf.family_id,pf.main_article_number
+               FROM manual_upc_override m
+               JOIN article a ON a.article_number=m.article_number
+               JOIN bridge_article_family baf
+                 ON baf.article_id=a.article_id
+                AND baf.mapping_status='CONFIRMED'
+                AND baf.is_primary=TRUE
+                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+               JOIN product_family pf ON pf.family_id=baf.family_id
+               WHERE m.override_status='CONFIRMED'"""
+        )
+        unresolved = set(unresolved_keys)
+        for row in cur.fetchall():
+            ean = str(row.get("ean_upc") or "").strip()
+            key = _numeric_key(ean) or ean
+            if key not in unresolved:
+                continue
+            fid = int(row["family_id"])
+            if fid not in targets.get(key, set()):
+                continue
+            main = str(row.get("main_article_number") or "")
+            if str(family_main_by_id.get(fid) or "") != main:
+                continue
+            article = str(row.get("article_number") or "").strip()
+            if article:
+                out.setdefault((fid, key), article)
+
+    return out
 
 def _quick_receiving_article_context(
     cur,
@@ -1007,10 +1046,6 @@ def _quick_receiving_article_context(
         cur,
         source_by_family,
         family_qrows,
-    )
-    manual_main_selling_uom = _manual_main_selling_uom_map(
-        cur,
-        source_by_family,
     )
     manual_authoritative_fids = {fid for fid, _ in manual_selling_by_upc}
 
@@ -1637,40 +1672,17 @@ def _quick_receiving_article_context(
             if str(x.get("uom") or "").strip()
         }
         canonical_metric = canonical_family_metric.get(fid)
-        active_pos_uoms = {
-            str(x.get("selling_uom") or "").strip().upper()
-            for x in active_pos_rows
-            if str(x.get("selling_uom") or "").strip()
-        }
-        main_selling_uom = str(manual_main_selling_uom.get(fid) or "").strip().upper() or None
-        family_uom = (
-            main_selling_uom
-            or (
-                next(iter(movement_uoms))
-                if len(movement_uoms) == 1
-                else (
-                    str((canonical_metric or {}).get("uom") or "").strip().upper()
-                    or (next(iter(active_pos_uoms)) if len(active_pos_uoms) == 1 else None)
-                )
-            )
-        )
         family_raw_uom = next(iter(movement_uoms)) if len(movement_uoms) == 1 else None
-        family_uom_reconciled = bool(
-            main_selling_uom
-            and family_raw_uom
-            and main_selling_uom == family_raw_uom
+        family_uom = (
+            family_raw_uom
+            or str((canonical_metric or {}).get("uom") or "").strip().upper()
+            or None
         )
-        movement_uom_conflicts_main = sorted(
-            u for u in movement_uoms
-            if main_selling_uom and u != main_selling_uom
-        )
+        family_uom_reconciled = bool(family_raw_uom)
 
         if unmapped_active_pos_upcs:
             family_qty = None
             family_status = "HOLD_POS_ACTIVE_UPC_SELLING_ARTICLE_UNMAPPED"
-        elif movement_uom_conflicts_main:
-            family_qty = None
-            family_status = "HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM"
         elif len(movement_uoms) > 1:
             family_qty = None
             family_status = "HOLD_SELLING_ARTICLE_MIXED_MVT_UOM"
@@ -1747,13 +1759,6 @@ def _quick_receiving_article_context(
             "family_group_movement_days_7d": day_count,
             "family_group_movement_status": family_status,
             "family_group_movement_basis": family_basis,
-            "family_group_main_selling_uom": main_selling_uom,
-            "family_group_uom_source": (
-                "ARTICLE_MANUAL_MAIN_ROW_COLUMN_G"
-                if main_selling_uom
-                else "FALLBACK_MOVEMENT_OR_CANONICAL_METRIC"
-            ),
-            "family_group_mvt_uom_conflicts_main": movement_uom_conflicts_main,
             "family_group_active_pos_upc_count": len(active_pos_rows),
             "family_group_active_selling_article_count": len(active_selling_articles),
             "family_group_active_selling_articles": sorted(active_selling_articles),
@@ -1763,7 +1768,6 @@ def _quick_receiving_article_context(
                 "PASS"
                 if family_qty is not None
                 and not unmapped_active_pos_upcs
-                and not movement_uom_conflicts_main
                 and len(movement_uoms) <= 1
                 else "HOLD"
             ),
@@ -2053,9 +2057,6 @@ def inventory_review(
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
                     "family_group_movement_basis": family_ctx.get("family_group_movement_basis"),
-                    "family_group_main_selling_uom": family_ctx.get("family_group_main_selling_uom"),
-                    "family_group_uom_source": family_ctx.get("family_group_uom_source"),
-                    "family_group_mvt_uom_conflicts_main": family_ctx.get("family_group_mvt_uom_conflicts_main", []),
                     "family_group_active_pos_upc_count": family_ctx.get("family_group_active_pos_upc_count"),
                     "family_group_active_selling_article_count": family_ctx.get("family_group_active_selling_article_count"),
                     "family_group_active_selling_articles": family_ctx.get("family_group_active_selling_articles", []),

@@ -196,6 +196,62 @@ def _build_column_map(header_payload: dict[str, Any]) -> dict[str, str]:
     return result
 
 
+ARTICLE_MANUAL_RECEIVING_PACK_TABS = {
+    'fresh fish',
+    'live fish',
+    'shrimp',
+    'fish ball',
+    'frozen fish',
+}
+
+
+def _article_manual_column_map(
+    sheet_name: str | None,
+    header_payload: dict[str, Any],
+) -> dict[str, str]:
+    """Apply the user-confirmed per-tab Article Manual schema.
+
+    Fresh Fish / Live Fish / Shrimp / Fish Ball / Frozen Fish:
+      A = Family/Main Article
+      B = Selling Article (blank means Main Article for that UPC row)
+      C = Toledo #
+      D = EAN/UPC
+      G = Receiving pack size/dimension
+      D EAN/UPC + C Toledo# on the same row => Selling UOM LB
+
+    Frozen Pack:
+      A = Family/Main Article
+      D = EAN/UPC
+      E = Receiving pack size/dimension
+      G = Selling UOM
+
+    Header aliases remain available for non-critical descriptive columns, but the
+    identity/UOM columns above are positional authority and cannot be reclassified
+    by a misleading header label.
+    """
+    result = _build_column_map(header_payload)
+    tab = _norm_header(sheet_name)
+
+    if tab in ARTICLE_MANUAL_RECEIVING_PACK_TABS:
+        result['main_article'] = 'A'
+        result['article'] = 'B'
+        result['sales_set'] = 'C'  # Toledo #
+        result['upc'] = 'D'
+        result['pack'] = 'G'
+        if result.get('selling_uom') == 'G':
+            result.pop('selling_uom', None)
+    elif tab == 'frozen pack':
+        result['main_article'] = 'A'
+        # Frozen Pack has no separate Selling Article column in the confirmed
+        # schema; the Family/Main Article is the row Article anchor.
+        result['article'] = 'A'
+        result['upc'] = 'D'
+        result['pack'] = 'E'
+        result['selling_uom'] = 'G'
+
+    return result
+
+
 def _get(row: dict[str, Any], colmap: dict[str, str], field: str) -> Any:
     col = colmap.get(field)
     return row.get(col) if col else None
@@ -664,6 +720,17 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
     category = _text(_get(row, colmap, 'category'))
     pack = _text(_get(row, colmap, 'pack'))
 
+    # On the confirmed Article Manual roster tabs, a UPC row may leave Column B
+    # (Selling Article) blank. That means the Selling Article is the Column A
+    # Family/Main Article; it is not an unmapped product row.
+    if (
+        ctx.source_type == 'article_manual'
+        and not article_number
+        and source_main_article
+        and ean_upc
+    ):
+        article_number = source_main_article
+
     if not article_number:
         _mark_row_state(cur, ctx, 'SKIPPED_NON_PRODUCT_ROW', {'reason': 'no article identifier'})
         return 'SKIPPED_NON_PRODUCT_ROW'
@@ -761,11 +828,40 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
             )
 
     selling_token = _source_token(_get(row, colmap, 'selling_uom'))
+    selling_rule = "EXPLICIT_SOURCE_UOM"
+    selling_source_field = 'selling_uom'
+    # User-confirmed Article Manual semantics for Fresh Fish / Live Fish /
+    # Shrimp / Fish Ball / Frozen Fish: when a numeric EAN/UPC exists in D and
+    # the same row has a Toledo# in C, that EAN/UPC is sold by pound. A Toledo-
+    # only row with no D EAN/UPC is NOT covered by this rule (e.g. UPC 4816 has
+    # separate explicit user authority: EA, 1 EA = 4 LB).
+    if (
+        ctx.source_type == 'article_manual'
+        and _norm_header(ctx.sheet_name) in ARTICLE_MANUAL_RECEIVING_PACK_TABS
+        and ean_upc
+        and sales_set
+    ):
+        selling_token = 'LB'
+        selling_rule = "ARTICLE_MANUAL_TOLEDO_EAN_LB"
+        selling_source_field = 'C_TOLEDO_PLUS_D_EAN'
+
     if selling_token:
         selling_uom_id, canonical = _canonical_uom(cur, ctx.source_type, selling_token)
         target_type, target_id = ('SELLING_UPC', upc_id) if upc_id else ('ARTICLE', article_id)
-        _insert_evidence(cur, target_type, int(target_id), 'SELLING_UOM_OBSERVED', ctx, 'selling_uom', selling_token,
-                         {'canonical_exact_match': canonical})
+        _insert_evidence(
+            cur,
+            target_type,
+            int(target_id),
+            'SELLING_UOM_OBSERVED',
+            ctx,
+            selling_source_field,
+            selling_token,
+            {
+                'canonical_exact_match': canonical,
+                'resolution_rule': selling_rule,
+                'toledo_number': sales_set if selling_rule == 'ARTICLE_MANUAL_TOLEDO_EAN_LB' else None,
+            },
+        )
         if upc_id is not None and selling_uom_id is not None:
             cur.execute("SELECT uom_dimension FROM dim_uom WHERE uom_id=%s", (selling_uom_id,))
             dimrow = cur.fetchone()
@@ -786,8 +882,8 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
                 cur.execute(
                     """INSERT INTO selling_upc_uom_history
                        (upc_id,selling_uom_id,base_uom_id,base_qty_per_selling_unit,mapping_status,confidence,resolution_method)
-                       VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,'EXPLICIT_SOURCE_UOM')""",
-                    (upc_id, selling_uom_id, base_uom_id, factor),
+                       VALUES (%s,%s,%s,%s,'CONFIRMED',1.0,%s)""",
+                    (upc_id, selling_uom_id, base_uom_id, factor, selling_rule),
                 )
 
     if pack:
@@ -800,7 +896,9 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
     _mark_row_state(
         cur, ctx, status,
         {'article': article_number, 'source_main_article': source_main_article, 'canonical_main_article': canonical_main_article,
-         'upc': ean_upc, 'family_status': family_status, 'upc_status': upc_status},
+         'upc': ean_upc, 'sales_set': sales_set, 'pack': pack,
+         'selling_uom_rule': selling_rule if selling_token else None,
+         'family_status': family_status, 'upc_status': upc_status},
     )
     return status
 
@@ -856,7 +954,10 @@ def _preload_article_manual_authority(cur, batch_id: int) -> dict[str, Any]:
             h = cur.fetchone()
             if not h:
                 continue
-            colmap = _build_column_map(_json_obj(h['raw_payload']))
+            colmap = _article_manual_column_map(
+                sh['sheet_name'],
+                _json_obj(h['raw_payload']),
+            )
             sheet_infos.append({
                 'file_id': int(f['file_id']),
                 'sheet_id': int(sh['sheet_id']),
@@ -1032,7 +1133,14 @@ def normalize_batch(batch_id: int) -> dict[str, Any]:
                     h = cur.fetchone()
                     if not h:
                         continue
-                    colmap = _build_column_map(_json_obj(h['raw_payload']))
+                    colmap = (
+                        _article_manual_column_map(
+                            sh['sheet_name'],
+                            _json_obj(h['raw_payload']),
+                        )
+                        if f['source_type'] == 'article_manual'
+                        else _build_column_map(_json_obj(h['raw_payload']))
+                    )
                     # Only treat sheets with explicit Article + Main Article headers as product-identity sheets.
                     if 'article' not in colmap or 'main_article' not in colmap:
                         continue

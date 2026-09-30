@@ -2494,9 +2494,6 @@ function mobileQuickFamilyGroups(rows){
       group_uom:'',
       group_status:'',
       group_basis:r.family_group_movement_basis||'',
-      main_selling_uom:r.family_group_main_selling_uom||'',
-      group_uom_source:r.family_group_uom_source||'',
-      group_uom_conflicts:Array.isArray(r.family_group_mvt_uom_conflicts_main)?r.family_group_mvt_uom_conflicts_main:[],
       reconciliation:r.family_group_reconciliation||'',
       active_pos_upc_count:r.family_group_active_pos_upc_count??null,
       active_selling_article_count:r.family_group_active_selling_article_count??null,
@@ -2535,9 +2532,6 @@ function mobileQuickFamilyGroups(rows){
     if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
     if(!g.group_status&&r.family_group_movement_status)g.group_status=String(r.family_group_movement_status);
     if(!g.group_basis&&r.family_group_movement_basis)g.group_basis=String(r.family_group_movement_basis);
-    if(!g.main_selling_uom&&r.family_group_main_selling_uom)g.main_selling_uom=String(r.family_group_main_selling_uom);
-    if(!g.group_uom_source&&r.family_group_uom_source)g.group_uom_source=String(r.family_group_uom_source);
-    if((!g.group_uom_conflicts||!g.group_uom_conflicts.length)&&Array.isArray(r.family_group_mvt_uom_conflicts_main))g.group_uom_conflicts=r.family_group_mvt_uom_conflicts_main;
     if(!g.reconciliation&&r.family_group_reconciliation)g.reconciliation=String(r.family_group_reconciliation);
     if((g.active_pos_upc_count===null||g.active_pos_upc_count===undefined)&&r.family_group_active_pos_upc_count!==null&&r.family_group_active_pos_upc_count!==undefined)g.active_pos_upc_count=Number(r.family_group_active_pos_upc_count);
     if((g.active_selling_article_count===null||g.active_selling_article_count===undefined)&&r.family_group_active_selling_article_count!==null&&r.family_group_active_selling_article_count!==undefined)g.active_selling_article_count=Number(r.family_group_active_selling_article_count);
@@ -2717,8 +2711,7 @@ function mobileQuickGroupedHtml(rows){
     const reconMeta='<div style="font-size:7px;font-weight:900;color:var(--muted);margin-top:3px">'+
       esc(reconText)+' · '+esc(String(g.active_selling_article_count??0))+' Selling Article'+(Number(g.active_selling_article_count||0)===1?'':'s')+
       ' · '+esc(String(g.active_pos_upc_count??0))+' POS-active UPC'+(Number(g.active_pos_upc_count||0)===1?'':'s')+
-      (g.main_selling_uom?' · Family Selling UOM '+esc(g.main_selling_uom)+' · Table 1 Main row':'')+
-      (g.group_uom_conflicts?.length?' · UOM conflict: '+esc(g.group_uom_conflicts.join(', ')):'')+
+      (g.group_uom?' · SAP MVT UOM '+esc(g.group_uom):'')+
       (g.zero_sap_mvt_articles?.length?' · Zero SAP MVT: '+esc(g.zero_sap_mvt_articles.join(', ')):'')+
       (g.unmapped_active_pos_upcs?.length?' · Unmapped UPC: '+esc(g.unmapped_active_pos_upcs.join(', ')):'')+
     '</div>';
