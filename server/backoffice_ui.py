@@ -2498,8 +2498,8 @@ function mobileQuickFamilyGroups(rows){
       source_movement_uom:r.family_source_movement_uom||'',
       source_movement_status:r.family_source_movement_status||'',
       group_movement_basis:r.family_group_movement_basis||'',
-      direct_251_252_7d:r.family_direct_251_252_7d,
-      direct_251_252_uom:r.family_direct_251_252_uom||'',
+      source_251_252_7d:r.family_source_251_252_7d,
+      source_251_252_uom:r.family_source_251_252_uom||'',
       conversion_317_318_7d:r.family_conversion_317_318_7d,
       conversion_317_318_uom:r.family_conversion_317_318_uom||'',
       conversion_317_318_status:r.family_conversion_317_318_status||'',
@@ -2530,8 +2530,8 @@ function mobileQuickFamilyGroups(rows){
     if(!g.source_movement_uom&&r.family_source_movement_uom)g.source_movement_uom=String(r.family_source_movement_uom);
     if(!g.source_movement_status&&r.family_source_movement_status)g.source_movement_status=String(r.family_source_movement_status);
     if(!g.group_movement_basis&&r.family_group_movement_basis)g.group_movement_basis=String(r.family_group_movement_basis);
-    if((g.direct_251_252_7d===null||g.direct_251_252_7d===undefined)&&r.family_direct_251_252_7d!==null&&r.family_direct_251_252_7d!==undefined)g.direct_251_252_7d=r.family_direct_251_252_7d;
-    if(!g.direct_251_252_uom&&r.family_direct_251_252_uom)g.direct_251_252_uom=String(r.family_direct_251_252_uom);
+    if((g.source_251_252_7d===null||g.source_251_252_7d===undefined)&&r.family_source_251_252_7d!==null&&r.family_source_251_252_7d!==undefined)g.source_251_252_7d=r.family_source_251_252_7d;
+    if(!g.source_251_252_uom&&r.family_source_251_252_uom)g.source_251_252_uom=String(r.family_source_251_252_uom);
     if((g.conversion_317_318_7d===null||g.conversion_317_318_7d===undefined)&&r.family_conversion_317_318_7d!==null&&r.family_conversion_317_318_7d!==undefined)g.conversion_317_318_7d=r.family_conversion_317_318_7d;
     if(!g.conversion_317_318_uom&&r.family_conversion_317_318_uom)g.conversion_317_318_uom=String(r.family_conversion_317_318_uom);
     if(!g.conversion_317_318_status&&r.family_conversion_317_318_status)g.conversion_317_318_status=String(r.family_conversion_317_318_status);
@@ -2681,14 +2681,14 @@ function mobileQuickGroupedHtml(rows){
     );
     const sourceHasMvt=hasNonZero(g.source_movement_7d);
     const hasConversion=(g.conversion_317_318_7d!==null&&g.conversion_317_318_7d!==undefined);
-    const directText=(g.direct_251_252_7d===null||g.direct_251_252_7d===undefined)
-      ? '0'
-      : fmt(g.direct_251_252_7d)+(g.direct_251_252_uom?' '+g.direct_251_252_uom:'');
+    const source251Text=(g.source_251_252_7d===null||g.source_251_252_7d===undefined)
+      ? '—'
+      : fmt(g.source_251_252_7d)+(g.source_251_252_uom?' '+g.source_251_252_uom:'');
     const conversionText=hasConversion
       ? fmt(g.conversion_317_318_7d)+(g.conversion_317_318_uom?' '+g.conversion_317_318_uom:'')
       : '—';
     const sourceMvtText=(sourceHasMvt||hasConversion)
-      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">DIRECT 251−252 · '+esc(directText)+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERTED · '+esc(conversionText):'')+'</div>'
+      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">FAMILY 251−252 TOTAL · '+esc(source251Text)+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERSION REF · '+esc(conversionText)+' · ALREADY INCLUDED':'')+'</div>'
       : '';
     const familyPositiveMvt=Number.isFinite(Number(g.group_qty_7d))&&Number(g.group_qty_7d)>0;
     const familyHead='<div class="m-q-family-head'+(familyPositiveMvt?' has-positive-mvt':'')+'">'+
