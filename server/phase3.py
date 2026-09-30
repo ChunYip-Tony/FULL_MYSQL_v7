@@ -1751,7 +1751,7 @@ def relink_history(cur) -> None:
                 (upc_id,ean,description,upc_id),
             )
 
-    for table in ('price_list_observation','inventory_observation','company_price_observation','upc_department_observation'):
+    for table in ('price_list_observation','inventory_observation','company_price_observation'):
         cur.execute(f"SELECT DISTINCT ean_upc FROM {table} WHERE ean_upc IS NOT NULL")
         for row in cur.fetchall():
             ean = row['ean_upc']
@@ -1764,6 +1764,42 @@ def relink_history(cur) -> None:
                           AND (upc_id IS NULL OR upc_id<>%s)""",
                     (upc_id, ean, upc_id),
                 )
+
+    # Department POS lineage must use the same Article Manual-first identity as
+    # sales history. Restrict the override to Seafood POS rows; other department
+    # observations keep ordinary barcode lineage.
+    cur.execute(
+        """SELECT DISTINCT ean_upc,department_code,source_type
+           FROM upc_department_observation
+           WHERE ean_upc IS NOT NULL"""
+    )
+    for row in cur.fetchall():
+        ean = row['ean_upc']
+        if (
+            str(row.get('department_code') or '') == SEAFOOD_DEPT_CODE
+            and str(row.get('source_type') or '').upper() == 'POS'
+        ):
+            upc_id = resolve_article_manual_pos_upc_id(article_manual_index, ean)
+            if upc_id is None:
+                upc_id = _find_upc_id(cur, ean)
+        else:
+            upc_id = _find_upc_id(cur, ean)
+        if upc_id is not None:
+            cur.execute(
+                """UPDATE upc_department_observation
+                   SET upc_id=%s
+                   WHERE ean_upc=%s
+                     AND department_code=%s
+                     AND source_type=%s
+                     AND (upc_id IS NULL OR upc_id<>%s)""",
+                (
+                    upc_id,
+                    ean,
+                    row.get('department_code'),
+                    row.get('source_type'),
+                    upc_id,
+                ),
+            )
 
 
 def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
