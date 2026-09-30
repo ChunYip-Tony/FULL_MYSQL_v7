@@ -13,6 +13,9 @@ POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
 STALE_STARTED_SECONDS=max(90,int(os.environ.get('FULLMYSQL_WORKER_STALE_STARTED_SECONDS','180')))
 VERSION_MISMATCH_GRACE_SECONDS=max(30,int(os.environ.get('FULLMYSQL_WORKER_VERSION_MISMATCH_GRACE_SECONDS','45')))
+HEARTBEAT_WRITE_RETRIES=max(1,min(5,int(os.environ.get('FULLMYSQL_HEARTBEAT_WRITE_RETRIES','3'))))
+HEARTBEAT_RETRY_SECONDS=max(1,min(5,int(os.environ.get('FULLMYSQL_HEARTBEAT_RETRY_SECONDS','2'))))
+SAME_VERSION_STALE_RECOVERY_LIMIT=max(0,min(3,int(os.environ.get('FULLMYSQL_SAME_VERSION_STALE_RECOVERY_LIMIT','1'))))
 BRIDGE_STAGE='CHATGPT_SHEET_PUBLISH'
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
 RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
@@ -66,18 +69,51 @@ def _touch_run(run_id:int, *, stage:str|None=None) -> None:
                      AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
                 (json.dumps(payload,ensure_ascii=False),run_id,API_VERSION),
             )
+            updated=int(cur.rowcount or 0)
             conn.commit()
+            if updated != 1:
+                raise RuntimeError(f'HEARTBEAT_RUN_NOT_ACTIVE:{run_id}')
         finally:
             cur.close()
 
 
 def _heartbeat_loop(run_id:int, stop_event:threading.Event) -> None:
+    consecutive_failures=0
     while not stop_event.wait(HEARTBEAT_SECONDS):
-        try:
-            _touch_run(run_id)
-        except Exception:
-            # Heartbeat must never kill the worker's business transaction.
-            pass
+        last_error=None
+        for attempt in range(HEARTBEAT_WRITE_RETRIES):
+            try:
+                _touch_run(run_id)
+                last_error=None
+                consecutive_failures=0
+                break
+            except Exception as exc:
+                last_error=exc
+                if attempt+1 < HEARTBEAT_WRITE_RETRIES:
+                    if stop_event.wait(HEARTBEAT_RETRY_SECONDS):
+                        return
+        if last_error is not None:
+            consecutive_failures += 1
+            print(
+                'Pipeline heartbeat write failed',
+                {
+                    'run_id':run_id,
+                    'consecutive_failures':consecutive_failures,
+                    'error':repr(last_error),
+                },
+                flush=True,
+            )
+            # Keep local worker health truthful even when MySQL heartbeat writes
+            # are temporarily unavailable. Recovery still relies on the DB lease,
+            # but transient failures now get multiple write attempts first.
+            with _RUNTIME_LOCK:
+                _RUNTIME_STATE['heartbeat_db_failures']=consecutive_failures
+                _RUNTIME_STATE['heartbeat_db_error']=repr(last_error)
+            _write_runtime_health()
+        else:
+            with _RUNTIME_LOCK:
+                _RUNTIME_STATE.pop('heartbeat_db_failures',None)
+                _RUNTIME_STATE.pop('heartbeat_db_error',None)
 
 
 def _set_runtime_state(state:str, run_id:int|None=None, stage:str|None=None) -> None:
@@ -104,6 +140,8 @@ def _write_runtime_health(state:str|None=None, run_id:int|None=None, stage:str|N
         'heartbeat_epoch':int(time.time()),
         'code_version':API_VERSION,
         'error':current.get('error'),
+        'heartbeat_db_failures':current.get('heartbeat_db_failures',0),
+        'heartbeat_db_error':current.get('heartbeat_db_error'),
     }
     try:
         RUNTIME_HEALTH_PATH.parent.mkdir(parents=True,exist_ok=True)
@@ -162,10 +200,27 @@ def _replacement_exists(cur,batch_id:int,stage_name:str) -> bool:
     return bool(cur.fetchone())
 
 
-def _enqueue_current_version_replacement(cur,batch_id:int,stage_name:str,old_run_id:int,reason:str) -> int|None:
+def _enqueue_current_version_replacement(
+    cur,
+    batch_id:int,
+    stage_name:str,
+    old_run_id:int,
+    reason:str,
+    *,
+    extra_detail:dict|None=None,
+) -> int|None:
     if _replacement_exists(cur,batch_id,stage_name):
         return None
     run_number=_next_run_number(cur,batch_id,stage_name)
+    detail={
+        'auto_recovery':True,
+        'reason':reason,
+        'supersedes_pipeline_run_id':old_run_id,
+        'queued_at':datetime.now(timezone.utc).isoformat(),
+        'required_code_version':API_VERSION,
+    }
+    if extra_detail:
+        detail.update(extra_detail)
     cur.execute(
         """INSERT INTO pipeline_run
            (batch_id,pipeline_name,stage_name,run_number,
@@ -177,13 +232,7 @@ def _enqueue_current_version_replacement(cur,batch_id:int,stage_name:str,old_run
             stage_name,
             run_number,
             API_VERSION,
-            json.dumps({
-                'auto_recovery':True,
-                'reason':reason,
-                'supersedes_pipeline_run_id':old_run_id,
-                'queued_at':datetime.now(timezone.utc).isoformat(),
-                'required_code_version':API_VERSION,
-            },ensure_ascii=False),
+            json.dumps(detail,ensure_ascii=False),
         ),
     )
     return int(cur.lastrowid)
@@ -212,7 +261,8 @@ def _recover_stale_started(cur) -> int:
     # Version is a lease boundary. A newer worker must never steal a run that
     # still has a fresh heartbeat from an older deployment. Once that heartbeat
     # expires, the old run is terminally superseded and a new current-version
-    # run is queued. Same-version stale jobs may be safely requeued in place.
+    # run is queued. Same-version stale jobs never restart in place: the old
+    # Run ID is terminal and at most one replacement Run ID is auto-created.
     cur.execute(
         """SELECT pipeline_run_id,batch_id,stage_name,processing_status,
                   started_at,code_version,detail_json
@@ -322,24 +372,40 @@ def _recover_stale_started(cur) -> int:
                 recovered += 1
             continue
 
+        prior_same_version_recoveries=detail.get('same_version_stale_recovery_count')
+        try:
+            prior_same_version_recoveries=int(prior_same_version_recoveries)
+        except Exception:
+            # Compatibility with runs created before the counter existed.
+            prior_same_version_recoveries=1 if detail.get('recovered_stale_started') else 0
+
+        terminal=prior_same_version_recoveries >= SAME_VERSION_STALE_RECOVERY_LIMIT
         recovery_detail={
             **detail,
-            'recovered_stale_started':True,
+            'recovered_stale_started':not terminal,
             'recovered_at':datetime.now(timezone.utc).isoformat(),
-            'recovery_reason':'WORKER_HEARTBEAT_STALE',
+            'recovery_reason':(
+                'WORKER_HEARTBEAT_STALE_RETRY_LIMIT'
+                if terminal
+                else 'WORKER_HEARTBEAT_STALE_NEW_RUN'
+            ),
             'previous_processing_status':previous_status,
-            'recovered_processing_status':'QUEUED',
+            'recovered_processing_status':'FAILED',
             'recovered_by_code_version':API_VERSION,
             'previous_worker':detail.get('worker'),
             'previous_heartbeat_at':detail.get('heartbeat_at'),
             'previous_heartbeat_epoch':detail.get('heartbeat_epoch'),
+            'stale_age_seconds':age,
             'last_phase3_stage':detail.get('phase3_stage') or detail.get('last_phase3_stage'),
+            'same_version_stale_recovery_count':prior_same_version_recoveries,
+            'same_version_stale_recovery_limit':SAME_VERSION_STALE_RECOVERY_LIMIT,
+            'auto_recovery_exhausted':terminal,
         }
         cur.execute(
             """UPDATE pipeline_run
-               SET processing_status='QUEUED',
-                   completed_at=NULL,
-                   error_count=0,
+               SET processing_status='FAILED',
+                   completed_at=CURRENT_TIMESTAMP(6),
+                   error_count=GREATEST(COALESCE(error_count,0),1),
                    detail_json=%s
                WHERE pipeline_run_id=%s
                  AND processing_status=%s
@@ -351,7 +417,23 @@ def _recover_stale_started(cur) -> int:
                 API_VERSION,
             ),
         )
-        recovered += int(cur.rowcount or 0)
+        changed=int(cur.rowcount or 0)
+        if changed and not terminal:
+            _enqueue_current_version_replacement(
+                cur,
+                bid,
+                stage_name,
+                run_id,
+                'WORKER_HEARTBEAT_STALE_NEW_RUN',
+                extra_detail={
+                    'same_version_stale_recovery_count':prior_same_version_recoveries+1,
+                    'same_version_stale_recovery_limit':SAME_VERSION_STALE_RECOVERY_LIMIT,
+                    'previous_worker':detail.get('worker'),
+                    'previous_heartbeat_at':detail.get('heartbeat_at'),
+                    'last_phase3_stage':detail.get('phase3_stage') or detail.get('last_phase3_stage'),
+                },
+            )
+        recovered += changed
     return recovered
 
 
