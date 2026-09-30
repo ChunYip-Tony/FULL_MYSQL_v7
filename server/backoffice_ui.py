@@ -191,11 +191,56 @@ function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),2200)}
 async function api(url,opts={}){const r=await fetch(url,{cache:'no-store',...opts});let data=null;try{data=await r.json()}catch{data={detail:await r.text()}}if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}return data}
-function show(view){$$('.view').forEach(x=>x.classList.toggle('on',x.id===view));$$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));if(view==='inventory')loadInventory();if(view==='sales')loadSell();if(view==='ordering')loadOrders();if(view==='pricing')loadPrices();if(view==='database')showDbTab('dboverview');window.scrollTo({top:0,behavior:'smooth'})}
-function showDbTab(tab){$$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));$$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));if(tab==='dboverview')loadDatabaseOverview();if(tab==='dbbatches')loadBatches();if(tab==='dbqa')loadQA();if(tab==='dbdata')loadData()}
+const DB_TAB_HASH={dboverview:'overview',dbupload:'upload',dbbatches:'processing',dbqa:'qa',dbdata:'health'};
+const HASH_DB_TAB={overview:'dboverview',upload:'dbupload',processing:'dbbatches',qa:'dbqa',health:'dbdata'};
+function routeFromHash(){
+  const raw=decodeURIComponent((location.hash||'').replace(/^#/,'').trim().toLowerCase());
+  if(!raw)return {view:'inventory',dbTab:null};
+  const [view,sub]=raw.split('/');
+  if(['inventory','sales','ordering','pricing'].includes(view))return {view,dbTab:null};
+  if(view==='database')return {view:'database',dbTab:HASH_DB_TAB[sub]||'dboverview'};
+  return {view:'inventory',dbTab:null};
+}
+function routeHash(view,dbTab=null){
+  if(view==='database')return '#database/'+(DB_TAB_HASH[dbTab]||'overview');
+  return '#'+view;
+}
+function syncRouteHash(view,dbTab=null,{replace=false}={}){
+  const next=routeHash(view,dbTab);
+  if(location.hash===next)return;
+  if(replace)history.replaceState(null,'',next);
+  else history.pushState(null,'',next);
+}
+function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
+  $$('.view').forEach(x=>x.classList.toggle('on',x.id===view));
+  $$('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
+  if(view==='inventory')loadInventory();
+  if(view==='sales')loadSell();
+  if(view==='ordering')loadOrders();
+  if(view==='pricing')loadPrices();
+  if(view==='database')showDbTab(dbTab||'dboverview',{syncHash:false});
+  if(syncHash)syncRouteHash(view,view==='database'?(dbTab||'dboverview'):null);
+  if(scroll)window.scrollTo({top:0,behavior:'smooth'});
+}
+function showDbTab(tab,{syncHash=true}={}){
+  $$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));
+  $$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));
+  if(tab==='dboverview')loadDatabaseOverview();
+  if(tab==='dbbatches')loadBatches();
+  if(tab==='dbqa')loadQA();
+  if(tab==='dbdata')loadData();
+  if(syncHash)syncRouteHash('database',tab);
+}
+function restoreRoute({replaceMissing=false}={}){
+  const hadHash=Boolean(location.hash);
+  const route=routeFromHash();
+  show(route.view,{syncHash:false,scroll:false,dbTab:route.dbTab});
+  if(!hadHash&&replaceMissing)syncRouteHash(route.view,route.dbTab,{replace:true});
+}
 $$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
 $$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
 $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
+window.addEventListener('hashchange',()=>restoreRoute());
 function openDrawer(title,sub,body,foot=''){ $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on') }
 function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}$('#drawerClose').onclick=closeDrawer;$('#drawerBack').onclick=closeDrawer;
 
@@ -499,7 +544,7 @@ $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>loadDatabaseOverview();
 
 $('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';$$('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('inventory')};
-async function boot(){await Promise.allSettled([loadHealth(),loadInventory()]);setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
+async function boot(){await loadHealth().catch(()=>{});restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview')loadDatabaseOverview();if(current?.id==='dbbatches')loadBatches()}},15000)}boot();
 })();
 </script>
 </body></html>'''
