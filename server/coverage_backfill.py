@@ -724,8 +724,22 @@ def article_manual_pos_alias_index(cur) -> dict[str, Any]:
     }
 
 
-def resolve_article_manual_pos_upc_id(index: dict[str, Any], raw_ean: Any) -> int | None:
-    """Resolve raw Seafood POS identity from Article Manual before heuristics."""
+def resolve_article_manual_pos_upc_id(
+    index: dict[str, Any],
+    raw_ean: Any,
+    *,
+    seafood_context: bool = False,
+) -> int | None:
+    """Resolve raw POS identity from Article Manual before heuristics.
+
+    Column D (EAN/UPC) and the canonical 249 service code are always safe
+    identity keys. Column B Selling Article is also authoritative when the
+    caller already knows the POS row is Seafood; outside that context only the
+    structural 1549xxx service-Article form is accepted.
+
+    Column C Toledo# is deliberately NOT treated as a POS identity key. It is
+    Article Manual UOM/scale evidence, not UPC sold-quantity authority.
+    """
     raw = _article_manual_digits(raw_ean)
     if not raw:
         return None
@@ -735,18 +749,14 @@ def resolve_article_manual_pos_upc_id(index: dict[str, Any], raw_ean: Any) -> in
     if key in source_map:
         return int(source_map[key])
 
-    article_map = index.get("selling_article") or {}
-    if key in article_map:
-        return int(article_map[key])
-
     service_code = service_249_product_code(raw)
     service_map = index.get("service_code") or {}
     if service_code and service_code in service_map:
         return int(service_map[service_code])
 
-    toledo_map = index.get("toledo") or {}
-    if key in toledo_map:
-        return int(toledo_map[key])
+    article_map = index.get("selling_article") or {}
+    if key in article_map and (seafood_context or key.startswith("1549")):
+        return int(article_map[key])
 
     for candidate in retail_barcode_alias_candidates(raw):
         candidate_key = numeric_digits(candidate)
