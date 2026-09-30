@@ -359,111 +359,149 @@ def inventory_review(
         raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
     limit = max(1, min(int(limit or 200), 500))
     q = str(query or "").strip()
-
-    # Search is server-side and uses the canonical V2 identity search contract.
-    # This avoids the old behavior where the browser only filtered the first
-    # 300 preloaded Inventory rows.
     search_meta: dict[str, Any] | None = None
-    ranked_upcs: list[str] = []
-    ranked_families: list[int] = []
-    ranked_articles: list[str] = []
-    relevance_by_upc: dict[str, int] = {}
-    relevance_by_family: dict[int, int] = {}
-    relevance_by_article: dict[str, int] = {}
-
-    if q:
-        search_meta = search_items(q, min(limit, 100))
-        for result in search_meta.get("results") or []:
-            rtype = str(result.get("result_type") or "").upper()
-            rel = int(result.get("relevance") or 0)
-            if rtype == "UPC":
-                upc = str(result.get("number") or "").strip()
-                if upc and upc not in relevance_by_upc:
-                    ranked_upcs.append(upc)
-                    relevance_by_upc[upc] = rel
-            elif rtype == "UPC_GROUP":
-                members = result.get("group_members") or []
-                for member in members:
-                    upc = str(member.get("upc") or "").strip()
-                    if upc and upc not in relevance_by_upc:
-                        ranked_upcs.append(upc)
-                        relevance_by_upc[upc] = rel
-                fid = result.get("family_id")
-                if fid is not None:
-                    fid = int(fid)
-                    if fid not in relevance_by_family:
-                        ranked_families.append(fid)
-                        relevance_by_family[fid] = rel
-            elif rtype == "FAMILY":
-                fid = result.get("family_id")
-                if fid is not None:
-                    fid = int(fid)
-                    if fid not in relevance_by_family:
-                        ranked_families.append(fid)
-                        relevance_by_family[fid] = rel
-            elif rtype == "ARTICLE":
-                article = str(result.get("number") or "").strip()
-                if article and article not in relevance_by_article:
-                    ranked_articles.append(article)
-                    relevance_by_article[article] = rel
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
 
+        # Fast path for normal Quick Check typing. Direct text / identifier
+        # matches should never invoke the heavyweight V2 fuzzy aggregation.
         if q:
-            clauses: list[str] = []
             params: list[Any] = []
-            if ranked_upcs:
-                ph = ",".join(["%s"] * len(ranked_upcs))
-                clauses.append(f"ean_upc IN ({ph})")
-                params.extend(ranked_upcs)
-            if ranked_families:
-                ph = ",".join(["%s"] * len(ranked_families))
-                clauses.append(f"family_id IN ({ph})")
-                params.extend(ranked_families)
-            if ranked_articles:
-                ph = ",".join(["%s"] * len(ranked_articles))
-                clauses.append(f"article_number IN ({ph})")
-                params.extend(ranked_articles)
-
-            if not clauses:
-                qrows = []
+            category_sql = ""
+            if cat != "ALL":
+                category_sql = " AND UPPER(COALESCE(product_class,''))=%s"
+            if q.isdigit():
+                like = f"%{q}%"
+                sql = """SELECT *
+                         FROM quick_check_current
+                         WHERE (
+                              ean_upc LIKE %s
+                           OR article_number LIKE %s
+                           OR main_article_number LIKE %s
+                         )"""
+                params.extend([like, like, like])
             else:
-                category_clause = ""
-                if cat != "ALL":
-                    category_clause = " AND UPPER(COALESCE(product_class,''))=%s"
-                    params.append(cat)
-                cur.execute(
-                    f"""SELECT * FROM quick_check_current
-                        WHERE ({' OR '.join(clauses)})
-                        {category_clause}
-                        ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
-                        LIMIT %s""",
-                    (*params, limit),
-                )
-                qrows = cur.fetchall()
+                like = f"%{q.upper()}%"
+                sql = """SELECT *
+                         FROM quick_check_current
+                         WHERE (
+                              UPPER(COALESCE(selling_description,'')) LIKE %s
+                           OR UPPER(COALESCE(family_description,'')) LIKE %s
+                         )"""
+                params.extend([like, like])
 
-            def _search_rank(row: dict[str, Any]) -> tuple[int, float, str]:
-                upc = str(row.get("ean_upc") or "")
-                fid = int(row["family_id"]) if row.get("family_id") is not None else None
-                article = str(row.get("article_number") or "")
-                rel = max(
-                    relevance_by_upc.get(upc, 0),
-                    relevance_by_family.get(fid, 0) if fid is not None else 0,
-                    relevance_by_article.get(article, 0),
-                )
-                return (
-                    -rel,
-                    -float(row.get("pos_qty_7d") or 0),
-                    upc,
-                )
+            if cat != "ALL":
+                sql += category_sql
+                params.append(cat)
+            sql += """ ORDER BY COALESCE(upc_velocity_7d,0) DESC,
+                              COALESCE(pos_qty_7d,0) DESC,
+                              ean_upc
+                       LIMIT %s"""
+            params.append(limit)
+            cur.execute(sql, tuple(params))
+            qrows = cur.fetchall()
 
-            qrows.sort(key=_search_rank)
+            if qrows:
+                search_meta = {
+                    "query": q,
+                    "mode": "DIRECT_QUICK_CHECK_MATCH",
+                    "count": len(qrows),
+                }
+            else:
+                # Typo-tolerant fallback only when direct search produced zero
+                # rows. This preserves SALMOM -> SALMON without making normal
+                # live search scan the full V2 serving corpus.
+                search_meta = search_items(q, min(limit, 100))
+                ranked_upcs: list[str] = []
+                ranked_families: list[int] = []
+                ranked_articles: list[str] = []
+                relevance_by_upc: dict[str, int] = {}
+                relevance_by_family: dict[int, int] = {}
+                relevance_by_article: dict[str, int] = {}
+
+                for result in search_meta.get("results") or []:
+                    rtype = str(result.get("result_type") or "").upper()
+                    rel = int(result.get("relevance") or 0)
+                    if rtype == "UPC":
+                        upc = str(result.get("number") or "").strip()
+                        if upc and upc not in relevance_by_upc:
+                            ranked_upcs.append(upc)
+                            relevance_by_upc[upc] = rel
+                    elif rtype == "UPC_GROUP":
+                        for member in result.get("group_members") or []:
+                            upc = str(member.get("upc") or "").strip()
+                            if upc and upc not in relevance_by_upc:
+                                ranked_upcs.append(upc)
+                                relevance_by_upc[upc] = rel
+                        fid = result.get("family_id")
+                        if fid is not None:
+                            fid = int(fid)
+                            if fid not in relevance_by_family:
+                                ranked_families.append(fid)
+                                relevance_by_family[fid] = rel
+                    elif rtype == "FAMILY":
+                        fid = result.get("family_id")
+                        if fid is not None:
+                            fid = int(fid)
+                            if fid not in relevance_by_family:
+                                ranked_families.append(fid)
+                                relevance_by_family[fid] = rel
+                    elif rtype == "ARTICLE":
+                        article = str(result.get("number") or "").strip()
+                        if article and article not in relevance_by_article:
+                            ranked_articles.append(article)
+                            relevance_by_article[article] = rel
+
+                clauses: list[str] = []
+                args: list[Any] = []
+                if ranked_upcs:
+                    ph = ",".join(["%s"] * len(ranked_upcs))
+                    clauses.append(f"ean_upc IN ({ph})")
+                    args.extend(ranked_upcs)
+                if ranked_families:
+                    ph = ",".join(["%s"] * len(ranked_families))
+                    clauses.append(f"family_id IN ({ph})")
+                    args.extend(ranked_families)
+                if ranked_articles:
+                    ph = ",".join(["%s"] * len(ranked_articles))
+                    clauses.append(f"article_number IN ({ph})")
+                    args.extend(ranked_articles)
+
+                if not clauses:
+                    qrows = []
+                else:
+                    fallback_sql = f"""SELECT *
+                                      FROM quick_check_current
+                                      WHERE ({' OR '.join(clauses)})"""
+                    if cat != "ALL":
+                        fallback_sql += " AND UPPER(COALESCE(product_class,''))=%s"
+                        args.append(cat)
+                    fallback_sql += " LIMIT %s"
+                    args.append(limit)
+                    cur.execute(fallback_sql, tuple(args))
+                    qrows = cur.fetchall()
+
+                    def _search_rank(row: dict[str, Any]) -> tuple[int, float, str]:
+                        upc = str(row.get("ean_upc") or "")
+                        fid = int(row["family_id"]) if row.get("family_id") is not None else None
+                        article = str(row.get("article_number") or "")
+                        rel = max(
+                            relevance_by_upc.get(upc, 0),
+                            relevance_by_family.get(fid, 0) if fid is not None else 0,
+                            relevance_by_article.get(article, 0),
+                        )
+                        vel = float(row.get("upc_velocity_7d") or 0)
+                        return (-rel, -vel, upc)
+
+                    qrows.sort(key=_search_rank)
         else:
             if cat == "ALL":
                 cur.execute(
                     """SELECT * FROM quick_check_current
-                       ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
+                       ORDER BY COALESCE(upc_velocity_7d,0) DESC,
+                                COALESCE(pos_qty_7d,0) DESC,
+                                ean_upc
                        LIMIT %s""",
                     (limit,),
                 )
@@ -471,7 +509,9 @@ def inventory_review(
                 cur.execute(
                     """SELECT * FROM quick_check_current
                        WHERE UPPER(COALESCE(product_class,''))=%s
-                       ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
+                       ORDER BY COALESCE(upc_velocity_7d,0) DESC,
+                                COALESCE(pos_qty_7d,0) DESC,
+                                ean_upc
                        LIMIT %s""",
                     (cat, limit),
                 )
@@ -500,31 +540,35 @@ def inventory_review(
                         / _d(live_price.get("price"))
                     )
             else:
-                # A stale Quick Check snapshot must never leak through as CURRENT.
                 row["current_price"] = None
                 row["current_price_type"] = None
                 row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
                 row["current_price_asof_date"] = None
                 row["gp_pct_current"] = None
+
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
             if fid is not None and fid not in family_cache:
-                cur.execute("SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc", (fid,))
+                cur.execute(
+                    "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                    (fid,),
+                )
                 children = cur.fetchall()
                 live_family_oh = _family_effective_oh(cur, children)
-                if live_family_oh.get('status') == 'READY' and live_family_oh.get('quantity') is not None:
-                    live_family_oh['as_of_date'] = (
-                        live_family_oh.get('movement_through_date')
-                        or live_family_oh.get('anchor_date')
+                if live_family_oh.get("status") == "READY" and live_family_oh.get("quantity") is not None:
+                    live_family_oh["as_of_date"] = (
+                        live_family_oh.get("movement_through_date")
+                        or live_family_oh.get("anchor_date")
                     )
                     family_cache[fid] = live_family_oh
                 else:
                     published = _published_family_oh_fallback(children)
                     if published:
-                        published['live_status'] = live_family_oh.get('status')
-                        published['live_reason'] = live_family_oh.get('reason')
+                        published["live_status"] = live_family_oh.get("status")
+                        published["live_reason"] = live_family_oh.get("reason")
                         family_cache[fid] = published
                     else:
                         family_cache[fid] = live_family_oh
+
             family_oh = family_cache.get(fid or -1, {})
             out.append(
                 {
@@ -563,7 +607,7 @@ def inventory_review(
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V2",
+        "contract_version": "BACKOFFICE_INVENTORY_V3",
         "category": cat,
         "query": q or None,
         "count": len(out),
@@ -571,12 +615,10 @@ def inventory_review(
         "search": search_meta,
         "rules": {
             "write_enabled": "OH_TRUE_STOCK_ONLY",
-            "search_scope": "CANONICAL_SERVER_SIDE_UPC_ARTICLE_FAMILY_ITEM",
-            "search_sort": "RELEVANCE_THEN_RECENT_POS_ACTIVITY",
+            "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
+            "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
         },
     }
-
-
 
 def _ensure_price_acceptance_table(cur) -> None:
     cur.execute(
