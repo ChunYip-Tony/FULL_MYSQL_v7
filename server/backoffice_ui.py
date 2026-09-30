@@ -1844,7 +1844,7 @@ function mobileShowDetail(title,sub,html,{historyMode='push'}={}){
 function mobileOpenItem(key){
   mobileState.currentDetailKey=String(key??'');
   const mod=mobileState.module;
-  if(mod==='quick')return mobileQuickDetail(key,false);
+  if(mod==='quick')return mobileOpenQuickDetail(key);
   if(mod==='qa')return openQAIssue(key);
   if(mod==='price')return openPriceDetail(key);
   if(mod==='performance')return mobilePerformanceDetail(key);
@@ -1936,7 +1936,43 @@ async function mobileLoadQuick7d(upc){
     box.innerHTML='<div class="m-error">7-day history unavailable: '+esc(e.message||String(e))+'</div>';
   }
 }
-function mobileQuickDetail(key,piMode){
+async function mobileOpenQuickDetail(key){
+  const upc=String(key||'').trim();
+  const preview=state.inventory.find(x=>String(x.upc||'')===upc);
+  const title=upc||'UPC Detail';
+  const sub=(preview?.name||preview?.family_name||'')+(preview?.chinese_name?' · '+preview.chinese_name:'');
+  mobileShowDetail(
+    title,
+    sub,
+    '<div class="m-detailcard"><div class="m-loading">Loading current UPC detail…</div></div>',
+    {historyMode:'push'}
+  );
+  try{
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),12000);
+    let d;
+    try{
+      d=await api(
+        '/v1/backoffice/inventory?category=ALL&limit=20&lightweight=false&q='+encodeURIComponent(upc),
+        {signal:controller.signal}
+      );
+    }finally{
+      clearTimeout(timeout);
+    }
+    const full=(d.rows||[]).find(x=>String(x.upc||'')===upc);
+    if(!full)throw new Error('UPC detail was not found.');
+    const idx=state.inventory.findIndex(x=>String(x.upc||'')===upc);
+    if(idx>=0)state.inventory[idx]={...state.inventory[idx],...full};
+    else state.inventory.push(full);
+    mobileQuickDetail(upc,false,{historyMode:'none'});
+  }catch(e){
+    const msg=e?.name==='AbortError'
+      ? 'UPC detail timed out. Please retry.'
+      : (e.message||String(e));
+    mNode('mobileDetailContent').innerHTML='<div class="m-error">'+esc(msg)+'</div>';
+  }
+}
+function mobileQuickDetail(key,piMode,{historyMode='push'}={}){
   let r=null;
   if(piMode)r=state.inventory.find(x=>String(x.family_article||x.upc)===String(key));
   else r=state.inventory.find(x=>String(x.upc)===String(key));
@@ -1964,7 +2000,7 @@ function mobileQuickDetail(key,piMode){
   if(r.family_article)html+='<button id="mAdjustOH" type="button" class="m-action primary">Update True Stock / OH</button>';
   html+='</div>';
   if(!piMode&&r.upc)html+='<div id="mQuick7dSection" class="m-quick7d"><div class="m-loading">Loading 7-day sales history…</div></div>';
-  mobileShowDetail(title,sub,html);
+  mobileShowDetail(title,sub,html,{historyMode});
   const btn=mNode('mAdjustOH');if(btn)btn.onclick=()=>openOH({family:r.family_article,uom:r.family_oh_uom||'',oh:r.family_oh??'',name:r.family_name||r.name||''});
   if(!piMode&&r.upc)mobileLoadQuick7d(r.upc);
 }
@@ -2239,7 +2275,8 @@ async function loadInventory(){
  err.innerHTML='';
  $('#invRows').innerHTML='<tr><td colspan="11" class="loading">Loading...</td></tr>';
  try{
-   const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=300${q?'&q='+encodeURIComponent(q):''}`;
+   const light=(isMobileBackoffice()&&mobileState.module==='quick');
+   const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=${light?120:300}&lightweight=${light?'true':'false'}${q?'&q='+encodeURIComponent(q):''}`;
    const controller=new AbortController();
    const timeout=setTimeout(()=>controller.abort(),8000);
    let d;
