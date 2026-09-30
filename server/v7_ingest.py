@@ -59,7 +59,7 @@ def find_active_batch() -> dict[str,Any]|None:
         row=cur.fetchone()
         if row:
             cur.execute(
-                """SELECT pipeline_run_id,stage_name,processing_status,code_version,started_at
+                """SELECT pipeline_run_id,stage_name,processing_status,code_version,started_at,detail_json
                    FROM pipeline_run
                    WHERE batch_id=%s
                      AND pipeline_name=%s
@@ -71,11 +71,51 @@ def find_active_batch() -> dict[str,Any]|None:
             )
             active_run=cur.fetchone()
             if active_run:
+                detail={}
+                try:
+                    parsed=json.loads(active_run.get('detail_json') or '{}')
+                    if isinstance(parsed,dict):
+                        detail=parsed
+                except Exception:
+                    detail={}
+                run_status=str(active_run.get('processing_status') or '').upper()
+                run_version=str(active_run.get('code_version') or '')
+                heartbeat_epoch=detail.get('heartbeat_epoch')
+                heartbeat_age_seconds=None
+                try:
+                    if heartbeat_epoch is not None:
+                        heartbeat_age_seconds=max(0,int(time.time())-int(heartbeat_epoch))
+                except Exception:
+                    heartbeat_age_seconds=None
+                heartbeat_fresh=(
+                    heartbeat_age_seconds is not None
+                    and heartbeat_age_seconds<=STATUS_HEARTBEAT_FRESH_SECONDS
+                )
+                version_matches=(not run_version) or run_version==API_VERSION
+                last_stage=detail.get('phase3_stage') or detail.get('last_phase3_stage')
                 row['active_pipeline_run_id']=active_run.get('pipeline_run_id')
                 row['active_stage_name']=active_run.get('stage_name')
                 row['active_run_status']=active_run.get('processing_status')
-                row['active_code_version']=active_run.get('code_version')
+                row['active_code_version']=run_version
                 row['active_run_started_at']=active_run.get('started_at')
+                row['active_phase3_stage']=(
+                    last_stage
+                    if run_status in {'STARTED','PAUSE_REQUESTED'}
+                    and heartbeat_fresh
+                    and version_matches
+                    else None
+                )
+                row['active_last_phase3_stage']=last_stage
+                row['active_stage_live']=bool(
+                    last_stage
+                    and run_status in {'STARTED','PAUSE_REQUESTED'}
+                    and heartbeat_fresh
+                    and version_matches
+                )
+                row['active_heartbeat_at']=detail.get('heartbeat_at')
+                row['active_heartbeat_age_seconds']=heartbeat_age_seconds
+                row['active_heartbeat_fresh']=heartbeat_fresh
+                row['active_worker']=detail.get('worker')
         cur.close()
     if row:
         row['device_id']=_device_from_notes(row.get('notes'))
