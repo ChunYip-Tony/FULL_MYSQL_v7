@@ -4918,6 +4918,8 @@ def performance_report(
         "analysis":analysis,
         "narrative_analysis":narrative_analysis,
         "report_date_top_sellers":day_items[:20],
+        "report_date_items":day_items[:limit],
+        "report_date_item_limit":limit,
         "top_urgent_price_suggestions":suggestions,
         "top_urgent_limit":limit,
         "price_suggestion_rules":{
