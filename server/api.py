@@ -3450,7 +3450,7 @@ def backoffice_ordering(category:str='ALL'):
 
 
 @app.get('/v1/backoffice/pricing-review')
-def backoffice_pricing(category:str='ALL',limit:int=100):
+def backoffice_pricing(category:str='ALL',limit:int=1000):
     try:
         result=backoffice_pricing_review(category=category,limit=limit)
     except ValueError as exc:
