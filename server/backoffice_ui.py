@@ -324,7 +324,8 @@ async function loadDatabaseOverview(){
     state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
     const latest=state.recent[0]||null;
     $('#dbOverviewActive').innerHTML=activeCard(state.active);
-    $('#dbLatestBatch').innerHTML=latest?activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'}):'<div class="empty">No completed batch history.</div>';
+    $('#dbLatestBatch').innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';
+    wireRebuildButtons($('#dbLatestBatch'));
     $('#dbProcessingSummary').textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch');
     const fixable=state.qaIssues.filter(x=>x.can_fix).length;
     $('#dbQASummary').textContent=state.qaIssues.length?`${state.qaIssues.length} open · ${fixable} fixable`:'No open QA issues';
@@ -334,8 +335,40 @@ async function loadDatabaseOverview(){
     const status=$('#dbOverallStatus');status.textContent=hasProblem?'ATTENTION':(state.active?'PROCESSING':'READY');status.className='pill '+(hasProblem?'amber':state.active?'sea':'green');
   }catch(e){if(err)err.innerHTML=`<div class="error">${esc(e.message)}</div>`;const st=$('#dbOverallStatus');if(st){st.textContent='CHECK FAILED';st.className='pill red'}}
 }
+function batchRebuildEligible(b){
+  const p2=String(b?.phase2c_status||'').toUpperCase();
+  const p3=String(b?.phase3_status||b?.processing_status||'').toUpperCase();
+  return p2==='READY' && ['QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','PHASE3_QA_HOLD'].includes(p3);
+}
+function rebuildActionHtml(b,compact=false){
+  if(!b||!batchRebuildEligible(b))return '';
+  return `<div style="${compact?'margin-top:8px':'margin-top:10px'};display:flex;justify-content:flex-end"><button class="btn primary batch-rebuild-btn" data-batch="${esc(b.batch_id)}">🔄 Rebuild Phase 3 / QA</button></div>`;
+}
+function wireRebuildButtons(root=document){
+  root.querySelectorAll('.batch-rebuild-btn').forEach(btn=>{
+    btn.onclick=e=>{e.stopPropagation();rebuildPhase3(btn.dataset.batch)}
+  });
+}
+async function rebuildPhase3(id){
+  const b=state.recent.find(x=>String(x.batch_id)===String(id));
+  if(!b){toast('Batch detail is not loaded yet');return}
+  if(!batchRebuildEligible(b)){toast('This batch is not currently eligible for Phase 3 rebuild');return}
+  if(!window.confirm(`Rebuild Phase 3 / QA for Batch #${b.batch_id}?\n\nRAW files will not be re-uploaded. The current Quick Check snapshot remains active until the rebuild commits.`))return;
+  const buttons=[...document.querySelectorAll(`.batch-rebuild-btn[data-batch="${CSS.escape(String(b.batch_id))}"]`)];
+  buttons.forEach(x=>{x.disabled=true;x.textContent='Queuing Rebuild…'});
+  try{
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id)}/rebuild-phase3`,{method:'POST'});
+    toast(d.already_active?'Phase 3 rebuild is already active':'Phase 3 / QA rebuild queued');
+    closeDrawer();
+    showDbTab('dbbatches');
+    await loadBatches();
+  }catch(e){
+    toast(e.message);
+    buttons.forEach(x=>{x.disabled=false;x.textContent='🔄 Rebuild Phase 3 / QA'});
+  }
+}
 function activeCard(a){if(!a)return '<div class="empty">No active batch.</div>';const id=a.batch_id||a.id||'—',status=a.processing_status||a.status||'PROCESSING';return `<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #${esc(id)}</div><div class="meta">${esc(a.batch_label||'Active upload')}</div></div>${pill(status)}</div><div class="batchmeta"><div><small>Files</small><b>${fmt(a.file_count,0)}</b></div><div><small>Started</small><b>${esc(a.upload_started_at||'—')}</b></div><div><small>Status</small><b>${esc(status)}</b></div></div></div>`}
-async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];const activeEl=$('#activeBatch');if(activeEl)activeEl.innerHTML=activeCard(state.active);const overviewActive=$('#dbOverviewActive');if(overviewActive)overviewActive.innerHTML=activeCard(state.active);const batchRows=$('#batchRows');if(batchRows){batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}const latest=state.recent[0]||null;const latestEl=$('#dbLatestBatch');if(latestEl)latestEl.innerHTML=latest?activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'}):'<div class="empty">No completed batch history.</div>';const ps=$('#dbProcessingSummary');if(ps)ps.textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch')}catch(e){const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(e.message)}</div>`;const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(e.message)}</div>`}}
+async function loadBatches(){try{const [a,r]=await Promise.all([api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=20')]);state.active=a.active_batch||null;state.recent=r.batches||[];const activeEl=$('#activeBatch');if(activeEl)activeEl.innerHTML=activeCard(state.active);const overviewActive=$('#dbOverviewActive');if(overviewActive)overviewActive.innerHTML=activeCard(state.active);const batchRows=$('#batchRows');if(batchRows){batchRows.innerHTML=state.recent.map(b=>`<tr class="batchrow" data-id="${esc(b.batch_id)}"><td><b>#${esc(b.batch_id)}</b><div class="meta">${esc(b.batch_label||'')}</div></td><td>${pill(b.processing_status)}</td><td>${fmt(b.file_count,0)}</td><td>${esc(b.upload_started_at||'—')}</td><td>${esc(b.completed_at||'—')}</td><td>${pill(b.phase3_status||'—')}</td><td>${fmt(b.quick_check_ready_rows,0)} / ${fmt(b.quick_check_hold_rows,0)}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No recent completed batches.</td></tr>';$$('.batchrow').forEach(x=>x.onclick=()=>openBatchDetail(x.dataset.id))}const latest=state.recent[0]||null;const latestEl=$('#dbLatestBatch');if(latestEl){latestEl.innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';wireRebuildButtons(latestEl)}const ps=$('#dbProcessingSummary');if(ps)ps.textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch')}catch(e){const be=$('#batchError');if(be)be.innerHTML=`<div class="error">${esc(e.message)}</div>`;const oe=$('#dbOverviewError');if(oe)oe.innerHTML=`<div class="error">${esc(e.message)}</div>`}}
 function openBatchDetail(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));if(!b)return;
   const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b);
