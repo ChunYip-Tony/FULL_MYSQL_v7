@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.232 Single-Service Edition
+Version: 7.0.233 Single-Service Edition
+
+v7.0.233 Live Current Price Serving Resolution:
+- Current Price is re-resolved from canonical FULL MYSQL observations at response time instead of relying only on the last Phase 3 quick_check_current snapshot.
+- Authority remains: newest valid Price List snapshot vs newer eligible SINGLE_DATE POS sold event; same-date Price List wins.
+- Search results, Family related UPCs, UPC detail, Price detail, Performance rows, Inventory Review, and Pricing Review now receive the live price overlay.
+- Price source, price type, and as-of date travel with the live-resolved price.
+- Current GP% is recalculated when a live price differs from the stored serving snapshot.
+- This prevents later accepted Price Lists or later single-day POS sales from being hidden until the next full Quick Check rebuild.
 
 v7.0.232 Current Price + Qualified Pricing Review:
 - Current Price on every Backoffice surface uses canonical Quick Check CURRENT and is displayed with source/as-of wherever an item price is shown.
