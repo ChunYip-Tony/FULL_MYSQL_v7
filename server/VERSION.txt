@@ -1,5 +1,13 @@
 FULL MYSQL Secure API Architecture
-Version: 7.0.234 Single-Service Edition
+
+v7.0.240 Current Price = Newest UPC Price Evidence:
+- Current Price compares each UPC's newest valid Price List evidence against its newest valid SINGLE_DATE POS sold event.
+- POS calculated price is Sales $ / Sold Quantity for the newest sold-event date and selected price type.
+- The globally latest POS date no longer suppresses an item's own last valid sold-price evidence.
+- Price List is no longer restricted to today's snapshot; the newest valid active Price List observation remains eligible until replaced.
+- Newer evidence wins. Same business date uses Price List as the point-in-time configured-price snapshot.
+- Serving source for POS-calculated current price is exposed as POS_CALCULATED.
+Version: 7.0.240 Single-Service Edition
 
 v7.0.234 Live Current Price Serving Resolution:
 - Current Price is re-resolved from canonical FULL MYSQL observations at response time instead of relying only on the last Phase 3 quick_check_current snapshot.
