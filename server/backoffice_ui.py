@@ -1060,7 +1060,7 @@ function openQAIssue(key){
 }
 $('#qaSearch').oninput=e=>{state.qaText=e.currentTarget.value;renderQA()};
 $('#qaSort').onchange=e=>{state.qaSort=e.currentTarget.value;renderQA()};
-$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
+$$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
 $('#qaRefresh').onclick=loadQA;
 
 async function loadDatabaseOverview(){
