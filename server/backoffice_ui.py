@@ -1503,8 +1503,8 @@ function mobileRenderQuickTools(){
    mNode('mobileListSub').textContent=q?'Searching: '+q:'Most actively selling Families first';
    mNode('mobileListContent').innerHTML='<div class="m-loading">'+(q?'Searching…':'Loading recent activity…')+'</div>';
    try{
-     await loadInventory();
-     if(seq!==mobileQuickSearchSeq)return;
+     const accepted=await loadInventory();
+     if(seq!==mobileQuickSearchSeq||accepted===false)return;
      mobileRenderList();
      mNode('mobileListSub').textContent=q
        ? 'Results for “'+q+'” · Family grouped · 7D velocity ↓'
