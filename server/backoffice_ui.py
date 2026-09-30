@@ -1121,6 +1121,16 @@ BACKOFFICE_HTML = r'''<!doctype html>
     box-shadow:0 3px 10px rgba(0,0,0,.10)!important;
   }
 }
+
+/* Performance auto-analysis: no extra Apply button */
+.m-perf-status{
+  min-height:16px;
+  font-size:10px;
+  line-height:1.3;
+  font-weight:750;
+  color:var(--muted);
+}
+.m-perftools.working .m-perf-status{color:var(--sea)}
 </style>
 </head>
 <body>
@@ -1181,7 +1191,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
       <option value="price_desc">Highest Avg Sold Price</option>
       <option value="name">Item A → Z</option>
     </select></label>
-    <button id="mPerfApply" type="button" class="btn primary">Analyze Range</button>
+    <div id="mPerfStatus" class="m-perf-status" aria-live="polite"></div>
   </div>
   <div id="mobileListContent" class="m-list"></div>
   <nav class="m-bottomnav" aria-label="Mobile Backoffice navigation">
@@ -1541,42 +1551,42 @@ function mobileRenderPerformanceTools(){
  if(!on)return;
  syncPerformanceDateControls();
 
- const start=mNode('mPerfStart'),end=mNode('mPerfEnd'),sort=mNode('mPerfSort'),apply=mNode('mPerfApply');
+ const start=mNode('mPerfStart'),end=mNode('mPerfEnd'),sort=mNode('mPerfSort'),status=mNode('mPerfStatus');
  sort.value=state.salesSort||'gp_desc';
 
- start.onchange=()=>{state.salesStartDate=start.value};
- end.onchange=()=>{state.salesEndDate=end.value};
- sort.onchange=()=>{
-   state.salesSort=sort.value;
-   renderSales();
-   mobileRenderList();
- };
-
- apply.onclick=async()=>{
+ const refreshRange=async()=>{
    state.salesStartDate=start.value;
    state.salesEndDate=end.value;
-   state.salesSort=sort.value;
-   const oldLabel=apply.textContent;
-   apply.disabled=true;
-   apply.textContent='Analyzing…';
+   if(state.salesStartDate>state.salesEndDate){
+     if(status)status.textContent='Start Date must be on or before End Date.';
+     return;
+   }
    box.classList.add('working');
-   mNode('mobileListContent').innerHTML='<div class="m-loading">Analyzing '+esc(state.salesStartDate)+' → '+esc(state.salesEndDate)+'…</div>';
+   if(status)status.textContent='Updating…';
+   mNode('mobileListContent').innerHTML='<div class="m-loading">Updating '+esc(state.salesStartDate)+' → '+esc(state.salesEndDate)+'…</div>';
    try{
      const ok=await loadSell();
      if(!ok)throw new Error(state.salesLastError||'Unable to analyze this date range.');
      mobileRenderList();
      mNode('mobileListSub').textContent='Showing '+state.salesStartDate+' → '+state.salesEndDate+' · '+(state.salesRows||[]).length+' items · '+sort.options[sort.selectedIndex].text;
-     apply.textContent='Updated ✓';
-     setTimeout(()=>{if(apply)apply.textContent='Analyze Range'},1000);
+     if(status)status.textContent='Updated';
    }catch(e){
      state.salesLastError=e.message||String(e);
      mNode('mobileListContent').innerHTML='<div class="m-error">'+esc(state.salesLastError)+'</div>';
-     apply.textContent='Try Again';
+     if(status)status.textContent=state.salesLastError;
    }finally{
-     apply.disabled=false;
      box.classList.remove('working');
-     if(apply.textContent===oldLabel)apply.textContent='Analyze Range';
    }
+ };
+
+ start.onchange=refreshRange;
+ end.onchange=refreshRange;
+ sort.onchange=()=>{
+   state.salesSort=sort.value;
+   renderSales();
+   mobileRenderList();
+   mNode('mobileListSub').textContent='Showing '+state.salesStartDate+' → '+state.salesEndDate+' · '+(state.salesRows||[]).length+' items · '+sort.options[sort.selectedIndex].text;
+   if(status)status.textContent='';
  };
 }
 async function mobileRefreshHome(){
