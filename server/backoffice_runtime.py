@@ -13,6 +13,7 @@ from webapp_v2_runtime import (
     _family_receipt_events,
     bulk_ordering_suggestions,
     performance_report,
+    search_items,
 )
 
 
@@ -315,30 +316,121 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
     }
 
 
-def inventory_review(limit: int = 200, category: str = "ALL") -> dict[str, Any]:
+def inventory_review(
+    limit: int = 200,
+    category: str = "ALL",
+    query: str | None = None,
+) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
     limit = max(1, min(int(limit or 200), 500))
+    q = str(query or "").strip()
+
+    # Search is server-side and uses the canonical V2 identity search contract.
+    # This avoids the old behavior where the browser only filtered the first
+    # 300 preloaded Inventory rows.
+    search_meta: dict[str, Any] | None = None
+    ranked_upcs: list[str] = []
+    ranked_families: list[int] = []
+    ranked_articles: list[str] = []
+    relevance_by_upc: dict[str, int] = {}
+    relevance_by_family: dict[int, int] = {}
+    relevance_by_article: dict[str, int] = {}
+
+    if q:
+        search_meta = search_items(q, min(limit, 100))
+        for result in search_meta.get("results") or []:
+            rtype = str(result.get("result_type") or "").upper()
+            rel = int(result.get("relevance") or 0)
+            if rtype == "UPC":
+                upc = str(result.get("number") or "").strip()
+                if upc and upc not in relevance_by_upc:
+                    ranked_upcs.append(upc)
+                    relevance_by_upc[upc] = rel
+            elif rtype == "FAMILY":
+                fid = result.get("family_id")
+                if fid is not None:
+                    fid = int(fid)
+                    if fid not in relevance_by_family:
+                        ranked_families.append(fid)
+                        relevance_by_family[fid] = rel
+            elif rtype == "ARTICLE":
+                article = str(result.get("number") or "").strip()
+                if article and article not in relevance_by_article:
+                    ranked_articles.append(article)
+                    relevance_by_article[article] = rel
 
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
-        if cat == "ALL":
-            cur.execute(
-                """SELECT * FROM quick_check_current
-                   ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
-                   LIMIT %s""",
-                (limit,),
-            )
+
+        if q:
+            clauses: list[str] = []
+            params: list[Any] = []
+            if ranked_upcs:
+                ph = ",".join(["%s"] * len(ranked_upcs))
+                clauses.append(f"ean_upc IN ({ph})")
+                params.extend(ranked_upcs)
+            if ranked_families:
+                ph = ",".join(["%s"] * len(ranked_families))
+                clauses.append(f"family_id IN ({ph})")
+                params.extend(ranked_families)
+            if ranked_articles:
+                ph = ",".join(["%s"] * len(ranked_articles))
+                clauses.append(f"article_number IN ({ph})")
+                params.extend(ranked_articles)
+
+            if not clauses:
+                qrows = []
+            else:
+                category_clause = ""
+                if cat != "ALL":
+                    category_clause = " AND UPPER(COALESCE(product_class,''))=%s"
+                    params.append(cat)
+                cur.execute(
+                    f"""SELECT * FROM quick_check_current
+                        WHERE ({' OR '.join(clauses)})
+                        {category_clause}
+                        ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
+                        LIMIT %s""",
+                    (*params, limit),
+                )
+                qrows = cur.fetchall()
+
+            def _search_rank(row: dict[str, Any]) -> tuple[int, float, str]:
+                upc = str(row.get("ean_upc") or "")
+                fid = int(row["family_id"]) if row.get("family_id") is not None else None
+                article = str(row.get("article_number") or "")
+                rel = max(
+                    relevance_by_upc.get(upc, 0),
+                    relevance_by_family.get(fid, 0) if fid is not None else 0,
+                    relevance_by_article.get(article, 0),
+                )
+                return (
+                    -rel,
+                    -float(row.get("pos_qty_7d") or 0),
+                    upc,
+                )
+
+            qrows.sort(key=_search_rank)
         else:
-            cur.execute(
-                """SELECT * FROM quick_check_current
-                   WHERE UPPER(COALESCE(product_class,''))=%s
-                   ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
-                   LIMIT %s""",
-                (cat, limit),
-            )
-        qrows = cur.fetchall()
+            if cat == "ALL":
+                cur.execute(
+                    """SELECT * FROM quick_check_current
+                       ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
+                       LIMIT %s""",
+                    (limit,),
+                )
+            else:
+                cur.execute(
+                    """SELECT * FROM quick_check_current
+                       WHERE UPPER(COALESCE(product_class,''))=%s
+                       ORDER BY COALESCE(pos_qty_7d,0) DESC,ean_upc
+                       LIMIT %s""",
+                    (cat, limit),
+                )
+            qrows = cur.fetchall()
+
         family_cache: dict[int, dict[str, Any]] = {}
         out = []
         for row in qrows:
@@ -375,11 +467,17 @@ def inventory_review(limit: int = 200, category: str = "ALL") -> dict[str, Any]:
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V1",
+        "contract_version": "BACKOFFICE_INVENTORY_V2",
         "category": cat,
+        "query": q or None,
         "count": len(out),
         "rows": out,
-        "rules": {"write_enabled": "OH_TRUE_STOCK_ONLY"},
+        "search": search_meta,
+        "rules": {
+            "write_enabled": "OH_TRUE_STOCK_ONLY",
+            "search_scope": "CANONICAL_SERVER_SIDE_UPC_ARTICLE_FAMILY_ITEM",
+            "search_sort": "RELEVANCE_THEN_RECENT_POS_ACTIVITY",
+        },
     }
 
 
