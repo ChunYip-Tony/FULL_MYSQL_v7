@@ -2741,7 +2741,7 @@ function mobileRenderList(){
   }else if(mobileState.module==='pi'){
     html=rows.map(r=>mobileRow(String(r.family_article||r.upc||''),r.family_article||r.upc,r.family_name||r.name,fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' OH · '+fmt(r.qty_7d)+' 7D · DOS '+fmt(r.dos),'OH',r.chinese_name||'')).join('');
   }else if(mobileState.module==='batches'){
-    html=rows.map(b=>mobileRow((b._mobileActive?'active:':'batch:')+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Completed batch'),(b.file_count??'—')+' file(s) · '+(b.quick_check_ready_rows??'—')+' ready · '+(b.quick_check_hold_rows??'—')+' hold',b._mobileActive?(b.processing_status||b.status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
+    html=rows.map(b=>mobileRow((b._mobileActive?'active:':'batch:')+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Completed batch'),(b.file_count??'—')+' file(s) · '+(b.quick_check_ready_rows??'—')+' ready · '+(b.quick_check_hold_rows??'—')+' hold',b._mobileActive?(b.active_run_status||b.processing_status||b.status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
   }else if(mobileState.module==='uploads'){
     html=rows.map(b=>b._mobileNewUpload?mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD',''):mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Upload history'),(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—'),b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
   }else if(mobileState.module==='freshness'){
@@ -3002,15 +3002,29 @@ function mobileOrderingDetail(key){
 function mobileActiveBatchDetail(){
   const b=state.active;if(!b)return;
   const waiting=batchResumeEligible(b);
+  const runStatus=String(b.active_run_status||'').toUpperCase();
+  const runStage=String(b.active_stage_name||'').toUpperCase();
+  const hasActiveRun=Boolean(b.active_pipeline_run_id&&runStatus);
+  const displayStatus=hasActiveRun?runStatus:(b.processing_status||b.status||'PROCESSING');
   let html='<div class="m-detailcard"><div class="m-label">Current Batch</div><div class="m-detailgrid">';
   html+=mobileMetric('Batch','#'+(b.batch_id||b.id||'—'),b.batch_label||'Active processing');
   html+=mobileMetric('Files',String(b.file_count??'—'),'Source files');
-  html+=mobileMetric('Started',b.upload_started_at||'—','Upload start');
-  html+=mobileMetric('Status',b.processing_status||b.status||'PROCESSING','Current pipeline state');
-  html+='</div><div class="m-detailsection"><h3>Processing</h3><p>'+(waiting?'Past: Phase 2C complete. Current: waiting for Phase 3. Next: Phase 3 rebuild → QA → Quick Check.':'This batch is still active.')+'</p></div>';
-  if(waiting)html+='<button id="mResumePhase3" type="button" class="m-action primary">Retry Phase 3</button>';
+  html+=mobileMetric('Started',b.active_run_started_at||b.upload_started_at||'—',hasActiveRun?'Active run start':'Upload start');
+  html+=mobileMetric('Status',displayStatus,hasActiveRun?(runStage||'Phase 3 rerun'):'Current pipeline state');
+  if(hasActiveRun){
+    html+=mobileMetric('Run ID','#'+b.active_pipeline_run_id,(b.active_code_version||'')+(runStage?' · '+runStage:''));
+    html+=mobileMetric('Previous Result',b.processing_status||'—','Last committed batch result');
+  }
+  html+='</div><div class="m-detailsection"><h3>Processing</h3><p>';
+  if(hasActiveRun){
+    html+='Phase 3 rebuild is currently <b>'+esc(displayStatus)+'</b>. Do not submit another rebuild while Run #'+esc(b.active_pipeline_run_id)+' is active.';
+  }else{
+    html+=waiting?'Past: Phase 2C complete. Current: waiting for Phase 3. Next: Phase 3 rebuild → QA → Quick Check.':'This batch is still active.';
+  }
+  html+='</p></div>';
+  if(waiting&&!hasActiveRun)html+='<button id="mResumePhase3" type="button" class="m-action primary">Retry Phase 3</button>';
   html+='</div>';
-  mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),b.processing_status||b.status||'PROCESSING',html);
+  mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),displayStatus,html);
   const btn=mNode('mResumePhase3');if(btn)btn.onclick=()=>resumePhase3(b.batch_id||b.id);
 }
 async function mobileLoadFreshness(){
