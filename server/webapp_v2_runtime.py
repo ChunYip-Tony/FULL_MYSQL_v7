@@ -5119,6 +5119,7 @@ def performance_report(
                 "selling_uom":row.get("selling_uom"),
                 "upc_role":_upc_role(row),
                 "current_price":current,
+                "current_price_type":row.get("current_price_type"),
                 "current_price_basis":price_opt.get("current_price_basis"),
                 "current_price_source":price_opt.get("current_price_source"),
                 "current_price_observed_date":price_opt.get("current_price_observed_date"),
