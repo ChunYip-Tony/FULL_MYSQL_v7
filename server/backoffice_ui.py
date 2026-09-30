@@ -2497,6 +2497,13 @@ function mobileQuickFamilyGroups(rows){
       source_movement_7d:r.family_source_movement_7d,
       source_movement_uom:r.family_source_movement_uom||'',
       source_movement_status:r.family_source_movement_status||'',
+      group_movement_basis:r.family_group_movement_basis||'',
+      direct_251_252_7d:r.family_direct_251_252_7d,
+      direct_251_252_uom:r.family_direct_251_252_uom||'',
+      conversion_317_318_7d:r.family_conversion_317_318_7d,
+      conversion_317_318_uom:r.family_conversion_317_318_uom||'',
+      conversion_317_318_status:r.family_conversion_317_318_status||'',
+      source_rows:[],
       family_receipt_verified:!!r.family_receipt_verified,
       family_receipt_movement_type:r.family_receipt_movement_type||'',
       family_receipt_date:r.family_receipt_date||'',
@@ -2522,6 +2529,12 @@ function mobileQuickFamilyGroups(rows){
     if((g.source_movement_7d===null||g.source_movement_7d===undefined)&&r.family_source_movement_7d!==null&&r.family_source_movement_7d!==undefined)g.source_movement_7d=r.family_source_movement_7d;
     if(!g.source_movement_uom&&r.family_source_movement_uom)g.source_movement_uom=String(r.family_source_movement_uom);
     if(!g.source_movement_status&&r.family_source_movement_status)g.source_movement_status=String(r.family_source_movement_status);
+    if(!g.group_movement_basis&&r.family_group_movement_basis)g.group_movement_basis=String(r.family_group_movement_basis);
+    if((g.direct_251_252_7d===null||g.direct_251_252_7d===undefined)&&r.family_direct_251_252_7d!==null&&r.family_direct_251_252_7d!==undefined)g.direct_251_252_7d=r.family_direct_251_252_7d;
+    if(!g.direct_251_252_uom&&r.family_direct_251_252_uom)g.direct_251_252_uom=String(r.family_direct_251_252_uom);
+    if((g.conversion_317_318_7d===null||g.conversion_317_318_7d===undefined)&&r.family_conversion_317_318_7d!==null&&r.family_conversion_317_318_7d!==undefined)g.conversion_317_318_7d=r.family_conversion_317_318_7d;
+    if(!g.conversion_317_318_uom&&r.family_conversion_317_318_uom)g.conversion_317_318_uom=String(r.family_conversion_317_318_uom);
+    if(!g.conversion_317_318_status&&r.family_conversion_317_318_status)g.conversion_317_318_status=String(r.family_conversion_317_318_status);
     if(!g.family_receipt_verified&&r.family_receipt_verified)g.family_receipt_verified=true;
     if(!g.family_receipt_movement_type&&r.family_receipt_movement_type)g.family_receipt_movement_type=String(r.family_receipt_movement_type);
     if(!g.family_receipt_date&&r.family_receipt_date)g.family_receipt_date=String(r.family_receipt_date);
@@ -2557,6 +2570,11 @@ function mobileQuickFamilyGroups(rows){
     });
 
     const assigned=String(r.receiving_article||'').trim();
+    const sourceKey=String(g.source_article||g.family_article||'').trim();
+    if(assigned&&sourceKey&&assigned===sourceKey){
+      g.source_rows.push(r);
+      return;
+    }
     const recvKey=assigned||'UNRESOLVED';
     if(!g.receiving.has(recvKey))g.receiving.set(recvKey,{
       article_number:assigned||null,
@@ -2580,6 +2598,7 @@ function mobileQuickFamilyGroups(rows){
   const out=[...groups.values()];
   out.forEach(g=>{
     g.rows.sort((a,b)=>Number(b.velocity_7d||0)-Number(a.velocity_7d||0)||Number(b.qty_7d||0)-Number(a.qty_7d||0)||String(a.upc||'').localeCompare(String(b.upc||'')));
+    g.source_rows.sort((a,b)=>Number(b.velocity_7d||0)-Number(a.velocity_7d||0)||Number(b.qty_7d||0)-Number(a.qty_7d||0)||String(a.upc||'').localeCompare(String(b.upc||'')));
     g.receiving=[...g.receiving.values()];
     g.receiving.forEach(a=>a.rows.sort((x,y)=>Number(y.velocity_7d||0)-Number(x.velocity_7d||0)||Number(y.qty_7d||0)-Number(x.qty_7d||0)||String(x.upc||'').localeCompare(String(y.upc||''))));
     g.receiving.sort((a,b)=>{
@@ -2661,8 +2680,15 @@ function mobileQuickGroupedHtml(rows){
       {movement_type:g.family_receipt_movement_type,date:g.family_receipt_date,quantity:g.family_receipt_qty,uom:g.family_receipt_uom}
     );
     const sourceHasMvt=hasNonZero(g.source_movement_7d);
-    const sourceMvtText=sourceHasMvt
-      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">SAP 251−252 SOURCE · '+esc(g.source_article||g.family_article||'—')+' · '+esc(fmt(g.source_movement_7d)+(g.source_movement_uom?' '+g.source_movement_uom:''))+'</div>'
+    const hasConversion=(g.conversion_317_318_7d!==null&&g.conversion_317_318_7d!==undefined);
+    const directText=(g.direct_251_252_7d===null||g.direct_251_252_7d===undefined)
+      ? '0'
+      : fmt(g.direct_251_252_7d)+(g.direct_251_252_uom?' '+g.direct_251_252_uom:'');
+    const conversionText=hasConversion
+      ? fmt(g.conversion_317_318_7d)+(g.conversion_317_318_uom?' '+g.conversion_317_318_uom:'')
+      : '—';
+    const sourceMvtText=(sourceHasMvt||hasConversion)
+      ? '<div style="font-size:8px;font-weight:900;color:var(--muted);margin-top:3px">DIRECT 251−252 · '+esc(directText)+(hasConversion?' &nbsp;·&nbsp; 317/318 CONVERTED · '+esc(conversionText):'')+'</div>'
       : '';
     const familyPositiveMvt=Number.isFinite(Number(g.group_qty_7d))&&Number(g.group_qty_7d)>0;
     const familyHead='<div class="m-q-family-head'+(familyPositiveMvt?' has-positive-mvt':'')+'">'+
@@ -2672,6 +2698,26 @@ function mobileQuickGroupedHtml(rows){
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
       '</div>'+
     '</div>';
+
+    const sourceRows=Array.isArray(g.source_rows)?g.source_rows:[];
+    const sourceActiveRows=sourceRows.filter(r=>hasNonZero(r?.qty_7d));
+    const sourceInactiveRows=sourceRows.filter(r=>!hasNonZero(r?.qty_7d));
+    const sourceActiveHtml=sourceActiveRows.map(mobileQuickUpcHtml).join('');
+    const sourceHiddenId='m-q-family-upc-hidden-'+String(idx)+'-'+String(g.family_id??g.family_article??'family').replace(/[^A-Za-z0-9_-]/g,'');
+    const sourceInactiveHtml=sourceInactiveRows.map(mobileQuickUpcHtml).join('');
+    const sourceHiddenToggle=sourceInactiveRows.length
+      ? '<button type="button" class="m-q-hidden-toggle" data-hidden-target="'+esc(sourceHiddenId)+'" data-hidden-noun="UPC" aria-expanded="false">'+
+          '<span class="m-q-hidden-left"><span class="m-q-hidden-count">'+sourceInactiveRows.length+'</span><span>Show inactive UPC'+(sourceInactiveRows.length===1?'':'s')+'</span></span>'+
+          '<span class="m-q-hidden-chevron">⌄</span>'+
+        '</button>'+
+        '<div class="m-q-hidden-wrap m-q-upc-hidden-wrap" id="'+esc(sourceHiddenId)+'"><div class="m-q-hidden-inner">'+
+          '<div class="m-q-upc-hidden-note">Hidden by default · UPC 7D POS Qty = 0 / none.</div>'+
+          '<div class="m-q-upcs">'+sourceInactiveHtml+'</div>'+
+        '</div></div>'
+      : '';
+    const sourceUpcSection=(sourceActiveHtml||sourceHiddenToggle)
+      ? '<div class="m-q-family-source-upcs"><div style="font-size:7px;font-weight:900;color:var(--muted);padding:3px 6px 1px">FAMILY ARTICLE IS ALSO SAP SELLING ARTICLE</div><div class="m-q-upcs">'+sourceActiveHtml+sourceHiddenToggle+'</div></div>'
+      : '';
 
     const receiving=Array.isArray(g.receiving)?g.receiving:[];
     const verified=receiving
@@ -2764,7 +2810,7 @@ function mobileQuickGroupedHtml(rows){
       : '';
 
     const statusLine=gstatus?'<div style="font-size:7px;color:var(--muted);font-weight:850;padding:0 3px">'+esc(gstatus)+'</div>':'';
-    return '<section class="m-q-family-group q-family-tone-'+(idx%6)+'">'+familyHead+familyReceiptInfo+statusLine+'<div class="m-q-receiving-list">'+visibleHtml+hiddenToggle+'</div></section>';
+    return '<section class="m-q-family-group q-family-tone-'+(idx%6)+'">'+familyHead+sourceUpcSection+familyReceiptInfo+statusLine+'<div class="m-q-receiving-list">'+visibleHtml+hiddenToggle+'</div></section>';
   }).join('');
 }
 function mobileRenderList(){
