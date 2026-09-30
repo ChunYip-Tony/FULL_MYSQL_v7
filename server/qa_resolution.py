@@ -5,7 +5,12 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from db import db_conn
-from manual_overrides import ensure_override_table, apply_manual_upc_overrides
+from manual_overrides import (
+    ensure_override_table,
+    apply_manual_upc_overrides,
+    ensure_cost_conversion_table,
+    apply_manual_cost_conversions,
+)
 from phase3 import relink_history, refresh_quick_check_subset
 
 
@@ -135,6 +140,8 @@ def _fix_kind(issue_code: str, summary: str, detail: dict[str, Any]) -> str:
             json.dumps(detail or {}, ensure_ascii=False, default=str),
         ]
     ).upper()
+    if "COST_TO_SELLING_UOM_UNRESOLVED" in blob:
+        return "COST_CONVERSION"
     if any(token in blob for token in UOM_TOKENS):
         return "UOM_OR_IDENTITY"
     if code in FIXABLE_IDENTITY_CODES:
@@ -504,6 +511,239 @@ def resolve_qa_issue(
         "rules": {
             "raw_source_rows_modified": False,
             "write_scope": "USER_CONFIRMED_UPC_IDENTITY_UOM_OVERRIDE",
+            "targeted_quick_check_refreshed": True,
+        },
+    }
+
+
+def resolve_cost_conversion_issue(
+    *,
+    issue_id: int | None,
+    ean_upc: str,
+    selling_qty: Any,
+    selling_uom: str,
+    cost_qty: Any,
+    cost_uom: str,
+    note: str | None,
+    actor: str,
+    confirm: str,
+) -> dict[str, Any]:
+    """Store an exact user-confirmed cost-to-selling conversion.
+
+    This never edits source cost, sales, receipts, or RAW rows. It only records
+    the conversion authority needed to express an already-authoritative cost in
+    the UPC's selling unit, then refreshes the affected Quick Check row.
+    """
+    if confirm != "APPLY_COST_CONVERSION_FIX":
+        raise ValueError("CONFIRM_MUST_BE_APPLY_COST_CONVERSION_FIX")
+
+    ean = str(ean_upc or "").strip()
+    sell = str(selling_uom or "").strip().upper()
+    cuom = str(cost_uom or "").strip().upper()
+    if not ean:
+        raise ValueError("EAN_UPC_REQUIRED")
+    if not sell:
+        raise ValueError("SELLING_UOM_REQUIRED")
+    if not cuom:
+        raise ValueError("COST_UOM_REQUIRED")
+    try:
+        sq = Decimal(str(selling_qty))
+        cq = Decimal(str(cost_qty))
+    except (InvalidOperation, ValueError):
+        raise ValueError("CONVERSION_QUANTITY_INVALID")
+    if sq <= 0 or cq <= 0:
+        raise ValueError("CONVERSION_QUANTITIES_MUST_BE_POSITIVE")
+
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        ensure_cost_conversion_table(cur)
+        _ensure_resolution_table(cur)
+        conn.commit()
+
+        if _pipeline_busy(cur):
+            cur.close()
+            raise RuntimeError("PIPELINE_BUSY_RETRY_AFTER_ACTIVE_BATCH_FINISHES")
+
+        current = _serving_row(cur, ean) or _active_identity(cur, ean) or {}
+        current_sell = str(current.get("selling_uom") or "").strip().upper()
+        if current_sell and current_sell in {"PAC","PACK"}:
+            current_sell = "PACK"
+        input_sell = "PACK" if sell in {"PAC","PACK"} else sell
+        if current_sell and current_sell != input_sell:
+            cur.close()
+            raise ValueError(
+                f"SELLING_UOM_MISMATCH_CURRENT:{current.get('selling_uom')}"
+            )
+
+        cur.execute("SELECT uom_code FROM dim_uom WHERE UPPER(uom_code)=UPPER(%s) LIMIT 1", (sell,))
+        if not cur.fetchone():
+            cur.close()
+            raise ValueError("SELLING_UOM_NOT_IN_DIM_UOM")
+        cur.execute("SELECT uom_code FROM dim_uom WHERE UPPER(uom_code)=UPPER(%s) LIMIT 1", (cuom,))
+        if not cur.fetchone():
+            cur.close()
+            raise ValueError("COST_UOM_NOT_IN_DIM_UOM")
+
+        issue_row = None
+        if issue_id is not None:
+            cur.execute(
+                """SELECT issue_id,batch_id,issue_code,entity_type,entity_key,
+                          issue_summary,detail_json,issue_status
+                   FROM qa_phase3_issue
+                   WHERE issue_id=%s
+                   LIMIT 1""",
+                (int(issue_id),),
+            )
+            issue_row = cur.fetchone()
+            if not issue_row:
+                cur.close()
+                raise ValueError("QA_ISSUE_NOT_FOUND")
+            if str(issue_row.get("issue_status") or "").upper() != "OPEN":
+                cur.close()
+                raise ValueError("QA_ISSUE_NOT_OPEN")
+            if str(issue_row.get("entity_type") or "").upper() == "UPC" and str(issue_row.get("entity_key") or "") != ean:
+                cur.close()
+                raise ValueError("QA_ISSUE_ENTITY_MISMATCH")
+
+        batch_id = _latest_phase3_batch(cur)
+        if batch_id is None:
+            cur.close()
+            raise RuntimeError("NO_PHASE3_BATCH_AVAILABLE_FOR_TARGETED_REFRESH")
+
+        before = {"serving": current, "issue": issue_row}
+        source_note = (
+            "BACKOFFICE_QA_USER_CONFIRMED_COST_CONVERSION: "
+            + (str(note or "").strip() or "User confirmed cost-to-selling conversion")
+        )[:512]
+
+        conn.start_transaction()
+        try:
+            cur.execute(
+                """INSERT INTO manual_cost_selling_conversion
+                     (ean_upc,selling_qty,selling_uom_code,cost_qty,cost_uom_code,
+                      conversion_status,source_note)
+                   VALUES (%s,%s,%s,%s,%s,'CONFIRMED',%s)
+                   ON DUPLICATE KEY UPDATE
+                     selling_qty=VALUES(selling_qty),
+                     selling_uom_code=VALUES(selling_uom_code),
+                     cost_qty=VALUES(cost_qty),
+                     cost_uom_code=VALUES(cost_uom_code),
+                     conversion_status='CONFIRMED',
+                     source_note=VALUES(source_note)""",
+                (ean, sq, sell, cq, cuom, source_note),
+            )
+
+            checked = apply_manual_cost_conversions(cur)
+            target_holds = [
+                x for x in (checked.get("held") or [])
+                if str(x.get("ean_upc") or "") == ean
+            ]
+            if target_holds:
+                raise RuntimeError("TARGET_COST_CONVERSION_HELD: " + json.dumps(target_holds, default=str))
+
+            cur.execute(
+                """SELECT pf.family_id
+                   FROM selling_upc su
+                   JOIN bridge_article_upc bau
+                     ON bau.upc_id=su.upc_id
+                    AND bau.mapping_status='CONFIRMED'
+                    AND bau.is_primary=TRUE
+                    AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+                   JOIN article a ON a.article_id=bau.article_id
+                   JOIN bridge_article_family baf
+                     ON baf.article_id=a.article_id
+                    AND baf.mapping_status='CONFIRMED'
+                    AND baf.is_primary=TRUE
+                    AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+                   JOIN product_family pf ON pf.family_id=baf.family_id
+                   WHERE su.ean_upc=%s
+                   LIMIT 1""",
+                (ean,),
+            )
+            family_row = cur.fetchone()
+            family_id = int(family_row["family_id"]) if family_row else None
+
+            refreshed = refresh_quick_check_subset(
+                cur,
+                batch_id,
+                family_ids=[family_id] if family_id is not None else None,
+                upcs=[ean],
+            )
+            after = _serving_row(cur, ean) or _active_identity(cur, ean) or {}
+
+            if issue_id is not None:
+                cur.execute(
+                    """UPDATE qa_phase3_issue
+                       SET issue_status='RESOLVED',
+                           detail_json=JSON_SET(
+                             COALESCE(detail_json,JSON_OBJECT()),
+                             '$.manual_resolution',
+                             CAST(%s AS JSON)
+                           )
+                       WHERE issue_id=%s
+                         AND issue_status='OPEN'""",
+                    (
+                        json.dumps({
+                            "actor": actor,
+                            "note": note,
+                            "resolution_kind": "USER_CONFIRMED_COST_CONVERSION",
+                            "ean_upc": ean,
+                            "selling_qty": str(sq),
+                            "selling_uom": sell,
+                            "cost_qty": str(cq),
+                            "cost_uom": cuom,
+                        }, ensure_ascii=False, default=str),
+                        int(issue_id),
+                    ),
+                )
+
+            cur.execute(
+                """INSERT INTO qa_manual_resolution
+                     (issue_id,batch_id,issue_code,entity_type,entity_key,
+                      resolution_kind,actor,resolution_note,before_json,applied_json,after_json)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                (
+                    int(issue_id) if issue_id is not None else None,
+                    int(issue_row["batch_id"]) if issue_row and issue_row.get("batch_id") is not None else batch_id,
+                    issue_row.get("issue_code") if issue_row else "COST_TO_SELLING_UOM_UNRESOLVED",
+                    issue_row.get("entity_type") if issue_row else "UPC",
+                    issue_row.get("entity_key") if issue_row else ean,
+                    "USER_CONFIRMED_COST_CONVERSION",
+                    actor,
+                    str(note or "")[:512] or None,
+                    json.dumps(before, ensure_ascii=False, default=str),
+                    json.dumps({
+                        "ean_upc": ean,
+                        "selling_qty": str(sq),
+                        "selling_uom": sell,
+                        "cost_qty": str(cq),
+                        "cost_uom": cuom,
+                        "targeted_refresh": refreshed,
+                    }, ensure_ascii=False, default=str),
+                    json.dumps(after, ensure_ascii=False, default=str),
+                ),
+            )
+            resolution_id = int(cur.lastrowid)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+    return {
+        "status": "APPLIED",
+        "resolution_id": resolution_id,
+        "ean_upc": ean,
+        "selling_qty": str(sq),
+        "selling_uom": sell,
+        "cost_qty": str(cq),
+        "cost_uom": cuom,
+        "after": after,
+        "rules": {
+            "raw_source_rows_modified": False,
+            "authoritative_cost_value_modified": False,
+            "write_scope": "USER_CONFIRMED_COST_TO_SELLING_CONVERSION_ONLY",
             "targeted_quick_check_refreshed": True,
         },
     }
