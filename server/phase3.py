@@ -2080,8 +2080,9 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
             config["upload_timestamp"] = pf.get("upload_timestamp")
         break
 
-    # POS: canonical upc_id first; raw alias fallback only if canonical lookup
-    # finds no sold event. This avoids broad OR predicates for the common path.
+    # POS_SINGLE_DATE authority: canonical upc_id first; raw alias fallback only
+    # if canonical lookup finds no sold event. This avoids broad OR predicates
+    # for the common path while preserving exact sold-event pricing.
     sold_date = None
     pos_match_mode = "CANONICAL_UPC_ID"
     if completed_day is not None:
