@@ -103,7 +103,7 @@ def _serving_row(cur, ean_upc: str) -> dict[str, Any] | None:
 
 def _active_identity(cur, ean_upc: str) -> dict[str, Any] | None:
     cur.execute(
-        """SELECT su.ean_upc,a.article_number,pf.family_id,pf.main_article_number,
+        """SELECT su.ean_upc,su.selling_description,a.article_number,pf.family_id,pf.main_article_number,
                   du.uom_code AS selling_uom,bu.uom_code AS base_uom,
                   uh.base_qty_per_selling_unit
            FROM selling_upc su

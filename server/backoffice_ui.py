@@ -373,7 +373,7 @@ function renderQA(){
    return `<tr>
      <td>${pill(x.severity)}</td>
      <td><div class="name">${esc(x.issue_code)}</div><div class="meta" style="max-width:380px">${esc(x.issue_summary||'')}</div></td>
-     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(x.entity_type||'')}</div></td>
+     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.selling_description||'Item name unavailable'):(x.entity_type||''))}</div></td>
      <td>${esc(stateText||'No current serving row')}</td>
      <td>${x.can_fix?'<span class="pill amber">USER CONFIRM</span>':'<span class="pill blue">VIEW ONLY</span>'}</td>
      <td><button class="btn small qadetail" data-key="${esc(String(x.issue_id??('QC:'+x.entity_key)))}">${x.can_fix?'Fix':'Details'}</button></td>
