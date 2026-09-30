@@ -32,6 +32,7 @@ from backoffice_runtime import (
     inventory_review as backoffice_inventory_review,
     ordering_review as backoffice_ordering_review,
     pricing_review as backoffice_pricing_review,
+    accept_price_suggestion as backoffice_accept_price_suggestion,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -3339,6 +3340,12 @@ class BackofficeQAArticleFamilyRequest(BaseModel):
     note: str | None = None
     confirm: str
 
+class BackofficePriceAcceptRequest(BaseModel):
+    current_price: Decimal
+    current_price_source: str
+    current_price_asof_date: date
+    candidate_price: Decimal
+
 
 @app.get('/v1/backoffice/qa-review')
 def backoffice_qa(limit:int=250):
@@ -3457,6 +3464,32 @@ def backoffice_pricing(category:str='ALL',limit:int=1000):
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice pricing review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+
+@app.post('/v1/backoffice/pricing-review/{upc}/accept')
+def backoffice_pricing_accept(
+    upc: str,
+    body: BackofficePriceAcceptRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=backoffice_accept_price_suggestion(
+            ean_upc=upc,
+            current_price=body.current_price,
+            current_price_source=body.current_price_source,
+            current_price_asof_date=body.current_price_asof_date,
+            candidate_price=body.candidate_price,
+            actor=actor,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'REFRESH_REQUIRED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice price suggestion accept failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
