@@ -10,6 +10,7 @@ from business_clock import business_today, completed_through_date
 from data_coverage import source_data_days
 from coverage_backfill import canonical_pos_qty_by_upc
 from db import db_conn
+from manual_overrides import USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930
 from phase3 import (
     PRICE_TYPE_PRIORITY,
     _current_price as _live_current_price,
@@ -877,6 +878,18 @@ def _manual_selling_article_map(
     if not targets:
         return {}
 
+    confirmed_out: dict[tuple[int, str], str] = {}
+    for confirmed in USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930:
+        main = str(confirmed.get("family_article") or "").strip()
+        ean = str(confirmed.get("ean_upc") or "").strip()
+        selling = str(confirmed.get("selling_article") or "").strip()
+        key = _numeric_key(ean) or ean
+        if not main or not key or not selling:
+            continue
+        for fid in targets.get(key, set()):
+            if str(family_main_by_id.get(fid) or "") == main:
+                confirmed_out[(fid, key)] = selling
+
     standard_tabs = {
         "fresh fish", "live fish", "shrimp", "fish ball", "frozen fish"
     }
@@ -910,7 +923,7 @@ def _manual_selling_article_map(
         tuple(mains),
     )
 
-    out: dict[tuple[int, str], str] = {}
+    out: dict[tuple[int, str], str] = dict(confirmed_out)
     for row in cur.fetchall():
         tab = str(row.get("sheet_name") or "").strip().lower()
         if tab not in recognized_tabs:
@@ -1267,6 +1280,20 @@ def _quick_receiving_article_context(
                     ),
                 }
 
+    # Some SAP Selling Articles have valid 251/252 rows but were ingested
+    # before their Family bridge existed, leaving movement_history.family_id NULL.
+    # Rescue them only when current evidence places that Article in exactly one
+    # Family candidate set (e.g. Article Manual or paired 317/318 lineage).
+    candidate_owner_sets: dict[str, set[int]] = {}
+    for owner_fid, family_candidates in candidates.items():
+        for candidate_article in family_candidates:
+            candidate_owner_sets.setdefault(str(candidate_article), set()).add(owner_fid)
+    unique_candidate_owner = {
+        article: next(iter(owners))
+        for article, owners in candidate_owner_sets.items()
+        if len(owners) == 1
+    }
+
     # Discover every SAP Article with actual 251/252 activity inside the
     # canonical Family window. Do not require the Article to already exist in
     # bridge_article_family or to have a recent 317/318 conversion. This is
@@ -1307,6 +1334,43 @@ def _quick_receiving_article_context(
         )
         movement_rows = cur.fetchall()
 
+        orphan_articles = sorted(unique_candidate_owner)
+        if orphan_articles:
+            aph = ",".join(["%s"] * len(orphan_articles))
+            orphan_clauses = []
+            orphan_args: list[Any] = list(orphan_articles)
+            for d in movement_days_7:
+                orphan_clauses.append("(m.file_id=%s AND m.posting_date=%s)")
+                orphan_args.extend([int(d["file_id"]), d["date"]])
+            cur.execute(
+                f"""SELECT m.article_number,
+                           MAX(m.description) AS article_description,
+                           m.base_uom_code,
+                           SUM(
+                             CASE
+                               WHEN m.movement_type='251' THEN ABS(COALESCE(m.base_quantity,0))
+                               WHEN m.movement_type='252' THEN -ABS(COALESCE(m.base_quantity,0))
+                               ELSE 0
+                             END
+                           ) AS qty_7d
+                    FROM movement_history m
+                    WHERE m.family_id IS NULL
+                      AND m.article_number IN ({aph})
+                      AND m.movement_type IN ('251','252')
+                      AND ({' OR '.join(orphan_clauses)})
+                      AND m.base_quantity IS NOT NULL
+                    GROUP BY m.article_number,m.base_uom_code""",
+                tuple(orphan_args),
+            )
+            for orphan in cur.fetchall():
+                art = str(orphan.get("article_number") or "").strip()
+                owner_fid = unique_candidate_owner.get(art)
+                if owner_fid is None:
+                    continue
+                orphan["family_id"] = owner_fid
+                orphan["orphan_family_rescue"] = True
+                movement_rows.append(orphan)
+
         article_groups: dict[tuple[int, str], list[dict[str, Any]]] = {}
         family_groups: dict[int, list[dict[str, Any]]] = {}
         for r in movement_rows:
@@ -1314,7 +1378,8 @@ def _quick_receiving_article_context(
                 continue
             fid = int(r["family_id"])
             art = str(r.get("article_number") or "").strip()
-            family_groups.setdefault(fid, []).append(r)
+            if not r.get("orphan_family_rescue"):
+                family_groups.setdefault(fid, []).append(r)
             if art:
                 article_groups.setdefault((fid, art), []).append(r)
 
@@ -1353,16 +1418,41 @@ def _quick_receiving_article_context(
                 for r in valid
             )
             if valid and len(uoms) == 1 and not has_missing_uom:
+                rescued = any(bool(r.get("orphan_family_rescue")) for r in valid)
                 movement_by_article[key] = {
                     "quantity": sum((_d(r.get("qty_7d")) for r in valid), Decimal("0")),
                     "uom": next(iter(uoms)),
-                    "status": "READY",
+                    "status": (
+                        "READY_ORPHAN_251_252_RESCUED_BY_UNIQUE_SELLING_LINEAGE"
+                        if rescued
+                        else "READY"
+                    ),
+                    "article_description": next(
+                        (
+                            r.get("article_description")
+                            for r in valid
+                            if r.get("article_description")
+                        ),
+                        None,
+                    ),
+                    "orphan_family_rescued": rescued,
                 }
             elif valid:
                 movement_by_article[key] = {
                     "quantity": None,
                     "uom": None,
                     "status": "MIXED_OR_MISSING_BASE_UOM",
+                    "article_description": next(
+                        (
+                            r.get("article_description")
+                            for r in valid
+                            if r.get("article_description")
+                        ),
+                        None,
+                    ),
+                    "orphan_family_rescued": any(
+                        bool(r.get("orphan_family_rescue")) for r in valid
+                    ),
                 }
 
         for fid, rows in family_groups.items():
@@ -1523,8 +1613,22 @@ def _quick_receiving_article_context(
 
             if str(a.get("lineage_basis") or "") == "SAP_DOCUMENT_317_318":
                 score += 12.0
-            if a.get("movement_7d") is not None and _d(a.get("movement_7d")) != 0:
-                score += 8.0
+            has_selling_mvt = (
+                a.get("movement_7d") is not None
+                and _d(a.get("movement_7d")) != 0
+            )
+            if has_selling_mvt:
+                score += 18.0
+            role = str(a.get("article_role") or "").upper()
+            if (
+                not has_selling_mvt
+                and role in {"RECEIVING_ARTICLE", "RELATED_SAP_ARTICLE"}
+                and str(a.get("lineage_basis") or "") not in {
+                    "ARTICLE_MANUAL_COLUMN_B_TO_D",
+                    "SAP_DOCUMENT_317_318",
+                }
+            ):
+                score -= 100.0
             scored.append((score, art, a))
 
         scored.sort(key=lambda x: (-x[0], x[1]))
