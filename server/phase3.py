@@ -335,7 +335,11 @@ def _find_pos_upc_id(
     """
     if article_manual_index is None:
         article_manual_index = article_manual_pos_alias_index(cur)
-    manual_id = resolve_article_manual_pos_upc_id(article_manual_index, ean)
+    manual_id = resolve_article_manual_pos_upc_id(
+        article_manual_index,
+        ean,
+        seafood_context=True,
+    )
     if manual_id is not None:
         return int(manual_id)
 
@@ -1779,7 +1783,11 @@ def relink_history(cur) -> None:
             str(row.get('department_code') or '') == SEAFOOD_DEPT_CODE
             and str(row.get('source_type') or '').upper() == 'POS'
         ):
-            upc_id = resolve_article_manual_pos_upc_id(article_manual_index, ean)
+            upc_id = resolve_article_manual_pos_upc_id(
+                article_manual_index,
+                ean,
+                seafood_context=True,
+            )
             if upc_id is None:
                 upc_id = _find_upc_id(cur, ean)
         else:
@@ -1806,6 +1814,7 @@ def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
     """Close only linkage QA that late Article Manual/PI identity evidence has actually repaired."""
     resolved_sales = 0
     resolved_movement = 0
+    article_manual_index = article_manual_pos_alias_index(cur)
     cur.execute(
         """SELECT issue_id,issue_code,entity_key FROM qa_phase3_issue
            WHERE batch_id=%s AND issue_status='OPEN'
@@ -1829,6 +1838,13 @@ def resolve_late_identity_issues(cur, batch_id: int) -> dict[str, int]:
             'HISTORICAL_SOLD_UPC_UNMAPPED',
         }:
             repaired = _upc_identity_ready(cur, key)
+            if not repaired:
+                manual_id = resolve_article_manual_pos_upc_id(
+                    article_manual_index,
+                    key,
+                    seafood_context=True,
+                )
+                repaired = _upc_id_identity_ready(cur, manual_id)
         elif code == 'SEAFOOD_MOVEMENT_ARTICLE_UNMAPPED':
             _, family_id = _find_article(cur, key)
             repaired = family_id is not None
