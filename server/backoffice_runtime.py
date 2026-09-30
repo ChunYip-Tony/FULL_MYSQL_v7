@@ -1902,6 +1902,11 @@ def _quick_receiving_article_context(
             "family_conversion_317_318_status": conversion_status,
             "family_source_article": source_article,
             "family_source_movement_7d": source_qty,
+            "family_source_avg_qty_day": (
+                _d(source_qty) / Decimal(day_count)
+                if source_qty is not None and day_count > 0
+                else None
+            ),
             "family_source_movement_uom": source_uom,
             "family_source_raw_movement_uom": source_raw_uom,
             "family_source_movement_status": source_status,
@@ -2149,6 +2154,19 @@ def inventory_review(
                 ),
                 {},
             )
+            if (
+                assigned_receiving
+                and str(assigned_receiving)
+                    == str(family_ctx.get("family_source_article") or "")
+            ):
+                assigned_receiving_row = {
+                    "movement_7d": family_ctx.get("family_source_movement_7d"),
+                    "movement_uom": family_ctx.get("family_source_movement_uom"),
+                    "avg_qty_day": family_ctx.get("family_source_avg_qty_day"),
+                    "movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
+                    "movement_status": family_ctx.get("family_source_movement_status"),
+                    "receipt_history": family_ctx.get("family_receipt_history", []),
+                }
 
             out.append(
                 {
@@ -2194,6 +2212,7 @@ def inventory_review(
                     "family_conversion_317_318_status": family_ctx.get("family_conversion_317_318_status"),
                     "family_source_article": family_ctx.get("family_source_article"),
                     "family_source_movement_7d": family_ctx.get("family_source_movement_7d"),
+                    "family_source_avg_qty_day": family_ctx.get("family_source_avg_qty_day"),
                     "family_source_movement_uom": family_ctx.get("family_source_movement_uom"),
                     "family_source_raw_movement_uom": family_ctx.get("family_source_raw_movement_uom"),
                     "family_source_movement_status": family_ctx.get("family_source_movement_status"),
