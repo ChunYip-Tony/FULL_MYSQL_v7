@@ -59,7 +59,7 @@ def find_active_batch() -> dict[str,Any]|None:
         row=cur.fetchone()
         if row:
             cur.execute(
-                """SELECT pipeline_run_id,stage_name,processing_status,code_version,started_at,created_at
+                """SELECT pipeline_run_id,stage_name,processing_status,code_version,started_at
                    FROM pipeline_run
                    WHERE batch_id=%s
                      AND pipeline_name=%s
@@ -75,7 +75,7 @@ def find_active_batch() -> dict[str,Any]|None:
                 row['active_stage_name']=active_run.get('stage_name')
                 row['active_run_status']=active_run.get('processing_status')
                 row['active_code_version']=active_run.get('code_version')
-                row['active_run_started_at']=active_run.get('started_at') or active_run.get('created_at')
+                row['active_run_started_at']=active_run.get('started_at')
         cur.close()
     if row:
         row['device_id']=_device_from_notes(row.get('notes'))
