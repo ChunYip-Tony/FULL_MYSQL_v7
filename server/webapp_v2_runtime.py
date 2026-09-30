@@ -2352,13 +2352,23 @@ def _ordering_candidate_families(cur, kind: str) -> list[dict[str,Any]]:
     )
     out=[]
     for fam in cur.fetchall():
-        bucket=_ordering_family_bucket(
-            cur,
-            int(fam["family_id"]),
-            fam.get("product_class"),
-            fam.get("cost_source"),
-            fam.get("official_source"),
-        )
+        pclass=str(fam.get("product_class") or "").strip().upper()
+        cost_source=str(fam.get("cost_source") or "").strip().upper()
+        official_source=str(fam.get("official_source") or "").strip().upper()
+        if pclass=="FROZEN":
+            bucket="FROZEN"
+        elif pclass in {"FRESH","LIVE"}:
+            bucket="FRESH"
+        elif cost_source=="FROZEN_INVENTORY_OFFICIAL_COST":
+            bucket="FROZEN"
+        elif cost_source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+            bucket="FRESH"
+        elif official_source=="FROZEN_INVENTORY_OFFICIAL_COST":
+            bucket="FROZEN"
+        elif official_source=="LIVE_FRESH_SUGGESTION_OFFICIAL_COST":
+            bucket="FRESH"
+        else:
+            bucket=None
         if bucket==target:
             fam["ordering_category"]=bucket
             out.append(fam)
@@ -3433,7 +3443,7 @@ def bulk_ordering_suggestions(
     return {
         "contract_version":"WEBAPP_V2_BULK_ORDERING_V2",
         "order_type":kind,
-        "category_scope":[kind],
+        "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
             "ordering_date":order_day,
             "expected_delivery_date":delivery,
