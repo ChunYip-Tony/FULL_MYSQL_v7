@@ -57,12 +57,20 @@ jobs:
       - name: Validate 249 service alias normalization
         run: |
           python - <<'PY'
+          import inspect
+          import phase3
           from upc_aliases import service_249_canonical_base, service_249_product_code
           assert service_249_product_code('249450') == '249450'
           assert service_249_product_code('24945012345') == '249450'
           assert service_249_canonical_base('249450') == '24945000000'
           assert service_249_canonical_base('24945012345') == '24945000000'
           assert service_249_canonical_base('24045000000') is None
+          targeted = inspect.getsource(phase3.refresh_quick_check_subset)
+          assert "_sales_metrics(cur, upc_id, pos_days_7, p['ean_upc'])" in targeted
+          assert "_sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])" in targeted
+          assert "_sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])" in targeted
+          assert "_current_price(cur, upc_id, p['ean_upc'])" in targeted
+          assert "_historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc'])" in targeted
           print('249-service-alias-smoke=PASS')
           PY
 
