@@ -348,6 +348,19 @@ def inventory_review(
                 if upc and upc not in relevance_by_upc:
                     ranked_upcs.append(upc)
                     relevance_by_upc[upc] = rel
+            elif rtype == "UPC_GROUP":
+                members = result.get("group_members") or []
+                for member in members:
+                    upc = str(member.get("upc") or "").strip()
+                    if upc and upc not in relevance_by_upc:
+                        ranked_upcs.append(upc)
+                        relevance_by_upc[upc] = rel
+                fid = result.get("family_id")
+                if fid is not None:
+                    fid = int(fid)
+                    if fid not in relevance_by_family:
+                        ranked_families.append(fid)
+                        relevance_by_family[fid] = rel
             elif rtype == "FAMILY":
                 fid = result.get("family_id")
                 if fid is not None:
