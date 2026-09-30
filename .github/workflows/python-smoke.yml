@@ -120,6 +120,10 @@ jobs:
           history_relink=inspect.getsource(phase3.relink_history)
           assert '_find_pos_upc_id' in history_relink
           assert "COALESCE(description,'')" in history_relink
+          active_guard=inspect.getsource(phase3.rebuild_current_active_unmapped_sales_guard)
+          assert '_recent_pos_canonical_ids_for_raw_ean' in active_guard
+          assert '_upc_id_identity_ready' in active_guard
+          assert 'mapped_by_relinked_pos_upc_id_count' in active_guard
           relink_src=inspect.getsource(coverage_backfill.relink_pos_backfill)
           assert '_resolve_source_upc_id' in relink_src
 
