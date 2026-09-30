@@ -1359,9 +1359,20 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 
 /* Canonical 240 / 249 display subgroup */
-.m-pair-subgroup{display:grid;gap:6px;padding:7px;border:1px solid #c6dfdb;border-radius:15px;background:rgba(232,247,244,.72)}
-.m-pair-label{display:flex;align-items:center;gap:6px;padding:2px 5px;font-size:9px;font-weight:950;letter-spacing:.055em;color:#0b6670;text-transform:uppercase}
-.m-pair-label:before{content:"↳";font-size:12px}
+.m-pair-subgroup{display:grid;gap:6px;padding:7px;border:1px solid var(--unit-border,#c6dfdb);border-radius:15px;background:var(--unit-bg,rgba(232,247,244,.72))}
+.m-pair-label{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:3px 5px;font-size:9px;font-weight:950;letter-spacing:.055em;color:#0b6670;text-transform:uppercase}
+.m-pair-name{display:flex;align-items:center;gap:5px}
+.m-pair-stats{text-align:right;line-height:1.18;text-transform:none;letter-spacing:0}
+.m-pair-stats small{display:block;font-size:8px;color:var(--muted);font-weight:900}
+.m-pair-stats b{display:block;font-size:13px;color:#0b6670;margin:2px 0}
+.m-pair-subgroup .m-row{background:var(--unit-bg,#eef9f7)!important;border-color:var(--unit-border,#c6dfdb)!important}
+.m-family-upcs> :nth-child(6n+1){--unit-bg:#eef8ff;--unit-border:#cde4f2}
+.m-family-upcs> :nth-child(6n+2){--unit-bg:#f0faee;--unit-border:#d3e9cf}
+.m-family-upcs> :nth-child(6n+3){--unit-bg:#f7f2ff;--unit-border:#e1d6f2}
+.m-family-upcs> :nth-child(6n+4){--unit-bg:#fff6eb;--unit-border:#f0dec7}
+.m-family-upcs> :nth-child(6n+5){--unit-bg:#eefaf8;--unit-border:#cee8e3}
+.m-family-upcs> :nth-child(6n+6){--unit-bg:#fff9e9;--unit-border:#eadfb9}
+.m-family-upcs> .m-row{background:var(--unit-bg,#fff)!important;border-color:var(--unit-border,#dce8e5)!important}
 .m-pair-subgroup .m-row{margin:0!important;box-shadow:none!important;border-left-width:4px!important}
 .m-pair-subgroup .m-row[data-pair-role="MAIN_240"]{border-left-color:#167985!important}
 .m-pair-subgroup .m-row[data-pair-role="COOK_SERVICE_249"]{border-left-color:#d18b2f!important}
@@ -1756,6 +1767,31 @@ function seafood240249Identity(r,familyOverride=''){
     role:prefix==='240'?'MAIN_240':'COOK_SERVICE_249'
   };
 }
+function displayQtyUom(r){
+  const raw=String(r?.qty_uom||r?.selling_uom||'').trim().toUpperCase();
+  if(raw)return raw==='LBS'?'LB':raw;
+  const key=numericUpcKey(r?.upc??r?.number??r?.ean_upc??'');
+  const p=Number(key.slice(0,3));
+  if(Number.isFinite(p)&&((p>=230&&p<=240)||p===242||p===245||p===247||p===249||(p>=250&&p<=269)))return 'LB';
+  return 'unit';
+}
+function subgroupPosSummary(rows){
+  const list=(rows||[]).filter(Boolean);
+  if(!list.length)return {ready:false};
+  const uoms=[...new Set(list.map(displayQtyUom).filter(Boolean))];
+  if(uoms.length!==1||uoms[0]==='unit')return {ready:false,mixed:true};
+  const qty=list.reduce((s,r)=>s+Number(r.qty_7d||0),0);
+  const dayCounts=list.map(r=>Number(r.sales_days_7d||0)).filter(n=>Number.isFinite(n)&&n>0);
+  const days=dayCounts.length?Math.max(...dayCounts):0;
+  return {ready:true,uom:uoms[0],qty,days,avg:days>0?qty/days:null};
+}
+function quickSalesMeta(r){
+  const uom=displayQtyUom(r);
+  const noSales=String(r?.sales_evidence_status||'').includes('NO_POS_SALES_LATEST_28_VALID_DATA_DAYS');
+  return '7D Vel '+fmt(r?.velocity_7d)+' '+uom+'/day · '+fmt(r?.qty_7d)+' '+uom+' 7D'+
+    (noSales?' · No POS sales in latest 28 valid data days':'')+
+    ' · tap for current price / OH';
+}
 function subgroup240249Units(rows,familyOverride=''){
   const list=Array.isArray(rows)?rows:[];
   const groups=new Map();
@@ -2131,19 +2167,22 @@ function mobileQuickGroupedHtml(rows){
     const uom=g.family_qty_uom||'';
     const avgText=avg==='—'?'—':avg+(uom?' '+uom:'')+'/day';
     const totalText=total==='—'?'—':total+(uom?' '+uom:'');
-    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Avg Qty/Day</small><b>'+esc(avgText)+'</b><small>7D Qty · '+esc(totalText)+'</small></div></div>';
+    const header='<div class="m-family-head"><div><small>FAMILY '+esc(g.family_article||'—')+'</small><b>'+esc(g.family_name||'Unmapped Family')+'</b></div><div class="m-family-velocity"><small>Family MVT Avg/Day</small><b>'+esc(avgText)+'</b><small>251−252 · 7D Qty · '+esc(totalText)+'</small></div></div>';
     const children=subgroup240249Units(g.rows,String(g.family_id??g.family_article??g.key)).map(unit=>{
       const rowHtml=r=>mobileRowWithPairRole(
         r,
         r.upc||r.family_article,
         r.name||r.family_name,
-        '7D Vel '+fmt(r.velocity_7d)+' '+(r.selling_uom||'unit')+'/day · '+fmt(r.qty_7d)+' 7D · tap for current price / OH',
+        quickSalesMeta(r),
         r.readiness||r.category,
         r.chinese_name||''
       );
-      return unit.type==='pair'
-        ? '<section class="m-pair-subgroup"><div class="m-pair-label">240 / 249 SUBGROUP</div>'+unit.rows.map(rowHtml).join('')+'</section>'
-        : rowHtml(unit.row);
+      if(unit.type!=='pair')return rowHtml(unit.row);
+      const sm=subgroupPosSummary(unit.rows);
+      const stats=sm.ready
+        ? '<div class="m-pair-stats"><small>POS Avg Qty/Day</small><b>'+esc(fmt(sm.avg)+' '+sm.uom+'/day')+'</b><small>7D Qty · '+esc(fmt(sm.qty)+' '+sm.uom)+'</small></div>'
+        : '<div class="m-pair-stats"><small>POS 7D Qty</small><b>See UPC rows</b><small>Mixed / unresolved UOM</small></div>';
+      return '<section class="m-pair-subgroup"><div class="m-pair-label"><div class="m-pair-name">↳ 240 / 249 SUBGROUP</div>'+stats+'</div>'+unit.rows.map(rowHtml).join('')+'</section>';
     }).join('');
     return '<section class="m-family-group">'+header+'<div class="m-family-upcs">'+children+'</div></section>';
   }).join('');

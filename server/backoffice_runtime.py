@@ -20,6 +20,7 @@ from webapp_v2_runtime import (
     bulk_ordering_suggestions,
     performance_report,
     _numeric_key,
+    _safe_qty_uom,
     _seafood_upc_group_signature,
 )
 
@@ -964,6 +965,9 @@ def inventory_review(
                     "category": row.get("product_class"),
                     "readiness": row.get("quick_check_status"),
                     "selling_uom": row.get("selling_uom"),
+                    "qty_uom": _safe_qty_uom(row.get("ean_upc"), row.get("selling_uom")),
+                    "sales_days_7d": row.get("sales_days_7d"),
+                    "sales_evidence_status": row.get("blocking_reason"),
                     "price": row.get("current_price"),
                     "price_type": row.get("current_price_type"),
                     "price_source": row.get("current_price_source"),
@@ -1016,6 +1020,8 @@ def inventory_review(
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
             "family_qty_basis": "MOVEMENT_251_MINUS_252_BASE_UOM",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
+            "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
+            "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",
             "lightweight": bool(lightweight),
             "lightweight_skips": (
                 ["FAMILY_EFFECTIVE_OH_ROLLFORWARD","LIVE_CURRENT_PRICE_RESOLUTION"]
