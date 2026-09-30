@@ -852,16 +852,13 @@ def _quick_receiving_article_context(
     qrows: list[dict[str, Any]],
     movement_days_7: list[dict[str, Any]],
 ) -> dict[int, dict[str, Any]]:
-    """Build Family -> Receiving Article lineage for Quick Check search.
+    """Build Family -> SAP selling article -> UPC lineage for Quick Check.
 
-    Family Article is the visible group leader. Every confirmed article linked to
-    the family is retained as a Receiving Article candidate. 251/252 movement is
-    measured on each candidate article independently. Receipt verification is
-    based on that article having Movement 101-109 history.
-
-    A selling UPC is assigned to one candidate for display only, using confirmed
-    family lineage plus deterministic article/description evidence. No 251/252
-    quantity is ever distributed to UPCs; UPC quantity remains POS-only.
+    The Family/main Article owns the 101-109 receipt/source identity shown in the
+    Family header. SAP 317/318 document-level conversion pairs are used as strong
+    evidence that inventory moved between the Family/source Article and an output
+    Article. SAP selling movement is then measured only on those output/linked
+    Articles as 251 sold minus 252 returns. UPC sold quantity remains POS-only.
     """
     family_rows: dict[int, dict[str, Any]] = {}
     for row in qrows:
@@ -873,6 +870,16 @@ def _quick_receiving_article_context(
         return {}
 
     fids = sorted(family_rows)
+    source_by_family = {
+        fid: str(row.get("main_article_number") or "").strip()
+        for fid, row in family_rows.items()
+    }
+    family_by_source = {
+        art: fid for fid, art in source_by_family.items() if art
+    }
+
+    # Start with confirmed bridge lineage, but do not duplicate the Family/source
+    # Article as a second-level selling Article. It stays in the Family header.
     ph = ",".join(["%s"] * len(fids))
     cur.execute(
         f"""SELECT baf.family_id,
@@ -891,62 +898,111 @@ def _quick_receiving_article_context(
                      a.article_number""",
         tuple(fids),
     )
-
-    articles_by_family: dict[int, list[dict[str, Any]]] = {fid: [] for fid in fids}
-    seen_by_family: dict[int, set[str]] = {fid: set() for fid in fids}
+    candidates: dict[int, dict[str, dict[str, Any]]] = {fid: {} for fid in fids}
     for r in cur.fetchall():
         fid = int(r["family_id"])
         art = str(r.get("article_number") or "").strip()
-        if not art or art in seen_by_family[fid]:
+        if not art or art == source_by_family.get(fid):
             continue
-        seen_by_family[fid].add(art)
-        articles_by_family[fid].append(
-            {
-                "article_number": art,
-                "article_description": r.get("article_description"),
-                "relationship_type": r.get("relationship_type"),
-                "is_primary": bool(r.get("is_primary")),
-                "mapping_status": "CONFIRMED",
-            }
-        )
+        candidates[fid][art] = {
+            "article_number": art,
+            "article_description": r.get("article_description"),
+            "relationship_type": r.get("relationship_type"),
+            "is_primary": bool(r.get("is_primary")),
+            "mapping_status": "CONFIRMED_BRIDGE",
+            "lineage_basis": "CONFIRMED_BRIDGE",
+            "lineage_hits": 0,
+            "lineage_latest_date": None,
+            "lineage_movement_types": None,
+        }
 
-    # Keep the Family Article as an explicit fallback only when the confirmed
-    # bridge has no usable article rows.
-    for fid, row in family_rows.items():
-        if articles_by_family[fid]:
-            continue
-        fallback = str(row.get("main_article_number") or "").strip()
-        if fallback:
-            articles_by_family[fid].append(
+    # Discover actual SAP output/selling Articles from 317/318 conversion pairs:
+    # same canonical file/date + same SAP document + same absolute quantity/UOM
+    # + opposite signs. This is stronger than description-only grouping.
+    source_articles = sorted(family_by_source)
+    if source_articles and movement_days_7:
+        sph = ",".join(["%s"] * len(source_articles))
+        canonical_clauses = []
+        args: list[Any] = list(source_articles)
+        for d in movement_days_7:
+            canonical_clauses.append("(src.file_id=%s AND src.posting_date=%s)")
+            args.extend([int(d["file_id"]), d["date"]])
+        cur.execute(
+            f"""SELECT src.article_number AS source_article,
+                       dst.article_number AS article_number,
+                       MAX(dst.description) AS article_description,
+                       COUNT(*) AS lineage_hits,
+                       MAX(dst.posting_date) AS lineage_latest_date,
+                       GROUP_CONCAT(DISTINCT src.movement_type ORDER BY src.movement_type) AS lineage_movement_types
+                FROM movement_history src
+                JOIN movement_history dst
+                  ON dst.file_id=src.file_id
+                 AND dst.posting_date=src.posting_date
+                 AND dst.article_document=src.article_document
+                 AND dst.movement_type=src.movement_type
+                 AND dst.article_number<>src.article_number
+                 AND (dst.base_uom_code <=> src.base_uom_code)
+                 AND dst.base_quantity IS NOT NULL
+                 AND src.base_quantity IS NOT NULL
+                 AND (dst.base_quantity * src.base_quantity) < 0
+                 AND ABS(dst.base_quantity)=ABS(src.base_quantity)
+                 AND (
+                      src.amount_local_currency IS NULL
+                      OR dst.amount_local_currency IS NULL
+                      OR ABS(dst.amount_local_currency)=ABS(src.amount_local_currency)
+                 )
+                WHERE src.article_number IN ({sph})
+                  AND src.movement_type IN ('317','318')
+                  AND src.article_document IS NOT NULL
+                  AND src.article_document<>''
+                  AND ({' OR '.join(canonical_clauses)})
+                GROUP BY src.article_number,dst.article_number""",
+            tuple(args),
+        )
+        for r in cur.fetchall():
+            source = str(r.get("source_article") or "").strip()
+            art = str(r.get("article_number") or "").strip()
+            fid = family_by_source.get(source)
+            if fid is None or not art or art == source:
+                continue
+            existing = candidates[fid].get(art, {})
+            existing.update(
                 {
-                    "article_number": fallback,
-                    "article_description": row.get("family_description"),
-                    "relationship_type": "FAMILY_FALLBACK",
-                    "is_primary": True,
-                    "mapping_status": "FALLBACK",
+                    "article_number": art,
+                    "article_description": (
+                        r.get("article_description")
+                        or existing.get("article_description")
+                    ),
+                    "relationship_type": existing.get("relationship_type") or "SAP_CONVERSION_OUTPUT",
+                    "is_primary": bool(existing.get("is_primary")),
+                    "mapping_status": "SAP_317_318_LINKED",
+                    "lineage_basis": "SAP_DOCUMENT_317_318",
+                    "lineage_hits": int(r.get("lineage_hits") or 0),
+                    "lineage_latest_date": r.get("lineage_latest_date"),
+                    "lineage_movement_types": r.get("lineage_movement_types"),
                 }
             )
+            candidates[fid][art] = existing
 
     article_numbers = sorted(
         {
-            str(a["article_number"])
-            for rows in articles_by_family.values()
-            for a in rows
-            if a.get("article_number")
+            art
+            for family_candidates in candidates.values()
+            for art in family_candidates
         }
     )
 
+    # 251/252 is the SAP selling movement shown on the second-level Article.
     movement_by_article: dict[str, dict[str, Any]] = {}
     if article_numbers and movement_days_7:
         aph = ",".join(["%s"] * len(article_numbers))
         clauses = []
-        args: list[Any] = list(article_numbers)
+        args = list(article_numbers)
         for d in movement_days_7:
             clauses.append("(file_id=%s AND posting_date=%s)")
             args.extend([int(d["file_id"]), d["date"]])
         cur.execute(
-            f"""SELECT article_number,
-                       base_uom_code,
+            f"""SELECT article_number,base_uom_code,
                        SUM(
                          CASE
                            WHEN movement_type='251' THEN ABS(COALESCE(base_quantity,0))
@@ -980,11 +1036,12 @@ def _quick_receiving_article_context(
                     "status": "MIXED_BASE_UOM",
                 }
 
-    # 101-109 history is verification evidence for the actual receiving article.
-    # Prefer 109 when multiple receipt/cost rows share the latest date.
+    # Receipt verification applies to the Family/source header and also remains
+    # available for any linked Article that independently has 101-109 history.
+    receipt_articles = sorted(set(source_articles) | set(article_numbers))
     receipt_by_article: dict[str, dict[str, Any]] = {}
-    if article_numbers:
-        aph = ",".join(["%s"] * len(article_numbers))
+    if receipt_articles:
+        aph = ",".join(["%s"] * len(receipt_articles))
         receipt_types = tuple(str(x) for x in range(101, 110))
         tph = ",".join(["%s"] * len(receipt_types))
         cur.execute(
@@ -1001,7 +1058,7 @@ def _quick_receiving_article_context(
                            ELSE 2
                          END,
                          file_id DESC""",
-            tuple(article_numbers) + receipt_types,
+            tuple(receipt_articles) + receipt_types,
         )
         for r in cur.fetchall():
             art = str(r.get("article_number") or "")
@@ -1033,9 +1090,7 @@ def _quick_receiving_article_context(
         articles: list[dict[str, Any]],
     ) -> tuple[str | None, str]:
         if not articles:
-            return None, "NO_RECEIVING_ARTICLE_CANDIDATE"
-        if len(articles) == 1:
-            return str(articles[0]["article_number"]), "ONLY_CONFIRMED_FAMILY_ARTICLE"
+            return None, "NO_SAP_SELLING_ARTICLE_CANDIDATE"
 
         digits = _numeric_key(row.get("ean_upc"))
         prefix = digits[:3]
@@ -1046,54 +1101,69 @@ def _quick_receiving_article_context(
         for a in articles:
             art = str(a.get("article_number") or "")
             desc = _norm_desc(a.get("article_description"))
-            score = SequenceMatcher(None, sell_desc, desc).ratio() * 60.0 if (sell_desc and desc) else 0.0
+            score = (
+                SequenceMatcher(None, sell_desc, desc).ratio() * 60.0
+                if sell_desc and desc
+                else 0.0
+            )
 
             if sell_desc and desc and sell_desc == desc:
                 score += 100.0
             if product_code and art.endswith(product_code):
-                score += 40.0
+                score += 45.0
+
+            # Seafood article-number pattern is powerful when it agrees with the
+            # UPC prefix/product code: 240xxx -> 1540xxx, 245xxx -> 1545xxx,
+            # 249xxx -> 1549xxx.
+            if product_code and art.endswith(product_code):
+                if prefix == "240" and art.startswith("1540"):
+                    score += 120.0
+                elif prefix == "245" and art.startswith("1545"):
+                    score += 120.0
+                elif prefix == "249" and art.startswith("1549"):
+                    score += 120.0
 
             if prefix == "249":
                 if "FRIED" in desc:
-                    score += 18.0
+                    score += 20.0
                 if "SERVICE" in desc:
-                    score += 22.0
+                    score += 20.0
             elif prefix == "247":
                 if "FRIED" in sell_desc and "FRIED" in desc:
                     score += 24.0
-            elif prefix == "240":
-                if "FRIED" not in desc and "SERVICE" not in desc:
-                    score += 8.0
 
-            if a.get("is_primary"):
-                score += 2.0
-            if str(a.get("relationship_type") or "").upper() == "SUB":
-                score += 1.0
+            if str(a.get("lineage_basis") or "") == "SAP_DOCUMENT_317_318":
+                score += 12.0
+            if a.get("movement_7d") is not None and _d(a.get("movement_7d")) != 0:
+                score += 8.0
             scored.append((score, art, a))
 
         scored.sort(key=lambda x: (-x[0], x[1]))
         best = scored[0]
+        if best[0] < 30.0:
+            return None, "NO_STRONG_SAP_SELLING_ARTICLE_MATCH"
         basis = (
-            "FAMILY_LINEAGE_PLUS_UPC_PRODUCT_CODE_OR_DESCRIPTION"
-            if best[0] >= 40
-            else "FAMILY_LINEAGE_BEST_AVAILABLE"
+            "SAP_317_318_PLUS_UPC_ARTICLE_PATTERN"
+            if best[2].get("lineage_basis") == "SAP_DOCUMENT_317_318"
+            else "CONFIRMED_LINEAGE_PLUS_UPC_PRODUCT_CODE_OR_DESCRIPTION"
         )
         return best[1], basis
 
     out: dict[int, dict[str, Any]] = {}
     for fid, row in family_rows.items():
+        source_article = source_by_family.get(fid)
+        family_receipt = receipt_by_article.get(str(source_article or ""), {})
+
         articles: list[dict[str, Any]] = []
         movement_uoms: set[str] = set()
         movement_values: list[Decimal] = []
 
-        for base in articles_by_family.get(fid, []):
-            a = dict(base)
-            art = str(a.get("article_number") or "")
+        for art in sorted(candidates.get(fid, {})):
+            a = dict(candidates[fid][art])
             mv = movement_by_article.get(art, {})
             qty = mv.get("quantity")
             uom = mv.get("uom")
             receipt = receipt_by_article.get(art, {})
-
             a.update(
                 {
                     "movement_7d": qty,
@@ -1134,7 +1204,9 @@ def _quick_receiving_article_context(
             family_status = "NO_251_252_IN_WINDOW"
 
         upc_map: dict[str, dict[str, Any]] = {}
-        article_lookup = {str(a.get("article_number") or ""): a for a in articles}
+        article_lookup = {
+            str(a.get("article_number") or ""): a for a in articles
+        }
         for qrow in qrows:
             if qrow.get("family_id") is None or int(qrow["family_id"]) != fid:
                 continue
@@ -1145,15 +1217,21 @@ def _quick_receiving_article_context(
                 "article_number": assigned,
                 "mapping_basis": basis,
                 "mapping_status": (
-                    "CONFIRMED_RECEIVING_ARTICLE"
-                    if assigned_row.get("mapping_status") == "CONFIRMED"
-                    else "FAMILY_ARTICLE_FALLBACK"
+                    assigned_row.get("mapping_status")
+                    if assigned
+                    else "UNRESOLVED"
                 ),
             }
 
         out[fid] = {
-            "family_article": row.get("main_article_number"),
+            "family_article": source_article,
             "family_name": row.get("family_description"),
+            "family_receipt_verified": bool(family_receipt.get("verified")),
+            "family_receipt_movement_type": family_receipt.get("movement_type"),
+            "family_receipt_date": family_receipt.get("date"),
+            "family_receipt_qty": family_receipt.get("quantity"),
+            "family_receipt_uom": family_receipt.get("uom"),
+            "family_receipt_source": family_receipt.get("source"),
             "receiving_articles": articles,
             "upc_map": upc_map,
             "family_group_movement_7d": family_qty,
@@ -1439,6 +1517,12 @@ def inventory_review(
                     "family_group_avg_qty_day": family_ctx.get("family_group_avg_qty_day"),
                     "family_group_movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "family_group_movement_status": family_ctx.get("family_group_movement_status"),
+                    "family_receipt_verified": family_ctx.get("family_receipt_verified"),
+                    "family_receipt_movement_type": family_ctx.get("family_receipt_movement_type"),
+                    "family_receipt_date": family_ctx.get("family_receipt_date"),
+                    "family_receipt_qty": family_ctx.get("family_receipt_qty"),
+                    "family_receipt_uom": family_ctx.get("family_receipt_uom"),
+                    "family_receipt_source": family_ctx.get("family_receipt_source"),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),
                     "family_name": row.get("family_description"),
@@ -1489,7 +1573,7 @@ def inventory_review(
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V5",
+        "contract_version": "BACKOFFICE_INVENTORY_V6",
         "category": cat,
         "query": q or None,
         "count": len(out),
@@ -1500,13 +1584,13 @@ def inventory_review(
             "search_scope": "DIRECT_QUICK_CHECK_THEN_TYPO_FALLBACK",
             "search_sort": "DIRECT_RECENT_VELOCITY_THEN_FUZZY_RELEVANCE",
             "quick_check_group_leader": "FAMILY_ARTICLE",
-            "quick_check_second_level": "RECEIVING_ARTICLES",
+            "quick_check_second_level": "SAP_SELLING_ARTICLES",
             "quick_check_third_level": "INDIVIDUAL_UPCS_POS_ONLY",
-            "receiving_qty_basis": "EACH_LINKED_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
+            "receiving_qty_basis": "SAP_SELLING_ARTICLE_MOVEMENT_251_MINUS_252_BASE_UOM",
             "receiving_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "family_group_qty_basis": "SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES",
-            "receipt_verification": "ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
-            "upc_receiving_display_link": "CONFIRMED_FAMILY_LINEAGE_PLUS_PRODUCT_CODE_OR_DESCRIPTION",
+            "receipt_verification": "FAMILY_SOURCE_AND_LINKED_ARTICLE_HAS_MOVEMENT_101_THROUGH_109",
+            "upc_receiving_display_link": "SAP_317_318_DOCUMENT_LINEAGE_THEN_UPC_ARTICLE_PATTERN_OR_DESCRIPTION",
             "family_qty_basis": "LEGACY_RELATIONSHIP_METRIC_ONLY",
             "family_avg_qty_day_denominator": "COMPLETED_MOVEMENT_DAYS",
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
