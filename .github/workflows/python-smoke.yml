@@ -75,6 +75,13 @@ jobs:
           assert service_249_product_code('249450') == '249450'
           assert service_249_product_code('24945012345') == '249450'
           assert service_249_canonical_base('24945012345') == '24945000000'
+
+          # SAP selling Article structural lineage is exact and deterministic.
+          assert phase3._structural_sap_selling_upc('1540569') == '24056900000'
+          assert phase3._structural_sap_selling_upc('1545569') == '24556900000'
+          assert phase3._structural_sap_selling_upc('1549569') == '24956900000'
+          assert phase3._structural_sap_selling_upc('1547569') is None
+
           assert normalize_selling_description('MILK FISH(Fried Service)') == 'MILK FISH FRIED SERVICE'
           assert looks_like_249_service_description('MILK FISH(Fried Service)')
           assert not looks_like_249_service_description('MILK FISH')
@@ -120,6 +127,9 @@ jobs:
           history_relink=inspect.getsource(phase3.relink_history)
           assert '_find_pos_upc_id' in history_relink
           assert "COALESCE(description,'')" in history_relink
+          assert "_structural_sap_selling_family" in inspect.getsource(phase3._find_article)
+          assert "family_movement_observation" in history_relink
+          assert "154[059]" in history_relink
           active_guard=inspect.getsource(phase3.rebuild_current_active_unmapped_sales_guard)
           assert '_recent_pos_canonical_ids_for_raw_ean' in active_guard
           assert '_upc_id_identity_ready' in active_guard

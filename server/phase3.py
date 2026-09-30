@@ -391,6 +391,58 @@ def _upc_identity_ready(cur, ean: str | None) -> bool:
     return _upc_id_identity_ready(cur, _find_upc_id(cur, ean))
 
 
+def _structural_sap_selling_upc(article_number: str | None) -> str | None:
+    """Deterministic Seafood SAP selling-Article -> canonical UPC bridge.
+
+    Known structural forms used by Store #1032:
+      1540xxx -> 240xxx00000
+      1545xxx -> 245xxx00000
+      1549xxx -> 249xxx00000
+
+    This function only derives the exact candidate identifier. Family authority
+    still requires that candidate UPC to exist as ACTIVE and resolve through one
+    unique current CONFIRMED UPC -> Article -> Family path.
+    """
+    s = str(article_number or '').strip()
+    m = re.fullmatch(r'154([059])(\d{3})', s)
+    if not m:
+        return None
+    prefix = {'0': '240', '5': '245', '9': '249'}[m.group(1)]
+    return f"{prefix}{m.group(2)}00000"
+
+
+def _structural_sap_selling_family(cur, article_number: str | None) -> int | None:
+    ean = _structural_sap_selling_upc(article_number)
+    if not ean:
+        return None
+    cur.execute(
+        """SELECT COUNT(DISTINCT baf.family_id) AS family_count,
+                  MIN(baf.family_id) AS family_id
+           FROM selling_upc su
+           JOIN bridge_article_upc bau
+             ON bau.upc_id=su.upc_id
+            AND bau.mapping_status='CONFIRMED'
+            AND bau.is_primary=TRUE
+            AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN bridge_article_family baf
+             ON baf.article_id=bau.article_id
+            AND baf.mapping_status='CONFIRMED'
+            AND baf.is_primary=TRUE
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           LEFT JOIN manual_upc_retirement mur
+             ON mur.ean_upc=su.ean_upc
+            AND mur.retirement_status='CONFIRMED'
+           WHERE su.ean_upc=%s
+             AND su.record_status='ACTIVE'
+             AND mur.retirement_id IS NULL""",
+        (ean,),
+    )
+    row = cur.fetchone() or {}
+    if int(row.get('family_count') or 0) != 1 or row.get('family_id') is None:
+        return None
+    return int(row['family_id'])
+
+
 def _find_article(cur, article_number: str | None) -> tuple[int | None, int | None]:
     if not article_number:
         return None, None
@@ -401,11 +453,21 @@ def _find_article(cur, article_number: str | None) -> tuple[int | None, int | No
              ON baf.article_id=a.article_id AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
             AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
            WHERE a.article_number=%s
-           ORDER BY baf.article_family_id DESC LIMIT 1""",
+           ORDER BY CASE WHEN baf.family_id IS NULL THEN 1 ELSE 0 END,
+                    baf.article_family_id DESC
+           LIMIT 1""",
         (article_number,),
     )
     r = cur.fetchone()
-    return (int(r['article_id']), int(r['family_id']) if r and r['family_id'] is not None else None) if r else (None, None)
+    article_id = int(r['article_id']) if r and r.get('article_id') is not None else None
+    if r and r.get('family_id') is not None:
+        return article_id, int(r['family_id'])
+
+    # A SAP 251/252 selling Article can appear in movement before its SUB bridge
+    # is materialized. Recover the Family only through the exact structural
+    # Article -> canonical UPC transform and a unique confirmed UPC family.
+    family_id = _structural_sap_selling_family(cur, article_number)
+    return article_id, family_id
 
 
 def _uom_id(cur, token: str | None) -> int | None:
@@ -1528,6 +1590,93 @@ def relink_history(cur) -> None:
                      AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
                    SET m.article_id=a.article_id, m.family_id=COALESCE(m.family_id,baf.family_id)
                    WHERE m.article_id IS NULL OR m.family_id IS NULL""")
+
+    # Late SAP selling Articles such as 1549569 can be authoritative 251/252
+    # evidence even when their SUB Article->Family bridge was absent at ingest.
+    # Relink only deterministic 1540/1545/1549 Article forms whose exact
+    # canonical 240/245/249 UPC resolves to one unique confirmed Family.
+    cur.execute(
+        """SELECT DISTINCT article_number
+           FROM movement_history
+           WHERE family_id IS NULL
+             AND article_number REGEXP '^154[059][0-9]{3}$'
+           ORDER BY article_number"""
+    )
+    for structural_row in cur.fetchall():
+        article_number = str(structural_row.get('article_number') or '').strip()
+        article_id, family_id = _find_article(cur, article_number)
+        if family_id is None:
+            continue
+        cur.execute(
+            """UPDATE movement_history
+               SET article_id=COALESCE(article_id,%s),
+                   family_id=%s
+               WHERE article_number=%s
+                 AND family_id IS NULL""",
+            (article_id, family_id, article_number),
+        )
+
+    # Rebuild missing derived 251/252 family-movement mirrors after late
+    # relinking. Respect the same explicit operational-UOM override used during
+    # normal movement ingest; otherwise preserve SAP Base quantity/UOM.
+    cur.execute(
+        """SELECT m.batch_id,m.file_id,m.sheet_id,m.raw_id,m.article_id,m.family_id,
+                  m.movement_type,m.posting_date,m.entry_quantity,m.entry_uom_code,
+                  m.base_quantity,m.base_uom_code
+           FROM movement_history m
+           WHERE m.family_id IS NOT NULL
+             AND m.movement_type IN ('251','252')
+             AND m.base_quantity IS NOT NULL
+             AND NOT EXISTS (
+                 SELECT 1
+                 FROM family_movement_observation fmo
+                 WHERE fmo.raw_id=m.raw_id
+             )
+           ORDER BY m.raw_id"""
+    )
+    for movement_row in cur.fetchall():
+        family_id = int(movement_row['family_id'])
+        movement_qty = movement_row.get('base_quantity')
+        movement_uom = movement_row.get('base_uom_code')
+        operational = confirmed_operational_uom_basis(cur, family_id)
+        if (
+            operational
+            and str(operational.get('movement_quantity_basis') or '').upper() == 'ENTRY'
+            and movement_row.get('entry_quantity') is not None
+            and movement_row.get('entry_uom_code')
+            and str(movement_row.get('entry_uom_code')).upper()
+                == str(operational.get('operational_uom_code') or '').upper()
+        ):
+            movement_qty = movement_row.get('entry_quantity')
+            movement_uom = str(operational['operational_uom_code']).upper()
+        if movement_qty is None:
+            continue
+        net_sold = -Decimal(str(movement_qty))
+        cur.execute(
+            """INSERT INTO family_movement_observation
+               (batch_id,file_id,sheet_id,raw_id,family_id,article_id,movement_type,posting_date,
+                base_quantity_signed,net_sold_quantity,base_uom_code)
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               ON DUPLICATE KEY UPDATE
+                 family_id=VALUES(family_id),
+                 article_id=VALUES(article_id),
+                 base_quantity_signed=VALUES(base_quantity_signed),
+                 net_sold_quantity=VALUES(net_sold_quantity),
+                 base_uom_code=VALUES(base_uom_code)""",
+            (
+                movement_row.get('batch_id'),
+                movement_row.get('file_id'),
+                movement_row.get('sheet_id'),
+                movement_row.get('raw_id'),
+                family_id,
+                movement_row.get('article_id'),
+                movement_row.get('movement_type'),
+                movement_row.get('posting_date'),
+                movement_qty,
+                net_sold,
+                movement_uom,
+            ),
+        )
     # Article-based OH rows can be ingested before late product-family repair.
     # Relink them from their exact article number without changing RAW source values.
     cur.execute(
