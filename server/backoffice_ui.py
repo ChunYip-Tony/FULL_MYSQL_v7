@@ -25,7 +25,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .reasonlist{display:grid;gap:6px}.reason{display:grid;grid-template-columns:auto 1fr;gap:7px;border:1px solid var(--line);border-radius:10px;padding:8px;background:#fbfdfc}.rdot{width:7px;height:7px;border-radius:50%;background:var(--sea);margin-top:4px}.reason b{display:block;font-size:10px}.reason span{display:block;color:var(--muted);font-size:9px;margin-top:1px}.sectiontitle{font-size:10px;font-weight:850;margin:13px 0 6px}.detailgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}.detail{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fbfdfc}.detail small{display:block;color:var(--muted);font-size:8px}.detail b{display:block;font-size:10px;margin-top:2px}.calc{border:1px dashed #b9d4cf;background:#f4fbf9;border-radius:9px;padding:8px;margin-top:8px;font-size:9px;color:var(--deep)}.logconsole{background:#0b272b;color:#d8efec;border-radius:10px;padding:9px;font:9px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;max-height:230px;overflow:auto}
 .dbcardgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px}.dbcard{border:1px solid var(--line);background:#fff;border-radius:13px;padding:13px;text-align:left;display:flex;gap:11px;align-items:flex-start;box-shadow:0 4px 14px rgba(9,49,54,.03)}.dbcard:hover{border-color:#a8cbc6;background:#fbfdfc}.dbcard .dbicon{font-size:24px;line-height:1}.dbcard span:last-child{display:block}.dbcard small{display:block;color:var(--muted);font-size:9px;font-weight:800;text-transform:uppercase}.dbcard b{display:block;font-size:14px;margin-top:2px}.dbcard em{display:block;color:var(--muted);font-size:10px;font-style:normal;margin-top:3px}.dboverviewgrid{display:grid;grid-template-columns:1fr;gap:9px;padding:0 11px 11px}.dbsummary{border:1px solid var(--line);border-radius:12px;padding:0 10px 10px;background:#fbfdfc}.uploadgrid{display:grid;gap:9px;padding:11px}.drop{border:2px dashed #bad5d1;background:#f8fcfb;border-radius:13px;padding:18px;text-align:center}.drop .ico{font-size:29px}.drop h3{font-size:14px;margin:6px 0 2px}.drop p{font-size:9px;color:var(--muted);margin:0}.drop input{display:block;width:100%;margin-top:10px;border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff}.upload-actions{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin-top:9px}.uploadresult{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.filelist{display:grid;gap:5px;margin-top:7px}.filerow{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:6px 0;font-size:9px}.filerow:last-child{border:0}
 .batchgrid{display:grid;gap:7px;padding:10px}.batch{border:1px solid var(--line);border-radius:11px;padding:9px;background:#fbfdfc}.batchtop{display:flex;justify-content:space-between;gap:8px}.batchid{font-weight:850;font-size:11px}.progress{height:6px;border-radius:999px;background:#e7efeb;overflow:hidden;margin-top:7px}.progress span{display:block;height:100%;background:linear-gradient(90deg,var(--sea),var(--sea2))}.batchmeta{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px}.batchmeta div{background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px}.batchmeta small{display:block;color:var(--muted);font-size:7px}.batchmeta b{display:block;font-size:9px;margin-top:1px}
-.drawerback{position:fixed;inset:0;background:rgba(7,43,47,.24);z-index:30;display:none}.drawerback.on{display:block}.drawer{position:fixed;right:0;top:0;bottom:0;width:min(94vw,570px);background:#fff;z-index:31;transform:translateX(105%);transition:.18s;box-shadow:-20px 0 50px rgba(8,44,48,.18);display:flex;flex-direction:column}.drawer.on{transform:translateX(0)}.drawerhead{padding:12px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:9px}.drawertitle{font-size:15px;font-weight:850}.drawersub{font-size:9px;color:var(--muted);margin-top:2px}.drawerbody{padding:12px;overflow:auto;flex:1}.drawerfoot{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:6px}.formfield{margin-top:9px}.formfield label{display:block;font-size:9px;font-weight:800;margin-bottom:4px}.formfield input,.formfield textarea,.formfield select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}.toast{position:fixed;right:12px;bottom:12px;z-index:50;background:var(--deep);color:#fff;border-radius:9px;padding:9px 10px;font-size:10px;opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none}.toast.on{opacity:1;transform:none}
+.drawerback{position:fixed;inset:0;background:rgba(7,43,47,.24);z-index:30;display:none}.drawerback.on{display:block}.drawer{position:fixed;right:0;top:0;bottom:0;width:min(94vw,570px);background:#fff;z-index:31;transform:translateX(105%);transition:.18s;box-shadow:-20px 0 50px rgba(8,44,48,.18);display:flex;flex-direction:column}.drawer.on{transform:translateX(0)}.drawerhead{padding:12px 13px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:9px}.drawertitle{font-size:15px;font-weight:850}.drawersub{font-size:9px;color:var(--muted);margin-top:2px}.drawerbody{padding:12px;overflow:auto;flex:1}.drawerfoot{padding:10px 12px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:6px}.formfield{margin-top:9px}.formfield label{display:block;font-size:9px;font-weight:800;margin-bottom:4px}.formfield input,.formfield textarea,.formfield select{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px;background:#fff}.toast{position:fixed;right:12px;bottom:12px;z-index:140;background:var(--deep);color:#fff;border-radius:9px;padding:9px 10px;font-size:10px;opacity:0;transform:translateY(8px);transition:.18s;pointer-events:none}.toast.on{opacity:1;transform:none}
 
 /* QA detail readability */
 .drawer{width:min(96vw,680px)}
@@ -46,7 +46,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .qa-field-help{font-size:9px;color:var(--muted);line-height:1.4;margin-top:5px}
 .qa-advanced{margin-top:12px;border:1px dashed #bfd6d2;background:#f8fcfb;border-radius:10px;padding:10px}
 .qa-confirm{display:flex;gap:9px;align-items:flex-start;margin-top:8px;font-size:11px;line-height:1.45}.qa-confirm input{width:19px;height:19px;margin-top:0;flex:0 0 auto}
-.qa-scope{font-size:9px;color:var(--muted);line-height:1.45;margin-top:8px}
+.qa-scope{font-size:9px;color:var(--muted);line-height:1.45;margin-top:8px}.qa-inline-feedback{display:none;flex:1 0 100%;width:100%;border-radius:9px;padding:8px 10px;font-size:10px;font-weight:800;line-height:1.4;border:1px solid var(--line);background:#f7faf9;color:var(--deep)}.qa-inline-feedback.on{display:block}.qa-inline-feedback.error{background:var(--redbg);border-color:#f1c9c4;color:var(--red)}.qa-inline-feedback.working{background:var(--bluebg);border-color:#c8d9f2;color:#245b8f}.qa-inline-feedback.success{background:var(--greenbg);border-color:#bfe4cf;color:var(--green)}
 .detailgrid.qa-detailgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.qa-detailgrid .detail small{font-size:9px}.qa-detailgrid .detail b{font-size:12px}
 .qa-cn-list{font-size:10px;color:var(--muted);margin-top:2px}
 @media(max-width:620px){.drawer{width:100vw}.drawerbody{padding:12px}.qa-detailgrid{grid-template-columns:1fr}.qa-name{font-size:17px}.qa-zh{font-size:14px}}
@@ -827,7 +827,14 @@ function qaFriendlyReasons(x,detail){
  if(!out.length)out.push('Review the current item identity and unit information before applying a correction.');
  return out;
 }
+function qaApplyFeedback(msg,kind=''){
+ const foot=$('#drawerFoot');
+ if(foot){let el=$('#qaApplyFeedback');if(!el){el=document.createElement('div');el.id='qaApplyFeedback';foot.prepend(el)}el.textContent=String(msg||'');el.className='qa-inline-feedback on'+(kind?' '+kind:'')}
+ toast(String(msg||''));
+}
+function qaClearFeedback(){const el=$('#qaApplyFeedback');if(el)el.remove()}
 function openQAIssue(key){
+ qaClearFeedback();
  const x=findQAIssue(key);if(!x)return;
  const cur=x.current||{},detail=x.detail||{};
  const itemName=cur.item_name||cur.selling_description||cur.article_description||(Array.isArray(detail.descriptions)&&detail.descriptions[0])||'Item name unavailable';
@@ -855,10 +862,10 @@ function openQAIssue(key){
      <div class="calc"><b>Fail-closed.</b> The target Family must already exist, and an Article already mapped to a different confirmed Family will be blocked. RAW movement values are never changed.</div>
    `,`<button id="applyQAArticleFamily" class="btn primary">Apply Family Mapping</button>`);
    $('#applyQAArticleFamily').onclick=async()=>{
-     if(!$('#qaMapConfirm').checked){toast('Confirm the Article → Family mapping first');return}
+     if(!$('#qaMapConfirm').checked){qaApplyFeedback('Confirm the Article → Family mapping first','error');return}
      const main=($('#qaMapFamily').value||'').trim();
-     if(!main){toast('Enter the Main / Family Article number');return}
-     const btn=$('#applyQAArticleFamily');btn.disabled=true;
+     if(!main){qaApplyFeedback('Enter the Main / Family Article number','error');return}
+     const btn=$('#applyQAArticleFamily');btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying Family mapping…','working');
      try{
        const d=await api('/v1/backoffice/qa-resolve-article-family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
          issue_id:x.issue_id,
@@ -867,10 +874,11 @@ function openQAIssue(key){
          note:($('#qaMapNote').value||'').trim()||null,
          confirm:'APPLY_ARTICLE_FAMILY_FIX'
        })});
+       qaApplyFeedback('Family mapping saved. Refreshing QA and batch status…','success');
        toast('Article → Family mapping applied. Rebuild Phase 3 / QA to recalculate family movement.');
        closeDrawer();
        await Promise.allSettled([loadQA(),loadBatches()]);
-     }catch(e){toast(e.message)}finally{const z=$('#applyQAArticleFamily');if(z)z.disabled=false}
+     }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAArticleFamily');if(z){z.disabled=false;z.textContent='Apply Family Mapping'}}
    };
    return;
  }
@@ -895,12 +903,12 @@ function openQAIssue(key){
      <div class="calc">Write scope: conversion authority only. Existing cost, POS sales, receipts, and source files remain unchanged.</div>
    `,`<button id="applyQACostConversion" class="btn primary">Apply Cost Conversion</button>`);
    const btn=$('#applyQACostConversion');
-   if(!sell||!costUom){btn.disabled=true;toast('Selling UOM and Cost UOM must both be known before conversion can be confirmed');return}
+   if(!sell||!costUom){btn.disabled=true;qaApplyFeedback('Selling UOM and Cost UOM must both be known before conversion can be confirmed','error');return}
    btn.onclick=async()=>{
-     if(!$('#qaConvConfirm').checked){toast('Confirm the conversion first');return}
+     if(!$('#qaConvConfirm').checked){qaApplyFeedback('Confirm the conversion first','error');return}
      const sq=Number($('#qaConvSellQty').value),cq=Number($('#qaConvCostQty').value);
-     if(!(sq>0)||!(cq>0)){toast('Enter positive conversion quantities');return}
-     btn.disabled=true;
+     if(!(sq>0)||!(cq>0)){qaApplyFeedback('Enter positive conversion quantities','error');return}
+     btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying cost conversion…','working');
      try{
        await api('/v1/backoffice/qa-resolve-cost-conversion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
          issue_id:x.issue_id,
@@ -912,10 +920,11 @@ function openQAIssue(key){
          note:($('#qaConvNote').value||'').trim()||null,
          confirm:'APPLY_COST_CONVERSION_FIX'
        })});
+       qaApplyFeedback('Cost conversion saved. Refreshing QA and inventory…','success');
        toast('Cost conversion applied');
        closeDrawer();
        await Promise.allSettled([loadQA(),loadInventory()]);
-     }catch(e){toast(e.message)}finally{const z=$('#applyQACostConversion');if(z)z.disabled=false}
+     }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQACostConversion');if(z){z.disabled=false;z.textContent='Apply Cost Conversion'}}
    };
    return;
  }
@@ -971,12 +980,12 @@ function openQAIssue(key){
    </div>
  `,`<button id="applyQAFix" class="btn primary">Apply Confirmed QA Fix</button>`);
  $('#applyQAFix').onclick=async()=>{
-   if(!$('#qaConfirm').checked){toast('Confirm the QA correction first');return}
+   if(!$('#qaConfirm').checked){qaApplyFeedback('Check the confirmation box before applying the correction','error');return}
    const sellingUom=$('#qaSellingUom').value;
-   if(!sellingUom){toast('Select the Selling UOM first');return}
+   if(!sellingUom){qaApplyFeedback('Select the Selling UOM first','error');return}
    const baseUom=$('#qaBaseUom').value||null;
    const factorRaw=($('#qaFactor').value||'').trim();
-   if(baseUom&&factorRaw===''){toast('Enter Base Qty per Selling Unit, or leave Base UOM unconfirmed');return}
+   if(baseUom&&factorRaw===''){qaApplyFeedback('Enter Base Qty per Selling Unit, or leave Base UOM unconfirmed','error');return}
    const body={
      issue_id:x.issue_id,
      ean_upc:x.entity_key,
@@ -987,11 +996,11 @@ function openQAIssue(key){
      note:($('#qaNote').value||'').trim()||null,
      confirm:'APPLY_QA_FIX'
    };
-   const btn=$('#applyQAFix');btn.disabled=true;btn.textContent='Applying…';
+   const btn=$('#applyQAFix');btn.disabled=true;btn.textContent='Applying…';qaApplyFeedback('Applying confirmed QA correction…','working');
    try{
      const r=await api('/v1/backoffice/qa-resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-     toast(`QA fix applied · resolution #${r.resolution_id}`);closeDrawer();await Promise.allSettled([loadQA(),loadInventory()]);
-   }catch(e){toast(e.message)}finally{const z=$('#applyQAFix');if(z){z.disabled=false;z.textContent='Apply Confirmed QA Fix'}}
+     qaApplyFeedback(`Saved · resolution #${r.resolution_id}. Refreshing QA and inventory…`,'success');toast(`QA fix applied · resolution #${r.resolution_id}`);closeDrawer();await Promise.allSettled([loadQA(),loadInventory()]);
+   }catch(e){qaApplyFeedback(e.message,'error')}finally{const z=$('#applyQAFix');if(z){z.disabled=false;z.textContent='Apply Confirmed QA Fix'}}
  };
 }
 $$('.qafilter').forEach(b=>b.onclick=()=>{state.qaFilter=b.dataset.qafilter;$$('.qafilter').forEach(x=>x.classList.toggle('on',x===b));renderQA()});
