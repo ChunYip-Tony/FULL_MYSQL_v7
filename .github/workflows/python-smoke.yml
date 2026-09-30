@@ -176,17 +176,22 @@ jobs:
           assert 'movement_by_article.get((fid, art), {})' in runtime
           assert 'SUM_LINKED_RECEIVING_ARTICLE_251_MINUS_252_WHEN_BASE_UOM_MATCHES' not in runtime
 
-          # Table 1 / Article Manual owns UPC -> Selling Article identity.
-          # 317/318 remains lineage only; Family usage is the visible Selling
-          # Article 251-252 sum for UPCs with positive 7D POS activity.
+          # Article Manual/Table 1 owns operational hierarchy:
+          # A=Family/Main, B=Selling Article, D=UPC, Main-row G=Family Selling UOM.
+          # 317/318 and 309 are lineage/conversion only, never added as sold usage.
           assert 'ARTICLE_MANUAL_COLUMN_B_TO_D_EXACT' in runtime
           assert "JSON_EXTRACT(detail_json,'$.article')" in runtime
           assert 'SUM_UNIQUE_TABLE1_SELLING_ARTICLE_251_MINUS_252_FOR_7D_POS_ACTIVE_UPCS' in runtime
           assert 'READY_SELLING_ARTICLE_SUM_RECONCILED' in runtime
+          assert 'ARTICLE_MANUAL_MAIN_ROW_COLUMN_G' in runtime
+          assert 'HOLD_SELLING_ARTICLE_MVT_UOM_NOT_MAIN_SELLING_UOM' in runtime
           assert '7D FAMILY MVT' in ui
           assert 'RECONCILED' in ui
+          assert 'Family Selling UOM' in ui
+          assert '317/318 CONVERSION LINEAGE' in ui
           print('backoffice-pricing-inventory-contract=PASS')
           PY
+
 
       - name: Validate current price authority contract
         run: |
