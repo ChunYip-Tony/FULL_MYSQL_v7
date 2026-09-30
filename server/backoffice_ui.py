@@ -88,7 +88,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-row{width:100%;min-height:82px;border:1px solid var(--line);background:#fff;border-radius:16px;padding:13px;text-align:left}
   .m-row-main{display:flex;gap:10px;align-items:center}.m-row-copy{min-width:0;flex:1}
   .m-row-code{font-size:17px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}.m-row-name{font-size:13px;font-weight:800;line-height:1.3;margin-top:4px}.m-row-cn{font-size:12px;line-height:1.3;color:var(--muted);margin-top:2px}.m-row-meta{font-size:10px;line-height:1.4;color:var(--muted);margin-top:6px}
-  .m-badge{display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;background:#f8faf9;font-size:9px;font-weight:900;white-space:nowrap}.m-badge.good{background:var(--greenbg);border-color:#bfe4cf;color:var(--green)}.m-badge.warn{background:var(--amberbg);border-color:#efd49d;color:var(--amber)}
+  .m-badge{display:inline-flex;align-items:center;justify-content:center;min-height:24px;padding:4px 8px;border:1px solid var(--line);border-radius:999px;background:#f8faf9;font-size:9px;font-weight:900;white-space:nowrap}.m-badge.good{background:var(--greenbg);border-color:#bfe4cf;color:var(--green)}.m-badge.warn{background:var(--amberbg);border-color:#efd49d;color:var(--amber)}.m-badge.bad{background:var(--redbg);border-color:#f1c9c4;color:var(--red)}
+  .m-dh-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.m-dh-chip{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 6px;border:1px solid var(--line);border-radius:9px;background:#f8faf9;font-size:8px;font-weight:850}.m-dh-chip b{font-size:8px}.m-dh-chip.good{background:var(--greenbg);border-color:#c7e9d5;color:var(--green)}.m-dh-chip.bad{background:var(--redbg);border-color:#f1c9c4;color:var(--red)}.m-dh-chip.warn{background:var(--amberbg);border-color:#efd49d;color:var(--amber)}
   .m-empty,.m-loading{padding:28px 16px;text-align:center;border:1px solid var(--line);background:#fff;border-radius:16px;color:var(--muted);font-size:11px}
   .m-error{padding:12px;border:1px solid #f1c9c4;background:var(--redbg);border-radius:14px;color:var(--red);font-size:11px}
 
@@ -391,7 +392,8 @@ function mobileScreen(name,{scroll=true}={}){
 function mobileBadgeClass(v){
   const s=String(v||'').toUpperCase();
   if(['READY','CURRENT','DONE','MATCH','HEALTHY','QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'].includes(s))return 'good';
-  if(['QA_HOLD','HIGH','CRITICAL','REVIEW','ACTIONABLE','PROCESSING','PHASE3_QA_HOLD'].includes(s))return 'warn';
+  if(['QA_HOLD','HIGH','CRITICAL','REVIEW','ACTIONABLE','PROCESSING','PHASE3_QA_HOLD','CURRENT_DAY'].includes(s))return 'warn';
+  if(['MISSING','MISS','ISSUE','FAIL','FAILED'].includes(s))return 'bad';
   return '';
 }
 function mobileMetric(label,value,sub){
@@ -409,7 +411,7 @@ function mobileModuleConfig(module){
     performance:{title:'Performance',sub:'Latest completed canonical sales date',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
     pi:{title:'PI / OH',sub:'Family True Stock and OH review',chips:[['all','All'],['positive','OH > 0'],['zero','OH ≤ 0']]},
     batches:{title:'Batches',sub:'Current processing first, then completed history',chips:[['all','All'],['current','Current'],['completed','Completed']]},
-    freshness:{title:'Data Health',sub:'Serving status and freshness evidence',chips:[]}
+    freshness:{title:'Data Health',sub:'Last 14 days · newest first · tap a date for source details',chips:[]}
   };
   return map[module]||{title:'Backoffice',sub:'',chips:[]};
 }
@@ -533,6 +535,19 @@ function mobileRows(){
   if(mod==='freshness')return mobileState.freshness;
   return [];
 }
+function mobileDataHealthStatus(x){
+  const s=String(x?.status||'NONE').toUpperCase();
+  if(s==='OK')return {text:'OK',cls:'good'};
+  if(s==='MISSING')return {text:'MISS',cls:'bad'};
+  if(s==='NOT_DUE')return {text:'N/D',cls:'warn'};
+  return {text:'—',cls:''};
+}
+function mobileDataHealthRow(r){
+  const s=r.sources||{},overall=String(r.overall_status||'').toUpperCase();
+  const items=[['POS',s.POS],['MVT',s.MVT],['Price',s.PRICE],['OH',s.OH],['Live/Fresh',s.LIVE_FRESH],['Frozen',s.FROZEN]];
+  const chips=items.map(([label,x])=>{const st=mobileDataHealthStatus(x);return '<span class="m-dh-chip '+st.cls+'"><span>'+esc(label)+'</span><b>'+esc(st.text)+'</b></span>'}).join('');
+  return '<button type="button" class="m-row" data-mobile-key="date:'+esc(r.date)+'"><div class="m-row-main"><div class="m-row-copy"><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap"><div class="m-row-code">'+esc(r.date||'—')+'</div><span class="m-badge '+mobileBadgeClass(overall)+'">'+esc(overall||'INFO')+'</span></div><div class="m-row-name">'+esc(r.weekday||'')+'</div><div class="m-dh-grid">'+chips+'</div></div><span class="m-arrow">›</span></div></button>';
+}
 function mobileRenderList(){
   const box=mNode('mobileListContent');if(!box)return;
   const rows=mobileRows();let html='';
@@ -551,7 +566,7 @@ function mobileRenderList(){
   }else if(mobileState.module==='uploads'){
     html=rows.map(b=>b._mobileNewUpload?mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD',''):mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Upload history'),(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—'),b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
   }else if(mobileState.module==='freshness'){
-    html=rows.map(r=>mobileRow(r.key,r.title,r.value,r.meta,r.badge||'INFO','')).join('');
+    html=rows.map(r=>mobileDataHealthRow(r)).join('');
   }
   box.innerHTML=html||'<div class="m-empty">No items match the current filter.</div>';
   box.querySelectorAll('[data-mobile-key]').forEach(b=>b.onclick=()=>mobileOpenItem(b.dataset.mobileKey));
@@ -623,25 +638,24 @@ function mobileActiveBatchDetail(){
   mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),b.processing_status||b.status||'PROCESSING',html);
 }
 async function mobileLoadFreshness(){
-  const res=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/app/v2/performance?category=ALL&limit=1'),api('/v1/backoffice/inventory?category=ALL&limit=300')]);
-  const h=res[0]||{},a=res[1]||{},r=res[2]||{},p=res[3]||{},inv=res[4]||{};
-  const latest=(r.batches||[])[0]||a.latest_batch||{};
-  const priceDates=(inv.rows||[]).map(x=>String(x.price_as_of||'')).filter(Boolean).sort();
-  const priceAsOf=priceDates.length?priceDates[priceDates.length-1]:'—';
-  mobileState.freshness=[
-    {key:'service',title:'Service',value:h.ok?'READY':'ISSUE',meta:'API '+(h.version||'—'),badge:h.ok?'READY':'ISSUE'},
-    {key:'worker',title:'Worker',value:h.worker_state||'—',meta:h.worker_healthy?'Worker healthy':'Worker needs review',badge:h.worker_healthy?'READY':'REVIEW'},
-    {key:'price',title:'Price',value:priceAsOf,meta:'Latest price as-of present in current serving rows',badge:'CURRENT'},
-    {key:'pos',title:'POS',value:p.report_date||'—',meta:'Latest completed canonical sales date',badge:'CURRENT'},
-    {key:'publish',title:'Latest Publish',value:latest.completed_at||latest.upload_started_at||'—',meta:latest.batch_id?('Batch #'+latest.batch_id+' · '+(latest.phase3_status||latest.processing_status||'')):'No completed batch',badge:latest.phase3_status||latest.processing_status||'INFO'},
-    {key:'active',title:'Active Batch',value:a.active_batch?('Batch #'+a.active_batch.batch_id):'None',meta:a.active_batch?(a.active_batch.processing_status||'Processing'):'Pipeline idle',badge:a.active_batch?'PROCESSING':'READY'}
-  ];
+  const d=await api('/v1/backoffice/data-health?days=14');
+  state.dataHealth=d;
+  mobileState.freshness=d.rows||[];
 }
+
 function mobileFreshnessDetail(key){
-  const r=mobileState.freshness.find(x=>x.key===key);if(!r)return;
-  const html='<div class="m-detailcard"><div class="m-label">Data Health Evidence</div><div class="m-detailgrid">'+mobileMetric('Status',r.value,r.meta)+mobileMetric('Type',r.title,'Live Backoffice check')+'</div><div class="m-detailsection"><h3>Interpretation</h3><p>'+esc(r.meta)+'</p></div></div>';
-  mobileShowDetail(r.title,'Serving / pipeline status',html);
+  const dateKey=String(key||'').replace(/^date:/,'');
+  const r=mobileState.freshness.find(x=>String(x.date)===dateKey);if(!r)return;
+  const names={POS:'POS',MVT:'MVT',PRICE:'Price List',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
+  let html='<div class="m-detailcard"><div class="m-label">14-Day Data Health</div><div class="m-detailgrid">';
+  Object.keys(names).forEach(k=>{
+    const x=(r.sources||{})[k]||{},st=mobileDataHealthStatus(x);
+    html+=mobileMetric(names[k],st.text,(x.file||'No source')+(x.batch_id?' · Batch #'+x.batch_id:''));
+  });
+  html+='</div><div class="m-detailsection"><h3>Coverage rule</h3><p>POS and MVT are daily-required through the latest completed business day. Price, OH, Live/Fresh and Frozen are snapshot sources; “—” means no new snapshot was ingested on that date.</p></div></div>';
+  mobileShowDetail(r.date||'Data Health',(r.weekday||'')+' · '+(r.overall_status||''),html);
 }
+
 function mobileUploadDetail(){
   let html='<div class="m-detailcard"><div class="m-label">New Source Batch</div><div class="m-detailsection" style="border-top:0;padding-top:0;margin-top:9px"><p>Select XLSX / XLS / XLSM / CSV / TXT / TSV files. Files selected together create one immutable batch.</p></div><button id="mChooseUploadFiles" type="button" class="m-action secondary">Choose Files</button><div id="mUploadFileSummary" class="m-detailsection"><p>No files selected.</p></div><div class="formfield"><label>Optional batch note</label><input id="mUploadNote" placeholder="Daily seafood upload"></div><button id="mStartUpload" type="button" class="m-action primary">Upload & Start Processing</button><div id="mUploadResult" class="m-detailsection"><p>File type is detected automatically.</p></div></div>';
   mobileShowDetail('New Upload','Create one source batch',html);
