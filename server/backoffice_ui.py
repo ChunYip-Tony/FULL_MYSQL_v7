@@ -944,13 +944,25 @@ BACKOFFICE_HTML = r'''<!doctype html>
 /* Quick Check live-search family grouping */
 .m-quicktools.on{display:grid!important;grid-template-columns:1fr!important}
 .m-quicktools>input{width:100%;min-height:52px;border:1px solid var(--line);border-radius:13px;padding:11px 13px;font-size:17px;background:#fff}
-.m-family-group{display:grid;gap:7px;margin-bottom:4px}
-.m-family-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;border:1px solid #eadfae;border-radius:15px;background:#fff9dd}
-.m-family-head small,.m-family-velocity small{display:block;font-size:9px;color:#7e7455;font-weight:900;letter-spacing:.04em}
-.m-family-head b{display:block;font-size:16px;line-height:1.2;margin-top:2px;color:#403b2a}
-.m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:#1a6a72}
+.m-family-group{
+  --family-bg:#eef9f2;
+  --family-border:#cfe9d8;
+  --family-accent:#5f9c72;
+  display:grid;
+  gap:7px;
+  margin-bottom:9px;
+}
+.m-family-group:nth-child(6n+2){--family-bg:#eef6ff;--family-border:#d2e4f6;--family-accent:#5e8fb9}
+.m-family-group:nth-child(6n+3){--family-bg:#f5f0ff;--family-border:#e2d6f5;--family-accent:#8970b8}
+.m-family-group:nth-child(6n+4){--family-bg:#fff3ea;--family-border:#f1d8c6;--family-accent:#bf8056}
+.m-family-group:nth-child(6n+5){--family-bg:#ecf9f8;--family-border:#cce9e6;--family-accent:#559f98}
+.m-family-group:nth-child(6n+6){--family-bg:#fff9e8;--family-border:#ecdfb2;--family-accent:#ad9142}
+.m-family-head{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:11px 13px;border:1px solid var(--family-border);border-radius:15px;background:var(--family-bg)}
+.m-family-head small,.m-family-velocity small{display:block;font-size:9px;color:var(--muted);font-weight:900;letter-spacing:.04em}
+.m-family-head b{display:block;font-size:16px;line-height:1.2;margin-top:2px;color:var(--ink)}
+.m-family-velocity{text-align:right;flex:0 0 auto}.m-family-velocity b{display:block;font-size:14px;margin-top:2px;color:var(--sea)}
 .m-family-upcs{display:grid;gap:7px;padding-left:5px}
-.m-family-upcs .m-row{border-left:4px solid #b7ddd7}
+.m-family-upcs .m-row{background:var(--family-bg);border-color:var(--family-border);border-left:4px solid var(--family-accent)}
 
 /* Global value hierarchy: operational values must visually outrank provenance */
 .m-metric b{font-size:21px!important;font-weight:950!important;line-height:1.08!important}
@@ -1773,6 +1785,7 @@ function mobileQuickFamilyGroups(rows){
     g.qty_7d+=Number(r.qty_7d||0);
   });
   const out=[...groups.values()];
+  // UPCs inside every family are always highest recent velocity first.
   out.forEach(g=>g.rows.sort((a,b)=>{
     const av=Number(a.velocity_7d),bv=Number(b.velocity_7d);
     const aa=Number.isFinite(av)?av:Number.NEGATIVE_INFINITY;
