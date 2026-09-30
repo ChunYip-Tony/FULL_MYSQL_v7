@@ -605,11 +605,10 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                 (like,like),
             )
         rows = cur.fetchall()
-        if not q.isdigit() and len(rows) < limit:
-            # Strict LIKE cannot find misspellings such as SALMOM. Pull the
-            # serving corpus only as a fallback, then let _relevance() perform
-            # bounded typo-tolerant scoring. Store-level Quick Check cardinality
-            # is small enough for this controlled fallback.
+        if not q.isdigit() and not rows:
+            # Only fall back to corpus-wide typo-tolerant scoring when strict
+            # name matching found nothing. Exact text such as SALMON must not
+            # pay the cost of scanning the full serving corpus.
             cur.execute(
                 """SELECT *
                    FROM quick_check_current
@@ -659,7 +658,7 @@ def search_items(query: str, limit: int = 30) -> dict[str, Any]:
                 (like,),
             )
         article_matches = cur.fetchall()
-        if not q.isdigit() and len(article_matches) < limit:
+        if not q.isdigit() and not article_matches:
             cur.execute(
                 """SELECT DISTINCT pf.family_id,pf.main_article_number,pf.family_description,
                                   a.article_number,a.article_description
