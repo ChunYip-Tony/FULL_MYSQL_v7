@@ -5,6 +5,22 @@ from typing import Any
 
 SERVICE_249_PREFIX = "249"
 
+def normalize_selling_description(value: Any) -> str:
+    """Normalize POS/roster descriptions for conservative exact matching."""
+    s=str(value or "").upper().strip()
+    s=re.sub(r"[^A-Z0-9]+"," ",s)
+    return re.sub(r"\s+"," ",s).strip()
+
+
+def looks_like_249_service_description(value: Any) -> bool:
+    """True only for explicit fried/cook service descriptions."""
+    s=normalize_selling_description(value)
+    if not s or "SERVICE" not in s:
+        return False
+    tokens=set(s.split())
+    return bool(tokens.intersection({"FRIED","FRY","COOK","COOKED"}))
+
+
 
 def numeric_digits(value: Any) -> str | None:
     """Return digits-only numeric text with leading zeroes removed."""
