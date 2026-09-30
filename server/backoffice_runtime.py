@@ -528,6 +528,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
         if str(x.get("upc") or "").strip()
     ]
     live_by_upc: dict[str, dict[str, Any]] = {}
+    resolved_by_upc: dict[str, dict[str, Any]] = {}
     if upcs:
         with db_conn() as conn:
             cur = conn.cursor(dictionary=True)
@@ -547,6 +548,15 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
                 str(r.get("ean_upc") or ""): r
                 for r in cur.fetchall()
             }
+            for _upc,_live in live_by_upc.items():
+                if _live.get("upc_id") is not None:
+                    _resolved=_live_current_price(
+                        cur,
+                        int(_live["upc_id"]),
+                        _live.get("ean_upc"),
+                    )
+                    if _resolved:
+                        resolved_by_upc[_upc]=_resolved
             cur.close()
 
     for row in rows:
@@ -556,11 +566,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000) -> dict[str, Any]:
             row["current_serving_overlay_status"] = "MISSING_QUICK_CHECK_CURRENT"
             continue
 
-        resolved_price = _live_current_price(
-            cur,
-            int(live["upc_id"]),
-            live.get("ean_upc"),
-        ) if live.get("upc_id") is not None else None
+        resolved_price = resolved_by_upc.get(upc)
         current_price = (
             resolved_price.get("price")
             if resolved_price else live.get("current_price")
