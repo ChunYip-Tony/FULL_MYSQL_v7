@@ -67,12 +67,17 @@ jobs:
               service_249_product_code,
               source_barcode_aliases,
               source_ean_predicate,
+              normalize_selling_description,
+              looks_like_249_service_description,
           )
 
           # 249 service lineage.
           assert service_249_product_code('249450') == '249450'
           assert service_249_product_code('24945012345') == '249450'
           assert service_249_canonical_base('24945012345') == '24945000000'
+          assert normalize_selling_description('MILK FISH(Fried Service)') == 'MILK FISH FRIED SERVICE'
+          assert looks_like_249_service_description('MILK FISH(Fried Service)')
+          assert not looks_like_249_service_description('MILK FISH')
 
           # Leading-zero and deterministic shortened retail-barcode lineage.
           pred,args=source_ean_predicate('s.ean_upc','4918')
@@ -107,7 +112,14 @@ jobs:
           # raw EAN before trusting a stale derived upc_id.
           qty_src=inspect.getsource(coverage_backfill.canonical_pos_qty_by_upc)
           assert '_resolve_source_upc_id' in qty_src
-          assert 'GROUP BY ean_upc,upc_id' in qty_src
+          assert 'description' in qty_src
+          assert 'GROUP BY ean_upc,upc_id,description' in qty_src
+          pos_resolver=inspect.getsource(phase3._find_pos_upc_id)
+          assert 'looks_like_249_service_description' in pos_resolver
+          assert "su.ean_upc LIKE '249%'" in pos_resolver
+          history_relink=inspect.getsource(phase3.relink_history)
+          assert '_find_pos_upc_id' in history_relink
+          assert "COALESCE(description,'')" in history_relink
           relink_src=inspect.getsource(coverage_backfill.relink_pos_backfill)
           assert '_resolve_source_upc_id' in relink_src
 
