@@ -1,2 +1,3 @@
 Diagnostic trigger for 249 POS source evidence on 2026-09-30.
 retrigger-after-workflow-normalization
+retrigger-current-249-pos-and-sap-mvt-20260930
