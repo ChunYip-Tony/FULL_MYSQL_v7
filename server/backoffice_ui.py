@@ -1790,7 +1790,7 @@ function mobileQuickGroupedHtml(rows){
       String(r.upc||''),
       r.upc||r.family_article,
       r.name||r.family_name,
-      '7D Vel '+fmt(r.velocity_7d)+' '+(r.selling_uom||'unit')+'/day · '+fmt(r.qty_7d)+' 7D · '+money(r.price)+' '+(r.price_type||'')+' · '+(r.price_source||'—')+(r.price_as_of?' · '+r.price_as_of:''),
+      '7D Vel '+fmt(r.velocity_7d)+' '+(r.selling_uom||'unit')+'/day · '+fmt(r.qty_7d)+' 7D · tap for current price / OH',
       r.readiness||r.category,
       r.chinese_name||''
     )).join('');
