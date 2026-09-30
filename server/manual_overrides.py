@@ -649,6 +649,167 @@ def confirmed_family_cost(cur, family_id: int) -> dict[str, Any] | None:
     return cur.fetchone()
 
 
+def ensure_article_family_override_table(cur) -> None:
+    if _table_exists(cur, 'manual_article_family_override'):
+        return
+    cur.execute(
+        """
+        CREATE TABLE manual_article_family_override (
+            authority_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+            article_number VARCHAR(64) NOT NULL,
+            main_article_number VARCHAR(64) NOT NULL,
+            authority_status VARCHAR(24) NOT NULL DEFAULT 'CONFIRMED',
+            source_note VARCHAR(512) NULL,
+            created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+            updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+                       ON UPDATE CURRENT_TIMESTAMP(6),
+            PRIMARY KEY (authority_id),
+            UNIQUE KEY uq_manual_article_family_override (article_number),
+            KEY ix_manual_article_family_override_status (authority_status),
+            KEY ix_manual_article_family_override_main (main_article_number)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+        """
+    )
+
+
+def apply_manual_article_family_overrides(cur) -> dict[str, Any]:
+    """Apply explicit Article -> Family authority without inventing identity.
+
+    The target family must already exist as a canonical product_family, and the
+    article must already exist in article. Existing confirmed cross-family
+    primary mappings are fail-closed.
+    """
+    ensure_article_family_override_table(cur)
+    cur.execute(
+        """SELECT authority_id,article_number,main_article_number,source_note
+           FROM manual_article_family_override
+           WHERE authority_status='CONFIRMED'
+           ORDER BY authority_id"""
+    )
+    rows = cur.fetchall()
+    result = {"examined": len(rows), "family_links": 0, "held": []}
+
+    for row in rows:
+        article_number = str(row["article_number"])
+        main_article_number = str(row["main_article_number"])
+
+        cur.execute(
+            """SELECT article_id,article_description
+               FROM article
+               WHERE article_number=%s
+               LIMIT 1""",
+            (article_number,),
+        )
+        ar = cur.fetchone()
+        if not ar:
+            result["held"].append({
+                "article_number": article_number,
+                "reason": "ARTICLE_NOT_PRESENT",
+            })
+            continue
+        article_id = int(ar["article_id"])
+
+        cur.execute(
+            """SELECT pf.family_id,ma.article_id AS main_article_id
+               FROM product_family pf
+               JOIN article ma ON ma.article_number=pf.main_article_number
+               WHERE pf.main_article_number=%s
+               LIMIT 1""",
+            (main_article_number,),
+        )
+        fam = cur.fetchone()
+        if not fam:
+            result["held"].append({
+                "article_number": article_number,
+                "main_article_number": main_article_number,
+                "reason": "TARGET_FAMILY_NOT_READY",
+            })
+            continue
+        family_id = int(fam["family_id"])
+
+        cur.execute(
+            """SELECT article_family_id,family_id
+               FROM bridge_article_family
+               WHERE article_id=%s
+                 AND mapping_status='CONFIRMED'
+                 AND is_primary=TRUE
+                 AND (valid_to IS NULL OR valid_to>CURRENT_TIMESTAMP(6))""",
+            (article_id,),
+        )
+        active = cur.fetchall()
+        conflicts = [x for x in active if int(x["family_id"]) != family_id]
+        if conflicts:
+            result["held"].append({
+                "article_number": article_number,
+                "main_article_number": main_article_number,
+                "reason": "EXISTING_CONFIRMED_CROSS_FAMILY_LINK",
+                "existing_family_ids": [int(x["family_id"]) for x in conflicts],
+            })
+            continue
+
+        cur.execute(
+            """SELECT article_family_id
+               FROM bridge_article_family
+               WHERE article_id=%s AND family_id=%s
+               ORDER BY article_family_id DESC
+               LIMIT 1""",
+            (article_id, family_id),
+        )
+        link = cur.fetchone()
+        if link:
+            article_family_id = int(link["article_family_id"])
+            cur.execute(
+                """UPDATE bridge_article_family
+                   SET relationship_type=CASE
+                         WHEN article_id=%s THEN relationship_type
+                         ELSE relationship_type
+                       END,
+                       mapping_status='CONFIRMED',
+                       is_primary=TRUE,
+                       confidence=1.0,
+                       valid_to=NULL
+                   WHERE article_family_id=%s""",
+                (article_id, article_family_id),
+            )
+        else:
+            cur.execute(
+                """INSERT INTO bridge_article_family
+                   (article_id,family_id,relationship_type,is_primary,mapping_status,confidence)
+                   VALUES (%s,%s,'SUB',TRUE,'CONFIRMED',1.0)""",
+                (article_id, family_id),
+            )
+            article_family_id = int(cur.lastrowid)
+
+        cur.execute(
+            """SELECT evidence_id
+               FROM normalized_source_evidence
+               WHERE object_type='ARTICLE_FAMILY'
+                 AND object_id=%s
+                 AND evidence_role='USER_CONFIRMED_ARTICLE_FAMILY_OVERRIDE'
+               LIMIT 1""",
+            (article_family_id,),
+        )
+        if not cur.fetchone():
+            cur.execute(
+                """INSERT INTO normalized_source_evidence
+                   (object_type,object_id,evidence_role,source_field_name,source_value_text,evidence_json)
+                   VALUES ('ARTICLE_FAMILY',%s,'USER_CONFIRMED_ARTICLE_FAMILY_OVERRIDE',
+                           'user_confirmation',%s,%s)""",
+                (
+                    article_family_id,
+                    main_article_number,
+                    json.dumps({
+                        "article_number": article_number,
+                        "main_article_number": main_article_number,
+                        "source_note": row.get("source_note"),
+                    }, ensure_ascii=False, default=str),
+                ),
+            )
+        result["family_links"] += 1
+
+    return result
+
+
 def apply_manual_family_subarticles(cur) -> dict[str, Any]:
     result = {"examined":0,"family_links":0,"upc_links":0,"upc_not_present":[],"held":[]}
     for row in USER_CONFIRMED_FAMILY_SUBARTICLES_20260926:
