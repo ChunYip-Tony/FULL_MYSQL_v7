@@ -9,6 +9,7 @@ from db import db_conn
 from upc_aliases import (
     numeric_digits,
     service_249_canonical_base,
+    service_249_product_code,
     retail_barcode_alias_candidates,
     normalize_selling_description,
     looks_like_249_service_description,
@@ -531,6 +532,229 @@ def resolve_pos_period_backfill(cur, batch_id: int) -> dict[str, Any]:
 
 
 
+
+ARTICLE_MANUAL_POS_TABS = {
+    "fresh fish",
+    "live fish",
+    "shrimp",
+    "fish ball",
+    "frozen fish",
+    "frozen pack",
+}
+
+
+def _article_manual_sheet_key(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    text = " ".join("".join(ch if ch.isalnum() else " " for ch in text).split())
+    return text
+
+
+def _article_manual_digits(value: Any) -> str | None:
+    """Parse one Article Manual identifier without inventing digits."""
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if not value.is_integer():
+            return None
+        return str(int(value))
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    if text.endswith(".0") and text[:-2].isdigit():
+        text = text[:-2]
+    compact = "".join(ch for ch in text if ch not in {" ", "-"})
+    return compact if compact.isdigit() else None
+
+
+def _unique_alias_map(values: dict[str, set[int]]) -> dict[str, int]:
+    return {
+        key: next(iter(ids))
+        for key, ids in values.items()
+        if key and len(ids) == 1
+    }
+
+
+def article_manual_pos_alias_index(cur) -> dict[str, Any]:
+    """Build authoritative 249 POS aliases from the newest valid Article Manual.
+
+    User-confirmed Article Manual schemas:
+      Fresh/Live/Shrimp/Fish Ball/Frozen Fish:
+        A=Family/Main, B=Selling Article, C=Toledo#, D=EAN/UPC.
+      Frozen Pack:
+        A=Family/Main/Selling Article, D=EAN/UPC.
+
+    Only Article Manual rows whose D value resolves to an existing ACTIVE
+    canonical 249 selling UPC are eligible. Ambiguous aliases are withheld.
+    Article Manual supplies identity only; POS remains the sole quantity source.
+    """
+    cur.execute(
+        """SELECT file_id,batch_id
+           FROM ingest_file
+           WHERE source_type='article_manual'
+             AND processing_status='INGESTED'
+             AND error_count=0
+             AND duplicate_of_file_id IS NULL
+           ORDER BY file_id DESC"""
+    )
+    files = cur.fetchall()
+    if not files:
+        return {
+            "source_upc": {},
+            "selling_article": {},
+            "toledo": {},
+            "service_code": {},
+            "source_batch_id": None,
+            "row_count": 0,
+        }
+
+    newest_batch = int(files[0]["batch_id"])
+    file_ids = [int(x["file_id"]) for x in files if int(x["batch_id"]) == newest_batch]
+    if not file_ids:
+        return {
+            "source_upc": {},
+            "selling_article": {},
+            "toledo": {},
+            "service_code": {},
+            "source_batch_id": newest_batch,
+            "row_count": 0,
+        }
+
+    cur.execute(
+        """SELECT upc_id,ean_upc
+           FROM selling_upc
+           WHERE record_status='ACTIVE'
+             AND ean_upc LIKE '249%'"""
+    )
+    exact: dict[str, int] = {}
+    numeric: dict[str, int] = {}
+    canonical_by_id: dict[int, str] = {}
+    for row in cur.fetchall():
+        ean = str(row.get("ean_upc") or "").strip()
+        if not ean:
+            continue
+        uid = int(row["upc_id"])
+        canonical_by_id[uid] = ean
+        exact.setdefault(ean, uid)
+        key = numeric_digits(ean)
+        if key:
+            numeric.setdefault(key, uid)
+
+    source_sets: dict[str, set[int]] = {}
+    article_sets: dict[str, set[int]] = {}
+    toledo_sets: dict[str, set[int]] = {}
+    service_sets: dict[str, set[int]] = {}
+    row_count = 0
+
+    placeholders = ",".join(["%s"] * len(file_ids))
+    cur.execute(
+        f"""SELECT sheet_id,sheet_name,file_id
+            FROM ingest_sheet
+            WHERE file_id IN ({placeholders})
+            ORDER BY file_id DESC,sheet_index""",
+        tuple(file_ids),
+    )
+    for sheet in cur.fetchall():
+        sheet_key = _article_manual_sheet_key(sheet.get("sheet_name"))
+        if sheet_key not in ARTICLE_MANUAL_POS_TABS:
+            continue
+        cur.execute(
+            """SELECT raw_payload
+               FROM raw_article_manual
+               WHERE sheet_id=%s
+               ORDER BY source_row_number""",
+            (int(sheet["sheet_id"]),),
+        )
+        for raw_row in cur.fetchall():
+            payload = raw_row.get("raw_payload")
+            if isinstance(payload, (bytes, bytearray)):
+                payload = payload.decode("utf-8", errors="replace")
+            if isinstance(payload, str):
+                try:
+                    import json
+                    payload = json.loads(payload)
+                except Exception:
+                    payload = {}
+            if not isinstance(payload, dict):
+                continue
+
+            source_upc = _article_manual_digits(payload.get("D"))
+            if not source_upc:
+                continue
+            uid = exact.get(source_upc)
+            if uid is None:
+                key = numeric_digits(source_upc)
+                uid = numeric.get(key) if key else None
+            if uid is None:
+                continue
+
+            canonical_ean = canonical_by_id.get(int(uid), "")
+            if not canonical_ean.startswith("249"):
+                continue
+
+            main_article = _article_manual_digits(payload.get("A"))
+            selling_article = (
+                main_article
+                if sheet_key == "frozen pack"
+                else (_article_manual_digits(payload.get("B")) or main_article)
+            )
+            toledo = None if sheet_key == "frozen pack" else _article_manual_digits(payload.get("C"))
+
+            source_key = numeric_digits(source_upc)
+            if source_key:
+                source_sets.setdefault(source_key, set()).add(int(uid))
+            if selling_article:
+                article_sets.setdefault(selling_article.lstrip("0") or "0", set()).add(int(uid))
+            if toledo:
+                toledo_sets.setdefault(toledo.lstrip("0") or "0", set()).add(int(uid))
+
+            service_code = service_249_product_code(canonical_ean)
+            if service_code:
+                service_sets.setdefault(service_code, set()).add(int(uid))
+            row_count += 1
+
+    return {
+        "source_upc": _unique_alias_map(source_sets),
+        "selling_article": _unique_alias_map(article_sets),
+        "toledo": _unique_alias_map(toledo_sets),
+        "service_code": _unique_alias_map(service_sets),
+        "source_batch_id": newest_batch,
+        "row_count": row_count,
+    }
+
+
+def resolve_article_manual_pos_upc_id(index: dict[str, Any], raw_ean: Any) -> int | None:
+    """Resolve raw Seafood POS identity from Article Manual before heuristics."""
+    raw = _article_manual_digits(raw_ean)
+    if not raw:
+        return None
+    key = raw.lstrip("0") or "0"
+
+    source_map = index.get("source_upc") or {}
+    if key in source_map:
+        return int(source_map[key])
+
+    article_map = index.get("selling_article") or {}
+    if key in article_map:
+        return int(article_map[key])
+
+    service_code = service_249_product_code(raw)
+    service_map = index.get("service_code") or {}
+    if service_code and service_code in service_map:
+        return int(service_map[service_code])
+
+    toledo_map = index.get("toledo") or {}
+    if key in toledo_map:
+        return int(toledo_map[key])
+
+    for candidate in retail_barcode_alias_candidates(raw):
+        candidate_key = numeric_digits(candidate)
+        if candidate_key and candidate_key in source_map:
+            return int(source_map[candidate_key])
+    return None
+
+
 def _active_upc_alias_index(cur) -> dict[str, Any]:
     """Build one in-memory authoritative UPC roster index for raw-source relinking."""
     cur.execute(
@@ -563,7 +787,12 @@ def _active_upc_alias_index(cur) -> dict[str, Any]:
         for key,ids in service_desc_ids.items()
         if len(ids)==1
     }
-    return {"exact":exact,"numeric":numeric,"service_desc":service_desc}
+    return {
+        "exact": exact,
+        "numeric": numeric,
+        "service_desc": service_desc,
+        "article_manual": article_manual_pos_alias_index(cur),
+    }
 
 
 def _resolve_source_upc_id(
@@ -575,6 +804,16 @@ def _resolve_source_upc_id(
     raw=str(raw_ean or "").strip()
     exact=index["exact"]
     numeric=index["numeric"]
+
+    # Article Manual is the primary identity authority for 249 Seafood POS.
+    # Quantity still comes only from this POS row; the manual never contributes
+    # sales quantity and therefore cannot create double counting.
+    manual_uid = resolve_article_manual_pos_upc_id(
+        index.get("article_manual") or {},
+        raw,
+    )
+    if manual_uid is not None:
+        return int(manual_uid)
 
     # A POS row explicitly labeled Fried/Cook Service is selling evidence for
     # the service UPC. If its source barcode is not a canonical 249 spelling,
