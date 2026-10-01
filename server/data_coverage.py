@@ -4,7 +4,12 @@ from datetime import date, datetime, timedelta
 from typing import Any
 
 from db import db_conn
-from business_clock import business_today, completed_through_date
+from business_clock import (
+    business_today,
+    completed_through_date,
+    movement_expected_through_date,
+    pos_expected_through_date,
+)
 from movement_coverage_rules import movement_daily_close_filename_evidence
 
 DAILY_REQUIRED_SOURCES = {
@@ -343,7 +348,14 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
 
 def coverage_summary(cur, source_type: str, *, include_batch_id: int | None = None,
                      expected_through: date | None = None, lookback_days: int = 35) -> dict[str, Any]:
-    expected = expected_through if expected_through is not None else completed_through_date()
+    if expected_through is not None:
+        expected = expected_through
+    elif source_type == 'sales_by_price_type':
+        expected = pos_expected_through_date()
+    elif source_type == 'movement':
+        expected = movement_expected_through_date()
+    else:
+        expected = completed_through_date()
     days = source_data_days(cur, source_type, include_batch_id=include_batch_id, up_to=expected)
     valid = {x['date'] for x in days}
     latest = max(valid) if valid else None
@@ -420,12 +432,15 @@ def _health_file_date(row: dict[str, Any]) -> date | None:
 def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
     """Return newest-first Data Health board for required daily + snapshot sources.
 
-    POS/MVT are required through completed_through_date(). Snapshot sources are
-    informational updates: absence on a given day is not itself an error.
+    POS/MVT daily files use a local 3 PM grace by default. Yesterday remains
+    NOT_DUE before the cutoff; an early-arriving file is still shown and usable.
+    Snapshot sources are informational updates: absence on a given day is not itself an error.
     """
     span = max(1, min(int(days or 14), 31))
     today = business_today()
     completed = completed_through_date()
+    pos_due_through = pos_expected_through_date()
+    mvt_due_through = movement_expected_through_date()
     start = today - timedelta(days=span - 1)
 
     with db_conn() as conn:
@@ -471,27 +486,29 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
             rows = []
             for offset in range(span):
                 d = today - timedelta(days=offset)
-                required = d <= completed
+                pos_required = d <= pos_due_through
+                mvt_required = d <= mvt_due_through
                 p = pos_by_date.get(d)
                 m = mvt_by_date.get(d)
 
-                def daily_cell(obs: dict[str,Any] | None) -> dict[str,Any]:
+                def daily_cell(obs: dict[str,Any] | None, required: bool) -> dict[str,Any]:
+                    # If a not-yet-due file is already present, show it as OK immediately.
+                    if obs:
+                        return {
+                            'status':'OK',
+                            'file':obs.get('original_filename'),
+                            'batch_id':obs.get('batch_id'),
+                            'file_id':obs.get('file_id'),
+                            'coverage_kind':obs.get('coverage_kind'),
+                            'source_type':obs.get('source_type'),
+                        }
                     if not required:
                         return {'status':'NOT_DUE','file':None,'batch_id':None,'source_type':None}
-                    if not obs:
-                        return {'status':'MISSING','file':None,'batch_id':None,'source_type':None}
-                    return {
-                        'status':'OK',
-                        'file':obs.get('original_filename'),
-                        'batch_id':obs.get('batch_id'),
-                        'file_id':obs.get('file_id'),
-                        'coverage_kind':obs.get('coverage_kind'),
-                        'source_type':obs.get('source_type'),
-                    }
+                    return {'status':'MISSING','file':None,'batch_id':None,'source_type':None}
 
                 sources = {
-                    'POS': daily_cell(p),
-                    'MVT': daily_cell(m),
+                    'POS': daily_cell(p, pos_required),
+                    'MVT': daily_cell(m, mvt_required),
                 }
                 for label, source_type in labels.items():
                     obs = snap_by_source_date.get((source_type,d))
@@ -517,14 +534,17 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                     name for name in ('POS','MVT')
                     if sources[name]['status']=='MISSING'
                 ]
+                any_required = pos_required or mvt_required
                 overall = (
                     'MISSING' if missing_required
-                    else ('COMPLETE' if required else 'CURRENT_DAY')
+                    else ('COMPLETE' if any_required else ('CURRENT_DAY' if d == today else 'PENDING'))
                 )
                 rows.append({
                     'date':d,
                     'weekday':d.strftime('%a'),
-                    'required_daily_due':required,
+                    'required_daily_due':any_required,
+                    'pos_required_due':pos_required,
+                    'mvt_required_due':mvt_required,
                     'overall_status':overall,
                     'missing_required':missing_required,
                     'sources':sources,
@@ -555,13 +575,17 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                 'window_days':span,
                 'today':today,
                 'completed_through':completed,
+                'pos_required_through':pos_due_through,
+                'mvt_required_through':mvt_due_through,
                 'rows':rows,
                 'latest':latest,
                 'rules':{
                     'sort':'MOST_RECENT_FIRST',
                     'daily_required':['POS','MVT'],
+                    'daily_grace_cutoff_local':'15:00',
                     'snapshot_sources':['PRICE','OH','LIVE_FRESH','FROZEN'],
-                    'current_day_required_status':'NOT_DUE_UNTIL_COMPLETED',
+                    'current_day_required_status':'NOT_DUE',
+                    'yesterday_before_cutoff_status':'PENDING',
                 },
             }
         finally:

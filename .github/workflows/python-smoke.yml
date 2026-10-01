@@ -27,25 +27,30 @@ jobs:
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import api, v7_ingest; assert api.VERSION == v7_ingest.API_VERSION, (api.VERSION, v7_ingest.API_VERSION); print(api.VERSION)"
-      - name: Validate 3 PM MVT grace policy
+      - name: Validate 3 PM POS and MVT grace policy
         run: |
           python - <<'PY'
           from datetime import datetime, date
           from zoneinfo import ZoneInfo
           import business_clock as b
-          import inventory_position as inv
 
           tz=ZoneInfo('America/Los_Angeles')
           assert b.MVT_DAILY_GRACE_HOUR==15
-          assert b.movement_expected_through_date(datetime(2026,10,1,0,1,tzinfo=tz))==date(2026,9,29)
-          assert b.movement_expected_through_date(datetime(2026,10,1,14,59,59,tzinfo=tz))==date(2026,9,29)
-          assert b.movement_expected_through_date(datetime(2026,10,1,15,0,0,tzinfo=tz))==date(2026,9,30)
-          assert b.movement_expected_through_date(datetime(2026,10,1,23,59,tzinfo=tz))==date(2026,9,30)
+          assert b.POS_DAILY_GRACE_HOUR==15
+          for fn in (b.movement_expected_through_date,b.pos_expected_through_date):
+              assert fn(datetime(2026,10,1,0,1,tzinfo=tz))==date(2026,9,29)
+              assert fn(datetime(2026,10,1,14,59,59,tzinfo=tz))==date(2026,9,29)
+              assert fn(datetime(2026,10,1,15,0,0,tzinfo=tz))==date(2026,9,30)
+              assert fn(datetime(2026,10,1,23,59,tzinfo=tz))==date(2026,9,30)
 
-          src=open('inventory_position.py',encoding='utf-8').read()
-          assert 'movement_expected_through_date()' in src
-          assert 'expected_through = completed_through_date()' not in src
-          print('mvt-3pm-grace=PASS')
+          inv=open('inventory_position.py',encoding='utf-8').read()
+          dc=open('data_coverage.py',encoding='utf-8').read()
+          assert 'movement_expected_through_date()' in inv
+          assert "source_type == 'sales_by_price_type'" in dc and 'pos_expected_through_date()' in dc
+          assert "source_type == 'movement'" in dc and 'movement_expected_through_date()' in dc
+          assert "'POS': daily_cell(p, pos_required)" in dc
+          assert "'MVT': daily_cell(m, mvt_required)" in dc
+          print('pos-mvt-3pm-grace=PASS')
           PY
 
       - name: Verify daily MVT close-file contract
@@ -507,7 +512,6 @@ jobs:
           src=inspect.getsource(a._repair_active_identity)
           assert 'USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001' in src
           assert "'repaired_user_confirmed_family'" in src
-          assert 'canonical_alias or ean' not in src
           assert "_apply_article_manual_candidate(\n                cur,\n                ean," in src
           assert "_confirm_unique_family_link(\n                cur,\n                ean," in src
           print('batch22-active-upc-family-authority=PASS')

@@ -1,3 +1,12 @@
+v7.0.315 POS + MVT 3 PM Grace Period:
+- Applies the same 3:00 PM local grace period to the prior-day POS sales file as MVT.
+- Before 3:00 PM, yesterday's missing POS and MVT files are PENDING / NOT_DUE rather than missing.
+- If yesterday's POS or MVT file arrives before 3:00 PM, it is usable and displayed immediately.
+- At 3:00 PM local, yesterday becomes required for Data Health and coverage checks.
+- Data Health now tracks POS-required-through and MVT-required-through separately and exposes PENDING status before the cutoff.
+- POS and MVT grace hours are independently configurable; both default to 15.
+Version: 7.0.315 Single-Service Edition
+
 v7.0.313 MVT 3 PM Grace Period:
 - MVT/OH roll-forward no longer requires yesterday's MVT immediately after midnight.
 - In the business timezone (America/Los_Angeles by default), yesterday remains PENDING until 3:00 PM local.
