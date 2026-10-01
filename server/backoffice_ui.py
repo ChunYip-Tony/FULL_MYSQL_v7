@@ -2487,6 +2487,18 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 }
 
+
+/* Desktop V5 · fast overview */
+@media(min-width:760px){
+  #overview .v3-priority{align-self:start}
+  #overview .desktop-queue-column{min-height:0}
+  #overview .desktop-queue-item{min-height:58px!important}
+  #overview .desktop-queue-empty{min-height:58px;display:grid;place-items:center;padding:14px 12px!important}
+  #overview .v3-snapshot{align-self:start}
+  #overview .desktop-kpi-card{min-height:102px!important}
+  #overview .desktop-kpi-card b{font-size:26px!important}
+}
+
 </style>
 </head>
 <body>
@@ -2597,7 +2609,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
   <div id="desktopOverviewError"></div>
   <div class="overview-v3-grid">
     <section class="v3-surface v3-priority">
-      <div class="v3-surface-head"><div><span>Priority queue</span><h2>Needs attention</h2></div><span id="desktopWorkQueueStatus" class="v3-status-chip">CHECKING</span></div>
+      <div class="v3-surface-head"><div><span>Operations queue</span><h2>What needs attention</h2></div><span id="desktopWorkQueueStatus" class="v3-status-chip">CHECKING</span></div>
       <div id="desktopWorkQueues" class="desktop-queue-grid"><div class="loading">Loading operational queues…</div></div>
     </section>
     <section class="v3-surface v3-pulse">
@@ -2605,7 +2617,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
       <div id="desktopFreshnessBoard" class="desktop-freshness-board"><div class="loading">Loading data health…</div></div>
     </section>
     <section class="v3-surface v3-snapshot">
-      <div class="v3-surface-head"><div><span>Live snapshot</span><h2>Operating state</h2></div></div>
+      <div class="v3-surface-head"><div><span>Live snapshot</span><h2>System state</h2></div></div>
       <div id="desktopOverviewKpis" class="desktop-kpi-row"><div class="desktop-kpi-card"><small>LOADING</small><b>—</b><span>Current operational snapshot</span></div></div>
     </section>
     <section class="v3-surface v3-batches">
@@ -4532,80 +4544,65 @@ function desktopBatchRow(b){
 async function loadDesktopOverview(){
   if(isMobileBackoffice())return;
   const err=$('#desktopOverviewError');if(err)err.innerHTML='';
-  const live={};
-  const failures=[];
-  const has=k=>Object.prototype.hasOwnProperty.call(live,k);
-  const skeleton=(n=3)=>Array.from({length:n},()=>'<div class="v4-skeleton-row"><i></i><span></span><em></em></div>').join('');
+  const workStatus=$('#desktopWorkQueueStatus');
+  workStatus.textContent='LIVE';workStatus.className='v3-status-chip good';
 
   $('#desktopWorkQueues').innerHTML=
-    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Pricing</b><small>Loading actions</small></div></div>'+skeleton(3)+'</div>'+
-    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Ordering</b><small>Loading families</small></div></div>'+skeleton(3)+'</div>'+
-    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>QA</b><small>Loading issues</small></div></div>'+skeleton(3)+'</div>';
-  $('#desktopFreshnessBoard').innerHTML=skeleton(5);
-  $('#desktopRecentBatches').innerHTML=skeleton(4);
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Quick Check</b><small>Loading status</small></div><button data-go-view="quick">Open</button></div><div class="v4-skeleton-row"><i></i><span></span><em></em></div></div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Inventory / PI</b><small>Loading attention</small></div><button data-go-view="inventory">Open</button></div><div class="v4-skeleton-row"><i></i><span></span><em></em></div></div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Data pipeline</b><small>Loading recent status</small></div><button data-go-view="database" data-go-db="dboverview">Open</button></div><div class="v4-skeleton-row"><i></i><span></span><em></em></div></div>';
+  $('#desktopFreshnessBoard').innerHTML='<div class="v4-skeleton-row"><i></i><span></span><em></em></div>'.repeat(5);
+  $('#desktopRecentBatches').innerHTML='<div class="v4-skeleton-row"><i></i><span></span><em></em></div>'.repeat(4);
   $('#desktopOverviewKpis').innerHTML=Array.from({length:6},()=>'<div class="desktop-kpi-card"><small>LOADING</small><b>—</b><span>Waiting for source</span></div>').join('');
 
-  const inventoryRows=()=>live.inventory?.rows||[];
-  const priceRows=()=>live.price?.rows||[];
-  const orderRows=()=>[...(live.orderFresh?.rows||[]),...(live.orderFrozen?.rows||[])];
-  const qaRows=()=>live.qa?.issues||[];
-  const dataHealth=()=>live.dataHealth||{};
+  const [dashR,dhR,activeR,recentR]=await Promise.allSettled([
+    api('/v1/app/dashboard',{timeoutMs:12000}),
+    api('/v1/backoffice/data-health?days=14',{timeoutMs:14000}),
+    api('/v1/web-upload/active',{timeoutMs:12000}),
+    api('/v1/web-upload/recent?limit=6',{timeoutMs:12000})
+  ]);
+  const dash=dashR.status==='fulfilled'?dashR.value:null;
+  const dh=dhR.status==='fulfilled'?dhR.value:null;
+  const active=activeR.status==='fulfilled'?activeR.value:null;
+  const recent=recentR.status==='fulfilled'?recentR.value:null;
 
-  function renderSnapshot(){
-    const inventory=inventoryRows(),prices=priceRows(),orders=orderRows(),qa=qaRows(),dh=dataHealth();
-    const invReady=has('inventory'),priceReady=has('price'),orderReady=has('orderFresh')&&has('orderFrozen'),qaReady=has('qa'),dhReady=has('dataHealth');
-    const positiveOh=inventory.filter(x=>Number(x.family_oh||0)>0).length;
-    const sold7=inventory.filter(x=>Number(x.qty_7d||0)>0).length;
-    const actionable=prices.filter(x=>String(x.review_status||'').toUpperCase()==='ACTIONABLE'||x.priority_240_249_mismatch).length;
-    const orderAttention=orders.filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).length;
-    const completedDays=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
-    const highQa=qa.filter(x=>desktopSeverityRank(x.severity)>=3).length;
-    const val=(ready,v)=>ready?fmt(v,0):'—';
-    $('#desktopOverviewKpis').innerHTML=
-      '<div class="desktop-kpi-card blue"><small>ACTIVE ITEMS</small><b>'+val(invReady,inventory.length)+'</b><span>'+(invReady?fmt(sold7,0)+' sold in latest 7D evidence':'Loading inventory…')+'</span></div>'+
-      '<div class="desktop-kpi-card green"><small>POSITIVE FAMILY OH</small><b>'+val(invReady,positiveOh)+'</b><span>'+(invReady?'Current positive OH':'Loading inventory…')+'</span></div>'+
-      '<div class="desktop-kpi-card purple"><small>PRICE ACTIONS</small><b>'+val(priceReady,actionable)+'</b><span>'+(priceReady?'Actionable / 240↔249':'Loading pricing…')+'</span></div>'+
-      '<div class="desktop-kpi-card orange"><small>ORDERING ATTENTION</small><b>'+val(orderReady,orderAttention)+'</b><span>'+(orderReady?'Suggested / attention families':'Loading ordering…')+'</span></div>'+
-      '<div class="desktop-kpi-card red"><small>OPEN QA</small><b>'+val(qaReady,qa.length)+'</b><span>'+(qaReady?fmt(highQa,0)+' high / critical':'Loading QA…')+'</span></div>'+
-      '<div class="desktop-kpi-card cyan"><small>COMPLETE DATA DAYS</small><b>'+(dhReady?fmt(completedDays,0)+'/14':'—')+'</b><span>'+(dhReady?'POS + MVT canonical':'Loading data health…')+'</span></div>';
-  }
+  const quick=dash?.quick_check||{};
+  const invAtt=dash?.inventory_attention||{};
+  const dumping=dash?.dumping||{};
+  const orderFlow=dash?.order_workflow||{};
+  const priceFlow=dash?.price_change||{};
+  const completedDays=(dh?.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
+  const latestBatch=(active?.active_batch)||null;
+  const recentBatches=recent?.batches||[];
+  const batchHoldCount=recentBatches.filter(x=>/HOLD|BLOCK|FAIL|ERROR/i.test(String(x.phase3_status||x.processing_status||''))).length;
 
-  function queueColumn(title,sub,rows,ready,buttonHtml){
-    if(!ready)return '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>'+title+'</b><small>'+sub+'</small></div>'+buttonHtml+'</div>'+skeleton(3)+'</div>';
-    return '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>'+title+'</b><small>'+sub+'</small></div>'+buttonHtml+'</div>'+
-      (rows||'<div class="desktop-queue-empty">No items need attention.</div>')+'</div>';
-  }
+  $('#desktopOverviewKpis').innerHTML=
+    '<div class="desktop-kpi-card blue"><small>QUICK CHECK ROWS</small><b>'+fmt(quick.total_rows||0,0)+'</b><span>'+fmt(quick.ready_rows||0,0)+' ready</span></div>'+
+    '<div class="desktop-kpi-card green"><small>QC READY</small><b>'+fmt(quick.ready_rows||0,0)+'</b><span>'+fmt(quick.historical_rows||0,0)+' historical-only</span></div>'+
+    '<div class="desktop-kpi-card red"><small>QA HOLD ROWS</small><b>'+fmt(quick.qa_hold_rows||0,0)+'</b><span>Quick Check publication holds</span></div>'+
+    '<div class="desktop-kpi-card orange"><small>NEGATIVE STOCK</small><b>'+fmt(invAtt.negative_stock_actionable_owner_count||0,0)+'</b><span>'+fmt(invAtt.negative_stock_blocked_owner_count||0,0)+' blocked owners</span></div>'+
+    '<div class="desktop-kpi-card purple"><small>PENDING DUMPING</small><b>'+fmt(dumping.pending||0,0)+'</b><span>True Stock discrepancy queue</span></div>'+
+    '<div class="desktop-kpi-card cyan"><small>COMPLETE DATA DAYS</small><b>'+(dh?fmt(completedDays,0)+'/14':'—')+'</b><span>POS + MVT canonical</span></div>';
 
-  function renderQueues(){
-    const prices=priceRows(),orders=orderRows(),qa=qaRows();
-    const priceReady=has('price'),orderReady=has('orderFresh')&&has('orderFrozen'),qaReady=has('qa');
-    const actionable=prices.filter(x=>String(x.review_status||'').toUpperCase()==='ACTIONABLE'||x.priority_240_249_mismatch).length;
-    const orderAttention=orders.filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).length;
-    const highQa=qa.filter(x=>desktopSeverityRank(x.severity)>=3).length;
+  const qcRows=
+    desktopQueueItem('✓','Ready for Quick Check',fmt(quick.ready_rows||0,0)+' rows available','READY','good')+
+    (Number(quick.qa_hold_rows||0)?desktopQueueItem('!','QA Hold rows','Quick Check rows requiring resolution',fmt(quick.qa_hold_rows||0,0),'bad'):'')+
+    (Number(quick.historical_rows||0)?desktopQueueItem('↺','Historical only','Inactive / historical publication rows',fmt(quick.historical_rows||0,0),'warn'):'');
+  const invRows=
+    (Number(invAtt.negative_stock_actionable_owner_count||0)?desktopQueueItem('−','Negative stock owners','Actionable inventory owners',fmt(invAtt.negative_stock_actionable_owner_count||0),'bad'):'')+
+    (Number(invAtt.negative_stock_blocked_owner_count||0)?desktopQueueItem('⊘','Blocked stock owners','Need upstream identity / UOM resolution',fmt(invAtt.negative_stock_blocked_owner_count||0),'warn'):'')+
+    (Number(dumping.pending||0)?desktopQueueItem('↘','Pending dumping','True Stock below System OH',fmt(dumping.pending||0),'orange'):'');
+  const pipelineRows=
+    (latestBatch?desktopQueueItem('↻','Current processing','Batch #'+String(latestBatch.batch_id||'—')+' · '+String(latestBatch.processing_status||latestBatch.status||'ACTIVE'),'LIVE','purple'):'')+
+    (batchHoldCount?desktopQueueItem('!','Recent batch holds','Recent batches still carrying hold status',fmt(batchHoldCount,0),'bad'):'')+
+    desktopQueueItem('▦','Completed data days','Canonical POS + MVT coverage',dh?fmt(completedDays,0)+'/14':'—','good');
 
-    const urgentPrice=[...prices].sort((a,b)=>Number(Boolean(b.priority_240_249_mismatch))-Number(Boolean(a.priority_240_249_mismatch))||Number(b.urgency_score||0)-Number(a.urgency_score||0)).slice(0,4);
-    const urgentOrder=[...orders].filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).sort((a,b)=>Number(b.suggested_delivery_qty||0)-Number(a.suggested_delivery_qty||0)).slice(0,4);
-    const urgentQa=[...qa].sort((a,b)=>desktopSeverityRank(b.severity)-desktopSeverityRank(a.severity)||Number(b.oh||0)-Number(a.oh||0)).slice(0,4);
+  $('#desktopWorkQueues').innerHTML=
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Quick Check</b><small>'+fmt(quick.ready_rows||0,0)+' ready · '+fmt(quick.qa_hold_rows||0,0)+' hold</small></div><button data-go-view="quick">Open</button></div>'+(qcRows||'<div class="desktop-queue-empty">No Quick Check attention.</div>')+'</div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Inventory / PI</b><small>Physical-stock attention</small></div><button data-go-view="inventory">Open</button></div>'+(invRows||'<div class="desktop-queue-empty">No inventory attention.</div>')+'</div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Data pipeline</b><small>'+fmt(batchHoldCount,0)+' recent holds</small></div><button data-go-view="database" data-go-db="dboverview">Open</button></div>'+pipelineRows+'</div>';
 
-    const pRows=urgentPrice.map(x=>desktopQueueItem('＄',x.name||x.upc,(x.upc||'')+' · '+(x.primary_reason_text||x.review_status||''),x.priority_240_249_mismatch?'240≠249':money(x.candidate_price),x.priority_240_249_mismatch?'bad':'purple')).join('');
-    const oRows=urgentOrder.map(x=>desktopQueueItem('→',x.family_name||x.family_article,(x.receiving_article||'')+' · OH '+fmt(x.oh)+' '+(x.oh_uom||''),fmt(x.suggested_delivery_qty)+' '+(x.suggested_delivery_uom||''),'orange')).join('');
-    const qRows=urgentQa.map(x=>desktopQueueItem('!',x.item_name||x.name||x.ean_upc||x.article_number,x.issue_code||x.reason||x.issue_type||'',String(x.severity||'REVIEW'),desktopSeverityRank(x.severity)>=3?'bad':'warn')).join('');
-
-    $('#desktopWorkQueues').innerHTML=
-      queueColumn('Pricing',priceReady?fmt(actionable,0)+' actions':'Loading actions',pRows,priceReady,'<button data-go-view="pricing">Open</button>')+
-      queueColumn('Ordering',orderReady?fmt(orderAttention,0)+' families':'Loading families',oRows,orderReady,'<button data-go-view="ordering">Open</button>')+
-      queueColumn('QA',qaReady?fmt(qa.length,0)+' open':'Loading issues',qRows,qaReady,'<button data-go-view="database" data-go-db="dbqa">Open</button>');
-
-    const loaded=[priceReady,orderReady,qaReady].filter(Boolean).length;
-    const attention=(priceReady?actionable:0)+(orderReady?orderAttention:0)+(qaReady?qa.length:0);
-    const workStatus=$('#desktopWorkQueueStatus');
-    if(loaded<3){workStatus.textContent=loaded+'/3 READY';workStatus.className='v3-status-chip'}
-    else{workStatus.textContent=attention?fmt(attention,0)+' ITEMS':'CLEAR';workStatus.className='v3-status-chip '+(highQa?'bad':attention?'warn':'good')}
-  }
-
-  function renderFreshness(){
-    if(!has('dataHealth'))return;
-    const dh=dataHealth();
+  if(dh){
     $('#desktopFreshnessBoard').innerHTML=
       desktopLatestSource(dh,'POS','POS Sales')+
       desktopLatestSource(dh,'MVT','Movement (MVT)')+
@@ -4613,33 +4610,15 @@ async function loadDesktopOverview(){
       desktopLatestSource(dh,'OH','OH Report')+
       desktopLatestSource(dh,'LIVE_FRESH','Live / Fresh')+
       desktopLatestSource(dh,'FROZEN','Frozen');
+  }else{
+    $('#desktopFreshnessBoard').innerHTML='<div class="desktop-queue-empty">Data Health did not respond. Open Data & QA to retry.</div>';
   }
 
-  function renderBatches(){
-    if(!has('active')&&!has('recent'))return;
-    const current=live.active?.active_batch;
-    const batches=[...(current?[{...current,batch_label:'Current processing'}]:[]),...(live.recent?.batches||[])].slice(0,6);
-    $('#desktopRecentBatches').innerHTML=batches.map(desktopBatchRow).join('')||'<div class="desktop-queue-empty">No recent batches.</div>';
-  }
+  const batches=[...(latestBatch?[{...latestBatch,batch_label:'Current processing'}]:[]),...recentBatches].slice(0,6);
+  $('#desktopRecentBatches').innerHTML=batches.map(desktopBatchRow).join('')||'<div class="desktop-queue-empty">No recent batches.</div>';
 
-  const jobs=[];
-  const load=(name,promise,after)=>{
-    const p=promise.then(d=>{live[name]=d;after?.();renderSnapshot();renderQueues()})
-      .catch(e=>{live[name]=null;failures.push({name,error:e?.message||String(e)});after?.();renderSnapshot();renderQueues()});
-    jobs.push(p);
-  };
-
-  load('inventory',api('/v1/backoffice/inventory?category=ALL&limit=300&lightweight=true',{timeoutMs:20000}));
-  load('price',api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}));
-  load('orderFresh',api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}));
-  load('orderFrozen',api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000}));
-  load('qa',api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000}));
-  load('dataHealth',api('/v1/backoffice/data-health?days=14',{timeoutMs:20000}),renderFreshness);
-  load('active',api('/v1/web-upload/active',{timeoutMs:16000}),renderBatches);
-  load('recent',api('/v1/web-upload/recent?limit=5',{timeoutMs:16000}),renderBatches);
-
-  await Promise.allSettled(jobs);
-  if(failures.length&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failures.length+' source request(s) timed out or failed; available modules remain usable.</div>';
+  const failed=[dashR,dhR,activeR,recentR].filter(x=>x.status==='rejected').length;
+  if(failed&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failed+' lightweight source request(s) failed; module pages remain available.</div>';
 }
 async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').textContent=h.ok?'SERVICE READY':'SERVICE ISSUE';$('#readyPill').style.color=h.ok?'#bff3d2':'#ffd0c8'}catch(e){$('#readyPill').textContent='SERVICE ERROR'}}
 async function loadInventory(){
