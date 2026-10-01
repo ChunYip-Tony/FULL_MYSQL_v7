@@ -116,6 +116,37 @@ def find_active_batch() -> dict[str,Any]|None:
                 row['active_heartbeat_age_seconds']=heartbeat_age_seconds
                 row['active_heartbeat_fresh']=heartbeat_fresh
                 row['active_worker']=detail.get('worker')
+
+                # Exact live progress payload written by the worker. Keep these
+                # fields flat so web/mobile status polling can render them
+                # without opening the full pipeline detail JSON.
+                for key in (
+                    'progress_kind','progress_unit','progress_current','progress_total',
+                    'progress_pct','progress_ready','progress_hold','progress_historical',
+                    'progress_elapsed_seconds','progress_rows_per_second','progress_eta_seconds',
+                    'progress_current_upc','progress_current_name',
+                ):
+                    row['active_'+key]=detail.get(key)
+
+            # During Phase 3, surface current open issue counts directly on the
+            # active batch page. These are live diagnostic counts, not the final
+            # committed Phase 3 result.
+            cur.execute(
+                """SELECT issue_code,COUNT(*) AS issue_count
+                   FROM qa_phase3_issue
+                   WHERE batch_id=%s
+                     AND issue_status='OPEN'
+                   GROUP BY issue_code
+                   ORDER BY issue_count DESC,issue_code
+                   LIMIT 12""",
+                (int(row['batch_id']),),
+            )
+            issue_rows=cur.fetchall()
+            row['active_issue_counts']=[
+                {'issue_code':x['issue_code'],'issue_count':int(x['issue_count'] or 0)}
+                for x in issue_rows
+            ]
+            row['active_issue_total']=sum(x['issue_count'] for x in row['active_issue_counts'])
         cur.close()
     if row:
         row['device_id']=_device_from_notes(row.get('notes'))
