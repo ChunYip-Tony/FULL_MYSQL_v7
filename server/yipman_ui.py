@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v331';
+const CACHE='yipman-v332';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -137,6 +137,35 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #home .launch em{font-size:10px;line-height:1.15}
 #home .priority .ph{font-size:11px}
 
+/* V332 Quick Check: compact hierarchy with unmistakable family color ownership. */
+.qfamily{--grp-border:#d6b72d;--grp-head:#fff5bf;--grp-recv:#fff9df;border:1.5px solid var(--grp-border);border-left:6px solid var(--grp-border);border-radius:17px;margin-bottom:8px;background:#fff;box-shadow:0 7px 20px rgba(18,38,56,.07)}
+.qfamily.tone0{--grp-border:#ddb916;--grp-head:#fff3b7;--grp-recv:#fff9dc}
+.qfamily.tone1{--grp-border:#58bd70;--grp-head:#dff6df;--grp-recv:#effbef}
+.qfamily.tone2{--grp-border:#4a9de2;--grp-head:#dcedfb;--grp-recv:#eef7fe}
+.qfamily.tone3{--grp-border:#ef72a5;--grp-head:#fde2ec;--grp-recv:#fff0f5}
+.qfamily.tone4{--grp-border:#9b7be0;--grp-head:#ece4fb;--grp-recv:#f7f2ff}
+.qfhead{padding:8px 9px;background:linear-gradient(90deg,var(--grp-head),#fff);border-bottom:1px solid color-mix(in srgb,var(--grp-border) 45%,#fff);grid-template-columns:minmax(0,1fr) auto}
+.qfamily:nth-child(n) .qfhead{background:linear-gradient(90deg,var(--grp-head),#fff)}
+.qfamily .qlabel{color:#675c2d;font-size:8px}.qfamily .qfnum{font-size:19px}.qfamily .qfname{font-size:14px;margin-top:2px;white-space:normal}
+.qfamily .qmeta{font-size:8px;margin-top:2px}.qfamily .qkpi small{font-size:7px}.qfamily .qkpi b{font-size:14px}
+.qreceivingrow{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr);gap:6px;align-items:center;padding:6px 9px;background:var(--grp-recv);border-bottom:1px solid color-mix(in srgb,var(--grp-border) 28%,#fff)}
+.qrecvidentity{min-width:0;display:grid;grid-template-columns:23px minmax(0,1fr);gap:7px;align-items:center}
+.qricon{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#f47b35;color:#fff;font-size:10px;font-weight:950}
+.qrnum{font-size:13px;font-weight:950;line-height:1.05}.qrname{font-size:9px;font-weight:800;color:#334554;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.qdelivery{min-width:0;text-align:right}.qdelivery small{display:block;font-size:6px;color:#667784;font-weight:900;letter-spacing:.03em}.qdelivery b{display:block;font-size:11px;line-height:1.1}.qdelivery span{font-size:8px;color:#435868;font-weight:800}
+.qsap{margin:6px 7px;border:1px solid #d9e2e9;border-left:4px solid var(--grp-border);border-radius:12px;overflow:hidden;background:#fff}
+.qsaphead{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;padding:6px 8px;background:#f3f7fa;border-bottom:1px solid #dfe6eb}
+.qsaprole{font-size:7px;font-weight:950;letter-spacing:.06em;color:#5e7180}.qsaptop{display:flex;align-items:baseline;gap:7px;min-width:0}.qsapnum{font-size:15px;font-weight:950;white-space:nowrap}.qsapname{font-size:10px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qsapkpis{display:grid;grid-template-columns:auto auto;gap:11px}.qsapkpi{text-align:right}.qsapkpi small{display:block;font-size:6px;color:#6d7d89;font-weight:900}.qsapkpi b{font-size:12px}
+.qupc{padding:6px 8px;gap:6px}.qupctop{gap:5px}.qrole{font-size:8px;padding:3px 6px;border-radius:8px}.qrole.main{background:#dff0ff;color:#075b9b}.qrole.service{background:#ffe3e6;color:#c9272f}.qrole.package{background:#eee2ff;color:#6c2ab7}
+.qupccode{font-size:10px}.qupcname{font-size:11px;margin-top:2px}.qupcmetrics b{font-size:13px}.qupcmetrics span,.qready{font-size:8px}
+.qhidebtn{padding:6px 8px}.qhiddennote{padding:5px 8px}
+@media(max-width:430px){
+  .qreceivingrow{grid-template-columns:minmax(0,1.2fr) minmax(0,.82fr) minmax(0,.82fr);gap:4px;padding:6px 7px}
+  .qrname{font-size:8px}.qdelivery b{font-size:10px}.qdelivery span{font-size:7px}
+  .qsapkpis{gap:8px}.qsapname{font-size:9px}
+}
+
 </style>
 </head>
 <body>
@@ -177,6 +206,14 @@ const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefi
 const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
 const iso=d=>d.toISOString().slice(0,10);
 const shortDate=v=>{const m=String(v||'').match(/^\d{4}-(\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]:'—'};
+const appDate=v=>{
+  const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m)return '—';
+  const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
+  const dt=new Date(y,mo-1,d,12,0,0,0);
+  const wd=dt.toLocaleDateString(undefined,{weekday:'short'});
+  return mo+'/'+d+' '+wd;
+};
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='home', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
@@ -308,26 +345,42 @@ function hasActivity(v){const n=Number(v);return Number.isFinite(n)&&Math.abs(n)
 function quickRole(r){
  const raw=String(r?.upc||'').replace(/\D/g,'').replace(/^0+/,'');
  const p=raw.slice(0,3);
- if(p==='240')return {label:'MAIN UPC · 240',cls:'main'};
+ if(p==='240')return {label:'MAIN · 240',cls:'main'};
  if(p==='249')return {label:'SERVICE · 249',cls:'service'};
- if(p==='245')return {label:'RELATED · 245',cls:''};
+ if(p==='245')return {label:'PACKAGE · 245',cls:'package'};
  if(p==='247')return {label:'RELATED · 247',cls:''};
  return {label:'UPC'+(p?' · '+p:''),cls:''};
 }
 function quickFamilyGroups(rows){
  const groups=new Map();
+ const articleCopy=a=>({
+   article_number:String(a?.article_number||'').trim(),
+   article_description:a?.article_description||'',
+   article_role:a?.article_role||'',
+   relationship_type:a?.relationship_type||'',
+   movement_7d:a?.movement_7d,
+   movement_uom:a?.movement_uom||'',
+   avg_qty_day:a?.avg_qty_day,
+   movement_status:a?.movement_status||'',
+   receipt_verified:!!a?.receipt_verified,
+   receipt_history:Array.isArray(a?.receipt_history)?a.receipt_history:[],
+   has_active_pos_upc:!!a?.has_active_pos_upc
+ });
  for(const r of (rows||[])){
    const key=String(r.family_id??r.family_article??('UPC:'+String(r.upc||'')));
    if(!groups.has(key))groups.set(key,{
      key,family_id:r.family_id,family_article:r.family_article||null,family_name:r.family_name||'Unmapped Family',category:r.category||'',
-     rows:[],source_rows:[],receiving:new Map(),max_velocity:Number.NEGATIVE_INFINITY,
+     rows:[],article_catalog:new Map(),receiving:new Map(),selling:new Map(),max_velocity:Number.NEGATIVE_INFINITY,
      group_qty_7d:r.family_group_movement_7d??r.family_qty_7d??null,
      group_avg_qty_day:r.family_group_avg_qty_day??r.family_avg_qty_day??null,
      group_uom:r.family_group_movement_uom||r.family_qty_uom||'',
-     group_status:r.family_group_movement_status||'',
      reconciliation:r.family_group_reconciliation||'',
      source_article:r.family_source_article||r.family_article||null,
-     family_receipt_verified:!!r.family_receipt_verified
+     source_movement_7d:r.family_source_movement_7d,
+     source_avg_qty_day:r.family_source_avg_qty_day,
+     source_movement_uom:r.family_source_movement_uom||'',
+     family_receipt_verified:!!r.family_receipt_verified,
+     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -335,34 +388,71 @@ function quickFamilyGroups(rows){
    if(g.group_avg_qty_day==null&&r.family_group_avg_qty_day!=null)g.group_avg_qty_day=r.family_group_avg_qty_day;
    if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
    if(!g.reconciliation&&r.family_group_reconciliation)g.reconciliation=String(r.family_group_reconciliation);
-   if(!g.source_article&&r.family_source_article)g.source_article=String(r.family_source_article);
 
-   for(const a of (Array.isArray(r.receiving_articles)?r.receiving_articles:[])){
-     const art=String(a?.article_number||'').trim();if(!art)continue;
-     if(!g.receiving.has(art))g.receiving.set(art,{
-       article_number:art,article_description:a.article_description||'',article_role:a.article_role||'',relationship_type:a.relationship_type||'',
-       movement_7d:a.movement_7d,movement_uom:a.movement_uom||'',avg_qty_day:a.avg_qty_day,movement_status:a.movement_status||'',
-       has_active_pos_upc:!!a.has_active_pos_upc,receipt_verified:!!a.receipt_verified,receipt_date:a.receipt_date||'',rows:[],max_velocity:Number.NEGATIVE_INFINITY
-     });
+   for(const rawA of (Array.isArray(r.receiving_articles)?r.receiving_articles:[])){
+     const a=articleCopy(rawA),art=a.article_number;if(!art)continue;
+     const prev=g.article_catalog.get(art);
+     if(!prev||a.receipt_history.length>prev.receipt_history.length||hasActivity(a.movement_7d))g.article_catalog.set(art,a);
    }
-
-   const assigned=String(r.receiving_article||'').trim();
-   const sourceKey=String(g.source_article||g.family_article||'').trim();
-   if(assigned&&sourceKey&&assigned===sourceKey){g.source_rows.push(r);continue}
-   const recvKey=assigned||'UNRESOLVED';
-   if(!g.receiving.has(recvKey))g.receiving.set(recvKey,{
-     article_number:assigned||null,article_description:assigned?'':'Receiving Article unresolved',article_role:'RELATED_SAP_ARTICLE',
-     movement_7d:r.receiving_movement_7d,movement_uom:r.receiving_movement_uom||'',avg_qty_day:r.receiving_avg_qty_day,
-     movement_status:r.receiving_movement_status||'',has_active_pos_upc:false,receipt_verified:false,receipt_date:'',rows:[],max_velocity:Number.NEGATIVE_INFINITY
-   });
-   const a=g.receiving.get(recvKey);a.rows.push(r);if(Number.isFinite(v))a.max_velocity=Math.max(a.max_velocity,v);
  }
  const out=[...groups.values()];
  for(const g of out){
+   const sourceKey=String(g.source_article||g.family_article||'').trim();
+
+   if(sourceKey&&g.family_receipt_history.length){
+     g.receiving.set(sourceKey,{
+       article_number:sourceKey,
+       article_description:g.family_name||'',
+       receipt_history:g.family_receipt_history,
+       source_family:true
+     });
+   }
+   for(const a of g.article_catalog.values()){
+     if(a.receipt_verified||a.receipt_history.length){
+       g.receiving.set(a.article_number,{
+         article_number:a.article_number,
+         article_description:a.article_description||'',
+         receipt_history:a.receipt_history||[],
+         source_family:false
+       });
+     }
+   }
+
+   for(const r of g.rows){
+     const assigned=String(r.receiving_article||'').trim();
+     const art=assigned||String(r.article_number||'').trim();
+     if(!art)continue;
+     const catalog=g.article_catalog.get(art)||{};
+     const isSource=sourceKey&&art===sourceKey;
+     if(!g.selling.has(art))g.selling.set(art,{
+       article_number:art,
+       article_description:(isSource?(g.family_name||r.name):'')||catalog.article_description||r.name||'',
+       movement_7d:isSource?g.source_movement_7d:(catalog.movement_7d??r.receiving_movement_7d),
+       movement_uom:isSource?(g.source_movement_uom||g.group_uom):(catalog.movement_uom||r.receiving_movement_uom||g.group_uom),
+       avg_qty_day:isSource?g.source_avg_qty_day:(catalog.avg_qty_day??r.receiving_avg_qty_day),
+       rows:[],max_velocity:Number.NEGATIVE_INFINITY
+     });
+     const a=g.selling.get(art);a.rows.push(r);if(Number.isFinite(Number(r.velocity_7d)))a.max_velocity=Math.max(a.max_velocity,Number(r.velocity_7d));
+   }
+
+   for(const a of g.article_catalog.values()){
+     const role=String(a.article_role||'').toUpperCase();
+     if(!g.selling.has(a.article_number)&&(role.includes('SAP_SELLING_ARTICLE')||hasActivity(a.movement_7d))){
+       g.selling.set(a.article_number,{
+         article_number:a.article_number,article_description:a.article_description||'',
+         movement_7d:a.movement_7d,movement_uom:a.movement_uom||g.group_uom,avg_qty_day:a.avg_qty_day,
+         rows:[],max_velocity:Number.NEGATIVE_INFINITY
+       });
+     }
+   }
+
    const sortRows=a=>a.sort((x,y)=>Number(y.velocity_7d||0)-Number(x.velocity_7d||0)||Number(y.qty_7d||0)-Number(x.qty_7d||0)||String(x.upc||'').localeCompare(String(y.upc||'')));
-   sortRows(g.rows);sortRows(g.source_rows);g.receiving=[...g.receiving.values()];
-   for(const a of g.receiving)sortRows(a.rows);
-   g.receiving.sort((a,b)=>(Number.isFinite(b.max_velocity)?b.max_velocity:-999999)-(Number.isFinite(a.max_velocity)?a.max_velocity:-999999)||Number(b.movement_7d||0)-Number(a.movement_7d||0)||Number(b.receipt_verified)-Number(a.receipt_verified)||String(a.article_number||'').localeCompare(String(b.article_number||'')));
+   for(const a of g.selling.values())sortRows(a.rows);
+   g.receiving=[...g.receiving.values()].sort((a,b)=>{
+     const ad=String(a.receipt_history?.[0]?.date||''),bd=String(b.receipt_history?.[0]?.date||'');
+     return bd.localeCompare(ad)||Number(b.source_family)-Number(a.source_family)||String(a.article_number).localeCompare(String(b.article_number));
+   });
+   g.selling=[...g.selling.values()].sort((a,b)=>(Number.isFinite(b.max_velocity)?b.max_velocity:-999999)-(Number.isFinite(a.max_velocity)?a.max_velocity:-999999)||Number(b.movement_7d||0)-Number(a.movement_7d||0)||String(a.article_number).localeCompare(String(b.article_number)));
  }
  out.sort((a,b)=>b.max_velocity-a.max_velocity||Number(b.group_qty_7d||0)-Number(a.group_qty_7d||0)||String(a.family_name||'').localeCompare(String(b.family_name||'')));
  return out;
@@ -375,33 +465,36 @@ function hiddenUpcs(rows,id){
  if(!rows.length)return '';
  return '<button class="qhidebtn" data-qhide="'+esc(id)+'" data-noun="UPC">Show '+rows.length+' inactive UPC'+(rows.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+esc(id)+'"><div class="qhiddennote">Hidden by default · UPC 7D POS Qty = 0 / none.</div>'+rows.map(quickUpcHtml).join('')+'</div>';
 }
-function quickReceivingHtml(a,idx,seq,{inactive=false}={}){
- const uom=String(a.movement_uom||''), hasMvt=hasActivity(a.movement_7d), positive=Number(a.movement_7d||0)>0;
- const code=String(a.article_role||'').toUpperCase();
- const role=code==='RECEIVING_AND_SAP_SELLING_ARTICLE'?'RECEIVING / SAP SELLING ARTICLE':code==='RECEIVING_ARTICLE'?'RECEIVING ARTICLE':code==='SAP_SELLING_ARTICLE'?'SAP SELLING ARTICLE':code==='RELATED_SAP_ARTICLE'?'RELATED SAP ARTICLE':(a.receipt_verified&&hasMvt?'RECEIVING / SAP SELLING ARTICLE':a.receipt_verified?'RECEIVING ARTICLE':hasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE');
- const rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
+function quickDeliveryCell(x,label){
+ if(!x)return '<div class="qdelivery"><small>'+label+'</small><b>—</b><span>No receipt</span></div>';
+ const uom=String(x.uom||'').trim();
+ return '<div class="qdelivery"><small>'+label+'</small><b>'+esc(appDate(x.date))+'</b><span>'+fmt(x.quantity)+' '+esc(uom)+'</span></div>';
+}
+function quickReceivingRowHtml(a){
+ const history=(Array.isArray(a.receipt_history)?a.receipt_history:[]).slice(0,2);
+ return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">R</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(a.article_description||'Receiving Article')+'</div></div></div>'+
+   quickDeliveryCell(history[0],'LATEST DELIVERY')+quickDeliveryCell(history[1],'PREV DELIVERY')+'</div>';
+}
+function quickSellingHtml(a,idx,seq,{inactive=false}={}){
+ const uom=String(a.movement_uom||''),rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
  const hid='q-upc-'+idx+'-'+seq;
- return '<section class="qrecv '+(a.receipt_verified?'receipt ':positive?'mvt ':'')+'">'+
-   '<div class="qrecvhead"><div><div class="qrecvrole">'+esc(role)+'</div><div class="qrecvnum">'+esc(a.article_number||'UNRESOLVED')+(a.receipt_verified?'<span class="qreceipt">O</span>':'')+'</div><div class="qrecvname">'+esc(a.article_description||'')+'</div><div class="qmeta">'+(hasMvt?'251−252 SELLING MVT':'No 7D 251−252 MVT')+(a.receipt_verified?' · 101–109 RECEIPT VERIFIED':'')+(a.receipt_date?' · '+esc(a.receipt_date):'')+'</div></div><div class="qrecvkpis"><div class="qrecvkpi"><small>7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b></div><div class="qrecvkpi"><small>AVG/DAY</small><b>'+fmt(a.avg_qty_day)+' '+esc(uom)+'</b></div></div></div>'+
-   active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+
-   (inactive?'<div class="qhiddennote">Inactive SAP Article · no 7D receiving MVT and no related UPC activity.</div>':'')+
- '</section>';
+ return '<section class="qsap"><div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span><span class="qsapname">'+esc(a.article_description||'')+'</span></div></div><div class="qsapkpis"><div class="qsapkpi"><small>7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b></div><div class="qsapkpi"><small>AVG/DAY</small><b>'+fmt(a.avg_qty_day)+' '+esc(uom)+'</b></div></div></div>'+
+   active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+(inactive?'<div class="qhiddennote">Inactive SAP Selling Article · no 7D MVT and no active UPC.</div>':'')+'</section>';
 }
 function quickGroupedHtml(rows){
  return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
    const uom=g.group_uom||'',recon=String(g.reconciliation||'').toUpperCase();
    const familyHead='<div class="qfhead"><div><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div><div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div><div class="qfkpis"><div class="qkpi"><small>7D TOTAL SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div><div class="qkpi"><small>AVG/DAY</small><b>'+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</b></div></div></div>';
-   const sourceActive=g.source_rows.filter(r=>hasActivity(r.qty_7d)), sourceInactive=g.source_rows.filter(r=>!hasActivity(r.qty_7d));
-   const source=sourceActive.map(quickUpcHtml).join('')+hiddenUpcs(sourceInactive,'q-src-'+idx);
+   const receivingHtml=g.receiving.map(quickReceivingRowHtml).join('');
    const visible=[],hidden=[];
-   for(const a of (g.receiving||[])){
-     const hasMvt=hasActivity(a.movement_7d),hasUpc=(a.rows||[]).some(r=>hasActivity(r.qty_7d))||a.has_active_pos_upc;
-     (a.receipt_verified||hasMvt||hasUpc?visible:hidden).push(a);
+   for(const a of (g.selling||[])){
+     const hasMvt=hasActivity(a.movement_7d),hasUpc=(a.rows||[]).some(r=>hasActivity(r.qty_7d));
+     (hasMvt||hasUpc?visible:hidden).push(a);
    }
-   const visibleHtml=visible.map((a,i)=>quickReceivingHtml(a,idx,i)).join('');
+   const visibleHtml=visible.map((a,i)=>quickSellingHtml(a,idx,i)).join('');
    const hiddenId='q-art-'+idx;
-   const hiddenHtml=hidden.length?'<button class="qhidebtn" data-qhide="'+hiddenId+'" data-noun="SAP Article">Show '+hidden.length+' inactive SAP Article'+(hidden.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+hiddenId+'">'+hidden.map((a,i)=>quickReceivingHtml(a,idx,100+i,{inactive:true})).join('')+'</div>':'';
-   return '<section class="qfamily">'+familyHead+(source?'<div class="qsource">'+source+'</div>':'')+visibleHtml+hiddenHtml+'</section>';
+   const hiddenHtml=hidden.length?'<button class="qhidebtn" data-qhide="'+hiddenId+'" data-noun="SAP Selling Article">Show '+hidden.length+' inactive SAP Selling Article'+(hidden.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+hiddenId+'">'+hidden.map((a,i)=>quickSellingHtml(a,idx,100+i,{inactive:true})).join('')+'</div>':'';
+   return '<section class="qfamily tone'+(idx%5)+'">'+familyHead+receivingHtml+visibleHtml+hiddenHtml+'</section>';
  }).join('');
 }
 function bindQuickRows(){
@@ -461,11 +554,11 @@ async function loadOrder(offset){
  try{
   let data=null;
   for(let i=0;i<10;i++){
-   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+orderDate+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
+   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
    if(requestId!==orderRequestSeq)return;
    const status=String(data.analysis_status||'').toUpperCase();
    if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;
-   $('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';
+   $('#orderStatus').textContent='Calculating '+appDate(orderDate)+' · receipt cadence first';
    await new Promise(r=>setTimeout(r,1500));
   }
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
@@ -490,8 +583,8 @@ async function loadOrder(offset){
   if(data?.history_mode||finalStatus==='HISTORY_READY'){
     $('#orderCol2').textContent='RECEIPT';
     $('#orderCol3').textContent='UOM';
-    $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+orderDate+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
-    $('#orderRows').innerHTML=rows.slice(0,24).map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div></div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/107/109 receipt was recorded on '+esc(orderDate)+'.</div>';
+    $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+appDate(orderDate)+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
+    $('#orderRows').innerHTML=rows.slice(0,24).map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div></div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/107/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
     $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
     return;
   }
@@ -512,7 +605,7 @@ async function loadOrder(offset){
 }
 function openOrderHistory(r){
  const events=Array.isArray(r.receipt_events)?r.receipt_events:[];
- sheet(r.family_name||'Delivery history','Family '+esc(r.family_article||'—')+' · '+esc(r.selected_delivery_date||orderDate),
+ sheet(r.family_name||'Delivery history','Family '+esc(r.family_article||'—')+' · '+esc(appDate(r.selected_delivery_date||orderDate)),
  '<div class="dmetrics"><div class="dm"><b>'+fmt(r.receipt_qty)+' '+esc(r.receipt_uom||'')+'</b><span>ACTUAL RECEIPT</span></div><div class="dm"><b>'+fmt(r.receipt_event_count,0)+'</b><span>RECEIPT EVENTS</span></div><div class="dm"><b>'+esc(r.category||'—')+'</b><span>CATEGORY</span></div></div>'+
  '<div class="detail"><b>Receiving article(s)</b><br>'+esc((r.receiving_articles||[]).join(' + ')||r.receiving_article||'—')+
  (events.length?'<br><br><b>Receipt detail</b><br>'+events.map(x=>'• '+esc(x.article_number||'Article')+' · '+fmt(x.quantity)+' '+esc(x.uom||'')+(x.purchase_order?' · PO '+esc(x.purchase_order):'')).join('<br>'):'')+
@@ -520,11 +613,11 @@ function openOrderHistory(r){
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[];
- sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(r.selected_delivery_date||orderDate),
+ sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
  '<div class="dmetrics"><div class="dm"><b>'+fmt(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>CURRENT OH</span></div><div class="dm"><b>'+fmt(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+fmt(r.suggested_delivery_qty)+' '+esc(r.suggested_delivery_uom||'')+'</b><span>'+(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER')+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">Best available estimate · data through '+esc(r.data_through||'—')+' · required through '+esc(r.expected_through||'—')+'.</div>':'')+
  '<div class="detail"><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
- '<br><br><b>Last receipt</b><br>'+esc(r.last_receipt_date||'—')+' · '+fmt(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
+ '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmt(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
  '<br><br><b>Demand</b><br>7D '+fmt(d.qty_7d)+' · 28D '+fmt(d.qty_28d)+' · DOS '+fmt(d.dos)+
  '<br><br><b>Projected at delivery</b><br>'+fmt(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+
  '<br><br><b>Delivery evidence</b><br>'+fmt(r.delivery_day_observed_count,0)+' / '+fmt(r.delivery_day_receipt_count,0)+' receipt dates · '+fmt(r.delivery_day_confidence_pct,0)+'% confidence'+

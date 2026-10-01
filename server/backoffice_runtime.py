@@ -2130,65 +2130,117 @@ def _quick_receiving_article_context(
         }
     )
 
-    # Receipt verification applies to the Family/source header and also remains
-    # available for any linked Article that independently has 101-109 history.
+    # Receipt verification applies to the Family/source header and linked Articles.
+    # V332 builds the two latest DELIVERY dates from canonical movement snapshots,
+    # aggregates all positive receipt events on the same Article/date, and keeps
+    # 251/252 selling movement completely separate from receiving quantity.
     receipt_articles = sorted(set(source_articles) | set(article_numbers))
     receipt_by_article: dict[str, dict[str, Any]] = {}
     receipt_history_by_article: dict[str, list[dict[str, Any]]] = {}
     if receipt_articles:
+        receipt_days_180 = source_data_days(
+            cur,
+            "movement",
+            limit=180,
+            up_to=completed_through_date(),
+        )
+        canonical_receipt_files = {
+            x["date"]: int(x["file_id"])
+            for x in receipt_days_180
+            if x.get("date") is not None and x.get("file_id") is not None
+        }
         aph = ",".join(["%s"] * len(receipt_articles))
         receipt_types = tuple(str(x) for x in range(101, 110))
         tph = ",".join(["%s"] * len(receipt_types))
         cur.execute(
             f"""SELECT article_number,movement_type,posting_date,
-                       base_quantity,base_uom_code,file_id
+                       base_quantity,base_uom_code,file_id,
+                       article_document,purchase_order,raw_id,source_row_number
                 FROM movement_history
                 WHERE article_number IN ({aph})
                   AND movement_type IN ({tph})
-                ORDER BY article_number,
-                         posting_date DESC,
-                         CASE movement_type
-                           WHEN '109' THEN 0
-                           WHEN '107' THEN 1
-                           ELSE 2
-                         END,
-                         file_id DESC""",
+                ORDER BY article_number,posting_date DESC,file_id DESC,
+                         raw_id DESC,source_row_number DESC""",
             tuple(receipt_articles) + receipt_types,
         )
-        seen_receipt_dates: dict[str, set[str]] = {}
-        for r in cur.fetchall():
-            art = str(r.get("article_number") or "")
+        canonical_rows = [
+            r for r in cur.fetchall()
+            if r.get("posting_date") in canonical_receipt_files
+            and canonical_receipt_files[r["posting_date"]] == int(r["file_id"])
+        ]
+
+        # First collapse movement stages at the receipt-document level so
+        # 101/107/109 representations of the same physical delivery are not
+        # counted more than once.
+        event_groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+        for r in canonical_rows:
+            art = str(r.get("article_number") or "").strip()
             posting_date = r.get("posting_date")
             if not art or posting_date is None:
                 continue
-            date_key = str(posting_date)
-            seen = seen_receipt_dates.setdefault(art, set())
-            if date_key in seen:
+            key = (
+                art,
+                posting_date,
+                str(r.get("purchase_order") or ""),
+                str(r.get("article_document") or ""),
+            )
+            event_groups.setdefault(key, []).append(r)
+
+        daily_events: dict[tuple[str, Any], list[dict[str, Any]]] = {}
+        for key, group in event_groups.items():
+            chosen, stage = _receipt_stage_rows(group)
+            if not chosen:
                 continue
-            history = receipt_history_by_article.setdefault(art, [])
-            if len(history) >= 2:
+            uoms = {
+                str(x.get("base_uom_code") or "").strip().upper()
+                for x in chosen
+                if str(x.get("base_uom_code") or "").strip()
+            }
+            if len(uoms) != 1:
                 continue
+            if not any(x.get("base_quantity") is not None for x in chosen):
+                continue
+            qty = sum((_d(x.get("base_quantity")) for x in chosen), Decimal("0"))
+            if qty <= 0:
+                continue
+            daily_events.setdefault((key[0], key[1]), []).append(
+                {
+                    "quantity": qty,
+                    "uom": next(iter(uoms)),
+                    "stage_basis": stage,
+                }
+            )
+
+        per_article: dict[str, list[dict[str, Any]]] = {}
+        for (art, posting_date), events in daily_events.items():
+            uoms = {str(x.get("uom") or "").upper() for x in events if x.get("uom")}
+            quantity = None
+            uom = None
+            if len(uoms) == 1:
+                uom = next(iter(uoms))
+                quantity = sum((_d(x.get("quantity")) for x in events), Decimal("0"))
             entry = {
                 "verified": True,
-                "movement_type": r.get("movement_type"),
+                "movement_type": "101-109",
                 "date": posting_date,
                 "weekday": (
                     posting_date.strftime("%A")
                     if hasattr(posting_date, "strftime")
                     else None
                 ),
-                "quantity": (
-                    abs(_d(r.get("base_quantity")))
-                    if r.get("base_quantity") is not None
-                    else None
-                ),
-                "uom": r.get("base_uom_code"),
-                "source": "MVT_101_109",
+                "quantity": quantity,
+                "uom": uom,
+                "receipt_event_count": len(events),
+                "source": "MVT_101_109_CANONICAL_DAILY_AGGREGATE",
             }
-            history.append(entry)
-            seen.add(date_key)
-            if art not in receipt_by_article:
-                receipt_by_article[art] = entry
+            per_article.setdefault(art, []).append(entry)
+
+        for art, entries in per_article.items():
+            entries.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
+            history = entries[:2]
+            if history:
+                receipt_history_by_article[art] = history
+                receipt_by_article[art] = history[0]
 
     day_count = len(movement_days_7)
 
