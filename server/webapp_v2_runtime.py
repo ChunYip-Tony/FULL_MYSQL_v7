@@ -2235,17 +2235,23 @@ def _family_sales_series(
     supported_day_count: int,
     data_days: list[dict[str,Any]]|None=None,
 ) -> dict[str,Any]:
+    """Aggregate Family POS demand in one compatible operational UOM.
+
+    A Seafood Family can legitimately contain mixed selling channels, e.g.
+    catch-weight LB UPCs plus a packaged UPC.  Family demand must therefore not
+    require every active UPC to share the same *selling* UOM.  Prefer explicit
+    selling->base conversions when all POS-active UPCs resolve to one base UOM;
+    otherwise use one common selling UOM.  Zero-sale historical aliases do not
+    block the Family.
+    """
     requested=max(1,min(int(supported_day_count),365))
     if data_days is None:
         days=_canonical_sales_days(cur,limit=requested)
     else:
         ordered=sorted(list(data_days),key=lambda x:x["date"])
         days=ordered[-requested:]
-    selling_uoms={
-        str(x.get("selling_uom") or "").strip().upper()
-        for x in upc_rows if x.get("selling_uom")
-    }
-    if not upc_rows or len(selling_uoms)!=1:
+
+    if not upc_rows:
         return {
             "status":"BLOCKED_FAMILY_UOM",
             "uom":None,
@@ -2253,9 +2259,75 @@ def _family_sales_series(
             "rows":[],
             "sold_quantity":None,
             "velocity_per_supported_day":None,
+            "uom_basis":"NO_UPC_ROWS",
         }
 
-    uom=next(iter(selling_uoms))
+    row_sales=[]
+    active_rows=[]
+    for row in upc_rows:
+        daily=_daily_sales_by_price_type(cur,int(row["upc_id"]),days)
+        sold=sum((_d(x.get("sold_quantity")) for x in daily.values()),Decimal("0"))
+        item={"row":row,"daily":daily,"sold_quantity":sold}
+        row_sales.append(item)
+        if sold!=0:
+            active_rows.append(item)
+
+    # When there are no POS-active rows, retain the old safe fallback so a
+    # zero-demand Family can still be represented if its known UOM is unique.
+    basis_rows=active_rows if active_rows else row_sales
+
+    def _uom(v: Any) -> str:
+        return str(v or "").strip().upper()
+
+    # Preferred basis: explicit base-UOM conversion for every POS-active row.
+    # This covers mixed LB/PACK families without assuming PACK==PAC/BAG/etc.
+    base_candidates=[]
+    base_conversion_ready=bool(basis_rows)
+    for item in basis_rows:
+        row=item["row"]
+        selling=_uom(row.get("selling_uom"))
+        base=_uom(row.get("base_uom"))
+        factor=row.get("base_qty_per_selling_unit")
+        if factor is None and selling and base and selling==base:
+            factor=Decimal("1")
+        try:
+            factor_d=Decimal(str(factor)) if factor is not None else None
+        except Exception:
+            factor_d=None
+        if not base or factor_d is None or factor_d<=0:
+            base_conversion_ready=False
+            break
+        base_candidates.append((base,factor_d))
+
+    base_uoms={x[0] for x in base_candidates}
+    if base_conversion_ready and len(base_uoms)==1:
+        uom=next(iter(base_uoms))
+        factor_by_upc={
+            int(item["row"]["upc_id"]):factor
+            for item,(_,factor) in zip(basis_rows,base_candidates)
+        }
+        uom_basis="EXPLICIT_POS_SELLING_TO_COMMON_BASE_UOM"
+    else:
+        selling_uoms={
+            _uom(item["row"].get("selling_uom"))
+            for item in basis_rows
+            if _uom(item["row"].get("selling_uom"))
+        }
+        if len(selling_uoms)!=1:
+            return {
+                "status":"BLOCKED_FAMILY_UOM",
+                "uom":None,
+                "supported_day_count":len(days),
+                "rows":[],
+                "sold_quantity":None,
+                "velocity_per_supported_day":None,
+                "uom_basis":"MIXED_ACTIVE_SELLING_UOM_WITHOUT_COMMON_BASE_CONVERSION",
+                "active_uoms":sorted(selling_uoms),
+            }
+        uom=next(iter(selling_uoms))
+        factor_by_upc={int(item["row"]["upc_id"]):Decimal("1") for item in basis_rows}
+        uom_basis="COMMON_POS_SELLING_UOM"
+
     series={
         x["date"]:{
             "date":x["date"],
@@ -2267,20 +2339,30 @@ def _family_sales_series(
         }
         for x in days
     }
-    for row in upc_rows:
-        daily=_daily_sales_by_price_type(cur,int(row["upc_id"]),days)
-        for d,x in daily.items():
-            series[d]["sold_quantity"]+=_d(x.get("sold_quantity"))
+
+    basis_ids=set(factor_by_upc)
+    for item in row_sales:
+        row=item["row"]
+        upc_id=int(row["upc_id"])
+        # Historical/zero-sale aliases outside the selected UOM basis add zero
+        # demand and must not block or alter Family totals.
+        if upc_id not in basis_ids:
+            continue
+        factor=factor_by_upc[upc_id]
+        for d,x in item["daily"].items():
+            series[d]["sold_quantity"]+=_d(x.get("sold_quantity"))*factor
             sale=x.get("price_types",{}).get("SALE")
             if sale:
                 series[d]["has_sale"]=True
-                series[d]["sale_quantity"]+=_d(sale.get("sold_quantity"))
+                series[d]["sale_quantity"]+=_d(sale.get("sold_quantity"))*factor
                 series[d]["sale_sales_amount"]+=_d(sale.get("sales_amount"))
+
     qty=sum((_d(x["sold_quantity"]) for x in series.values()),Decimal("0"))
     n=len(days)
     return {
         "status":"READY",
         "uom":uom,
+        "uom_basis":uom_basis,
         "supported_day_count":n,
         "coverage_status":"COMPLETE" if n>=supported_day_count else "PARTIAL",
         "rows":[series[d] for d in sorted(series)],
