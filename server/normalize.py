@@ -252,6 +252,123 @@ def _article_manual_column_map(
     return result
 
 
+def _monthly_pi_column_map(
+    sheet_name: str | None,
+    header_payload: dict[str, Any],
+) -> dict[str, str]:
+    """Apply the user-confirmed Monthly PI per-tab UOM schema.
+
+    Frozen:
+      E = Base Unit.
+
+    Fresh / Live:
+      D = Pack Size
+      E = Receiving Unit
+
+    Other identity/descriptive fields remain header-driven. These positional UOM
+    fields are authoritative for their tabs and must not be reclassified by a
+    misleading header label.
+    """
+    result = _build_column_map(header_payload)
+    tab = _norm_header(sheet_name)
+
+    if tab == 'frozen' or tab.startswith('frozen '):
+        result['base_uom'] = 'E'
+        # Column E is explicitly Base Unit on Frozen, not Receiving Unit.
+        if result.get('receiving_uom') == 'E':
+            result.pop('receiving_uom', None)
+    elif tab == 'fresh' or tab.startswith('fresh ') or tab == 'live' or tab.startswith('live '):
+        result['pack'] = 'D'
+        result['receiving_uom'] = 'E'
+        # Column E is explicitly Receiving Unit on Fresh/Live, not Base Unit.
+        if result.get('base_uom') == 'E':
+            result.pop('base_uom', None)
+
+    return result
+
+
+def _structured_pack_weight(value: Any) -> dict[str, Any] | None:
+    """Parse only the user-confirmed structured weight pack patterns.
+
+    Examples:
+      60LB  -> one receiving unit contains 60 LB
+      6/5LB -> one receiving case contains 6 inner selling units of 5 LB each
+
+    Slash is a case-pack separator here, never division. No OZ/KG conversion is
+    attempted; the unit printed in the source remains the base unit.
+    """
+    raw = _source_token(value)
+    if not raw:
+        return None
+    token = re.sub(r'\s+', '', str(raw).upper())
+    token = token.replace('LBS', 'LB')
+
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)LB', token)
+    if m:
+        qty = Decimal(m.group(1))
+        if qty <= 0:
+            return None
+        return {
+            'outer_count': Decimal('1'),
+            'inner_qty': qty,
+            'base_uom': 'LB',
+            'total_base_qty': qty,
+            'pattern': 'SINGLE_WEIGHT',
+            'raw': raw,
+        }
+
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)[/X*](\d+(?:\.\d+)?)LB', token)
+    if m:
+        outer = Decimal(m.group(1))
+        inner = Decimal(m.group(2))
+        if outer <= 0 or inner <= 0:
+            return None
+        return {
+            'outer_count': outer,
+            'inner_qty': inner,
+            'base_uom': 'LB',
+            'total_base_qty': outer * inner,
+            'pattern': 'OUTER_COUNT_X_INNER_WEIGHT',
+            'raw': raw,
+        }
+    return None
+
+
+def _selling_factor_from_frozen_pack(
+    selling_uom: str | None,
+    pack: Any,
+) -> dict[str, Any] | None:
+    """Derive selling-unit-to-base conversion from Frozen Pack schema only.
+
+    For N/QTYLB pack text (e.g. 6/5LB):
+      - BX/PACK/PAC/BAG/TRAY/EA style selling units use QTY LB per selling unit.
+      - CASE/CV selling units use N*QTY LB per selling unit.
+    """
+    parsed = _structured_pack_weight(pack)
+    sell = (_source_token(selling_uom) or '').upper().strip()
+    if not parsed or not sell:
+        return None
+
+    if sell in {'CASE', 'CV'}:
+        factor = parsed['total_base_qty']
+        basis = 'FULL_CASE_WEIGHT'
+    elif sell in {'BX', 'BOX', 'PACK', 'PAC', 'PK', 'PKG', 'BAG', 'TRAY', 'EA', 'EACH', 'PC', 'PCS'}:
+        factor = parsed['inner_qty']
+        basis = 'INNER_SELLING_UNIT_WEIGHT'
+    elif sell in {'LB', 'LBS'}:
+        factor = Decimal('1')
+        basis = 'SELLING_EQUALS_BASE'
+    else:
+        return None
+
+    return {
+        **parsed,
+        'selling_uom': sell,
+        'base_qty_per_selling_unit': factor,
+        'conversion_basis': basis,
+    }
+
+
 def _get(row: dict[str, Any], colmap: dict[str, str], field: str) -> Any:
     col = colmap.get(field)
     return row.get(col) if col else None
