@@ -623,7 +623,11 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             up_to=expected_through,
         )
         for kind in kinds:
-            bulk = bulk_ordering_suggestions(kind, expected_delivery_date=delivery_date)
+            bulk = bulk_ordering_suggestions(
+                kind,
+                expected_delivery_date=delivery_date,
+                include_sufficient_stock=bool(delivery_date),
+            )
             inputs[kind] = bulk.get("inputs")
             skipped.extend(bulk.get("skipped") or [])
             for s in bulk.get("suggestions") or []:
