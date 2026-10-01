@@ -2390,6 +2390,103 @@ BACKOFFICE_HTML = r'''<!doctype html>
 }
 @media(max-width:759px){.overview-v3-head,.overview-v3-grid,.desktop-rail-foot,.desktop-rail-toggle{display:none!important}}
 
+
+/* Desktop V4 · production polish + progressive-loading visuals */
+@media(min-width:760px){
+  body{font-size:13px!important}
+  .workspace{padding-left:26px!important;padding-right:26px!important}
+  body.desktop-inspector-open .workspace{padding-right:min(41vw,680px)!important}
+
+  .desktop-commandbar{
+    min-height:62px!important;
+    margin-left:-26px!important;margin-right:-26px!important;
+    padding-left:26px!important;padding-right:26px!important;
+  }
+  .desktop-command-title{font-size:15px!important}
+  .desktop-command-sub{font-size:9px!important}
+  .desktop-global-search{height:40px!important}
+  .desktop-global-search input{font-size:12px!important}
+  .desktop-store-chip,.desktop-version-chip{font-size:9px!important}
+
+  .appbar .nav button{height:48px!important;min-height:48px!important;border-radius:9px!important;color:#8c929b!important}
+  .appbar .nav button.on{background:#252931!important;color:#fff!important;box-shadow:inset 3px 0 0 #8fb5ff!important}
+  .navicon{font-size:18px!important}
+  body.desktop-rail-expanded .navlabel{font-size:10px!important}
+  .appbar .mark{background:#f0f1f2!important;color:#121418!important}
+  .desktop-rail-toggle{background:#22262d!important;color:#c0c5cc!important}
+
+  .overview-v3-head{padding:8px 0 14px!important}
+  .overview-v3-date{font-size:10px!important}
+  .overview-v3-head h1{font-size:34px!important;margin-top:5px!important}
+  .overview-v3-head p{font-size:12px!important;margin-top:5px!important}
+  .overview-v3-actions button{min-height:34px!important;font-size:10px!important;padding:7px 12px!important}
+
+  .overview-v3-grid{gap:12px!important;margin-top:12px!important}
+  .v3-surface{border-radius:13px!important}
+  .v3-surface-head{min-height:60px!important;padding:11px 14px!important}
+  .v3-surface-head span{font-size:9px!important}
+  .v3-surface-head h2{font-size:15px!important;margin-top:5px!important}
+  .v3-link{font-size:9px!important}
+  .v3-status-chip{font-size:9px!important;min-height:26px!important;padding:5px 8px!important}
+
+  .desktop-queue-title{padding:11px 12px!important}
+  .desktop-queue-title b{font-size:12px!important}
+  .desktop-queue-title small{font-size:9px!important;margin-top:3px!important}
+  .desktop-queue-title button{font-size:9px!important}
+  .desktop-queue-item{min-height:64px!important;padding:10px 12px!important;gap:10px!important}
+  .desktop-queue-icon{width:30px!important;height:30px!important;font-size:12px!important}
+  .desktop-queue-item b{font-size:11px!important}
+  .desktop-queue-item span:not(.desktop-queue-icon){font-size:9px!important;line-height:1.4!important}
+  .desktop-queue-item em,.desktop-batch-row em{font-size:8px!important}
+  .desktop-queue-empty{font-size:10px!important;padding:28px 12px!important}
+
+  .desktop-source-row{padding:9px 2px!important;gap:9px!important}
+  .desktop-source-row b,.desktop-batch-row b{font-size:11px!important}
+  .desktop-source-row small,.desktop-batch-row span{font-size:9px!important}
+  .desktop-batch-row{padding:10px 2px!important}
+
+  .desktop-kpi-card{min-height:108px!important;padding:15px 14px!important}
+  .desktop-kpi-card small{font-size:9px!important}
+  .desktop-kpi-card b{font-size:28px!important;margin-top:12px!important}
+  .desktop-kpi-card span{font-size:9px!important;margin-top:8px!important;line-height:1.35!important}
+
+  .desktop-module-hero{min-height:92px!important;padding:16px 2px 16px!important}
+  .desktop-module-kicker{font-size:9px!important}
+  .desktop-module-hero h1{font-size:28px!important}
+  .desktop-module-hero p{font-size:10px!important}
+  .desktop-hero-search{height:44px!important}
+  .desktop-hero-search input{font-size:12px!important}
+
+  .panelhead .title{font-size:16px!important}
+  .panelhead .sub{font-size:9px!important}
+  .filter{font-size:9px!important}
+  .select,.qa-search,.btn{font-size:10px!important}
+  .table{font-size:11px!important}
+  .table th{font-size:8.5px!important;padding:9px 10px!important}
+  .table td{padding:9px 10px!important}
+  .name{font-size:12px!important}
+  .table td>b,.table td>.linkbtn{font-size:12px!important}
+  .table .meta{font-size:8.5px!important}
+
+  .v4-skeleton-row{
+    display:grid;grid-template-columns:30px minmax(0,1fr) 58px;gap:10px;align-items:center;
+    min-height:62px;padding:10px 12px;border-bottom:1px solid #f0f0f1;
+  }
+  .v4-skeleton-row i,.v4-skeleton-row span,.v4-skeleton-row em{
+    display:block;border-radius:7px;background:linear-gradient(90deg,#f0f1f2 25%,#f7f7f8 37%,#f0f1f2 63%);
+    background-size:400% 100%;animation:v4shimmer 1.35s ease infinite;
+  }
+  .v4-skeleton-row i{width:30px;height:30px}
+  .v4-skeleton-row span{height:12px}
+  .v4-skeleton-row em{height:20px}
+  @keyframes v4shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+
+  @media(min-width:1500px){
+    .overview-v3-grid{grid-template-columns:repeat(12,minmax(0,1fr))}
+    .v3-priority{grid-column:span 9}.v3-pulse{grid-column:span 3}.v3-snapshot{grid-column:span 9}.v3-batches{grid-column:span 3}
+  }
+}
+
 </style>
 </head>
 <body>
@@ -4435,69 +4532,114 @@ function desktopBatchRow(b){
 async function loadDesktopOverview(){
   if(isMobileBackoffice())return;
   const err=$('#desktopOverviewError');if(err)err.innerHTML='';
-  $('#desktopWorkQueueStatus').textContent='CHECKING';
-  const calls=[
-    api('/healthz',{timeoutMs:12000}),
-    api('/v1/backoffice/inventory?category=ALL&limit=300&lightweight=true',{timeoutMs:25000}),
-    api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}),
-    api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
-    api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000}),
-    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:25000}),
-    api('/v1/backoffice/data-health?days=14',{timeoutMs:25000}),
-    api('/v1/web-upload/active',{timeoutMs:20000}),
-    api('/v1/web-upload/recent?limit=5',{timeoutMs:20000})
-  ];
-  const r=await Promise.allSettled(calls);
-  const val=i=>r[i].status==='fulfilled'?r[i].value:null;
-  const h=val(0)||{},inv=val(1)||{},price=val(2)||{},of=val(3)||{},oz=val(4)||{},qa=val(5)||{},dh=val(6)||{},active=val(7)||{},recent=val(8)||{};
-  const inventory=inv.rows||[];
-  const priceRows=price.rows||[];
-  const orderRows=[...(of.rows||[]),...(oz.rows||[])];
-  const qaRows=qa.issues||[];
-  const positiveOh=inventory.filter(x=>Number(x.family_oh||0)>0).length;
-  const sold7=inventory.filter(x=>Number(x.qty_7d||0)>0).length;
-  const actionable=priceRows.filter(x=>String(x.review_status||'').toUpperCase()==='ACTIONABLE'||x.priority_240_249_mismatch).length;
-  const orderAttention=orderRows.filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).length;
-  const completedDays=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
-  const highQa=qaRows.filter(x=>desktopSeverityRank(x.severity)>=3).length;
-  $('#desktopOverviewKpis').innerHTML=
-    '<div class="desktop-kpi-card blue"><small>ACTIVE / LOADED ITEMS</small><b>'+fmt(inventory.length,0)+'</b><span>'+fmt(sold7,0)+' sold in latest 7D evidence</span></div>'+
-    '<div class="desktop-kpi-card green"><small>POSITIVE FAMILY OH</small><b>'+fmt(positiveOh,0)+'</b><span>Items with current positive OH</span></div>'+
-    '<div class="desktop-kpi-card purple"><small>PRICE ACTIONS</small><b>'+fmt(actionable,0)+'</b><span>Actionable or 240 / 249 priority</span></div>'+
-    '<div class="desktop-kpi-card orange"><small>ORDERING ATTENTION</small><b>'+fmt(orderAttention,0)+'</b><span>Suggested or attention families</span></div>'+
-    '<div class="desktop-kpi-card red"><small>OPEN QA</small><b>'+fmt(qaRows.length,0)+'</b><span>'+fmt(highQa,0)+' high / critical</span></div>'+
-    '<div class="desktop-kpi-card cyan"><small>COMPLETE DATA DAYS</small><b>'+fmt(completedDays,0)+'/14</b><span>POS + MVT canonical completeness</span></div>';
-
-  const urgentPrice=[...priceRows].sort((a,b)=>Number(Boolean(b.priority_240_249_mismatch))-Number(Boolean(a.priority_240_249_mismatch))||Number(b.urgency_score||0)-Number(a.urgency_score||0)).slice(0,4);
-  const urgentOrder=[...orderRows].filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).sort((a,b)=>Number(b.suggested_delivery_qty||0)-Number(a.suggested_delivery_qty||0)).slice(0,4);
-  const urgentQa=[...qaRows].sort((a,b)=>desktopSeverityRank(b.severity)-desktopSeverityRank(a.severity)||Number(b.oh||0)-Number(a.oh||0)).slice(0,4);
+  const live={};
+  const failures=[];
+  const has=k=>Object.prototype.hasOwnProperty.call(live,k);
+  const skeleton=(n=3)=>Array.from({length:n},()=>'<div class="v4-skeleton-row"><i></i><span></span><em></em></div>').join('');
 
   $('#desktopWorkQueues').innerHTML=
-    '<div class="desktop-queue-column"><div class="desktop-queue-title"><span>🏷️</span><div><b>Pricing</b><small>'+fmt(actionable,0)+' actions</small></div><button data-go-view="pricing">Open</button></div>'+
-      (urgentPrice.map(x=>desktopQueueItem('＄',x.name||x.upc,(x.upc||'')+' · '+(x.primary_reason_text||x.review_status||''),x.priority_240_249_mismatch?'240≠249':money(x.candidate_price),x.priority_240_249_mismatch?'bad':'purple')).join('')||'<div class="desktop-queue-empty">No price actions.</div>')+'</div>'+
-    '<div class="desktop-queue-column"><div class="desktop-queue-title"><span>🛒</span><div><b>Ordering</b><small>'+fmt(orderAttention,0)+' families</small></div><button data-go-view="ordering">Open</button></div>'+
-      (urgentOrder.map(x=>desktopQueueItem('→',x.family_name||x.family_article,(x.receiving_article||'')+' · OH '+fmt(x.oh)+' '+(x.oh_uom||''),fmt(x.suggested_delivery_qty)+' '+(x.suggested_delivery_uom||''),'orange')).join('')||'<div class="desktop-queue-empty">No order attention.</div>')+'</div>'+
-    '<div class="desktop-queue-column"><div class="desktop-queue-title"><span>🧩</span><div><b>QA</b><small>'+fmt(qaRows.length,0)+' open</small></div><button data-go-view="database" data-go-db="dbqa">Open</button></div>'+
-      (urgentQa.map(x=>desktopQueueItem('!',x.item_name||x.name||x.ean_upc||x.article_number,x.issue_code||x.reason||x.issue_type||'',String(x.severity||'REVIEW'),desktopSeverityRank(x.severity)>=3?'bad':'warn')).join('')||'<div class="desktop-queue-empty">No open QA issues.</div>')+'</div>';
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Pricing</b><small>Loading actions</small></div></div>'+skeleton(3)+'</div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>Ordering</b><small>Loading families</small></div></div>'+skeleton(3)+'</div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>QA</b><small>Loading issues</small></div></div>'+skeleton(3)+'</div>';
+  $('#desktopFreshnessBoard').innerHTML=skeleton(5);
+  $('#desktopRecentBatches').innerHTML=skeleton(4);
+  $('#desktopOverviewKpis').innerHTML=Array.from({length:6},()=>'<div class="desktop-kpi-card"><small>LOADING</small><b>—</b><span>Waiting for source</span></div>').join('');
 
-  $('#desktopFreshnessBoard').innerHTML=
-    desktopLatestSource(dh,'POS','POS Sales')+
-    desktopLatestSource(dh,'MVT','Movement (MVT)')+
-    desktopLatestSource(dh,'PRICE','Price List')+
-    desktopLatestSource(dh,'OH','OH Report')+
-    desktopLatestSource(dh,'LIVE_FRESH','Live / Fresh')+
-    desktopLatestSource(dh,'FROZEN','Frozen');
+  const inventoryRows=()=>live.inventory?.rows||[];
+  const priceRows=()=>live.price?.rows||[];
+  const orderRows=()=>[...(live.orderFresh?.rows||[]),...(live.orderFrozen?.rows||[])];
+  const qaRows=()=>live.qa?.issues||[];
+  const dataHealth=()=>live.dataHealth||{};
 
-  const current=active.active_batch;
-  const batches=[...(current?[{...current,batch_label:'Current processing'}]:[]),...(recent.batches||[])].slice(0,6);
-  $('#desktopRecentBatches').innerHTML=batches.map(desktopBatchRow).join('')||'<div class="desktop-queue-empty">No recent batches.</div>';
-  const workStatus=$('#desktopWorkQueueStatus');
-  const attention=actionable+orderAttention+qaRows.length;
-  workStatus.textContent=attention?fmt(attention,0)+' ITEMS':'CLEAR';
-  workStatus.className='v3-status-chip '+(highQa?'bad':attention?'warn':'good');
+  function renderSnapshot(){
+    const inventory=inventoryRows(),prices=priceRows(),orders=orderRows(),qa=qaRows(),dh=dataHealth();
+    const invReady=has('inventory'),priceReady=has('price'),orderReady=has('orderFresh')&&has('orderFrozen'),qaReady=has('qa'),dhReady=has('dataHealth');
+    const positiveOh=inventory.filter(x=>Number(x.family_oh||0)>0).length;
+    const sold7=inventory.filter(x=>Number(x.qty_7d||0)>0).length;
+    const actionable=prices.filter(x=>String(x.review_status||'').toUpperCase()==='ACTIONABLE'||x.priority_240_249_mismatch).length;
+    const orderAttention=orders.filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).length;
+    const completedDays=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
+    const highQa=qa.filter(x=>desktopSeverityRank(x.severity)>=3).length;
+    const val=(ready,v)=>ready?fmt(v,0):'—';
+    $('#desktopOverviewKpis').innerHTML=
+      '<div class="desktop-kpi-card blue"><small>ACTIVE ITEMS</small><b>'+val(invReady,inventory.length)+'</b><span>'+(invReady?fmt(sold7,0)+' sold in latest 7D evidence':'Loading inventory…')+'</span></div>'+
+      '<div class="desktop-kpi-card green"><small>POSITIVE FAMILY OH</small><b>'+val(invReady,positiveOh)+'</b><span>'+(invReady?'Current positive OH':'Loading inventory…')+'</span></div>'+
+      '<div class="desktop-kpi-card purple"><small>PRICE ACTIONS</small><b>'+val(priceReady,actionable)+'</b><span>'+(priceReady?'Actionable / 240↔249':'Loading pricing…')+'</span></div>'+
+      '<div class="desktop-kpi-card orange"><small>ORDERING ATTENTION</small><b>'+val(orderReady,orderAttention)+'</b><span>'+(orderReady?'Suggested / attention families':'Loading ordering…')+'</span></div>'+
+      '<div class="desktop-kpi-card red"><small>OPEN QA</small><b>'+val(qaReady,qa.length)+'</b><span>'+(qaReady?fmt(highQa,0)+' high / critical':'Loading QA…')+'</span></div>'+
+      '<div class="desktop-kpi-card cyan"><small>COMPLETE DATA DAYS</small><b>'+(dhReady?fmt(completedDays,0)+'/14':'—')+'</b><span>'+(dhReady?'POS + MVT canonical':'Loading data health…')+'</span></div>';
+  }
 
-  const failed=r.filter(x=>x.status==='rejected').length;
-  if(failed&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failed+' source request(s) did not respond; module pages remain available.</div>';
+  function queueColumn(title,sub,rows,ready,buttonHtml){
+    if(!ready)return '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>'+title+'</b><small>'+sub+'</small></div>'+buttonHtml+'</div>'+skeleton(3)+'</div>';
+    return '<div class="desktop-queue-column"><div class="desktop-queue-title"><div><b>'+title+'</b><small>'+sub+'</small></div>'+buttonHtml+'</div>'+
+      (rows||'<div class="desktop-queue-empty">No items need attention.</div>')+'</div>';
+  }
+
+  function renderQueues(){
+    const prices=priceRows(),orders=orderRows(),qa=qaRows();
+    const priceReady=has('price'),orderReady=has('orderFresh')&&has('orderFrozen'),qaReady=has('qa');
+    const actionable=prices.filter(x=>String(x.review_status||'').toUpperCase()==='ACTIONABLE'||x.priority_240_249_mismatch).length;
+    const orderAttention=orders.filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).length;
+    const highQa=qa.filter(x=>desktopSeverityRank(x.severity)>=3).length;
+
+    const urgentPrice=[...prices].sort((a,b)=>Number(Boolean(b.priority_240_249_mismatch))-Number(Boolean(a.priority_240_249_mismatch))||Number(b.urgency_score||0)-Number(a.urgency_score||0)).slice(0,4);
+    const urgentOrder=[...orders].filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).sort((a,b)=>Number(b.suggested_delivery_qty||0)-Number(a.suggested_delivery_qty||0)).slice(0,4);
+    const urgentQa=[...qa].sort((a,b)=>desktopSeverityRank(b.severity)-desktopSeverityRank(a.severity)||Number(b.oh||0)-Number(a.oh||0)).slice(0,4);
+
+    const pRows=urgentPrice.map(x=>desktopQueueItem('＄',x.name||x.upc,(x.upc||'')+' · '+(x.primary_reason_text||x.review_status||''),x.priority_240_249_mismatch?'240≠249':money(x.candidate_price),x.priority_240_249_mismatch?'bad':'purple')).join('');
+    const oRows=urgentOrder.map(x=>desktopQueueItem('→',x.family_name||x.family_article,(x.receiving_article||'')+' · OH '+fmt(x.oh)+' '+(x.oh_uom||''),fmt(x.suggested_delivery_qty)+' '+(x.suggested_delivery_uom||''),'orange')).join('');
+    const qRows=urgentQa.map(x=>desktopQueueItem('!',x.item_name||x.name||x.ean_upc||x.article_number,x.issue_code||x.reason||x.issue_type||'',String(x.severity||'REVIEW'),desktopSeverityRank(x.severity)>=3?'bad':'warn')).join('');
+
+    $('#desktopWorkQueues').innerHTML=
+      queueColumn('Pricing',priceReady?fmt(actionable,0)+' actions':'Loading actions',pRows,priceReady,'<button data-go-view="pricing">Open</button>')+
+      queueColumn('Ordering',orderReady?fmt(orderAttention,0)+' families':'Loading families',oRows,orderReady,'<button data-go-view="ordering">Open</button>')+
+      queueColumn('QA',qaReady?fmt(qa.length,0)+' open':'Loading issues',qRows,qaReady,'<button data-go-view="database" data-go-db="dbqa">Open</button>');
+
+    const loaded=[priceReady,orderReady,qaReady].filter(Boolean).length;
+    const attention=(priceReady?actionable:0)+(orderReady?orderAttention:0)+(qaReady?qa.length:0);
+    const workStatus=$('#desktopWorkQueueStatus');
+    if(loaded<3){workStatus.textContent=loaded+'/3 READY';workStatus.className='v3-status-chip'}
+    else{workStatus.textContent=attention?fmt(attention,0)+' ITEMS':'CLEAR';workStatus.className='v3-status-chip '+(highQa?'bad':attention?'warn':'good')}
+  }
+
+  function renderFreshness(){
+    if(!has('dataHealth'))return;
+    const dh=dataHealth();
+    $('#desktopFreshnessBoard').innerHTML=
+      desktopLatestSource(dh,'POS','POS Sales')+
+      desktopLatestSource(dh,'MVT','Movement (MVT)')+
+      desktopLatestSource(dh,'PRICE','Price List')+
+      desktopLatestSource(dh,'OH','OH Report')+
+      desktopLatestSource(dh,'LIVE_FRESH','Live / Fresh')+
+      desktopLatestSource(dh,'FROZEN','Frozen');
+  }
+
+  function renderBatches(){
+    if(!has('active')&&!has('recent'))return;
+    const current=live.active?.active_batch;
+    const batches=[...(current?[{...current,batch_label:'Current processing'}]:[]),...(live.recent?.batches||[])].slice(0,6);
+    $('#desktopRecentBatches').innerHTML=batches.map(desktopBatchRow).join('')||'<div class="desktop-queue-empty">No recent batches.</div>';
+  }
+
+  const jobs=[];
+  const load=(name,promise,after)=>{
+    const p=promise.then(d=>{live[name]=d;after?.();renderSnapshot();renderQueues()})
+      .catch(e=>{live[name]=null;failures.push({name,error:e?.message||String(e)});after?.();renderSnapshot();renderQueues()});
+    jobs.push(p);
+  };
+
+  load('inventory',api('/v1/backoffice/inventory?category=ALL&limit=300&lightweight=true',{timeoutMs:20000}));
+  load('price',api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}));
+  load('orderFresh',api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}));
+  load('orderFrozen',api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000}));
+  load('qa',api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000}));
+  load('dataHealth',api('/v1/backoffice/data-health?days=14',{timeoutMs:20000}),renderFreshness);
+  load('active',api('/v1/web-upload/active',{timeoutMs:16000}),renderBatches);
+  load('recent',api('/v1/web-upload/recent?limit=5',{timeoutMs:16000}),renderBatches);
+
+  await Promise.allSettled(jobs);
+  if(failures.length&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failures.length+' source request(s) timed out or failed; available modules remain usable.</div>';
 }
 async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').textContent=h.ok?'SERVICE READY':'SERVICE ISSUE';$('#readyPill').style.color=h.ok?'#bff3d2':'#ffd0c8'}catch(e){$('#readyPill').textContent='SERVICE ERROR'}}
 async function loadInventory(){
