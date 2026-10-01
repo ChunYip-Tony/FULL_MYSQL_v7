@@ -1,3 +1,14 @@
+v7.0.332 Yipman Compact Family Hierarchy:
+- Rebuilds mobile Quick Check results into compact Family → Receiving Article → SAP Selling Article → UPC hierarchy.
+- Uses a distinct pastel color family per result group; Family and Receiving rows share the same group color while SAP/UPC rows remain neutral for readability.
+- Receiving Article rows no longer show sold movement or velocity. They show the two most recent canonical delivery dates and quantities.
+- Receipt delivery quantity is aggregated by Article/date from canonical movement snapshots without double-counting repeated 101/107/109 receipt stages.
+- SAP Selling Article rows retain Article name plus 7D 251−252 movement and Avg/Day.
+- UPC role badges explicitly label 240 MAIN, 245 PACKAGE, and 249 SERVICE.
+- Operational dates display weekday (for example 9/26 Fri); source/evidence dates retain source-style date formatting.
+- Preserves v7.0.331 on backup/yipman-v331-pre-compact for immediate rollback.
+Version: 7.0.332 Single-Service Edition
+
 v7.0.326 Ordering Stale Estimate Mode:
 - Ordering no longer hard-blocks when the newest completed POS or MVT day is missing but both sources still have a common usable historical date.
 - Uses the latest common canonical POS+MVT date as the operational data-through date and labels every affected suggestion ESTIMATE / STALE rather than presenting it as current.
