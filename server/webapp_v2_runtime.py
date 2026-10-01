@@ -1190,30 +1190,60 @@ def _family_receipt_events(
     return events
 
 
-def _delivery_pattern(receipt_events: list[dict[str,Any]], after_date: date | None = None) -> dict[str,Any]:
-    dates=sorted({
+def _delivery_pattern(
+    receipt_events: list[dict[str,Any]],
+    after_date: date | None = None,
+    lookback_days: int = 84,
+) -> dict[str,Any]:
+    """Summarize recent canonical receipt weekdays for delivery planning.
+
+    Only positive canonical 101/107/109 receipt events inside the recent
+    calendar lookback are used for cadence. Older history remains available in
+    receipt detail but does not make a stale weekday look current.
+    """
+    anchor=after_date or business_today()
+    lookback=max(28,min(int(lookback_days or 84),180))
+    window_start=anchor-timedelta(days=lookback-1)
+    all_dates=sorted({
         x["posting_date"]
         for x in receipt_events
         if x.get("posting_date")
         and x.get("receipt_quantity") is not None
         and Decimal(str(x.get("receipt_quantity"))) > 0
     })
+    dates=[d for d in all_dates if window_start <= d <= anchor]
     if not dates:
         return {
             "observed_delivery_days":[],
+            "receipt_date_count":0,
+            "historical_receipt_date_count":len(all_dates),
+            "lookback_days":lookback,
+            "lookback_start":window_start,
+            "lookback_end":anchor,
             "frequency":"NO_DATA",
             "median_gap_days":None,
+            "expected_weekdays":[],
             "next_expected_delivery_date":None,
             "confidence":"NONE",
+            "confidence_percent":0,
+            "basis":"CANONICAL_COMPLETED_MOVEMENT_RECEIPT_DATES_RECENT_WINDOW",
         }
+
     counts=Counter(d.weekday() for d in dates)
-    observed=[
-        {"weekday":WEEKDAY_NAMES[k],"weekday_number":k,"receipt_date_count":v}
-        for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0]))
-    ]
+    total=len(dates)
+    observed=[]
+    for k,v in sorted(counts.items(),key=lambda kv:(-kv[1],kv[0])):
+        share=(Decimal(v)/Decimal(total)) if total else Decimal("0")
+        observed.append({
+            "weekday":WEEKDAY_NAMES[k],
+            "weekday_number":k,
+            "receipt_date_count":v,
+            "receipt_date_share":share,
+            "confidence_percent":int((share*Decimal("100")).quantize(Decimal("1"))),
+        })
+
     gaps=[(b-a).days for a,b in zip(dates,dates[1:])]
     med=float(median(gaps)) if gaps else None
-    total=len(dates)
     top=observed[0]
     top_share=Decimal(top["receipt_date_count"])/Decimal(total)
 
@@ -1230,13 +1260,13 @@ def _delivery_pattern(receipt_events: list[dict[str,Any]], after_date: date | No
         if pair_share>=Decimal("0.70"):
             frequency="MULTIPLE_PER_WEEK"
             expected_weekdays=sorted(int(x["weekday_number"]) for x in pair)
-            confidence="MEDIUM"
+            confidence="HIGH" if pair_share>=Decimal("0.85") else "MEDIUM"
 
-    anchor=after_date or business_today()
+    anchor_for_next=after_date or business_today()
     next_expected=None
     if expected_weekdays:
         candidates=[
-            anchor+timedelta(days=(wd-anchor.weekday())%7)
+            anchor_for_next+timedelta(days=(wd-anchor_for_next.weekday())%7)
             for wd in expected_weekdays
         ]
         next_expected=min(candidates)
@@ -1244,12 +1274,70 @@ def _delivery_pattern(receipt_events: list[dict[str,Any]], after_date: date | No
     return {
         "observed_delivery_days":observed,
         "receipt_date_count":total,
+        "historical_receipt_date_count":len(all_dates),
+        "lookback_days":lookback,
+        "lookback_start":window_start,
+        "lookback_end":anchor,
         "frequency":frequency,
         "median_gap_days":med,
         "expected_weekdays":expected_weekdays,
         "next_expected_delivery_date":next_expected,
         "confidence":confidence,
-        "basis":"CANONICAL_COMPLETED_MOVEMENT_RECEIPT_DATES",
+        "confidence_percent":int((top_share*Decimal("100")).quantize(Decimal("1"))),
+        "basis":"CANONICAL_COMPLETED_MOVEMENT_RECEIPT_DATES_RECENT_WINDOW",
+    }
+
+
+def _delivery_day_evidence(pattern: dict[str,Any], target_date: date | None) -> dict[str,Any]:
+    if target_date is None:
+        return {
+            "target_date":None,
+            "weekday":None,
+            "weekday_number":None,
+            "observed_count":0,
+            "receipt_date_count":int(pattern.get("receipt_date_count") or 0),
+            "share":Decimal("0"),
+            "confidence_percent":0,
+            "confidence":"NONE",
+            "eligible":False,
+        }
+
+    wd=int(target_date.weekday())
+    observed=next(
+        (x for x in (pattern.get("observed_delivery_days") or [])
+         if int(x.get("weekday_number"))==wd),
+        None,
+    )
+    total=int(pattern.get("receipt_date_count") or 0)
+    count=int((observed or {}).get("receipt_date_count") or 0)
+    share=(Decimal(count)/Decimal(total)) if total else Decimal("0")
+    expected={int(x) for x in (pattern.get("expected_weekdays") or [])}
+    eligible=bool(
+        wd in expected
+        or (count>=2 and share>=Decimal("0.25"))
+    )
+    if count>=3 and share>=Decimal("0.75"):
+        label="HIGH"
+    elif count>=2 and share>=Decimal("0.50"):
+        label="MEDIUM"
+    elif count>=1:
+        label="LOW"
+    else:
+        label="NONE"
+    return {
+        "target_date":target_date,
+        "weekday":WEEKDAY_NAMES[wd],
+        "weekday_number":wd,
+        "observed_count":count,
+        "receipt_date_count":total,
+        "share":share,
+        "confidence_percent":int((share*Decimal("100")).quantize(Decimal("1"))),
+        "confidence":label,
+        "eligible":eligible,
+        "eligibility_rule":"EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE",
+        "lookback_days":pattern.get("lookback_days"),
+        "lookback_start":pattern.get("lookback_start"),
+        "lookback_end":pattern.get("lookback_end"),
     }
 
 
@@ -2365,6 +2453,7 @@ def bulk_ordering_suggestions(
     *,
     ordering_date: date|None=None,
     expected_delivery_date: date|None=None,
+    include_sufficient_stock: bool=False,
     promotion_involved: bool=False,
     promotion_start_date: date|None=None,
     promotion_end_date: date|None=None,
@@ -2457,7 +2546,7 @@ def bulk_ordering_suggestions(
             raw_oh=_d(family_oh.get("quantity"))
             ordering_oh=max(Decimal("0"),raw_oh)
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-            if not active_28 or dos is None or dos>=Decimal("7"):
+            if not active_28 or dos is None or (dos>=Decimal("7") and not include_sufficient_stock):
                 continue
 
             regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
@@ -2562,7 +2651,11 @@ def bulk_ordering_suggestions(
         },
         "eligibility":{
             "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
-            "dos_threshold":"LESS_THAN_7_DAYS",
+            "dos_threshold":(
+                "ALL_ACTIVE_FAMILIES_WHEN_DELIVERY_DATE_ROSTER"
+                if include_sufficient_stock else "LESS_THAN_7_DAYS"
+            ),
+            "include_sufficient_stock":bool(include_sufficient_stock),
             "negative_effective_oh_for_ordering":"TREAT_AS_ZERO",
         },
         "suggestion_count":len(suggestions),
