@@ -1710,23 +1710,371 @@ BACKOFFICE_HTML = r'''<!doctype html>
 .pair-inline{margin-top:6px;padding:7px 8px;border:1px solid #c6dfdb;border-radius:9px;background:#eef9f7;font-size:9px;font-weight:850;line-height:1.45;color:#315f62}
 .pair-inline b{color:#0b6670}
 @media(max-width:759px){.m-pair-subgroup{padding:7px;border-radius:17px}.m-pair-label{font-size:9px}.m-pair-price-grid{grid-template-columns:1fr 1fr}}
+
+/* Desktop Marketplace Workbench v1
+   Visual-only desktop redesign. Mobile <=759px remains governed by its existing rules. */
+@media(min-width:760px){
+  :root{
+    --desk-bg:#f5f7fb;
+    --desk-surface:#ffffff;
+    --desk-surface-2:#f8fafc;
+    --desk-navy:#0b1f3a;
+    --desk-navy-2:#102b4c;
+    --desk-blue:#2563eb;
+    --desk-blue-soft:#eef4ff;
+    --desk-cyan:#0891b2;
+    --desk-green:#0f9f6e;
+    --desk-orange:#e8791a;
+    --desk-purple:#7657d9;
+    --desk-red:#df4b4b;
+    --desk-text:#14233b;
+    --desk-muted:#6b7a90;
+    --desk-line:#e4eaf1;
+    --desk-shadow:0 12px 32px rgba(31,48,74,.07);
+    --desk-shadow-soft:0 5px 16px rgba(31,48,74,.05);
+  }
+
+  html{background:var(--desk-bg)}
+  body{
+    background:
+      radial-gradient(circle at 88% -10%,rgba(37,99,235,.08),transparent 30%),
+      linear-gradient(180deg,#f8faff 0,#f5f7fb 240px,#f5f7fb 100%);
+    color:var(--desk-text);
+    font-size:14px;
+  }
+
+  .shell{
+    max-width:none;
+    width:100%;
+    margin:0;
+    padding:14px 16px 34px;
+    grid-template-columns:258px minmax(0,1fr);
+    gap:18px;
+    align-items:start;
+  }
+
+  .appbar{
+    grid-column:1;
+    position:sticky;
+    top:14px;
+    height:calc(100vh - 28px);
+    border-radius:22px;
+    overflow:hidden auto;
+    background:
+      radial-gradient(circle at 10% 8%,rgba(49,160,190,.24),transparent 26%),
+      linear-gradient(180deg,var(--desk-navy) 0%,#0c2543 64%,#0a1a31 100%);
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 18px 42px rgba(8,27,50,.20);
+  }
+  .appbar .top{display:block;padding:18px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .appbar .brand{display:flex;align-items:center;gap:12px}
+  .appbar .mark{
+    width:46px;height:46px;border-radius:15px;
+    background:linear-gradient(145deg,#1f88d8,#20b4c3);
+    box-shadow:0 8px 20px rgba(18,128,190,.25),inset 0 1px 0 rgba(255,255,255,.28);
+    font-size:23px;
+  }
+  .appbar .brand strong{font-size:19px;line-height:1;font-weight:950;letter-spacing:-.03em}
+  .appbar .brand small{font-size:9px;line-height:1.35;color:#9fb6cc;margin-top:6px}
+  .appbar .topstat{display:grid;grid-template-columns:1fr;gap:6px;margin-top:15px}
+  .appbar .glass{
+    min-height:30px;
+    display:flex;align-items:center;
+    border:1px solid rgba(255,255,255,.09);
+    border-radius:10px;
+    padding:6px 9px;
+    background:rgba(255,255,255,.055);
+    color:#d8e7f4;
+    font-size:9px;
+    letter-spacing:.015em;
+  }
+  #readyPill:before{content:"●";color:#54df9b;margin-right:6px}
+  #posPill:before{content:"POS";font-size:7px;font-weight:950;color:#7dd3fc;margin-right:7px}
+  #pricePill:before{content:"PRICE";font-size:7px;font-weight:950;color:#c4b5fd;margin-right:7px}
+
+  .appbar .searchbar{display:grid;grid-template-columns:1fr;padding:12px 12px 8px;gap:7px}
+  .appbar .searchbar input{
+    width:100%;min-height:42px;
+    border:1px solid rgba(255,255,255,.10);
+    border-radius:12px;
+    background:rgba(255,255,255,.07);
+    color:#fff;
+    padding:10px 12px;
+    font-size:12px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  }
+  .appbar .searchbar input:focus{border-color:#49b8cf;background:rgba(255,255,255,.10)}
+  .appbar .searchbar button{
+    min-height:36px;border:0;border-radius:10px;
+    background:linear-gradient(135deg,#1a75d1,#218db7);
+    color:#fff;font-size:11px;
+  }
+
+  .appbar .nav{display:grid;gap:6px;padding:8px 10px 16px}
+  .appbar .nav button{
+    position:relative;
+    width:100%;
+    min-height:46px;
+    text-align:left;
+    padding:11px 12px;
+    border-radius:12px;
+    color:#c6d6e5;
+    font-size:12px;
+    font-weight:780;
+    transition:background .12s ease,color .12s ease,transform .12s ease;
+  }
+  .appbar .nav button:hover{background:rgba(255,255,255,.06);color:#fff;transform:translateX(2px)}
+  .appbar .nav button.on{
+    background:linear-gradient(135deg,#216ce5,#248dc7);
+    color:#fff;
+    box-shadow:0 9px 20px rgba(22,95,190,.25);
+  }
+  .appbar .nav button.on:after{
+    content:"";position:absolute;right:10px;top:50%;width:6px;height:6px;
+    margin-top:-3px;border-radius:50%;background:#fff;opacity:.85;
+  }
+
+  .view{grid-column:2;min-width:0;margin:0}
+  .view.on{display:block}
+  .view>.panel,#database>.panel,#database .subview>.panel{
+    margin-top:0;
+    border:1px solid var(--desk-line);
+    border-radius:20px;
+    background:rgba(255,255,255,.97);
+    box-shadow:var(--desk-shadow);
+    overflow:hidden;
+  }
+  #database .subview>.panel{margin-top:14px}
+  .panel+.panel{margin-top:14px}
+
+  .panelhead{
+    min-height:78px;
+    padding:17px 18px 14px;
+    align-items:center;
+    border-bottom:1px solid var(--desk-line);
+    background:
+      linear-gradient(90deg,rgba(37,99,235,.035),transparent 38%),
+      #fff;
+  }
+  .title{font-size:24px;line-height:1.08;font-weight:950;letter-spacing:-.035em;color:#10213a}
+  .sub{font-size:11px;line-height:1.45;color:var(--desk-muted);margin-top:6px;max-width:900px}
+  .tools{gap:8px}.toolrow{padding:11px 14px;background:#fbfcfe;border-bottom:1px solid var(--desk-line)}
+  .filters{gap:7px}
+  .filter{
+    min-height:34px;
+    border:1px solid #dce4ee;
+    border-radius:9px;
+    padding:7px 11px;
+    background:#fff;
+    color:#53637a;
+    font-size:10px;
+    font-weight:800;
+  }
+  .filter:hover{border-color:#b8c7da;color:#253d5d}
+  .filter.on{background:var(--desk-blue-soft);border-color:#bfd1ff;color:#235bc1}
+  .select,.qa-search{
+    min-height:36px;
+    border:1px solid #dce4ee;
+    border-radius:9px;
+    background:#fff;
+    padding:7px 10px;
+    font-size:11px;
+    box-shadow:0 1px 0 rgba(16,33,58,.02);
+  }
+  .select:focus,.qa-search:focus{border-color:#7ca8f8}
+  .btn{border-radius:9px;border-color:#dbe3ed;font-weight:850;box-shadow:none}
+  .btn.primary{background:linear-gradient(135deg,#2563eb,#1683c8);border-color:transparent}
+  .btn.soft{background:#eef5ff;color:#265fc5}
+  .pill{padding:5px 9px;font-size:9px;border:1px solid transparent}
+
+  body[data-desktop-view="quick"] #inventory .panelhead{box-shadow:inset 4px 0 0 var(--desk-blue)}
+  body[data-desktop-view="inventory"] #inventory .panelhead{box-shadow:inset 4px 0 0 var(--desk-cyan)}
+  #pricing .panelhead{box-shadow:inset 4px 0 0 var(--desk-purple)}
+  #ordering .panelhead{box-shadow:inset 4px 0 0 var(--desk-orange)}
+  #sales .panelhead{box-shadow:inset 4px 0 0 var(--desk-green)}
+  #database>.panel .panelhead{box-shadow:inset 4px 0 0 #168e96}
+
+  #pricing .filter.on{background:#f2efff;border-color:#d9cffd;color:#6849cb}
+  #ordering .filter.on{background:#fff3e7;border-color:#f3d1ad;color:#b65d12}
+  #sales .filter.on{background:#eaf8f2;border-color:#c9eadc;color:#087c56}
+  #database .filter.on{background:#e9f8f7;border-color:#cbe8e5;color:#0b7a80}
+
+  .tablewrap{
+    overflow:auto;
+    scrollbar-color:#cbd6e3 transparent;
+    background:#fff;
+  }
+  .table{
+    width:100%;
+    min-width:1050px;
+    border-collapse:separate;
+    border-spacing:0;
+    font-size:11px;
+  }
+  .table th{
+    position:sticky;top:0;z-index:4;
+    padding:10px 10px;
+    background:#f5f8fc;
+    color:#65758b;
+    border-bottom:1px solid #dce4ee;
+    font-size:9px;
+    font-weight:950;
+    letter-spacing:.045em;
+  }
+  .table td{
+    padding:10px 10px;
+    border-bottom:1px solid #edf1f5;
+    background:#fff;
+  }
+  .table tbody tr:nth-child(even) td{background:#fcfdff}
+  .table tbody tr:hover td{background:#f2f7ff}
+  .table tbody tr.velocity-active td{background:#eefaf6}
+  .table tbody tr.velocity-active:hover td{background:#e4f7f0}
+  .table tbody tr.velocity-active td:first-child{box-shadow:inset 4px 0 0 #28a47b}
+  .name{font-size:13px;font-weight:900;color:#1b2e49}
+  .meta{font-size:9px!important;color:#7a8799!important}
+  .num{font-weight:800}
+  .suggest{font-size:12px;color:#0d8d63}
+  .linkbtn{color:#215fb8;text-decoration:none}
+  .linkbtn:hover{text-decoration:underline;text-underline-offset:3px}
+
+  .grid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:10px;
+    padding:14px;
+  }
+  .kpi{
+    min-height:86px;
+    border:1px solid var(--desk-line);
+    border-radius:14px;
+    padding:12px 13px;
+    background:linear-gradient(180deg,#fff,#f9fbfe);
+    box-shadow:var(--desk-shadow-soft);
+  }
+  .kpi small{font-size:9px!important;color:#728197!important}
+  .kpi b{font-size:22px!important;color:#10213a}
+  .kpi span{font-size:9px!important}
+
+  #sales .grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  #sales .kpi{border-top:3px solid #31a67a}
+  #pricing .tablewrap{max-height:calc(100vh - 210px)}
+  #inventory .tablewrap{max-height:calc(100vh - 210px)}
+  #ordering .tablewrap{max-height:calc(100vh - 210px)}
+  #database .tablewrap{max-height:420px}
+
+  .dbcardgrid{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:12px;
+    padding:14px;
+  }
+  .dbcard{
+    min-height:96px;
+    border:1px solid var(--desk-line);
+    border-radius:15px;
+    background:linear-gradient(180deg,#fff,#f8fbfd);
+    box-shadow:var(--desk-shadow-soft);
+    transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease;
+  }
+  .dbcard:hover{transform:translateY(-2px);border-color:#9fcfd0;box-shadow:0 10px 24px rgba(31,48,74,.08)}
+  .dbcard .dbicon{width:42px;height:42px;display:grid;place-items:center;border-radius:12px;background:#eaf7f7;font-size:22px}
+  .dbcard b{font-size:16px!important}.dbcard small,.dbcard em{font-size:9px!important}
+
+  .dboverviewgrid{grid-template-columns:1fr 1fr;gap:12px;padding:0 14px 14px}
+  .dbsummary{border:1px solid var(--desk-line);border-radius:15px;background:#fbfcfe;padding:0 12px 12px}
+  .uploadgrid{grid-template-columns:1fr 1fr;gap:14px;padding:14px}
+  .drop{
+    border:2px dashed #bbd8dc;
+    border-radius:16px;
+    background:linear-gradient(180deg,#f8fcfc,#f3f8fb);
+  }
+  .uploadresult{border-color:#dfe7ef;border-radius:14px;background:#fafcff}
+  .batch{border-color:#dfe7ef;border-radius:13px;background:#fbfcfe}
+  .progress{height:8px;background:#e6edf4}.progress span{background:linear-gradient(90deg,#2563eb,#18a0ae)}
+
+  .drawerback{background:rgba(7,21,40,.22);backdrop-filter:blur(2px)}
+  .drawer{
+    top:14px;right:14px;bottom:14px;
+    width:min(44vw,760px);
+    border-radius:22px;
+    border:1px solid #dce4ee;
+    overflow:hidden;
+    box-shadow:-18px 14px 54px rgba(20,37,60,.18);
+  }
+  .drawerhead{
+    min-height:74px;
+    padding:15px 17px;
+    align-items:center;
+    background:linear-gradient(135deg,#f7faff,#fff);
+    border-bottom:1px solid var(--desk-line);
+  }
+  .drawertitle{font-size:21px;line-height:1.1;font-weight:950;color:#12243e}
+  .drawersub{font-size:10px;color:#6c7b90;margin-top:5px}
+  .drawerbody{padding:16px;background:#f8fafc}
+  .drawerfoot{padding:12px 16px;background:#fff;border-top:1px solid var(--desk-line)}
+  .desktop-detail-section{
+    margin-top:14px;
+    padding:14px;
+    border:1px solid var(--desk-line);
+    border-radius:15px;
+    background:#fff;
+    box-shadow:var(--desk-shadow-soft);
+  }
+  .desktop-detail-section:first-child{margin-top:0;padding-top:14px;border-top:1px solid var(--desk-line)}
+  .desktop-detail-section h3{font-size:12px;color:#18304f}
+  .desktop-related-row{
+    border-color:#e0e7ef;border-radius:10px;background:#f9fbfd;font-size:10px
+  }
+  .desktop-oh-bottom{
+    border:1px solid #bfe3dc;
+    border-radius:15px;
+    background:linear-gradient(135deg,#eefaf7,#fff);
+  }
+  .detailgrid{grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+  .detail{
+    border:1px solid #e0e7ef;
+    border-radius:12px;
+    background:#f9fbfd;
+    padding:10px;
+  }
+  .detail b{font-size:16px!important;color:#10243c}
+  .detail small{font-size:8px!important;color:#748197!important}
+
+  .pair249{border:1px solid #f0ddad}
+  .pair249.mismatch{border-color:#efb8b0}
+  .pair-subgroup-head td{background:#e9f6f5!important}
+  .pair-subgroup-main td{background:#f8fcfb!important}
+  .pair-subgroup-service td{background:#fffaf1!important}
+
+  #database .sectiontitle{font-size:11px;font-weight:950;color:#25435f}
+  #dataGrid .kpi{border-top:3px solid #15999c}
+  #dbqa .tablewrap{max-height:calc(100vh - 330px)}
+
+  @media(min-width:1400px){
+    .shell{grid-template-columns:272px minmax(0,1fr);gap:20px;padding:16px 18px 36px}
+    .appbar{top:16px;height:calc(100vh - 32px)}
+    .table{font-size:12px}
+    .table td{padding:11px 11px}
+    .panelhead{padding-left:20px;padding-right:20px}
+  }
+}
+
 </style>
 </head>
 <body>
 <div class="shell">
 <header class="appbar">
   <div class="top">
-    <div class="brand"><div class="mark">⚓</div><div><strong>Dockside Backoffice</strong><small>FULL MYSQL · Seafood Operations · v__VERSION__</small></div></div>
+    <div class="brand"><div class="mark">🐟</div><div><strong>FULL MYSQL</strong><small>Seafood Backoffice · Store #1032 · Las Vegas · v__VERSION__</small></div></div>
     <div class="topstat"><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
   </div>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav" aria-label="Desktop Backoffice main menu">
     <button class="navbtn on" data-view="quick">🔎 Quick Check</button>
-    <button class="navbtn" data-view="pricing">🏷️ Price Change</button>
-    <button class="navbtn" data-view="sales">📊 Performance</button>
-    <button class="navbtn" data-view="ordering">🛒 Ordering</button>
-    <button class="navbtn" data-view="inventory">📦 Inventory</button>
-    <button class="navbtn" data-view="database">🗄️ Data</button>
+    <button class="navbtn" data-view="pricing">🏷️ Price Suggestions</button>
+    <button class="navbtn" data-view="sales">📊 Performance Report</button>
+    <button class="navbtn" data-view="ordering">🛒 Ordering Review</button>
+    <button class="navbtn" data-view="inventory">📦 Inventory / PI</button>
+    <button class="navbtn" data-view="database">🗄️ Data & QA</button>
   </nav>
 </header>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
@@ -2029,14 +2377,15 @@ function syncRouteHash(view,dbTab=null,{replace=false}={}){
 }
 function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
   const actualView=view==='quick'?'inventory':view;
+  document.body.dataset.desktopView=view;
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id===actualView));
   document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
   const invTitle=document.querySelector('#inventory .title');
   const invSub=document.querySelector('#inventory .sub');
-  if(invTitle)invTitle.textContent=view==='quick'?'Quick Check':'Inventory Ledger';
+  if(invTitle)invTitle.textContent=view==='quick'?'Quick Check Workspace':'Inventory / PI Control';
   if(invSub)invSub.textContent=view==='quick'
-    ?'Search or select an item. Most active items first; open details on the right.'
-    :'Read-only system data. OH / True Stock is the only editable value.';
+    ?'Search Article #, UPC, Family or item. Results stay velocity-first; details open in the right-side workspace.'
+    :'Review effective OH, selling activity and PI evidence. True Stock / OH remains the only editable inventory value.';
   if(actualView==='inventory')loadInventory();
   if(actualView==='sales')loadSell();
   if(actualView==='ordering')loadOrders();
