@@ -795,7 +795,8 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
                         "receiving_articles_on_last_receipt": receipt.get("receiving_articles"),
                         "delivery_pattern": pattern,
                         "delivery_day_evidence": delivery_day,
-                        "reasons": _suggestion_reason(s, pattern, receipt) + (
+                        "reasons": _suggestion_reason(s, pattern, receipt)
+                        + (
                             [{
                                 "title":"Selected delivery day",
                                 "detail":(
@@ -805,6 +806,17 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
                                     f"{delivery_day.get('confidence_percent')}% confidence."
                                 ),
                             }] if delivery_day else []
+                        )
+                        + (
+                            [{
+                                "title":"Data freshness",
+                                "detail":(
+                                    f"ESTIMATE using existing POS and MVT through {common_data_through}. "
+                                    f"Required completed data is through {expected_through}. "
+                                    f"Forecast coverage begins {forecast_start_date} so the missing "
+                                    f"{stale_days} calendar day(s) are included before delivery."
+                                ),
+                            }] if missing_required_sources else []
                         ),
                     },
                 }
