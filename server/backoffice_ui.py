@@ -2317,40 +2317,113 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .desktop-commandbar,.desktop-overview-hero,.desktop-kpi-row,.desktop-workgrid,.desktop-module-hero{display:none!important}
 }
 
+
+/* Desktop V3 · 2026 workbench */
+@media(min-width:760px){
+  :root{--v3-bg:#f4f5f6;--v3-surface:#fff;--v3-ink:#17191d;--v3-muted:#777d85;--v3-line:#e7e8ea;--v3-line2:#d8dade;--rail-w:88px}
+  body.desktop-rail-expanded{--rail-w:212px}
+  html,body{background:var(--v3-bg)!important;color:var(--v3-ink)!important}
+  body{min-width:1040px!important}
+  .shell{grid-template-columns:var(--rail-w) minmax(0,1fr)!important;gap:0!important;padding:0!important;min-height:100vh;transition:grid-template-columns .18s ease}
+
+  .appbar{top:0!important;height:100vh!important;border-radius:0!important;border:0!important;border-right:1px solid #24272c!important;background:#111317!important;box-shadow:none!important;overflow:hidden!important;padding:10px 8px!important}
+  .appbar .top{display:grid!important;padding:0!important;border:0!important;gap:10px!important}
+  .appbar .brand{height:48px;justify-content:center;gap:10px!important;min-width:0}
+  .appbar .mark{width:38px!important;height:38px!important;flex:0 0 38px;border-radius:11px!important;background:#f4f4f2!important;color:#111317!important;font-size:14px!important;font-weight:1000!important;box-shadow:none!important}
+  .brandcopy{display:none;min-width:0}.brandcopy strong{font-size:12px!important;color:#fff!important;white-space:nowrap}.brandcopy small{font-size:8px!important;color:#858b93!important;white-space:nowrap}
+  body.desktop-rail-expanded .appbar .brand{justify-content:flex-start;padding:0 4px}body.desktop-rail-expanded .brandcopy{display:block}
+  .desktop-rail-toggle{position:absolute;right:-1px;top:66px;width:22px;height:34px;border:1px solid #2a2e34;border-right:0;border-radius:8px 0 0 8px;background:#191c21;color:#aab0b7;font-size:18px;z-index:4}
+  .appbar .topstat,.appbar .searchbar{display:none!important}
+  .appbar .nav{display:grid!important;gap:5px!important;padding:18px 0 0!important}
+  .appbar .nav button{width:100%!important;height:52px!important;min-height:52px!important;display:grid!important;grid-template-columns:1fr!important;place-items:center!important;padding:0!important;border-radius:10px!important;background:transparent!important;color:#80868f!important;transform:none!important;box-shadow:none!important;overflow:hidden}
+  .appbar .nav button:hover{background:#191c21!important;color:#e4e6e9!important}.appbar .nav button.on{background:#f3f4f5!important;color:#111318!important}.appbar .nav button.on:after{display:none!important}
+  .navicon{font-size:20px;line-height:1;font-weight:700}.navlabel{display:none;font-size:9px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.desktop-rail-expanded .appbar .nav button{grid-template-columns:36px minmax(0,1fr)!important;place-items:center stretch!important;text-align:left!important;padding:0 10px!important}body.desktop-rail-expanded .navicon{text-align:center}body.desktop-rail-expanded .navlabel{display:block}
+  .desktop-rail-foot{position:absolute;left:8px;right:8px;bottom:12px;height:36px;display:flex;align-items:center;justify-content:center;gap:7px;border-top:1px solid #25282d;color:#7f858e;font-size:8px;font-weight:900;letter-spacing:.12em}
+  .desktop-live-dot{width:7px;height:7px;border-radius:50%;background:#36ba84;box-shadow:0 0 0 4px rgba(54,186,132,.08)}.desktop-rail-foot-label{display:none}body.desktop-rail-expanded .desktop-rail-foot-label{display:inline}
+
+  .workspace{padding:0 22px 36px!important;min-width:0;transition:padding-right .18s ease}
+  body.desktop-inspector-open .workspace{padding-right:min(41vw,680px)!important}
+
+  .desktop-commandbar{top:0!important;min-height:58px!important;margin:0 -22px 22px!important;padding:8px 22px!important;border:0!important;border-bottom:1px solid var(--v3-line)!important;border-radius:0!important;background:rgba(251,251,252,.93)!important;box-shadow:none!important;grid-template-columns:minmax(140px,.55fr) minmax(320px,1.1fr) auto!important;backdrop-filter:blur(18px)!important}
+  .desktop-command-title{font-size:14px!important;font-weight:850!important;letter-spacing:-.015em!important}.desktop-command-sub{font-size:8px!important;margin-top:2px!important;color:#878c93!important}
+  .desktop-global-search{height:38px!important;border:1px solid var(--v3-line2)!important;border-radius:9px!important;background:#fff!important;padding:3px 4px 3px 10px!important;gap:7px!important;box-shadow:0 1px 2px rgba(20,24,29,.03);grid-template-columns:auto minmax(0,1fr) auto auto!important}
+  .desktop-search-glyph{font-size:16px!important;color:#999fa7!important}.desktop-global-search input{font-size:11px!important}.desktop-global-search button{height:28px!important;border-radius:7px!important;background:#1b1e23!important;padding:0 10px!important;font-size:9px!important}
+  .desktop-global-search kbd,.desktop-hero-search kbd{display:inline-flex;align-items:center;height:24px;padding:0 6px;border:1px solid #e2e3e5;border-bottom-color:#ced0d3;border-radius:6px;background:#f8f8f8;color:#92979e;font:700 8px/1 ui-sans-serif,system-ui;white-space:nowrap}
+  .desktop-store-chip,.desktop-version-chip{min-height:28px!important;border:0!important;border-radius:7px!important;background:#eff0f1!important;color:#6f757d!important;font-size:8px!important;padding:5px 7px!important}
+
+  .overview-v3-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;padding:12px 0 18px;border-bottom:1px solid var(--v3-line)}
+  .overview-v3-date{font-size:9px;font-weight:850;letter-spacing:.08em;color:#898e95}.overview-v3-head h1{margin:4px 0 3px;font-size:30px;line-height:1;letter-spacing:-.045em;font-weight:750}.overview-v3-head p{margin:0;font-size:11px;color:#7b8188}
+  .overview-v3-actions{display:flex;gap:6px}.overview-v3-actions button{min-height:32px;padding:6px 10px;border:1px solid var(--v3-line2);border-radius:8px;background:#fff;color:#333941;font-size:9px;font-weight:800}.overview-v3-actions button:hover{border-color:#bec2c7;background:#f8f8f9}
+  .overview-v3-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;margin-top:10px;align-items:start}
+  .v3-surface{min-width:0;border:1px solid var(--v3-line);border-radius:12px;background:#fff;overflow:hidden;box-shadow:0 1px 2px rgba(20,24,29,.025)}
+  .v3-priority{grid-column:span 8;grid-row:span 2}.v3-pulse{grid-column:span 4}.v3-snapshot{grid-column:span 8}.v3-batches{grid-column:span 4}
+  .v3-surface-head{min-height:54px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border-bottom:1px solid var(--v3-line);background:#fff}
+  .v3-surface-head span{display:block;font-size:8px;font-weight:750;color:#8a8f96;text-transform:uppercase;letter-spacing:.06em}.v3-surface-head h2{font-size:13px;line-height:1;margin:4px 0 0;font-weight:780;letter-spacing:-.01em}
+  .v3-link{border:0;background:transparent;color:#536f9e;font-size:8px;font-weight:800}.v3-status-chip{display:inline-flex!important;align-items:center;min-height:24px;padding:4px 7px;border-radius:999px;background:#eef1f4;color:#6a7078;font-size:8px!important;font-weight:850!important;letter-spacing:0!important;text-transform:none!important}
+  .v3-status-chip.good{background:#eaf5f0;color:#287458}.v3-status-chip.warn{background:#fff4e5;color:#9a6117}.v3-status-chip.bad{background:#fceced;color:#a73a3e}
+
+  .desktop-queue-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}.desktop-queue-column{border-right:1px solid var(--v3-line)!important}.desktop-queue-title{padding:10px!important;background:#fafafa!important;border-bottom:1px solid var(--v3-line)!important}
+  .desktop-queue-title>span{display:none!important}.desktop-queue-title b{font-size:10px!important}.desktop-queue-title small{font-size:8px!important}.desktop-queue-title button{background:transparent!important;color:#657086!important;padding:3px!important}
+  .desktop-queue-item{min-height:56px!important;padding:8px 10px!important;border-bottom:1px solid #f0f0f1!important}.desktop-queue-icon{width:25px!important;height:25px!important;border-radius:7px!important;background:#f0f2f4!important;color:#676e78!important}
+  .desktop-queue-item b{font-size:9px!important}.desktop-queue-item span:not(.desktop-queue-icon){font-size:8px!important}.desktop-queue-item em,.desktop-batch-row em{font-size:7px!important}
+
+  .desktop-freshness-board,.desktop-recent-list{padding:5px 10px 7px!important}.desktop-source-row{padding:7px 1px!important}.desktop-source-row b,.desktop-batch-row b{font-size:9px!important}.desktop-source-row small,.desktop-batch-row span{font-size:7.5px!important}.desktop-batch-row{padding:8px 1px!important}
+
+  .desktop-kpi-row{display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:0!important;margin:0!important}.desktop-kpi-card{min-height:96px!important;padding:13px 12px!important;border:0!important;border-right:1px solid var(--v3-line)!important;border-radius:0!important;background:#fff!important;box-shadow:none!important}.desktop-kpi-card:last-child{border-right:0!important}.desktop-kpi-card:before{display:none!important}.desktop-kpi-card small{font-size:7.5px!important;color:#868b92!important;letter-spacing:.035em!important}.desktop-kpi-card b{font-size:23px!important;margin-top:10px!important;font-weight:700!important;color:#20242a!important}.desktop-kpi-card span{font-size:7.5px!important;margin-top:6px!important;color:#8b9097!important}
+
+  .desktop-module-hero{min-height:82px!important;margin:0!important;padding:14px 2px 15px!important;border-radius:0!important;border-bottom:1px solid var(--v3-line)!important;background:transparent!important;color:var(--v3-ink)!important;box-shadow:none!important;grid-template-columns:minmax(0,1fr) auto!important}
+  .desktop-module-kicker{font-size:8px!important;color:#8a8f96!important;opacity:1!important}.desktop-module-hero h1{font-size:24px!important;margin:4px 0!important;font-weight:730!important;letter-spacing:-.035em!important}.desktop-module-hero p{font-size:9px!important;color:#7d8289!important;max-width:760px!important}.desktop-hero-icon{display:none!important}
+  .desktop-hero-search{width:min(560px,42vw)!important;height:42px!important;grid-template-columns:auto minmax(0,1fr) auto auto!important;padding:3px 4px 3px 10px!important;border:1px solid var(--v3-line2)!important;border-radius:9px!important;background:#fff!important}.desktop-hero-search>span{color:#8f959d;font-size:16px}.desktop-hero-search input{border:0!important;padding:0 6px!important;font-size:11px!important}.desktop-hero-search button{height:32px!important;border-radius:7px!important;background:#1d2025!important;color:#fff!important;padding:0 10px!important}
+
+  #inventory .panel,#pricing .panel,#ordering .panel,#sales .panel,#database>.panel,#database .subview>.panel{border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important}#database .subview>.panel{margin-top:8px!important}
+  .panelhead{min-height:54px!important;padding:9px 0!important;border-bottom:1px solid var(--v3-line)!important;background:transparent!important;box-shadow:none!important}.panelhead .title{font-size:14px!important;font-weight:780!important;letter-spacing:-.015em!important}.panelhead .sub{font-size:8px!important;margin-top:3px!important}
+  .toolrow{padding:8px 0!important;background:transparent!important;border-bottom:1px solid var(--v3-line)!important}.filter{min-height:30px!important;border-radius:7px!important;font-size:8.5px!important;padding:5px 8px!important}.filter.on{background:#eef2f7!important;border-color:#dce1e8!important;color:#353b44!important}.select,.qa-search{min-height:32px!important;border-radius:7px!important;font-size:9px!important;padding:5px 8px!important}.btn{min-height:32px!important;border-radius:7px!important;font-size:9px!important;padding:5px 8px!important}.btn.primary{background:#202329!important;border-color:#202329!important}.pill{font-size:7.5px!important;padding:4px 6px!important}
+  .tablewrap{max-height:calc(100vh - 205px)!important;background:#fff!important;border:1px solid var(--v3-line)!important;border-radius:9px!important;margin-top:8px}.table{font-size:10px!important}.table th{padding:8px 9px!important;background:#f7f7f8!important;color:#7b8087!important;font-size:7.5px!important;letter-spacing:.035em!important}.table td{padding:8px 9px!important;border-bottom-color:#eeeeef!important}.table tbody tr:nth-child(even) td{background:#fff!important}.table tbody tr:hover td{background:#f6f8fb!important}.table tbody tr.velocity-active td{background:#f3f8f5!important}.name{font-size:11px!important}.table td>b,.table td>.linkbtn{font-size:11px!important}.table .meta{font-size:7.5px!important}
+
+  .drawerback.on{display:none!important}.drawer{top:58px!important;right:0!important;bottom:0!important;width:min(41vw,680px)!important;border:0!important;border-left:1px solid var(--v3-line2)!important;border-radius:0!important;box-shadow:-12px 0 30px rgba(22,26,31,.08)!important;background:#fff!important}.drawerhead{min-height:58px!important;padding:10px 12px!important;border-bottom:1px solid var(--v3-line)!important;background:#fbfbfc!important}.drawertitle{font-size:14px!important}.drawersub{font-size:8px!important}.drawerbody{padding:12px!important;background:#f7f7f8!important}.drawerfoot{padding:9px 12px!important;border-top:1px solid var(--v3-line)!important}.desktop-detail-section{padding:11px!important;border:1px solid var(--v3-line)!important;border-radius:9px!important;box-shadow:none!important}.desktop-oh-bottom{border-radius:9px!important;background:#f4faf7!important}.detail{border-radius:8px!important;padding:8px!important;background:#fff!important}.detail b{font-size:13px!important}.detail small{font-size:7.5px!important}
+
+  @media(max-width:1380px){.v3-priority,.v3-snapshot{grid-column:span 12}.v3-pulse,.v3-batches{grid-column:span 6}.desktop-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr))!important}.desktop-kpi-card:nth-child(3){border-right:0!important}}
+}
+@media(max-width:759px){.overview-v3-head,.overview-v3-grid,.desktop-rail-foot,.desktop-rail-toggle{display:none!important}}
+
 </style>
 </head>
 <body>
 <div class="shell">
 <header class="appbar">
   <div class="top">
-    <div class="brand"><div class="mark">🐟</div><div><strong>FULL MYSQL</strong><small>Seafood Backoffice · Store #1032 · Las Vegas · v__VERSION__</small></div></div>
-    <div class="topstat"><span class="glass desktop-marketplace-badge">DESKTOP MARKETPLACE UI</span><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
+    <div class="brand"><div class="mark">F</div><div class="brandcopy"><strong>FULL MYSQL</strong><small>SEAFOOD · #1032</small></div></div>
+    <button id="desktopRailToggle" class="desktop-rail-toggle" type="button" aria-label="Expand navigation">›</button>
+    <div class="topstat"><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
   </div>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav" aria-label="Desktop Backoffice main menu">
-    <button class="navbtn on" data-view="overview">⌂ Overview</button>
-    <button class="navbtn" data-view="quick">🔎 Quick Check</button>
-    <button class="navbtn" data-view="pricing">🏷️ Price Suggestions</button>
-    <button class="navbtn" data-view="sales">📊 Performance Report</button>
-    <button class="navbtn" data-view="ordering">🛒 Ordering Review</button>
-    <button class="navbtn" data-view="inventory">📦 Inventory / PI</button>
-    <button class="navbtn" data-view="database">🗄️ Data & QA</button>
+    <button class="navbtn on" data-view="overview" title="Overview"><span class="navicon">⌂</span><span class="navlabel">Overview</span></button>
+    <button class="navbtn" data-view="quick" title="Quick Check"><span class="navicon">⌕</span><span class="navlabel">Quick Check</span></button>
+    <button class="navbtn" data-view="pricing" title="Price Suggestions"><span class="navicon">◇</span><span class="navlabel">Pricing</span></button>
+    <button class="navbtn" data-view="sales" title="Performance Report"><span class="navicon">▥</span><span class="navlabel">Performance</span></button>
+    <button class="navbtn" data-view="ordering" title="Ordering Review"><span class="navicon">⇄</span><span class="navlabel">Ordering</span></button>
+    <button class="navbtn" data-view="inventory" title="Inventory / PI"><span class="navicon">◎</span><span class="navlabel">Inventory / PI</span></button>
+    <button class="navbtn" data-view="database" title="Data & QA"><span class="navicon">▦</span><span class="navlabel">Data & QA</span></button>
   </nav>
+  <div class="desktop-rail-foot"><span class="desktop-live-dot"></span><span class="desktop-rail-foot-label">LIVE</span></div>
 </header>
 <main class="workspace">
   <div class="desktop-commandbar" aria-label="Desktop command bar">
     <div class="desktop-command-copy">
-      <div id="desktopPageEyebrow" class="desktop-command-eyebrow">SEAFOOD OPERATIONS</div>
       <div id="desktopPageTitle" class="desktop-command-title">Overview</div>
-      <div id="desktopPageSub" class="desktop-command-sub">Store #1032 · Las Vegas</div>
+      <div id="desktopPageSub" class="desktop-command-sub">Seafood operations</div>
+      <div id="desktopPageEyebrow" class="desktop-command-eyebrow" style="display:none">SEAFOOD OPERATIONS</div>
     </div>
     <form id="desktopGlobalSearchForm" class="desktop-global-search">
-      <span>⌕</span>
-      <input id="desktopGlobalSearch" type="search" autocomplete="off" placeholder="Search Article #, UPC, family, or item name">
-      <button type="submit">Search</button>
+      <span class="desktop-search-glyph">⌕</span>
+      <input id="desktopGlobalSearch" type="search" autocomplete="off" placeholder="Search anything… UPC, article, family, item">
+      <kbd>Ctrl K</kbd>
+      <button type="submit">Go</button>
     </form>
     <div class="desktop-command-meta">
-      <span class="desktop-store-chip">📍 Store #1032 · Las Vegas</span>
+      <span class="desktop-store-chip">#1032 · Las Vegas</span>
       <span class="desktop-version-chip">v__VERSION__</span>
     </div>
   </div>
@@ -2413,42 +2486,30 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </section>
 
 <section id="overview" class="view on">
-  <div class="desktop-overview-hero">
-    <div class="desktop-overview-copy">
-      <span class="desktop-overview-kicker">FULL MYSQL · SEAFOOD BACKOFFICE</span>
-      <h1>Seafood Operations Command Center</h1>
-      <p>One desktop workspace for pricing, ordering, inventory, PI, QA, data freshness, and daily decision work.</p>
-      <div class="desktop-overview-actions">
-        <button class="desktop-hero-btn primary" type="button" data-go-view="quick">Open Quick Check</button>
-        <button class="desktop-hero-btn" type="button" data-go-view="pricing">Review Prices</button>
-        <button class="desktop-hero-btn" type="button" data-go-view="database" data-go-db="dboverview">Upload / Data Health</button>
-      </div>
-    </div>
-    <div class="desktop-overview-seal">
-      <span>🐟</span>
-      <b>Store #1032</b>
-      <small>Las Vegas · Seafood</small>
+  <div class="overview-v3-head">
+    <div><div class="overview-v3-date" id="desktopTodayLabel">TODAY</div><h1>Operations</h1><p>Priorities first. Everything else stays quiet until it needs you.</p></div>
+    <div class="overview-v3-actions">
+      <button type="button" data-go-view="quick">Quick Check</button>
+      <button type="button" data-go-view="pricing">Pricing</button>
+      <button type="button" data-go-view="database" data-go-db="dboverview">Upload</button>
     </div>
   </div>
-
   <div id="desktopOverviewError"></div>
-  <div id="desktopOverviewKpis" class="desktop-kpi-row">
-    <div class="desktop-kpi-card"><small>Loading</small><b>—</b><span>Current operational snapshot</span></div>
-  </div>
-
-  <div class="desktop-workgrid">
-    <section class="desktop-workcard desktop-workcard-wide">
-      <div class="desktop-workhead"><div><small>WORK QUEUE</small><h2>What needs attention now</h2></div><span id="desktopWorkQueueStatus" class="pill blue">CHECKING</span></div>
+  <div class="overview-v3-grid">
+    <section class="v3-surface v3-priority">
+      <div class="v3-surface-head"><div><span>Priority queue</span><h2>Needs attention</h2></div><span id="desktopWorkQueueStatus" class="v3-status-chip">CHECKING</span></div>
       <div id="desktopWorkQueues" class="desktop-queue-grid"><div class="loading">Loading operational queues…</div></div>
     </section>
-
-    <section class="desktop-workcard">
-      <div class="desktop-workhead"><div><small>DATA FRESHNESS</small><h2>Required source status</h2></div><button class="desktop-text-btn" type="button" data-go-view="database" data-go-db="dbdata">Open Data Health →</button></div>
+    <section class="v3-surface v3-pulse">
+      <div class="v3-surface-head"><div><span>System pulse</span><h2>Data freshness</h2></div><button class="v3-link" type="button" data-go-view="database" data-go-db="dbdata">Data Health</button></div>
       <div id="desktopFreshnessBoard" class="desktop-freshness-board"><div class="loading">Loading data health…</div></div>
     </section>
-
-    <section class="desktop-workcard">
-      <div class="desktop-workhead"><div><small>PROCESSING</small><h2>Recent batches</h2></div><button class="desktop-text-btn" type="button" data-go-view="database" data-go-db="dboverview">Open Uploads →</button></div>
+    <section class="v3-surface v3-snapshot">
+      <div class="v3-surface-head"><div><span>Live snapshot</span><h2>Operating state</h2></div></div>
+      <div id="desktopOverviewKpis" class="desktop-kpi-row"><div class="desktop-kpi-card"><small>LOADING</small><b>—</b><span>Current operational snapshot</span></div></div>
+    </section>
+    <section class="v3-surface v3-batches">
+      <div class="v3-surface-head"><div><span>Processing</span><h2>Recent batches</h2></div><button class="v3-link" type="button" data-go-view="database" data-go-db="dboverview">Open</button></div>
       <div id="desktopRecentBatches" class="desktop-recent-list"><div class="loading">Loading batches…</div></div>
     </section>
   </div>
@@ -2456,15 +2517,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 <section id="inventory" class="view">
   <div id="desktopQuickHero" class="desktop-module-hero desktop-quick-hero">
-    <div>
-      <span class="desktop-module-kicker">QUICK CHECK</span>
-      <h1>Find the item. See the whole operating picture.</h1>
-      <p>Velocity-first results with current price, cost, OH, family relationships, receipts, and 240 / 249 evidence.</p>
-    </div>
-    <form id="desktopQuickSearchForm" class="desktop-hero-search">
-      <input id="desktopQuickSearch" type="search" autocomplete="off" placeholder="Try salmon, 240, 1341, UPC, or article #">
-      <button type="submit">Search</button>
-    </form>
+    <div><span class="desktop-module-kicker">PRODUCT INTELLIGENCE</span><h1>Quick Check</h1><p>Family → receiving article → selling UPC, with current price, cost, OH, receipts and recent movement.</p></div>
+    <form id="desktopQuickSearchForm" class="desktop-hero-search"><span>⌕</span><input id="desktopQuickSearch" type="search" autocomplete="off" placeholder="Search salmon, 240, family, UPC or article #"><kbd>Enter</kbd><button type="submit">Search</button></form>
   </div>
   <div id="desktopInventoryHero" class="desktop-module-hero desktop-inventory-hero">
     <div><span class="desktop-module-kicker">INVENTORY / PI</span><h1>Inventory position and physical-count control</h1><p>Review effective family OH, activity, DOS, and True Stock actions without mixing selling-UPC quantity with family movement.</p></div>
@@ -4343,12 +4397,13 @@ mobileMedia.addEventListener?.('change',e=>{
 });
 function openDrawer(title,sub,body,foot=''){
   $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on');
+  if(!isMobileBackoffice())document.body.classList.add('desktop-inspector-open');
   if(isMobileBackoffice()&&!mobileRestoringHistory){
     const st=history.state||{};
     if(st[MOBILE_HISTORY_KEY]&&!st.drawer)history.pushState({...st,drawer:true},'',location.href);
   }
 }
-function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}
+function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on');document.body.classList.remove('desktop-inspector-open')}
 function closeDrawerUser(){
   const st=history.state||{};
   if(isMobileBackoffice()&&st[MOBILE_HISTORY_KEY]&&st.drawer)history.back();
@@ -4436,7 +4491,7 @@ async function loadDesktopOverview(){
   const workStatus=$('#desktopWorkQueueStatus');
   const attention=actionable+orderAttention+qaRows.length;
   workStatus.textContent=attention?fmt(attention,0)+' ITEMS':'CLEAR';
-  workStatus.className='pill '+(highQa?'red':attention?'amber':'green');
+  workStatus.className='v3-status-chip '+(highQa?'bad':attention?'warn':'good');
 
   const failed=r.filter(x=>x.status==='rejected').length;
   if(failed&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failed+' source request(s) did not respond; module pages remain available.</div>';
@@ -5528,6 +5583,22 @@ function openDataHealthDetail(dateKey){
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
 
+function initDesktopV3(){
+  if(isMobileBackoffice())return;
+  const today=$('#desktopTodayLabel');
+  if(today)today.textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'}).toUpperCase();
+  const expanded=localStorage.getItem('fullmysql_desktop_rail')==='expanded';
+  document.body.classList.toggle('desktop-rail-expanded',expanded);
+  const toggle=$('#desktopRailToggle');
+  if(toggle){
+    toggle.textContent=expanded?'‹':'›';
+    toggle.onclick=()=>{const on=document.body.classList.toggle('desktop-rail-expanded');localStorage.setItem('fullmysql_desktop_rail',on?'expanded':'collapsed');toggle.textContent=on?'‹':'›'};
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(isMobileBackoffice())return;
+  if((e.ctrlKey||e.metaKey)&&String(e.key).toLowerCase()==='k'){e.preventDefault();const input=$('#desktopGlobalSearch');if(input){input.focus();input.select()}}
+});
 function desktopGo(view,dbTab=null){
   if(view==='database')show('database',{dbTab:dbTab||'dboverview'});
   else show(view);
@@ -5548,7 +5619,7 @@ function desktopSubmitSearch(value){
 $('#searchForm').onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#searchInput').value)};
 const dg=$('#desktopGlobalSearchForm');if(dg)dg.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopGlobalSearch').value)};
 const dq=$('#desktopQuickSearchForm');if(dq)dq.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopQuickSearch').value)};
-async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
+async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else{initDesktopV3();restoreRoute({replaceMissing:true});}setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
 })();
 </script>
 </body></html>'''
