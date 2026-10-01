@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v344';
+const CACHE='yipman-v345';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -333,7 +333,7 @@ const appDate=v=>{
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='home', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0, priceRequestSeq=0;
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
@@ -798,7 +798,7 @@ function renderOrderRoster(rows,data,h,stale){
   const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
   return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span></div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+ $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
@@ -890,25 +890,28 @@ function openOrder(r){
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
 }
 
-async function loadPrices(){
+function schedulePriceRetry(requestId,delayMs=3000){
+ clearTimeout(priceRetryTimer);
+ priceRetryTimer=setTimeout(()=>{
+  if(current==='price'&&requestId===priceRequestSeq)loadPrices({quiet:true});
+ },delayMs);
+}
+async function loadPrices(opts={}){
+ const quiet=!!opts.quiet;
  const requestId=++priceRequestSeq;
- $('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';
+ clearTimeout(priceRetryTimer);
+ if(!quiet)$('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';
  $('#priceStatus').textContent='Current price uses latest valid evidence';
  try{
-  let d=null;
-  for(let i=0;i<16;i++){
-    d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:9000});
-    if(requestId!==priceRequestSeq)return;
-    const warming=String(d.analysis_status||'').toUpperCase()==='REFRESHING'||String(d.cache_status||'').toUpperCase()==='WARMING';
-    if(!warming)break;
-    $('#priceStatus').textContent='Calculating current Price Review · '+(i+1)+'/16';
-    $('#priceRows').innerHTML='<div class="loading">Pricing analysis is running in the background. Yipman will update automatically.</div>';
-    if(i<15)await new Promise(r=>setTimeout(r,1600));
-  }
+  const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:12000});
   if(requestId!==priceRequestSeq)return;
-  if(!d||String(d.analysis_status||'').toUpperCase()==='REFRESHING'||String(d.cache_status||'').toUpperCase()==='WARMING'){
-    $('#priceStatus').textContent='Price Review still calculating';
-    $('#priceRows').innerHTML='<div class="empty">Current pricing analysis is still running. Pull down to refresh in a moment.</div>';
+  const analysisStatus=String(d.analysis_status||'').toUpperCase();
+  const cacheStatus=String(d.cache_status||'').toUpperCase();
+  const warming=analysisStatus==='REFRESHING'||cacheStatus==='WARMING';
+  if(warming){
+    $('#priceStatus').textContent='Building current Price Review…';
+    $('#priceRows').innerHTML='<div class="loading">Pricing analysis is running in the background. Yipman will retry automatically.</div>';
+    schedulePriceRetry(requestId,3000);
     return;
   }
   const h=d.data_health||{};
@@ -938,7 +941,8 @@ async function loadPrices(){
  }catch(e){
   if(requestId!==priceRequestSeq)return;
   $('#priceStatus').textContent='Price review temporarily unavailable';
-  $('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Pull down to retry.</div>';
+  $('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Yipman will retry automatically.</div>';
+  schedulePriceRetry(requestId,6000);
  }
 }
 function openPrice(r){
