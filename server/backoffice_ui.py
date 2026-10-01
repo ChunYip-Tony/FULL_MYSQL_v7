@@ -4258,8 +4258,14 @@ function mobileRenderList(){
       const obs=r.delivery_day
         ? ' · Observed '+r.delivery_day+' '+fmt(r.delivery_day_observed_count,0)+'/'+fmt(r.delivery_day_receipt_count,0)+' · '+fmt(r.delivery_day_confidence_pct,0)+'%'
         : '';
-      return mobileRow(String(r.family_article||''),r.family_article||r.receiving_article,r.family_name||'Family Article','OH '+fmt(r.oh)+' '+(r.oh_uom||'')+obs+' · Suggested '+fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),r.attention?'REVIEW':'READY','');
+      const estimate=r.estimate_only?' · ESTIMATE':'';
+      return mobileRow(String(r.family_article||''),r.family_article||r.receiving_article,r.family_name||'Family Article','OH '+fmt(r.oh)+' '+(r.oh_uom||'')+obs+' · Suggested '+fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||'')+estimate,r.attention?'REVIEW':(r.estimate_only?'ESTIMATE':'READY'),'');
     }).join('');
+    if(state.orderHealth?.staleEstimate){
+      const h=state.orderHealth;
+      const warning='<div class="m-warning"><b>⚠ Estimate using existing data through '+esc(h.dataThrough||'—')+'.</b><br>Required through '+esc(h.expectedThrough||'—')+' · POS '+esc(h.posThrough||'—')+' · MVT '+esc(h.movementThrough||'—')+'.<br>The suggestion includes forecast depletion for the missing day(s) before delivery.</div>';
+      html=warning+html;
+    }
   }else if(mobileState.module==='inventory'){
     html=subgroup240249Units(rows).map(unit=>{
       const rr=r=>mobileRowWithPairRole(r,r.upc,r.name||r.family_name,'OH '+fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' · 7D Vel '+fmt(r.velocity_7d)+' · DOS '+fmt(r.dos)+' · '+money(r.price),r.readiness||r.category,r.chinese_name||'');
@@ -4527,7 +4533,10 @@ function mobileOrderingDetail(key){
   html+=mobileMetric('Delivery',r.selected_delivery_date||'—',r.delivery_day||'Observed delivery day');
   html+=mobileMetric('Observed Cadence',r.delivery_day?(r.delivery_day+' '+fmt(r.delivery_day_observed_count,0)+'/'+fmt(r.delivery_day_receipt_count,0)):(r.ordering_frequency||'—'),r.delivery_day_confidence_pct!==null&&r.delivery_day_confidence_pct!==undefined?fmt(r.delivery_day_confidence_pct,0)+'% confidence · recent 12 weeks':'Observed ordering cadence');
   html+=mobileMetric('Frequency',r.ordering_frequency||'—','Observed ordering cadence');
-  html+=mobileMetric('Coming Delivery Suggestion',fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),'Family-level suggestion');
+  html+=mobileMetric('Coming Delivery Suggestion',fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),r.estimate_only?'ESTIMATE · existing data':'Family-level suggestion');
+  if(r.estimate_only){
+    html+=mobileMetric('Data Through',r.data_through||'—','Required through '+(r.expected_through||'—')+' · '+fmt(r.stale_calendar_days,0)+' day(s) behind');
+  }
   html+='</div>';
   if((d.reasons||[]).length){
     const reasonText=(d.reasons||[]).map(x=>typeof x==='string'?x:((x.title?x.title+': ':'')+(x.detail||''))).join(' · ');
@@ -5373,14 +5382,19 @@ async function loadOrders(){
     }
 
     const health=d.data_health||{};
-    const blocked=status==='BLOCKED_STALE_REQUIRED_DATA';
+    const blocked=status==='UNAVAILABLE';
+    const staleEstimate=String(health.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'
+      || status.startsWith('READY_STALE_ESTIMATE');
     const skipped=d.skipped_breakdown||{};
     state.orderHealth={
       blocked,
+      staleEstimate,
       warming:false,
       refreshing:Boolean(d.refreshing),
-      analysisStatus:blocked?'BLOCKED_STALE_REQUIRED_DATA':'CURRENT',
+      analysisStatus:status||'CURRENT',
       expectedThrough:health.expected_through||null,
+      dataThrough:health.data_through||null,
+      staleDays:health.stale_calendar_days??null,
       posThrough:health.pos_data_through||null,
       movementThrough:health.movement_data_through||null,
       missing:health.missing_required_sources||[],
@@ -5390,7 +5404,9 @@ async function loadOrders(){
     };
     state.orders=blocked?[]:(d.rows||[]);
     if(isMobileBackoffice()&&state.orderHealth.selectedDelivery){
-      mNode('mobileListSub').textContent='Delivery '+state.orderHealth.selectedDelivery+' · '+(state.orderHealth.selectedWeekday||'')+' · observed 12-week receipt cadence';
+      mNode('mobileListSub').textContent=staleEstimate
+        ? 'Delivery '+state.orderHealth.selectedDelivery+' · ESTIMATE · data through '+(state.orderHealth.dataThrough||'—')
+        : 'Delivery '+state.orderHealth.selectedDelivery+' · '+(state.orderHealth.selectedWeekday||'')+' · observed 12-week receipt cadence';
     }
     renderOrders();
     return true
@@ -5417,10 +5433,17 @@ function renderOrders(){
     $('#orderRows').innerHTML=`<tr><td colspan="9" class="empty"><b>Ordering is blocked by stale required data.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing/currentness issue: ${esc(missing)}. Upload/finish ingestion for the missing completed day, then refresh.</td></tr>`;
     return
   }
-  const a=orderRows();$('#orderCount').textContent=`${a.length} families`;$('#orderRows').innerHTML=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span></td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">No eligible families: none currently meet the Ordering rules.</td></tr>';$$('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))
+  const a=orderRows();
+  $('#orderCount').textContent=h.staleEstimate?`${a.length} families · ESTIMATE`:`${a.length} families`;
+  const warning=h.staleEstimate
+    ? `<tr><td colspan="9"><div style="padding:10px 12px;border:1px solid #efd49d;background:#fff4d9;border-radius:12px;color:#8a5a00"><b>⚠ Estimate using data through ${esc(h.dataThrough||'—')}.</b> Required through ${esc(h.expectedThrough||'—')} · POS ${esc(h.posThrough||'—')} · MVT ${esc(h.movementThrough||'—')}. Missing day(s) are forecast forward into the delivery coverage calculation.</div></td></tr>`
+    : '';
+  const body=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span>${r.estimate_only?' <span class="pill yellow">ESTIMATE</span>':''}</td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('');
+  $('#orderRows').innerHTML=warning+(body||'<tr><td colspan="9" class="empty">No eligible families: none currently meet the Ordering rules.</td></tr>');
+  $('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))
 }
 $$('.ordfilter').forEach(b=>b.onclick=()=>{state.orderFilter=b.dataset.filter;$$('.ordfilter').forEach(x=>x.classList.toggle('on',x===b));renderOrders()});$('#orderSort').onchange=renderOrders;
-function openOrderDetail(fam){const r=state.orders.find(x=>String(x.family_article)===String(fam));if(!r)return;const d=r.details||{},reasons=d.reasons||[], recArts=d.receiving_articles_on_last_receipt||[];openDrawer('Ordering Detail / Why?',`${r.family_name} · Family ${r.family_article}`,`<div class="detailgrid"><div class="detail"><small>Receiving Article</small><b>${esc(r.receiving_article||'—')}</b></div><div class="detail"><small>Family OH</small><b>${fmt(r.oh)} ${esc(r.oh_uom||'')}</b></div><div class="detail"><small>Last Receipt</small><b>${esc(r.last_receipt_date||'—')}</b></div><div class="detail"><small>Receipt Qty · Base</small><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></div><div class="detail"><small>Family 7D Movement</small><b>${fmt(d.qty_7d)}</b></div><div class="detail"><small>Family 28D Movement</small><b>${fmt(d.qty_28d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(d.velocity_7d)}/day</b></div><div class="detail"><small>DOS</small><b>${fmt(d.dos)}</b></div></div><div class="sectiontitle">Why this suggestion?</div><div class="reasonlist">${reasons.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div></div>`).join('')}</div><div class="calc">Coming delivery suggestion ≈ expected family usage through coverage window − usable family OH + promotion/safety adjustment. Incoming is not used as a displayed Ordering Review field.</div>${recArts.length?`<div class="sectiontitle">Receiving Articles on Last Receipt</div><div class="reasonlist">${recArts.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.article_number)}</b><span>${fmt(x.quantity)} ${esc(x.base_uom||'')} · Base UOM</span></div></div>`).join('')}</div>`:''}`,`<span class="pill blue">READ ONLY</span>`)}
+function openOrderDetail(fam){const r=state.orders.find(x=>String(x.family_article)===String(fam));if(!r)return;const d=r.details||{},reasons=d.reasons||[], recArts=d.receiving_articles_on_last_receipt||[];openDrawer('Ordering Detail / Why?',`${r.family_name} · Family ${r.family_article}`,`<div class="detailgrid"><div class="detail"><small>Receiving Article</small><b>${esc(r.receiving_article||'—')}</b></div><div class="detail"><small>Family OH</small><b>${fmt(r.oh)} ${esc(r.oh_uom||'')}</b></div><div class="detail"><small>Last Receipt</small><b>${esc(r.last_receipt_date||'—')}</b></div><div class="detail"><small>Receipt Qty · Base</small><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></div><div class="detail"><small>Family 7D Movement</small><b>${fmt(d.qty_7d)}</b></div><div class="detail"><small>Family 28D Movement</small><b>${fmt(d.qty_28d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(d.velocity_7d)}/day</b></div><div class="detail"><small>DOS</small><b>${fmt(d.dos)}</b></div>${r.estimate_only?`<div class="detail"><small>Data Basis</small><b>ESTIMATE · through ${esc(r.data_through||'—')}</b></div>`:''}</div><div class="sectiontitle">Why this suggestion?</div><div class="reasonlist">${reasons.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div></div>`).join('')}</div><div class="calc">Coming delivery suggestion ≈ expected family usage through coverage window − usable family OH + promotion/safety adjustment. Incoming is not used as a displayed Ordering Review field.</div>${recArts.length?`<div class="sectiontitle">Receiving Articles on Last Receipt</div><div class="reasonlist">${recArts.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.article_number)}</b><span>${fmt(x.quantity)} ${esc(x.base_uom||'')} · Base UOM</span></div></div>`).join('')}</div>`:''}`,`<span class="pill blue">READ ONLY</span>`)}
 
 async function loadPrices(){
   const err=$('#priceError');
