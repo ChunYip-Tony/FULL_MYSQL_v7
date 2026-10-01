@@ -1,3 +1,12 @@
+v7.0.316 Mobile Home Operations Dashboard:
+- Compacts the mobile 2×3 Home cards by roughly 25–30% while preserving all six production modules and one-screen fit.
+- Adds live operational status chips to Quick Check, Price Change, Performance, Ordering, Inventory, and Data.
+- Quick Check shows READY / HOLD counts; Price Change shows actionable review count and 240≠249 urgent count; Ordering shows Family review / attention counts.
+- Performance shows the latest completed data day Sales and GP$; Inventory shows negative-stock owners and pending dumping; Data shows current/latest batch and QA holds.
+- Keeps Home status loading non-blocking, caches heavyweight review summaries for 60 seconds, and preserves existing module logic/navigation.
+- Shrinks decorative seafood art and wave accents so operational information visually dominates the cards.
+Version: 7.0.316 Single-Service Edition
+
 v7.0.315 POS + MVT 3 PM Grace Period:
 - Applies the same 3:00 PM local grace period to the prior-day POS sales file as MVT.
 - Before 3:00 PM, yesterday's missing POS and MVT files are PENDING / NOT_DUE rather than missing.
