@@ -4525,7 +4525,10 @@ function mobileOrderingDetail(key){
   html+=mobileMetric('Frequency',r.ordering_frequency||'—','Observed ordering cadence');
   html+=mobileMetric('Coming Delivery Suggestion',fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),'Family-level suggestion');
   html+='</div>';
-  if((d.reasons||[]).length)html+='<div class="m-detailsection"><h3>Why?</h3><p>'+esc((d.reasons||[]).join(' · '))+'</p></div>';
+  if((d.reasons||[]).length){
+    const reasonText=(d.reasons||[]).map(x=>typeof x==='string'?x:((x.title?x.title+': ':'')+(x.detail||''))).join(' · ');
+    html+='<div class="m-detailsection"><h3>Why?</h3><p>'+esc(reasonText)+'</p></div>';
+  }
   html+='</div>';
   mobileShowDetail(r.family_article||'Ordering',r.family_name||'',html);
 }
