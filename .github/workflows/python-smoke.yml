@@ -523,3 +523,22 @@ jobs:
           echo
           curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240533&lightweight=true"
           echo
+
+      - name: Diagnose 249527 production POS lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 30 "$base/healthz"
+          echo
+          echo "=== 249527 SOURCE EVIDENCE ==="
+          curl -fsS --max-time 120 "$base/v1/web-upload/diagnostics/249-source-evidence?upc=24952700000"
+          echo
+          echo "=== 249527 CURRENT SERVING ==="
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=249527&lightweight=false"
+          echo
+          echo "=== 240527 CURRENT SERVING ==="
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=240527&lightweight=false"
+          echo
+
