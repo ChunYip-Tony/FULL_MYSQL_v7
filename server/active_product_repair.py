@@ -1058,7 +1058,7 @@ def _relink_family_and_derive_cost(cur) -> dict[str, int]:
            JOIN dim_uom bu ON UPPER(bu.uom_code)=UPPER(m.base_uom_code)
            WHERE m.article_id IS NOT NULL
              AND m.family_id IS NOT NULL
-             AND m.movement_type IN ('101','107','109')
+             AND m.movement_type IN ('101','107')
              AND m.amount_local_currency IS NOT NULL
              AND m.amount_local_currency<>0
              AND m.base_quantity IS NOT NULL

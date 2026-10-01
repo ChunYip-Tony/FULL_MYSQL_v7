@@ -23,6 +23,7 @@ from quick_check_app import (
 from inventory_position import latest_canonical_movement_day
 from upc_aliases import source_ean_predicate
 from phase3 import _current_price as _live_current_price
+from receipt_semantics import physical_receipt_stage_rows
 
 
 WEEKDAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
@@ -1161,7 +1162,7 @@ def _family_receipt_events(
             LEFT JOIN raw_movement r ON r.raw_id=m.raw_id
             WHERE m.family_id=%s
               AND m.file_id IN ({ph})
-              AND m.movement_type IN ('101','102','107','108','109','110')
+              AND m.movement_type IN ('101','102','109','110')
             ORDER BY m.posting_date,m.file_id,m.raw_id,m.source_row_number""",
         (int(family_id),*file_ids),
     )
@@ -1186,15 +1187,9 @@ def _family_receipt_events(
         by_type: dict[str,list[dict[str,Any]]] = {}
         for r in group:
             by_type.setdefault(str(r.get("movement_type") or ""),[]).append(r)
-        if by_type.get("101") or by_type.get("102"):
-            chosen=(by_type.get("101") or [])+(by_type.get("102") or [])
-            basis="101_102_DIRECT_GR_NET"
-        elif by_type.get("107") or by_type.get("108"):
-            chosen=(by_type.get("107") or [])+(by_type.get("108") or [])
-            basis="107_108_BLOCKED_GR_NET"
-        else:
-            chosen=(by_type.get("109") or [])+(by_type.get("110") or [])
-            basis="109_110_RELEASE_FALLBACK"
+        chosen,basis=physical_receipt_stage_rows(group)
+        if not chosen:
+            continue
 
         entry_uoms={str(x.get("entry_uom_code") or "").upper() for x in chosen if x.get("entry_uom_code")}
         base_uoms={str(x.get("base_uom_code") or "").upper() for x in chosen if x.get("base_uom_code")}
@@ -1275,7 +1270,7 @@ def _family_receipt_events_bulk(
             LEFT JOIN raw_movement r ON r.raw_id=m.raw_id
             WHERE m.family_id IN ({fam_ph})
               AND m.file_id IN ({file_ph})
-              AND m.movement_type IN ('101','102','107','108','109','110')
+              AND m.movement_type IN ('101','102','109','110')
             ORDER BY m.family_id,m.posting_date,m.file_id,m.raw_id,m.source_row_number""",
         (*ids,*file_ids),
     )
@@ -1302,15 +1297,9 @@ def _family_receipt_events_bulk(
         by_type: dict[str,list[dict[str,Any]]] = {}
         for r in group:
             by_type.setdefault(str(r.get("movement_type") or ""),[]).append(r)
-        if by_type.get("101") or by_type.get("102"):
-            chosen=(by_type.get("101") or [])+(by_type.get("102") or [])
-            basis="101_102_DIRECT_GR_NET"
-        elif by_type.get("107") or by_type.get("108"):
-            chosen=(by_type.get("107") or [])+(by_type.get("108") or [])
-            basis="107_108_BLOCKED_GR_NET"
-        else:
-            chosen=(by_type.get("109") or [])+(by_type.get("110") or [])
-            basis="109_110_RELEASE_FALLBACK"
+        chosen,basis=physical_receipt_stage_rows(group)
+        if not chosen:
+            continue
 
         entry_uoms={str(x.get("entry_uom_code") or "").upper() for x in chosen if x.get("entry_uom_code")}
         base_uoms={str(x.get("base_uom_code") or "").upper() for x in chosen if x.get("base_uom_code")}
@@ -1365,7 +1354,7 @@ def _delivery_pattern(
 ) -> dict[str,Any]:
     """Summarize recent canonical receipt weekdays for delivery planning.
 
-    Only positive canonical 101/107/109 receipt events inside the recent
+    Only positive canonical physical 101/109 receipt events inside the recent
     calendar lookback are used for cadence. Older history remains available in
     receipt detail but does not make a stale weekday look current.
     """

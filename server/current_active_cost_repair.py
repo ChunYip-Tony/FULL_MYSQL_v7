@@ -337,7 +337,7 @@ def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str
 
 def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
     # Authoritative current-cost order:
-    # 1) Valid receipt valuation from 101/107/109.
+    # 1) Valid receipt valuation from 101/107. 109 is physical GR quantity/date.
     # 2) Live/Fresh/Frozen official report cost.
     # 3) Explicit supported cost from the On-Hand report (fallback).
     # 4) Explicit user-confirmed Family/Main-Article fallback.
@@ -637,7 +637,7 @@ def _relink_existing_cost_observations(cur, target_family_ids: list[int]) -> dic
                 co.article_id=COALESCE(co.article_id,m.article_id)
             WHERE m.family_id IN ({ph})
               AND m.article_id IS NOT NULL
-              AND m.movement_type IN ('101','107','109')
+              AND m.movement_type IN ('101','107')
               AND (co.family_id IS NULL OR co.family_id<>m.family_id OR co.article_id IS NULL)""",
         tuple(target_family_ids),
     )
@@ -669,7 +669,7 @@ def _backfill_receipt_cost(cur, target_family_ids: list[int]) -> int:
             JOIN dim_uom bu ON UPPER(bu.uom_code)=UPPER(m.base_uom_code)
             WHERE m.family_id IN ({ph})
               AND m.article_id IS NOT NULL
-              AND m.movement_type IN ('101','107','109')
+              AND m.movement_type IN ('101','107')
               AND m.amount_local_currency IS NOT NULL
               AND m.amount_local_currency<>0
               AND m.base_quantity IS NOT NULL
@@ -708,7 +708,7 @@ def _backfill_receipt_cost(cur, target_family_ids: list[int]) -> int:
                    co.confidence=1.0
                WHERE co.family_id=%s
                  AND co.source_type='MOVEMENT_RECEIPT_VALUATION'
-                 AND m.movement_type IN ('101','107','109')
+                 AND m.movement_type IN ('101','107')
                  AND UPPER(m.entry_uom_code)=UPPER(%s)
                  AND m.entry_quantity IS NOT NULL
                  AND m.entry_quantity<>0
@@ -986,7 +986,7 @@ def _family_diagnostics(
                            THEN 1 ELSE 0 END) AS valid_receipt_rows,
                   MAX(posting_date) AS latest_receipt_date
            FROM movement_history
-           WHERE family_id=%s AND movement_type IN ('101','107','109')""",
+           WHERE family_id=%s AND movement_type IN ('101','107')""",
         (family_id,),
     )
     receipt = cur.fetchone() or {}

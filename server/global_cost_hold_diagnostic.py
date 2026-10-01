@@ -83,7 +83,7 @@ def _receipt_evidence(
                MAX(m.posting_date) AS latest_receipt_date
             FROM movement_history m
             WHERE {where}
-              AND m.movement_type IN ('101','107','109')""",
+              AND m.movement_type IN ('101','107')""",
         params,
     )
     summary = cur.fetchone() or {}
@@ -106,7 +106,7 @@ def _receipt_evidence(
                    m.file_id,m.sheet_id,m.raw_id,m.source_row_number
             FROM movement_history m
             WHERE {where}
-              AND m.movement_type IN ('101','107','109')
+              AND m.movement_type IN ('101','107')
             ORDER BY m.posting_date DESC,m.raw_id DESC
             LIMIT 12""",
         params,

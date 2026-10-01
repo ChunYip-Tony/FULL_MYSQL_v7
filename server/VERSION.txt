@@ -1,3 +1,18 @@
+v7.0.337 Canonical Physical Receipt Semantics:
+- Fixes receipt/delivery double counting caused by treating 107 and 109 as two deliveries.
+- Physical delivery quantity/date now comes only from 101 direct GR or 109 release/GR; 107 is cost-stage evidence only.
+- A 107+109 flow is one delivery even when the two movements post on different dates; the 109 posting date is the physical delivery date.
+- Receipt cost authority is separated from physical quantity: 101 or 107 can provide cost evidence; 109 no longer creates/qualifies receipt cost evidence.
+- Quick Check Receiving Article latest/previous delivery quantities, Ordering receipt history, observed delivery weekdays/cadence, last-receipt fields, and DOH inputs all use the same physical 101/109 semantics.
+- Ordering cache schema advanced to V9 and Yipman shell cache advanced to v337 so stale double-counted receipt payloads are not reused.
+- Adds smoke regression checks for same-date and cross-date 107+109 cases.
+Version: 7.0.337 Single-Service Edition
+
+v7.0.336 GR Trace Cache Invalidation:
+- Ordering cache schema advanced to V8 after GR identification was restricted to validated 5014 documents.
+- Yipman shell cache advanced to v336.
+Version: 7.0.336 Single-Service Edition
+
 v7.0.335 Complete Observed-Delivery Roster + Ordering Sort/Filter:
 - Delivery-date Ordering now returns every Family with canonical receipt evidence on the selected weekday in the Yipman 180-day lookback; order-calculation blockers no longer silently hide the Family.
 - Each selected-day Family is classified as ORDER, ZERO_ORDER, or REVIEW. UOM/OH/baseline blockers remain visible as REVIEW rows instead of disappearing.

@@ -21,6 +21,7 @@ from phase3 import (
     _current_price as _live_current_price,
     _price_list_upload_business_date,
 )
+from receipt_semantics import physical_receipt_stage_rows
 from webapp_v2_runtime import (
     _batch_daily_sales_by_price_type,
     _batch_sales_metric,
@@ -305,14 +306,9 @@ def _published_family_oh_fallback(children: list[dict[str, Any]]) -> dict[str, A
 
 
 def _receipt_stage_rows(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
-    by_type: dict[str, list[dict[str, Any]]] = {}
-    for row in rows:
-        by_type.setdefault(str(row.get("movement_type") or ""), []).append(row)
-    if by_type.get("101") or by_type.get("102"):
-        return (by_type.get("101") or []) + (by_type.get("102") or []), "101_102_DIRECT_GR_NET"
-    if by_type.get("107") or by_type.get("108"):
-        return (by_type.get("107") or []) + (by_type.get("108") or []), "107_108_BLOCKED_GR_NET"
-    return (by_type.get("109") or []) + (by_type.get("110") or []), "109_110_RELEASE_FALLBACK"
+    # One physical delivery is either 101 or the 109 side of a 107+109 flow.
+    # 107 is cost-stage evidence only and must never add delivery quantity.
+    return physical_receipt_stage_rows(rows)
 
 
 def _last_receipt_base_summary(cur, family_id: int) -> dict[str, Any]:
@@ -347,7 +343,7 @@ def _last_receipt_base_summary(cur, family_id: int) -> dict[str, Any]:
             FROM movement_history
             WHERE family_id=%s
               AND file_id IN ({ph})
-              AND movement_type IN ('101','102','107','108','109','110')
+              AND movement_type IN ('101','102','109','110')
             ORDER BY posting_date DESC,file_id DESC,raw_id DESC,source_row_number DESC""",
         (int(family_id), *file_ids),
     )
@@ -1199,7 +1195,7 @@ def _ordering_review_cache_key(
     # Cache schema V8: GR semantics changed to validated 5014-only receipt docs.
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
-    return f"V8_GR5014|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+    return f"V9_PHYSICAL_RECEIPT_101_109|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -2297,7 +2293,7 @@ def _quick_receiving_article_context(
             if x.get("date") is not None and x.get("file_id") is not None
         }
         aph = ",".join(["%s"] * len(receipt_articles))
-        receipt_types = tuple(str(x) for x in range(101, 110))
+        receipt_types = ('101', '102', '109', '110')
         tph = ",".join(["%s"] * len(receipt_types))
         cur.execute(
             f"""SELECT article_number,movement_type,posting_date,
@@ -2316,9 +2312,9 @@ def _quick_receiving_article_context(
             and canonical_receipt_files[r["posting_date"]] == int(r["file_id"])
         ]
 
-        # First collapse movement stages at the receipt-document level so
-        # 101/107/109 representations of the same physical delivery are not
-        # counted more than once.
+        # Physical delivery quantity comes only from 101 or 109 (plus reversals).
+        # 107 is the cost stage of a 107+109 flow and is never counted here,
+        # including when its posting date differs from the 109 GR date.
         event_groups: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
         for r in canonical_rows:
             art = str(r.get("article_number") or "").strip()
@@ -2368,7 +2364,7 @@ def _quick_receiving_article_context(
                 quantity = sum((_d(x.get("quantity")) for x in events), Decimal("0"))
             entry = {
                 "verified": True,
-                "movement_type": "101-109",
+                "movement_type": "101/109",
                 "date": posting_date,
                 "weekday": (
                     posting_date.strftime("%A")
@@ -2378,7 +2374,7 @@ def _quick_receiving_article_context(
                 "quantity": quantity,
                 "uom": uom,
                 "receipt_event_count": len(events),
-                "source": "MVT_101_109_CANONICAL_DAILY_AGGREGATE",
+                "source": "MVT_PHYSICAL_101_109_CANONICAL_DAILY_AGGREGATE",
             }
             per_article.setdefault(art, []).append(entry)
 

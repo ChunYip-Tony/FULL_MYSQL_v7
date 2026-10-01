@@ -1,0 +1,128 @@
+name: One-time v7.0.337 receipt-semantics rebuild
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    if: startsWith(github.event.head_commit.message, 'v7.0.337:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Wait for v7.0.337 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          consecutive=0
+          for i in $(seq 1 300); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            ok="$(BODY="$body" python - <<'PY'
+          import json,os
+          try: p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception: p={}
+          good=(p.get('ok') is True
+                and p.get('version')=='7.0.337-single-service'
+                and p.get('worker_version')=='7.0.337-single-service'
+                and p.get('worker_healthy') is True
+                and p.get('worker_ready') is True)
+          print('1' if good else '0')
+          PY
+          )"
+            if [ "$ok" = 1 ]; then
+              consecutive=$((consecutive+1))
+              [ "$consecutive" -ge 3 ] && exit 0
+            else
+              consecutive=0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Wait for pipeline idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 300); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+            cat /tmp/active.json; echo
+            active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json',encoding='utf-8'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+            [ "$active" = 0 ] && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Select latest rebuildable serving batch
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/web-upload/recent?limit=20" -o /tmp/recent.json
+          cat /tmp/recent.json; echo
+          batch_id="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/recent.json',encoding='utf-8'))
+          rows=p.get('batches') or p.get('rows') or []
+          allowed={'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','PHASE3_QA_HOLD'}
+          ids=[int(x.get('batch_id')) for x in rows
+               if x.get('batch_id') is not None
+               and str(x.get('processing_status') or '') in allowed]
+          print(max(ids) if ids else '')
+          PY
+          )"
+          test -n "$batch_id"
+          echo "BATCH_ID=$batch_id" >> "$GITHUB_ENV"
+          echo "Selected batch $batch_id"
+
+      - name: Rebuild Phase 3 with corrected receipt semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/$BATCH_ID/rebuild-phase3")"
+          cat /tmp/rebuild.json; echo
+          test "$code" = 200
+          read -r ok run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json',encoding='utf-8'))
+          ok=(p.get('code_version')=='7.0.337-single-service' and p.get('version_fence_pass') is True)
+          print('1' if ok else '0',p.get('pipeline_run_id') or '',p.get('session_id') or '')
+          PY
+          )
+          test "$ok" = 1
+          echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+      - name: Wait for rebuild terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          final=""
+          for i in $(seq 1 480); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$SESSION_ID" -o /tmp/session.json
+            final="$(RUN_ID="$RUN_ID" python - <<'PY'
+          import json,os
+          p=json.load(open('/tmp/session.json',encoding='utf-8'))
+          rid=int(os.environ['RUN_ID'])
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid),None)
+          print(str((run or {}).get('processing_status') or 'MISSING'))
+          PY
+          )"
+            echo "run=$RUN_ID status=$final"
+            case "$final" in COMPLETED|QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED) break ;; esac
+            sleep 5
+          done
+          case "$final" in COMPLETED|QA_HOLD) ;; *) exit 1 ;; esac

@@ -80,6 +80,68 @@ jobs:
           print('mvt-close-contract-ok')
           PY
 
+      - name: Validate canonical physical receipt semantics
+        run: |
+          python - <<'PY'
+          import inspect
+          from decimal import Decimal
+          import phase3
+          import backoffice_runtime
+          import webapp_v2_runtime
+          from receipt_semantics import (
+              physical_receipt_stage_rows,
+              is_physical_receipt_movement,
+              is_positive_physical_receipt_movement,
+              is_receipt_cost_movement,
+          )
+
+          # Same-day 107 + 109 is ONE delivery: quantity comes from 109 only.
+          same_day=[
+              {'movement_type':'107','posting_date':'2026-09-22','base_quantity':Decimal('132.276')},
+              {'movement_type':'109','posting_date':'2026-09-22','base_quantity':Decimal('132.276')},
+          ]
+          chosen,basis=physical_receipt_stage_rows(same_day)
+          assert [x['movement_type'] for x in chosen] == ['109'], (chosen,basis)
+          assert sum(x['base_quantity'] for x in chosen) == Decimal('132.276')
+
+          # Cross-date 107 + 109 is still ONE delivery. A 107-only day contributes
+          # no delivery; the 109 day is the physical GR date and quantity.
+          chosen_107,basis_107=physical_receipt_stage_rows([
+              {'movement_type':'107','posting_date':'2026-09-24','base_quantity':Decimal('36')}
+          ])
+          assert chosen_107 == [] and basis_107 == 'NON_PHYSICAL_RECEIPT_STAGE'
+          chosen_109,basis_109=physical_receipt_stage_rows([
+              {'movement_type':'109','posting_date':'2026-09-25','base_quantity':Decimal('36')}
+          ])
+          assert [x['movement_type'] for x in chosen_109] == ['109']
+          assert chosen_109[0]['posting_date'] == '2026-09-25'
+          assert basis_109 == '107_109_VALUATED_BLOCKED_RELEASE_NET'
+
+          # Direct 101 remains a standalone physical delivery and cost source.
+          chosen_101,_=physical_receipt_stage_rows([
+              {'movement_type':'101','posting_date':'2026-09-28','base_quantity':Decimal('37')}
+          ])
+          assert [x['movement_type'] for x in chosen_101] == ['101']
+
+          assert is_physical_receipt_movement('101')
+          assert is_physical_receipt_movement('109')
+          assert not is_physical_receipt_movement('107')
+          assert is_positive_physical_receipt_movement('101')
+          assert is_positive_physical_receipt_movement('109')
+          assert is_receipt_cost_movement('101')
+          assert is_receipt_cost_movement('107')
+          assert not is_receipt_cost_movement('109')
+
+          # Operational readers must use the shared physical-stage rule.
+          assert 'physical_receipt_stage_rows' in inspect.getsource(webapp_v2_runtime._family_receipt_events)
+          assert 'physical_receipt_stage_rows' in inspect.getsource(webapp_v2_runtime._family_receipt_events_bulk)
+          assert 'physical_receipt_stage_rows' in inspect.getsource(backoffice_runtime._receipt_stage_rows)
+
+          # Current cost cannot select a 109 observation as receipt valuation.
+          assert "co.movement_type IN ('101','107')" in inspect.getsource(phase3._latest_cost)
+          print('canonical-physical-receipt-semantics=PASS')
+          PY
+
       - name: Validate all-UPC source lineage normalization
         run: |
           python - <<'PY'

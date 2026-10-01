@@ -40,6 +40,7 @@ from current_active_cost_repair import repair_current_active_cost
 from product_identity_audit import audit_product_identity
 from quick_check_app import expire_true_stock_for_new_oh
 from inventory_position import rollforward_position
+from receipt_semantics import RECEIPT_COST_MOVEMENTS
 from upc_aliases import (
     service_249_canonical_base,
     service_249_source_prefix,
@@ -1011,7 +1012,7 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
 
                 valuation_qty = entry_qty if use_entry_cost_basis else base_qty
                 valuation_uom_id = entry_uom_id if use_entry_cost_basis else base_uom_id
-                if amount not in (None, 0) and valuation_qty not in (None, 0) and valuation_uom_id is not None:
+                if mvt in RECEIPT_COST_MOVEMENTS and amount not in (None, 0) and valuation_qty not in (None, 0) and valuation_uom_id is not None:
                     unit_cost = abs(amount / valuation_qty)
                     cur.execute(
                         "SELECT cost_observation_id FROM article_cost_observation "
@@ -2421,7 +2422,7 @@ def _product_class(article_desc: str | None, family_desc: str | None, category: 
 
 def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
     # Authority order:
-    # 1) valid 101/107/109 receipt valuation
+    # 1) valid 101/107 receipt valuation (109 is physical GR quantity/date, not cost)
     # 2) supported OH-report cost: explicit unit cost or Total Value / Unrestricted Qty
     # 3) Live/Fresh/Frozen official report cost
     # 4) user-confirmed fallback
@@ -2432,6 +2433,7 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
            LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s AND co.source_type='MOVEMENT_RECEIPT_VALUATION'
+             AND co.movement_type IN ('101','107')
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
            ORDER BY co.business_date DESC, co.cost_observation_id DESC LIMIT 1""",
@@ -2978,7 +2980,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
         m30 = _sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])
         price = _current_price(cur, upc_id, p['ean_upc'])
         cost = _latest_cost(cur, family_id)
-        cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'107\',\'109\')', (family_id,))
+        cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'109\')', (family_id,))
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
         factor = Decimal(str(p['base_qty_per_selling_unit'])) if p['base_qty_per_selling_unit'] is not None else None
         selling_uom = p['selling_uom']; base_uom = p['base_uom']
@@ -3264,7 +3266,7 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
         m30 = _sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])
         price = _current_price(cur, upc_id, p['ean_upc'])
         cost = _latest_cost(cur, family_id)
-        cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'107\',\'109\')', (family_id,))
+        cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'109\')', (family_id,))
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
         factor = Decimal(str(p['base_qty_per_selling_unit'])) if p['base_qty_per_selling_unit'] is not None else None
         selling_uom = p['selling_uom']; base_uom = p['base_uom']

@@ -151,7 +151,7 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                              THEN 1 ELSE 0 END) AS valid_valuation_row_count
                     FROM movement_history
                     WHERE {where}
-                      AND movement_type IN ('101','107','109')""",
+                      AND movement_type IN ('101','107')""",
                 params,
             )
             receipt = cur.fetchone() or {}
@@ -266,7 +266,7 @@ def cost_backfill_queue(lookback_days: int = 90) -> dict[str, Any]:
                     "backfill_needed": backfill_needed,
                     "backfill_mode": backfill_mode,
                     "required_upload_scope": required_upload_scope,
-                    "required_receipt_movements": ["101","107","109"],
+                    "required_receipt_movements": ["101","107"],
                     "action_code": action_code,
                 }
             )

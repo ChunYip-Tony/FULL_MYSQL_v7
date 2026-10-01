@@ -173,7 +173,7 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
     """Materialize OH cost evidence and refresh only families affected by authority order.
 
     Authority:
-      1) valid 101/107/109 receipt valuation
+      1) valid 101/107 receipt valuation
       2) explicit supported OH-report cost
       3) Live/Fresh/Frozen official report cost
       4) explicit user-confirmed fallback
@@ -225,7 +225,7 @@ def run_cost_authority_refresh(device: str) -> dict[str, Any]:
             )
 
             # Materialize in the same order as cost authority:
-            # 1) receipt 101/107/109
+            # 1) receipt cost evidence 101/107
             # 2) OH cost: explicit unit cost or Total Value / Unrestricted Qty
             # 3) Live/Fresh/Frozen official cost
             receipt_backfill_rows = _backfill_receipt_cost(

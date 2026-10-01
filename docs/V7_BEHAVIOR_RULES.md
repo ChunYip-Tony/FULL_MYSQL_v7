@@ -14,6 +14,15 @@
 - Backfilled daily sources automatically change affected rolling windows when Phase3 is rebuilt.
 - Work/Home v7 clients upload through HTTPS only; MySQL credentials remain server-side.
 
+## Canonical receipt / delivery semantics
+
+- A physical delivery is either a direct **101** receipt or the **109** physical GR/release in a **107 + 109** flow.
+- **107 never contributes delivery quantity or delivery cadence.** It is valuation/cost-stage evidence for the same physical delivery represented by 109.
+- 107 and 109 may post on different dates. The physical delivery date is the **109 posting date**; pairing must not require equal posting dates.
+- Direct 101 receipt cost may come from 101. In a 107+109 flow, receipt cost authority comes from **107**, while quantity/date/GR come from **109**.
+- Reversals follow the same separation: 102 reverses 101, 108 reverses 107 cost-stage evidence, and 110 reverses 109 physical receipt.
+- Delivery history, last receipt, observed delivery weekdays, ordering cadence, and delivery quantities must use physical receipt stages only and must never sum 107 + 109.
+
 ## Single-Service deployment rule
 
 - v7.0.1 Single-Service Edition runs the HTTPS API and background worker in one App Platform service/container.
