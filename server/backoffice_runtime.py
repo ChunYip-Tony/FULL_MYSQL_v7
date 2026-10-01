@@ -3043,6 +3043,104 @@ def _quick_price_preview_by_upc(
     return previews
 
 
+def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[str, Any]:
+    """Return CURRENT/SUGGEST/Company pricing for a small Quick Check UPC set.
+
+    This endpoint is intentionally separate from inventory search so identity /
+    movement results render immediately even if pricing analysis is still busy.
+    """
+    requested=[]
+    seen=set()
+    for raw in upcs or []:
+        value=str(raw or "").strip()
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        requested.append(value)
+        if len(requested)>=60:
+            break
+    if not requested:
+        return {
+            "contract_version":"YIPMAN_QUICK_PRICE_PREVIEW_V1",
+            "count":0,
+            "rows":[],
+        }
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        ph=",".join(["%s"]*len(requested))
+        cur.execute(
+            f"""SELECT *
+                FROM quick_check_current
+                WHERE ean_upc IN ({ph})
+                ORDER BY ean_upc""",
+            tuple(requested),
+        )
+        rows=cur.fetchall()
+
+        # Include confirmed 240/249 companions only for equality enforcement.
+        pair_signatures=set()
+        for row in rows:
+            sig=_seafood_upc_group_signature(row.get("family_id"),row.get("ean_upc"))
+            prefix=_numeric_key(row.get("ean_upc"))[:3]
+            if sig is not None and prefix in {"240","249"}:
+                pair_signatures.add(sig)
+        if pair_signatures:
+            family_ids=sorted({x[0] for x in pair_signatures})
+            fph=",".join(["%s"]*len(family_ids))
+            cur.execute(
+                f"""SELECT *
+                    FROM quick_check_current
+                    WHERE family_id IN ({fph})
+                    ORDER BY family_id,ean_upc""",
+                tuple(family_ids),
+            )
+            existing={str(x.get("ean_upc") or "") for x in rows}
+            for extra in cur.fetchall():
+                sig=_seafood_upc_group_signature(extra.get("family_id"),extra.get("ean_upc"))
+                prefix=_numeric_key(extra.get("ean_upc"))[:3]
+                ean=str(extra.get("ean_upc") or "")
+                if sig in pair_signatures and prefix in {"240","249"} and ean not in existing:
+                    rows.append(extra)
+                    existing.add(ean)
+
+        live_prices=_bulk_live_current_prices(cur,rows)
+        previews=_quick_price_preview_by_upc(cur,rows,live_prices)
+        requested_set=set(requested)
+        out=[]
+        for row in rows:
+            upc=str(row.get("ean_upc") or "")
+            if upc not in requested_set or row.get("upc_id") is None:
+                continue
+            uid=int(row["upc_id"])
+            live=live_prices.get(uid) or {}
+            preview=previews.get(uid) or {}
+            out.append({
+                "upc":upc,
+                "current_price":live.get("price"),
+                "current_price_type":live.get("type"),
+                "current_price_source":live.get("source"),
+                "current_price_asof_date":live.get("date"),
+                "suggested_price":preview.get("suggested_price"),
+                "suggestion_status":preview.get("suggestion_status"),
+                "suggestion_basis":preview.get("suggestion_basis"),
+                "company_price_a":row.get("company_price_a"),
+                "company_price_b":row.get("company_price_b"),
+                "company_price_c":row.get("company_price_c"),
+            })
+        cur.close()
+    return {
+        "contract_version":"YIPMAN_QUICK_PRICE_PREVIEW_V1",
+        "count":len(out),
+        "rows":out,
+        "rules":{
+            "current_price":"LIVE_CANONICAL_PRICE_AUTHORITY",
+            "suggestion":"SAME_14D_GP_PER_DAY_ENGINE_AND_GATES_AS_PRICE_REVIEW",
+            "pair_rule":"CONFIRMED_240_249_EQUALITY_ENFORCED",
+        },
+    }
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",
@@ -4226,6 +4324,165 @@ def pricing_review(
             "estimate_is_clearly_labelled": True,
             "source_contract": report.get("price_suggestion_rules"),
         },
+    }
+
+
+_PRICING_REVIEW_CACHE_LOCK=threading.Lock()
+_PRICING_REVIEW_CACHE_VALUES: dict[str,dict[str,Any]]={}
+_PRICING_REVIEW_CACHE_AT: dict[str,float]={}
+_PRICING_REVIEW_REFRESHING: set[str]=set()
+_PRICING_REVIEW_LAST_ERROR: dict[str,str]={}
+_PRICING_REVIEW_CACHE_TTL_SECONDS=120.0
+
+
+def _pricing_review_cache_key(category: str, limit: int) -> str:
+    return f"V1_NO_GRACE|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
+
+
+def _ensure_pricing_review_cache_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS backoffice_pricing_review_cache (
+             cache_key VARCHAR(96) NOT NULL PRIMARY KEY,
+             payload_json LONGTEXT NOT NULL,
+             generated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+             ON UPDATE CURRENT_TIMESTAMP(6)
+           )"""
+    )
+
+
+def _load_persisted_pricing_review(cache_key: str) -> dict[str,Any] | None:
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            _ensure_pricing_review_cache_table(cur)
+            conn.commit()
+            cur.execute(
+                """SELECT payload_json,generated_at
+                   FROM backoffice_pricing_review_cache
+                   WHERE cache_key=%s
+                   LIMIT 1""",
+                (cache_key,),
+            )
+            row=cur.fetchone()
+            cur.close()
+        if not row:
+            return None
+        payload=json.loads(row.get("payload_json") or "{}")
+        if not isinstance(payload,dict):
+            return None
+        payload["persisted_generated_at"]=row.get("generated_at")
+        return payload
+    except Exception:
+        return None
+
+
+def _persist_pricing_review(cache_key: str, value: dict[str,Any]) -> None:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_pricing_review_cache_table(cur)
+        cur.execute(
+            """INSERT INTO backoffice_pricing_review_cache(cache_key,payload_json)
+               VALUES (%s,%s)
+               ON DUPLICATE KEY UPDATE
+                 payload_json=VALUES(payload_json),
+                 generated_at=CURRENT_TIMESTAMP(6)""",
+            (cache_key,json.dumps(value,default=str)),
+        )
+        conn.commit()
+        cur.close()
+
+
+def _pricing_review_refresh_worker(category: str, limit: int, cache_key: str) -> None:
+    try:
+        _PRICING_REVIEW_LAST_ERROR.pop(cache_key,None)
+        value=pricing_review(
+            category=category,
+            limit=limit,
+            allow_stale_estimate=True,
+        )
+        _persist_pricing_review(cache_key,value)
+        with _PRICING_REVIEW_CACHE_LOCK:
+            _PRICING_REVIEW_CACHE_VALUES[cache_key]=value
+            _PRICING_REVIEW_CACHE_AT[cache_key]=time.monotonic()
+    except Exception as exc:
+        _PRICING_REVIEW_LAST_ERROR[cache_key]=f"{type(exc).__name__}: {exc}"[:1000]
+    finally:
+        with _PRICING_REVIEW_CACHE_LOCK:
+            _PRICING_REVIEW_REFRESHING.discard(cache_key)
+
+
+def _request_pricing_review_refresh(category: str, limit: int, cache_key: str) -> None:
+    with _PRICING_REVIEW_CACHE_LOCK:
+        if cache_key in _PRICING_REVIEW_REFRESHING:
+            return
+        _PRICING_REVIEW_REFRESHING.add(cache_key)
+    threading.Thread(
+        target=_pricing_review_refresh_worker,
+        args=(category,limit,cache_key),
+        name=f"pricing-review-{str(category or 'ALL').lower()}",
+        daemon=True,
+    ).start()
+
+
+def cached_pricing_review(
+    category: str="ALL",
+    limit: int=1000,
+    force: bool=False,
+) -> dict[str,Any]:
+    """Non-blocking Pricing Review with persistent stale-while-refresh cache."""
+    cat=str(category or "ALL").strip().upper()
+    if cat not in {"ALL","LIVE","FRESH","FROZEN"}:
+        raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
+    lim=max(1,min(int(limit or 1000),1000))
+    key=_pricing_review_cache_key(cat,lim)
+
+    with _PRICING_REVIEW_CACHE_LOCK:
+        cached=_PRICING_REVIEW_CACHE_VALUES.get(key)
+        cached_at=_PRICING_REVIEW_CACHE_AT.get(key)
+        already_refreshing=key in _PRICING_REVIEW_REFRESHING
+
+    if cached is None and not already_refreshing:
+        persisted=_load_persisted_pricing_review(key)
+        if persisted is not None:
+            with _PRICING_REVIEW_CACHE_LOCK:
+                _PRICING_REVIEW_CACHE_VALUES[key]=persisted
+                _PRICING_REVIEW_CACHE_AT[key]=0.0
+            cached=persisted
+            cached_at=0.0
+
+    if cached is None:
+        if not already_refreshing:
+            _request_pricing_review_refresh(cat,lim,key)
+        return {
+            "contract_version":"BACKOFFICE_PRICING_REVIEW_V9_ASYNC_CACHE",
+            "category":cat,
+            "analysis_status":"REFRESHING",
+            "cache_status":"WARMING",
+            "refreshing":True,
+            "refresh_error":_PRICING_REVIEW_LAST_ERROR.get(key),
+            "rows":[],
+            "suppressed_accepted_count":0,
+            "data_health":{
+                "status":"REFRESHING",
+                "expected_through":completed_through_date(),
+                "rule":"PRICING_ASYNC_CACHE_WARMING",
+            },
+        }
+
+    age=(time.monotonic()-cached_at) if cached_at is not None else None
+    stale=age is None or age>=_PRICING_REVIEW_CACHE_TTL_SECONDS
+    if force or stale:
+        _request_pricing_review_refresh(cat,lim,key)
+    with _PRICING_REVIEW_CACHE_LOCK:
+        refreshing=key in _PRICING_REVIEW_REFRESHING
+
+    return {
+        **cached,
+        "contract_version":"BACKOFFICE_PRICING_REVIEW_V9_ASYNC_CACHE",
+        "analysis_status":"READY_STALE_REFRESHING" if stale else "READY",
+        "cache_status":"STALE_REFRESHING" if stale else "HIT",
+        "refreshing":refreshing,
+        "refresh_error":_PRICING_REVIEW_LAST_ERROR.get(key),
     }
 
 
