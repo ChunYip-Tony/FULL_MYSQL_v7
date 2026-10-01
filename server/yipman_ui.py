@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v339';
+const CACHE='yipman-v340';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -587,10 +587,12 @@ function receiptTracePairs(r){
  events.forEach(x=>{
   const po=String(x?.purchase_order||'').trim();
   const gr=String(x?.gr_number||'').trim();
+  const basis=String(x?.receipt_stage_basis||'').toUpperCase();
   if(!po&&!gr)return;
-  const key=po+'|'+gr;
+  const traceLabel=gr?'GR '+gr:(basis.startsWith('101_102')?'101 RECEIPT':basis.startsWith('107_109')?'109 GR':'RECEIPT');
+  const key=po+'|'+traceLabel;
   if(seen.has(key))return;
-  seen.add(key);pairs.push({po,gr});
+  seen.add(key);pairs.push({po,gr,traceLabel,basis});
  });
  return pairs;
 }
@@ -598,14 +600,14 @@ function receiptTraceHtml(r){
  const pairs=receiptTracePairs(r), shown=pairs.slice(0,3);
  if(!shown.length)return '';
  return '<div class="rtrace">'+shown.map(p=>
-  '<div class="rtrace-line"><span class="rpo">PO '+esc(p.po||'—')+'</span><span class="rtrace-arrow">→</span><span class="rgr">GR '+esc(p.gr||'—')+'</span></div>'
+  '<div class="rtrace-line"><span class="rpo">PO '+esc(p.po||'—')+'</span><span class="rtrace-arrow">→</span><span class="rgr">'+esc(p.traceLabel||('GR '+(p.gr||'—')))+'</span></div>'
  ).join('')+(pairs.length>shown.length?'<div class="rtrace-more">+'+(pairs.length-shown.length)+' more PO / GR pair'+(pairs.length-shown.length===1?'':'s')+'</div>':'')+'</div>';
 }
 function receiptMovementLabel(x){
  const s=String(x?.receipt_stage_basis||'').toUpperCase();
- if(s.startsWith('101_102'))return '101/102';
- if(s.startsWith('107_108'))return '107/108';
- if(s.startsWith('109_110'))return '109/110';
+ if(s.startsWith('101_102'))return '101 direct receipt';
+ if(s.startsWith('107_109'))return '109 physical GR · 107 cost stage';
+ if(s.startsWith('109_110'))return '109/110 physical GR';
  return s||'—';
 }
 function fmtNullable(v,d=1){return v===null||v===undefined||v===''?'—':fmt(v,d)}
@@ -715,7 +717,7 @@ async function loadOrder(offset){
     $('#orderCol2').textContent='RECEIPT';
     $('#orderCol3').textContent='UOM';
     $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+appDate(orderDate)+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
-    $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/109 physical receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
+    $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical physical 101/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
     $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
     return;
   }
@@ -735,10 +737,11 @@ function openOrderHistory(r){
  const pairs=receiptTracePairs(r);
  const poCount=new Set(pairs.map(x=>x.po).filter(Boolean)).size;
  const grCount=new Set(pairs.map(x=>x.gr).filter(Boolean)).size;
+ const direct101Count=pairs.filter(x=>!x.gr&&String(x.basis||'').startsWith('101_102')).length;
  sheet(r.family_name||'Delivery history','Family '+esc(r.family_article||'—')+' · '+esc(appDate(r.selected_delivery_date||orderDate)),
- '<div class="dmetrics"><div class="dm"><b>'+fmt(r.receipt_qty)+' '+esc(r.receipt_uom||'')+'</b><span>ACTUAL RECEIPT</span></div><div class="dm"><b>'+fmt(poCount,0)+'</b><span>PO #</span></div><div class="dm"><b>'+fmt(grCount,0)+'</b><span>GR #</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><b>'+fmt(r.receipt_qty)+' '+esc(r.receipt_uom||'')+'</b><span>ACTUAL RECEIPT</span></div><div class="dm"><b>'+fmt(poCount,0)+'</b><span>PO #</span></div><div class="dm"><b>'+fmt(grCount,0)+(direct101Count?' + '+fmt(direct101Count,0)+' 101':'')+'</b><span>GR / DIRECT RECEIPT</span></div></div>'+
  '<div class="detail"><b>Receiving article(s)</b><br>'+esc((r.receiving_articles||[]).join(' + ')||r.receiving_article||'—')+
- (events.length?'<br><br><b>PO → GR receipt trace</b>'+events.map(x=>'<div class="receipt-event"><div class="receipt-pair">PO '+esc(x.purchase_order||'—')+' → GR '+esc(x.gr_number||'—')+'</div><div class="receipt-meta">Article '+esc(x.article_number||'—')+' · '+fmt(x.quantity)+' '+esc(x.uom||'')+' · MVT '+esc(receiptMovementLabel(x))+(x.vendor_code?' · Vendor '+esc(x.vendor_code):'')+(x.gr_number_source==='RAW_REFERENCE_Q_5014'?' · GR from Reference':x.gr_number_source==='RAW_ROW_5014_SCAN'?' · GR from MVT row':'')+'</div></div>').join(''):'')+
+ (events.length?'<br><br><b>PO → receipt trace</b>'+events.map(x=>{const basis=String(x?.receipt_stage_basis||'').toUpperCase();const receiptRef=x.gr_number?'GR '+x.gr_number:(basis.startsWith('101_102')?'101 RECEIPT':basis.startsWith('107_109')?'109 GR':'RECEIPT');return '<div class="receipt-event"><div class="receipt-pair">PO '+esc(x.purchase_order||'—')+' → '+esc(receiptRef)+'</div><div class="receipt-meta">Article '+esc(x.article_number||'—')+' · '+fmt(x.quantity)+' '+esc(x.uom||'')+' · '+esc(receiptMovementLabel(x))+(x.vendor_code?' · Vendor '+esc(x.vendor_code):'')+(x.gr_number_source==='RAW_REFERENCE_Q_5014'?' · GR from Reference':x.gr_number_source==='RAW_ROW_5014_SCAN'?' · GR from MVT row':'')+'</div></div>'}).join(''):'')+
  '<br><b>Basis</b><br>Actual canonical receipt movements on the selected past date. PO and GR are paired from the same canonical receipt event. Base UOM is used when all receipt events reconcile; otherwise the common entry UOM is shown.</div>');
 }
 function openOrder(r){
