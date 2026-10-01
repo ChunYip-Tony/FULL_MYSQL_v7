@@ -960,7 +960,10 @@ def ordering_review(
                     "stale_calendar_days": stale_days,
                     "estimate_only": bool(missing_required_sources),
                     "attention": bool(
-                        _d(s.get("dos")) < Decimal("3")
+                        (
+                            s.get("dos") is not None
+                            and _d(s.get("dos")) < Decimal("3")
+                        )
                         or _d(s.get("projected_oh_at_delivery")) < 0
                     ),
                     "details": {
