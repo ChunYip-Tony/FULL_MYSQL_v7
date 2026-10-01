@@ -2446,6 +2446,7 @@ _HOME_SUMMARY_CACHE_VALUE: dict[str, Any] | None = None
 _HOME_SUMMARY_CACHE_AT = 0.0
 _HOME_SUMMARY_CACHE_TTL_SECONDS = 120.0
 _HOME_SUMMARY_REFRESHING = False
+_HOME_SUMMARY_LAST_ERROR: str | None = None
 
 
 def _ensure_home_summary_cache_table(cur) -> None:
@@ -2748,16 +2749,17 @@ def _build_backoffice_home_summary() -> dict[str, Any]:
 
 
 def _refresh_home_summary_worker() -> None:
-    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT, _HOME_SUMMARY_REFRESHING
+    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT, _HOME_SUMMARY_REFRESHING, _HOME_SUMMARY_LAST_ERROR
     try:
+        _HOME_SUMMARY_LAST_ERROR = None
         value = _build_backoffice_home_summary()
         _persist_home_summary(value)
         with _HOME_SUMMARY_CACHE_LOCK:
             _HOME_SUMMARY_CACHE_VALUE = value
             _HOME_SUMMARY_CACHE_AT = time.monotonic()
-    except Exception:
+    except Exception as exc:
         # Keep the last successful cache. A failed refresh must never blank Home.
-        pass
+        _HOME_SUMMARY_LAST_ERROR = f"{type(exc).__name__}: {exc}"[:1000]
     finally:
         _HOME_SUMMARY_REFRESHING = False
 
@@ -2797,6 +2799,7 @@ def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
             "contract_version": "BACKOFFICE_HOME_SUMMARY_V2",
             "cache_status": "WARMING",
             "refreshing": True,
+            "refresh_error": _HOME_SUMMARY_LAST_ERROR,
             "pricing": {},
             "performance": {},
             "ordering": {},
@@ -2806,6 +2809,7 @@ def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
         **cached,
         "cache_status": "STALE_REFRESHING" if stale else "HIT",
         "refreshing": bool(_HOME_SUMMARY_REFRESHING),
+        "refresh_error": _HOME_SUMMARY_LAST_ERROR,
     }
 
 
