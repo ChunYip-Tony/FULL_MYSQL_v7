@@ -333,6 +333,7 @@ def public_web_app():
     )
 
 
+@app.get('/yipman',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/yipman',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/yipman/',response_class=HTMLResponse,include_in_schema=False)
 def yipman_web_app():
