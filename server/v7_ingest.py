@@ -148,6 +148,22 @@ def find_active_batch() -> dict[str,Any]|None:
                 for x in issue_rows
             ]
             row['active_issue_total']=sum(x['issue_count'] for x in row['active_issue_counts'])
+
+            cur.execute(
+                """SELECT original_filename,source_type,source_row_count,processing_status,
+                          coverage_start_date,coverage_end_date
+                   FROM ingest_file
+                   WHERE batch_id=%s
+                   ORDER BY file_id
+                   LIMIT 6""",
+                (int(row['batch_id']),),
+            )
+            row['active_files']=cur.fetchall()
+            if row['active_files']:
+                first=row['active_files'][0]
+                row['active_file_name']=first.get('original_filename')
+                row['active_source_type']=first.get('source_type')
+                row['active_file_rows']=first.get('source_row_count')
         cur.close()
     if row:
         row['device_id']=_device_from_notes(row.get('notes'))
