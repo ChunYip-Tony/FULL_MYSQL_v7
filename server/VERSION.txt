@@ -1,3 +1,13 @@
+v7.0.318 Source-backed UOM / Cost-Conversion Repair:
+- Allows a current shortened POS UPC to reuse deterministic full-barcode evidence when the longer UPC is current-inactive and confirmed to the same Family; current-active collisions and different/unresolved Family collisions remain blocked.
+- Extends Monthly PI Frozen evidence indexing to exact UPC + pack + Base UOM, not only Article-level Base UOM.
+- Enriches existing Selling UOM mappings with source-backed Base UOM/factor from exact or approved historical barcode aliases.
+- Adds exact Article + pack-signature reconciliation between Monthly PI and Article Manual Frozen Pack for source spellings that differ but describe the same physical pack.
+- Supports count/package identity factor 1 only when both explicit units are count/package units; no EA/PACK-to-LB conversion is invented.
+- Can recover Selling UOM alone from approved Article Manual barcode evidence while leaving cost conversion HOLD when Base/factor is still unresolved.
+- Leaves true source gaps, conflicting pack signatures, prefix-policy conflicts, and missing receipt/report/OH cost evidence on QA HOLD.
+Version: 7.0.318 Single-Service Edition
+
 v7.0.317 Mobile Home Density + Operational KPI Semantics:
 - Shrinks the six Home cards another ~20-25% by stopping the 2x3 grid from stretching to fill the full viewport; unused space remains below the dashboard for safer mobile spacing.
 - Further reduces header height, seafood decoration size, and wave height while keeping the approved two-column seafood-market theme.

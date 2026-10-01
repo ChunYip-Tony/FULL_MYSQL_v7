@@ -352,6 +352,33 @@ jobs:
           print('global-selling-article-fallback-guard=PASS')
           PY
 
+      - name: Validate source-backed UOM repair rules
+        run: |
+          python - <<'PY'
+          import inspect
+          from decimal import Decimal
+          import active_28d_uom_repair as a
+
+          assert a._normalized_pack_signature('30/12OZ') == '30/12OZ'
+          assert a._normalized_pack_signature('30 / 12oz') == '30/12OZ'
+          assert a._normalized_pack_signature('12/2LBS (56)') == '12/2LB'
+          assert a._count_package_identity_factor('PACK','PAC') == Decimal('1')
+          assert a._count_package_identity_factor('PACK','EA') == Decimal('1')
+          assert a._count_package_identity_factor('PACK','LB') is None
+
+          alias=inspect.getsource(a._authoritative_upc_lookup_keys)
+          assert 'active_upc_ids' in alias
+          assert 'other_upc_id in active_upc_ids' in alias
+          assert 'int(other_family_id) != target_family_id' in alias
+
+          repair=inspect.getsource(a.repair_active_28d_uom)
+          assert '_safe_existing_uom_monthly_pi_mapping' in repair
+          assert '_safe_family_pack_signature_mapping' in repair
+          assert '_safe_frozen_pack_selling_uom' in repair
+          assert repair.index('_safe_existing_uom_monthly_pi_mapping') < repair.index('if _has_current_uom')
+          print('source-backed-uom-repair=PASS')
+          PY
+
       - name: Validate Article Manual tab schemas
         run: |
           python - <<'PY'

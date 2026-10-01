@@ -29,7 +29,7 @@ from normalize import (
     _source_token,
 )
 
-VERSION = "7.0.307-active-28d-uom-repair"
+VERSION = "7.0.318-active-28d-uom-repair"
 
 # Latest user-confirmed FULL MYSQL Seafood Selling-UOM authority.
 # Applies only to CURRENT-ACTIVE Seafood UPCs. Historical rows remain untouched.
@@ -134,13 +134,17 @@ def _uom_by_code(cur, code: str) -> dict[str, Any] | None:
     return cur.fetchone()
 
 
-def _authoritative_upc_lookup_keys(cur, target: dict[str, Any]) -> list[str]:
-    """Return exact plus deterministic check-digit Article Manual lookup keys.
+def _authoritative_upc_lookup_keys(
+    cur,
+    target: dict[str, Any],
+    active_upc_ids: set[int] | None = None,
+) -> list[str]:
+    """Return exact plus deterministic retail-barcode evidence keys.
 
-    FULL MYSQL can contain a shortened POS spelling while Article Manual keeps
-    the retail check digit (for example 4029549308 vs 040295493088).  Reuse the
-    central retail-barcode check-digit logic, but never alias a shortened UPC
-    when the longer candidate already exists as a different ACTIVE selling UPC.
+    A shortened current POS UPC may use evidence from its deterministic full
+    check-digit spelling when that longer spelling is CURRENT-INACTIVE and is
+    confirmed to the same Family.  A second current-active UPC or a different/
+    unresolved Family still blocks alias reuse fail-closed.
     """
     raw = str(target.get("ean_upc") or "").strip()
     exact = _numeric_key(raw)
@@ -149,26 +153,54 @@ def _authoritative_upc_lookup_keys(cur, target: dict[str, Any]) -> list[str]:
 
     keys = [exact]
     target_upc_id = int(target["upc_id"])
+    target_family_id = int(target["family_id"])
     for candidate in retail_barcode_alias_candidates(raw):
         key = _numeric_key(candidate)
         if not key or key in keys:
             continue
+
         cur.execute(
-            """SELECT 1
-               FROM selling_upc
-               WHERE record_status='ACTIVE'
-                 AND upc_id<>%s
-                 AND ean_upc<>''
-                 AND ean_upc NOT REGEXP '[^0-9]'
-                 AND TRIM(LEADING '0' FROM ean_upc)=%s
-               LIMIT 1""",
+            """SELECT su.upc_id,baf.family_id
+               FROM selling_upc su
+               LEFT JOIN bridge_article_upc bau
+                 ON bau.upc_id=su.upc_id
+                AND bau.mapping_status='CONFIRMED'
+                AND bau.is_primary=TRUE
+                AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+               LEFT JOIN bridge_article_family baf
+                 ON baf.article_id=bau.article_id
+                AND baf.mapping_status='CONFIRMED'
+                AND baf.is_primary=TRUE
+                AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+               WHERE su.record_status='ACTIVE'
+                 AND su.upc_id<>%s
+                 AND su.ean_upc<>''
+                 AND su.ean_upc NOT REGEXP '[^0-9]'
+                 AND TRIM(LEADING '0' FROM su.ean_upc)=%s
+               ORDER BY su.upc_id""",
             (target_upc_id, key),
         )
-        if cur.fetchone():
-            continue
+        collisions = cur.fetchall()
+        if collisions:
+            # Preserve the old strict behavior for callers that do not provide
+            # the exact current-active roster.
+            if active_upc_ids is None:
+                continue
+            unsafe = False
+            for row in collisions:
+                other_upc_id = int(row["upc_id"])
+                other_family_id = row.get("family_id")
+                if other_upc_id in active_upc_ids:
+                    unsafe = True
+                    break
+                if other_family_id is None or int(other_family_id) != target_family_id:
+                    unsafe = True
+                    break
+            if unsafe:
+                continue
+
         keys.append(key)
     return keys
-
 
 def _historical_uom_conflict(cur, upc_id: int, desired_code: str) -> dict[str, Any] | None:
     """Do not silently overwrite a prior non-matching configured UOM."""
@@ -297,15 +329,16 @@ def _latest_article_manual_source(cur, preferred_batch_id: int | None = 7) -> tu
 def _latest_monthly_pi_frozen_base_source(
     cur,
     preferred_batch_id: int | None = None,
-) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
-    """Return Article -> explicit Frozen-tab Base UOM observations.
+) -> tuple[
+    dict[str, list[dict[str, Any]]],
+    dict[str, list[dict[str, Any]]],
+    dict[str, Any],
+]:
+    """Return explicit Frozen-tab Article base-UOM and UPC/pack evidence.
 
-    Monthly PI authority confirmed by the user:
-      Frozen Column E = Base Unit.
-
-    Prefer the current ingest batch when it contains a non-duplicate Monthly PI
-    file; otherwise use the newest successfully ingested non-duplicate Monthly
-    PI batch. No UOM alias or conversion is invented here.
+    Monthly PI Frozen authority:
+      D = pack text, E = Base Unit, G = Family/Main Article, H = EAN/UPC.
+    Current batch is preferred.  No Selling UOM is inferred from Monthly PI.
     """
     files: list[dict[str, Any]] = []
     if preferred_batch_id is not None:
@@ -338,11 +371,13 @@ def _latest_monthly_pi_frozen_base_source(
             files = [x for x in all_files if int(x["batch_id"]) == newest_batch]
 
     article_base_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    upc_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     stats = {
         "files": [x["original_filename"] for x in files],
         "sheets_scanned": 0,
         "rows_scanned": 0,
         "explicit_base_rows": 0,
+        "explicit_upc_rows": 0,
     }
 
     for f in files:
@@ -359,7 +394,6 @@ def _latest_monthly_pi_frozen_base_source(
                 continue
             if not sh.get("header_row_number"):
                 continue
-
             cur.execute(
                 """SELECT raw_payload
                    FROM raw_monthly_pi_form
@@ -370,10 +404,7 @@ def _latest_monthly_pi_frozen_base_source(
             h = cur.fetchone()
             if not h:
                 continue
-            colmap = _monthly_pi_column_map(
-                sh["sheet_name"],
-                _json_obj(h["raw_payload"]),
-            )
+            colmap = _monthly_pi_column_map(sh["sheet_name"], _json_obj(h["raw_payload"]))
             if "base_uom" not in colmap:
                 continue
             if "article" not in colmap and "main_article" not in colmap:
@@ -397,20 +428,27 @@ def _latest_monthly_pi_frozen_base_source(
                 base_uom = _source_token(_get(payload, colmap, "base_uom"))
                 if not article or not base_uom:
                     continue
-                article_base_rows[str(article)].append({
+                row = {
                     "article": str(article),
                     "base_uom": str(base_uom).upper().strip(),
+                    "pack": _source_token(_get(payload, colmap, "pack")),
+                    "source_upc": _digits_identifier(_get(payload, colmap, "upc")),
                     "sheet_name": str(sh["sheet_name"]),
                     "batch_id": int(f["batch_id"]),
                     "file_id": int(f["file_id"]),
                     "sheet_id": int(sh["sheet_id"]),
                     "raw_id": int(rr["raw_id"]),
                     "source_row_number": int(rr["source_row_number"]),
-                })
+                }
+                article_base_rows[str(article)].append(row)
                 stats["explicit_base_rows"] += 1
+                source_upc = row.get("source_upc")
+                key = _numeric_key(str(source_upc or ""))
+                if key:
+                    upc_rows[key].append(row)
+                    stats["explicit_upc_rows"] += 1
 
-    return article_base_rows, stats
-
+    return article_base_rows, upc_rows, stats
 
 def _parse_frozen_pack_selling_declaration(
     selling_uom: Any,
@@ -476,6 +514,7 @@ def _safe_frozen_pack_cross_source_mapping(
     target: dict[str, Any],
     upc_rows: dict[str, list[dict[str, Any]]],
     monthly_pi_base_rows: dict[str, list[dict[str, Any]]],
+    active_upc_ids: set[int] | None = None,
 ) -> dict[str, Any] | None:
     """Resolve Selling UOM + Base UOM + factor from two explicit sources.
 
@@ -487,7 +526,7 @@ def _safe_frozen_pack_cross_source_mapping(
     Pack text is used for a conversion only when Monthly PI explicitly confirms
     the same printed base UOM. Conflicts or ambiguity remain unresolved.
     """
-    lookup_keys = _authoritative_upc_lookup_keys(cur, target)
+    lookup_keys = _authoritative_upc_lookup_keys(cur, target, active_upc_ids)
     if not lookup_keys:
         return None
     exact_key = lookup_keys[0]
@@ -599,13 +638,229 @@ def _article_is_in_family(cur, article_number: str, family_id: int) -> bool:
     return bool(cur.fetchone())
 
 
+def _normalized_pack_signature(value: Any) -> str | None:
+    raw = _source_token(value)
+    if not raw:
+        return None
+    token = re.sub(r"\s+", "", str(raw).upper()).replace("LBS", "LB")
+    # Source annotations such as "(56)" are not part of the physical pack.
+    token = re.sub(r"\([^)]*\)$", "", token)
+    return token or None
+
+
+_COUNT_PACKAGE_UOMS = {"EA", "EACH", "PC", "PCS", "PACK", "PAC", "PK", "PKG"}
+
+
+def _count_package_identity_factor(selling_uom: str | None, base_uom: str | None) -> Decimal | None:
+    sell = str(selling_uom or "").upper().strip()
+    base = str(base_uom or "").upper().strip()
+    if sell in _COUNT_PACKAGE_UOMS and base in _COUNT_PACKAGE_UOMS:
+        return Decimal("1")
+    return None
+
+
+def _current_selling_uom(cur, upc_id: int) -> dict[str, Any] | None:
+    cur.execute(
+        """SELECT h.selling_uom_id,du.uom_code
+           FROM selling_upc_uom_history h
+           JOIN dim_uom du ON du.uom_id=h.selling_uom_id
+           WHERE h.upc_id=%s
+             AND h.mapping_status='CONFIRMED'
+             AND (h.effective_to IS NULL OR h.effective_to>CURRENT_TIMESTAMP(6))
+           ORDER BY h.upc_uom_id DESC
+           LIMIT 1""",
+        (upc_id,),
+    )
+    return cur.fetchone()
+
+
+def _safe_existing_uom_monthly_pi_mapping(
+    cur,
+    target: dict[str, Any],
+    monthly_pi_upc_rows: dict[str, list[dict[str, Any]]],
+    active_upc_ids: set[int],
+) -> dict[str, Any] | None:
+    """Enrich an existing Selling UOM from exact/approved-alias Monthly PI evidence."""
+    current = _current_selling_uom(cur, int(target["upc_id"]))
+    if not current:
+        return None
+    selling = str(current.get("uom_code") or "").upper().strip()
+    if not selling:
+        return None
+
+    lookup_keys = _authoritative_upc_lookup_keys(cur, target, active_upc_ids)
+    if not lookup_keys:
+        return None
+    exact_key = lookup_keys[0]
+    candidates: list[dict[str, Any]] = []
+    for key in lookup_keys:
+        for row in monthly_pi_upc_rows.get(key, []):
+            article = str(row.get("article") or "")
+            if not article or not _article_is_in_family(cur, article, int(target["family_id"])):
+                continue
+            base = str(row.get("base_uom") or "").upper().strip()
+            sell_row = _uom_by_code(cur, selling)
+            base_row = _uom_by_code(cur, base)
+            if not sell_row or not base_row:
+                continue
+            if selling == base:
+                factor = Decimal("1")
+                basis = "SELLING_EQUALS_MONTHLY_PI_BASE"
+            else:
+                detail = _selling_factor_from_frozen_pack(selling, row.get("pack"))
+                if detail and str(detail.get("base_uom") or "").upper().strip() == base:
+                    factor = Decimal(str(detail["base_qty_per_selling_unit"]))
+                    basis = "MONTHLY_PI_EXACT_UPC_STRUCTURED_PACK"
+                else:
+                    factor = _count_package_identity_factor(selling, base)
+                    basis = "MONTHLY_PI_EXACT_UPC_COUNT_PACKAGE_IDENTITY" if factor is not None else None
+            if factor is None:
+                continue
+            candidates.append({
+                "selling_uom": selling,
+                "selling_uom_id": int(sell_row["uom_id"]),
+                "base_uom": base,
+                "base_uom_id": int(base_row["uom_id"]),
+                "factor": factor,
+                "conversion_basis": basis,
+                "monthly_pi_row": row,
+                "upc_match": "EXACT_NUMERIC" if key == exact_key else "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS",
+                "lookup_key": key,
+            })
+
+    sigs={(x["selling_uom"],x["base_uom"],str(x["factor"])) for x in candidates}
+    if len(sigs)!=1 or not candidates:
+        return None
+    chosen=candidates[0]
+    chosen["rule"]="MONTHLY_PI_EXACT_UPC_ENRICH_EXISTING_SELLING_UOM_V7318"
+    return chosen
+
+
+def _safe_family_pack_signature_mapping(
+    cur,
+    target: dict[str, Any],
+    article_manual_upc_rows: dict[str, list[dict[str, Any]]],
+    monthly_pi_upc_rows: dict[str, list[dict[str, Any]]],
+    active_upc_ids: set[int],
+) -> dict[str, Any] | None:
+    """Use exact PI identity plus same-Article exact pack signature to recover AM Selling UOM."""
+    lookup_keys = _authoritative_upc_lookup_keys(cur, target, active_upc_ids)
+    if not lookup_keys:
+        return None
+    exact_key=lookup_keys[0]
+    pi_rows=[]
+    for key in lookup_keys:
+        for row in monthly_pi_upc_rows.get(key, []):
+            article=str(row.get("article") or "")
+            if article and _article_is_in_family(cur, article, int(target["family_id"])):
+                pi_rows.append((key,row))
+
+    all_manual=[row for rows in article_manual_upc_rows.values() for row in rows]
+    candidates=[]
+    for key,pi in pi_rows:
+        article=str(pi.get("article") or "")
+        pi_pack=_normalized_pack_signature(pi.get("pack"))
+        base=str(pi.get("base_uom") or "").upper().strip()
+        if not pi_pack or not base:
+            continue
+        for am in all_manual:
+            if _norm_header(am.get("sheet_name"))!="frozen pack":
+                continue
+            if str(am.get("article") or "")!=article:
+                continue
+            if _normalized_pack_signature(am.get("pack"))!=pi_pack:
+                continue
+            decl=_parse_frozen_pack_selling_declaration(am.get("selling_uom"),am.get("pack"))
+            if not decl:
+                continue
+            selling=str(decl.get("selling_uom") or "").upper().strip()
+            sell_row=_uom_by_code(cur,selling)
+            base_row=_uom_by_code(cur,base)
+            if not sell_row or not base_row:
+                continue
+
+            if selling==base:
+                factor=Decimal("1")
+                basis="SELLING_EQUALS_MONTHLY_PI_BASE"
+            else:
+                detail=_selling_factor_from_frozen_pack(selling,am.get("pack"))
+                if detail and str(detail.get("base_uom") or "").upper().strip()==base:
+                    factor=Decimal(str(detail["base_qty_per_selling_unit"]))
+                    basis="MATCHED_FAMILY_PACK_STRUCTURED_WEIGHT"
+                else:
+                    factor=_count_package_identity_factor(selling,base)
+                    basis="MATCHED_FAMILY_PACK_COUNT_PACKAGE_IDENTITY" if factor is not None else None
+            if factor is None:
+                continue
+            candidates.append({
+                "selling_uom":selling,
+                "selling_uom_id":int(sell_row["uom_id"]),
+                "base_uom":base,
+                "base_uom_id":int(base_row["uom_id"]),
+                "factor":factor,
+                "conversion_basis":basis,
+                "article_manual_row":am,
+                "monthly_pi_row":pi,
+                "pack_signature":pi_pack,
+                "upc_match":"EXACT_NUMERIC" if key==exact_key else "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS",
+                "lookup_key":key,
+            })
+
+    sigs={(x["selling_uom"],x["base_uom"],str(x["factor"])) for x in candidates}
+    if len(sigs)!=1 or not candidates:
+        return None
+    chosen=candidates[0]
+    chosen["rule"]="ARTICLE_MANUAL_PLUS_MONTHLY_PI_MATCHED_ARTICLE_PACK_V7318"
+    return chosen
+
+
+def _safe_frozen_pack_selling_uom(
+    cur,
+    target: dict[str, Any],
+    upc_rows: dict[str, list[dict[str, Any]]],
+    active_upc_ids: set[int],
+) -> dict[str, Any] | None:
+    """Recover Selling UOM only from exact/approved-alias Frozen Pack Column G."""
+    keys=_authoritative_upc_lookup_keys(cur,target,active_upc_ids)
+    if not keys:
+        return None
+    exact_key=keys[0]
+    candidates=[]
+    for key in keys:
+        for row in upc_rows.get(key,[]):
+            if _norm_header(row.get("sheet_name"))!="frozen pack":
+                continue
+            article=str(row.get("article") or "")
+            if not article or not _article_is_in_family(cur,article,int(target["family_id"])):
+                continue
+            decl=_parse_frozen_pack_selling_declaration(row.get("selling_uom"),row.get("pack"))
+            if not decl:
+                continue
+            selling=str(decl.get("selling_uom") or "").upper().strip()
+            if not _uom_by_code(cur,selling):
+                continue
+            candidates.append({
+                "uom":selling,
+                "evidence_row":row,
+                "upc_match":"EXACT_NUMERIC" if key==exact_key else "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS",
+                "lookup_key":key,
+            })
+    units={x["uom"] for x in candidates}
+    if len(units)!=1 or not candidates:
+        return None
+    chosen=candidates[0]
+    chosen["rule"]="ARTICLE_MANUAL_FROZEN_PACK_COLUMN_G_UPC_ALIAS_V7318"
+    return chosen
+
+
 def _safe_article_manual_unit(
     cur,
     target: dict[str, Any],
     upc_rows: dict[str, list[dict[str, Any]]],
     article_units: dict[str, set[str]],
+    active_upc_ids: set[int] | None = None,
 ) -> dict[str, Any] | None:
-    lookup_keys = _authoritative_upc_lookup_keys(cur, target)
+    lookup_keys = _authoritative_upc_lookup_keys(cur, target, active_upc_ids)
     if not lookup_keys:
         return None
     rows = [row for key in lookup_keys for row in upc_rows.get(key, [])]
@@ -688,8 +943,9 @@ def _related_prefix_evidence(cur, target: dict[str, Any]) -> dict[str, Any] | No
 
 def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
     active, valid_day_count, latest_valid_date = _active_selling_upcs(cur, batch_id)
+    active_upc_ids = {int(x["upc_id"]) for x in active}
     upc_rows, article_units, manual_stats = _latest_article_manual_source(cur, 7)
-    monthly_pi_base_rows, monthly_pi_stats = _latest_monthly_pi_frozen_base_source(
+    monthly_pi_base_rows, monthly_pi_upc_rows, monthly_pi_stats = _latest_monthly_pi_frozen_base_source(
         cur,
         preferred_batch_id=batch_id,
     )
@@ -751,6 +1007,7 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
             target,
             upc_rows,
             monthly_pi_base_rows,
+            active_upc_ids,
         )
         if cross:
             exact_uom = USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
@@ -792,7 +1049,80 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
             })
             continue
 
-        # 0c) Exact user-confirmed non-prefix Seafood Selling-UOM fallback.
+        # 0c) Existing Selling UOM + exact/approved-alias Monthly PI UPC can
+        # safely enrich Base UOM/factor without changing the Selling UOM.
+        existing_pi = _safe_existing_uom_monthly_pi_mapping(
+            cur, target, monthly_pi_upc_rows, active_upc_ids
+        )
+        if existing_pi:
+            _insert_uom_mapping(
+                cur,
+                upc_id,
+                int(existing_pi["selling_uom_id"]),
+                int(existing_pi["base_uom_id"]),
+                Decimal(str(existing_pi["factor"])),
+                existing_pi["rule"],
+            )
+            result["repaired_source_supported"] += 1
+            if existing_pi.get("upc_match") == "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS":
+                result["repaired_via_retail_barcode_alias"] += 1
+            result["repaired"].append({
+                "upc": upc,
+                "uom": existing_pi["selling_uom"],
+                "base_uom": existing_pi["base_uom"],
+                "base_qty_per_selling_unit": str(existing_pi["factor"]),
+                "method": existing_pi["rule"],
+                "conversion_basis": existing_pi["conversion_basis"],
+                "upc_match": existing_pi.get("upc_match"),
+                "lookup_key": existing_pi.get("lookup_key"),
+                "monthly_pi_evidence": existing_pi["monthly_pi_row"],
+            })
+            continue
+
+        # 0d) Some POS spellings differ from both source barcodes. If Monthly PI
+        # identifies the target through a deterministic alias and the same Article
+        # has exactly the same physical pack signature in Frozen Pack, Column G
+        # may provide the Selling UOM. Mismatched pack signatures remain HOLD.
+        family_pack = _safe_family_pack_signature_mapping(
+            cur, target, upc_rows, monthly_pi_upc_rows, active_upc_ids
+        )
+        if family_pack:
+            exact_uom = USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
+            if exact_uom and str(family_pack["selling_uom"]).upper() != str(exact_uom).upper():
+                result["held_cross_source_conflict"] += 1
+                result["held_conflicts"].append({
+                    "upc": upc,
+                    "rule": family_pack["rule"],
+                    "reason": "MATCHED_PACK_SELLING_UOM_CONFLICTS_WITH_EXACT_USER_AUTHORITY",
+                    "article_manual_selling_uom": family_pack["selling_uom"],
+                    "user_confirmed_selling_uom": exact_uom,
+                })
+                continue
+            _insert_uom_mapping(
+                cur,
+                upc_id,
+                int(family_pack["selling_uom_id"]),
+                int(family_pack["base_uom_id"]),
+                Decimal(str(family_pack["factor"])),
+                family_pack["rule"],
+            )
+            result["repaired_source_supported"] += 1
+            if family_pack.get("upc_match") == "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS":
+                result["repaired_via_retail_barcode_alias"] += 1
+            result["repaired"].append({
+                "upc": upc,
+                "uom": family_pack["selling_uom"],
+                "base_uom": family_pack["base_uom"],
+                "base_qty_per_selling_unit": str(family_pack["factor"]),
+                "method": family_pack["rule"],
+                "conversion_basis": family_pack["conversion_basis"],
+                "pack_signature": family_pack["pack_signature"],
+                "article_manual_evidence": family_pack["article_manual_row"],
+                "monthly_pi_evidence": family_pack["monthly_pi_row"],
+            })
+            continue
+
+        # 0e) Exact user-confirmed non-prefix Seafood Selling-UOM fallback.
         # It remains useful when the cross-source base conversion is not yet
         # available, but it intentionally does not invent a Base UOM/factor.
         exact_uom = USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
@@ -812,13 +1142,37 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
                 })
                 continue
 
+        # 0f) Exact/approved historical barcode alias may supply only the
+        # Article Manual Frozen Pack Selling UOM. This can clear UOM_MISSING;
+        # conversion remains HOLD unless Base/factor are independently known.
+        am_sell = _safe_frozen_pack_selling_uom(cur, target, upc_rows, active_upc_ids)
+        if am_sell and not _has_current_uom(cur, upc_id):
+            if _apply_uom(
+                cur,
+                upc_id,
+                am_sell["uom"],
+                am_sell["rule"],
+            ):
+                result["repaired_source_supported"] += 1
+                if am_sell.get("upc_match") == "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS":
+                    result["repaired_via_retail_barcode_alias"] += 1
+                result["repaired"].append({
+                    "upc": upc,
+                    "uom": am_sell["uom"],
+                    "method": am_sell["rule"],
+                    "upc_match": am_sell.get("upc_match"),
+                    "lookup_key": am_sell.get("lookup_key"),
+                    "evidence": am_sell["evidence_row"],
+                })
+                continue
+
         if _has_current_uom(cur, upc_id):
             result["already_has_current_uom"] += 1
             continue
 
         # 1) Exact/numeric-equivalent UPC + same Article + pure structured
         #    Size/dimensions unit declaration from Article Manual.
-        source = _safe_article_manual_unit(cur, target, upc_rows, article_units)
+        source = _safe_article_manual_unit(cur, target, upc_rows, article_units, active_upc_ids)
         if source:
             conflict = _historical_uom_conflict(cur, upc_id, source["uom"])
             if conflict:
