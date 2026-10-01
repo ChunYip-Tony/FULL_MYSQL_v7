@@ -1,3 +1,11 @@
+v7.0.316 Mobile Home Operations Dashboard:
+- Compacts the six mobile Home cards while preserving the approved 2 x 3 seafood-market layout and navigation.
+- Adds resilient live Home status badges for Quick Check readiness, price-change workflow, completed data days, ordering workflow, inventory attention, and Data/QA.
+- Adds a mobile Home refresh timestamp and keeps partial status available when one supporting endpoint fails.
+- Reduces decorative seafood artwork and header height so operational information has stronger visual priority.
+- Desktop Backoffice layout, business rules, ingestion rules, pricing rules, and ordering calculations are unchanged.
+Version: 7.0.316 Single-Service Edition
+
 v7.0.315 POS + MVT 3 PM Grace Period:
 - Applies the same 3:00 PM local grace period to the prior-day POS sales file as MVT.
 - Before 3:00 PM, yesterday's missing POS and MVT files are PENDING / NOT_DUE rather than missing.
