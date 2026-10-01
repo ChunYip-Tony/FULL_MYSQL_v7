@@ -59,6 +59,11 @@ def _warm_mobile_home_summary_cache():
         name="home-summary-warmup",
         daemon=True,
     ).start()
+    threading.Thread(
+        target=lambda: backoffice_cached_pricing_review(category="ALL",limit=1000),
+        name="pricing-review-warmup",
+        daemon=True,
+    ).start()
 
 def j(v):
     if isinstance(v,(date,datetime)): return v.isoformat()
