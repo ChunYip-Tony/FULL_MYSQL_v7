@@ -1974,6 +1974,20 @@ function money(v){if(v===null||v===undefined||v==='')return '—';const n=Number
 function pct(v){if(v===null||v===undefined||v==='')return '—';let n=Number(v);if(Math.abs(n)<=1.5)n*=100;return Number.isFinite(n)?n.toFixed(1)+'%':esc(v)}
 function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blue';if(s.includes('READY')||s==='PASS'||s==='ACTIVE')c='green';else if(s.includes('FAIL')||s.includes('BLOCK')||s==='OUT')c='red';else if(s.includes('HOLD')||s.includes('PROCESS')||s.includes('QUEUED')||s.includes('WAIT')||s==='WATCH')c='amber';return `<span class="pill ${c}">${esc(s)}</span>`}
 function toast(t,ms=2200){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),Math.max(1200,Number(ms||2200)))}
+function uploadSourceLabel(v){
+  const k=String(v||'').toLowerCase();
+  return ({sales_by_price_type:'POS Sales',movement:'MVT',price_list:'Price List',on_hand:'OH',live_fresh_suggestion:'Live / Fresh',frozen_inventory:'Frozen',article_manual:'Article Manual'})[k]||String(v||'Unknown');
+}
+function uploadCoverageText(u){
+  const start=u?.coverage_start_date||u?.header_period_start_date||null;
+  const end=u?.coverage_end_date||u?.header_period_end_date||null;
+  const coverage=start?(end&&String(end)!==String(start)?String(start)+' → '+String(end):String(start)):'DATE UNRESOLVED';
+  return uploadSourceLabel(u?.source_type)+' · '+coverage+' · '+String(u?.status||'');
+}
+function uploadEvidenceHtml(rows){
+  const a=rows||[];
+  return '<div class="filelist">'+a.map(u=>'<div class="filerow"><span><b>'+esc(u.filename||'')+'</b><br><small>'+esc(uploadCoverageText(u))+(u.duplicate_of_file_id?' · duplicate of file #'+esc(u.duplicate_of_file_id):'')+'</small></span><span>'+esc(u.date_semantics_status||'')+'</span></div>').join('')+'</div>';
+}
 async function api(url,opts={}){
   const o={...opts};const timeoutMs=Number(o.timeoutMs||0);delete o.timeoutMs;
   let ctl=null,timer=null;
