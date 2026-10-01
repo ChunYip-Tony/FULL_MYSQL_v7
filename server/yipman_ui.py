@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v343';
+const CACHE='yipman-v344';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -252,6 +252,34 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .qffocusbox b{font-size:20px}
   .qupcname,.qupcmetrics b{font-size:15px!important}
   .qprice b{font-size:8.5px}
+}
+
+
+/* V344 Quick Check: modestly larger operational numbers; density unchanged. */
+.qfamily .qfnum{font-size:19px}
+.qffocusbox b{font-size:24px}
+.qffocusbox span{font-size:7px}
+.qrnum{font-size:13px}
+.qdelivery b{font-size:11px}
+.qdelivery span{font-size:8px}
+.qsapnum{font-size:15px}
+.qsapmetric b{font-size:20px}
+.qsapmetric span{font-size:7px}
+.qupcmetrics b{font-size:18px!important}
+.qupcmetrics span{font-size:7px!important}
+.qprice b{font-size:10.5px}
+@media(max-width:430px){
+  .qfamily .qfnum{font-size:18px}
+  .qffocusbox b{font-size:23px}
+  .qrnum{font-size:13px}
+  .qdelivery b{font-size:10px}
+  .qdelivery span{font-size:8px}
+  .qsapnum{font-size:14px}
+  .qsapmetric b{font-size:19px}
+  .qsapmetric span{font-size:7px}
+  .qupcmetrics b{font-size:17px!important}
+  .qupcmetrics span{font-size:7px!important}
+  .qprice b{font-size:10px}
 }
 
 </style>
