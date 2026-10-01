@@ -151,6 +151,22 @@ jobs:
           PY
 
 
+      - name: Diagnose production 249527 POS evidence
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 30 "$base/healthz" || true
+          echo
+          echo "=== 249527 SOURCE EVIDENCE ==="
+          curl -fsS --max-time 120 "$base/v1/web-upload/diagnostics/249-source-evidence?upc=24952700000" || true
+          echo
+          echo "=== 249527 INVENTORY ==="
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249527&lightweight=false" || true
+          echo
+
       - name: Validate Backoffice DOM collection bindings
         run: |
           python - <<'PY'
