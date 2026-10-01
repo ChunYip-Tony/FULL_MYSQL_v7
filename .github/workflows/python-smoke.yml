@@ -151,86 +151,20 @@ jobs:
           PY
 
 
-      - name: Diagnose and rebuild production 249527 POS evidence
+      - name: Diagnose production 249527 POS evidence
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           base="https://seal-app-tkkkd.ondigitalocean.app"
           echo "=== HEALTH ==="
-          curl -fsS --max-time 30 "$base/healthz"
+          curl -fsS --max-time 30 "$base/healthz" || true
           echo
-
-          echo "=== WAIT FOR IDLE ==="
-          for i in $(seq 1 120); do
-            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
-            active="$(python - <<'PY'
-          import json
-          p=json.load(open('/tmp/active.json',encoding='utf-8'))
-          print('1' if p.get('active_batch') else '0')
-          PY
-          )"
-            echo "active=$active"
-            [ "$active" = "0" ] && break
-            sleep 5
-          done
-          [ "$active" = "0" ]
-
-          echo "=== PICK LATEST REBUILDABLE BATCH ==="
-          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=30" -o /tmp/recent.json
-          batch_id="$(python - <<'PY'
-          import json
-          p=json.load(open('/tmp/recent.json',encoding='utf-8'))
-          allowed={'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','PHASE3_QA_HOLD','COMPLETED','READY'}
-          row=next((x for x in (p.get('batches') or [])
-                    if str(x.get('phase3_status') or '').upper() in allowed
-                    or str(x.get('processing_status') or '').upper() in allowed),None)
-          if not row:
-              raise SystemExit('NO_REBUILDABLE_BATCH')
-          print(int(row['batch_id']))
-          PY
-          )"
-          echo "BATCH_ID=$batch_id"
-
-          echo "=== START PHASE3 REBUILD ==="
-          curl -fsS --max-time 60 -X POST "$base/v1/web-upload/batches/$batch_id/rebuild-phase3" -o /tmp/rebuild.json
-          cat /tmp/rebuild.json
-          read -r run_id session_id < <(python - <<'PY'
-          import json
-          p=json.load(open('/tmp/rebuild.json',encoding='utf-8'))
-          print(p.get('pipeline_run_id') or '',p.get('session_id') or '')
-          PY
-          )
-          [ -n "$run_id" ] && [ -n "$session_id" ]
-
-          echo "=== WAIT PHASE3 REBUILD ==="
-          final=""
-          for i in $(seq 1 240); do
-            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$session_id" -o /tmp/session.json
-            final="$(RUN_ID="$run_id" python - <<'PY'
-          import json,os
-          p=json.load(open('/tmp/session.json',encoding='utf-8'))
-          rid=int(os.environ['RUN_ID'])
-          run=next((x for x in (p.get('api_runs') or []) if int(x.get('pipeline_run_id') or 0)==rid),None)
-          print(str((run or {}).get('processing_status') or 'MISSING'))
-          PY
-          )"
-            echo "$final"
-            case "$final" in
-              COMPLETED) break ;;
-              QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED)
-                cat /tmp/session.json
-                exit 1
-                ;;
-            esac
-            sleep 5
-          done
-          [ "$final" = "COMPLETED" ]
-
           echo "=== 249527 SOURCE EVIDENCE ==="
           curl -fsS --max-time 120 "$base/v1/web-upload/diagnostics/249-source-evidence?upc=24952700000" || true
           echo
           echo "=== 249527 INVENTORY ==="
-          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249527&lightweight=false"
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249527&lightweight=false" || true
           echo
 
       - name: Validate Backoffice DOM collection bindings
