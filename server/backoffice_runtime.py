@@ -868,7 +868,9 @@ _ORDERING_REVIEW_CACHE_TTL_SECONDS = 120.0
 
 
 def _ordering_review_cache_key(category: str, delivery_date: date) -> str:
-    return f"{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+    # Versioned key prevents a prior hard-block snapshot from masking the
+    # stale-estimate behavior introduced in V5.
+    return f"V5|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
