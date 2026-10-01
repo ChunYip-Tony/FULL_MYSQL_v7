@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v329';
+const CACHE='yipman-v330';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -131,6 +131,12 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .launch b{font-size:15px}.priority .prio:nth-child(n+4){display:none}
 }
 
+/* V330 Home: explicit source dates and less ambiguous decision status. */
+#home .stat span{font-size:10px;font-weight:850;letter-spacing:.03em}
+#home .launch span{font-size:11px;line-height:1.2}
+#home .launch em{font-size:10px;line-height:1.15}
+#home .priority .ph{font-size:11px}
+
 </style>
 </head>
 <body>
@@ -143,9 +149,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   <main class="workspace">
     <section class="page on" id="home">
       <div class="topline"><h2>Today</h2><div class="hint" id="todayLabel">YIPMAN</div></div>
-      <div class="hero"><small>SEAFOOD OPERATIONS</small><h3 id="attentionTitle">Loading current work…</h3><p id="attentionSub">Current FULL MYSQL serving data</p><div class="stats"><div class="stat"><b id="homeOrder">—</b><span>ORDER REVIEW</span></div><div class="stat"><b id="homePrice">—</b><span>PRICE ACTIONS</span></div><div class="stat"><b id="homeHealth">—</b><span>DATA HEALTH</span></div></div></div>
-      <div class="launch"><button data-go="quick"><i>⌕</i><b>Quick Check</b><span>Family / UPC lookup</span><em>MOST USED</em></button><button data-go="order"><i>▤</i><b>Ordering</b><span>By delivery date</span><em id="orderMini">LOADING</em></button><button data-go="price"><i>$</i><b>Price Review</b><span>Material changes only</span><em id="priceMini">LOADING</em></button><button data-go="data"><i>▦</i><b>Data Center</b><span>Uploads / batches</span><em id="dataMini">LOADING</em></button></div>
-      <div class="priority"><div class="ph"><span>NEEDS ATTENTION</span><span>LIVE</span></div><div id="priorityRows"><div class="loading">Loading priorities…</div></div></div>
+      <div class="hero"><small>SEAFOOD OPERATIONS</small><h3 id="attentionTitle">Loading current work…</h3><p id="attentionSub">Current FULL MYSQL serving data</p><div class="stats"><div class="stat"><b id="homeOrder">—</b><span>POS SALES</span></div><div class="stat"><b id="homePrice">—</b><span>MVT</span></div><div class="stat"><b id="homeHealth">—</b><span>OH SNAPSHOT</span></div></div></div>
+      <div class="launch"><button data-go="quick"><i>⌕</i><b>Quick Check</b><span>Search current Family / UPC data</span><em>MOST USED</em></button><button data-go="order"><i>▤</i><b>Ordering</b><span>Receipt cadence + sales history</span><em id="orderMini">LOADING</em></button><button data-go="price"><i>$</i><b>Price Review</b><span>Completed-day price optimization</span><em id="priceMini">LOADING</em></button><button data-go="data"><i>▦</i><b>Data Center</b><span>Freshness / uploads / batches</span><em id="dataMini">LOADING</em></button></div>
+      <div class="priority"><div class="ph"><span>NEEDS ATTENTION</span><span>NOW</span></div><div id="priorityRows"><div class="loading">Loading priorities…</div></div></div>
     </section>
 
     <section class="page" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="empty">Use the search bar above. Results appear automatically.</div></div></section>
@@ -170,6 +176,7 @@ const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
 const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
 const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
 const iso=d=>d.toISOString().slice(0,10);
+const shortDate=v=>{const m=String(v||'').match(/^\d{4}-(\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]:'—'};
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='home', priceCat='ALL', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
@@ -234,35 +241,62 @@ const today=new Date();$('#todayLabel').textContent=today.toLocaleDateString(und
 async function loadHome(){
  try{
   const [h,health]=await Promise.all([api('/v1/backoffice/home-summary',{timeoutMs:10000}),api('/v1/backoffice/data-health?days=14',{timeoutMs:10000})]);
-  const oh=h?.ordering||{}, ph=h?.pricing||{}, sourceHealth=ph?.data_health||oh?.data_health||{};
+  const oh=h?.ordering||{}, ph=h?.pricing||{}, sourceHealth=ph?.data_health||oh?.data_health||{}, latest=health?.latest||{};
   const stale=String(sourceHealth.status||'').toUpperCase()!=='CURRENT';
   const dataThrough=sourceHealth.data_through||sourceHealth.pos_data_through||sourceHealth.movement_data_through||null;
-  const oc=num(oh.family_count)||0, oa=num(oh.attention_count)||0, pc=num(ph.qualified_count)||0;
+  const expectedThrough=sourceHealth.expected_through||health?.completed_through||null;
+  const posDate=latest?.POS?.date||sourceHealth.pos_data_through||null;
+  const mvtDate=latest?.MVT?.date||sourceHealth.movement_data_through||null;
+  const ohDate=latest?.OH?.date||null;
+  const oc=num(oh.family_count)||0, oa=num(oh.attention_count)||0, pc=num(ph.qualified_count)||0, pairUrgent=num(ph.urgent_240_249_count)||0;
   const due=(health?.rows||[]).filter(x=>x.required_daily_due), complete=due.filter(x=>x.overall_status==='COMPLETE').length;
   const hp=due.length?Math.round(complete/due.length*100):100;
-  $('#homeOrder').textContent=stale?'EST':oc;
-  $('#homePrice').textContent=stale?'EST':pc;
-  $('#homeHealth').textContent=stale?(dataThrough?String(dataThrough).slice(5):'EST'):hp+'%';
-  $('#orderMini').textContent=stale?'BEST AVAILABLE':(oa?oa+' NEED ATTENTION':oc+' TO REVIEW');
-  $('#priceMini').textContent=stale?'BEST AVAILABLE':pc+' ACTIONABLE';
-  $('#dataMini').textContent=stale?(dataThrough?'THRU '+String(dataThrough).slice(5):'CHECK DATA'):hp+'% READY';
+
+  // The blue card is source freshness, not a vague EST counter.
+  $('#homeOrder').textContent=shortDate(posDate);
+  $('#homePrice').textContent=shortDate(mvtDate);
+  $('#homeHealth').textContent=shortDate(ohDate);
+
+  $('#orderMini').textContent=stale?'ESTIMATE · THRU '+shortDate(dataThrough):(oa?oa+' NEED ATTENTION':oc+' TO REVIEW');
+  $('#priceMini').textContent=stale?'ESTIMATE · THRU '+shortDate(dataThrough):pc+' ACTIONABLE';
+  $('#dataMini').textContent='POS '+shortDate(posDate)+' · OH '+shortDate(ohDate);
+
+  const freshness='POS '+shortDate(posDate)+' · MVT '+shortDate(mvtDate)+' · OH '+shortDate(ohDate);
   if(stale){
-    $('#attentionTitle').textContent='Best-available analysis ready';
-    $('#attentionSub').textContent='POS/MVT not fully current · decisions use existing data'+(dataThrough?' through '+dataThrough:'')+' and are labelled ESTIMATE';
+    $('#attentionTitle').textContent='Best-available analysis · thru '+shortDate(dataThrough);
+    $('#attentionSub').textContent=freshness+' · ESTIMATE MODE';
   }else{
     const total=oa+pc+(hp<100?1:0);
     $('#attentionTitle').textContent=total?total+' actions need attention':'Current work is clear';
-    $('#attentionSub').textContent='Current through '+(h?.generated_at||health?.completed_through||'latest data');
+    $('#attentionSub').textContent=freshness+' · CURRENT';
   }
+
   const rows=[];
+  const missing=[...(sourceHealth.missing_required_sources||[])].map(x=>String(x).toUpperCase());
   if(stale){
-    rows.push({title:'Ordering estimate',sub:'Use existing receiving + sales history',badge:'EST',cls:'amber',go:'order'});
-    rows.push({title:'Price estimate',sub:'Optimize from existing completed-day history',badge:'EST',cls:'amber',go:'price'});
+    if(missing.length){
+      rows.push({
+        title:'Latest daily sources behind target',
+        sub:missing.join(' + ')+' · analysis thru '+shortDate(dataThrough)+' · target '+shortDate(expectedThrough),
+        badge:'DATA',cls:'amber',go:'data'
+      });
+    }
+    rows.push({
+      title:'Ordering estimate available',
+      sub:'Receipt cadence + completed sales through '+shortDate(dataThrough),
+      badge:'EST',cls:'amber',go:'order'
+    });
+    rows.push({
+      title:'Price estimate available',
+      sub:'Completed-day sales / GP evidence through '+shortDate(dataThrough),
+      badge:'EST',cls:'amber',go:'price'
+    });
   }else{
+    if(pairUrgent)rows.push({title:'240 / 249 price mismatch',sub:pairUrgent+' service price pair(s) need equality review',badge:'PRICE',cls:'red',go:'price'});
     if(oa)rows.push({title:'Ordering review',sub:oa+' family item(s) need attention',badge:'ORDER',cls:'red',go:'order'});
     if(pc)rows.push({title:'Price review',sub:pc+' actionable price suggestion(s)',badge:'PRICE',cls:'red',go:'price'});
+    if(hp<100)rows.push({title:'Data completeness',sub:(100-hp)+'% of due daily coverage needs attention',badge:'DATA',cls:'amber',go:'data'});
   }
-  if(hp<100)rows.push({title:'Data completeness',sub:(100-hp)+'% of due coverage needs attention',badge:'DATA',cls:'amber',go:'data'});
   if(!rows.length)rows.push({title:'No urgent actions',sub:'Use Quick Check for item lookup',badge:'READY',cls:'green',go:'quick'});
   $('#priorityRows').innerHTML=rows.slice(0,3).map(r=>'<div class="prio" data-prio="'+r.go+'"><div><b>'+esc(r.title)+'</b><span>'+esc(r.sub)+'</span></div><div class="badge '+r.cls+'">'+r.badge+'</div></div>').join('');
   $$('[data-prio]').forEach(x=>x.onclick=()=>go(x.dataset.prio));
