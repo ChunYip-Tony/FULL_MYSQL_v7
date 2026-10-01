@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v342';
+const CACHE='yipman-v343';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -305,7 +305,7 @@ const appDate=v=>{
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='home', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0;
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0, priceRequestSeq=0;
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
@@ -551,12 +551,13 @@ function quickFamilyGroups(rows){
 }
 function quickUpcHtml(r){
  const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'',active=hasActivity(r.qty_7d);
- const priceStrip=active?'<div class="qupcprices">'+
-   '<div class="qprice"><small>CURRENT</small><b>'+money(r.price)+'</b></div>'+
-   '<div class="qprice suggest"><small>SUGGEST</small><b>'+money(r.suggest_price)+'</b></div>'+
-   '<div class="qprice comp"><small>COMP A</small><b>'+money(r.company_price_a)+'</b></div>'+
-   '<div class="qprice comp"><small>COMP B</small><b>'+money(r.company_price_b)+'</b></div>'+
-   '<div class="qprice comp companyc"><small>COMP C</small><b>'+money(r.company_price_c)+'</b></div>'+
+ const pm=v=>num(v)===null?'…':money(v);
+ const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
+   '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
+   '<div class="qprice suggest"><small>SUGGEST</small><b data-q-suggest>'+pm(r.suggest_price)+'</b></div>'+
+   '<div class="qprice comp"><small>COMP A</small><b data-q-comp-a>'+pm(r.company_price_a)+'</b></div>'+
+   '<div class="qprice comp"><small>COMP B</small><b data-q-comp-b>'+pm(r.company_price_b)+'</b></div>'+
+   '<div class="qprice comp companyc"><small>COMP C</small><b data-q-comp-c>'+pm(r.company_price_c)+'</b></div>'+
  '</div>':'';
  return '<div class="qupc" data-upc="'+esc(r.upc||'')+'">'+
    '<div class="qupcmain"><div class="qupctop"><span class="qrole '+role.cls+'">'+esc(role.label)+'</span><span class="qupccode">'+esc(r.upc||'—')+'</span></div>'+
@@ -611,17 +612,49 @@ function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
  $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
 }
+async function hydrateQuickPrices(rows,requestId){
+ const upcs=[...new Set((rows||[])
+   .filter(r=>hasActivity(r.qty_7d)&&String(r.upc||'').trim())
+   .map(r=>String(r.upc).trim()))].slice(0,60);
+ if(!upcs.length)return;
+ try{
+  const d=await api('/v1/yipman/quick-price-preview?upcs='+encodeURIComponent(upcs.join(',')),{timeoutMs:22000});
+  if(requestId!==quickRequestSeq)return;
+  const byUpc=new Map((d.rows||[]).map(r=>[String(r.upc||''),r]));
+  $$('[data-upc]').forEach(card=>{
+    const row=byUpc.get(String(card.dataset.upc||''));
+    if(!row)return;
+    const set=(sel,val)=>{const n=card.querySelector(sel);if(n)n.textContent=num(val)===null?'—':money(val)};
+    set('[data-q-current]',row.current_price);
+    set('[data-q-suggest]',row.suggested_price);
+    set('[data-q-comp-a]',row.company_price_a);
+    set('[data-q-comp-b]',row.company_price_b);
+    set('[data-q-comp-c]',row.company_price_c);
+    const strip=card.querySelector('[data-qprice-status]');
+    if(strip){
+      strip.dataset.qpriceStatus=String(row.suggestion_status||'READY');
+      strip.title='Current: '+String(row.current_price_source||'—')+(row.current_price_asof_date?' · '+String(row.current_price_asof_date):'')+' | Suggest: '+String(row.suggestion_status||'—');
+    }
+  });
+ }catch(e){
+  // Pricing is supplemental. Never blank otherwise valid Quick Check results.
+  if(requestId!==quickRequestSeq)return;
+  $$('[data-qprice-status="loading"]').forEach(x=>{x.dataset.qpriceStatus='unavailable';x.title='Price preview temporarily unavailable'});
+ }
+}
+
 async function loadQuick(q){
  const query=String(q||'').trim(), box=$('#quickRows');
  if(!query){quickRequestSeq++;lastQuickQuery='';box.innerHTML='<div class="empty">Use the search bar above. Results appear automatically.</div>';return}
  const requestId=++quickRequestSeq;lastQuickQuery=query;box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_price_preview=true&q='+encodeURIComponent(query),{timeoutMs:18000});
+  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(query),{timeoutMs:18000});
   if(requestId!==quickRequestSeq)return;
   const rows=d.rows||[];
   if(!rows.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
   box.innerHTML=quickGroupedHtml(rows);
   bindQuickRows();
+  hydrateQuickPrices(rows,requestId);
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 $('#globalForm').onsubmit=e=>{e.preventDefault();const q=$('#globalInput').value.trim();if(!q)return;go('quick');clearTimeout(quickSearchTimer);loadQuick(q);$('#globalInput').blur()};
@@ -830,16 +863,33 @@ function openOrder(r){
 }
 
 async function loadPrices(){
+ const requestId=++priceRequestSeq;
  $('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';
  $('#priceStatus').textContent='Current price uses latest valid evidence';
  try{
-  const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}), h=d.data_health||{};
+  let d=null;
+  for(let i=0;i<16;i++){
+    d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:9000});
+    if(requestId!==priceRequestSeq)return;
+    const warming=String(d.analysis_status||'').toUpperCase()==='REFRESHING'||String(d.cache_status||'').toUpperCase()==='WARMING';
+    if(!warming)break;
+    $('#priceStatus').textContent='Calculating current Price Review · '+(i+1)+'/16';
+    $('#priceRows').innerHTML='<div class="loading">Pricing analysis is running in the background. Yipman will update automatically.</div>';
+    if(i<15)await new Promise(r=>setTimeout(r,1600));
+  }
+  if(requestId!==priceRequestSeq)return;
+  if(!d||String(d.analysis_status||'').toUpperCase()==='REFRESHING'||String(d.cache_status||'').toUpperCase()==='WARMING'){
+    $('#priceStatus').textContent='Price Review still calculating';
+    $('#priceRows').innerHTML='<div class="empty">Current pricing analysis is still running. Pull down to refresh in a moment.</div>';
+    return;
+  }
+  const h=d.data_health||{};
   if(String(h.status||'').includes('BLOCKED')){
     $('#priceStatus').textContent='Price estimate unavailable';
     $('#priceRows').innerHTML='<div class="empty">No usable POS or MVT history is available for a best-available price estimate.<br>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</div>';
     return;
   }
-  const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE';
+  const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||String(d.cache_status||'').toUpperCase()==='STALE_REFRESHING';
   const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||num(r.price_gap_pct)===null||num(r.price_gap_pct)>=3);
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
   const filtered=meaningful.filter(r=>{
@@ -858,8 +908,9 @@ async function loadPrices(){
   }).join('')||'<div class="empty">No actionable price suggestion matches this delivery-pattern filter.</div>';
   $$('[data-price]').forEach(x=>x.onclick=()=>openPrice(rows[Number(x.dataset.price)]));
  }catch(e){
-  $('#priceStatus').textContent='Price review failed';
-  $('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+  if(requestId!==priceRequestSeq)return;
+  $('#priceStatus').textContent='Price review temporarily unavailable';
+  $('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Pull down to retry.</div>';
  }
 }
 function openPrice(r){

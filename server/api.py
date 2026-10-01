@@ -35,6 +35,8 @@ from backoffice_runtime import (
     ordering_review as backoffice_ordering_review,
     cached_ordering_review as backoffice_cached_ordering_review,
     pricing_review as backoffice_pricing_review,
+    cached_pricing_review as backoffice_cached_pricing_review,
+    quick_price_preview as backoffice_quick_price_preview,
     sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
     backoffice_home_summary,
@@ -3761,13 +3763,25 @@ def yipman_receipt_audit(lookback_days:int=365):
     return json.loads(json.dumps(result,default=j))
 
 
-@app.get('/v1/yipman/pricing-review')
-def yipman_pricing(category:str='ALL',limit:int=1000):
+@app.get('/v1/yipman/quick-price-preview')
+def yipman_quick_price_preview(upcs:str=''):
     try:
-        result=backoffice_pricing_review(
+        values=[x.strip() for x in str(upcs or '').split(',') if x.strip()]
+        result=backoffice_quick_price_preview(values)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman quick price preview failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/pricing-review')
+def yipman_pricing(category:str='ALL',limit:int=1000,force:bool=False):
+    try:
+        result=backoffice_cached_pricing_review(
             category=category,
             limit=limit,
-            allow_stale_estimate=True,
+            force=force,
         )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
