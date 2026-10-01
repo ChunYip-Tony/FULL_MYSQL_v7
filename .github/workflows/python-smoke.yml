@@ -297,22 +297,39 @@ jobs:
           assert frozen['pack']=='E'
           assert frozen['selling_uom']=='G'
 
-          pi_frozen = normalize._monthly_pi_column_map('Frozen', {})
+          pi_frozen = normalize._monthly_pi_column_map('FROZEN', {})
+          assert pi_frozen['pack']=='D'
           assert pi_frozen['base_uom']=='E'
+          assert pi_frozen['main_article']=='G'
+          assert pi_frozen['upc']=='H'
           assert pi_frozen.get('receiving_uom')!='E'
-          pi_fresh = normalize._monthly_pi_column_map('Fresh', {})
-          assert pi_fresh['pack']=='D'
-          assert pi_fresh['receiving_uom']=='E'
-          assert pi_fresh.get('base_uom')!='E'
-          pi_live = normalize._monthly_pi_column_map('Live', {})
-          assert pi_live['pack']=='D'
-          assert pi_live['receiving_uom']=='E'
 
-          p60=normalize._structured_pack_weight('60LB')
-          assert p60['base_uom']=='LB'
-          assert Decimal(str(p60['total_base_qty']))==Decimal('60')
-          p160=normalize._structured_pack_weight('1/60LB')
-          assert Decimal(str(p160['total_base_qty']))==Decimal('60')
+          pi_fl = normalize._monthly_pi_column_map('FRESH&LIVE', {})
+          assert pi_fl['pack']=='D'
+          assert pi_fl['order_uom']=='E'
+          assert pi_fl['main_article']=='F'
+          assert pi_fl.get('receiving_uom')!='E'
+          assert pi_fl.get('base_uom')!='E'
+
+          x=normalize._monthly_pi_pack_structure('60LB/CV','LB')
+          assert x['base_uom']=='LB' and x['receiving_uom']=='CV'
+          assert Decimal(str(x['base_qty_per_receiving_unit']))==Decimal('60')
+          x=normalize._monthly_pi_pack_structure('40 LB/BAG','LB')
+          assert x['base_uom']=='LB' and x['receiving_uom']=='BAG'
+          assert Decimal(str(x['base_qty_per_receiving_unit']))==Decimal('40')
+          x=normalize._monthly_pi_pack_structure('12 EA/CV','EA')
+          assert x['base_uom']=='EA' and x['receiving_uom']=='CV'
+          assert Decimal(str(x['base_qty_per_receiving_unit']))==Decimal('12')
+          x=normalize._monthly_pi_pack_structure('5/2LB','CV')
+          assert x['base_uom']=='LB' and x['receiving_uom']=='CV'
+          assert Decimal(str(x['base_qty_per_receiving_unit']))==Decimal('10')
+          x=normalize._monthly_pi_pack_structure('LB','LB')
+          assert x['base_uom']=='LB' and x['receiving_uom']=='LB'
+          assert Decimal(str(x['base_qty_per_receiving_unit']))==Decimal('1')
+          x=normalize._monthly_pi_pack_structure('10LB','LB')
+          assert x['base_uom']=='LB' and x['receiving_uom']=='LB'
+          assert Decimal(str(x['base_qty_per_receiving_unit']))==Decimal('1')
+
           p65=normalize._structured_pack_weight('6/5LB')
           assert Decimal(str(p65['outer_count']))==Decimal('6')
           assert Decimal(str(p65['inner_qty']))==Decimal('5')
