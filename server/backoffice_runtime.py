@@ -29,6 +29,7 @@ from webapp_v2_runtime import (
     _delivery_day_evidence,
     _family_effective_oh,
     _family_receipt_events,
+    _family_receipt_events_bulk,
     _ordering_candidate_families,
     _gp_day_price_suggestion_from_batch,
     _performance_cost_for_day,
@@ -632,9 +633,15 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             # expensive 28D family demand / OH / baseline calculations.
             if delivery_date is not None:
                 eligible_family_ids=[]
-                for fam in _ordering_candidate_families(cur,kind):
+                candidate_families=_ordering_candidate_families(cur,kind)
+                event_map=_family_receipt_events_bulk(
+                    cur,
+                    [int(x["family_id"]) for x in candidate_families],
+                    data_days=receipt_days,
+                )
+                for fam in candidate_families:
                     fid=int(fam["family_id"])
-                    events=_family_receipt_events(cur,fid,data_days=receipt_days)
+                    events=event_map.get(fid) or []
                     receipt=_last_receipt_base_summary_from_events(events)
                     pattern=_delivery_pattern(events,after_date=delivery_date)
                     delivery_day=_delivery_day_evidence(pattern,delivery_date)
