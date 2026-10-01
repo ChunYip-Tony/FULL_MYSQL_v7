@@ -1190,6 +1190,117 @@ def _family_receipt_events(
     return events
 
 
+def _family_receipt_events_bulk(
+    cur,
+    family_ids: list[int] | set[int] | tuple[int,...],
+    data_day_limit: int = 180,
+    data_days: list[dict[str,Any]]|None=None,
+) -> dict[int,list[dict[str,Any]]]:
+    """Load canonical receipt events for many families in one movement query."""
+    ids=sorted({int(x) for x in family_ids if x is not None})
+    out={fid:[] for fid in ids}
+    if not ids:
+        return out
+    if data_days is None:
+        days=source_data_days(
+            cur,"movement",limit=max(1,min(int(data_day_limit),365)),
+            up_to=completed_through_date(),
+        )
+    else:
+        requested=max(1,min(int(data_day_limit),365))
+        days=sorted(list(data_days),key=lambda x:x["date"])[-requested:]
+    canonical={x["date"]:int(x["file_id"]) for x in days}
+    if not canonical:
+        return out
+
+    file_ids=sorted(set(canonical.values()))
+    fam_ph=",".join(["%s"]*len(ids))
+    file_ph=",".join(["%s"]*len(file_ids))
+    cur.execute(
+        f"""SELECT family_id,file_id,raw_id,source_row_number,article_id,article_number,
+                   movement_type,posting_date,entry_quantity,entry_uom_code,
+                   base_quantity,base_uom_code,amount_local_currency,
+                   article_document,purchase_order,vendor_code
+            FROM movement_history
+            WHERE family_id IN ({fam_ph})
+              AND file_id IN ({file_ph})
+              AND movement_type IN ('101','102','107','108','109','110')
+            ORDER BY family_id,posting_date,file_id,raw_id,source_row_number""",
+        (*ids,*file_ids),
+    )
+    rows=[
+        r for r in cur.fetchall()
+        if r.get("posting_date") in canonical
+        and canonical[r["posting_date"]]==int(r["file_id"])
+    ]
+    groups: dict[tuple[Any,...],list[dict[str,Any]]] = {}
+    for r in rows:
+        key=(
+            int(r["family_id"]),
+            r.get("posting_date"),r.get("article_id"),r.get("article_number"),
+            r.get("purchase_order"),r.get("article_document"),
+        )
+        groups.setdefault(key,[]).append(r)
+
+    for key,group in groups.items():
+        fid=int(key[0])
+        by_type: dict[str,list[dict[str,Any]]] = {}
+        for r in group:
+            by_type.setdefault(str(r.get("movement_type") or ""),[]).append(r)
+        if by_type.get("101") or by_type.get("102"):
+            chosen=(by_type.get("101") or [])+(by_type.get("102") or [])
+            basis="101_102_DIRECT_GR_NET"
+        elif by_type.get("107") or by_type.get("108"):
+            chosen=(by_type.get("107") or [])+(by_type.get("108") or [])
+            basis="107_108_BLOCKED_GR_NET"
+        else:
+            chosen=(by_type.get("109") or [])+(by_type.get("110") or [])
+            basis="109_110_RELEASE_FALLBACK"
+
+        entry_uoms={str(x.get("entry_uom_code") or "").upper() for x in chosen if x.get("entry_uom_code")}
+        base_uoms={str(x.get("base_uom_code") or "").upper() for x in chosen if x.get("base_uom_code")}
+        base_qty=None; base_uom=None
+        if len(base_uoms)==1 and any(x.get("base_quantity") is not None for x in chosen):
+            base_qty=sum((_d(x.get("base_quantity")) for x in chosen),Decimal("0"))
+            base_uom=next(iter(base_uoms))
+
+        qty=None; uom=None; qty_basis=None
+        if len(entry_uoms)==1 and any(x.get("entry_quantity") is not None for x in chosen):
+            qty=sum((_d(x.get("entry_quantity")) for x in chosen),Decimal("0"))
+            uom=next(iter(entry_uoms)); qty_basis="ENTRY"
+        elif base_qty is not None:
+            qty=base_qty
+            uom=base_uom; qty_basis="BASE"
+
+        out.setdefault(fid,[]).append({
+            "posting_date":key[1],
+            "article_id":key[2],
+            "article_number":key[3],
+            "purchase_order":key[4],
+            "article_document":key[5],
+            "vendor_code":next((x.get("vendor_code") for x in chosen if x.get("vendor_code")),None),
+            "receipt_quantity":qty,
+            "receipt_uom":uom,
+            "base_receipt_quantity":base_qty,
+            "base_receipt_uom":base_uom,
+            "quantity_basis":qty_basis,
+            "receipt_stage_basis":basis,
+            "receipt_status":(
+                "POSITIVE_RECEIPT"
+                if qty is not None and qty > 0
+                else "NON_POSITIVE_OR_UNRESOLVED"
+            ),
+            "source_rows":len(chosen),
+        })
+
+    for fid in out:
+        out[fid].sort(
+            key=lambda x:(x["posting_date"],str(x.get("article_number") or "")),
+            reverse=True,
+        )
+    return out
+
+
 def _delivery_pattern(
     receipt_events: list[dict[str,Any]],
     after_date: date | None = None,
