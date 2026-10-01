@@ -3720,11 +3720,40 @@ async function mobilePollPhase3Run(batchId,runId,seq){
     }
     state.active=b;
     updateMobilePhase3Monitor(b);
+    updateMobileBatchLiveIssues(b);
   }catch(e){
     const txt=mNode('mPhase3ProgressText');
     if(txt)txt.textContent='Live status check failed: '+String(e?.message||e)+' · retrying in 3s';
   }
   if(seq===mobileBatchProgressPollSeq)setTimeout(()=>mobilePollPhase3Run(batchId,runId,seq),3000);
+}
+
+function mobileBatchIssueState(b){
+  const liveIssueMap=(b?.active_progress_issue_counts&&typeof b.active_progress_issue_counts==='object')
+    ? b.active_progress_issue_counts
+    : null;
+  const all=liveIssueMap
+    ? Object.entries(liveIssueMap).map(([issue_code,issue_count])=>({issue_code,issue_count:Number(issue_count||0)}))
+        .sort((a,z)=>z.issue_count-a.issue_count||String(a.issue_code).localeCompare(String(z.issue_code)))
+    : (b?.active_issue_counts||[]);
+  return {all,total:all.reduce((n,x)=>n+Number(x.issue_count||0),0)};
+}
+function mobileBatchIssueRowsHtml(b,limit=3){
+  const st=mobileBatchIssueState(b),issues=st.all.slice(0,limit);
+  if(!issues.length)return '<div class="m-batch-issue-row"><span>No open Phase 3 issues recorded</span><b>✓</b></div>';
+  let html=issues.map(x=>'<div class="m-batch-issue-row"><span>'+esc(issueLabel(x.issue_code))+'</span><b>'+fmt(x.issue_count,0)+'</b></div>').join('');
+  if(st.all.length>limit)html+='<div class="m-batch-issue-row"><span>Other issue types</span><b>+'+(st.all.length-limit)+'</b></div>';
+  return html;
+}
+function updateMobileBatchLiveIssues(b){
+  const st=mobileBatchIssueState(b);
+  const total=mNode('mBatchIssueTotal');
+  if(total){
+    total.textContent=fmt(st.total,0);
+    total.style.color=st.total>0?'#b64635':'#158259';
+  }
+  const rows=mNode('mBatchIssueRows');
+  if(rows)rows.innerHTML=mobileBatchIssueRowsHtml(b,3);
 }
 
 function mobileActiveBatchDetail(){
@@ -3734,15 +3763,8 @@ function mobileActiveBatchDetail(){
   const hasActiveRun=Boolean(b.active_pipeline_run_id&&runStatus);
   const displayStatus=hasActiveRun?runStatus:(b.processing_status||b.status||'PROCESSING');
   const p=phase3ProgressState(b);
-  const liveIssueMap=(b.active_progress_issue_counts&&typeof b.active_progress_issue_counts==='object')
-    ? b.active_progress_issue_counts
-    : null;
-  const allIssues=liveIssueMap
-    ? Object.entries(liveIssueMap).map(([issue_code,issue_count])=>({issue_code,issue_count:Number(issue_count||0)}))
-        .sort((a,z)=>z.issue_count-a.issue_count||String(a.issue_code).localeCompare(String(z.issue_code)))
-    : (b.active_issue_counts||[]);
-  const issues=allIssues.slice(0,3);
-  const liveIssueTotal=allIssues.reduce((n,x)=>n+Number(x.issue_count||0),0);
+  const issueState=mobileBatchIssueState(b);
+  const liveIssueTotal=issueState.total;
   const prev=state.recent.find(x=>String(x.batch_id)!==String(b.batch_id||b.id));
   const firstFile=(b.active_files||[])[0]||{};
   const fileName=b.active_file_name||firstFile.original_filename||b.batch_label||'Current source batch';
@@ -3761,17 +3783,8 @@ function mobileActiveBatchDetail(){
   if(hasActiveRun)html+=phase3MonitorHtml(b);
 
   html+='<div class="m-batch-issues">'+
-    '<div class="m-batch-issues-head"><b>Current Errors / Issues</b><span style="color:'+(liveIssueTotal>0?'#b64635':'#158259')+'">'+fmt(liveIssueTotal,0)+'</span></div>';
-
-  if(issues.length){
-    html+=issues.map(x=>
-      '<div class="m-batch-issue-row"><span>'+esc(issueLabel(x.issue_code))+'</span><b>'+fmt(x.issue_count,0)+'</b></div>'
-    ).join('');
-    if(allIssues.length>3)html+='<div class="m-batch-issue-row"><span>Other issue types</span><b>+'+(allIssues.length-3)+'</b></div>';
-  }else{
-    html+='<div class="m-batch-issue-row"><span>No open Phase 3 issues recorded</span><b>✓</b></div>';
-  }
-  html+='</div>';
+    '<div class="m-batch-issues-head"><b>Current Errors / Issues</b><span id="mBatchIssueTotal" style="color:'+(liveIssueTotal>0?'#b64635':'#158259')+'">'+fmt(liveIssueTotal,0)+'</span></div>'+
+    '<div id="mBatchIssueRows">'+mobileBatchIssueRowsHtml(b,3)+'</div></div>';
 
   if(prev){
     const prevStatus=prev.phase3_status||prev.processing_status||'—';
