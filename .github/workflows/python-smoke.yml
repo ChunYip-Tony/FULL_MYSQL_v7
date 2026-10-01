@@ -467,12 +467,12 @@ jobs:
                   self.collisions=set(collisions); self.key=None
               def execute(self, sql, args):
                   self.key=str(args[1])
-              def fetchone(self):
-                  return {'hit': 1} if self.key in self.collisions else None
-          t={'upc_id': 99, 'ean_upc': '4029549308'}
+              def fetchall(self):
+                  return [{'upc_id': 999, 'family_id': 1}] if self.key in self.collisions else []
+          t={'upc_id': 99, 'family_id': 1, 'ean_upc': '4029549308'}
           assert a28._authoritative_upc_lookup_keys(_AliasCur(), t)==['4029549308','40295493088']
           assert a28._authoritative_upc_lookup_keys(_AliasCur({'40295493088'}), t)==['4029549308']
-          t={'upc_id': 100, 'ean_upc': '66718100001'}
+          t={'upc_id': 100, 'family_id': 1, 'ean_upc': '66718100001'}
           assert a28._authoritative_upc_lookup_keys(_AliasCur(), t)==['66718100001','667181000016']
           assert 'retail_barcode_alias_candidates' in inspect.getsource(a28._authoritative_upc_lookup_keys)
 
