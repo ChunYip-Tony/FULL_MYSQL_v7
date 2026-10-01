@@ -3478,7 +3478,7 @@ def pricing_review(
         visible_rows.append(row)
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V6",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V7_BEST_AVAILABLE",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
