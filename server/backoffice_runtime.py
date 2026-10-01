@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from difflib import SequenceMatcher
 from decimal import Decimal
+import threading
+import time
 from typing import Any
 
 from business_clock import business_today, completed_through_date
@@ -17,9 +20,15 @@ from phase3 import (
     _price_list_upload_business_date,
 )
 from webapp_v2_runtime import (
+    _batch_daily_sales_by_price_type,
+    _batch_sales_metric,
+    _canonical_report_date_sales,
     _delivery_pattern,
     _family_effective_oh,
     _family_receipt_events,
+    _gp_day_price_suggestion_from_batch,
+    _performance_cost_for_day,
+    _performance_range_cost_rows,
     bulk_ordering_suggestions,
     performance_report,
     _numeric_key,
@@ -2430,6 +2439,340 @@ def _accepted_snapshot_matches(row: dict[str, Any], accepted: dict[str, Any] | N
         and str(row.get("current_price_observed_date") or "") == str(accepted.get("accepted_current_price_asof_date") or "")
         and _same_decimal(row.get("candidate_price"),accepted.get("accepted_candidate_price"))
     )
+
+_HOME_SUMMARY_CACHE_LOCK = threading.Lock()
+_HOME_SUMMARY_CACHE_VALUE: dict[str, Any] | None = None
+_HOME_SUMMARY_CACHE_AT = 0.0
+_HOME_SUMMARY_CACHE_TTL_SECONDS = 120.0
+
+
+def _home_price_performance_summary() -> dict[str, Any]:
+    """Fast Home-only pricing + latest-day performance summary.
+
+    This intentionally reuses the same 14 completed-data-day price candidate
+    logic as Pricing Review, but skips the full Performance narrative, 28/90-day
+    analytics, row rendering, and second live-price overlay pass.
+    """
+    health = _pricing_review_data_health()
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        days = source_data_days(
+            cur,
+            "sales_by_price_type",
+            limit=14,
+            up_to=completed_through_date(),
+        )
+        days = sorted(days, key=lambda x: x["date"])
+        if not days:
+            cur.close()
+            return {
+                "pricing": {
+                    "status": health.get("status"),
+                    "qualified_count": 0,
+                    "urgent_240_249_count": 0,
+                    "data_health": health,
+                },
+                "performance": {
+                    "status": "UNAVAILABLE",
+                    "report_date": None,
+                    "sales_dollars": None,
+                    "gp_dollars": None,
+                    "gp_dollars_complete": False,
+                },
+            }
+
+        anchor = days[-1]["date"]
+        anchor_entry = days[-1]
+        cur.execute("SELECT * FROM quick_check_current")
+        rows = [dict(x) for x in cur.fetchall()]
+        daily = _batch_daily_sales_by_price_type(cur, rows, days)
+
+        # Current price authority must match the live Pricing Review page.
+        live_prices = _bulk_live_current_prices(cur, rows)
+        for row in rows:
+            if row.get("upc_id") is None:
+                continue
+            live = live_prices.get(int(row["upc_id"]))
+            if live:
+                row["current_price"] = live.get("price")
+                row["current_price_type"] = live.get("type")
+                row["current_price_source"] = live.get("source")
+                row["current_price_asof_date"] = live.get("date")
+            else:
+                row["current_price"] = None
+                row["current_price_type"] = None
+                row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
+                row["current_price_asof_date"] = None
+
+        # Latest completed-day Sales authority is direct canonical POS.
+        canonical_sales = _canonical_report_date_sales(cur, anchor_entry)
+        cost_obs = _performance_range_cost_rows(cur, rows, anchor)
+        gp_total = Decimal("0")
+        gp_complete = True
+        for row in rows:
+            uid = int(row["upc_id"])
+            obs = (daily.get(uid) or {}).get(anchor) or {}
+            qty = _d(obs.get("sold_quantity"))
+            if qty <= 0:
+                continue
+            sales = _d(obs.get("sales_amount"))
+            cost = _performance_cost_for_day(row, cost_obs, anchor)
+            if cost is None:
+                gp_complete = False
+                continue
+            gp_total += sales - qty * _d(cost.get("cost_per_selling_unit"))
+
+        performance = {
+            "status": "READY",
+            "report_date": anchor,
+            "sales_dollars": canonical_sales.get("sales_amount"),
+            "gp_dollars": gp_total if gp_complete else None,
+            "gp_dollars_complete": gp_complete,
+            "gp_basis": "HISTORICAL_APPLICABLE_COST_AS_OF_LATEST_SUPPORTED_DAY",
+        }
+
+        if health.get("status") != "CURRENT":
+            cur.close()
+            return {
+                "pricing": {
+                    "status": "BLOCKED_STALE_REQUIRED_DATA",
+                    "qualified_count": 0,
+                    "urgent_240_249_count": 0,
+                    "data_health": health,
+                },
+                "performance": performance,
+            }
+
+        # Mandatory 240=249 mismatch candidates bypass normal OH/DOH gates.
+        pair_groups: dict[tuple[int, str], dict[str, dict[str, Any]]] = {}
+        for row in rows:
+            sig = _seafood_upc_group_signature(row.get("family_id"), row.get("ean_upc"))
+            prefix = _numeric_key(row.get("ean_upc"))[:3]
+            if sig is not None and prefix in {"240", "249"}:
+                pair_groups.setdefault(sig, {})[prefix] = row
+
+        candidates: list[dict[str, Any]] = []
+        urgent_service_upcs: set[str] = set()
+        for members in pair_groups.values():
+            main = members.get("240")
+            service = members.get("249")
+            if not main or not service:
+                continue
+            main_price = (
+                _d(main.get("current_price"))
+                if main.get("current_price") is not None else None
+            )
+            service_price = (
+                _d(service.get("current_price"))
+                if service.get("current_price") is not None else None
+            )
+            if (
+                main_price is None
+                or main_price <= 0
+                or service_price is None
+                or service_price <= 0
+                or main_price == service_price
+            ):
+                continue
+            upc = str(service.get("ean_upc") or "")
+            urgent_service_upcs.add(upc)
+            candidates.append({
+                "upc": upc,
+                "current_price": service_price,
+                "current_price_source": service.get("current_price_source"),
+                "current_price_observed_date": service.get("current_price_asof_date"),
+                "candidate_price": main_price,
+                "urgent_240_249": True,
+                "actionable": (
+                    str(main.get("quick_check_status") or "").upper() == "READY"
+                    and str(service.get("quick_check_status") or "").upper() == "READY"
+                ),
+            })
+
+        # Normal Pricing Review qualification + 14D max-GP$/day candidate.
+        for row in rows:
+            uid = int(row["upc_id"])
+            upc = str(row.get("ean_upc") or "")
+            if upc in urgent_service_upcs:
+                continue
+
+            m14 = _batch_sales_metric(daily, days, uid, 14)
+            q14 = _d(m14.get("sold_quantity"))
+            current_oh = (
+                _d(row.get("current_oh"))
+                if row.get("current_oh") is not None else None
+            )
+            pclass = str(row.get("product_class") or "").upper()
+            doh = _d(row.get("doh")) if row.get("doh") is not None else None
+            freshness_qualified = (
+                (pclass == "FRESH" and doh is not None and doh > Decimal("7"))
+                or (pclass == "FROZEN" and doh is not None and doh > Decimal("60"))
+                or (pclass not in {"FRESH", "FROZEN"})
+            )
+            if current_oh is None or current_oh <= 0 or q14 <= 0 or not freshness_qualified:
+                continue
+            if str(row.get("quick_check_status") or "").upper() != "READY":
+                continue
+
+            day_obs = (daily.get(uid) or {}).get(anchor) or {}
+            report_day_types = {
+                str(x).upper() for x in (day_obs.get("price_types") or {}).keys()
+            }
+            if "SALE" in report_day_types:
+                continue
+
+            price_opt = _gp_day_price_suggestion_from_batch(row, uid, daily, days)
+            current = price_opt.get("current_price_used")
+            suggested = price_opt.get("suggested_price")
+            if (
+                price_opt.get("status") != "READY"
+                or current is None
+                or _d(current) <= 0
+                or row.get("current_cost_per_selling_unit") is None
+                or suggested is None
+            ):
+                continue
+            if abs(_d(suggested) - _d(current)) <= Decimal("0.25"):
+                continue
+
+            candidates.append({
+                "upc": upc,
+                "current_price": current,
+                "current_price_source": price_opt.get("current_price_source"),
+                "current_price_observed_date": price_opt.get("current_price_observed_date"),
+                "candidate_price": suggested,
+                "urgent_240_249": False,
+                "actionable": True,
+            })
+
+        acceptance = _latest_price_acceptances(
+            cur,
+            [str(x.get("upc") or "") for x in candidates],
+        )
+        visible = [
+            x for x in candidates
+            if not _accepted_snapshot_matches(
+                x,
+                acceptance.get(str(x.get("upc") or "")),
+            )
+        ]
+        cur.close()
+
+    actionable = [x for x in visible if x.get("actionable")]
+    return {
+        "pricing": {
+            "status": "CURRENT",
+            "qualified_count": len(actionable),
+            "review_count": len(visible),
+            "urgent_240_249_count": sum(
+                1 for x in actionable if x.get("urgent_240_249")
+            ),
+            "suppressed_accepted_count": len(candidates) - len(visible),
+            "data_health": health,
+            "basis": "FAST_14D_SAME_PRICE_CANDIDATE_AND_ACCEPTANCE_RULES",
+        },
+        "performance": performance,
+    }
+
+
+def _home_ordering_summary(order_type: str) -> dict[str, Any]:
+    report = bulk_ordering_suggestions(order_type)
+    rows = list(report.get("suggestions") or [])
+    attention = sum(
+        1
+        for x in rows
+        if (
+            _d(x.get("dos")) < Decimal("3")
+            or _d(x.get("projected_oh_at_delivery")) < 0
+        )
+    )
+    return {
+        "order_type": str(order_type or "").upper(),
+        "family_count": len(rows),
+        "attention_count": attention,
+    }
+
+
+def _build_backoffice_home_summary() -> dict[str, Any]:
+    health = _pricing_review_data_health()
+    # Ordering and pricing both fail closed on the same completed POS + MVT gate.
+    if health.get("status") != "CURRENT":
+        price_perf = _home_price_performance_summary()
+        ordering = {
+            "status": "BLOCKED_STALE_REQUIRED_DATA",
+            "family_count": 0,
+            "attention_count": 0,
+            "data_health": health,
+        }
+    else:
+        # Run the three independent operational summaries concurrently so Home
+        # latency is bounded by the slowest review rather than their sum.
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            price_future = pool.submit(_home_price_performance_summary)
+            fresh_future = pool.submit(_home_ordering_summary, "FRESH")
+            frozen_future = pool.submit(_home_ordering_summary, "FROZEN")
+            price_perf = price_future.result()
+            fresh = fresh_future.result()
+            frozen = frozen_future.result()
+        ordering = {
+            "status": "CURRENT",
+            "family_count": int(fresh.get("family_count") or 0)
+                + int(frozen.get("family_count") or 0),
+            "attention_count": int(fresh.get("attention_count") or 0)
+                + int(frozen.get("attention_count") or 0),
+            "fresh_family_count": int(fresh.get("family_count") or 0),
+            "frozen_family_count": int(frozen.get("family_count") or 0),
+            "data_health": health,
+            "basis": "BULK_ORDERING_SUGGESTIONS_WITHOUT_RECEIPT_DETAIL_ENRICHMENT",
+        }
+
+    return {
+        "contract_version": "BACKOFFICE_HOME_SUMMARY_V1",
+        "pricing": price_perf.get("pricing") or {},
+        "performance": price_perf.get("performance") or {},
+        "ordering": ordering,
+        "generated_monotonic": time.monotonic(),
+    }
+
+
+def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
+    """Cached operational summary for the mobile Home.
+
+    Heavy review math is computed at most once per cache TTL per service process.
+    """
+    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT
+    now = time.monotonic()
+    cached = _HOME_SUMMARY_CACHE_VALUE
+    if (
+        not force
+        and cached is not None
+        and now - _HOME_SUMMARY_CACHE_AT < _HOME_SUMMARY_CACHE_TTL_SECONDS
+    ):
+        return {**cached, "cache_status": "HIT"}
+
+    with _HOME_SUMMARY_CACHE_LOCK:
+        now = time.monotonic()
+        cached = _HOME_SUMMARY_CACHE_VALUE
+        if (
+            not force
+            and cached is not None
+            and now - _HOME_SUMMARY_CACHE_AT < _HOME_SUMMARY_CACHE_TTL_SECONDS
+        ):
+            return {**cached, "cache_status": "HIT_AFTER_WAIT"}
+
+        value = _build_backoffice_home_summary()
+        _HOME_SUMMARY_CACHE_VALUE = value
+        _HOME_SUMMARY_CACHE_AT = time.monotonic()
+        return {**value, "cache_status": "REFRESHED"}
+
+
+def warm_backoffice_home_summary() -> None:
+    try:
+        backoffice_home_summary(force=True)
+    except Exception:
+        # Warmup must never block API startup. The first Home request can retry.
+        return
+
 
 def _pricing_review_data_health() -> dict[str, Any]:
     """Required-source freshness gate for operational price-change decisions.

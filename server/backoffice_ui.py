@@ -1182,6 +1182,20 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 
 
+  /* v7.0.318 · rebalance compact Home to use the viewport without oversized cards */
+  .mobilehome.on .m-modgrid{
+    grid-template-rows:repeat(3,clamp(142px,19.8dvh,166px))!important;
+  }
+  .mobilehome.on .m-module{
+    padding-bottom:clamp(22px,3.05dvh,27px)!important;
+  }
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on .m-modgrid{
+      grid-template-rows:repeat(3,clamp(114px,17.8dvh,128px))!important;
+    }
+  }
+
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -3579,9 +3593,9 @@ async function mobileRefreshHome(){
   }else setCard('mQuickModuleMeta','STATUS UNAVAILABLE','neutral');
 
   // Do not show legacy proposal/draft workflow counts as operational Price/Ordering KPIs.
-  setCard('mPriceModuleMeta','LOADING QUALIFIED REVIEW…','neutral');
-  setCard('mOrderingModuleMeta','LOADING FAMILY REVIEW…','neutral');
-  setCard('mPerformanceModuleMeta','LOADING LATEST DAY…','neutral');
+  setCard('mPriceModuleMeta','OPEN QUALIFIED REVIEW','neutral');
+  setCard('mOrderingModuleMeta','OPEN FAMILY REVIEW','neutral');
+  setCard('mPerformanceModuleMeta','LATEST COMPLETED DAY','neutral');
 
   const inv=dash?.inventory_attention||null,dumping=dash?.dumping||{};
   if(inv){
@@ -3602,57 +3616,51 @@ async function mobileRefreshHome(){
   const updated=mNode('mHomeUpdated');
   if(updated)updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
 
-  // Operational KPI layer: use the same live review engines as the actual pages.
-  const ops=await Promise.allSettled([
-    api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}),
-    api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
-    api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000}),
-    api('/v1/app/v2/performance/latest-date',{timeoutMs:12000})
-  ]);
-  const op=i=>ops[i]?.status==='fulfilled'?ops[i].value:null;
-  const pricing=op(0),fresh=op(1),frozen=op(2),latestPerf=op(3);
-
-  if(pricing){
-    const blocked=String(pricing.data_health?.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA';
-    if(blocked){
+  // One cached endpoint serves the three expensive Home KPIs.
+  // The server prewarms it at startup and refreshes the operational math at most
+  // once per cache TTL, so mobile Home no longer fans out to four heavyweight
+  // Pricing / Ordering / Performance requests.
+  try{
+    const home=await api('/v1/backoffice/home-summary',{timeoutMs:15000});
+    const pricing=home?.pricing||{};
+    if(String(pricing.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA'){
       setCard('mPriceModuleMeta','CURRENT DATA REQUIRED','bad');
     }else{
-      const rows=pricing.rows||[];
-      const urgent=rows.filter(x=>Boolean(x.priority_240_249_mismatch)).length;
-      const text=urgent?urgent+' URGENT · '+rows.length+' REVIEW':rows.length+' QUALIFIED REVIEW';
-      setCard('mPriceModuleMeta',text,urgent?'bad':(rows.length?'warn':'good'));
-    }
-  }else setCard('mPriceModuleMeta','REVIEW STATUS UNAVAILABLE','neutral');
-
-  if(fresh||frozen){
-    const reports=[fresh,frozen].filter(Boolean);
-    const blocked=reports.some(x=>String(x.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA');
-    if(blocked){
-      setCard('mOrderingModuleMeta','CURRENT DATA REQUIRED','bad');
-    }else{
-      const rows=[...(fresh?.rows||[]),...(frozen?.rows||[])];
-      const attention=rows.filter(x=>Boolean(x.attention)).length;
-      setCard('mOrderingModuleMeta',rows.length+' FAMILIES · '+attention+' ATTENTION',attention?'warn':'good');
-    }
-  }else setCard('mOrderingModuleMeta','ORDER STATUS UNAVAILABLE','neutral');
-
-  const perfDate=latestPerf?.latest_completed_supported_sales_date||null;
-  if(perfDate){
-    try{
-      const perf=await api(
-        '/v1/app/v2/performance/range?start_date='+encodeURIComponent(perfDate)+'&end_date='+encodeURIComponent(perfDate)+'&limit=20',
-        {timeoutMs:20000}
+      const urgent=Number(pricing.urgent_240_249_count||0);
+      const qualified=Number(pricing.qualified_count||0);
+      setCard(
+        'mPriceModuleMeta',
+        urgent?urgent+' URGENT · '+qualified+' QUALIFIED':qualified+' QUALIFIED REVIEW',
+        urgent?'bad':(qualified?'warn':'good')
       );
-      const s=perf.summary||{};
-      const gp=s.gp_dollars_complete===false?'GP$ PARTIAL':compactMoney(s.gp_dollars)+' GP$';
-      setCard('mPerformanceModuleMeta',shortDate(perfDate)+' · '+compactMoney(s.sales_dollars)+' SALES · '+gp,s.gp_dollars_complete===false?'warn':'good');
-    }catch(_){
-      setCard('mPerformanceModuleMeta','LATEST '+shortDate(perfDate)+' · GP$ UNAVAILABLE','neutral');
     }
-  }else if(dh){
-    const complete=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
-    setCard('mPerformanceModuleMeta',complete+'/14 COMPLETE DATA DAYS',complete>=13?'good':(complete?'warn':'bad'));
-  }else setCard('mPerformanceModuleMeta','PERFORMANCE STATUS UNAVAILABLE','neutral');
+
+    const ordering=home?.ordering||{};
+    if(String(ordering.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA'){
+      setCard('mOrderingModuleMeta','CURRENT DATA REQUIRED','bad');
+    }else if(ordering.status){
+      const families=Number(ordering.family_count||0);
+      const attention=Number(ordering.attention_count||0);
+      setCard(
+        'mOrderingModuleMeta',
+        families+' FAMILIES · '+attention+' ATTENTION',
+        attention?'warn':'good'
+      );
+    }
+
+    const perf=home?.performance||{};
+    if(perf.report_date){
+      const gp=perf.gp_dollars_complete===false?'GP$ PARTIAL':compactMoney(perf.gp_dollars)+' GP$';
+      setCard(
+        'mPerformanceModuleMeta',
+        shortDate(perf.report_date)+' · '+compactMoney(perf.sales_dollars)+' SALES · '+gp,
+        perf.gp_dollars_complete===false?'warn':'good'
+      );
+    }
+  }catch(_){
+    // Keep the neutral fallback labels already painted above; Home navigation
+    // remains fully usable even if the summary refresh is temporarily unavailable.
+  }
 
   if(updated)updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
 }

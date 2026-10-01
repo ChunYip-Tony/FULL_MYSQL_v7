@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, hashlib, hmac, json, os, time
+import base64, hashlib, hmac, json, os, threading, time
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from decimal import Decimal
@@ -34,6 +34,8 @@ from backoffice_runtime import (
     pricing_review as backoffice_pricing_review,
     sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
+    backoffice_home_summary,
+    warm_backoffice_home_summary,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -44,6 +46,14 @@ from qa_resolution import (
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, performance_range as v2_performance_range, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
 from version import VERSION
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
+
+@app.on_event("startup")
+def _warm_mobile_home_summary_cache():
+    threading.Thread(
+        target=warm_backoffice_home_summary,
+        name="home-summary-warmup",
+        daemon=True,
+    ).start()
 
 def j(v):
     if isinstance(v,(date,datetime)): return v.isoformat()
@@ -3456,6 +3466,15 @@ class BackofficePriceAcceptRequest(BaseModel):
     current_price_source: str
     current_price_asof_date: date
     candidate_price: Decimal
+
+
+@app.get('/v1/backoffice/home-summary')
+def backoffice_home_summary_endpoint():
+    try:
+        result=backoffice_home_summary()
+    except Exception as exc:
+        raise HTTPException(500,f'Backoffice Home summary failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/backoffice/qa-review')

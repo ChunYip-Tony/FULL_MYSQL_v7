@@ -1,3 +1,14 @@
+v7.0.318 Fast Mobile Home Summary:
+- Replaces the mobile Home fan-out to full Pricing Review, two full Ordering Reviews, and Performance Range with one cached /v1/backoffice/home-summary endpoint.
+- Prewarms the Home summary after API startup and caches operational summary math for 120 seconds so normal Home loads do not repeat heavyweight review calculations.
+- Price Change Home KPI uses the same 14 completed-day max-GP$/day candidate rules, live current-price authority, 240=249 urgent rule, $0.25 suppression, READY gate, SALE-day exclusion, and accepted-suggestion suppression.
+- Ordering Home KPI uses the actual Fresh + Frozen bulk family ordering suggestion engines but skips receipt/detail enrichment; Home shows eligible Family count and Attention count.
+- Performance Home KPI uses the latest completed supported POS day, canonical Seafood Sales$, and historical applicable cost for GP$; incomplete GP cost lineage is explicitly marked partial.
+- Home no longer leaves Price / Performance / Ordering stuck on LOADING labels; neutral usable fallbacks remain if summary refresh is temporarily unavailable.
+- Rebalances the compact 2x3 card grid about 10-15% taller than v7.0.317 to reduce excessive lower-screen whitespace while keeping cards materially smaller than v7.0.316.
+- Desktop Backoffice, full Pricing Review, full Ordering Review, Performance pages, ingestion rules, and business logic remain unchanged.
+Version: 7.0.318 Single-Service Edition
+
 v7.0.318 Source-backed UOM / Cost-Conversion Repair:
 - Allows a current shortened POS UPC to reuse deterministic full-barcode evidence when the longer UPC is current-inactive and confirmed to the same Family; current-active collisions and different/unresolved Family collisions remain blocked.
 - Extends Monthly PI Frozen evidence indexing to exact UPC + pack + Base UOM, not only Article-level Base UOM.
