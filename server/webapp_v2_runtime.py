@@ -2229,6 +2229,55 @@ def _strict_next_weekday(anchor: date, weekday: int) -> date:
     return anchor+timedelta(days=delta)
 
 
+def _ordering_family_movement_7d(
+    rows: list[dict[str,Any]],
+    movement_day_count: int,
+) -> dict[str,Any]:
+    """Family-level Ordering demand from canonical 251 minus 252 movement.
+
+    Ordering is a Family/Receiving-Article decision. UPC POS remains UPC-level
+    activity/price evidence and must not force a Family UOM hold when the
+    canonical Family movement already provides demand in the Family base UOM.
+    """
+    qty_values={
+        Decimal(str(x.get("family_movement_7d")))
+        for x in rows
+        if x.get("family_movement_7d") is not None
+    }
+    uoms={
+        str(x.get("family_movement_uom") or "").strip().upper()
+        for x in rows
+        if str(x.get("family_movement_uom") or "").strip()
+    }
+    if len(qty_values)>1 or len(uoms)>1:
+        return {
+            "status":"BLOCKED_FAMILY_MOVEMENT_INCONSISTENT",
+            "quantity":None,
+            "uom":None,
+            "velocity_per_supported_day":None,
+            "supported_day_count":int(movement_day_count or 0),
+        }
+    qty=next(iter(qty_values)) if qty_values else None
+    uom=next(iter(uoms)) if uoms else None
+    if qty is None or not uom:
+        return {
+            "status":"UNAVAILABLE",
+            "quantity":qty,
+            "uom":uom,
+            "velocity_per_supported_day":None,
+            "supported_day_count":int(movement_day_count or 0),
+        }
+    n=max(0,int(movement_day_count or 0))
+    return {
+        "status":"READY",
+        "quantity":qty,
+        "uom":uom,
+        "velocity_per_supported_day":(qty/Decimal(n) if n else None),
+        "supported_day_count":n,
+        "basis":"FAMILY_251_MINUS_252_CANONICAL_COMPLETED_MVT_DAYS",
+    }
+
+
 def _family_sales_series(
     cur,
     upc_rows: list[dict[str,Any]],
@@ -3671,6 +3720,12 @@ def bulk_ordering_suggestions(
         # prevents the Ordering overview from re-reading the same POS coverage
         # and UPC history three times per family (28D, 7D, regular baseline).
         shared_sales_days_28=_canonical_sales_days(cur,limit=28)
+        shared_movement_days_7=source_data_days(
+            cur,
+            "movement",
+            limit=7,
+            up_to=completed_through_date(),
+        )
 
         # Resolve every selected promotion item to one canonical UPC.
         promo_by_family: dict[int,list[dict[str,Any]]] = {}
@@ -3762,7 +3817,33 @@ def bulk_ordering_suggestions(
 
             m28=_family_sales_series(cur,rows,28,data_days=shared_sales_days_28)
             m7=_family_sales_tail(m28,7)
-            if m28.get("status")!="READY" or m7.get("status")!="READY":
+            family_mvt7=_ordering_family_movement_7d(
+                rows,
+                len(shared_movement_days_7),
+            )
+
+            # POS determines whether the Family is active. Replenishment
+            # quantity/UOM uses Family 251-252 first.
+            if m28.get("status")=="READY":
+                active_28=_d(m28.get("sold_quantity"))>0
+                qty_28_display=m28.get("sold_quantity")
+            else:
+                active_28=any(_d(x.get("pos_qty_30d"))>0 for x in rows)
+                qty_28_display=None
+
+            if family_mvt7.get("status")=="READY":
+                demand_source="FAMILY_251_252"
+                demand_uom=str(family_mvt7.get("uom") or "").upper()
+                qty_7_display=family_mvt7.get("quantity")
+                vel7=family_mvt7.get("velocity_per_supported_day")
+                supported_7=family_mvt7.get("supported_day_count")
+            elif m7.get("status")=="READY":
+                demand_source="UPC_POS_FALLBACK"
+                demand_uom=str(m7.get("uom") or "").upper()
+                qty_7_display=m7.get("sold_quantity")
+                vel7=m7.get("velocity_per_supported_day")
+                supported_7=m7.get("supported_day_count")
+            else:
                 skipped.append({
                     "family_id":fid,
                     "family_article_number":fam.get("main_article_number"),
@@ -3771,8 +3852,6 @@ def bulk_ordering_suggestions(
                 })
                 continue
 
-            active_28=_d(m28.get("sold_quantity"))>0
-            vel7=m7.get("velocity_per_supported_day")
             family_oh=_family_effective_oh_for_ordering(
                 cur,
                 rows,
@@ -3788,7 +3867,6 @@ def bulk_ordering_suggestions(
                 continue
 
             oh_uom=str(family_oh.get("uom") or "").upper()
-            demand_uom=str(m7.get("uom") or "").upper()
             if not oh_uom or oh_uom!=demand_uom:
                 skipped.append({
                     "family_id":fid,
@@ -3808,8 +3886,8 @@ def bulk_ordering_suggestions(
                     "family_article_number":fam.get("main_article_number"),
                     "family_article_name":fam.get("family_description"),
                     "reason":"NO_28D_SALES",
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
+                    "qty_7d":qty_7_display,
+                    "qty_28d":qty_28_display,
                     "velocity_7d":vel7,
                     "oh":ordering_oh,
                     "oh_uom":demand_uom,
@@ -3822,8 +3900,8 @@ def bulk_ordering_suggestions(
                     "family_article_number":fam.get("main_article_number"),
                     "family_article_name":fam.get("family_description"),
                     "reason":"NO_7D_VELOCITY",
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
+                    "qty_7d":qty_7_display,
+                    "qty_28d":qty_28_display,
                     "velocity_7d":vel7,
                     "oh":ordering_oh,
                     "oh_uom":demand_uom,
@@ -3833,7 +3911,18 @@ def bulk_ordering_suggestions(
             if dos is not None and dos>=Decimal("7") and not include_sufficient_stock:
                 continue
 
-            regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
+            if demand_source=="FAMILY_251_252":
+                regular={
+                    "status":"READY_FAMILY_MOVEMENT_BASELINE",
+                    "uom":demand_uom,
+                    "regular_supported_day_count":supported_7,
+                    "regular_sold_quantity":qty_7_display,
+                    "regular_velocity_per_supported_day":vel7,
+                    "basis":"FAMILY_251_MINUS_252_7D_CURRENT_VELOCITY",
+                    "sale_days_excluded":None,
+                }
+            else:
+                regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
             reg_vel=regular.get("regular_velocity_per_supported_day")
             if reg_vel is None:
                 skipped.append({
@@ -3901,15 +3990,19 @@ def bulk_ordering_suggestions(
                 "ordering_oh_used":ordering_oh,
                 "negative_oh_treated_as_zero":raw_oh<0,
                 "uom":demand_uom,
-                "qty_7d":m7.get("sold_quantity"),
-                "supported_days_7d":m7.get("supported_day_count"),
-                "qty_28d":m28.get("sold_quantity"),
+                "qty_7d":qty_7_display,
+                "supported_days_7d":supported_7,
+                "qty_28d":qty_28_display,
                 "supported_days_28d":m28.get("supported_day_count"),
                 "velocity_7d":vel7,
                 "dos":dos,
+                "family_movement_7d":family_mvt7.get("quantity"),
+                "family_movement_uom":family_mvt7.get("uom"),
+                "demand_source":demand_source,
                 "delivery_roster_demand_basis":(
-                    "28D_REGULAR_BASELINE_FALLBACK"
-                    if dos is None else "7D_VELOCITY_PLUS_28D_REGULAR_BASELINE"
+                    "FAMILY_251_MINUS_252_7D"
+                    if demand_source=="FAMILY_251_252"
+                    else "UPC_POS_7D_FALLBACK"
                 ),
                 "oh_best_available":bool(family_oh.get("best_available")),
                 "oh_source":family_oh.get("source"),
@@ -3949,7 +4042,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V3_BEST_AVAILABLE_ROSTER",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V4_FAMILY_MVT_DEMAND",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -3982,6 +4075,8 @@ def bulk_ordering_suggestions(
         "skipped":skipped,
         "rules":{
             "sales_history":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
+            "ordering_demand_authority":"FAMILY_251_MINUS_252_FIRST;UPC_POS_ONLY_FALLBACK_WHEN_FAMILY_MVT_UOM_UNAVAILABLE",
+            "upc_pos_role":"ACTIVE_FAMILY_AND_PRICE_TYPE_EVIDENCE;NOT_FAMILY_ORDER_QTY_AUTHORITY",
             "missing_source_dates_count_as_zero":False,
             "promotion_definition":"PRICE_TYPE_SALE_ONLY",
             "promotion_item_identity":"UPC",
