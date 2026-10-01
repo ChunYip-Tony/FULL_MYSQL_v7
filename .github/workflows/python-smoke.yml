@@ -27,6 +27,27 @@ jobs:
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
         run: python -c "import api, v7_ingest; assert api.VERSION == v7_ingest.API_VERSION, (api.VERSION, v7_ingest.API_VERSION); print(api.VERSION)"
+      - name: Validate 3 PM MVT grace policy
+        run: |
+          python - <<'PY'
+          from datetime import datetime, date
+          from zoneinfo import ZoneInfo
+          import business_clock as b
+          import inventory_position as inv
+
+          tz=ZoneInfo('America/Los_Angeles')
+          assert b.MVT_DAILY_GRACE_HOUR==15
+          assert b.movement_expected_through_date(datetime(2026,10,1,0,1,tzinfo=tz))==date(2026,9,29)
+          assert b.movement_expected_through_date(datetime(2026,10,1,14,59,59,tzinfo=tz))==date(2026,9,29)
+          assert b.movement_expected_through_date(datetime(2026,10,1,15,0,0,tzinfo=tz))==date(2026,9,30)
+          assert b.movement_expected_through_date(datetime(2026,10,1,23,59,tzinfo=tz))==date(2026,9,30)
+
+          src=open('inventory_position.py',encoding='utf-8').read()
+          assert 'movement_expected_through_date()' in src
+          assert 'expected_through = completed_through_date()' not in src
+          print('mvt-3pm-grace=PASS')
+          PY
+
       - name: Verify daily MVT close-file contract
         run: |
           python - <<'PY'

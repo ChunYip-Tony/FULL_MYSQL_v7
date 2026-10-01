@@ -1,3 +1,11 @@
+v7.0.313 MVT 3 PM Grace Period:
+- MVT/OH roll-forward no longer requires yesterday's MVT immediately after midnight.
+- In the business timezone (America/Los_Angeles by default), yesterday remains PENDING until 3:00 PM local.
+- Before 3:00 PM, MVT coverage is required only through the day before yesterday; at/after 3:00 PM, yesterday becomes required.
+- The grace applies only to MVT/OH coverage. POS completed-day metrics keep their existing completed-through-yesterday rule.
+- Grace hour is configurable with FULLMYSQL_MVT_DAILY_GRACE_HOUR and defaults to 15.
+Version: 7.0.313 Single-Service Edition
+
 v7.0.311 Batch 22 Active UPC Identity Repair:
 - Adds user-approved identity-only Family mappings for 24912400000 -> 3400124, 4029551013 -> 3405995, 4029551952 -> 3480504, and 6501700000 -> 1366620.
 - Fixes active identity repair so a full retail-barcode/check-digit alias can supply evidence while the actual shortened POS UPC receives the confirmed Family link.

@@ -6,6 +6,11 @@ from zoneinfo import ZoneInfo
 
 BUSINESS_TIMEZONE=os.environ.get('FULLMYSQL_BUSINESS_TIMEZONE','America/Los_Angeles')
 
+try:
+    MVT_DAILY_GRACE_HOUR=max(0,min(23,int(os.environ.get('FULLMYSQL_MVT_DAILY_GRACE_HOUR','15'))))
+except (TypeError,ValueError):
+    MVT_DAILY_GRACE_HOUR=15
+
 
 def business_now() -> datetime:
     return datetime.now(ZoneInfo(BUSINESS_TIMEZONE))
@@ -17,3 +22,23 @@ def business_today() -> date:
 
 def completed_through_date() -> date:
     return business_today() - timedelta(days=1)
+
+
+def movement_expected_through_date(now: datetime | None = None) -> date:
+    """Latest MVT business date that is operationally due.
+
+    Yesterday's MVT is not required until the local business-day grace cutoff.
+    With the default 15:00 cutoff, 00:00-14:59 treats yesterday as PENDING and
+    requires coverage only through the day before yesterday. At 15:00 or later,
+    yesterday becomes required. This affects MVT/OH roll-forward coverage only;
+    POS completed-day semantics remain unchanged.
+    """
+    current=now or business_now()
+    cutoff=current.replace(
+        hour=MVT_DAILY_GRACE_HOUR,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+    lag_days=1 if current>=cutoff else 2
+    return current.date()-timedelta(days=lag_days)

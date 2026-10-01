@@ -1,0 +1,128 @@
+name: One-time Batch 22 v7.0.313 MVT grace rebuild
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    if: github.event.head_commit.message == 'Trigger Batch 22 v7.0.313 3PM MVT grace rebuild'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for v7.0.313 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          consecutive=0
+          for i in $(seq 1 240); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            ok="$(BODY="$body" python - <<'PY'
+          import json,os
+          try: p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception: p={}
+          good=(p.get('ok') is True
+                and p.get('version')=='7.0.313-single-service'
+                and p.get('worker_version')=='7.0.313-single-service'
+                and p.get('worker_healthy') is True
+                and p.get('worker_ready') is True)
+          print('1' if good else '0')
+          PY
+          )"
+            if [ "$ok" = 1 ]; then
+              consecutive=$((consecutive+1))
+              [ "$consecutive" -ge 3 ] && exit 0
+            else
+              consecutive=0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Wait for pipeline idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+            cat /tmp/active.json; echo
+            active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json',encoding='utf-8'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+            [ "$active" = 0 ] && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Request Batch 22 Phase 3 rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/22/rebuild-phase3")"
+          cat /tmp/rebuild.json; echo
+          test "$code" = 200
+          read -r ok run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json',encoding='utf-8'))
+          ok=(p.get('code_version')=='7.0.313-single-service' and p.get('version_fence_pass') is True)
+          print('1' if ok else '0',p.get('pipeline_run_id') or '',p.get('session_id') or '')
+          PY
+          )
+          test "$ok" = 1
+          echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+      - name: Wait for Batch 22 terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          final=""
+          for i in $(seq 1 360); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$SESSION_ID" -o /tmp/session.json
+            final="$(RUN_ID="$RUN_ID" python - <<'PY'
+          import json,os
+          p=json.load(open('/tmp/session.json',encoding='utf-8'))
+          rid=int(os.environ['RUN_ID'])
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid),None)
+          print(str((run or {}).get('processing_status') or 'MISSING'))
+          PY
+          )"
+            echo "run=$RUN_ID status=$final"
+            case "$final" in COMPLETED|QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED) break ;; esac
+            sleep 5
+          done
+          case "$final" in COMPLETED|QA_HOLD) ;; *) exit 1 ;; esac
+
+      - name: Verify grace effect
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/web-upload/batches/22/qa-summary" -o /tmp/after.json
+          cat /tmp/after.json; echo
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/after.json',encoding='utf-8'))
+          phase=p.get('phase3') or {}
+          qc=p.get('quick_check') or {}
+          reasons=qc.get('reason_counts') or {}
+          gap=int(reasons.get('OH_MOVEMENT_ROLLFORWARD_BLOCKED') or 0)
+          assert int(phase.get('blocking_issue_count') or 0)==0, phase
+          assert str(phase.get('result_status') or '') in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}, phase
+          assert gap < 384, f'3PM grace did not reduce OH movement coverage holds: {gap}'
+          print('BATCH22_3PM_MVT_GRACE=PASS remaining_oh_gap_holds=',gap)
+          PY

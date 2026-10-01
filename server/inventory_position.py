@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 from data_coverage import source_data_days
-from business_clock import completed_through_date
+from business_clock import movement_expected_through_date
 from manual_overrides import confirmed_operational_uom_basis
 
 
@@ -65,12 +65,13 @@ def _movement_coverage_after_anchor(
 ) -> dict[str, Any]:
     """Return fail-closed completed-day MVT coverage after an inventory anchor.
 
-    Current inventory may use only completed business days. Today is intentionally
-    excluded because a same-day MVT export is provisional by policy. Every calendar
-    business date from anchor+1 through yesterday must have one canonical COMPLETE
-    movement snapshot; otherwise the roll-forward is not analysis-usable.
+    Current inventory may use only operationally due completed MVT days. Today is
+    intentionally excluded because same-day MVT is provisional. Yesterday remains
+    PENDING until the configured local grace cutoff (default 15:00); before that
+    cutoff coverage is required only through the day before yesterday. After the
+    cutoff, yesterday must have one canonical COMPLETE movement snapshot.
     """
-    expected_through = completed_through_date()
+    expected_through = movement_expected_through_date()
     if anchor_day >= expected_through:
         return {
             "expected_through_date": expected_through,
