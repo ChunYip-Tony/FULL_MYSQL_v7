@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+import json
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from difflib import SequenceMatcher
@@ -31,6 +32,44 @@ def _d(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
     return Decimal(str(value))
+
+
+def _gr_5014_id(v: Any) -> str | None:
+    if v is None:
+        return None
+    s=str(v).strip().replace(",","")
+    if s.endswith(".0") and s[:-2].isdigit():
+        s=s[:-2]
+    return s if s.isdigit() and s.startswith("5014") else None
+
+
+def _receipt_gr_from_row(row: dict[str,Any]) -> tuple[str|None,str|None]:
+    """Resolve GR from normalized document first, then any raw MVT cell.
+
+    Only 5014... values qualify as GR numbers for this store.
+    """
+    doc=_gr_5014_id(row.get("normalized_article_document"))
+    if doc:
+        return doc,"NORMALIZED_5014_DOCUMENT"
+    payload=row.get("raw_payload")
+    if isinstance(payload,(bytes,bytearray)):
+        payload=payload.decode("utf-8",errors="replace")
+    if isinstance(payload,str):
+        try:
+            payload=json.loads(payload)
+        except Exception:
+            payload={}
+    if isinstance(payload,dict):
+        # Reference Q is checked first because many SAP MVT exports place the
+        # material document there; then scan remaining cells for a valid 5014.
+        q=_gr_5014_id(payload.get("Q"))
+        if q:
+            return q,"RAW_REFERENCE_Q_5014"
+        for value in payload.values():
+            candidate=_gr_5014_id(value)
+            if candidate:
+                return candidate,"RAW_ROW_5014_SCAN"
+    return None,None
 
 
 def _overlay_live_current_price(cur, row: dict[str,Any]) -> dict[str,Any]:
@@ -1116,10 +1155,7 @@ def _family_receipt_events(
                    m.movement_type,m.posting_date,m.entry_quantity,m.entry_uom_code,
                    m.base_quantity,m.base_uom_code,m.amount_local_currency,
                    m.article_document AS normalized_article_document,
-                   COALESCE(
-                     NULLIF(TRIM(m.article_document),''),
-                     NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.Q')),'')
-                   ) AS article_document,
+                   r.raw_payload,
                    m.purchase_order,m.vendor_code
             FROM movement_history m
             LEFT JOIN raw_movement r ON r.raw_id=m.raw_id
@@ -1133,11 +1169,15 @@ def _family_receipt_events(
         r for r in cur.fetchall()
         if r.get("posting_date") in canonical and canonical[r["posting_date"]]==int(r["file_id"])
     ]
+    for r in rows:
+        gr,gr_source=_receipt_gr_from_row(r)
+        r["gr_number"]=gr
+        r["gr_number_source"]=gr_source
     groups: dict[tuple[Any,...],list[dict[str,Any]]] = {}
     for r in rows:
         key=(
             r.get("posting_date"),r.get("article_id"),r.get("article_number"),
-            r.get("purchase_order"),r.get("article_document"),
+            r.get("purchase_order"),r.get("gr_number"),
         )
         groups.setdefault(key,[]).append(r)
 
@@ -1176,12 +1216,9 @@ def _family_receipt_events(
             "article_id":key[1],
             "article_number":key[2],
             "purchase_order":key[3],
-            "article_document":key[4],
-            "article_document_source":(
-                "NORMALIZED_ARTICLE_DOCUMENT"
-                if any(str(x.get("normalized_article_document") or "").strip() for x in chosen)
-                else ("RAW_REFERENCE_Q_FALLBACK" if key[4] else None)
-            ),
+            "article_document":next((x.get("normalized_article_document") for x in chosen if x.get("normalized_article_document")),None),
+            "gr_number":key[4],
+            "gr_number_source":next((x.get("gr_number_source") for x in chosen if x.get("gr_number_source")),None),
             "vendor_code":next((x.get("vendor_code") for x in chosen if x.get("vendor_code")),None),
             "receipt_quantity":qty,
             "receipt_uom":uom,
@@ -1232,10 +1269,7 @@ def _family_receipt_events_bulk(
                    m.movement_type,m.posting_date,m.entry_quantity,m.entry_uom_code,
                    m.base_quantity,m.base_uom_code,m.amount_local_currency,
                    m.article_document AS normalized_article_document,
-                   COALESCE(
-                     NULLIF(TRIM(m.article_document),''),
-                     NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.Q')),'')
-                   ) AS article_document,
+                   r.raw_payload,
                    m.purchase_order,m.vendor_code
             FROM movement_history m
             LEFT JOIN raw_movement r ON r.raw_id=m.raw_id
@@ -1250,12 +1284,16 @@ def _family_receipt_events_bulk(
         if r.get("posting_date") in canonical
         and canonical[r["posting_date"]]==int(r["file_id"])
     ]
+    for r in rows:
+        gr,gr_source=_receipt_gr_from_row(r)
+        r["gr_number"]=gr
+        r["gr_number_source"]=gr_source
     groups: dict[tuple[Any,...],list[dict[str,Any]]] = {}
     for r in rows:
         key=(
             int(r["family_id"]),
             r.get("posting_date"),r.get("article_id"),r.get("article_number"),
-            r.get("purchase_order"),r.get("article_document"),
+            r.get("purchase_order"),r.get("gr_number"),
         )
         groups.setdefault(key,[]).append(r)
 
@@ -1294,12 +1332,9 @@ def _family_receipt_events_bulk(
             "article_id":key[2],
             "article_number":key[3],
             "purchase_order":key[4],
-            "article_document":key[5],
-            "article_document_source":(
-                "NORMALIZED_ARTICLE_DOCUMENT"
-                if any(str(x.get("normalized_article_document") or "").strip() for x in chosen)
-                else ("RAW_REFERENCE_Q_FALLBACK" if key[5] else None)
-            ),
+            "article_document":next((x.get("normalized_article_document") for x in chosen if x.get("normalized_article_document")),None),
+            "gr_number":key[5],
+            "gr_number_source":next((x.get("gr_number_source") for x in chosen if x.get("gr_number_source")),None),
             "vendor_code":next((x.get("vendor_code") for x in chosen if x.get("vendor_code")),None),
             "receipt_quantity":qty,
             "receipt_uom":uom,
