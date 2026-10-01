@@ -1,3 +1,13 @@
+v7.0.320 Delivery-Date Ordering + Observed Receipt Confidence:
+- Mobile Ordering now uses a seven-day delivery-date selector instead of category-first navigation; next Tuesday remains the default selected day when it is inside the upcoming seven-day window.
+- Ordering Review accepts an explicit delivery_date and recalculates Fresh/Frozen family coverage against that same selected delivery date.
+- Delivery-day eligibility uses recent canonical positive 101/107/109 receipt dates from an 84-day (12-week) calendar window.
+- Each selected-day family now exposes observed weekday count / total receipt dates, confidence percentage, and confidence label.
+- A family is shown for a selected delivery day only when that weekday is part of its expected cadence or has at least two recent receipts and at least 25% of recent receipt dates.
+- Mobile list/detail surfaces show delivery date plus “Observed <weekday> x/y · confidence %”.
+- Existing family-level OH, completed-day velocity, negative-OH-as-zero, promotion, and coverage-to-next-delivery business rules remain unchanged.
+Version: 7.0.320 Single-Service Edition
+
 v7.0.319 Persistent Nonblocking Mobile Home Cache:
 - Fixes the v7.0.318 symptom where Price Change, Performance, and Ordering stayed on fallback labels because Home waited on a still-expensive summary build.
 - Home summary endpoint is now nonblocking: it returns the last successful snapshot immediately and refreshes operational calculations in a background thread.
