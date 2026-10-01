@@ -17,15 +17,18 @@ from data_coverage import source_data_days
 from coverage_backfill import canonical_pos_qty_by_upc
 from normalize import (
     RowContext,
-    _build_column_map,
+    _article_manual_column_map,
     _get,
     _json_obj,
+    _monthly_pi_column_map,
     _numeric_identifier,
     _numeric_key,
+    _norm_header,
+    _selling_factor_from_frozen_pack,
     _source_token,
 )
 
-VERSION = "7.0.182-active-28d-uom-repair"
+VERSION = "7.0.303-active-28d-uom-repair"
 
 # Latest user-confirmed FULL MYSQL Seafood Selling-UOM authority.
 # Applies only to CURRENT-ACTIVE Seafood UPCs. Historical rows remain untouched.
@@ -200,7 +203,10 @@ def _latest_article_manual_source(cur, preferred_batch_id: int | None = 7) -> tu
             h = cur.fetchone()
             if not h:
                 continue
-            colmap = _build_column_map(_json_obj(h["raw_payload"]))
+            colmap = _article_manual_column_map(
+                sh["sheet_name"],
+                _json_obj(h["raw_payload"]),
+            )
             if "pack" not in colmap:
                 continue
             if "article" not in colmap and "main_article" not in colmap:
@@ -238,6 +244,8 @@ def _latest_article_manual_source(cur, preferred_batch_id: int | None = 7) -> tu
                             "article": article,
                             "source_upc": source_upc,
                             "sheet_name": str(sh["sheet_name"]),
+                            "pack": pack,
+                            "selling_uom": _source_token(_get(payload, colmap, "selling_uom")),
                             "batch_id": int(f["batch_id"]),
                             "file_id": int(f["file_id"]),
                             "sheet_id": int(sh["sheet_id"]),
@@ -247,6 +255,214 @@ def _latest_article_manual_source(cur, preferred_batch_id: int | None = 7) -> tu
                         stats["upc_rows"] += 1
 
     return upc_rows, article_units, stats
+
+
+def _latest_monthly_pi_frozen_base_source(
+    cur,
+    preferred_batch_id: int | None = None,
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, Any]]:
+    """Return Article -> explicit Frozen-tab Base UOM observations.
+
+    Monthly PI authority confirmed by the user:
+      Frozen Column E = Base Unit.
+
+    Prefer the current ingest batch when it contains a non-duplicate Monthly PI
+    file; otherwise use the newest successfully ingested non-duplicate Monthly
+    PI batch. No UOM alias or conversion is invented here.
+    """
+    files: list[dict[str, Any]] = []
+    if preferred_batch_id is not None:
+        cur.execute(
+            """SELECT file_id,batch_id,original_filename
+               FROM ingest_file
+               WHERE batch_id=%s
+                 AND source_type='monthly_pi_form'
+                 AND processing_status='INGESTED'
+                 AND COALESCE(error_count,0)=0
+                 AND duplicate_of_file_id IS NULL
+               ORDER BY file_id DESC""",
+            (preferred_batch_id,),
+        )
+        files = cur.fetchall()
+
+    if not files:
+        cur.execute(
+            """SELECT file_id,batch_id,original_filename
+               FROM ingest_file
+               WHERE source_type='monthly_pi_form'
+                 AND processing_status='INGESTED'
+                 AND COALESCE(error_count,0)=0
+                 AND duplicate_of_file_id IS NULL
+               ORDER BY file_id DESC"""
+        )
+        all_files = cur.fetchall()
+        if all_files:
+            newest_batch = int(all_files[0]["batch_id"])
+            files = [x for x in all_files if int(x["batch_id"]) == newest_batch]
+
+    article_base_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    stats = {
+        "files": [x["original_filename"] for x in files],
+        "sheets_scanned": 0,
+        "rows_scanned": 0,
+        "explicit_base_rows": 0,
+    }
+
+    for f in files:
+        cur.execute(
+            """SELECT sheet_id,sheet_name,header_row_number,sheet_index
+               FROM ingest_sheet
+               WHERE file_id=%s
+               ORDER BY sheet_index""",
+            (f["file_id"],),
+        )
+        for sh in cur.fetchall():
+            tab = _norm_header(sh.get("sheet_name"))
+            if not (tab == "frozen" or tab.startswith("frozen ")):
+                continue
+            if not sh.get("header_row_number"):
+                continue
+
+            cur.execute(
+                """SELECT raw_payload
+                   FROM raw_monthly_pi_form
+                   WHERE sheet_id=%s AND source_row_number=%s
+                   LIMIT 1""",
+                (sh["sheet_id"], sh["header_row_number"]),
+            )
+            h = cur.fetchone()
+            if not h:
+                continue
+            colmap = _monthly_pi_column_map(
+                sh["sheet_name"],
+                _json_obj(h["raw_payload"]),
+            )
+            if "base_uom" not in colmap:
+                continue
+            if "article" not in colmap and "main_article" not in colmap:
+                continue
+
+            stats["sheets_scanned"] += 1
+            cur.execute(
+                """SELECT raw_id,source_row_number,raw_payload
+                   FROM raw_monthly_pi_form
+                   WHERE sheet_id=%s AND source_row_number>%s
+                   ORDER BY source_row_number""",
+                (sh["sheet_id"], sh["header_row_number"]),
+            )
+            for rr in cur.fetchall():
+                stats["rows_scanned"] += 1
+                payload = _json_obj(rr["raw_payload"])
+                article = (
+                    _numeric_identifier(_get(payload, colmap, "article"))
+                    or _numeric_identifier(_get(payload, colmap, "main_article"))
+                )
+                base_uom = _source_token(_get(payload, colmap, "base_uom"))
+                if not article or not base_uom:
+                    continue
+                article_base_rows[str(article)].append({
+                    "article": str(article),
+                    "base_uom": str(base_uom).upper().strip(),
+                    "sheet_name": str(sh["sheet_name"]),
+                    "batch_id": int(f["batch_id"]),
+                    "file_id": int(f["file_id"]),
+                    "sheet_id": int(sh["sheet_id"]),
+                    "raw_id": int(rr["raw_id"]),
+                    "source_row_number": int(rr["source_row_number"]),
+                })
+                stats["explicit_base_rows"] += 1
+
+    return article_base_rows, stats
+
+
+def _safe_frozen_pack_cross_source_mapping(
+    cur,
+    target: dict[str, Any],
+    upc_rows: dict[str, list[dict[str, Any]]],
+    monthly_pi_base_rows: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    """Resolve Selling UOM + Base UOM + factor from two explicit sources.
+
+    Article Manual Frozen Pack:
+      D = UPC, E = pack size, G = Selling Unit.
+    Monthly PI Frozen:
+      E = Base Unit.
+
+    Pack text is used for a conversion only when Monthly PI explicitly confirms
+    the same printed base UOM. Conflicts or ambiguity remain unresolved.
+    """
+    key = _numeric_key(str(target.get("ean_upc") or ""))
+    if not key:
+        return None
+
+    candidates: list[dict[str, Any]] = []
+    for row in upc_rows.get(key, []):
+        if _norm_header(row.get("sheet_name")) != "frozen pack":
+            continue
+        article = str(row.get("article") or "")
+        if not article or not _article_is_in_family(cur, article, int(target["family_id"])):
+            continue
+        selling = (_source_token(row.get("selling_uom")) or "").upper().strip()
+        if not selling:
+            continue
+
+        base_rows = monthly_pi_base_rows.get(article, [])
+        if not base_rows and article != str(target.get("main_article_number") or ""):
+            base_rows = monthly_pi_base_rows.get(str(target.get("main_article_number") or ""), [])
+        base_units = {
+            str(x.get("base_uom") or "").upper().strip()
+            for x in base_rows
+            if str(x.get("base_uom") or "").strip()
+        }
+        if len(base_units) != 1:
+            continue
+        base = next(iter(base_units))
+
+        sell_uom_row = _uom_by_code(cur, selling)
+        base_uom_row = _uom_by_code(cur, base)
+        if not sell_uom_row or not base_uom_row:
+            continue
+
+        if selling == base:
+            factor = Decimal("1")
+            conversion_basis = "SELLING_EQUALS_MONTHLY_PI_BASE"
+            pack_detail = None
+        else:
+            pack_detail = _selling_factor_from_frozen_pack(selling, row.get("pack"))
+            if not pack_detail:
+                continue
+            parsed_base = str(pack_detail.get("base_uom") or "").upper().strip()
+            if parsed_base != base:
+                continue
+            factor = Decimal(str(pack_detail["base_qty_per_selling_unit"]))
+            conversion_basis = str(pack_detail["conversion_basis"])
+
+        candidates.append({
+            "selling_uom": str(sell_uom_row["uom_code"]),
+            "selling_uom_id": int(sell_uom_row["uom_id"]),
+            "base_uom": str(base_uom_row["uom_code"]),
+            "base_uom_id": int(base_uom_row["uom_id"]),
+            "factor": factor,
+            "conversion_basis": conversion_basis,
+            "article_manual_row": row,
+            "monthly_pi_rows": base_rows,
+            "pack_detail": pack_detail,
+        })
+
+    signatures = {
+        (
+            x["selling_uom"].upper(),
+            x["base_uom"].upper(),
+            str(x["factor"]),
+        )
+        for x in candidates
+    }
+    if len(signatures) != 1 or not candidates:
+        return None
+
+    chosen = candidates[0]
+    chosen["rule"] = "ARTICLE_MANUAL_FROZEN_PACK_PLUS_MONTHLY_PI_BASE_V7303"
+    return chosen
 
 
 def _article_is_in_family(cur, article_number: str, family_id: int) -> bool:
