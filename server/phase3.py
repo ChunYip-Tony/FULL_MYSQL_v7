@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -2839,7 +2840,7 @@ def _days_of_supply(
         return (iq / factor) / velocity7
     return None
 
-def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
+def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
     calendar_today = business_today()
     completed_through = completed_through_date()
 
@@ -2876,7 +2877,42 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
     )
     products = cur.fetchall()
     active_rows = active_ready = active_hold = historical_rows = 0
-    for p in products:
+    total_rows = len(products)
+    progress_started = time.monotonic()
+
+    def report_row_progress(current: int, p: dict[str, Any] | None = None, *, force: bool = False):
+        if not progress:
+            return
+        # Keep progress writes cheap: exact row count, emitted every 25 rows,
+        # plus start/final events. The worker stores this in pipeline_run detail.
+        if not force and current % 25 != 0:
+            return
+        elapsed = max(0.001, time.monotonic() - progress_started)
+        speed = (Decimal(current) / Decimal(str(elapsed))) if current > 0 else Decimal('0')
+        remaining = max(0, total_rows - current)
+        eta = (Decimal(remaining) / speed) if speed > 0 else None
+        pct = (Decimal(current) * Decimal('100') / Decimal(total_rows)) if total_rows else Decimal('100')
+        progress(
+            'PHASE3_QUICK_CHECK_REBUILD',
+            {
+                'progress_kind': 'ROW_COUNT',
+                'progress_unit': 'UPC',
+                'progress_current': current,
+                'progress_total': total_rows,
+                'progress_pct': float(pct.quantize(Decimal('0.1'))),
+                'progress_ready': active_ready,
+                'progress_hold': active_hold,
+                'progress_historical': historical_rows,
+                'progress_elapsed_seconds': int(elapsed),
+                'progress_rows_per_second': float(speed.quantize(Decimal('0.01'))) if speed > 0 else 0.0,
+                'progress_eta_seconds': int(eta) if eta is not None else None,
+                'progress_current_upc': str((p or {}).get('ean_upc') or '') or None,
+                'progress_current_name': str((p or {}).get('selling_description') or '') or None,
+            },
+        )
+
+    report_row_progress(0, force=True)
+    for row_no, p in enumerate(products, 1):
         upc_id = int(p['upc_id']); family_id = int(p['family_id'])
         m7 = _sales_metrics(cur, upc_id, pos_days_7, p['ean_upc'])
         m28 = _sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])
@@ -3052,6 +3088,7 @@ def rebuild_quick_check(cur, batch_id: int) -> dict[str, Any]:
               ('NO_POS_SALES_LATEST_28_VALID_DATA_DAYS' if not active_current else None)),
              batch_id),
         )
+        report_row_progress(row_no, p, force=(row_no == total_rows))
 
     def _dates(xs: list[dict[str, Any]]) -> list[str]:
         return [x['date'].isoformat() for x in sorted(xs, key=lambda z: z['date'])]
@@ -3543,7 +3580,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             # previously published Quick Check remains intact.
             cur.execute('SAVEPOINT before_quick_check_publish')
             report('PHASE3_QUICK_CHECK_REBUILD')
-            qc_attempt = rebuild_quick_check(cur, batch_id)
+            qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress)
             report('PHASE3_ANALYSIS_LAYER_REFRESH')
             seafood_analysis_attempt = refresh_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
             seafood_analysis_audit = audit_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
