@@ -256,35 +256,156 @@ def _monthly_pi_column_map(
     sheet_name: str | None,
     header_payload: dict[str, Any],
 ) -> dict[str, str]:
-    """Apply the user-confirmed Monthly PI per-tab UOM schema.
+    """Apply the user-confirmed Monthly PI per-tab schema.
 
-    Frozen:
-      E = Base Unit.
+    Actual current workbook:
+      FROZEN:      D = Pack, E = Base Unit, G = Main Article, H = UPC/PLU.
+      FRESH&LIVE:  D = Packing Size, E = Order Unit, F = Main Article.
 
-    Fresh / Live:
-      D = Pack Size
-      E = Receiving Unit
-
-    Other identity/descriptive fields remain header-driven. These positional UOM
-    fields are authoritative for their tabs and must not be reclassified by a
-    misleading header label.
+    Important: on FRESH&LIVE the receiving container is not reliably Column E.
+    Rows such as 1361596 are D='60LB/CV', E='LB': the receiving unit is CV,
+    base unit is LB, and one CV contains 60 LB. Therefore receiving/base
+    conversion is parsed from D first; Column E is retained as ORDERING evidence
+    and is used only as a fallback container for count/inner-pack expressions.
     """
     result = _build_column_map(header_payload)
     tab = _norm_header(sheet_name)
 
     if tab == 'frozen' or tab.startswith('frozen '):
+        result['pack'] = 'D'
         result['base_uom'] = 'E'
-        # Column E is explicitly Base Unit on Frozen, not Receiving Unit.
+        result['main_article'] = 'G'
+        result['upc'] = 'H'
         if result.get('receiving_uom') == 'E':
             result.pop('receiving_uom', None)
-    elif tab == 'fresh' or tab.startswith('fresh ') or tab == 'live' or tab.startswith('live '):
+        if result.get('order_uom') == 'E':
+            result.pop('order_uom', None)
+
+    elif tab in {'fresh&live', 'fresh & live', 'fresh live'}:
         result['pack'] = 'D'
-        result['receiving_uom'] = 'E'
-        # Column E is explicitly Receiving Unit on Fresh/Live, not Base Unit.
+        result['order_uom'] = 'E'
+        result['main_article'] = 'F'
+        # Do not label E as Receiving. The receiving container is encoded in
+        # D when present (e.g. 60LB/CV, 40LB/BAG, 12EA/CV).
+        if result.get('receiving_uom') == 'E':
+            result.pop('receiving_uom', None)
         if result.get('base_uom') == 'E':
             result.pop('base_uom', None)
 
     return result
+
+
+def _monthly_pi_pack_structure(
+    value: Any,
+    order_uom: Any = None,
+) -> dict[str, Any] | None:
+    """Parse Monthly PI pack structure without converting between dimensions.
+
+    Supported exact structures from the uploaded form:
+      60LB/CV   -> 60 LB per CV
+      40 LB/BAG -> 40 LB per BAG
+      12 EA/CV  -> 12 EA per CV
+      25 PAC/CV -> 25 PAC per CV
+      5/2LB     -> with E=CV, 10 LB per CV
+      24/6OZ    -> with E=CV, 144 OZ per CV
+      LB        -> LB base / LB order, factor 1
+      10LB      -> if E=LB, package descriptor only; factor stays 1 LB per LB
+
+    No OZ<->LB, G<->LB, PAC<->EA, or similar conversion is inferred.
+    """
+    raw = _source_token(value)
+    if not raw:
+        return None
+    token = re.sub(r'\s+', '', str(raw).upper()).replace('LBS', 'LB')
+    order = (_source_token(order_uom) or '').upper().strip()
+
+    # QTY BASE / RECEIVING, e.g. 60LB/CV or 25PAC/CV.
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)([A-Z]+)/(?:1)?([A-Z]+)', token)
+    if m:
+        qty = Decimal(m.group(1))
+        base = m.group(2)
+        receiving = m.group(3)
+        if qty > 0:
+            return {
+                'base_uom': base,
+                'receiving_uom': receiving,
+                'base_qty_per_receiving_unit': qty,
+                'order_uom': order or None,
+                'pattern': 'QTY_BASE_PER_RECEIVING',
+                'raw': raw,
+            }
+
+    # OUTER COUNT / INNER QTY BASE, e.g. 5/2LB or 24/6OZ.
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)([A-Z]+)', token)
+    if m:
+        outer = Decimal(m.group(1))
+        inner = Decimal(m.group(2))
+        base = m.group(3)
+        if outer > 0 and inner > 0:
+            if order and order != base:
+                return {
+                    'base_uom': base,
+                    'receiving_uom': order,
+                    'base_qty_per_receiving_unit': outer * inner,
+                    'outer_count': outer,
+                    'inner_qty': inner,
+                    'order_uom': order,
+                    'pattern': 'OUTER_COUNT_X_INNER_BASE_USING_ORDER_CONTAINER',
+                    'raw': raw,
+                }
+            return {
+                'base_uom': base,
+                'receiving_uom': base if order == base else None,
+                'base_qty_per_receiving_unit': Decimal('1') if order == base else None,
+                'outer_count': outer,
+                'inner_qty': inner,
+                'order_uom': order or None,
+                'pattern': 'PACK_DESCRIPTOR_BASE_ORDERED_DIRECTLY',
+                'raw': raw,
+            }
+
+    # Plain BASE token.
+    m = re.fullmatch(r'([A-Z]+)', token)
+    if m:
+        base = m.group(1)
+        receiving = order or base
+        return {
+            'base_uom': base,
+            'receiving_uom': receiving if receiving == base else None,
+            'base_qty_per_receiving_unit': Decimal('1') if receiving == base else None,
+            'order_uom': order or None,
+            'pattern': 'BASE_DIRECT',
+            'raw': raw,
+        }
+
+    # Plain package quantity, e.g. 10LB. If ordered in LB, do not turn 10LB
+    # into a 10x selling/receiving conversion; it is package-size evidence only.
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)([A-Z]+)', token)
+    if m:
+        qty = Decimal(m.group(1))
+        base = m.group(2)
+        if qty > 0:
+            if order and order != base:
+                return {
+                    'base_uom': base,
+                    'receiving_uom': order,
+                    'base_qty_per_receiving_unit': qty,
+                    'order_uom': order,
+                    'pattern': 'QTY_BASE_USING_ORDER_CONTAINER',
+                    'raw': raw,
+                }
+            return {
+                'base_uom': base,
+                'receiving_uom': base if order == base else None,
+                'base_qty_per_receiving_unit': Decimal('1') if order == base else None,
+                'order_uom': order or None,
+                'package_qty': qty,
+                'pattern': 'PACKAGE_DESCRIPTOR_BASE_ORDERED_DIRECTLY',
+                'raw': raw,
+            }
+
+    return None
+
 
 
 def _structured_pack_weight(value: Any) -> dict[str, Any] | None:
