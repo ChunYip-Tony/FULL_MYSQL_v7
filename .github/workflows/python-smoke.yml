@@ -277,8 +277,10 @@ jobs:
         run: |
           python - <<'PY'
           import inspect
+          from decimal import Decimal
           import normalize
           import article_manual_multitab_repair as amr
+          import active_28d_uom_repair as a28
 
           fresh = normalize._article_manual_column_map('Fresh fish', {})
           assert fresh['main_article']=='A'
@@ -294,6 +296,34 @@ jobs:
           assert frozen['upc']=='D'
           assert frozen['pack']=='E'
           assert frozen['selling_uom']=='G'
+
+          pi_frozen = normalize._monthly_pi_column_map('Frozen', {})
+          assert pi_frozen['base_uom']=='E'
+          assert pi_frozen.get('receiving_uom')!='E'
+          pi_fresh = normalize._monthly_pi_column_map('Fresh', {})
+          assert pi_fresh['pack']=='D'
+          assert pi_fresh['receiving_uom']=='E'
+          assert pi_fresh.get('base_uom')!='E'
+          pi_live = normalize._monthly_pi_column_map('Live', {})
+          assert pi_live['pack']=='D'
+          assert pi_live['receiving_uom']=='E'
+
+          p60=normalize._structured_pack_weight('60LB')
+          assert p60['base_uom']=='LB'
+          assert Decimal(str(p60['total_base_qty']))==Decimal('60')
+          p160=normalize._structured_pack_weight('1/60LB')
+          assert Decimal(str(p160['total_base_qty']))==Decimal('60')
+          p65=normalize._structured_pack_weight('6/5LB')
+          assert Decimal(str(p65['outer_count']))==Decimal('6')
+          assert Decimal(str(p65['inner_qty']))==Decimal('5')
+          assert Decimal(str(p65['total_base_qty']))==Decimal('30')
+          assert Decimal(str(normalize._selling_factor_from_frozen_pack('BX','6/5LB')['base_qty_per_selling_unit']))==Decimal('5')
+          assert Decimal(str(normalize._selling_factor_from_frozen_pack('CV','6/5LB')['base_qty_per_selling_unit']))==Decimal('30')
+
+          a28src=inspect.getsource(a28.repair_active_28d_uom)
+          assert 'ARTICLE_MANUAL_FROZEN_PACK_PLUS_MONTHLY_PI_BASE_V7303' in inspect.getsource(a28._safe_frozen_pack_cross_source_mapping)
+          assert a28src.index('_safe_frozen_pack_cross_source_mapping') < a28src.index('_has_current_uom')
+          assert '_latest_monthly_pi_frozen_base_source' in a28src
 
           nsrc=inspect.getsource(normalize._normalize_identity_row)
           assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in nsrc
