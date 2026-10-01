@@ -3338,7 +3338,15 @@ function mobileActiveBatchDetail(){
   const hasActiveRun=Boolean(b.active_pipeline_run_id&&runStatus);
   const displayStatus=hasActiveRun?runStatus:(b.processing_status||b.status||'PROCESSING');
   const p=phase3ProgressState(b);
-  const issues=(b.active_issue_counts||[]).slice(0,4);
+  const liveIssueMap=(b.active_progress_issue_counts&&typeof b.active_progress_issue_counts==='object')
+    ? b.active_progress_issue_counts
+    : null;
+  const allIssues=liveIssueMap
+    ? Object.entries(liveIssueMap).map(([issue_code,issue_count])=>({issue_code,issue_count:Number(issue_count||0)}))
+        .sort((a,z)=>z.issue_count-a.issue_count||String(a.issue_code).localeCompare(String(z.issue_code)))
+    : (b.active_issue_counts||[]);
+  const issues=allIssues.slice(0,4);
+  const liveIssueTotal=allIssues.reduce((n,x)=>n+Number(x.issue_count||0),0);
   const prev=state.recent.find(x=>String(x.batch_id)!==String(b.batch_id||b.id));
 
   let html='<div class="m-detailcard" style="padding:10px">'+
@@ -3357,14 +3365,14 @@ function mobileActiveBatchDetail(){
 
   html+='<div class="m-detailsection" style="padding:9px 0 0;margin-top:9px">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Current Errors / Issues</h3>'+
-    '<b style="color:'+(Number(b.active_issue_total||0)>0?'#b64635':'#158259')+'">'+fmt(b.active_issue_total||0,0)+'</b></div>';
+    '<b style="color:'+(liveIssueTotal>0?'#b64635':'#158259')+'">'+fmt(liveIssueTotal,0)+'</b></div>';
 
   if(issues.length){
     html+='<div style="margin-top:5px">'+issues.map(x=>
       '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #edf1f1">'+
       '<span>'+esc(issueLabel(x.issue_code))+'</span><b>'+fmt(x.issue_count,0)+'</b></div>'
     ).join('')+'</div>';
-    if((b.active_issue_counts||[]).length>4)html+='<div class="meta" style="margin-top:4px">+'+((b.active_issue_counts||[]).length-4)+' more issue types</div>';
+    if(allIssues.length>4)html+='<div class="meta" style="margin-top:4px">+'+(allIssues.length-4)+' more issue types</div>';
   }else{
     html+='<p class="meta" style="margin:5px 0 0">No open Phase 3 issue rows currently recorded.</p>';
   }
@@ -4528,7 +4536,10 @@ function activeCard(a){
   const progress=p.hasRowProgress
     ? '<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+fmt(p.rowCurrent,0)+' / '+fmt(p.rowTotal,0)+' UPC</b><b>'+fmt(p.pct,1)+'%</b></div><div class="progress" style="height:8px;margin:5px 0"><span style="width:'+p.pct+'%"></span></div><div class="meta">'+esc(p.currentUpc||p.stageLabel)+(p.speed?' · '+fmt(p.speed,2)+' rows/s':'')+(p.eta!==null?' · ETA '+compactDuration(p.eta):'')+'</div></div>'
     : '<div class="meta" style="margin-top:7px">'+esc(p.stageLabel)+'</div>';
-  const errors=Number(a.active_issue_total||0);
+  const liveMap=(a.active_progress_issue_counts&&typeof a.active_progress_issue_counts==='object')?a.active_progress_issue_counts:null;
+  const errors=liveMap
+    ? Object.values(liveMap).reduce((n,v)=>n+Number(v||0),0)
+    : Number(a.active_issue_total||0);
   return '<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #'+esc(id)+'</div><div class="meta">'+esc(a.batch_label||'Active upload')+'</div></div>'+pill(status)+'</div>'+
     '<div class="batchmeta"><div><small>Files</small><b>'+fmt(a.file_count,0)+'</b></div><div><small>Run</small><b>'+esc(a.active_pipeline_run_id||'—')+'</b></div><div><small>Open Issues</small><b>'+fmt(errors,0)+'</b></div></div>'+
     progress+'</div>';
