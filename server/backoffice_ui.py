@@ -5311,19 +5311,25 @@ async function loadOrders(){
   const err=$('#orderError');err.innerHTML='';state.orderLoadError='';state.orderHealth=null;
   $('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';
   try{
-    // Mobile Ordering is delivery-date first. Desktop keeps the existing category
-    // review unless a delivery date was already selected on the mobile surface.
+    // One ALL request is substantially lighter and more reliable on the small
+    // production worker than two simultaneous Fresh/Frozen review requests.
     const deliveryParam=(isMobileBackoffice()&&mobileState.orderDeliveryDate)
       ? '&delivery_date='+encodeURIComponent(mobileState.orderDeliveryDate)
       : '';
-    const [fresh,frozen]=await Promise.all([
-      api('/v1/backoffice/ordering-review?category=FRESH'+deliveryParam,{timeoutMs:30000}),
-      api('/v1/backoffice/ordering-review?category=FROZEN'+deliveryParam,{timeoutMs:30000})
-    ]);
-    const health=fresh.data_health||frozen.data_health||{};
-    const blocked=[fresh,frozen].some(x=>String(x.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA');
-    const skipped={};
-    [fresh.skipped_breakdown||{},frozen.skipped_breakdown||{}].forEach(m=>Object.entries(m).forEach(([k,v])=>skipped[k]=(skipped[k]||0)+Number(v||0)));
+    const url='/v1/backoffice/ordering-review?category=ALL'+deliveryParam;
+    let d;
+    try{
+      d=await api(url,{timeoutMs:45000});
+    }catch(e){
+      // A rolling restart can drop one in-flight fetch even after the new HTML
+      // is visible. Retry one time only for the browser-level network failure.
+      if(String(e?.message||e)!=='Failed to fetch')throw e;
+      await new Promise(resolve=>setTimeout(resolve,800));
+      d=await api(url,{timeoutMs:45000});
+    }
+    const health=d.data_health||{};
+    const blocked=String(d.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA';
+    const skipped=d.skipped_breakdown||{};
     state.orderHealth={
       blocked,
       analysisStatus:blocked?'BLOCKED_STALE_REQUIRED_DATA':'CURRENT',
@@ -5332,10 +5338,10 @@ async function loadOrders(){
       movementThrough:health.movement_data_through||null,
       missing:health.missing_required_sources||[],
       skipped,
-      selectedDelivery:fresh.selected_delivery_date||frozen.selected_delivery_date||null,
-      selectedWeekday:fresh.selected_delivery_weekday||frozen.selected_delivery_weekday||null
+      selectedDelivery:d.selected_delivery_date||null,
+      selectedWeekday:d.selected_delivery_weekday||null
     };
-    state.orders=blocked?[]:[...(fresh.rows||[]),...(frozen.rows||[])];
+    state.orders=blocked?[]:(d.rows||[]);
     if(isMobileBackoffice()&&state.orderHealth.selectedDelivery){
       mNode('mobileListSub').textContent='Delivery '+state.orderHealth.selectedDelivery+' · '+(state.orderHealth.selectedWeekday||'')+' · observed 12-week receipt cadence';
     }
