@@ -15,6 +15,7 @@ from article_manual_multitab_repair import (
 )
 from data_coverage import source_data_days
 from coverage_backfill import canonical_pos_qty_by_upc
+from upc_aliases import retail_barcode_alias_candidates
 from normalize import (
     RowContext,
     _article_manual_column_map,
@@ -28,7 +29,7 @@ from normalize import (
     _source_token,
 )
 
-VERSION = "7.0.303-active-28d-uom-repair"
+VERSION = "7.0.307-active-28d-uom-repair"
 
 # Latest user-confirmed FULL MYSQL Seafood Selling-UOM authority.
 # Applies only to CURRENT-ACTIVE Seafood UPCs. Historical rows remain untouched.
@@ -131,6 +132,42 @@ def _uom_by_code(cur, code: str) -> dict[str, Any] | None:
         (code,),
     )
     return cur.fetchone()
+
+
+def _authoritative_upc_lookup_keys(cur, target: dict[str, Any]) -> list[str]:
+    """Return exact plus deterministic check-digit Article Manual lookup keys.
+
+    FULL MYSQL can contain a shortened POS spelling while Article Manual keeps
+    the retail check digit (for example 4029549308 vs 040295493088).  Reuse the
+    central retail-barcode check-digit logic, but never alias a shortened UPC
+    when the longer candidate already exists as a different ACTIVE selling UPC.
+    """
+    raw = str(target.get("ean_upc") or "").strip()
+    exact = _numeric_key(raw)
+    if not exact:
+        return []
+
+    keys = [exact]
+    target_upc_id = int(target["upc_id"])
+    for candidate in retail_barcode_alias_candidates(raw):
+        key = _numeric_key(candidate)
+        if not key or key in keys:
+            continue
+        cur.execute(
+            """SELECT 1
+               FROM selling_upc
+               WHERE record_status='ACTIVE'
+                 AND upc_id<>%s
+                 AND ean_upc<>''
+                 AND ean_upc NOT REGEXP '[^0-9]'
+                 AND TRIM(LEADING '0' FROM ean_upc)=%s
+               LIMIT 1""",
+            (target_upc_id, key),
+        )
+        if cur.fetchone():
+            continue
+        keys.append(key)
+    return keys
 
 
 def _historical_uom_conflict(cur, upc_id: int, desired_code: str) -> dict[str, Any] | None:
@@ -450,80 +487,82 @@ def _safe_frozen_pack_cross_source_mapping(
     Pack text is used for a conversion only when Monthly PI explicitly confirms
     the same printed base UOM. Conflicts or ambiguity remain unresolved.
     """
-    key = _numeric_key(str(target.get("ean_upc") or ""))
-    if not key:
+    lookup_keys = _authoritative_upc_lookup_keys(cur, target)
+    if not lookup_keys:
         return None
+    exact_key = lookup_keys[0]
 
     candidates: list[dict[str, Any]] = []
-    for row in upc_rows.get(key, []):
-        if _norm_header(row.get("sheet_name")) != "frozen pack":
-            continue
-        article = str(row.get("article") or "")
-        if not article or not _article_is_in_family(cur, article, int(target["family_id"])):
-            continue
-        selling_decl = _parse_frozen_pack_selling_declaration(
-            row.get("selling_uom"),
-            row.get("pack"),
-        )
-        if not selling_decl:
-            continue
-        selling = str(selling_decl["selling_uom"]).upper().strip()
+    for lookup_key in lookup_keys:
+      for row in upc_rows.get(lookup_key, []):
+          if _norm_header(row.get("sheet_name")) != "frozen pack":
+              continue
+          article = str(row.get("article") or "")
+          if not article or not _article_is_in_family(cur, article, int(target["family_id"])):
+              continue
+          selling_decl = _parse_frozen_pack_selling_declaration(
+              row.get("selling_uom"),
+              row.get("pack"),
+          )
+          if not selling_decl:
+              continue
+          selling = str(selling_decl["selling_uom"]).upper().strip()
 
-        base_rows = monthly_pi_base_rows.get(article, [])
-        if not base_rows and article != str(target.get("main_article_number") or ""):
-            base_rows = monthly_pi_base_rows.get(str(target.get("main_article_number") or ""), [])
-        base_units = {
-            str(x.get("base_uom") or "").upper().strip()
-            for x in base_rows
-            if str(x.get("base_uom") or "").strip()
-        }
-        if len(base_units) != 1:
-            continue
-        base = next(iter(base_units))
+          base_rows = monthly_pi_base_rows.get(article, [])
+          if not base_rows and article != str(target.get("main_article_number") or ""):
+              base_rows = monthly_pi_base_rows.get(str(target.get("main_article_number") or ""), [])
+          base_units = {
+              str(x.get("base_uom") or "").upper().strip()
+              for x in base_rows
+              if str(x.get("base_uom") or "").strip()
+          }
+          if len(base_units) != 1:
+              continue
+          base = next(iter(base_units))
 
-        sell_uom_row = _uom_by_code(cur, selling)
-        base_uom_row = _uom_by_code(cur, base)
-        if not sell_uom_row or not base_uom_row:
-            continue
+          sell_uom_row = _uom_by_code(cur, selling)
+          base_uom_row = _uom_by_code(cur, base)
+          if not sell_uom_row or not base_uom_row:
+              continue
 
-        declared_base = str(selling_decl.get("declared_base_uom") or "").upper().strip()
-        declared_factor = selling_decl.get("base_qty_per_selling_unit")
+          declared_base = str(selling_decl.get("declared_base_uom") or "").upper().strip()
+          declared_factor = selling_decl.get("base_qty_per_selling_unit")
 
-        if selling == base:
-            # Same-unit selling/base always means factor 1; package size remains
-            # descriptive and must not multiply POS quantity.
-            factor = Decimal("1")
-            conversion_basis = "SELLING_EQUALS_MONTHLY_PI_BASE"
-            pack_detail = selling_decl
-        elif declared_base and declared_factor is not None:
-            if declared_base != base:
-                continue
-            factor = Decimal(str(declared_factor))
-            conversion_basis = str(selling_decl.get("conversion_basis") or "ARTICLE_MANUAL_DECLARED")
-            pack_detail = selling_decl
-        else:
-            # Pure non-base selling unit without an explicit Column G
-            # conversion may use the same-row structured Column E pack text.
-            pack_detail = _selling_factor_from_frozen_pack(selling, row.get("pack"))
-            if not pack_detail:
-                continue
-            parsed_base = str(pack_detail.get("base_uom") or "").upper().strip()
-            if parsed_base != base:
-                continue
-            factor = Decimal(str(pack_detail["base_qty_per_selling_unit"]))
-            conversion_basis = str(pack_detail["conversion_basis"])
+          if selling == base:
+              # Same-unit selling/base always means factor 1; package size remains
+              # descriptive and must not multiply POS quantity.
+              factor = Decimal("1")
+              conversion_basis = "SELLING_EQUALS_MONTHLY_PI_BASE"
+              pack_detail = selling_decl
+          elif declared_base and declared_factor is not None:
+              if declared_base != base:
+                  continue
+              factor = Decimal(str(declared_factor))
+              conversion_basis = str(selling_decl.get("conversion_basis") or "ARTICLE_MANUAL_DECLARED")
+              pack_detail = selling_decl
+          else:
+              # Pure non-base selling unit without an explicit Column G
+              # conversion may use the same-row structured Column E pack text.
+              pack_detail = _selling_factor_from_frozen_pack(selling, row.get("pack"))
+              if not pack_detail:
+                  continue
+              parsed_base = str(pack_detail.get("base_uom") or "").upper().strip()
+              if parsed_base != base:
+                  continue
+              factor = Decimal(str(pack_detail["base_qty_per_selling_unit"]))
+              conversion_basis = str(pack_detail["conversion_basis"])
 
-        candidates.append({
-            "selling_uom": str(sell_uom_row["uom_code"]),
-            "selling_uom_id": int(sell_uom_row["uom_id"]),
-            "base_uom": str(base_uom_row["uom_code"]),
-            "base_uom_id": int(base_uom_row["uom_id"]),
-            "factor": factor,
-            "conversion_basis": conversion_basis,
-            "article_manual_row": row,
-            "monthly_pi_rows": base_rows,
-            "pack_detail": pack_detail,
-        })
+          candidates.append({
+              "selling_uom": str(sell_uom_row["uom_code"]),
+              "selling_uom_id": int(sell_uom_row["uom_id"]),
+              "base_uom": str(base_uom_row["uom_code"]),
+              "base_uom_id": int(base_uom_row["uom_id"]),
+              "factor": factor,
+              "conversion_basis": conversion_basis,
+              "article_manual_row": row,
+              "monthly_pi_rows": base_rows,
+              "pack_detail": pack_detail,
+          })
 
     signatures = {
         (
@@ -564,10 +603,10 @@ def _safe_article_manual_unit(
     upc_rows: dict[str, list[dict[str, Any]]],
     article_units: dict[str, set[str]],
 ) -> dict[str, Any] | None:
-    key = _numeric_key(str(target["ean_upc"]))
-    if not key:
+    lookup_keys = _authoritative_upc_lookup_keys(cur, target)
+    if not lookup_keys:
         return None
-    rows = upc_rows.get(key, [])
+    rows = [row for key in lookup_keys for row in upc_rows.get(key, [])]
     if not rows:
         return None
 
@@ -668,6 +707,7 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
         "repaired_authoritative_prefix_lb": 0,
         "repaired_source_supported": 0,
         "repaired_frozen_pack_cross_source": 0,
+        "repaired_via_retail_barcode_alias": 0,
         "held_historical_uom_conflict": 0,
         "held_cross_source_conflict": 0,
         "held_no_safe_evidence": 0,
@@ -733,6 +773,8 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
             )
             result["repaired_source_supported"] += 1
             result["repaired_frozen_pack_cross_source"] += 1
+            if cross.get("upc_match") == "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS":
+                result["repaired_via_retail_barcode_alias"] += 1
             result["repaired"].append({
                 "upc": upc,
                 "uom": cross["selling_uom"],
@@ -740,6 +782,8 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
                 "base_qty_per_selling_unit": str(cross["factor"]),
                 "method": cross["rule"],
                 "conversion_basis": cross["conversion_basis"],
+                "upc_match": cross.get("upc_match"),
+                "lookup_key": cross.get("lookup_key"),
                 "article_manual_pack": cross["article_manual_row"].get("pack"),
                 "article_manual_article": cross["article_manual_row"].get("article"),
                 "monthly_pi_base_evidence": cross["monthly_pi_rows"],

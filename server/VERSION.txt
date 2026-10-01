@@ -1,3 +1,10 @@
+v7.0.307 Batch 22 Retail-Barcode Alias Repair:
+- Phase 3 UOM repair now reuses deterministic UPC-A/EAN check-digit aliases when POS stores a shortened Seafood UPC and Article Manual stores the authoritative retail barcode.
+- Alias matching is blocked when the longer candidate already exists as a different ACTIVE selling UPC, preventing double mapping or double counting.
+- Frozen Pack D/E/G + Monthly PI Frozen Base Unit can now clear false SELLING_UOM_MISSING / COST_TO_SELLING_UOM_UNRESOLVED holds caused only by the shortened barcode spelling.
+- Repair output exposes exact vs deterministic-check-digit matching for QA audit.
+Version: 7.0.307 Single-Service Edition
+
 v7.0.286 Mobile Quick Check Search Result Background:
 - Mobile Quick Check search results now use white Family, SAP/Receiving Article, and UPC row backgrounds by default.
 - Family and SAP/Receiving Article headers are highlighted light yellow only when their displayed 7D SAP MVT is positive (> 0).

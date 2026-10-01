@@ -401,6 +401,23 @@ jobs:
           assert d['selling_uom']=='EA' and d['declared_base_uom']=='LB'
           assert Decimal(str(d['base_qty_per_selling_unit']))==Decimal('2')
 
+          # Batch 22 check-digit alias coverage: POS can omit the retail check
+          # digit while Article Manual keeps it. Only deterministic GS1 aliases
+          # are eligible, and an independently ACTIVE long UPC blocks aliasing.
+          class _AliasCur:
+              def __init__(self, collisions=()):
+                  self.collisions=set(collisions); self.key=None
+              def execute(self, sql, args):
+                  self.key=str(args[1])
+              def fetchone(self):
+                  return {'hit': 1} if self.key in self.collisions else None
+          t={'upc_id': 99, 'ean_upc': '4029549308'}
+          assert a28._authoritative_upc_lookup_keys(_AliasCur(), t)==['4029549308','40295493088']
+          assert a28._authoritative_upc_lookup_keys(_AliasCur({'40295493088'}), t)==['4029549308']
+          t={'upc_id': 100, 'ean_upc': '66718100001'}
+          assert a28._authoritative_upc_lookup_keys(_AliasCur(), t)==['66718100001','667181000016']
+          assert 'retail_barcode_alias_candidates' in inspect.getsource(a28._authoritative_upc_lookup_keys)
+
           nsrc=inspect.getsource(normalize._normalize_identity_row)
           assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in nsrc
           assert "and ean_upc" in nsrc and "and sales_set" in nsrc
