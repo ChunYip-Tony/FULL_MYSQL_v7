@@ -171,8 +171,21 @@ def add_file(session_id: str, device_id: str, filename: str, data: bytes) -> dic
             cur.execute("SELECT file_id,processing_status,source_row_count FROM ingest_file WHERE batch_id=%s AND file_sha256=%s ORDER BY file_id LIMIT 1",(batch_id,p.sha256))
             same=cur.fetchone()
             if same:
-                conn.commit(); return {'batch_id':batch_id,'session_id':session_id,'idempotent':True,'file_id':int(same['file_id']),
-                                       'filename':filename,'sha256':p.sha256,'status':same['processing_status'],'raw_rows_inserted':int(same['source_row_count'] or 0)}
+                conn.commit(); return {
+                    'batch_id':batch_id,'session_id':session_id,'idempotent':True,
+                    'file_id':int(same['file_id']),'filename':filename,'sha256':p.sha256,
+                    'source_type':p.source_type,'status':same['processing_status'],
+                    'raw_rows_inserted':int(same['source_row_count'] or 0),
+                    'coverage_type':p.coverage_type,
+                    'coverage_start_date':p.coverage_start,
+                    'coverage_end_date':p.coverage_end,
+                    'header_period_start_date':p.header_period_start,
+                    'header_period_end_date':p.header_period_end,
+                    'date_semantics_status':p.date_semantics_status,
+                    'filename_date_candidate':p.filename_date_candidate,
+                    'report_generated_at':p.report_generated_at,
+                    'warnings':p.warnings,
+                }
             # A previous QA_HOLD/unclassified copy must not suppress a
             # corrected re-ingest after classifier repairs. Treat a file as a
             # true duplicate only when the same bytes were already successfully
@@ -261,8 +274,21 @@ def add_file(session_id: str, device_id: str, filename: str, data: bytes) -> dic
             cur.execute("""UPDATE ingest_batch SET file_count=file_count+1,source_row_count=source_row_count+%s,error_count=error_count+%s,
                 notes=%s WHERE batch_id=%s""",(raw_count,err_count,_notes(device_id,'UPLOADING',last_file=filename),batch_id))
             conn.commit()
-            return {'batch_id':batch_id,'session_id':session_id,'file_id':file_id,'filename':filename,'sha256':p.sha256,'source_type':p.source_type,
-                    'raw_rows_inserted':raw_count,'rows_read':total_rows,'duplicate_of_file_id':duplicate_of,'status':status,'warnings':p.warnings}
+            return {
+                'batch_id':batch_id,'session_id':session_id,'file_id':file_id,
+                'filename':filename,'sha256':p.sha256,'source_type':p.source_type,
+                'raw_rows_inserted':raw_count,'rows_read':total_rows,
+                'duplicate_of_file_id':duplicate_of,'status':status,
+                'coverage_type':p.coverage_type,
+                'coverage_start_date':p.coverage_start,
+                'coverage_end_date':p.coverage_end,
+                'header_period_start_date':p.header_period_start,
+                'header_period_end_date':p.header_period_end,
+                'date_semantics_status':p.date_semantics_status,
+                'filename_date_candidate':p.filename_date_candidate,
+                'report_generated_at':p.report_generated_at,
+                'warnings':p.warnings,
+            }
         except Exception:
             conn.rollback(); raise
         finally: cur.close()
