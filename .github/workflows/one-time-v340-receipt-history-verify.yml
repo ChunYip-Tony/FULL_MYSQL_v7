@@ -1,0 +1,92 @@
+name: One-time v7.0.340 receipt history verification
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: startsWith(github.event.head_commit.message, 'v7.0.340:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for v7.0.340 API
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          ok=0
+          for i in $(seq 1 240); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            ok="$(BODY="$body" python - <<'PY'
+          import json,os
+          try: p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception: p={}
+          print('1' if p.get('ok') is True and p.get('version')=='7.0.340-single-service' else '0')
+          PY
+          )"
+            [ "$ok" = 1 ] && break
+            sleep 5
+          done
+          test "$ok" = 1
+
+      - name: Verify 9/24 Squid receipt is one physical event
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 20); do
+            curl -fsS --max-time 90 "$base/v1/yipman/ordering-review?category=ALL&delivery_date=2026-09-24" -o /tmp/history.json
+            status="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/history.json',encoding='utf-8'))
+          print(p.get('analysis_status') or '')
+          PY
+          )"
+            echo "history status=$status"
+            [ "$status" = "HISTORY_READY" ] && break
+            sleep 4
+          done
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/history.json',encoding='utf-8'))
+          assert p.get('analysis_status')=='HISTORY_READY', p
+          rows=p.get('rows') or []
+          matches=[
+              r for r in rows
+              if str(r.get('receiving_article') or '')=='1341020'
+              or '1341020' in [str(x) for x in (r.get('receiving_articles') or [])]
+              or 'SQUID LOLIGO' in str(r.get('family_name') or '').upper()
+          ]
+          assert matches, 'SQUID LOLIGO / receiving 1341020 not found'
+          r=matches[0]
+          events=r.get('receipt_events') or []
+          print('SQUID_ROW',json.dumps(r,default=str))
+          assert int(r.get('receipt_event_count') or 0)==1, r
+          assert len(events)==1, events
+          assert str(events[0].get('gr_number') or '')=='5014865155', events[0]
+          assert str(events[0].get('receipt_stage_basis') or '').startswith('107_109'), events[0]
+          print('SQUID_RECEIPT_EVENT_CHECK=PASS')
+          PY
+
+      - name: Re-run all-family receipt audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 180 "$base/v1/yipman/receipt-audit?lookback_days=365" -o /tmp/audit.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/audit.json',encoding='utf-8'))
+          print('AUDIT_STATUS',p.get('status'))
+          print('FAMILIES_WITH_RECEIPTS',p.get('families_with_receipt_evidence'))
+          print('LEGACY_107_109_EXPOSURE_FAMILIES',p.get('legacy_107_109_exposure_family_count'))
+          print('PHYSICAL_DUPLICATE_CANDIDATES',p.get('physical_duplicate_candidate_count'))
+          assert p.get('current_physical_receipt_types')==['101','109'], p
+          assert int(p.get('physical_duplicate_candidate_count') or 0)==0, p
+          print('ALL_FAMILY_RECEIPT_AUDIT=PASS')
+          PY
