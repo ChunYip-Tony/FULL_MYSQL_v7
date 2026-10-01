@@ -590,16 +590,17 @@ def ordering_review(
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         expected_through=completed_through_date()
+        source_limit=60 if best_available_delivery_evidence else 1
         pos_latest_days=source_data_days(
             cur,
             "sales_by_price_type",
-            limit=1,
+            limit=source_limit,
             up_to=expected_through,
         )
         mvt_latest_days=source_data_days(
             cur,
             "movement",
-            limit=1,
+            limit=source_limit,
             up_to=expected_through,
         )
         pos_through=pos_latest_days[0]["date"] if pos_latest_days else None
@@ -610,8 +611,14 @@ def ordering_review(
         if mvt_through!=expected_through:
             missing_required_sources.append("MVT")
 
-        available_dates=[x for x in (pos_through,mvt_through) if x is not None]
-        common_data_through=min(available_dates) if len(available_dates)==2 else None
+        if best_available_delivery_evidence:
+            pos_dates={x["date"] for x in pos_latest_days if x.get("date") is not None}
+            mvt_dates={x["date"] for x in mvt_latest_days if x.get("date") is not None}
+            common_dates=sorted(pos_dates & mvt_dates)
+            common_data_through=common_dates[-1] if common_dates else None
+        else:
+            available_dates=[x for x in (pos_through,mvt_through) if x is not None]
+            common_data_through=min(available_dates) if len(available_dates)==2 else None
         stale_days=(
             max(0,(expected_through-common_data_through).days)
             if common_data_through is not None else None
