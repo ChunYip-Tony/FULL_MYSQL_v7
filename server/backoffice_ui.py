@@ -2323,34 +2323,37 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <div class="shell">
 <header class="appbar">
   <div class="top">
-    <div class="brand"><div class="mark">🐟</div><div><strong>FULL MYSQL</strong><small>Seafood Backoffice · Store #1032 · Las Vegas · v__VERSION__</small></div></div>
-    <div class="topstat"><span class="glass desktop-marketplace-badge">DESKTOP MARKETPLACE UI</span><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
+    <div class="brand"><div class="mark">F</div><div class="brandcopy"><strong>FULL MYSQL</strong><small>SEAFOOD · #1032</small></div></div>
+    <button id="desktopRailToggle" class="desktop-rail-toggle" type="button" aria-label="Expand navigation">›</button>
+    <div class="topstat"><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
   </div>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav" aria-label="Desktop Backoffice main menu">
-    <button class="navbtn on" data-view="overview">⌂ Overview</button>
-    <button class="navbtn" data-view="quick">🔎 Quick Check</button>
-    <button class="navbtn" data-view="pricing">🏷️ Price Suggestions</button>
-    <button class="navbtn" data-view="sales">📊 Performance Report</button>
-    <button class="navbtn" data-view="ordering">🛒 Ordering Review</button>
-    <button class="navbtn" data-view="inventory">📦 Inventory / PI</button>
-    <button class="navbtn" data-view="database">🗄️ Data & QA</button>
+    <button class="navbtn on" data-view="overview" title="Overview"><span class="navicon">⌂</span><span class="navlabel">Overview</span></button>
+    <button class="navbtn" data-view="quick" title="Quick Check"><span class="navicon">⌕</span><span class="navlabel">Quick Check</span></button>
+    <button class="navbtn" data-view="pricing" title="Price Suggestions"><span class="navicon">◇</span><span class="navlabel">Pricing</span></button>
+    <button class="navbtn" data-view="sales" title="Performance Report"><span class="navicon">▥</span><span class="navlabel">Performance</span></button>
+    <button class="navbtn" data-view="ordering" title="Ordering Review"><span class="navicon">⇄</span><span class="navlabel">Ordering</span></button>
+    <button class="navbtn" data-view="inventory" title="Inventory / PI"><span class="navicon">◎</span><span class="navlabel">Inventory / PI</span></button>
+    <button class="navbtn" data-view="database" title="Data & QA"><span class="navicon">▦</span><span class="navlabel">Data & QA</span></button>
   </nav>
+  <div class="desktop-rail-foot"><span class="desktop-live-dot"></span><span class="desktop-rail-foot-label">LIVE</span></div>
 </header>
 <main class="workspace">
   <div class="desktop-commandbar" aria-label="Desktop command bar">
     <div class="desktop-command-copy">
-      <div id="desktopPageEyebrow" class="desktop-command-eyebrow">SEAFOOD OPERATIONS</div>
       <div id="desktopPageTitle" class="desktop-command-title">Overview</div>
-      <div id="desktopPageSub" class="desktop-command-sub">Store #1032 · Las Vegas</div>
+      <div id="desktopPageSub" class="desktop-command-sub">Seafood operations</div>
+      <div id="desktopPageEyebrow" class="desktop-command-eyebrow" style="display:none">SEAFOOD OPERATIONS</div>
     </div>
     <form id="desktopGlobalSearchForm" class="desktop-global-search">
-      <span>⌕</span>
-      <input id="desktopGlobalSearch" type="search" autocomplete="off" placeholder="Search Article #, UPC, family, or item name">
-      <button type="submit">Search</button>
+      <span class="desktop-search-glyph">⌕</span>
+      <input id="desktopGlobalSearch" type="search" autocomplete="off" placeholder="Search anything… UPC, article, family, item">
+      <kbd>Ctrl K</kbd>
+      <button type="submit">Go</button>
     </form>
     <div class="desktop-command-meta">
-      <span class="desktop-store-chip">📍 Store #1032 · Las Vegas</span>
+      <span class="desktop-store-chip">#1032 · Las Vegas</span>
       <span class="desktop-version-chip">v__VERSION__</span>
     </div>
   </div>
@@ -2413,42 +2416,30 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </section>
 
 <section id="overview" class="view on">
-  <div class="desktop-overview-hero">
-    <div class="desktop-overview-copy">
-      <span class="desktop-overview-kicker">FULL MYSQL · SEAFOOD BACKOFFICE</span>
-      <h1>Seafood Operations Command Center</h1>
-      <p>One desktop workspace for pricing, ordering, inventory, PI, QA, data freshness, and daily decision work.</p>
-      <div class="desktop-overview-actions">
-        <button class="desktop-hero-btn primary" type="button" data-go-view="quick">Open Quick Check</button>
-        <button class="desktop-hero-btn" type="button" data-go-view="pricing">Review Prices</button>
-        <button class="desktop-hero-btn" type="button" data-go-view="database" data-go-db="dboverview">Upload / Data Health</button>
-      </div>
-    </div>
-    <div class="desktop-overview-seal">
-      <span>🐟</span>
-      <b>Store #1032</b>
-      <small>Las Vegas · Seafood</small>
+  <div class="overview-v3-head">
+    <div><div class="overview-v3-date" id="desktopTodayLabel">TODAY</div><h1>Operations</h1><p>Priorities first. Everything else stays quiet until it needs you.</p></div>
+    <div class="overview-v3-actions">
+      <button type="button" data-go-view="quick">Quick Check</button>
+      <button type="button" data-go-view="pricing">Pricing</button>
+      <button type="button" data-go-view="database" data-go-db="dboverview">Upload</button>
     </div>
   </div>
-
   <div id="desktopOverviewError"></div>
-  <div id="desktopOverviewKpis" class="desktop-kpi-row">
-    <div class="desktop-kpi-card"><small>Loading</small><b>—</b><span>Current operational snapshot</span></div>
-  </div>
-
-  <div class="desktop-workgrid">
-    <section class="desktop-workcard desktop-workcard-wide">
-      <div class="desktop-workhead"><div><small>WORK QUEUE</small><h2>What needs attention now</h2></div><span id="desktopWorkQueueStatus" class="pill blue">CHECKING</span></div>
+  <div class="overview-v3-grid">
+    <section class="v3-surface v3-priority">
+      <div class="v3-surface-head"><div><span>Priority queue</span><h2>Needs attention</h2></div><span id="desktopWorkQueueStatus" class="v3-status-chip">CHECKING</span></div>
       <div id="desktopWorkQueues" class="desktop-queue-grid"><div class="loading">Loading operational queues…</div></div>
     </section>
-
-    <section class="desktop-workcard">
-      <div class="desktop-workhead"><div><small>DATA FRESHNESS</small><h2>Required source status</h2></div><button class="desktop-text-btn" type="button" data-go-view="database" data-go-db="dbdata">Open Data Health →</button></div>
+    <section class="v3-surface v3-pulse">
+      <div class="v3-surface-head"><div><span>System pulse</span><h2>Data freshness</h2></div><button class="v3-link" type="button" data-go-view="database" data-go-db="dbdata">Data Health</button></div>
       <div id="desktopFreshnessBoard" class="desktop-freshness-board"><div class="loading">Loading data health…</div></div>
     </section>
-
-    <section class="desktop-workcard">
-      <div class="desktop-workhead"><div><small>PROCESSING</small><h2>Recent batches</h2></div><button class="desktop-text-btn" type="button" data-go-view="database" data-go-db="dboverview">Open Uploads →</button></div>
+    <section class="v3-surface v3-snapshot">
+      <div class="v3-surface-head"><div><span>Live snapshot</span><h2>Operating state</h2></div></div>
+      <div id="desktopOverviewKpis" class="desktop-kpi-row"><div class="desktop-kpi-card"><small>LOADING</small><b>—</b><span>Current operational snapshot</span></div></div>
+    </section>
+    <section class="v3-surface v3-batches">
+      <div class="v3-surface-head"><div><span>Processing</span><h2>Recent batches</h2></div><button class="v3-link" type="button" data-go-view="database" data-go-db="dboverview">Open</button></div>
       <div id="desktopRecentBatches" class="desktop-recent-list"><div class="loading">Loading batches…</div></div>
     </section>
   </div>
@@ -2456,15 +2447,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 <section id="inventory" class="view">
   <div id="desktopQuickHero" class="desktop-module-hero desktop-quick-hero">
-    <div>
-      <span class="desktop-module-kicker">QUICK CHECK</span>
-      <h1>Find the item. See the whole operating picture.</h1>
-      <p>Velocity-first results with current price, cost, OH, family relationships, receipts, and 240 / 249 evidence.</p>
-    </div>
-    <form id="desktopQuickSearchForm" class="desktop-hero-search">
-      <input id="desktopQuickSearch" type="search" autocomplete="off" placeholder="Try salmon, 240, 1341, UPC, or article #">
-      <button type="submit">Search</button>
-    </form>
+    <div><span class="desktop-module-kicker">PRODUCT INTELLIGENCE</span><h1>Quick Check</h1><p>Family → receiving article → selling UPC, with current price, cost, OH, receipts and recent movement.</p></div>
+    <form id="desktopQuickSearchForm" class="desktop-hero-search"><span>⌕</span><input id="desktopQuickSearch" type="search" autocomplete="off" placeholder="Search salmon, 240, family, UPC or article #"><kbd>Enter</kbd><button type="submit">Search</button></form>
   </div>
   <div id="desktopInventoryHero" class="desktop-module-hero desktop-inventory-hero">
     <div><span class="desktop-module-kicker">INVENTORY / PI</span><h1>Inventory position and physical-count control</h1><p>Review effective family OH, activity, DOS, and True Stock actions without mixing selling-UPC quantity with family movement.</p></div>
@@ -4343,12 +4327,13 @@ mobileMedia.addEventListener?.('change',e=>{
 });
 function openDrawer(title,sub,body,foot=''){
   $('#drawerTitle').textContent=title;$('#drawerSub').textContent=sub||'';$('#drawerBody').innerHTML=body;$('#drawerFoot').innerHTML=foot;$('#drawerBack').classList.add('on');$('#drawer').classList.add('on');
+  if(!isMobileBackoffice())document.body.classList.add('desktop-inspector-open');
   if(isMobileBackoffice()&&!mobileRestoringHistory){
     const st=history.state||{};
     if(st[MOBILE_HISTORY_KEY]&&!st.drawer)history.pushState({...st,drawer:true},'',location.href);
   }
 }
-function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on')}
+function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on');document.body.classList.remove('desktop-inspector-open')}
 function closeDrawerUser(){
   const st=history.state||{};
   if(isMobileBackoffice()&&st[MOBILE_HISTORY_KEY]&&st.drawer)history.back();
@@ -4436,7 +4421,7 @@ async function loadDesktopOverview(){
   const workStatus=$('#desktopWorkQueueStatus');
   const attention=actionable+orderAttention+qaRows.length;
   workStatus.textContent=attention?fmt(attention,0)+' ITEMS':'CLEAR';
-  workStatus.className='pill '+(highQa?'red':attention?'amber':'green');
+  workStatus.className='v3-status-chip '+(highQa?'bad':attention?'warn':'good');
 
   const failed=r.filter(x=>x.status==='rejected').length;
   if(failed&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failed+' source request(s) did not respond; module pages remain available.</div>';
@@ -5528,6 +5513,22 @@ function openDataHealthDetail(dateKey){
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
 
+function initDesktopV3(){
+  if(isMobileBackoffice())return;
+  const today=$('#desktopTodayLabel');
+  if(today)today.textContent=new Date().toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'}).toUpperCase();
+  const expanded=localStorage.getItem('fullmysql_desktop_rail')==='expanded';
+  document.body.classList.toggle('desktop-rail-expanded',expanded);
+  const toggle=$('#desktopRailToggle');
+  if(toggle){
+    toggle.textContent=expanded?'‹':'›';
+    toggle.onclick=()=>{const on=document.body.classList.toggle('desktop-rail-expanded');localStorage.setItem('fullmysql_desktop_rail',on?'expanded':'collapsed');toggle.textContent=on?'‹':'›'};
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(isMobileBackoffice())return;
+  if((e.ctrlKey||e.metaKey)&&String(e.key).toLowerCase()==='k'){e.preventDefault();const input=$('#desktopGlobalSearch');if(input){input.focus();input.select()}}
+});
 function desktopGo(view,dbTab=null){
   if(view==='database')show('database',{dbTab:dbTab||'dboverview'});
   else show(view);
@@ -5548,7 +5549,7 @@ function desktopSubmitSearch(value){
 $('#searchForm').onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#searchInput').value)};
 const dg=$('#desktopGlobalSearchForm');if(dg)dg.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopGlobalSearch').value)};
 const dq=$('#desktopQuickSearchForm');if(dq)dq.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopQuickSearch').value)};
-async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
+async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else{initDesktopV3();restoreRoute({replaceMissing:true});}setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
 })();
 </script>
 </body></html>'''
