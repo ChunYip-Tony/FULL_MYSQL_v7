@@ -2877,6 +2877,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
     )
     products = cur.fetchall()
     active_rows = active_ready = active_hold = historical_rows = 0
+    live_issue_counts: dict[str, int] = defaultdict(int)
     total_rows = len(products)
     progress_started = time.monotonic()
 
@@ -2903,6 +2904,10 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
                 'progress_ready': active_ready,
                 'progress_hold': active_hold,
                 'progress_historical': historical_rows,
+                'progress_issue_counts': dict(sorted(
+                    live_issue_counts.items(),
+                    key=lambda kv: (-kv[1], kv[0]),
+                )),
                 'progress_elapsed_seconds': int(elapsed),
                 'progress_rows_per_second': float(speed.quantize(Decimal('0.01'))) if speed > 0 else 0.0,
                 'progress_eta_seconds': int(eta) if eta is not None else None,
@@ -3024,6 +3029,8 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
                 active_ready += 1
             else:
                 active_hold += 1
+                for reason in reasons:
+                    live_issue_counts[str(reason)] += 1
                 _issue(cur, batch_id, 'QUICK_CHECK_CORE_FIELD_MISSING', 'UPC', p['ean_upc'],
                        f"Quick Check core fields are unresolved for UPC {p['ean_upc']}: {', '.join(reasons)}",
                        'HIGH', detail={
