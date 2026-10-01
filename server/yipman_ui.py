@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v349';
+const CACHE='yipman-v350';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -282,6 +282,31 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .qprice b{font-size:10px}
 }
 
+
+/* V350 Yipman: Quick Check home + fixed top + bottom live search + Best Sellers. */
+.header{position:relative;z-index:20;background:rgba(246,247,249,.98);backdrop-filter:blur(12px)}
+.workspace{height:calc(100% - 62px)}
+#quick{padding-bottom:calc(154px + env(safe-area-inset-bottom))}
+.nav{grid-template-columns:repeat(3,1fr)}
+.quicksearch{position:absolute;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:12;margin:0;display:grid;grid-template-columns:42px minmax(0,1fr) 64px;align-items:center;min-height:60px;border:2px solid #1769e0;border-radius:18px;padding:5px 7px;background:#fff;box-shadow:0 9px 24px rgba(13,79,139,.20)}
+.quicksearch:focus-within{border-color:#075b9b;box-shadow:0 10px 27px rgba(13,79,139,.25)}
+.quicksearch>span{display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:10px;background:#e8f3ff;color:#0d5f9f;font-size:20px;font-weight:950}
+.quicksearch input{min-width:0;width:100%;border:0;outline:0;background:transparent;padding:10px 5px;font-size:17px;font-weight:800}
+.quicksearch input::placeholder{color:#6f7d89;font-weight:750}
+.quickclear{display:none;align-items:center;justify-content:center;height:39px;border:1px solid #cdd8e1;border-radius:10px;background:#edf3f7;color:#36516a;font-size:11px;font-weight:950;letter-spacing:.02em}
+.quickclear.on{display:flex}
+.besthead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin:0 1px 7px}
+.besthead h3{font-size:17px;margin:0;font-weight:950}.besthead span{font-size:8px;color:var(--muted);font-weight:900}
+.bestsort{white-space:nowrap;border:1px solid #cbddeb;background:#edf6fd;color:#315b78;border-radius:999px;padding:5px 7px;font-size:8px!important}
+.bestfam{--best-border:#ddb916;--best-bg:#fff3b7;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);border-radius:13px;background:linear-gradient(90deg,var(--best-bg),#fff);padding:7px 8px;margin-bottom:6px;box-shadow:0 6px 17px rgba(18,38,56,.06)}
+.bestfam.tone1{--best-border:#58bd70;--best-bg:#e2f6e6}.bestfam.tone2{--best-border:#4a9de2;--best-bg:#e6f2fc}.bestfam.tone3{--best-border:#ef72a5;--best-bg:#fde7ef}.bestfam.tone4{--best-border:#9b7be0;--best-bg:#eee8fb}
+.besttop{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.bestlabel{font-size:7px;font-weight:950;color:#6f6a53}.bestnum{font-size:17px;font-weight:1000;line-height:1}.bestname{font-size:18px;font-weight:1000;line-height:1.03;margin-top:2px}.bestrank{align-self:start;background:rgba(255,255,255,.72);border:1px solid rgba(70,80,90,.10);border-radius:7px;padding:4px 6px;font-size:8px;font-weight:950}
+.bestmetrics{display:grid;grid-template-columns:1.35fr 1fr;gap:4px;margin-top:5px}.bestmetric{background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.13);border-radius:8px;padding:4px 6px}.bestmetric small{display:block;font-size:6px;color:#6e7c87;font-weight:950}.bestmetric b{display:block;font-size:22px;line-height:1;font-weight:1000;margin-top:2px}.bestmetric span{display:block;font-size:7px;color:#7e8a93;font-weight:850;margin-top:2px}
+.bestrecent{margin-top:4px;background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.12);border-radius:8px;padding:4px 6px}.bestrecenthead{display:flex;justify-content:space-between;gap:6px;font-size:7px;color:#6d7a85;font-weight:950}.bestreceipt{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:3px;font-size:9px;font-weight:900}.bestreceipt b{font-size:10px}
+.qsap.nohead{border-left-width:1px;margin-top:3px}.qsap.nohead .qupc:first-child{border-top:0}
+.qupcname{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important}
+@media(max-width:430px){.bestname{font-size:17px}.bestmetric b{font-size:21px}.quicksearch{left:8px;right:8px}}
+
 </style>
 </head>
 <body>
@@ -289,17 +314,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   <div class="ptr" id="ptr"><div id="ptrText">Pull to refresh</div></div>
   <header class="header">
     <div class="head"><div><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
-    <form class="search" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off"></form>
   </header>
   <main class="workspace">
-    <section class="page on" id="home">
-      <div class="topline"><h2>Today</h2><div class="hint" id="todayLabel">YIPMAN</div></div>
-      <div class="hero"><small>SEAFOOD OPERATIONS</small><h3 id="attentionTitle">Loading current work…</h3><p id="attentionSub">Current FULL MYSQL serving data</p><div class="stats"><div class="stat"><b id="homeOrder">—</b><span>POS SALES</span></div><div class="stat"><b id="homePrice">—</b><span>MVT</span></div><div class="stat"><b id="homeHealth">—</b><span>PRICE LIST</span></div></div></div>
-      <div class="launch"><button data-go="quick"><i>⌕</i><b>Quick Check</b><span>Search current Family / UPC data</span><em>MOST USED</em></button><button data-go="order"><i>▤</i><b>Ordering</b><span>Receipt cadence + sales history</span><em id="orderMini">LOADING</em></button><button data-go="price"><i>$</i><b>Price Review</b><span>Completed-day price optimization</span><em id="priceMini">LOADING</em></button><button data-go="data"><i>▦</i><b>Data Center</b><span>Freshness / uploads / batches</span><em id="dataMini">LOADING</em></button></div>
-      <div class="priority"><div class="ph"><span>NEEDS ATTENTION</span><span>NOW</span></div><div id="priorityRows"><div class="loading">Loading priorities…</div></div></div>
-    </section>
-
-    <section class="page" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="empty">Use the search bar above. Results appear automatically.</div></div></section>
+    <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading best sellers…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
 
     <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">14-DAY DELIVERY VIEW</div></div><div class="daybar" id="dayBar"></div><div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
 
@@ -307,7 +324,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 
     <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">BACK OFFICE UNCHANGED</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
-    <nav class="nav"><button class="on" data-go="home"><i>⌂</i>HOME</button><button data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button></nav>
+    <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
     <div class="exitoverlay" id="exitOverlay"><div class="exitbox"><h3>Exit Yipman?</h3><p>Your current view will close. No inventory, ordering, or price data will be changed.</p><div class="exitactions"><button class="exitcancel" id="exitCancel">Stay</button><button class="exitconfirm" id="exitConfirm">Exit</button></div></div></div>
     <div class="toast" id="toast"></div>
@@ -331,18 +348,19 @@ const appDate=v=>{
   return mo+'/'+d+' '+wd;
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='home', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
+let current='quick', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
 function renderView(id){
-  if(!$('#'+id))id='home';
+  if(!$('#'+id))id='quick';
   current=id;
   pages.forEach(p=>p.classList.toggle('on',p.id===id));
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
   const p=$('#'+id);if(p)p.scrollTop=0;
+  if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
   if(id==='order'&&!orderDate)loadOrder(0);
   if(id==='price')loadPrices();
   if(id==='data')loadData();
@@ -372,8 +390,8 @@ $('#exitCancel').onclick=hideExitConfirm;
 $('#exitConfirm').onclick=()=>{exitAllowed=true;hideExitConfirm();history.go(-2)};
 window.addEventListener('popstate',e=>{
   if($('#exitOverlay').classList.contains('on')){
-    history.pushState({yipman:true,view:'home',guard:true},'', '#home');
-    hideExitConfirm();renderView('home');return;
+    history.pushState({yipman:true,view:'quick',guard:true},'', '#quick');
+    hideExitConfirm();renderView('quick');return;
   }
   if($('#overlay').classList.contains('on')){
     $('#overlay').classList.remove('on');detailHistory=false;
@@ -382,15 +400,15 @@ window.addEventListener('popstate',e=>{
   }
   const st=e.state;
   if(st?.yipman&&st.root){
-    renderView('home');
-    history.pushState({yipman:true,view:'home',guard:true},'', '#home');
+    renderView('quick');
+    history.pushState({yipman:true,view:'quick',guard:true},'', '#quick');
     showExitConfirm();
     return;
   }
   if(st?.yipman&&st.view){renderView(st.view);return}
 });
 window.addEventListener('beforeunload',e=>{if(exitAllowed)return;e.preventDefault();e.returnValue=''});
-const today=new Date();$('#todayLabel').textContent=today.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}).toUpperCase();
+const today=new Date();
 
 async function loadHome(){
  try{
@@ -500,7 +518,8 @@ function quickFamilyGroups(rows){
      family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],
      family_receipt_7d_qty:r.family_receipt_7d_qty??null,
      family_receipt_7d_uom:r.family_receipt_7d_uom||'',
-     family_receipt_7d_status:r.family_receipt_7d_status||''
+     family_receipt_7d_status:r.family_receipt_7d_status||'',
+     family_receipt_7d_day_count:r.family_receipt_7d_day_count??null
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -607,12 +626,19 @@ function quickReceivingRowHtml(a){
  return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">R</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(a.article_description||'Receiving Article')+'</div></div></div>'+
    quickDeliveryCell(history[0],'LATEST DELIVERY')+quickDeliveryCell(history[1],'PREV DELIVERY')+'</div>';
 }
-function quickSellingHtml(a,idx,seq,{inactive=false}={}){
+function quickSellingHtml(a,idx,seq){
  const uom=String(a.movement_uom||''),rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
- const hid='q-upc-'+idx+'-'+seq;
- return '<section class="qsap"><div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div></div>'+
-   '<div class="qsapmetric"><small>SAP 7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(a.avg_qty_day)+' '+esc(uom)+'</span></div></div>'+
-   active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+(inactive?'<div class="qhiddennote">Inactive SAP Selling Article · no 7D MVT and no active UPC.</div>':'')+'</section>';
+ const hid='q-upc-'+idx+'-'+seq,mvt=num(a.movement_7d);
+ const isLb=v=>['LB','LBS','POUND','POUNDS'].includes(String(v||'').trim().toUpperCase());
+ const posRows=rows.filter(r=>num(r.qty_7d)!==null);
+ const comparable=isLb(uom)&&posRows.every(r=>isLb(r.qty_uom||r.selling_uom||uom));
+ const pos7=posRows.reduce((sum,r)=>sum+Number(r.qty_7d||0),0);
+ const diff=comparable&&mvt!==null?Math.abs(mvt-pos7):null;
+ const showSap=diff!==null&&diff>1.5;
+ if(!showSap&&!rows.length)return '';
+ const head=showSap?'<div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div></div>'+
+   '<div class="qsapmetric"><small>SAP 7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(a.avg_qty_day)+' '+esc(uom)+'</span></div></div>':'';
+ return '<section class="qsap'+(showSap?'':' nohead')+'">'+head+active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+'</section>';
 }
 function quickGroupedHtml(rows){
  return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
@@ -625,20 +651,23 @@ function quickGroupedHtml(rows){
        '<div class="qffocusbox receipt"><div><small>7D RECEIPT</small><span>PHYSICAL · DE-DUPED</span></div><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b></div>'+
      '</div></div>';
    const receivingHtml=g.receiving.map(quickReceivingRowHtml).join('');
-   const visible=[],hidden=[];
-   for(const a of (g.selling||[])){
-     const hasMvt=hasActivity(a.movement_7d),hasUpc=(a.rows||[]).some(r=>hasActivity(r.qty_7d));
-     (hasMvt||hasUpc?visible:hidden).push(a);
-   }
-   const visibleHtml=visible.map((a,i)=>quickSellingHtml(a,idx,i)).join('');
-   const hiddenId='q-art-'+idx;
-   const hiddenHtml=hidden.length?'<button class="qhidebtn" data-qhide="'+hiddenId+'" data-noun="SAP Selling Article">Show '+hidden.length+' inactive SAP Selling Article'+(hidden.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+hiddenId+'">'+hidden.map((a,i)=>quickSellingHtml(a,idx,100+i,{inactive:true})).join('')+'</div>':'';
-   return '<section class="qfamily tone'+(idx%5)+'">'+familyHead+receivingHtml+visibleHtml+hiddenHtml+'</section>';
+   const sellingHtml=(g.selling||[]).map((a,i)=>quickSellingHtml(a,idx,i)).join('');
+   return '<section class="qfamily tone'+(idx%5)+'">'+familyHead+receivingHtml+sellingHtml+'</section>';
  }).join('');
 }
+function fitQuickUpcNames(){
+ $('.qupcname').forEach(el=>{
+   el.style.fontSize='';el.style.letterSpacing='';
+   let size=parseFloat(getComputedStyle(el).fontSize)||16;
+   const available=el.clientWidth;if(!available)return;
+   while(el.scrollWidth>available&&size>8){size-=0.5;el.style.fontSize=size+'px'}
+   if(el.scrollWidth>available)el.style.letterSpacing='-.45px';
+ });
+}
 function bindQuickRows(){
- $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
- $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
+ $('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+ $('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
+ requestAnimationFrame(fitQuickUpcNames);
 }
 async function hydrateQuickPrices(rows,requestId){
  const upcs=[...new Set((rows||[])
@@ -671,9 +700,36 @@ async function hydrateQuickPrices(rows,requestId){
  }
 }
 
+function quickReceiptDay(v){
+ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return '—';
+ const dt=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0);
+ return dt.toLocaleDateString(undefined,{weekday:'short'})+' '+Number(m[2])+'/'+Number(m[3]);
+}
+function bestSellerFamilyHtml(g,idx){
+ const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
+ const count=num(g.family_receipt_7d_day_count);
+ const recent=history.length?history.map(x=>'<div class="bestreceipt"><span>'+esc(quickReceiptDay(x.date))+'</span><b>'+fmt(x.quantity)+' '+esc(x.uom||receiptUom)+'</b></div>').join(''):'<div class="bestreceipt"><span>No recent receipt</span><b>—</b></div>';
+ return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="bestrank">#'+(idx+1)+'</div></div>'+
+   '<div class="bestmetrics"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
+   '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div></div>'+
+   '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span>LAST 2</span></div>'+recent+'</div></section>';
+}
+async function loadBestSellers(force=false){
+ const box=$('#quickRows');
+ if(bestSellerGroups&&!force){
+   box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');return;
+ }
+ const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading best-selling families…</div>';
+ try{
+  const d=await api('/v1/backoffice/inventory?category=ALL&limit=500&lightweight=true',{timeoutMs:22000});
+  if(requestId!==quickRequestSeq||$('#globalInput').value.trim())return;
+  bestSellerGroups=quickFamilyGroups(d.rows||[]).filter(g=>num(g.group_avg_qty_day)!==null&&Number(g.group_avg_qty_day)>0).sort((a,b)=>Number(b.group_avg_qty_day||0)-Number(a.group_avg_qty_day||0)||Number(b.group_qty_7d||0)-Number(a.group_qty_7d||0)||String(a.family_name||'').localeCompare(String(b.family_name||''))).slice(0,8);
+  box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');
+ }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
 async function loadQuick(q){
  const query=String(q||'').trim(), box=$('#quickRows');
- if(!query){quickRequestSeq++;lastQuickQuery='';box.innerHTML='<div class="empty">Use the search bar above. Results appear automatically.</div>';return}
+ if(!query){lastQuickQuery='';await loadBestSellers();return}
  const requestId=++quickRequestSeq;lastQuickQuery=query;box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
   const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(query),{timeoutMs:18000});
@@ -686,7 +742,9 @@ async function loadQuick(q){
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 $('#globalForm').onsubmit=e=>{e.preventDefault();const q=$('#globalInput').value.trim();if(!q)return;go('quick');clearTimeout(quickSearchTimer);loadQuick(q);$('#globalInput').blur()};
-$('#globalInput').addEventListener('input',()=>{if(current!=='quick')return;clearTimeout(quickSearchTimer);const q=$('#globalInput').value.trim();if(!q){loadQuick('');return}quickSearchTimer=setTimeout(()=>loadQuick(q),260)});
+$('#globalInput').addEventListener('input',()=>{if(current!=='quick')return;clearTimeout(quickSearchTimer);const q=$('#globalInput').value.trim();$('#quickClear').classList.toggle('on',!!q);if(!q){loadQuick('');return}quickSearchTimer=setTimeout(()=>loadQuick(q),260)});
+$('#quickClear').onclick=()=>{$('#globalInput').value='';$('#quickClear').classList.remove('on');clearTimeout(quickSearchTimer);loadQuick('');$('#globalInput').focus()};
+window.addEventListener('resize',()=>requestAnimationFrame(fitQuickUpcNames));
 
 async function openUpc(upc){
  sheet('Loading…',upc,'<div class="loading">Loading current item detail…</div>');
@@ -964,7 +1022,7 @@ async function acceptPrice(r,b){
  b.disabled=true;b.textContent='SAVING…';
  try{
   await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price}),timeoutMs:30000});
-  closeSheet(true);toast('Accepted · hidden until evidence changes');loadPrices();loadHome();
+  closeSheet(true);toast('Accepted · hidden until evidence changes');loadPrices();
  }catch(e){b.disabled=false;b.textContent='ACCEPTED';toast(e.message)}
 }
 $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
@@ -990,16 +1048,16 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){if(current==='home')await loadHome();else if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q)}else if(current==='order')await loadOrder(Number($('.day.on')?.dataset.offset||0));else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
+async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await loadOrder(Number($('.day.on')?.dataset.offset||0));else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
 
 const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
-const initialView=['home','quick','order','price','data'].includes(initialHash)?initialHash:'home';
-history.replaceState({yipman:true,root:true,view:'home'},'', '#home');
+const initialView=['quick','order','price','data'].includes(initialHash)?initialHash:'quick';
+history.replaceState({yipman:true,root:true,view:'quick'},'', '#quick');
 history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView);
 historyReady=true;
 buildDays();
 renderView(initialView);
-loadHome();
+if(initialView==='quick'&&!$('#globalInput').value.trim())loadBestSellers();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();
 </script>
