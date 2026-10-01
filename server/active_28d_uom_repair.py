@@ -375,6 +375,65 @@ def _latest_monthly_pi_frozen_base_source(
     return article_base_rows, stats
 
 
+def _parse_frozen_pack_selling_declaration(
+    selling_uom: Any,
+    pack: Any,
+) -> dict[str, Any] | None:
+    """Interpret Article Manual Frozen Pack Column G conservatively.
+
+    Column G is the Selling Unit. In the source it may be a pure UOM (EA/PAC/
+    PACK/BX/CV) or an explicit composite declaration such as 2LB/PACK or
+    2.5LB/PACK. Composite declarations are stronger than pack-text inference:
+    they directly state the base quantity per selling unit.
+
+    No cross-dimension conversion is performed.
+    """
+    raw = (_source_token(selling_uom) or '').upper().strip()
+    if not raw:
+        return None
+    token = re.sub(r'\s+', '', raw).replace('LBS', 'LB')
+
+    m = re.fullmatch(r'(\d+(?:\.\d+)?)([A-Z]+)/([A-Z]+)', token)
+    if m:
+        qty = Decimal(m.group(1))
+        base = m.group(2)
+        sell = m.group(3)
+        if qty <= 0:
+            return None
+        return {
+            'selling_uom': sell,
+            'declared_base_uom': base,
+            'base_qty_per_selling_unit': qty,
+            'conversion_basis': 'ARTICLE_MANUAL_G_EXPLICIT_BASE_PER_SELLING',
+            'raw_selling_declaration': raw,
+        }
+
+    # Pure unit: derive a weight factor only from the same row's structured
+    # Column E pack text, using the already-conservative parser.
+    inferred = _selling_factor_from_frozen_pack(raw, pack)
+    if inferred:
+        return {
+            'selling_uom': raw,
+            'declared_base_uom': inferred.get('base_uom'),
+            'base_qty_per_selling_unit': Decimal(str(inferred['base_qty_per_selling_unit'])),
+            'conversion_basis': inferred.get('conversion_basis'),
+            'raw_selling_declaration': raw,
+        }
+
+    # Pure canonical unit may still be useful when Monthly PI says Base equals
+    # Selling; factor 1 will be assigned only after the cross-source check.
+    if re.fullmatch(r'[A-Z]+', token):
+        return {
+            'selling_uom': raw,
+            'declared_base_uom': None,
+            'base_qty_per_selling_unit': None,
+            'conversion_basis': 'PURE_SELLING_UOM_NO_FACTOR_YET',
+            'raw_selling_declaration': raw,
+        }
+
+    return None
+
+
 def _safe_frozen_pack_cross_source_mapping(
     cur,
     target: dict[str, Any],
@@ -402,9 +461,13 @@ def _safe_frozen_pack_cross_source_mapping(
         article = str(row.get("article") or "")
         if not article or not _article_is_in_family(cur, article, int(target["family_id"])):
             continue
-        selling = (_source_token(row.get("selling_uom")) or "").upper().strip()
-        if not selling:
+        selling_decl = _parse_frozen_pack_selling_declaration(
+            row.get("selling_uom"),
+            row.get("pack"),
+        )
+        if not selling_decl:
             continue
+        selling = str(selling_decl["selling_uom"]).upper().strip()
 
         base_rows = monthly_pi_base_rows.get(article, [])
         if not base_rows and article != str(target.get("main_article_number") or ""):
@@ -423,11 +486,24 @@ def _safe_frozen_pack_cross_source_mapping(
         if not sell_uom_row or not base_uom_row:
             continue
 
+        declared_base = str(selling_decl.get("declared_base_uom") or "").upper().strip()
+        declared_factor = selling_decl.get("base_qty_per_selling_unit")
+
         if selling == base:
+            # Same-unit selling/base always means factor 1; package size remains
+            # descriptive and must not multiply POS quantity.
             factor = Decimal("1")
             conversion_basis = "SELLING_EQUALS_MONTHLY_PI_BASE"
-            pack_detail = None
+            pack_detail = selling_decl
+        elif declared_base and declared_factor is not None:
+            if declared_base != base:
+                continue
+            factor = Decimal(str(declared_factor))
+            conversion_basis = str(selling_decl.get("conversion_basis") or "ARTICLE_MANUAL_DECLARED")
+            pack_detail = selling_decl
         else:
+            # Pure non-base selling unit without an explicit Column G
+            # conversion may use the same-row structured Column E pack text.
             pack_detail = _selling_factor_from_frozen_pack(selling, row.get("pack"))
             if not pack_detail:
                 continue
