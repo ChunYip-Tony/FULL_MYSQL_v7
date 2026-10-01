@@ -796,6 +796,179 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
 
 
 
+_ORDERING_REVIEW_CACHE_LOCK = threading.Lock()
+_ORDERING_REVIEW_CACHE_VALUES: dict[str,dict[str,Any]] = {}
+_ORDERING_REVIEW_CACHE_AT: dict[str,float] = {}
+_ORDERING_REVIEW_REFRESHING: set[str] = set()
+_ORDERING_REVIEW_LAST_ERROR: dict[str,str] = {}
+_ORDERING_REVIEW_CACHE_TTL_SECONDS = 120.0
+
+
+def _ordering_review_cache_key(category: str, delivery_date: date) -> str:
+    return f"{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+
+
+def _ensure_ordering_review_cache_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS backoffice_ordering_review_cache (
+             cache_key VARCHAR(96) NOT NULL PRIMARY KEY,
+             payload_json LONGTEXT NOT NULL,
+             generated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+             ON UPDATE CURRENT_TIMESTAMP(6)
+           )"""
+    )
+
+
+def _load_persisted_ordering_review(cache_key: str) -> dict[str,Any] | None:
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            _ensure_ordering_review_cache_table(cur)
+            conn.commit()
+            cur.execute(
+                """SELECT payload_json,generated_at
+                   FROM backoffice_ordering_review_cache
+                   WHERE cache_key=%s
+                   LIMIT 1""",
+                (cache_key,),
+            )
+            row=cur.fetchone()
+            cur.close()
+        if not row:
+            return None
+        payload=json.loads(row.get("payload_json") or "{}")
+        if not isinstance(payload,dict):
+            return None
+        payload["persisted_generated_at"]=row.get("generated_at")
+        return payload
+    except Exception:
+        return None
+
+
+def _persist_ordering_review(cache_key: str, value: dict[str,Any]) -> None:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_ordering_review_cache_table(cur)
+        cur.execute(
+            """INSERT INTO backoffice_ordering_review_cache(cache_key,payload_json)
+               VALUES (%s,%s)
+               ON DUPLICATE KEY UPDATE
+                 payload_json=VALUES(payload_json),
+                 generated_at=CURRENT_TIMESTAMP(6)""",
+            (cache_key,json.dumps(value,default=str)),
+        )
+        conn.commit()
+        cur.close()
+
+
+def _ordering_review_refresh_worker(category: str, delivery_date: date, cache_key: str) -> None:
+    try:
+        _ORDERING_REVIEW_LAST_ERROR.pop(cache_key,None)
+        value=ordering_review(category=category,delivery_date=delivery_date)
+        _persist_ordering_review(cache_key,value)
+        with _ORDERING_REVIEW_CACHE_LOCK:
+            _ORDERING_REVIEW_CACHE_VALUES[cache_key]=value
+            _ORDERING_REVIEW_CACHE_AT[cache_key]=time.monotonic()
+    except Exception as exc:
+        _ORDERING_REVIEW_LAST_ERROR[cache_key]=f"{type(exc).__name__}: {exc}"[:1000]
+    finally:
+        with _ORDERING_REVIEW_CACHE_LOCK:
+            _ORDERING_REVIEW_REFRESHING.discard(cache_key)
+
+
+def _request_ordering_review_refresh(category: str, delivery_date: date, cache_key: str) -> None:
+    with _ORDERING_REVIEW_CACHE_LOCK:
+        if cache_key in _ORDERING_REVIEW_REFRESHING:
+            return
+        _ORDERING_REVIEW_REFRESHING.add(cache_key)
+    threading.Thread(
+        target=_ordering_review_refresh_worker,
+        args=(category,delivery_date,cache_key),
+        name=f"ordering-review-{delivery_date.isoformat()}",
+        daemon=True,
+    ).start()
+
+
+def cached_ordering_review(
+    category: str = "ALL",
+    delivery_date: date | None = None,
+    force: bool = False,
+) -> dict[str,Any]:
+    """Return delivery-date Ordering immediately; heavy analysis refreshes in background."""
+    if delivery_date is None:
+        return ordering_review(category=category,delivery_date=None)
+
+    cat=str(category or "ALL").strip().upper()
+    if cat not in {"ALL","FRESH","FROZEN"}:
+        raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
+    key=_ordering_review_cache_key(cat,delivery_date)
+
+    with _ORDERING_REVIEW_CACHE_LOCK:
+        cached=_ORDERING_REVIEW_CACHE_VALUES.get(key)
+        cached_at=_ORDERING_REVIEW_CACHE_AT.get(key)
+
+    if cached is None:
+        persisted=_load_persisted_ordering_review(key)
+        if persisted is not None:
+            with _ORDERING_REVIEW_CACHE_LOCK:
+                _ORDERING_REVIEW_CACHE_VALUES[key]=persisted
+                _ORDERING_REVIEW_CACHE_AT[key]=0.0
+            cached=persisted
+            cached_at=0.0
+
+    expected=str(completed_through_date())
+    cached_expected=str(((cached or {}).get("data_health") or {}).get("expected_through") or "")
+    data_current=bool(cached and cached_expected==expected)
+    age=(time.monotonic()-cached_at) if cached is not None and cached_at is not None else None
+    stale=(
+        cached is None
+        or not data_current
+        or age is None
+        or age>=_ORDERING_REVIEW_CACHE_TTL_SECONDS
+    )
+    if force or stale:
+        _request_ordering_review_refresh(cat,delivery_date,key)
+
+    with _ORDERING_REVIEW_CACHE_LOCK:
+        refreshing=key in _ORDERING_REVIEW_REFRESHING
+    err=_ORDERING_REVIEW_LAST_ERROR.get(key)
+
+    # Never present a prior completed-data-day snapshot as current Ordering.
+    if cached is None or not data_current:
+        return {
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V4_ASYNC",
+            "category":cat,
+            "selected_delivery_date":delivery_date,
+            "selected_delivery_weekday":[
+                "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+            ][delivery_date.weekday()],
+            "analysis_status":"REFRESHING" if refreshing else "REFRESH_FAILED",
+            "cache_status":"WARMING" if cached is None else "STALE_DATA_REFRESHING",
+            "refreshing":refreshing,
+            "refresh_error":err,
+            "count":0,
+            "rows":[],
+            "skipped":[],
+            "skipped_breakdown":{},
+            "data_health":{
+                "status":"REFRESHING" if refreshing else "UNAVAILABLE",
+                "expected_through":completed_through_date(),
+                "pos_data_through":None,
+                "movement_data_through":None,
+                "missing_required_sources":[],
+                "rule":"ORDERING_ASYNC_CACHE_REQUIRES_CURRENT_COMPLETED_DATA",
+            },
+        }
+
+    return {
+        **cached,
+        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V4_ASYNC",
+        "cache_status":"STALE_REFRESHING" if stale else "HIT",
+        "refreshing":refreshing,
+        "refresh_error":err,
+    }
+
+
 def sales_lineage_audit() -> dict[str, Any]:
     """Audit every current Seafood UPC against lineage-aware canonical POS totals."""
     with db_conn() as conn:
