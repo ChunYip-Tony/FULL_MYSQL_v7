@@ -1016,8 +1016,9 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
         _insert_evidence(cur, 'ARTICLE', article_id, 'PACK_TEXT_OBSERVED', ctx, 'pack', pack, pack_extra)
 
         # Monthly PI Fresh/Live: D is Pack Size and E is Receiving Unit.
-        # A simple explicit weight pack (e.g. 60LB) establishes LB as Base UOM
-        # and 1 Receiving Unit = 60 LB. This is a source-schema rule, not a
+        # An explicit structured weight pack (e.g. 60LB or 1/60LB) establishes
+        # LB as Base UOM and the full pack weight per Receiving Unit. This is a
+        # source-schema rule, not a
         # description-text inference.
         if (
             ctx.source_type == 'monthly_pi_form'
@@ -1028,7 +1029,6 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
                 or _norm_header(ctx.sheet_name).startswith('live ')
             )
             and parsed_pack
-            and parsed_pack.get('pattern') == 'SINGLE_WEIGHT'
         ):
             receiving_token = _source_token(_get(row, colmap, 'receiving_uom'))
             base_token = str(parsed_pack.get('base_uom') or '')
