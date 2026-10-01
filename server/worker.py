@@ -58,6 +58,18 @@ def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=No
     }
     if stage:
         payload['phase3_stage']=stage
+        # Row-count data belongs to the stage that emitted it. Clear it when a
+        # later Phase 3 stage starts so the UI cannot keep showing a stale
+        # Quick Check percentage during Analysis/Audit/Finalize.
+        if not progress_payload:
+            for key in (
+                'progress_kind','progress_unit','progress_current','progress_total',
+                'progress_pct','progress_ready','progress_hold','progress_historical',
+                'progress_issue_counts','progress_elapsed_seconds',
+                'progress_rows_per_second','progress_eta_seconds',
+                'progress_current_upc','progress_current_name',
+            ):
+                payload[key]=None
     if progress_payload:
         for key,value in progress_payload.items():
             if key.startswith('progress_'):
