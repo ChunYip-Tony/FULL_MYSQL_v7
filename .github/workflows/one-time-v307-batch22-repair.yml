@@ -1,0 +1,205 @@
+name: One-time Batch 22 v7.0.307 repair
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.head_commit.message == 'Trigger Batch 22 v7.0.307 repair'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for v7.0.307 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          consecutive=0
+          for i in $(seq 1 180); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            printf '%s' "$body" > /tmp/health.json
+            pass="$(BODY="$body" python - <<'PY'
+          import json, os
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          ok=(
+              p.get('ok') is True
+              and p.get('version') == '7.0.307-single-service'
+              and p.get('worker_version') == '7.0.307-single-service'
+              and p.get('worker_healthy') is True
+              and p.get('worker_ready') is True
+          )
+          print('1' if ok else '0')
+          PY
+          )"
+            if [ "$pass" = "1" ]; then
+              consecutive=$((consecutive+1))
+              if [ "$consecutive" -ge 3 ]; then
+                echo "API_WORKER_VERSION_GATE=PASS"
+                exit 0
+              fi
+            else
+              consecutive=0
+            fi
+            sleep 5
+          done
+          echo "API_WORKER_VERSION_GATE=TIMEOUT"
+          exit 1
+
+      - name: Wait for pipeline idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+            cat /tmp/active.json
+            echo
+            active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json', encoding='utf-8'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+            if [ "$active" = "0" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "ACTIVE_BATCH_DID_NOT_CLEAR"
+          exit 1
+
+      - name: Capture Batch 22 before state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/web-upload/diagnostics/batch-id/22" -o /tmp/before-diagnostic.json || echo '{}' > /tmp/before-diagnostic.json
+          curl -fsS --max-time 60 "$base/v1/web-upload/batches/22/qa-summary" -o /tmp/before-qa.json || echo '{}' > /tmp/before-qa.json
+          curl -fsS --max-time 60 "$base/v1/web-upload/recent?limit=8" -o /tmp/recent.json || echo '{}' > /tmp/recent.json
+          echo "=== BEFORE DIAGNOSTIC ==="; cat /tmp/before-diagnostic.json; echo
+          echo "=== BEFORE QA ==="; cat /tmp/before-qa.json; echo
+
+      - name: Request Batch 22 Phase 3 rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          set +e
+          code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/22/rebuild-phase3")"
+          rc=$?
+          set -e
+          echo "CURL_RC=$rc HTTP=$code"
+          test ! -s /tmp/rebuild.json || cat /tmp/rebuild.json
+          echo
+          echo "REBUILD_HTTP=$code" >> "$GITHUB_ENV"
+          accepted="$(HTTP="$code" python - <<'PY'
+          import json, os
+          try:
+              p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          except Exception:
+              p={}
+          ok=os.environ.get('HTTP')=='200' and p.get('code_version')=='7.0.307-single-service' and p.get('version_fence_pass') is True
+          print('1' if ok else '0')
+          PY
+          )"
+          echo "REBUILD_ACCEPTED=$accepted" >> "$GITHUB_ENV"
+          if [ "$accepted" = "1" ]; then
+            read -r run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json', encoding='utf-8'))
+          print(p.get('pipeline_run_id') or '', p.get('session_id') or '')
+          PY
+          )
+            echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+            echo "SESSION_ID=$session_id" >> "$GITHUB_ENV"
+          fi
+
+      - name: Wait for Batch 22 rebuild terminal state
+        if: ${{ env.REBUILD_ACCEPTED == '1' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          final_status=""
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$SESSION_ID" -o /tmp/session.json
+            state="$(RUN_ID="$RUN_ID" python - <<'PY'
+          import json, os
+          rid=int(os.environ['RUN_ID'])
+          p=json.load(open('/tmp/session.json', encoding='utf-8'))
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid), None)
+          if not run:
+              print('MISSING||')
+          else:
+              print(str(run.get('processing_status') or '')+'|'+str(run.get('code_version') or '')+'|'+str(run.get('phase3_stage') or run.get('last_phase3_stage') or ''))
+          PY
+          )"
+            echo "$state"
+            final_status="${state%%|*}"
+            case "$final_status" in
+              COMPLETED|QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED) break ;;
+            esac
+            sleep 5
+          done
+          echo "FINAL_RUN_STATUS=$final_status" >> "$GITHUB_ENV"
+
+      - name: Capture Batch 22 after state
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -sS --max-time 60 "$base/v1/web-upload/diagnostics/batch-id/22" -o /tmp/after-diagnostic.json
+          test -s /tmp/after-diagnostic.json || echo '{}' > /tmp/after-diagnostic.json
+          curl -sS --max-time 60 "$base/v1/web-upload/batches/22/qa-summary" -o /tmp/after-qa.json
+          test -s /tmp/after-qa.json || echo '{}' > /tmp/after-qa.json
+          mkdir -p ops
+          python - <<'PY'
+          import json, os, pathlib, datetime
+          def load(p):
+              try:
+                  return json.load(open(p, encoding='utf-8'))
+              except Exception:
+                  return {}
+          out={
+              'recorded_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'target_version': '7.0.307-single-service',
+              'batch_id': 22,
+              'rebuild_http': os.environ.get('REBUILD_HTTP'),
+              'rebuild_accepted': os.environ.get('REBUILD_ACCEPTED') == '1',
+              'run_id': os.environ.get('RUN_ID'),
+              'session_id': os.environ.get('SESSION_ID'),
+              'final_run_status': os.environ.get('FINAL_RUN_STATUS'),
+              'health': load('/tmp/health.json'),
+              'before_diagnostic': load('/tmp/before-diagnostic.json'),
+              'before_qa': load('/tmp/before-qa.json'),
+              'rebuild_response': load('/tmp/rebuild.json'),
+              'after_diagnostic': load('/tmp/after-diagnostic.json'),
+              'after_qa': load('/tmp/after-qa.json'),
+          }
+          pathlib.Path('ops/batch22_v307_result.json').write_text(json.dumps(out,indent=2,default=str)+'\n', encoding='utf-8')
+          PY
+          cat ops/batch22_v307_result.json
+
+      - name: Persist Batch 22 repair result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "FULL MYSQL Ops"
+          git config user.email "full-mysql-ops@users.noreply.github.com"
+          git add ops/batch22_v307_result.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "ops: record Batch 22 v7.0.307 repair result"
+          git push
