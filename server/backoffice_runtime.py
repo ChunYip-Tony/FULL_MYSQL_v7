@@ -1042,8 +1042,13 @@ def cached_ordering_review(
     with _ORDERING_REVIEW_CACHE_LOCK:
         cached=_ORDERING_REVIEW_CACHE_VALUES.get(key)
         cached_at=_ORDERING_REVIEW_CACHE_AT.get(key)
+        already_refreshing=key in _ORDERING_REVIEW_REFRESHING
 
-    if cached is None:
+    # Polling a cache that is already warming must stay non-blocking.  The old
+    # path re-opened MySQL on every poll while the heavy worker was using the
+    # same database, which could make the mobile request hit its AbortController
+    # timeout and surface "signal is aborted without reason".
+    if cached is None and not already_refreshing:
         persisted=_load_persisted_ordering_review(key)
         if persisted is not None:
             with _ORDERING_REVIEW_CACHE_LOCK:
@@ -1051,6 +1056,33 @@ def cached_ordering_review(
                 _ORDERING_REVIEW_CACHE_AT[key]=0.0
             cached=persisted
             cached_at=0.0
+
+    if cached is None and already_refreshing:
+        expected_now=completed_through_date()
+        return {
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V6_ASYNC_BEST_AVAILABLE",
+            "category":cat,
+            "selected_delivery_date":delivery_date,
+            "selected_delivery_weekday":[
+                "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+            ][delivery_date.weekday()],
+            "analysis_status":"REFRESHING",
+            "cache_status":"WARMING",
+            "refreshing":True,
+            "refresh_error":None,
+            "count":0,
+            "rows":[],
+            "skipped":[],
+            "skipped_breakdown":{},
+            "data_health":{
+                "status":"REFRESHING",
+                "expected_through":expected_now,
+                "pos_data_through":None,
+                "movement_data_through":None,
+                "missing_required_sources":[],
+                "rule":"ORDERING_ASYNC_REFRESH_ALREADY_RUNNING_NONBLOCKING_POLL",
+            },
+        }
 
     expected=str(completed_through_date())
     cached_expected=str(((cached or {}).get("data_health") or {}).get("expected_through") or "")
@@ -1074,7 +1106,36 @@ def cached_ordering_review(
         refreshing=key in _ORDERING_REVIEW_REFRESHING
     err=_ORDERING_REVIEW_LAST_ERROR.get(key)
 
-    # Never present a prior completed-data-day snapshot as current Ordering.
+    # Yipman is explicitly a best-available operating view.  When yesterday's
+    # cache is still the newest usable evidence, return it immediately as an
+    # ESTIMATE while a fresh delivery-date calculation runs in the background.
+    # Standard Back Office behavior remains unchanged.
+    if cached is not None and not data_current and best_available_delivery_evidence:
+        stale_health=dict((cached.get("data_health") or {}))
+        stale_health.update({
+            "status":"STALE_ESTIMATE_AVAILABLE",
+            "decision_mode":"STALE_ESTIMATE",
+            "expected_through":expected,
+            "cache_expected_through":cached_expected or None,
+            "warning":"Best-available cached ordering estimate is shown while current delivery analysis refreshes.",
+        })
+        has_rows=bool(cached.get("rows"))
+        return {
+            **cached,
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V6_ASYNC_BEST_AVAILABLE",
+            "analysis_status":(
+                "READY_STALE_ESTIMATE_REFRESHING"
+                if has_rows else
+                "READY_STALE_ESTIMATE_NO_ELIGIBLE_ITEMS_REFRESHING"
+            ),
+            "cache_status":"STALE_ESTIMATE_REFRESHING",
+            "refreshing":refreshing,
+            "refresh_error":err,
+            "data_health":stale_health,
+        }
+
+    # Never present a prior completed-data-day snapshot as current Ordering
+    # in the standard Back Office path.
     if cached is None or not data_current:
         return {
             "contract_version":"BACKOFFICE_ORDERING_REVIEW_V5_ASYNC_STALE_ESTIMATE",
