@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, timedelta
 from difflib import SequenceMatcher
 from decimal import Decimal
 import json
@@ -604,18 +604,67 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             missing_required_sources.append("POS")
         if mvt_through!=expected_through:
             missing_required_sources.append("MVT")
+
+        available_dates=[x for x in (pos_through,mvt_through) if x is not None]
+        common_data_through=min(available_dates) if len(available_dates)==2 else None
+        stale_days=(
+            max(0,(expected_through-common_data_through).days)
+            if common_data_through is not None else None
+        )
+        can_estimate=common_data_through is not None
         ordering_data_health={
             "status":(
                 "CURRENT"
                 if not missing_required_sources
-                else "BLOCKED_STALE_REQUIRED_DATA"
+                else ("STALE_ESTIMATE_AVAILABLE" if can_estimate else "UNAVAILABLE")
+            ),
+            "decision_mode":(
+                "CURRENT"
+                if not missing_required_sources
+                else ("STALE_ESTIMATE" if can_estimate else "UNAVAILABLE")
             ),
             "expected_through":expected_through,
+            "data_through":common_data_through,
+            "stale_calendar_days":stale_days,
             "pos_data_through":pos_through,
             "movement_data_through":mvt_through,
             "missing_required_sources":missing_required_sources,
-            "rule":"ORDERING_REQUIRES_CURRENT_COMPLETED_POS_AND_MVT",
+            "rule":"ORDERING_USES_LATEST_COMMON_POS_MVT_AS_ESTIMATE_WHEN_CURRENT_COMPLETED_DAY_IS_MISSING",
+            "warning":(
+                None
+                if not missing_required_sources
+                else (
+                    f"Estimate uses existing data through {common_data_through}; "
+                    f"required completed data is through {expected_through}."
+                    if can_estimate else
+                    "Ordering estimate unavailable because POS and MVT do not have a common usable date."
+                )
+            ),
         }
+
+        if not can_estimate:
+            cur.close()
+            return {
+                "contract_version":"BACKOFFICE_ORDERING_REVIEW_V5_STALE_ESTIMATE",
+                "category":cat,
+                "selected_delivery_date":delivery_date,
+                "selected_delivery_weekday":(
+                    ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][delivery_date.weekday()]
+                    if delivery_date else None
+                ),
+                "analysis_status":"UNAVAILABLE",
+                "data_health":ordering_data_health,
+                "count":0,
+                "rows":[],
+                "skipped":[],
+                "skipped_breakdown":{},
+                "inputs":{},
+                "rules":{
+                    "decision_level":"FAMILY_ARTICLE_AND_RECEIVING_ARTICLE",
+                    "stale_estimate_allowed":True,
+                    "requires_common_pos_mvt_date":True,
+                },
+            }
 
         # Reuse the same canonical movement window for every suggested family.
         # The former path re-queried coverage and movement rows twice per family.
@@ -623,7 +672,7 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             cur,
             "movement",
             limit=180,
-            up_to=expected_through,
+            up_to=common_data_through,
         )
         for kind in kinds:
             delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
@@ -658,7 +707,12 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
                             "delivery_day_evidence":delivery_day,
                         })
 
+            # OH / movement evidence is only current through common_data_through.
+            # Start forecast depletion on the next calendar day so every missing
+            # day between the evidence date and the delivery date is covered.
+            forecast_start_date=common_data_through+timedelta(days=1)
             bulk_kwargs: dict[str,Any] = {
+                "ordering_date":forecast_start_date,
                 "expected_delivery_date":delivery_date,
                 "include_sufficient_stock":bool(delivery_date),
                 "family_ids":eligible_family_ids,
@@ -718,6 +772,11 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
                     "suggested_delivery_qty": s.get("suggested_order_qty"),
                     "suggested_delivery_uom": s.get("suggested_order_uom"),
                     "category": s.get("category"),
+                    "data_status": ordering_data_health.get("status"),
+                    "data_through": common_data_through,
+                    "expected_through": expected_through,
+                    "stale_calendar_days": stale_days,
+                    "estimate_only": bool(missing_required_sources),
                     "attention": bool(
                         _d(s.get("dos")) < Decimal("3")
                         or _d(s.get("projected_oh_at_delivery")) < 0
@@ -761,13 +820,14 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
     skipped_breakdown=dict(
         Counter(str(x.get("reason") or "UNKNOWN") for x in skipped)
     )
-    analysis_status=(
-        ordering_data_health["status"]
-        if ordering_data_health["status"]!="CURRENT"
-        else ("READY" if rows else "READY_NO_ELIGIBLE_ITEMS")
-    )
+    if ordering_data_health["status"]=="CURRENT":
+        analysis_status="READY" if rows else "READY_NO_ELIGIBLE_ITEMS"
+    elif ordering_data_health["status"]=="STALE_ESTIMATE_AVAILABLE":
+        analysis_status="READY_STALE_ESTIMATE" if rows else "READY_STALE_ESTIMATE_NO_ELIGIBLE_ITEMS"
+    else:
+        analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V3",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V5_STALE_ESTIMATE",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_delivery_weekday": (
@@ -790,6 +850,9 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             "delivery_date_filter": "RECENT_12_WEEK_CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
             "delivery_day_eligibility": "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE",
             "delivery_day_prefilter_before_heavy_math": True,
+            "stale_estimate_allowed": True,
+            "stale_estimate_basis": "LATEST_COMMON_CANONICAL_POS_AND_MVT_DATE",
+            "stale_forecast_starts_day_after_data_through": True,
         },
     }
 
