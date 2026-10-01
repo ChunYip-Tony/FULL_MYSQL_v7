@@ -1,3 +1,11 @@
+v7.0.340 Yipman Physical Receipt Trace Clarity:
+- Direct 101 receipts now display as "101 RECEIPT" instead of "GR —".
+- 107+109 blocked-stock deliveries display the physical 109 GR; 107 remains cost-stage evidence only.
+- Receipt-detail labels explicitly distinguish direct 101 receipts from 109 physical GR receipts.
+- Past delivery history contract text now states canonical physical 101/109 receipts.
+- Yipman shell cache advanced to v340.
+Version: 7.0.340 Single-Service Edition
+
 v7.0.339 Ordering + Pricing Best-Available No-Grace Mode:
 - Removes POS/MVT freshness/grace gating from Ordering and Price Suggestion while keeping source dates visible.
 - Missing POS/MVT dates no longer block module-level suggestions; missing dates are excluded, never treated as zero.
