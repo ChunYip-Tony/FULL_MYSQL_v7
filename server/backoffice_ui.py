@@ -1080,6 +1080,108 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 
 
+  /* v7.0.317 · denser Home + operational KPI semantics */
+  .mobilehome.on .m-topbar{
+    min-height:clamp(68px,9.2dvh,82px)!important;
+    margin-bottom:3px!important;
+    padding:4px 7px 6px!important;
+  }
+  .mobilehome.on:before{
+    height:clamp(91px,12.2dvh,110px)!important;
+    border-radius:0 0 25px 25px!important;
+  }
+  .mobilehome.on:after{
+    top:clamp(67px,9dvh,80px)!important;
+    height:20px!important;
+  }
+  .mobilehome.on .m-version-title{
+    font-size:clamp(16px,4.45vw,22px)!important;
+  }
+  .mobilehome.on .m-home-subline{margin-top:4px!important}
+  .mobilehome.on .m-header-fish{
+    right:clamp(53px,14vw,68px)!important;
+    bottom:-8px!important;
+    font-size:clamp(38px,5.8dvh,49px)!important;
+    opacity:.18!important;
+  }
+  .mobilehome.on .m-status{
+    min-height:27px!important;
+    padding:4px 8px!important;
+  }
+  .mobilehome.on .m-modgrid{
+    flex:0 0 auto!important;
+    grid-template-rows:repeat(3,clamp(128px,18dvh,145px))!important;
+    align-content:start!important;
+    gap:clamp(6px,.85dvh,8px)!important;
+    margin-top:3px!important;
+  }
+  .mobilehome.on .m-module{
+    min-height:0!important;
+    height:auto!important;
+    padding:clamp(7px,.9dvh,9px) 9px clamp(21px,2.9dvh,25px)!important;
+    border-radius:17px!important;
+  }
+  .mobilehome.on .m-module .ico{
+    width:clamp(29px,4dvh,35px)!important;
+    height:clamp(29px,4dvh,35px)!important;
+    border-radius:11px!important;
+    font-size:clamp(15px,2.05dvh,18px)!important;
+    margin-bottom:4px!important;
+  }
+  .mobilehome.on .m-module:after{
+    right:8px!important;
+    top:7px!important;
+    width:22px!important;
+    height:22px!important;
+    font-size:15px!important;
+  }
+  .mobilehome.on .m-module b{
+    font-size:clamp(13.5px,1.85dvh,16px)!important;
+    line-height:1.05!important;
+  }
+  .mobilehome.on .m-module .m-desc{
+    margin-top:3px!important;
+    font-size:clamp(8px,1.08dvh,9.5px)!important;
+    line-height:1.12!important;
+  }
+  .mobilehome.on .m-cardstatus{
+    min-height:17px!important;
+    margin-top:5px!important;
+    padding:2.5px 6px!important;
+    max-width:96%!important;
+    font-size:clamp(7.5px,1.08dvh,9px)!important;
+    letter-spacing:0!important;
+  }
+  .mobilehome.on .m-module:before{
+    height:clamp(13px,1.95dvh,17px)!important;
+    border-radius:48% 52% 15px 15px / 42% 40% 15px 15px!important;
+    opacity:.62!important;
+  }
+  .mobilehome.on .seafood-art,
+  .mobilehome.on .m-module:nth-child(1) .seafood-art,
+  .mobilehome.on .m-module:nth-child(2) .seafood-art,
+  .mobilehome.on .m-module:nth-child(4) .seafood-art,
+  .mobilehome.on .m-module:nth-child(5) .seafood-art,
+  .mobilehome.on .m-module:nth-child(6) .seafood-art{
+    right:6px!important;
+    bottom:5px!important;
+    font-size:clamp(19px,3.15dvh,25px)!important;
+    opacity:.72!important;
+    filter:drop-shadow(0 3px 4px rgba(8,64,72,.09))!important;
+  }
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on .m-topbar{min-height:58px!important}
+    .mobilehome.on:before{height:82px!important}
+    .mobilehome.on:after{top:59px!important;height:17px!important}
+    .mobilehome.on .m-modgrid{grid-template-rows:repeat(3,clamp(108px,17.1dvh,121px))!important}
+    .mobilehome.on .m-module{padding:5px 7px 19px!important}
+    .mobilehome.on .m-module .ico{width:27px!important;height:27px!important;font-size:14px!important}
+    .mobilehome.on .m-cardstatus{font-size:7px!important;min-height:15px!important;padding:2px 5px!important}
+    .mobilehome.on .seafood-art{font-size:18px!important;bottom:4px!important}
+    .mobilehome.on .m-module:before{height:12px!important}
+  }
+
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -3430,6 +3532,20 @@ async function mobileRefreshHome(){
     el.textContent=text;
     el.className='m-cardstatus '+tone;
   };
+  const compactMoney=v=>{
+    const n=Number(v);
+    if(!Number.isFinite(n))return '—';
+    if(Math.abs(n)>=1000000)return '$'+(n/1000000).toFixed(1)+'M';
+    if(Math.abs(n)>=1000)return '$'+(n/1000).toFixed(1)+'K';
+    return '$'+n.toFixed(0);
+  };
+  const shortDate=v=>{
+    const s=String(v||'');
+    const m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m?(Number(m[2])+'/'+Number(m[3])):s;
+  };
+
+  // Fast status layer: paint the Home immediately from lightweight endpoints.
   const requests=[
     api('/healthz',{timeoutMs:9000}),
     api('/v1/app/dashboard',{timeoutMs:12000}),
@@ -3462,25 +3578,10 @@ async function mobileRefreshHome(){
     setCard('mQuickModuleMeta',ready+' READY · '+hold+' HOLD',hold?'warn':'good');
   }else setCard('mQuickModuleMeta','STATUS UNAVAILABLE','neutral');
 
-  const price=dash?.price_change||null;
-  if(price){
-    const review=Number(price.pending_review||0),execute=Number(price.approved_for_execution||0);
-    setCard('mPriceModuleMeta',review+' REVIEW · '+execute+' TO EXECUTE',(review||execute)?'warn':'good');
-  }else setCard('mPriceModuleMeta','WORKFLOW STATUS UNAVAILABLE','neutral');
-
-  if(dh){
-    const complete=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
-    setCard('mPerformanceModuleMeta',complete+'/14 COMPLETE DATA DAYS',complete>=13?'good':(complete?'warn':'bad'));
-  }else if(quick?.latest_published_at){
-    const published=String(quick.latest_published_at).slice(0,10);
-    setCard('mPerformanceModuleMeta','PUBLISHED '+published,'neutral');
-  }else setCard('mPerformanceModuleMeta','DATA STATUS UNAVAILABLE','neutral');
-
-  const order=dash?.order_workflow||null,orderCfg=dash?.ordering||{};
-  if(order){
-    const drafts=Number(order.draft||0),policies=Number(orderCfg.enabled_policy_count||0);
-    setCard('mOrderingModuleMeta',drafts+' DRAFT · '+policies+' POLICIES',drafts?'warn':'good');
-  }else setCard('mOrderingModuleMeta','WORKFLOW STATUS UNAVAILABLE','neutral');
+  // Do not show legacy proposal/draft workflow counts as operational Price/Ordering KPIs.
+  setCard('mPriceModuleMeta','LOADING QUALIFIED REVIEW…','neutral');
+  setCard('mOrderingModuleMeta','LOADING FAMILY REVIEW…','neutral');
+  setCard('mPerformanceModuleMeta','LOADING LATEST DAY…','neutral');
 
   const inv=dash?.inventory_attention||null,dumping=dash?.dumping||{};
   if(inv){
@@ -3499,9 +3600,61 @@ async function mobileRefreshHome(){
   }else setCard('mDataModuleMeta','BATCH / QA STATUS UNAVAILABLE','neutral');
 
   const updated=mNode('mHomeUpdated');
-  if(updated){
-    updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
-  }
+  if(updated)updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+
+  // Operational KPI layer: use the same live review engines as the actual pages.
+  const ops=await Promise.allSettled([
+    api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}),
+    api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
+    api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000}),
+    api('/v1/app/v2/performance/latest-date',{timeoutMs:12000})
+  ]);
+  const op=i=>ops[i]?.status==='fulfilled'?ops[i].value:null;
+  const pricing=op(0),fresh=op(1),frozen=op(2),latestPerf=op(3);
+
+  if(pricing){
+    const blocked=String(pricing.data_health?.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA';
+    if(blocked){
+      setCard('mPriceModuleMeta','CURRENT DATA REQUIRED','bad');
+    }else{
+      const rows=pricing.rows||[];
+      const urgent=rows.filter(x=>Boolean(x.priority_240_249_mismatch)).length;
+      const text=urgent?urgent+' URGENT · '+rows.length+' REVIEW':rows.length+' QUALIFIED REVIEW';
+      setCard('mPriceModuleMeta',text,urgent?'bad':(rows.length?'warn':'good'));
+    }
+  }else setCard('mPriceModuleMeta','REVIEW STATUS UNAVAILABLE','neutral');
+
+  if(fresh||frozen){
+    const reports=[fresh,frozen].filter(Boolean);
+    const blocked=reports.some(x=>String(x.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA');
+    if(blocked){
+      setCard('mOrderingModuleMeta','CURRENT DATA REQUIRED','bad');
+    }else{
+      const rows=[...(fresh?.rows||[]),...(frozen?.rows||[])];
+      const attention=rows.filter(x=>Boolean(x.attention)).length;
+      setCard('mOrderingModuleMeta',rows.length+' FAMILIES · '+attention+' ATTENTION',attention?'warn':'good');
+    }
+  }else setCard('mOrderingModuleMeta','ORDER STATUS UNAVAILABLE','neutral');
+
+  const perfDate=latestPerf?.latest_completed_supported_sales_date||null;
+  if(perfDate){
+    try{
+      const perf=await api(
+        '/v1/app/v2/performance/range?start_date='+encodeURIComponent(perfDate)+'&end_date='+encodeURIComponent(perfDate)+'&limit=20',
+        {timeoutMs:20000}
+      );
+      const s=perf.summary||{};
+      const gp=s.gp_dollars_complete===false?'GP$ PARTIAL':compactMoney(s.gp_dollars)+' GP$';
+      setCard('mPerformanceModuleMeta',shortDate(perfDate)+' · '+compactMoney(s.sales_dollars)+' SALES · '+gp,s.gp_dollars_complete===false?'warn':'good');
+    }catch(_){
+      setCard('mPerformanceModuleMeta','LATEST '+shortDate(perfDate)+' · GP$ UNAVAILABLE','neutral');
+    }
+  }else if(dh){
+    const complete=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
+    setCard('mPerformanceModuleMeta',complete+'/14 COMPLETE DATA DAYS',complete>=13?'good':(complete?'warn':'bad'));
+  }else setCard('mPerformanceModuleMeta','PERFORMANCE STATUS UNAVAILABLE','neutral');
+
+  if(updated)updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
 }
 function showMobileHome({scroll=true,historyMode='push'}={}){
   if(!isMobileBackoffice())return;
