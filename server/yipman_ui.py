@@ -554,11 +554,11 @@ async function loadOrder(offset){
  try{
   let data=null;
   for(let i=0;i<10;i++){
-   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+orderDate+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
+   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
    if(requestId!==orderRequestSeq)return;
    const status=String(data.analysis_status||'').toUpperCase();
    if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;
-   $('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';
+   $('#orderStatus').textContent='Calculating '+appDate(orderDate)+' · receipt cadence first';
    await new Promise(r=>setTimeout(r,1500));
   }
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
