@@ -623,11 +623,23 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             up_to=expected_through,
         )
         for kind in kinds:
-            bulk = bulk_ordering_suggestions(
-                kind,
-                expected_delivery_date=delivery_date,
-                include_sufficient_stock=bool(delivery_date),
-            )
+            try:
+                bulk = bulk_ordering_suggestions(
+                    kind,
+                    expected_delivery_date=delivery_date,
+                    include_sufficient_stock=bool(delivery_date),
+                )
+            except TypeError as exc:
+                # Rolling deploy compatibility: a request can briefly land on an
+                # older worker that has the pre-v7.0.320 function signature.
+                # Do not fail the whole Ordering screen during that window.
+                if "include_sufficient_stock" not in str(exc):
+                    raise
+                bulk = bulk_ordering_suggestions(
+                    kind,
+                    expected_delivery_date=delivery_date,
+                )
+                bulk.setdefault("rules", {})["rolling_deploy_compatibility_fallback"] = True
             inputs[kind] = bulk.get("inputs")
             skipped.extend(bulk.get("skipped") or [])
             for s in bulk.get("suggestions") or []:

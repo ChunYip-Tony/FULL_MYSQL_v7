@@ -1,3 +1,10 @@
+v7.0.321 Ordering Rolling-Deploy Compatibility:
+- Prevents the mobile Ordering page from failing when a rolling deployment briefly mixes a v7.0.320 Backoffice caller with an older bulk_ordering_suggestions function signature.
+- Uses the full v7.0.320 delivery-date roster when the new signature is available.
+- Falls back safely to the older suggestion call only when the specific include_sufficient_stock keyword is unsupported; unrelated TypeError exceptions still surface normally.
+- Removes the red full-page Ordering failure during deployment version skew without changing the v7.0.320 delivery-date or receipt-confidence rules.
+Version: 7.0.321 Single-Service Edition
+
 v7.0.320 Delivery-Date Ordering + Observed Receipt Confidence:
 - Mobile Ordering now uses a seven-day delivery-date selector instead of category-first navigation; next Tuesday remains the default selected day when it is inside the upcoming seven-day window.
 - Ordering Review accepts an explicit delivery_date and recalculates Fresh/Frozen family coverage against that same selected delivery date.
