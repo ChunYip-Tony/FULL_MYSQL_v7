@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1';
+const CACHE='yipman-v326';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -80,6 +80,17 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .search2{display:grid;grid-template-columns:1fr 70px;gap:6px;margin-bottom:8px}.search2 input{border:1px solid var(--line);background:#fff;border-radius:13px;padding:10px 11px;font-size:16px;outline:0}.search2 button{border:0;background:var(--blue);color:#fff;border-radius:13px;font-size:9px;font-weight:900}
 .group{background:#fff;border-radius:16px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:8px}.ghead{display:flex;justify-content:space-between;gap:8px;padding:11px 12px;background:#fafbfc}.ghead b{font-size:14px}.ghead small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.gmetric{text-align:right;font-size:12px;font-weight:900}.gmetric span{display:block;font-size:7px;color:var(--muted)}
 .upc{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}.upc b{font-size:11px}.upc small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.upcv{text-align:right;font-size:10px;font-weight:900}
+.qfamily{background:#fff;border-radius:17px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:10px;border:1px solid #e7ebee}
+.qfhead{display:grid;grid-template-columns:1fr auto;gap:10px;padding:11px 12px;background:linear-gradient(90deg,#fff8d9,#fffdf4);border-bottom:1px solid #eee5bd}
+.qfamily:nth-child(6n+2) .qfhead{background:linear-gradient(90deg,#edf8ef,#f9fdf9)}.qfamily:nth-child(6n+3) .qfhead{background:linear-gradient(90deg,#eef6fd,#fafcff)}.qfamily:nth-child(6n+4) .qfhead{background:linear-gradient(90deg,#fff0f4,#fffafb)}.qfamily:nth-child(6n+5) .qfhead{background:linear-gradient(90deg,#f3efff,#fcfbff)}
+.qlabel{font-size:7px;font-weight:950;letter-spacing:.08em;color:#7a6a28}.qfnum{font-size:16px;font-weight:950;line-height:1.05;margin-top:2px}.qfname{font-size:12px;font-weight:900;margin-top:4px;line-height:1.15}.qmeta{font-size:7px;color:var(--muted);font-weight:750;margin-top:3px}
+.qfkpis{display:grid;grid-template-columns:1fr 1fr;gap:5px;align-content:start}.qkpi{text-align:right}.qkpi small{display:block;font-size:6px;color:var(--muted);font-weight:900}.qkpi b{font-size:12px}
+.qsource{border-top:1px solid var(--line)}
+.qrecv{margin:7px 8px 8px;border:1px solid #dfe5e9;border-left:4px solid #7c91a3;border-radius:13px;overflow:hidden;background:#fbfcfd}.qrecv.receipt{border-left-color:var(--red)}.qrecv.mvt{border-left-color:var(--blue)}
+.qrecvhead{display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 9px;background:#f4f7f9;border-bottom:1px solid var(--line)}.qrecvrole{font-size:6px;font-weight:950;letter-spacing:.06em;color:#63717c}.qrecvnum{font-size:13px;font-weight:950;margin-top:2px}.qrecvname{font-size:9px;font-weight:800;margin-top:2px}.qreceipt{display:inline-flex;margin-left:4px;width:17px;height:17px;border-radius:50%;align-items:center;justify-content:center;background:#9e1f24;color:#fff;font-size:10px;font-weight:950;vertical-align:middle}
+.qrecvkpis{display:grid;grid-template-columns:1fr 1fr;gap:5px}.qrecvkpi{text-align:right}.qrecvkpi small{display:block;font-size:6px;color:var(--muted);font-weight:900}.qrecvkpi b{font-size:11px}
+.qupc{display:grid;grid-template-columns:1fr auto;gap:8px;padding:9px 10px;border-top:1px solid var(--line);background:#fff}.qupc:first-child{border-top:0}.qupcmain{min-width:0}.qupctop{display:flex;align-items:center;gap:5px;min-width:0}.qrole{font-size:6px;font-weight:950;padding:3px 5px;border-radius:999px;background:#edf2f6;color:#4b6171;white-space:nowrap}.qrole.main{background:#e9f3ff;color:var(--blue)}.qrole.service{background:#fff0f0;color:var(--red)}.qupccode{font-size:8px;color:var(--muted);font-weight:850;overflow:hidden;text-overflow:ellipsis}.qupcname{font-size:11px;font-weight:900;margin-top:4px;line-height:1.12}.qupcmetrics{text-align:right;white-space:nowrap}.qupcmetrics b{font-size:11px}.qupcmetrics span{display:block;font-size:7px;color:var(--muted);margin-top:2px}.qready{font-size:7px;font-weight:900;color:var(--green)}
+.qhidebtn{width:100%;border:0;background:#f5f7f9;color:#5c6974;padding:7px 10px;text-align:left;font-size:8px;font-weight:900;border-top:1px solid var(--line)}.qhidden{display:none}.qhidden.on{display:block}.qhiddennote{font-size:7px;color:var(--muted);padding:6px 10px;background:#fafbfc;border-top:1px solid var(--line)}
 .empty{background:#fff;border-radius:16px;padding:20px;text-align:center;font-size:10px;color:var(--muted);box-shadow:var(--shadow)}
 .daybar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:8px}.daybar::-webkit-scrollbar{display:none}.day{min-width:49px;border:0;border-radius:14px;background:#fff;padding:8px 4px;box-shadow:0 4px 12px rgba(18,38,56,.05);text-align:center}.day b{display:block;font-size:8px;color:var(--muted)}.day strong{display:block;font-size:17px;margin-top:1px}.day span{display:block;font-size:7px;color:var(--muted)}.day.on{background:var(--blue);color:#fff}.day.on b,.day.on span{color:#dbeafa}
 .list{background:#fff;border-radius:16px;box-shadow:var(--shadow);overflow:hidden}.lh,.orow{display:grid;grid-template-columns:1fr 58px 64px;padding:0 11px}.lh{background:#eef2f5;padding-top:8px;padding-bottom:8px;font-size:7px;font-weight:900;color:#5d6974}.orow{border-top:1px solid var(--line)}.orow>div{padding:10px 0}.orow .name{font-size:11px;font-weight:900}.orow .sub{font-size:7px;color:var(--muted);margin-top:2px}.cell{text-align:right;font-size:11px;font-weight:900}.cell span{display:block;font-size:7px;color:var(--muted)}.orow.urgent{box-shadow:inset 4px 0 0 var(--red)}
@@ -161,19 +172,118 @@ async function loadHome(){
  }catch(e){$('#attentionTitle').textContent='Home summary unavailable';$('#attentionSub').textContent=e.message;$('#priorityRows').innerHTML='<div class="loading">Pull down to retry.</div>'}
 }
 
-function groupRows(rows){
- const map=new Map();
- for(const r of rows){const k=String(r.family_id??r.family_article??r.upc);if(!map.has(k))map.set(k,[]);map.get(k).push(r)}
- return [...map.values()];
+function hasActivity(v){const n=Number(v);return Number.isFinite(n)&&Math.abs(n)>0.0000001}
+function quickRole(r){
+ const raw=String(r?.upc||'').replace(/\D/g,'').replace(/^0+/,'');
+ const p=raw.slice(0,3);
+ if(p==='240')return {label:'MAIN UPC · 240',cls:'main'};
+ if(p==='249')return {label:'SERVICE · 249',cls:'service'};
+ if(p==='245')return {label:'RELATED · 245',cls:''};
+ if(p==='247')return {label:'RELATED · 247',cls:''};
+ return {label:'UPC'+(p?' · '+p:''),cls:''};
+}
+function quickFamilyGroups(rows){
+ const groups=new Map();
+ for(const r of (rows||[])){
+   const key=String(r.family_id??r.family_article??('UPC:'+String(r.upc||'')));
+   if(!groups.has(key))groups.set(key,{
+     key,family_id:r.family_id,family_article:r.family_article||null,family_name:r.family_name||'Unmapped Family',category:r.category||'',
+     rows:[],source_rows:[],receiving:new Map(),max_velocity:Number.NEGATIVE_INFINITY,
+     group_qty_7d:r.family_group_movement_7d??r.family_qty_7d??null,
+     group_avg_qty_day:r.family_group_avg_qty_day??r.family_avg_qty_day??null,
+     group_uom:r.family_group_movement_uom||r.family_qty_uom||'',
+     group_status:r.family_group_movement_status||'',
+     reconciliation:r.family_group_reconciliation||'',
+     source_article:r.family_source_article||r.family_article||null,
+     family_receipt_verified:!!r.family_receipt_verified
+   });
+   const g=groups.get(key);g.rows.push(r);
+   const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
+   if(g.group_qty_7d==null&&r.family_group_movement_7d!=null)g.group_qty_7d=r.family_group_movement_7d;
+   if(g.group_avg_qty_day==null&&r.family_group_avg_qty_day!=null)g.group_avg_qty_day=r.family_group_avg_qty_day;
+   if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
+   if(!g.reconciliation&&r.family_group_reconciliation)g.reconciliation=String(r.family_group_reconciliation);
+   if(!g.source_article&&r.family_source_article)g.source_article=String(r.family_source_article);
+
+   for(const a of (Array.isArray(r.receiving_articles)?r.receiving_articles:[])){
+     const art=String(a?.article_number||'').trim();if(!art)continue;
+     if(!g.receiving.has(art))g.receiving.set(art,{
+       article_number:art,article_description:a.article_description||'',article_role:a.article_role||'',relationship_type:a.relationship_type||'',
+       movement_7d:a.movement_7d,movement_uom:a.movement_uom||'',avg_qty_day:a.avg_qty_day,movement_status:a.movement_status||'',
+       has_active_pos_upc:!!a.has_active_pos_upc,receipt_verified:!!a.receipt_verified,receipt_date:a.receipt_date||'',rows:[],max_velocity:Number.NEGATIVE_INFINITY
+     });
+   }
+
+   const assigned=String(r.receiving_article||'').trim();
+   const sourceKey=String(g.source_article||g.family_article||'').trim();
+   if(assigned&&sourceKey&&assigned===sourceKey){g.source_rows.push(r);continue}
+   const recvKey=assigned||'UNRESOLVED';
+   if(!g.receiving.has(recvKey))g.receiving.set(recvKey,{
+     article_number:assigned||null,article_description:assigned?'':'Receiving Article unresolved',article_role:'RELATED_SAP_ARTICLE',
+     movement_7d:r.receiving_movement_7d,movement_uom:r.receiving_movement_uom||'',avg_qty_day:r.receiving_avg_qty_day,
+     movement_status:r.receiving_movement_status||'',has_active_pos_upc:false,receipt_verified:false,receipt_date:'',rows:[],max_velocity:Number.NEGATIVE_INFINITY
+   });
+   const a=g.receiving.get(recvKey);a.rows.push(r);if(Number.isFinite(v))a.max_velocity=Math.max(a.max_velocity,v);
+ }
+ const out=[...groups.values()];
+ for(const g of out){
+   const sortRows=a=>a.sort((x,y)=>Number(y.velocity_7d||0)-Number(x.velocity_7d||0)||Number(y.qty_7d||0)-Number(x.qty_7d||0)||String(x.upc||'').localeCompare(String(y.upc||'')));
+   sortRows(g.rows);sortRows(g.source_rows);g.receiving=[...g.receiving.values()];
+   for(const a of g.receiving)sortRows(a.rows);
+   g.receiving.sort((a,b)=>(Number.isFinite(b.max_velocity)?b.max_velocity:-999999)-(Number.isFinite(a.max_velocity)?a.max_velocity:-999999)||Number(b.movement_7d||0)-Number(a.movement_7d||0)||Number(b.receipt_verified)-Number(a.receipt_verified)||String(a.article_number||'').localeCompare(String(b.article_number||'')));
+ }
+ out.sort((a,b)=>b.max_velocity-a.max_velocity||Number(b.group_qty_7d||0)-Number(a.group_qty_7d||0)||String(a.family_name||'').localeCompare(String(b.family_name||'')));
+ return out;
+}
+function quickUpcHtml(r){
+ const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'';
+ return '<div class="qupc" data-upc="'+esc(r.upc||'')+'"><div class="qupcmain"><div class="qupctop"><span class="qrole '+role.cls+'">'+esc(role.label)+'</span><span class="qupccode">'+esc(r.upc||'—')+'</span></div><div class="qupcname">'+esc(r.name||r.upc||'')+'</div></div><div class="qupcmetrics"><b>'+fmt(r.qty_7d)+' '+esc(uom)+'</b><span>7D Qty · '+fmt(r.velocity_7d)+' /day</span><span class="qready">'+esc(r.readiness||'')+'</span></div></div>';
+}
+function hiddenUpcs(rows,id){
+ if(!rows.length)return '';
+ return '<button class="qhidebtn" data-qhide="'+esc(id)+'" data-noun="UPC">Show '+rows.length+' inactive UPC'+(rows.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+esc(id)+'"><div class="qhiddennote">Hidden by default · UPC 7D POS Qty = 0 / none.</div>'+rows.map(quickUpcHtml).join('')+'</div>';
+}
+function quickReceivingHtml(a,idx,seq,{inactive=false}={}){
+ const uom=String(a.movement_uom||''), hasMvt=hasActivity(a.movement_7d), positive=Number(a.movement_7d||0)>0;
+ const code=String(a.article_role||'').toUpperCase();
+ const role=code==='RECEIVING_AND_SAP_SELLING_ARTICLE'?'RECEIVING / SAP SELLING ARTICLE':code==='RECEIVING_ARTICLE'?'RECEIVING ARTICLE':code==='SAP_SELLING_ARTICLE'?'SAP SELLING ARTICLE':code==='RELATED_SAP_ARTICLE'?'RELATED SAP ARTICLE':(a.receipt_verified&&hasMvt?'RECEIVING / SAP SELLING ARTICLE':a.receipt_verified?'RECEIVING ARTICLE':hasMvt?'SAP SELLING ARTICLE':'RELATED SAP ARTICLE');
+ const rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
+ const hid='q-upc-'+idx+'-'+seq;
+ return '<section class="qrecv '+(a.receipt_verified?'receipt ':positive?'mvt ':'')+'">'+
+   '<div class="qrecvhead"><div><div class="qrecvrole">'+esc(role)+'</div><div class="qrecvnum">'+esc(a.article_number||'UNRESOLVED')+(a.receipt_verified?'<span class="qreceipt">O</span>':'')+'</div><div class="qrecvname">'+esc(a.article_description||'')+'</div><div class="qmeta">'+(hasMvt?'251−252 SELLING MVT':'No 7D 251−252 MVT')+(a.receipt_verified?' · 101–109 RECEIPT VERIFIED':'')+(a.receipt_date?' · '+esc(a.receipt_date):'')+'</div></div><div class="qrecvkpis"><div class="qrecvkpi"><small>7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b></div><div class="qrecvkpi"><small>AVG/DAY</small><b>'+fmt(a.avg_qty_day)+' '+esc(uom)+'</b></div></div></div>'+
+   active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+
+   (inactive?'<div class="qhiddennote">Inactive SAP Article · no 7D receiving MVT and no related UPC activity.</div>':'')+
+ '</section>';
+}
+function quickGroupedHtml(rows){
+ return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
+   const uom=g.group_uom||'',recon=String(g.reconciliation||'').toUpperCase();
+   const familyHead='<div class="qfhead"><div><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div><div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div><div class="qfkpis"><div class="qkpi"><small>7D TOTAL SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div><div class="qkpi"><small>AVG/DAY</small><b>'+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</b></div></div></div>';
+   const sourceActive=g.source_rows.filter(r=>hasActivity(r.qty_7d)), sourceInactive=g.source_rows.filter(r=>!hasActivity(r.qty_7d));
+   const source=sourceActive.map(quickUpcHtml).join('')+hiddenUpcs(sourceInactive,'q-src-'+idx);
+   const visible=[],hidden=[];
+   for(const a of (g.receiving||[])){
+     const hasMvt=hasActivity(a.movement_7d),hasUpc=(a.rows||[]).some(r=>hasActivity(r.qty_7d))||a.has_active_pos_upc;
+     (a.receipt_verified||hasMvt||hasUpc?visible:hidden).push(a);
+   }
+   const visibleHtml=visible.map((a,i)=>quickReceivingHtml(a,idx,i)).join('');
+   const hiddenId='q-art-'+idx;
+   const hiddenHtml=hidden.length?'<button class="qhidebtn" data-qhide="'+hiddenId+'" data-noun="SAP Article">Show '+hidden.length+' inactive SAP Article'+(hidden.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+hiddenId+'">'+hidden.map((a,i)=>quickReceivingHtml(a,idx,100+i,{inactive:true})).join('')+'</div>':'';
+   return '<section class="qfamily">'+familyHead+(source?'<div class="qsource">'+source+'</div>':'')+visibleHtml+hiddenHtml+'</section>';
+ }).join('');
+}
+function bindQuickRows(){
+ $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+ $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
 }
 async function loadQuick(q){
  const box=$('#quickRows');box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
   const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(q),{timeoutMs:14000});
-  const groups=groupRows(d.rows||[]).slice(0,12);
-  if(!groups.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
-  box.innerHTML=groups.map(g=>{g.sort((a,b)=>(Number(b.qty_7d||0)-Number(a.qty_7d||0)));const r=g[0], fq=r.family_group_movement_7d??r.family_qty_7d;return '<div class="group"><div class="ghead"><div><b>'+esc(r.family_name||r.name||'Family')+'</b><small>Family '+esc(r.family_article||'—')+' · '+esc(r.category||'')+'</small></div><div class="gmetric">'+fmt(fq)+' '+esc(r.family_group_movement_uom||r.family_qty_uom||'')+'<span>7D FAMILY MVT</span></div></div>'+g.slice(0,6).map(u=>'<div class="upc" data-upc="'+esc(u.upc)+'"><div><b>'+esc(u.name||u.upc)+'</b><small>'+esc(u.upc)+' · '+fmt(u.qty_7d)+' '+esc(u.qty_uom||u.selling_uom||'')+' / 7D</small></div><div class="upcv">'+fmt(u.velocity_7d)+' /day<br>'+esc(u.readiness||'')+'</div></div>').join('')+'</div>'}).join('');
-  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+  const rows=d.rows||[];
+  if(!rows.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
+  box.innerHTML=quickGroupedHtml(rows);
+  bindQuickRows();
  }catch(e){box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 $('#quickForm').onsubmit=e=>{e.preventDefault();const q=$('#quickInput').value.trim();if(q)loadQuick(q)};
