@@ -173,30 +173,6 @@ jobs:
           curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249527&lightweight=false" || true
           echo
 
-      - name: Diagnose recent POS ingest files
-        shell: bash
-        run: |
-          set -euo pipefail
-          base="https://seal-app-tkkkd.ondigitalocean.app"
-          for i in $(seq 1 120); do
-            body="$(curl -fsS --max-time 20 "$base/healthz" || true)"
-            ver="$(BODY="$body" python - <<'PY'
-          import json,os
-          try:
-              p=json.loads(os.environ.get('BODY') or '{}')
-          except Exception:
-              p={}
-          print(p.get('version') or '')
-          PY
-          )"
-            echo "runtime=$ver"
-            [ "$ver" = "7.0.301-single-service" ] && break
-            sleep 5
-          done
-          [ "$ver" = "7.0.301-single-service" ]
-          curl -fsS --max-time 60 "$base/v1/web-upload/diagnostics/recent-pos-files?limit=40"
-          echo
-
       - name: Validate Backoffice DOM collection bindings
         run: |
           python - <<'PY'
@@ -448,6 +424,12 @@ jobs:
           assert 'COMPANY_RANGE_CLAMPED_14D_MAX_GP_PER_DAY' in runtime
           assert 'current_price_source' in backoffice
           assert 'current_price_source' in v2ui
+          ingest = Path('v7_ingest.py').read_text(encoding='utf-8')
+          assert "'coverage_start_date':p.coverage_start" in ingest
+          assert "'coverage_end_date':p.coverage_end" in ingest
+          assert 'Upload verified' in backoffice
+          assert 'uploadCoverageText' in backoffice
+          assert 'UPLOAD NOT COMMITTED' in backoffice
           print('final-pricing-review-rules=PASS')
           PY
 
