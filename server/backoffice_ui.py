@@ -3247,7 +3247,7 @@ $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
 window.addEventListener('hashchange',()=>restoreRoute());
 
 const mobileMedia=window.matchMedia('(max-width:759px)');
-const mobileState={module:null,parentModule:null,currentDetailKey:null,filter:'all',query:'',freshness:[]};
+const mobileState={module:null,parentModule:null,currentDetailKey:null,filter:'all',query:'',freshness:[],orderDeliveryDate:null};
 let mobilePendingTopModule=null;
 let mobileQuickSearchTimer=null;
 let mobileQuickSearchSeq=0;
@@ -3424,7 +3424,7 @@ function mobileModuleConfig(module){
     quick:{title:'Quick Check',sub:'Most actively selling items first',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
     price:{title:'Price Change',sub:'Current price, source and qualified price-change review',chips:[['all','All'],['actionable','Actionable'],['review_only','Review only'],['qa_hold','QA Hold']]},
     performance:{title:'Performance',sub:'Choose analysis dates · all Seafood together · sort by the metric you need',chips:[]},
-    ordering:{title:'Ordering',sub:'Family / Receiving Article ordering review',chips:[['all','All'],['fresh','Fresh'],['frozen','Frozen'],['attention','Needs Attention']]},
+    ordering:{title:'Ordering',sub:'Select an upcoming delivery date · families follow observed receipt cadence',chips:[]},
     inventory:{title:'Inventory',sub:'Current stock, velocity, DOS and inventory status',chips:[['all','All'],['fresh','Fresh'],['live','Live'],['frozen','Frozen']]},
     data:{title:'Data',sub:'Uploads, QA fixes, processing and data health',chips:[]},
     qa:{title:'QA Holds',sub:'Choose one issue, review it, then fix',chips:[['all','All'],['fixable','Fixable'],['view_only','Review only'],['high','High / Critical']]},
@@ -3434,9 +3434,34 @@ function mobileModuleConfig(module){
   };
   return map[module]||{title:'Backoffice',sub:'',chips:[]};
 }
+function mobileOrderingDates(){
+  const base=new Date();base.setHours(12,0,0,0);
+  return Array.from({length:7},(_,i)=>{
+    const d=new Date(base);d.setDate(base.getDate()+i);
+    const iso=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    return {iso,weekday:d.getDay(),label:d.toLocaleDateString([],{weekday:'short'})+' '+(d.getMonth()+1)+'/'+d.getDate()};
+  });
+}
 function mobileRenderChips(){
   const cfg=mobileModuleConfig(mobileState.module),box=mNode('mobileListChips');
   if(!box)return;
+  if(mobileState.module==='ordering'){
+    const days=mobileOrderingDates();
+    if(!days.some(x=>x.iso===mobileState.orderDeliveryDate)){
+      const nextTuesday=days.find(x=>x.weekday===2);
+      mobileState.orderDeliveryDate=(nextTuesday||days[0]||{}).iso||null;
+    }
+    box.innerHTML=days.map(x=>'<button type="button" class="m-chip '+(mobileState.orderDeliveryDate===x.iso?'on':'')+'" data-delivery-date="'+esc(x.iso)+'">'+esc(x.label)+'</button>').join('');
+    box.style.display='flex';
+    box.querySelectorAll('[data-delivery-date]').forEach(b=>b.onclick=async()=>{
+      mobileState.orderDeliveryDate=b.dataset.deliveryDate;
+      mobileRenderChips();
+      mNode('mobileListSub').textContent='Delivery '+mobileState.orderDeliveryDate+' · matching observed receiving cadence';
+      mNode('mobileListContent').innerHTML='<div class="m-loading">Calculating delivery-date suggestions…</div>';
+      try{await loadOrders();mobileRenderList()}catch(e){mNode('mobileListContent').innerHTML='<div class="m-error">'+esc(e.message||'Unable to load Ordering')+'</div>'}
+    });
+    return;
+  }
   box.innerHTML=cfg.chips.map(x=>'<button type="button" class="m-chip '+(mobileState.filter===x[0]?'on':'')+'" data-m-filter="'+esc(x[0])+'">'+esc(x[1])+'</button>').join('');
   box.style.display=cfg.chips.length?'flex':'none';
   box.querySelectorAll('[data-m-filter]').forEach(b=>b.onclick=()=>{mobileState.filter=b.dataset.mFilter;mobileRenderChips();mobileRenderList()});
@@ -4228,7 +4253,12 @@ function mobileRenderList(){
       return unit.type==='pair'?'<section class="m-pair-subgroup"><div class="m-pair-label">240 / 249 SUBGROUP</div>'+unit.rows.map(rr).join('')+'</section>':rr(unit.row);
     }).join('');
   }else if(mobileState.module==='ordering'){
-    html=rows.map(r=>mobileRow(String(r.family_article||''),r.family_article||r.receiving_article,r.family_name||'Family Article','OH '+fmt(r.oh)+' '+(r.oh_uom||'')+' · Last receipt '+(r.last_receipt_date||'—')+' · Suggested '+fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),r.attention?'REVIEW':'READY','')).join('');
+    html=rows.map(r=>{
+      const obs=r.delivery_day
+        ? ' · Observed '+r.delivery_day+' '+fmt(r.delivery_day_observed_count,0)+'/'+fmt(r.delivery_day_receipt_count,0)+' · '+fmt(r.delivery_day_confidence_pct,0)+'%'
+        : '';
+      return mobileRow(String(r.family_article||''),r.family_article||r.receiving_article,r.family_name||'Family Article','OH '+fmt(r.oh)+' '+(r.oh_uom||'')+obs+' · Suggested '+fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),r.attention?'REVIEW':'READY','');
+    }).join('');
   }else if(mobileState.module==='inventory'){
     html=subgroup240249Units(rows).map(unit=>{
       const rr=r=>mobileRowWithPairRole(r,r.upc,r.name||r.family_name,'OH '+fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' · 7D Vel '+fmt(r.velocity_7d)+' · DOS '+fmt(r.dos)+' · '+money(r.price),r.readiness||r.category,r.chinese_name||'');
@@ -4490,6 +4520,8 @@ function mobileOrderingDetail(key){
   html+=mobileMetric('Receiving Article',r.receiving_article||'—','Ordering / receiving level');
   html+=mobileMetric('OH',fmt(r.oh)+' '+(r.oh_uom||''),'Current family OH');
   html+=mobileMetric('Last Receipt',r.last_receipt_date||'—',fmt(r.last_receipt_qty_base)+' '+(r.last_receipt_base_uom||''));
+  html+=mobileMetric('Delivery',r.selected_delivery_date||'—',r.delivery_day||'Observed delivery day');
+  html+=mobileMetric('Observed Cadence',r.delivery_day?(r.delivery_day+' '+fmt(r.delivery_day_observed_count,0)+'/'+fmt(r.delivery_day_receipt_count,0)):(r.ordering_frequency||'—'),r.delivery_day_confidence_pct!==null&&r.delivery_day_confidence_pct!==undefined?fmt(r.delivery_day_confidence_pct,0)+'% confidence · recent 12 weeks':'Observed ordering cadence');
   html+=mobileMetric('Frequency',r.ordering_frequency||'—','Observed ordering cadence');
   html+=mobileMetric('Coming Delivery Suggestion',fmt(r.suggested_delivery_qty)+' '+(r.suggested_delivery_uom||''),'Family-level suggestion');
   html+='</div>';
@@ -5276,11 +5308,14 @@ async function loadOrders(){
   const err=$('#orderError');err.innerHTML='';state.orderLoadError='';state.orderHealth=null;
   $('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';
   try{
-    // FRESH and FROZEN are independent workloads. Loading them concurrently
-    // avoids making the mobile ALL view wait for two heavyweight reviews in sequence.
+    // Mobile Ordering is delivery-date first. Desktop keeps the existing category
+    // review unless a delivery date was already selected on the mobile surface.
+    const deliveryParam=(isMobileBackoffice()&&mobileState.orderDeliveryDate)
+      ? '&delivery_date='+encodeURIComponent(mobileState.orderDeliveryDate)
+      : '';
     const [fresh,frozen]=await Promise.all([
-      api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
-      api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000})
+      api('/v1/backoffice/ordering-review?category=FRESH'+deliveryParam,{timeoutMs:30000}),
+      api('/v1/backoffice/ordering-review?category=FROZEN'+deliveryParam,{timeoutMs:30000})
     ]);
     const health=fresh.data_health||frozen.data_health||{};
     const blocked=[fresh,frozen].some(x=>String(x.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA');
@@ -5293,9 +5328,14 @@ async function loadOrders(){
       posThrough:health.pos_data_through||null,
       movementThrough:health.movement_data_through||null,
       missing:health.missing_required_sources||[],
-      skipped
+      skipped,
+      selectedDelivery:fresh.selected_delivery_date||frozen.selected_delivery_date||null,
+      selectedWeekday:fresh.selected_delivery_weekday||frozen.selected_delivery_weekday||null
     };
     state.orders=blocked?[]:[...(fresh.rows||[]),...(frozen.rows||[])];
+    if(isMobileBackoffice()&&state.orderHealth.selectedDelivery){
+      mNode('mobileListSub').textContent='Delivery '+state.orderHealth.selectedDelivery+' · '+(state.orderHealth.selectedWeekday||'')+' · observed 12-week receipt cadence';
+    }
     renderOrders()
   }catch(e){
     state.orderLoadError=e.message||'Unable to load ordering review';
