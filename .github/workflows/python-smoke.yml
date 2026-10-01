@@ -160,6 +160,12 @@ jobs:
           echo "=== HEALTH ==="
           curl -fsS --max-time 30 "$base/healthz" || true
           echo
+          echo "=== ACTIVE PIPELINE ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/active" || true
+          echo
+          echo "=== RECENT BATCHES ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=8" || true
+          echo
           echo "=== 249527 SOURCE EVIDENCE ==="
           curl -fsS --max-time 120 "$base/v1/web-upload/diagnostics/249-source-evidence?upc=24952700000" || true
           echo
