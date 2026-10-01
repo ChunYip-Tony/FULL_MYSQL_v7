@@ -2453,6 +2453,7 @@ def bulk_ordering_suggestions(
     *,
     ordering_date: date|None=None,
     expected_delivery_date: date|None=None,
+    include_sufficient_stock: bool=False,
     promotion_involved: bool=False,
     promotion_start_date: date|None=None,
     promotion_end_date: date|None=None,
@@ -2545,7 +2546,7 @@ def bulk_ordering_suggestions(
             raw_oh=_d(family_oh.get("quantity"))
             ordering_oh=max(Decimal("0"),raw_oh)
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-            if not active_28 or dos is None or dos>=Decimal("7"):
+            if not active_28 or dos is None or (dos>=Decimal("7") and not include_sufficient_stock):
                 continue
 
             regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
@@ -2650,7 +2651,11 @@ def bulk_ordering_suggestions(
         },
         "eligibility":{
             "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
-            "dos_threshold":"LESS_THAN_7_DAYS",
+            "dos_threshold":(
+                "ALL_ACTIVE_FAMILIES_WHEN_DELIVERY_DATE_ROSTER"
+                if include_sufficient_stock else "LESS_THAN_7_DAYS"
+            ),
+            "include_sufficient_stock":bool(include_sufficient_stock),
             "negative_effective_oh_for_ordering":"TREAT_AS_ZERO",
         },
         "suggestion_count":len(suggestions),
