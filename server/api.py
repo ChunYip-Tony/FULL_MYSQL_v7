@@ -31,6 +31,7 @@ from backoffice_ui import backoffice_html
 from backoffice_runtime import (
     inventory_review as backoffice_inventory_review,
     ordering_review as backoffice_ordering_review,
+    cached_ordering_review as backoffice_cached_ordering_review,
     pricing_review as backoffice_pricing_review,
     sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
@@ -3607,9 +3608,13 @@ def backoffice_ordering(category:str='ALL', delivery_date:str|None=None):
                 parsed_delivery=date.fromisoformat(str(delivery_date))
             except ValueError:
                 raise ValueError('DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
-        result=backoffice_ordering_review(
-            category=category,
-            delivery_date=parsed_delivery,
+        result=(
+            backoffice_cached_ordering_review(
+                category=category,
+                delivery_date=parsed_delivery,
+            )
+            if parsed_delivery is not None
+            else backoffice_ordering_review(category=category)
         )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})

@@ -1,3 +1,12 @@
+v7.0.323 Async Cached Ordering + Bulk Receipt Cadence:
+- Removes the browser's long-lived dependency on heavy Ordering calculations. Delivery-date Ordering now returns immediately from a persistent cache or REFRESHING state while the full calculation runs in a background worker.
+- Mobile Ordering polls the lightweight cached endpoint and shows “Calculating delivery suggestions…” instead of surfacing browser-level Failed to fetch during a long analysis.
+- Persists completed delivery-date Ordering snapshots in MySQL so another worker can serve the result after a rolling restart.
+- Never serves a prior completed-data-day Ordering snapshot as current; stale-data caches trigger background refresh and return REFRESHING until current data is ready.
+- Replaces per-Family 180-day receipt-history queries with one bulk canonical movement query for all candidate Families before weekday cadence filtering.
+- Preserves the 12-week observed delivery-day confidence, family-level OH, negative-OH-as-zero, completed-day demand, zero-suggestion roster, and coverage-to-next-delivery rules.
+Version: 7.0.323 Single-Service Edition
+
 v7.0.322 Ordering Delivery Prefilter + Single Request:
 - Fixes mobile Ordering browser-level “Failed to fetch” caused by two simultaneous heavyweight Fresh/Frozen ordering reviews.
 - Delivery-date mode now evaluates recent 12-week canonical receipt cadence first and only runs expensive 28D demand, OH, baseline, and suggestion math for families that match the selected delivery day.

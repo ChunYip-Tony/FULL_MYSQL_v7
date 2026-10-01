@@ -3252,6 +3252,7 @@ let mobilePendingTopModule=null;
 let mobileQuickSearchTimer=null;
 let mobileQuickSearchSeq=0;
 let inventoryLoadSeq=0;
+let orderingLoadSeq=0;
 const MOBILE_HISTORY_KEY='fullmysql_mobile_v1';
 let mobileHistoryReady=false;
 let mobileRestoringHistory=false;
@@ -4277,6 +4278,9 @@ function mobileRenderList(){
   }
   if(!html&&mobileState.module==='batches'&&state.batchLoadWarning){
     html='<div class="m-error">'+esc(state.batchLoadWarning)+'</div>';
+  }
+  if(!html&&mobileState.module==='ordering'&&state.orderHealth?.warming){
+    html='<div class="m-loading"><b>Calculating delivery suggestions…</b><br><br>Receipt cadence is filtered first. Results will appear automatically when ready.</div>';
   }
   if(!html&&mobileState.module==='ordering'&&state.orderHealth?.blocked){
     const h=state.orderHealth;
@@ -5308,30 +5312,73 @@ $('#salesStartDate').onchange=e=>{state.salesStartDate=e.target.value};
 $('#salesEndDate').onchange=e=>{state.salesEndDate=e.target.value};
 
 async function loadOrders(){
+  const seq=++orderingLoadSeq;
   const err=$('#orderError');err.innerHTML='';state.orderLoadError='';state.orderHealth=null;
   $('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';
   try{
-    // One ALL request is substantially lighter and more reliable on the small
-    // production worker than two simultaneous Fresh/Frozen review requests.
     const deliveryParam=(isMobileBackoffice()&&mobileState.orderDeliveryDate)
       ? '&delivery_date='+encodeURIComponent(mobileState.orderDeliveryDate)
       : '';
     const url='/v1/backoffice/ordering-review?category=ALL'+deliveryParam;
-    let d;
-    try{
-      d=await api(url,{timeoutMs:45000});
-    }catch(e){
-      // A rolling restart can drop one in-flight fetch even after the new HTML
-      // is visible. Retry one time only for the browser-level network failure.
-      if(String(e?.message||e)!=='Failed to fetch')throw e;
-      await new Promise(resolve=>setTimeout(resolve,800));
-      d=await api(url,{timeoutMs:45000});
+    let d=null;
+    for(let poll=0;poll<15;poll++){
+      try{
+        d=await api(url,{timeoutMs:12000});
+      }catch(e){
+        // Network can drop once during a rolling worker restart. Because the
+        // analysis itself is now server-side async, this retry is lightweight.
+        if(String(e?.message||e)!=='Failed to fetch')throw e;
+        await new Promise(resolve=>setTimeout(resolve,800));
+        d=await api(url,{timeoutMs:12000});
+      }
+      if(seq!==orderingLoadSeq)return false;
+      const status=String(d?.analysis_status||'').toUpperCase();
+      if(status==='REFRESH_FAILED'){
+        throw new Error(d?.refresh_error||'Ordering background refresh failed');
+      }
+      const warming=status==='REFRESHING'
+        || ['WARMING','STALE_DATA_REFRESHING'].includes(String(d?.cache_status||'').toUpperCase());
+      if(!warming)break;
+
+      const health=d?.data_health||{};
+      state.orderHealth={
+        blocked:false,
+        warming:true,
+        refreshing:Boolean(d?.refreshing),
+        analysisStatus:status||'REFRESHING',
+        expectedThrough:health.expected_through||null,
+        posThrough:health.pos_data_through||null,
+        movementThrough:health.movement_data_through||null,
+        missing:health.missing_required_sources||[],
+        skipped:d?.skipped_breakdown||{},
+        selectedDelivery:d?.selected_delivery_date||mobileState.orderDeliveryDate||null,
+        selectedWeekday:d?.selected_delivery_weekday||null
+      };
+      state.orders=[];
+      renderOrders();
+      if(isMobileBackoffice()){
+        mNode('mobileListSub').textContent='Calculating '+(state.orderHealth.selectedDelivery||'delivery')+' · receipt cadence first';
+        mobileRenderList();
+      }
+      if(poll<14)await new Promise(resolve=>setTimeout(resolve,1800));
     }
+    if(seq!==orderingLoadSeq)return false;
+    if(!d)throw new Error('Ordering response unavailable');
+
+    const status=String(d.analysis_status||'').toUpperCase();
+    if(status==='REFRESHING'){
+      state.orderHealth={...(state.orderHealth||{}),warming:true,refreshing:true};
+      renderOrders();
+      return true;
+    }
+
     const health=d.data_health||{};
-    const blocked=String(d.analysis_status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA';
+    const blocked=status==='BLOCKED_STALE_REQUIRED_DATA';
     const skipped=d.skipped_breakdown||{};
     state.orderHealth={
       blocked,
+      warming:false,
+      refreshing:Boolean(d.refreshing),
       analysisStatus:blocked?'BLOCKED_STALE_REQUIRED_DATA':'CURRENT',
       expectedThrough:health.expected_through||null,
       posThrough:health.pos_data_through||null,
@@ -5345,17 +5392,25 @@ async function loadOrders(){
     if(isMobileBackoffice()&&state.orderHealth.selectedDelivery){
       mNode('mobileListSub').textContent='Delivery '+state.orderHealth.selectedDelivery+' · '+(state.orderHealth.selectedWeekday||'')+' · observed 12-week receipt cadence';
     }
-    renderOrders()
+    renderOrders();
+    return true
   }catch(e){
+    if(seq!==orderingLoadSeq)return false;
     state.orderLoadError=e.message||'Unable to load ordering review';
     err.innerHTML=`<div class="error">${esc(state.orderLoadError)}</div>`;
     $('#orderRows').innerHTML='';
     if(isMobileBackoffice())throw e
+    return false
   }
 }
 function orderRows(){let a=[...state.orders];if(state.orderFilter==='FRESH')a=a.filter(x=>String(x.category).toUpperCase()==='FRESH');if(state.orderFilter==='FROZEN')a=a.filter(x=>String(x.category).toUpperCase()==='FROZEN');if(state.orderFilter==='ATTENTION')a=a.filter(x=>x.attention);const s=$('#orderSort').value;if(s==='suggested')a.sort((x,y)=>Number(y.suggested_delivery_qty||0)-Number(x.suggested_delivery_qty||0));if(s==='receipt')a.sort((x,y)=>String(y.last_receipt_date||'').localeCompare(String(x.last_receipt_date||'')));if(s==='oh')a.sort((x,y)=>Number(x.oh??1e18)-Number(y.oh??1e18));if(s==='frequency')a.sort((x,y)=>String(x.ordering_frequency||'').localeCompare(String(y.ordering_frequency||'')));if(s==='family')a.sort((x,y)=>String(x.family_name||'').localeCompare(String(y.family_name||'')));return a}
 function renderOrders(){
   const h=state.orderHealth||{};
+  if(h.warming){
+    $('#orderCount').textContent='CALCULATING';
+    $('#orderRows').innerHTML='<tr><td colspan="9" class="loading"><b>Calculating delivery suggestions…</b><br>Receipt cadence is filtered first; you can stay on this page while the server finishes.</td></tr>';
+    return
+  }
   if(h.blocked){
     $('#orderCount').textContent='BLOCKED';
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
