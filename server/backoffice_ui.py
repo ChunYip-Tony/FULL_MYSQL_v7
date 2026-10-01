@@ -2058,6 +2058,47 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
 }
 
+
+@media(max-width:759px){
+  .m-batch-detail-card{padding:10px!important;border-radius:17px!important}
+  .m-batch-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .m-batch-head-main{min-width:0;flex:1}
+  .m-batch-head-main .m-label{font-size:8px}
+  .m-batch-id{font-size:20px;font-weight:950;line-height:1.05;color:#0b444a}
+  .m-batch-file{font-size:11px;font-weight:850;line-height:1.25;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .m-batch-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:4px;font-size:8px;color:var(--muted)}
+  .m-batch-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:8px}
+  .m-batch-step{min-width:0;padding:5px 3px;border-radius:10px;background:#f5f8f7;border:1px solid #e3ece9;text-align:center}
+  .m-batch-step span{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#e5eceb;color:#5e7271;font-size:8px;font-weight:950}
+  .m-batch-step b{display:block;margin-top:3px;font-size:8px;line-height:1.1;white-space:nowrap}
+  .m-batch-step small{display:block;margin-top:2px;font-size:7px;color:var(--muted)}
+  .m-batch-step.done{background:#edf8f2;border-color:#cee8d9}.m-batch-step.done span{background:#1b9b69;color:#fff}
+  .m-batch-step.live{background:#e9f7f7;border-color:#a9d8d5;box-shadow:inset 0 0 0 1px #78c0bc}
+  .m-batch-step.live span{background:#167985;color:#fff}.m-batch-step.live small{color:#0b7077;font-weight:900}
+  .m-batch-progress{margin-top:8px;padding:9px;border:1px solid #dceae7;border-radius:14px;background:linear-gradient(180deg,#fff,#f7fbfa)}
+  .m-batch-progress-head{display:flex;align-items:center;justify-content:space-between;gap:7px}
+  .m-batch-progress-head>div{min-width:0}.m-batch-progress-head b{font-size:11px}.m-batch-progress-head small{display:block;font-size:7px;color:var(--muted);margin-top:1px}
+  .m-batch-live{padding:3px 6px;border-radius:999px;background:#eef4f3;font-size:7px;font-weight:900;white-space:nowrap}
+  .m-batch-live.good{background:#e5f6ed;color:#117249}.m-batch-live.warn{background:#fff1d8;color:#8b5c00}
+  .m-batch-progress-main{display:grid;grid-template-columns:1.4fr .7fr;gap:7px;align-items:end;margin-top:6px}
+  .m-batch-progress-main strong{font-size:22px;line-height:1;color:#0b3446}.m-batch-progress-main strong i{font-size:12px;font-style:normal;color:#728380}
+  .m-batch-progress-main small{display:block;font-size:7px;color:var(--muted);margin-top:2px}
+  .m-batch-progress-main .pct{text-align:right}.m-batch-progress-main .pct strong{color:#0a7d82}
+  .m-batch-bar{height:7px!important;margin:6px 0!important}
+  .m-batch-current{display:grid;grid-template-columns:auto auto 1fr;gap:5px;align-items:baseline;padding:5px 7px;border-radius:9px;background:#eaf8f4;min-width:0}
+  .m-batch-current small{font-size:7px;color:#567772}.m-batch-current b{font-size:10px;color:#0c6067}.m-batch-current span{font-size:8px;color:#496865;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .m-batch-speed,.m-batch-live-results{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:6px}
+  .m-batch-speed span,.m-batch-live-results span{padding:4px 3px;border-radius:8px;background:#f6f9f8;text-align:center}
+  .m-batch-speed b,.m-batch-live-results b{display:block;font-size:10px}.m-batch-speed small,.m-batch-live-results small{display:block;font-size:7px;color:var(--muted);margin-top:1px}
+  .m-batch-live-results .ready{background:#eaf7ef;color:#13724e}.m-batch-live-results .hold{background:#fff4dd;color:#946000}.m-batch-live-results .hist{background:#eef4fb;color:#35618e}
+  .m-batch-foot{margin-top:5px;font-size:7px;color:#7a8986;text-align:center}
+  .m-batch-issues{margin-top:8px;padding-top:7px;border-top:1px solid #e5edeb}
+  .m-batch-issues-head{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .m-batch-issues-head b{font-size:10px}.m-batch-issues-head span{font-size:10px;font-weight:950}
+  .m-batch-issue-row{display:flex;justify-content:space-between;gap:8px;padding:4px 0;border-top:1px solid #edf2f1;font-size:8px}
+  .m-batch-prev{display:flex;justify-content:space-between;gap:7px;margin-top:7px;padding:6px 7px;border-radius:9px;background:#f5f8f7;font-size:8px}
+  .m-batch-prev b{font-size:9px}.m-batch-prev span{color:var(--muted);text-align:right}
+}
 </style>
 </head>
 <body>
@@ -3700,57 +3741,58 @@ function mobileActiveBatchDetail(){
     ? Object.entries(liveIssueMap).map(([issue_code,issue_count])=>({issue_code,issue_count:Number(issue_count||0)}))
         .sort((a,z)=>z.issue_count-a.issue_count||String(a.issue_code).localeCompare(String(z.issue_code)))
     : (b.active_issue_counts||[]);
-  const issues=allIssues.slice(0,4);
+  const issues=allIssues.slice(0,3);
   const liveIssueTotal=allIssues.reduce((n,x)=>n+Number(x.issue_count||0),0);
   const prev=state.recent.find(x=>String(x.batch_id)!==String(b.batch_id||b.id));
+  const firstFile=(b.active_files||[])[0]||{};
+  const fileName=b.active_file_name||firstFile.original_filename||b.batch_label||'Current source batch';
+  const sourceType=uploadSourceLabel(b.active_source_type||firstFile.source_type||'');
+  const rows=b.active_file_rows??firstFile.source_row_count??b.source_row_count??'—';
 
-  let html='<div class="m-detailcard" style="padding:10px">'+
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start">'+
-      '<div><div class="m-label">Current Batch</div><div style="font-size:22px;font-weight:900">Batch #'+esc(b.batch_id||b.id||'—')+'</div>'+
-      '<div class="meta" style="margin-top:2px">'+esc(b.batch_label||'Active processing')+'</div></div>'+
-      pill(displayStatus)+
-    '</div>'+
-    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:7px" class="meta">'+
-      '<span>'+fmt(b.file_count,0)+' file(s)</span>'+
-      '<span>Run #'+esc(b.active_pipeline_run_id||'—')+'</span>'+
-      '<span>'+esc(b.active_code_version||'')+'</span>'+
-    '</div>';
+  let html='<div class="m-detailcard m-batch-detail-card">'+
+    '<div class="m-batch-head"><div class="m-batch-head-main">'+
+      '<div class="m-label">Current Batch</div>'+
+      '<div class="m-batch-id">Batch #'+esc(b.batch_id||b.id||'—')+'</div>'+
+      '<div class="m-batch-file">'+esc(fileName)+'</div>'+
+      '<div class="m-batch-meta"><span>'+esc(sourceType||'Source')+'</span><span>'+fmt(rows,0)+' rows</span><span>Run #'+esc(b.active_pipeline_run_id||'—')+'</span><span>'+esc(b.active_code_version||'')+'</span></div>'+
+    '</div>'+pill(displayStatus)+'</div>'+
+    batchPhaseStripHtml(b);
 
   if(hasActiveRun)html+=phase3MonitorHtml(b);
 
-  html+='<div class="m-detailsection" style="padding:9px 0 0;margin-top:9px">'+
-    '<div style="display:flex;justify-content:space-between;align-items:center"><h3 style="margin:0">Current Errors / Issues</h3>'+
-    '<b style="color:'+(liveIssueTotal>0?'#b64635':'#158259')+'">'+fmt(liveIssueTotal,0)+'</b></div>';
+  html+='<div class="m-batch-issues">'+
+    '<div class="m-batch-issues-head"><b>Current Errors / Issues</b><span style="color:'+(liveIssueTotal>0?'#b64635':'#158259')+'">'+fmt(liveIssueTotal,0)+'</span></div>';
 
   if(issues.length){
-    html+='<div style="margin-top:5px">'+issues.map(x=>
-      '<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid #edf1f1">'+
-      '<span>'+esc(issueLabel(x.issue_code))+'</span><b>'+fmt(x.issue_count,0)+'</b></div>'
-    ).join('')+'</div>';
-    if(allIssues.length>4)html+='<div class="meta" style="margin-top:4px">+'+(allIssues.length-4)+' more issue types</div>';
+    html+=issues.map(x=>
+      '<div class="m-batch-issue-row"><span>'+esc(issueLabel(x.issue_code))+'</span><b>'+fmt(x.issue_count,0)+'</b></div>'
+    ).join('');
+    if(allIssues.length>3)html+='<div class="m-batch-issue-row"><span>Other issue types</span><b>+'+(allIssues.length-3)+'</b></div>';
   }else{
-    html+='<p class="meta" style="margin:5px 0 0">No open Phase 3 issue rows currently recorded.</p>';
+    html+='<div class="m-batch-issue-row"><span>No open Phase 3 issues recorded</span><b>✓</b></div>';
   }
   html+='</div>';
 
   if(prev){
     const prevStatus=prev.phase3_status||prev.processing_status||'—';
-    html+='<div class="m-detailsection" style="padding:8px 0 0;margin-top:8px">'+
-      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'+
-      '<span><b>Previous #'+esc(prev.batch_id)+'</b> <span class="meta">'+esc(prevStatus)+'</span></span>'+
-      '<span class="meta">'+fmt(prev.quick_check_ready_rows,0)+' ready · '+fmt(prev.quick_check_hold_rows,0)+' hold</span>'+
-      '</div></div>';
+    html+='<div class="m-batch-prev"><div><b>Previous #'+esc(prev.batch_id)+'</b><br><small>'+esc(prevStatus)+'</small></div>'+
+      '<span>'+fmt(prev.quick_check_ready_rows,0)+' ready · '+fmt(prev.quick_check_hold_rows,0)+' hold</span></div>';
   }
 
-  if(waiting&&!hasActiveRun)html+='<button id="mResumePhase3" type="button" class="m-action primary" style="margin-top:9px">Retry Phase 3</button>';
+  if(waiting&&!hasActiveRun)html+='<button id="mResumePhase3" type="button" class="m-action primary" style="min-height:42px;margin-top:8px">Retry Phase 3</button>';
   html+='</div>';
 
-  mobileShowDetail('Batch #'+(b.batch_id||b.id||'—'),p.hasRowProgress?(fmt(p.rowCurrent,0)+' / '+fmt(p.rowTotal,0)+' · '+fmt(p.pct,1)+'%'):displayStatus,html);
+  mobileShowDetail(
+    'Batch #'+(b.batch_id||b.id||'—'),
+    p.hasRowProgress?(fmt(p.rowCurrent,0)+' / '+fmt(p.rowTotal,0)+' · '+fmt(p.pct,1)+'%'):displayStatus,
+    html
+  );
   const btn=mNode('mResumePhase3');if(btn)btn.onclick=()=>resumePhase3(b.batch_id||b.id);
   mobileBatchProgressPollSeq+=1;
   const seq=mobileBatchProgressPollSeq;
   if(hasActiveRun)setTimeout(()=>mobilePollPhase3Run(b.batch_id||b.id,b.active_pipeline_run_id,seq),1000);
 }
+
 
 async function mobileLoadFreshness(){
   const d=await api('/v1/backoffice/data-health?days=14');
