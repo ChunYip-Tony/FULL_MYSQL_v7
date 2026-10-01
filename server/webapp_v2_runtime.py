@@ -2454,6 +2454,7 @@ def bulk_ordering_suggestions(
     ordering_date: date|None=None,
     expected_delivery_date: date|None=None,
     include_sufficient_stock: bool=False,
+    family_ids: set[int]|list[int]|tuple[int,...]|None=None,
     promotion_involved: bool=False,
     promotion_start_date: date|None=None,
     promotion_end_date: date|None=None,
@@ -2493,6 +2494,9 @@ def bulk_ordering_suggestions(
         cur=conn.cursor(dictionary=True)
         shared_sales_days_28=_canonical_sales_days(cur,limit=28)
         families=_ordering_candidate_families(cur,kind)
+        if family_ids is not None:
+            allowed_family_ids={int(x) for x in family_ids}
+            families=[x for x in families if int(x.get("family_id")) in allowed_family_ids]
         suggestions=[]
         skipped=[]
 
@@ -2656,6 +2660,7 @@ def bulk_ordering_suggestions(
                 if include_sufficient_stock else "LESS_THAN_7_DAYS"
             ),
             "include_sufficient_stock":bool(include_sufficient_stock),
+            "family_prefilter_applied":family_ids is not None,
             "negative_effective_oh_for_ordering":"TREAT_AS_ZERO",
         },
         "suggestion_count":len(suggestions),
