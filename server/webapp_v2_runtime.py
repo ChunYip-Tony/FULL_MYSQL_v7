@@ -2743,7 +2743,7 @@ def bulk_ordering_suggestions(
                     "dos":dos,
                 })
                 continue
-            if dos is None:
+            if dos is None and not include_sufficient_stock:
                 skipped.append({
                     "family_id":fid,
                     "family_article_number":fam.get("main_article_number"),
@@ -2827,6 +2827,10 @@ def bulk_ordering_suggestions(
                 "supported_days_28d":m28.get("supported_day_count"),
                 "velocity_7d":vel7,
                 "dos":dos,
+                "delivery_roster_demand_basis":(
+                    "28D_REGULAR_BASELINE_FALLBACK"
+                    if dos is None else "7D_VELOCITY_PLUS_28D_REGULAR_BASELINE"
+                ),
                 "regular_baseline":regular,
                 "promotion_involved":bool(promo_item),
                 "promotion_item":promo_item,
