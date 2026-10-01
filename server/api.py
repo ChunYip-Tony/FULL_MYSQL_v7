@@ -20,6 +20,7 @@ from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_
 from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard, add_order_recommendation_to_draft, update_order_draft_line, order_draft_history, transition_order_draft, order_delivery_reconciliation, update_order_external_reference
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
+from receipt_audit import receipt_double_count_audit
 from coverage_backfill import diagnose_coverage_backfill
 from current_work_verification import verify_current_work
 from cost_backfill_queue import cost_backfill_queue
@@ -3731,6 +3732,17 @@ def yipman_ordering(category:str='ALL', delivery_date:str|None=None):
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Yipman ordering review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/receipt-audit')
+def yipman_receipt_audit(lookback_days:int=365):
+    try:
+        result=receipt_double_count_audit(lookback_days=lookback_days)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Receipt double-count audit failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 

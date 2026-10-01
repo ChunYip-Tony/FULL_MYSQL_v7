@@ -1264,7 +1264,7 @@ def _quick_check_family_relationships(
                   GROUP_CONCAT(DISTINCT base_uom_code ORDER BY base_uom_code) AS base_uoms
            FROM movement_history
            WHERE family_id=%s
-             AND movement_type IN ('101','107','109')
+             AND movement_type IN ('101','109')
              AND article_number IS NOT NULL
            GROUP BY article_number
            ORDER BY latest_receipt_date DESC,article_number""",
@@ -3378,7 +3378,7 @@ def _canonical_receipt_rows_for_line(
             FROM movement_history
             WHERE file_id IN ({placeholders})
               AND {identity_sql}
-              AND movement_type IN ('101','102','107','108','109','110')
+              AND movement_type IN ('101','102','109','110')
               AND posting_date>=%s AND posting_date<%s
             ORDER BY posting_date,file_id,raw_id,source_row_number""",
         (*file_ids,identity_arg,order_date,end_exclusive),
@@ -3488,9 +3488,12 @@ def order_delivery_reconciliation(order_draft_id: int) -> dict[str, Any]:
                 else:
                     compatible.append(enriched)
 
-            direct_rows=[r for r in compatible if str(r.get("movement_type")) in {"101","102"}]
-            blocked_rows=[r for r in compatible if str(r.get("movement_type")) in {"107","108"}]
-            release_rows=[r for r in compatible if str(r.get("movement_type")) in {"109","110"}]
+            # Physical delivery quantity is 101/109 only. 107/108 are
+            # valuation stages and never enter this reconciliation.
+            physical_rows=[
+                r for r in compatible
+                if str(r.get("movement_type")) in {"101","102","109","110"}
+            ]
 
             def _sum(rows_: list[dict[str,Any]]) -> Decimal:
                 return sum(
@@ -3498,22 +3501,17 @@ def order_delivery_reconciliation(order_draft_id: int) -> dict[str, Any]:
                     Decimal("0"),
                 )
 
-            if direct_rows or blocked_rows:
-                received=_sum(direct_rows)+_sum(blocked_rows)
-                receipt_basis="PHYSICAL_RECEIPT_101_107_NET_REVERSALS"
-                ignored_release_count=len(release_rows)
-            elif release_rows:
-                received=_sum(release_rows)
-                receipt_basis="109_RELEASE_ONLY_FALLBACK"
-                ignored_release_count=0
+            if physical_rows:
+                received=_sum(physical_rows)
+                receipt_basis="PHYSICAL_RECEIPT_101_109_NET_REVERSALS"
             else:
                 received=Decimal("0")
-                receipt_basis="NO_COMPATIBLE_RECEIPT_EVIDENCE"
-                ignored_release_count=0
+                receipt_basis="NO_COMPATIBLE_PHYSICAL_RECEIPT_EVIDENCE"
+            ignored_cost_stage_count=0
 
             ordered=_qc_decimal(line.get("final_qty")) or Decimal("0")
             variance=received-ordered
-            has_reversal=any(str(r.get("movement_type")) in {"102","108","110"} for r in compatible)
+            has_reversal=any(str(r.get("movement_type")) in {"102","110"} for r in physical_rows)
             family_fallback=evidence.get("identity_basis")=="FAMILY_FALLBACK"
             reference_unmatched=bool(
                 draft.get("external_order_reference")
@@ -3559,8 +3557,8 @@ def order_delivery_reconciliation(order_draft_id: int) -> dict[str, Any]:
                 "receipt_row_count":len(rows),
                 "compatible_receipt_row_count":len(compatible),
                 "incompatible_receipt_row_count":len(incompatible),
-                "ignored_109_110_row_count":ignored_release_count,
-                "receipt_evidence":compatible,
+                "ignored_cost_stage_107_108_row_count":ignored_cost_stage_count,
+                "receipt_evidence":physical_rows,
                 "uom_blocked_evidence":incompatible,
             })
 
@@ -3589,11 +3587,11 @@ def order_delivery_reconciliation(order_draft_id: int) -> dict[str, Any]:
         "lines":output_lines,
         "receipt_policy":{
             "canonical_movement_files_only":True,
-            "physical_receipt_types":["101","107"],
-            "receipt_reversal_types":["102","108"],
-            "release_fallback_types":["109","110"],
-            "rule_109_110":"Ignored when 101/102 or 107/108 receipt-stage evidence exists; otherwise used as release-only fallback.",
-            "movement_107_inventory_effect":"NO_UNRESTRICTED_EFFECT; used here only as receiving evidence.",
+            "physical_receipt_types":["101","109"],
+            "receipt_reversal_types":["102","110"],
+            "cost_stage_types":["107","108"],
+            "rule_107_109":"107 is valuation/cost-stage evidence only; 109 is the physical GR quantity/date for the same blocked-stock delivery.",
+            "movement_107_inventory_effect":"NO_UNRESTRICTED_EFFECT; excluded from received quantity and delivery cadence.",
         },
     }
 

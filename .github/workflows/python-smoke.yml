@@ -88,6 +88,7 @@ jobs:
           import phase3
           import backoffice_runtime
           import webapp_v2_runtime
+          import quick_check_app
           from receipt_semantics import (
               physical_receipt_stage_rows,
               is_physical_receipt_movement,
@@ -139,6 +140,14 @@ jobs:
 
           # Current cost cannot select a 109 observation as receipt valuation.
           assert "co.movement_type IN ('101','107')" in inspect.getsource(phase3._latest_cost)
+          reconcile_src=inspect.getsource(quick_check_app.order_delivery_reconciliation)
+          canonical_rows_src=inspect.getsource(quick_check_app._canonical_receipt_rows_for_line)
+          relation_src=inspect.getsource(quick_check_app._quick_check_family_relationships)
+          assert "PHYSICAL_RECEIPT_101_109_NET_REVERSALS" in reconcile_src
+          assert '"physical_receipt_types":["101","109"]' in reconcile_src
+          assert "('101','102','109','110')" in canonical_rows_src
+          assert "('101','109')" in relation_src
+          assert "PHYSICAL_RECEIPT_101_107_NET_REVERSALS" not in reconcile_src
           print('canonical-physical-receipt-semantics=PASS')
           PY
 

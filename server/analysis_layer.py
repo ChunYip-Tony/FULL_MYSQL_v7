@@ -533,7 +533,7 @@ def refresh_analysis_layer(cur, batch_id: int, department_code: str = SEAFOOD_DE
         "upc_quantity_authority": "POS_ONLY",
         "family_movement_authority": "MVT_251_252_SEPARATE",
         "cost_authority": [
-            "MOVEMENT_RECEIPT_VALUATION_101_107_109",
+            "MOVEMENT_RECEIPT_VALUATION_101_107",
             "LIVE_FRESH_FROZEN_OFFICIAL_REPORT",
             "ON_HAND_EXPLICIT_COST_FALLBACK",
             "USER_CONFIRMED_FAMILY_COST",
