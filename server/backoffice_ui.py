@@ -5755,6 +5755,28 @@ async function loadBatches(){
       : state.batchLoadWarning||'No active batch';
   return {active_ok:activeOk,recent_ok:recentOk};
 }
+let desktopActiveBatchPollBusy=false;
+async function refreshDesktopActiveBatch(){
+  if(desktopActiveBatchPollBusy||document.hidden||isMobileBackoffice())return;
+  if(!$('#database')?.classList.contains('on'))return;
+  if($('#database .subview.on')?.id!=='dboverview')return;
+  desktopActiveBatchPollBusy=true;
+  try{
+    const d=await api('/v1/web-upload/active',{timeoutMs:8000});
+    state.active=d.active_batch||null;
+    const roots=[$('#activeBatch'),$('#dbOverviewActive')].filter(Boolean);
+    roots.forEach(root=>{
+      root.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);
+      wireRecoveryButtons(root);
+      wireActiveBatchButtons(root);
+    });
+    const ps=$('#dbProcessingSummary');
+    if(ps)ps.textContent=state.active
+      ? 'Batch #'+String(state.active.batch_id||'—')+' · '+String(state.active.active_run_status||state.active.processing_status||'processing')
+      : 'No active batch';
+  }catch(_){}
+  finally{desktopActiveBatchPollBusy=false}
+}
 function openBatchDetail(id){
   const b=state.recent.find(x=>String(x.batch_id)===String(id));if(!b)return;
   const files=b.files||[],q=b.qa_summary||{},eligible=batchRebuildEligible(b),active=activePhase3RunForBatch(b.batch_id);
@@ -5874,7 +5896,7 @@ function desktopSubmitSearch(value){
 $('#searchForm').onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#searchInput').value)};
 const dg=$('#desktopGlobalSearchForm');if(dg)dg.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopGlobalSearch').value)};
 const dq=$('#desktopQuickSearchForm');if(dq)dq.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopQuickSearch').value)};
-async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else{initDesktopV3();restoreRoute({replaceMissing:true});}setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
+async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else{initDesktopV3();restoreRoute({replaceMissing:true});}setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000);setInterval(refreshDesktopActiveBatch,5000)}boot();
 })();
 </script>
 </body></html>'''
