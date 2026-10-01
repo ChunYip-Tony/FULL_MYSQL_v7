@@ -1184,7 +1184,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
   /* v7.0.318 · rebalance compact Home to use the viewport without oversized cards */
   .mobilehome.on .m-modgrid{
-    grid-template-rows:repeat(3,clamp(142px,19.8dvh,166px))!important;
+    grid-template-rows:repeat(3,clamp(150px,21.6dvh,180px))!important;
   }
   .mobilehome.on .m-module{
     padding-bottom:clamp(22px,3.05dvh,27px)!important;
@@ -3616,28 +3616,28 @@ async function mobileRefreshHome(){
   const updated=mNode('mHomeUpdated');
   if(updated)updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
 
-  // One cached endpoint serves the three expensive Home KPIs.
-  // The server prewarms it at startup and refreshes the operational math at most
-  // once per cache TTL, so mobile Home no longer fans out to four heavyweight
-  // Pricing / Ordering / Performance requests.
-  try{
-    const home=await api('/v1/backoffice/home-summary',{timeoutMs:15000});
+  // Read the last successful operational summary immediately. If the server is
+  // refreshing a new snapshot in the background, retry only this small endpoint;
+  // never rerun the full Home status fan-out.
+  const applyHomeSummary=home=>{
+    if(!home)return false;
+    let applied=false;
     const pricing=home?.pricing||{};
     if(String(pricing.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA'){
-      setCard('mPriceModuleMeta','CURRENT DATA REQUIRED','bad');
-    }else{
+      setCard('mPriceModuleMeta','CURRENT DATA REQUIRED','bad');applied=true;
+    }else if(pricing.status){
       const urgent=Number(pricing.urgent_240_249_count||0);
       const qualified=Number(pricing.qualified_count||0);
       setCard(
         'mPriceModuleMeta',
         urgent?urgent+' URGENT · '+qualified+' QUALIFIED':qualified+' QUALIFIED REVIEW',
         urgent?'bad':(qualified?'warn':'good')
-      );
+      );applied=true;
     }
 
     const ordering=home?.ordering||{};
     if(String(ordering.status||'').toUpperCase()==='BLOCKED_STALE_REQUIRED_DATA'){
-      setCard('mOrderingModuleMeta','CURRENT DATA REQUIRED','bad');
+      setCard('mOrderingModuleMeta','CURRENT DATA REQUIRED','bad');applied=true;
     }else if(ordering.status){
       const families=Number(ordering.family_count||0);
       const attention=Number(ordering.attention_count||0);
@@ -3645,7 +3645,7 @@ async function mobileRefreshHome(){
         'mOrderingModuleMeta',
         families+' FAMILIES · '+attention+' ATTENTION',
         attention?'warn':'good'
-      );
+      );applied=true;
     }
 
     const perf=home?.performance||{};
@@ -3655,12 +3655,25 @@ async function mobileRefreshHome(){
         'mPerformanceModuleMeta',
         shortDate(perf.report_date)+' · '+compactMoney(perf.sales_dollars)+' SALES · '+gp,
         perf.gp_dollars_complete===false?'warn':'good'
-      );
+      );applied=true;
     }
-  }catch(_){
-    // Keep the neutral fallback labels already painted above; Home navigation
-    // remains fully usable even if the summary refresh is temporarily unavailable.
-  }
+    return applied;
+  };
+
+  const refreshSummaryOnly=async(retry=0)=>{
+    if(!mNode('mobileHome')?.classList.contains('on'))return;
+    try{
+      const home=await api('/v1/backoffice/home-summary',{timeoutMs:5000});
+      applyHomeSummary(home);
+      if(home?.refreshing && retry<4){
+        const delay=[3000,6000,12000,20000][retry]||20000;
+        setTimeout(()=>refreshSummaryOnly(retry+1),delay);
+      }
+    }catch(_){
+      if(retry<2)setTimeout(()=>refreshSummaryOnly(retry+1),5000*(retry+1));
+    }
+  };
+  await refreshSummaryOnly(0);
 
   if(updated)updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
 }

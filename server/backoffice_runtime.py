@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from difflib import SequenceMatcher
 from decimal import Decimal
+import json
 import threading
 import time
 from typing import Any
@@ -2444,6 +2445,60 @@ _HOME_SUMMARY_CACHE_LOCK = threading.Lock()
 _HOME_SUMMARY_CACHE_VALUE: dict[str, Any] | None = None
 _HOME_SUMMARY_CACHE_AT = 0.0
 _HOME_SUMMARY_CACHE_TTL_SECONDS = 120.0
+_HOME_SUMMARY_REFRESHING = False
+_HOME_SUMMARY_LAST_ERROR: str | None = None
+
+
+def _ensure_home_summary_cache_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS backoffice_home_summary_cache (
+             cache_key VARCHAR(64) NOT NULL PRIMARY KEY,
+             payload_json LONGTEXT NOT NULL,
+             generated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+             ON UPDATE CURRENT_TIMESTAMP(6)
+           )"""
+    )
+
+
+def _load_persisted_home_summary() -> dict[str, Any] | None:
+    try:
+        with db_conn() as conn:
+            cur = conn.cursor(dictionary=True)
+            _ensure_home_summary_cache_table(cur)
+            conn.commit()
+            cur.execute(
+                """SELECT payload_json,generated_at
+                   FROM backoffice_home_summary_cache
+                   WHERE cache_key='MOBILE_HOME'
+                   LIMIT 1"""
+            )
+            row = cur.fetchone()
+            cur.close()
+        if not row:
+            return None
+        payload = json.loads(row.get("payload_json") or "{}")
+        if not isinstance(payload, dict):
+            return None
+        payload["persisted_generated_at"] = row.get("generated_at")
+        return payload
+    except Exception:
+        return None
+
+
+def _persist_home_summary(value: dict[str, Any]) -> None:
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        _ensure_home_summary_cache_table(cur)
+        cur.execute(
+            """INSERT INTO backoffice_home_summary_cache(cache_key,payload_json)
+               VALUES ('MOBILE_HOME',%s)
+               ON DUPLICATE KEY UPDATE
+                 payload_json=VALUES(payload_json),
+                 generated_at=CURRENT_TIMESTAMP(6)""",
+            (json.dumps(value, default=str),),
+        )
+        conn.commit()
+        cur.close()
 
 
 def _home_price_performance_summary() -> dict[str, Any]:
@@ -2487,7 +2542,6 @@ def _home_price_performance_summary() -> dict[str, Any]:
         rows = [dict(x) for x in cur.fetchall()]
         daily = _batch_daily_sales_by_price_type(cur, rows, days)
 
-        # Current price authority must match the live Pricing Review page.
         live_prices = _bulk_live_current_prices(cur, rows)
         for row in rows:
             if row.get("upc_id") is None:
@@ -2504,7 +2558,6 @@ def _home_price_performance_summary() -> dict[str, Any]:
                 row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
                 row["current_price_asof_date"] = None
 
-        # Latest completed-day Sales authority is direct canonical POS.
         canonical_sales = _canonical_report_date_sales(cur, anchor_entry)
         cost_obs = _performance_range_cost_rows(cur, rows, anchor)
         gp_total = Decimal("0")
@@ -2543,7 +2596,6 @@ def _home_price_performance_summary() -> dict[str, Any]:
                 "performance": performance,
             }
 
-        # Mandatory 240=249 mismatch candidates bypass normal OH/DOH gates.
         pair_groups: dict[tuple[int, str], dict[str, dict[str, Any]]] = {}
         for row in rows:
             sig = _seafood_upc_group_signature(row.get("family_id"), row.get("ean_upc"))
@@ -2558,21 +2610,9 @@ def _home_price_performance_summary() -> dict[str, Any]:
             service = members.get("249")
             if not main or not service:
                 continue
-            main_price = (
-                _d(main.get("current_price"))
-                if main.get("current_price") is not None else None
-            )
-            service_price = (
-                _d(service.get("current_price"))
-                if service.get("current_price") is not None else None
-            )
-            if (
-                main_price is None
-                or main_price <= 0
-                or service_price is None
-                or service_price <= 0
-                or main_price == service_price
-            ):
+            main_price = _d(main.get("current_price")) if main.get("current_price") is not None else None
+            service_price = _d(service.get("current_price")) if service.get("current_price") is not None else None
+            if main_price is None or main_price <= 0 or service_price is None or service_price <= 0 or main_price == service_price:
                 continue
             upc = str(service.get("ean_upc") or "")
             urgent_service_upcs.add(upc)
@@ -2589,19 +2629,14 @@ def _home_price_performance_summary() -> dict[str, Any]:
                 ),
             })
 
-        # Normal Pricing Review qualification + 14D max-GP$/day candidate.
         for row in rows:
             uid = int(row["upc_id"])
             upc = str(row.get("ean_upc") or "")
             if upc in urgent_service_upcs:
                 continue
-
             m14 = _batch_sales_metric(daily, days, uid, 14)
             q14 = _d(m14.get("sold_quantity"))
-            current_oh = (
-                _d(row.get("current_oh"))
-                if row.get("current_oh") is not None else None
-            )
+            current_oh = _d(row.get("current_oh")) if row.get("current_oh") is not None else None
             pclass = str(row.get("product_class") or "").upper()
             doh = _d(row.get("doh")) if row.get("doh") is not None else None
             freshness_qualified = (
@@ -2613,14 +2648,10 @@ def _home_price_performance_summary() -> dict[str, Any]:
                 continue
             if str(row.get("quick_check_status") or "").upper() != "READY":
                 continue
-
             day_obs = (daily.get(uid) or {}).get(anchor) or {}
-            report_day_types = {
-                str(x).upper() for x in (day_obs.get("price_types") or {}).keys()
-            }
+            report_day_types = {str(x).upper() for x in (day_obs.get("price_types") or {}).keys()}
             if "SALE" in report_day_types:
                 continue
-
             price_opt = _gp_day_price_suggestion_from_batch(row, uid, daily, days)
             current = price_opt.get("current_price_used")
             suggested = price_opt.get("suggested_price")
@@ -2630,11 +2661,9 @@ def _home_price_performance_summary() -> dict[str, Any]:
                 or _d(current) <= 0
                 or row.get("current_cost_per_selling_unit") is None
                 or suggested is None
+                or abs(_d(suggested) - _d(current)) <= Decimal("0.25")
             ):
                 continue
-            if abs(_d(suggested) - _d(current)) <= Decimal("0.25"):
-                continue
-
             candidates.append({
                 "upc": upc,
                 "current_price": current,
@@ -2645,16 +2674,10 @@ def _home_price_performance_summary() -> dict[str, Any]:
                 "actionable": True,
             })
 
-        acceptance = _latest_price_acceptances(
-            cur,
-            [str(x.get("upc") or "") for x in candidates],
-        )
+        acceptance = _latest_price_acceptances(cur,[str(x.get("upc") or "") for x in candidates])
         visible = [
             x for x in candidates
-            if not _accepted_snapshot_matches(
-                x,
-                acceptance.get(str(x.get("upc") or "")),
-            )
+            if not _accepted_snapshot_matches(x,acceptance.get(str(x.get("upc") or "")))
         ]
         cur.close()
 
@@ -2664,9 +2687,7 @@ def _home_price_performance_summary() -> dict[str, Any]:
             "status": "CURRENT",
             "qualified_count": len(actionable),
             "review_count": len(visible),
-            "urgent_240_249_count": sum(
-                1 for x in actionable if x.get("urgent_240_249")
-            ),
+            "urgent_240_249_count": sum(1 for x in actionable if x.get("urgent_240_249")),
             "suppressed_accepted_count": len(candidates) - len(visible),
             "data_health": health,
             "basis": "FAST_14D_SAME_PRICE_CANDIDATE_AND_ACCEPTANCE_RULES",
@@ -2681,10 +2702,7 @@ def _home_ordering_summary(order_type: str) -> dict[str, Any]:
     attention = sum(
         1
         for x in rows
-        if (
-            _d(x.get("dos")) < Decimal("3")
-            or _d(x.get("projected_oh_at_delivery")) < 0
-        )
+        if (_d(x.get("dos")) < Decimal("3") or _d(x.get("projected_oh_at_delivery")) < 0)
     )
     return {
         "order_type": str(order_type or "").upper(),
@@ -2695,7 +2713,6 @@ def _home_ordering_summary(order_type: str) -> dict[str, Any]:
 
 def _build_backoffice_home_summary() -> dict[str, Any]:
     health = _pricing_review_data_health()
-    # Ordering and pricing both fail closed on the same completed POS + MVT gate.
     if health.get("status") != "CURRENT":
         price_perf = _home_price_performance_summary()
         ordering = {
@@ -2705,8 +2722,6 @@ def _build_backoffice_home_summary() -> dict[str, Any]:
             "data_health": health,
         }
     else:
-        # Run the three independent operational summaries concurrently so Home
-        # latency is bounded by the slowest review rather than their sum.
         with ThreadPoolExecutor(max_workers=3) as pool:
             price_future = pool.submit(_home_price_performance_summary)
             fresh_future = pool.submit(_home_ordering_summary, "FRESH")
@@ -2716,10 +2731,8 @@ def _build_backoffice_home_summary() -> dict[str, Any]:
             frozen = frozen_future.result()
         ordering = {
             "status": "CURRENT",
-            "family_count": int(fresh.get("family_count") or 0)
-                + int(frozen.get("family_count") or 0),
-            "attention_count": int(fresh.get("attention_count") or 0)
-                + int(frozen.get("attention_count") or 0),
+            "family_count": int(fresh.get("family_count") or 0)+int(frozen.get("family_count") or 0),
+            "attention_count": int(fresh.get("attention_count") or 0)+int(frozen.get("attention_count") or 0),
             "fresh_family_count": int(fresh.get("family_count") or 0),
             "frozen_family_count": int(frozen.get("family_count") or 0),
             "data_health": health,
@@ -2727,51 +2740,90 @@ def _build_backoffice_home_summary() -> dict[str, Any]:
         }
 
     return {
-        "contract_version": "BACKOFFICE_HOME_SUMMARY_V1",
+        "contract_version": "BACKOFFICE_HOME_SUMMARY_V2",
         "pricing": price_perf.get("pricing") or {},
         "performance": price_perf.get("performance") or {},
         "ordering": ordering,
-        "generated_monotonic": time.monotonic(),
+        "generated_at": str(business_today()),
     }
 
 
-def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
-    """Cached operational summary for the mobile Home.
-
-    Heavy review math is computed at most once per cache TTL per service process.
-    """
-    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT
-    now = time.monotonic()
-    cached = _HOME_SUMMARY_CACHE_VALUE
-    if (
-        not force
-        and cached is not None
-        and now - _HOME_SUMMARY_CACHE_AT < _HOME_SUMMARY_CACHE_TTL_SECONDS
-    ):
-        return {**cached, "cache_status": "HIT"}
-
-    with _HOME_SUMMARY_CACHE_LOCK:
-        now = time.monotonic()
-        cached = _HOME_SUMMARY_CACHE_VALUE
-        if (
-            not force
-            and cached is not None
-            and now - _HOME_SUMMARY_CACHE_AT < _HOME_SUMMARY_CACHE_TTL_SECONDS
-        ):
-            return {**cached, "cache_status": "HIT_AFTER_WAIT"}
-
+def _refresh_home_summary_worker() -> None:
+    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT, _HOME_SUMMARY_REFRESHING, _HOME_SUMMARY_LAST_ERROR
+    try:
+        _HOME_SUMMARY_LAST_ERROR = None
         value = _build_backoffice_home_summary()
-        _HOME_SUMMARY_CACHE_VALUE = value
-        _HOME_SUMMARY_CACHE_AT = time.monotonic()
-        return {**value, "cache_status": "REFRESHED"}
+        _persist_home_summary(value)
+        with _HOME_SUMMARY_CACHE_LOCK:
+            _HOME_SUMMARY_CACHE_VALUE = value
+            _HOME_SUMMARY_CACHE_AT = time.monotonic()
+    except Exception as exc:
+        # Keep the last successful cache. A failed refresh must never blank Home.
+        _HOME_SUMMARY_LAST_ERROR = f"{type(exc).__name__}: {exc}"[:1000]
+    finally:
+        _HOME_SUMMARY_REFRESHING = False
+
+
+def _request_home_summary_refresh() -> None:
+    global _HOME_SUMMARY_REFRESHING
+    if _HOME_SUMMARY_REFRESHING:
+        return
+    _HOME_SUMMARY_REFRESHING = True
+    threading.Thread(
+        target=_refresh_home_summary_worker,
+        name="home-summary-refresh",
+        daemon=True,
+    ).start()
+
+
+def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
+    """Return immediately from memory/persistent cache; refresh in background."""
+    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT
+
+    cached = _HOME_SUMMARY_CACHE_VALUE
+    if cached is None:
+        persisted = _load_persisted_home_summary()
+        if persisted is not None:
+            with _HOME_SUMMARY_CACHE_LOCK:
+                _HOME_SUMMARY_CACHE_VALUE = persisted
+                # Persisted snapshot is immediately usable but intentionally
+                # stale so a current background refresh starts at once.
+                _HOME_SUMMARY_CACHE_AT = 0.0
+            cached = persisted
+
+    age = time.monotonic() - _HOME_SUMMARY_CACHE_AT if cached is not None else None
+    stale = cached is None or age is None or age >= _HOME_SUMMARY_CACHE_TTL_SECONDS
+    if force or stale:
+        _request_home_summary_refresh()
+
+    if cached is None:
+        return {
+            "contract_version": "BACKOFFICE_HOME_SUMMARY_V2",
+            "cache_status": "WARMING",
+            "refreshing": True,
+            "refresh_error": _HOME_SUMMARY_LAST_ERROR,
+            "pricing": {},
+            "performance": {},
+            "ordering": {},
+        }
+
+    return {
+        **cached,
+        "cache_status": "STALE_REFRESHING" if stale else "HIT",
+        "refreshing": bool(_HOME_SUMMARY_REFRESHING),
+        "refresh_error": _HOME_SUMMARY_LAST_ERROR,
+    }
 
 
 def warm_backoffice_home_summary() -> None:
-    try:
-        backoffice_home_summary(force=True)
-    except Exception:
-        # Warmup must never block API startup. The first Home request can retry.
-        return
+    # Load any prior successful snapshot immediately, then refresh asynchronously.
+    persisted = _load_persisted_home_summary()
+    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT
+    if persisted is not None:
+        with _HOME_SUMMARY_CACHE_LOCK:
+            _HOME_SUMMARY_CACHE_VALUE = persisted
+            _HOME_SUMMARY_CACHE_AT = 0.0
+    _request_home_summary_refresh()
 
 
 def _pricing_review_data_health() -> dict[str, Any]:
