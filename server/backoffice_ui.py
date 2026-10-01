@@ -5394,9 +5394,13 @@ async function loadDatabaseOverview(){
     const [h,a,r,q]=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
     state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
     const latest=state.recent[0]||null;
-    $('#dbOverviewActive').innerHTML=activeCard(state.active);
-    $('#dbLatestBatch').innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';
-    wireRebuildButtons($('#dbLatestBatch'));
+    const currentRoot=$('#dbOverviewActive');
+    const latestRoot=$('#dbLatestBatch');
+    currentRoot.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);
+    latestRoot.innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';
+    wireRecoveryButtons(currentRoot);
+    wireActiveBatchButtons(currentRoot);
+    wireRecoveryButtons(latestRoot);
     $('#dbProcessingSummary').textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch');
     const fixable=state.qaIssues.filter(x=>x.can_fix).length;
     $('#dbQASummary').textContent=state.qaIssues.length?`${state.qaIssues.length} open · ${fixable} fixable`:'No open QA issues';
