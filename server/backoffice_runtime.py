@@ -6,6 +6,7 @@ from datetime import date
 from difflib import SequenceMatcher
 from decimal import Decimal
 import json
+import inspect
 import threading
 import time
 from typing import Any
@@ -28,6 +29,7 @@ from webapp_v2_runtime import (
     _delivery_day_evidence,
     _family_effective_oh,
     _family_receipt_events,
+    _ordering_candidate_families,
     _gp_day_price_suggestion_from_batch,
     _performance_cost_for_day,
     _performance_range_cost_rows,
@@ -623,41 +625,67 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             up_to=expected_through,
         )
         for kind in kinds:
-            try:
-                bulk = bulk_ordering_suggestions(
-                    kind,
-                    expected_delivery_date=delivery_date,
-                    include_sufficient_stock=bool(delivery_date),
-                )
-            except TypeError as exc:
-                # Rolling deploy compatibility: a request can briefly land on an
-                # older worker that has the pre-v7.0.320 function signature.
-                # Do not fail the whole Ordering screen during that window.
-                if "include_sufficient_stock" not in str(exc):
-                    raise
-                bulk = bulk_ordering_suggestions(
-                    kind,
-                    expected_delivery_date=delivery_date,
-                )
-                bulk.setdefault("rules", {})["rolling_deploy_compatibility_fallback"] = True
+            delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
+            eligible_family_ids: list[int] | None = None
+
+            # Delivery-date mode must filter on receipt cadence before running
+            # expensive 28D family demand / OH / baseline calculations.
+            if delivery_date is not None:
+                eligible_family_ids=[]
+                for fam in _ordering_candidate_families(cur,kind):
+                    fid=int(fam["family_id"])
+                    events=_family_receipt_events(cur,fid,data_days=receipt_days)
+                    receipt=_last_receipt_base_summary_from_events(events)
+                    pattern=_delivery_pattern(events,after_date=delivery_date)
+                    delivery_day=_delivery_day_evidence(pattern,delivery_date)
+                    if delivery_day.get("eligible"):
+                        eligible_family_ids.append(fid)
+                        delivery_cache[fid]=(receipt,pattern,delivery_day)
+                    else:
+                        skipped.append({
+                            "family_id":fid,
+                            "family_article_number":fam.get("main_article_number"),
+                            "family_article_name":fam.get("family_description"),
+                            "reason":"DELIVERY_DAY_NOT_OBSERVED_ENOUGH",
+                            "delivery_date":delivery_date,
+                            "delivery_day_evidence":delivery_day,
+                        })
+
+            bulk_kwargs: dict[str,Any] = {
+                "expected_delivery_date":delivery_date,
+                "include_sufficient_stock":bool(delivery_date),
+                "family_ids":eligible_family_ids,
+            }
+            supported=set(inspect.signature(bulk_ordering_suggestions).parameters)
+            bulk_kwargs={k:v for k,v in bulk_kwargs.items() if k in supported}
+
+            if delivery_date is not None and not eligible_family_ids:
+                bulk={
+                    "inputs":{"expected_delivery_date":delivery_date},
+                    "suggestions":[],
+                    "skipped":[],
+                    "rules":{"delivery_prefilter_short_circuit":True},
+                }
+            else:
+                bulk=bulk_ordering_suggestions(kind,**bulk_kwargs)
+
             inputs[kind] = bulk.get("inputs")
             skipped.extend(bulk.get("skipped") or [])
             for s in bulk.get("suggestions") or []:
                 fid = int(s["family_id"])
-                events = _family_receipt_events(cur, fid, data_days=receipt_days)
-                receipt = _last_receipt_base_summary_from_events(events)
-                pattern = _delivery_pattern(events, after_date=delivery_date)
-                delivery_day = _delivery_day_evidence(pattern, delivery_date) if delivery_date else None
-                if delivery_date is not None and not delivery_day.get("eligible"):
-                    skipped.append({
-                        "family_id":fid,
-                        "family_article_number":s.get("family_article_number"),
-                        "family_article_name":s.get("family_article_name"),
-                        "reason":"DELIVERY_DAY_NOT_OBSERVED_ENOUGH",
-                        "delivery_date":delivery_date,
-                        "delivery_day_evidence":delivery_day,
-                    })
-                    continue
+                if delivery_date is not None:
+                    cached=delivery_cache.get(fid)
+                    if not cached:
+                        # Compatibility with an older worker that cannot accept
+                        # family_ids: never leak a nonmatching delivery family.
+                        continue
+                    receipt,pattern,delivery_day=cached
+                else:
+                    events = _family_receipt_events(cur, fid, data_days=receipt_days)
+                    receipt = _last_receipt_base_summary_from_events(events)
+                    pattern = _delivery_pattern(events)
+                    delivery_day = None
+
                 receiving_article = receipt.get("receiving_article") or _fallback_receiving_article(
                     cur, fid, str(s.get("family_article_number") or "") or None
                 )
@@ -754,6 +782,7 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             "write_enabled": False,
             "delivery_date_filter": "RECENT_12_WEEK_CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
             "delivery_day_eligibility": "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE",
+            "delivery_day_prefilter_before_heavy_math": True,
         },
     }
 
