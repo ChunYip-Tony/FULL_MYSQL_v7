@@ -362,6 +362,15 @@ jobs:
           assert 'cross = _safe_frozen_pack_cross_source_mapping' in a28src
           assert 'if _has_current_uom(cur, upc_id):' in a28src
           assert '_latest_monthly_pi_frozen_base_source' in a28src
+          d=a28._parse_frozen_pack_selling_declaration('2LB/PACK','12/2LB')
+          assert d['selling_uom']=='PACK' and d['declared_base_uom']=='LB'
+          assert Decimal(str(d['base_qty_per_selling_unit']))==Decimal('2')
+          d=a28._parse_frozen_pack_selling_declaration('PAC','15/1.5LB')
+          assert d['selling_uom']=='PAC' and d['declared_base_uom']=='LB'
+          assert Decimal(str(d['base_qty_per_selling_unit']))==Decimal('1.5')
+          d=a28._parse_frozen_pack_selling_declaration('EA','5/2LB')
+          assert d['selling_uom']=='EA' and d['declared_base_uom']=='LB'
+          assert Decimal(str(d['base_qty_per_selling_unit']))==Decimal('2')
 
           nsrc=inspect.getsource(normalize._normalize_identity_row)
           assert 'ARTICLE_MANUAL_TOLEDO_EAN_LB' in nsrc
