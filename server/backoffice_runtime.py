@@ -817,7 +817,7 @@ def ordering_review(
                 "inputs":{"history_date":delivery_date},
                 "rules":{
                     "decision_level":"FAMILY_ARTICLE_AND_RECEIVING_ARTICLE",
-                    "history_basis":"ACTUAL_CANONICAL_101_107_109_RECEIPTS_ON_SELECTED_DATE",
+                    "history_basis":"ACTUAL_CANONICAL_PHYSICAL_101_109_RECEIPTS_ON_SELECTED_DATE",
                     "receipt_quantity_basis":"BASE_UOM_WHEN_RECONCILABLE_ELSE_ENTRY_UOM",
                     "write_enabled":False,
                 },
