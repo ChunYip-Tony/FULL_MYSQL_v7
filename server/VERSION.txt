@@ -1,3 +1,12 @@
+v7.0.334 Yipman Moderate Size + Compact Quick Check:
+- Uses the approved slightly-smaller all-page sizing direction: larger than the old compact UI, but below the oversized mock.
+- Makes Quick Check result groups denser so more Family / Receiving / SAP / UPC rows fit on one phone screen.
+- Hides SAP Selling Article descriptions in the Quick Check list while keeping the SAP Selling Article number, 7D MVT and Avg/Day.
+- Keeps UPC descriptions visible under each UPC, including MAIN 240 / PACKAGE 245 / SERVICE 249 badges.
+- Keeps Family and Receiving color-group ownership, two latest receiving delivery dates/quantities, and all current v7.0.333 Ordering PO → GR trace behavior.
+- Rollback snapshot: backup/yipman-v333-pre-compact-quick.
+Version: 7.0.334 Single-Service Edition
+
 v7.0.332 Yipman Compact Family Hierarchy:
 - Rebuilds mobile Quick Check results into compact Family → Receiving Article → SAP Selling Article → UPC hierarchy.
 - Uses a distinct pastel color family per result group; Family and Receiving rows share the same group color while SAP/UPC rows remain neutral for readability.

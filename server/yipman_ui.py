@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v333';
+const CACHE='yipman-v334';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -164,6 +164,45 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .qreceivingrow{grid-template-columns:minmax(0,1.2fr) minmax(0,.82fr) minmax(0,.82fr);gap:4px;padding:6px 7px}
   .qrname{font-size:8px}.qdelivery b{font-size:10px}.qdelivery span{font-size:7px}
   .qsapkpis{gap:8px}.qsapname{font-size:9px}
+}
+
+
+/* V334 moderate-size all-page UI: slightly smaller than the large-type mock. */
+.brand{font-size:29px}.ver{font-size:12px}.dbbtn{width:42px;height:42px;font-size:21px}
+.search input{font-size:19px;padding:11px 9px}.search span{font-size:20px}
+.topline h2{font-size:24px}.hint{font-size:11px}
+.hero h3{font-size:22px}.hero p{font-size:11px}.stat b{font-size:18px}
+.launch b{font-size:16px}.launch span{font-size:10px}.launch em{font-size:9px}
+.prio b{font-size:13px}.prio span{font-size:10px}
+.day strong{font-size:20px}.orow .name{font-size:13px}.cell{font-size:13px}
+.ptop b{font-size:14px}.pbox b{font-size:19px}.dcard h3{font-size:12px}
+.shead h3{font-size:20px}.dm b{font-size:17px}.detail{font-size:11px}
+.nav button{font-size:9px}.nav i{font-size:20px}
+
+/* V334 Quick Check: tighter result density; SAP description hidden, UPC description retained. */
+.qfamily{border-radius:15px;margin-bottom:6px;border-left-width:5px}
+.qfhead{padding:6px 8px;gap:7px}
+.qfamily .qlabel{font-size:7px}.qfamily .qfnum{font-size:17px}.qfamily .qfname{font-size:13px;margin-top:1px}
+.qfamily .qmeta{font-size:7px;margin-top:1px}.qfamily .qkpi small{font-size:6px}.qfamily .qkpi b{font-size:12px}
+.qreceivingrow{gap:4px;padding:4px 7px}
+.qrecvidentity{grid-template-columns:20px minmax(0,1fr);gap:5px}
+.qricon{width:20px;height:20px;border-radius:6px;font-size:9px}
+.qrnum{font-size:12px}.qrname{font-size:8px;margin-top:1px}
+.qdelivery small{font-size:5px}.qdelivery b{font-size:10px}.qdelivery span{font-size:7px}
+.qsap{margin:4px 5px;border-left-width:3px;border-radius:10px}
+.qsaphead{padding:4px 6px;gap:5px}
+.qsaprole{font-size:6px}.qsaptop{gap:4px}.qsapnum{font-size:13px}
+.qsapname{display:none!important}
+.qsapkpis{gap:7px}.qsapkpi small{font-size:5px}.qsapkpi b{font-size:10px}
+.qupc{padding:5px 7px;gap:5px}
+.qupctop{gap:4px}.qrole{font-size:7px;padding:2px 5px}.qupccode{font-size:9px}
+.qupcname{display:block;font-size:11px;margin-top:1px;line-height:1.08}
+.qupcmetrics b{font-size:12px}.qupcmetrics span,.qready{font-size:7px}
+.qhidebtn{padding:5px 7px;font-size:9px}.qhiddennote{padding:4px 7px;font-size:8px}
+@media(max-width:430px){
+  .qreceivingrow{padding:4px 6px}
+  .qrname{font-size:8px}.qdelivery b{font-size:9px}.qdelivery span{font-size:7px}
+  .qsapkpis{gap:6px}
 }
 
 </style>
@@ -478,7 +517,7 @@ function quickReceivingRowHtml(a){
 function quickSellingHtml(a,idx,seq,{inactive=false}={}){
  const uom=String(a.movement_uom||''),rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
  const hid='q-upc-'+idx+'-'+seq;
- return '<section class="qsap"><div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span><span class="qsapname">'+esc(a.article_description||'')+'</span></div></div><div class="qsapkpis"><div class="qsapkpi"><small>7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b></div><div class="qsapkpi"><small>AVG/DAY</small><b>'+fmt(a.avg_qty_day)+' '+esc(uom)+'</b></div></div></div>'+
+ return '<section class="qsap"><div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div></div><div class="qsapkpis"><div class="qsapkpi"><small>7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b></div><div class="qsapkpi"><small>AVG/DAY</small><b>'+fmt(a.avg_qty_day)+' '+esc(uom)+'</b></div></div></div>'+
    active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+(inactive?'<div class="qhiddennote">Inactive SAP Selling Article · no 7D MVT and no active UPC.</div>':'')+'</section>';
 }
 function quickGroupedHtml(rows){
