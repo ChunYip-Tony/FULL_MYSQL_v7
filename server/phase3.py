@@ -649,6 +649,68 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
     return inserted
 
 
+def _backfill_recent_pos_history(
+    cur,
+    *,
+    exclude_batch_id: int | None = None,
+    lookback_days: int = 45,
+) -> dict[str, Any]:
+    """Reprocess recent immutable POS RAW with the current department/UPC resolver.
+
+    This is required for historical Seafood service rows that were present in
+    RAW but were skipped before 401 POS section headers were normalized to the
+    canonical Seafood department 400. Reprocessing is idempotent because
+    sales_period_observation and upc_department_observation use their existing
+    source-row unique keys with ON DUPLICATE KEY UPDATE.
+
+    POS remains the sole source of UPC sold quantity. No 251/252 or 317/318
+    movement quantity is converted into UPC sales by this repair.
+    """
+    days=max(7,min(int(lookback_days or 45),120))
+    cutoff=completed_through_date()-timedelta(days=days)
+    args: list[Any]=[cutoff]
+    exclude_sql=''
+    if exclude_batch_id is not None:
+        exclude_sql=' AND batch_id<>%s'
+        args.append(int(exclude_batch_id))
+
+    cur.execute(
+        f"""SELECT batch_id,file_id,original_filename,source_type,
+                   coverage_start_date,coverage_end_date,
+                   header_period_start_date,header_period_end_date,
+                   report_generated_at,upload_timestamp,filename_date_candidate
+            FROM ingest_file
+            WHERE source_type='sales_by_price_type'
+              AND processing_status='INGESTED'
+              AND duplicate_of_file_id IS NULL
+              AND COALESCE(header_period_end_date,coverage_end_date)>=%s
+              {exclude_sql}
+            ORDER BY file_id""",
+        tuple(args),
+    )
+    files=cur.fetchall()
+    rows_processed=0
+    source_batches:set[int]=set()
+    file_ids:list[int]=[]
+    for row in files:
+        source_batch_id=int(row['batch_id'])
+        source_batches.add(source_batch_id)
+        file_ids.append(int(row['file_id']))
+        rows_processed += _process_sales(cur, source_batch_id, row)
+
+    return {
+        'lookback_days': days,
+        'cutoff_date': cutoff,
+        'files_reprocessed': len(files),
+        'source_batches_reprocessed': sorted(source_batches),
+        'file_ids_reprocessed': file_ids,
+        'sales_rows_processed': rows_processed,
+        'rule': 'REPROCESS_RECENT_POS_RAW_WITH_CURRENT_DEPARTMENT_AND_UPC_RESOLVER',
+        'upc_qty_source': 'POS_ONLY',
+        'movement_used_as_upc_qty': False,
+    }
+
+
 def _process_price(cur, batch_id: int, f: dict[str, Any]) -> int:
     inserted = 0
     cur.execute('SELECT sheet_id FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
@@ -3372,6 +3434,22 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                 elif st == 'live_fresh_suggestion': counts['company'] += _process_company(cur, batch_id, f, 'raw_live_fresh_suggestion')
 
             report('PHASE3_HISTORY_INGESTED', counts=counts)
+
+            # Historical POS RAW backfill (v7.0.300):
+            # Older Seafood service rows under POS section 401 were preserved
+            # in RAW but skipped by pre-v299 Phase 3 because only department
+            # codes present in DEPARTMENT_REGISTRY were accepted. Reprocess the
+            # recent analytical horizon with the current 400/401 -> Seafood
+            # normalizer and hybrid UPC resolver before any 7D/28D metrics.
+            historical_pos_backfill = _backfill_recent_pos_history(
+                cur,
+                exclude_batch_id=batch_id,
+                lookback_days=45,
+            )
+            report(
+                'PHASE3_HISTORICAL_POS_BACKFILL_READY',
+                historical_pos_backfill=historical_pos_backfill,
+            )
 
             # Coverage-aware multi-date resolver:
             # - POS range file with exactly one missing daily date -> solve by
