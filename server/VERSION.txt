@@ -1,3 +1,15 @@
+v7.0.335 Complete Observed-Delivery Roster + Ordering Sort/Filter:
+- Delivery-date Ordering now returns every Family with canonical receipt evidence on the selected weekday in the Yipman 180-day lookback; order-calculation blockers no longer silently hide the Family.
+- Each selected-day Family is classified as ORDER, ZERO_ORDER, or REVIEW. UOM/OH/baseline blockers remain visible as REVIEW rows instead of disappearing.
+- Families with active 28D demand but zero/unavailable 7D velocity can use the 28D regular baseline for selected-delivery forecasting instead of being dropped.
+- Families with no 28D sales stay in the observed-delivery roster with a zero-order state.
+- Ordering roster summary shows Observed / Order / 0 Order / Review counts.
+- Mobile Ordering adds Filter (All / Need Order / 0 Order / Review) and Sort (Action First / Order Qty / DOS / Observed Count / Name) controls.
+- Removes the 16-row future-order display cap and the 24-row past-receipt display cap so the selected date can show the complete roster/history.
+- Ordering cache key advanced to V7 so old partial-roster cached responses cannot mask the new behavior.
+- Rollback snapshot: backup/yipman-v334-pre-order-roster.
+Version: 7.0.335 Single-Service Edition
+
 v7.0.334 Yipman Moderate Size + Compact Quick Check:
 - Uses the approved slightly-smaller all-page sizing direction: larger than the old compact UI, but below the oversized mock.
 - Makes Quick Check result groups denser so more Family / Receiving / SAP / UPC rows fit on one phone screen.
