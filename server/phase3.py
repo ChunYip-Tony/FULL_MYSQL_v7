@@ -157,6 +157,17 @@ def _id(v: Any) -> str | None:
     return s
 
 
+def _gr_5014_id(v: Any) -> str | None:
+    """Return a validated Seafood SAP GR/material-document number.
+
+    Store-specific receipt evidence confirms GR numbers use the 5014 prefix.
+    Do not classify PO/reference/other SAP document values as GR unless this
+    prefix is present.
+    """
+    doc = _id(v)
+    return doc if doc and doc.startswith("5014") else None
+
+
 def _numeric_key(v: str | None) -> str | None:
     if not v or not re.fullmatch(r'\d+', v):
         return None
@@ -912,16 +923,31 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
             base_uom = (_text(p.get(base_uom_col)) or '').upper() or None
             amount = _num(p.get(amount_col))
             sales_value = _num(p.get(sales_value_col))
-            # Prefer the explicit SAP Material/Article Document value, but
-            # fall back per-row to Reference when the document column exists
-            # yet is blank. Some MVT exports include both headers but only
-            # populate Reference with the GR/material-document number.
+            # Preserve the generic SAP document for non-receipt lineage.
+            # For receipt movements, only a 5014... value is accepted as the
+            # GR/material-document number. Search explicit Art./Material Doc,
+            # Reference, then the remaining raw row cells because SAP exports
+            # are not fully consistent about which document column is populated.
             art_doc = (
                 _text(p.get(article_doc_col))
                 if article_doc_col else None
             )
-            if not art_doc:
-                art_doc = _text(p.get(reference_col))
+            reference_doc = _text(p.get(reference_col))
+            if mvt in RECEIPT_MOVEMENTS:
+                gr_doc = (
+                    _gr_5014_id(art_doc)
+                    or _gr_5014_id(reference_doc)
+                    or next(
+                        (_gr_5014_id(v) for v in p.values() if _gr_5014_id(v)),
+                        None,
+                    )
+                )
+                if gr_doc:
+                    art_doc = gr_doc
+                elif not art_doc:
+                    art_doc = reference_doc
+            elif not art_doc:
+                art_doc = reference_doc
             po = _text(p.get(po_col))
             vendor = _text(p.get(vendor_col))
             cur.execute(

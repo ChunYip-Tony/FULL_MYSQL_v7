@@ -784,8 +784,8 @@ def ordering_review(
                                 "purchase_order":x.get("purchase_order"),
                                 # SAP material/article document is the receipt document
                                 # used by Yipman as the GR trace number.
-                                "gr_number":x.get("article_document"),
-                                "gr_number_source":x.get("article_document_source"),
+                                "gr_number":x.get("gr_number"),
+                                "gr_number_source":x.get("gr_number_source"),
                                 "article_document":x.get("article_document"),
                                 "vendor_code":x.get("vendor_code"),
                                 "receipt_stage_basis":x.get("receipt_stage_basis"),
@@ -805,7 +805,7 @@ def ordering_review(
             ][delivery_date.weekday()]
             cur.close()
             return {
-                "contract_version":"BACKOFFICE_ORDERING_REVIEW_V8_YIPMAN_GR_REFERENCE_FALLBACK",
+                "contract_version":"BACKOFFICE_ORDERING_REVIEW_V9_YIPMAN_GR_5014_AUTHORITY",
                 "category":cat,
                 "selected_delivery_date":delivery_date,
                 "selected_delivery_weekday":selected_weekday,

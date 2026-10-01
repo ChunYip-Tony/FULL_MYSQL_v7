@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v334';
+const CACHE='yipman-v335';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -584,7 +584,7 @@ function receiptTracePairs(r){
  const pairs=[], seen=new Set();
  events.forEach(x=>{
   const po=String(x?.purchase_order||'').trim();
-  const gr=String(x?.gr_number||x?.article_document||'').trim();
+  const gr=String(x?.gr_number||'').trim();
   if(!po&&!gr)return;
   const key=po+'|'+gr;
   if(seen.has(key))return;
@@ -677,7 +677,7 @@ function openOrderHistory(r){
  sheet(r.family_name||'Delivery history','Family '+esc(r.family_article||'—')+' · '+esc(appDate(r.selected_delivery_date||orderDate)),
  '<div class="dmetrics"><div class="dm"><b>'+fmt(r.receipt_qty)+' '+esc(r.receipt_uom||'')+'</b><span>ACTUAL RECEIPT</span></div><div class="dm"><b>'+fmt(poCount,0)+'</b><span>PO #</span></div><div class="dm"><b>'+fmt(grCount,0)+'</b><span>GR #</span></div></div>'+
  '<div class="detail"><b>Receiving article(s)</b><br>'+esc((r.receiving_articles||[]).join(' + ')||r.receiving_article||'—')+
- (events.length?'<br><br><b>PO → GR receipt trace</b>'+events.map(x=>'<div class="receipt-event"><div class="receipt-pair">PO '+esc(x.purchase_order||'—')+' → GR '+esc(x.gr_number||x.article_document||'—')+'</div><div class="receipt-meta">Article '+esc(x.article_number||'—')+' · '+fmt(x.quantity)+' '+esc(x.uom||'')+' · MVT '+esc(receiptMovementLabel(x))+(x.vendor_code?' · Vendor '+esc(x.vendor_code):'')+(x.gr_number_source==='RAW_REFERENCE_Q_FALLBACK'?' · GR from Reference':'')+'</div></div>').join(''):'')+
+ (events.length?'<br><br><b>PO → GR receipt trace</b>'+events.map(x=>'<div class="receipt-event"><div class="receipt-pair">PO '+esc(x.purchase_order||'—')+' → GR '+esc(x.gr_number||'—')+'</div><div class="receipt-meta">Article '+esc(x.article_number||'—')+' · '+fmt(x.quantity)+' '+esc(x.uom||'')+' · MVT '+esc(receiptMovementLabel(x))+(x.vendor_code?' · Vendor '+esc(x.vendor_code):'')+(x.gr_number_source==='RAW_REFERENCE_Q_5014'?' · GR from Reference':x.gr_number_source==='RAW_ROW_5014_SCAN'?' · GR from MVT row':'')+'</div></div>').join(''):'')+
  '<br><b>Basis</b><br>Actual canonical receipt movements on the selected past date. PO and GR are paired from the same canonical receipt event. Base UOM is used when all receipt events reconcile; otherwise the common entry UOM is shown.</div>');
 }
 function openOrder(r){
