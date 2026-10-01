@@ -1,0 +1,22 @@
+name: Read-only production status probe
+on:
+  push:
+    branches:
+      - prod-status-probe-v318
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Production state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 30 "$base/healthz"; echo
+          echo "=== ACTIVE ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/active"; echo
+          echo "=== QA22 ==="
+          curl -fsS --max-time 60 "$base/v1/web-upload/batches/22/qa-summary"; echo
