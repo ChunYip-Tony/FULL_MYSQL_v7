@@ -403,6 +403,16 @@ async function loadOrder(offset){
   let data=null;
   for(let i=0;i<10;i++){data=await api(url,{timeoutMs:14000});const s=String(data.analysis_status||'').toUpperCase();if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(s)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;$('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';await new Promise(r=>setTimeout(r,1500))}
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
+  if(['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(String(data?.cache_status||'').toUpperCase())){
+    $('#orderStatus').textContent='Still calculating best-available delivery suggestions…';
+    $('#orderRows').innerHTML='<div class="empty">Yipman is analyzing receipt cadence, OH and sales history. Pull down to refresh in a few seconds.</div>';
+    return;
+  }
+  if(finalStatus==='REFRESH_FAILED'){
+    $('#orderStatus').textContent='Ordering calculation failed';
+    $('#orderRows').innerHTML='<div class="empty">'+esc(data?.refresh_error||'Pull down to retry.')+'</div>';
+    return;
+  }
   if(finalStatus==='UNAVAILABLE'){const missing=(h.missing_required_sources||[]).join(' + ')||'POS / MVT';$('#orderStatus').textContent='Ordering unavailable';$('#orderRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required through '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'<br>'+esc(missing)+'</div>';return}
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||finalStatus.startsWith('READY_STALE_ESTIMATE');
   const rows=data?.rows||[];
@@ -451,7 +461,7 @@ function openPrice(r){
  const c=$('#priceClose');if(c)c.onclick=()=>closeSheet(true);
  const a=$('#priceAccept');if(a)a.onclick=()=>acceptPrice(r,a);
 }
-async function acceptPrice(r,b){b.disabled=true;b.textContent='SAVING…';try{await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price}),timeoutMs:30000});$('#overlay').classList.remove('on');toast('Accepted · hidden until evidence changes');loadPrices();loadHome()}catch(e){b.disabled=false;b.textContent='ACCEPTED';toast(e.message)}}
+async function acceptPrice(r,b){b.disabled=true;b.textContent='SAVING…';try{await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price}),timeoutMs:30000});closeSheet(true);toast('Accepted · hidden until evidence changes');loadPrices();loadHome()}catch(e){b.disabled=false;b.textContent='ACCEPTED';toast(e.message)}}
 $$('.pill[data-cat]').forEach(b=>b.onclick=()=>{priceCat=b.dataset.cat;$$('.pill[data-cat]').forEach(x=>x.classList.toggle('on',x===b));loadPrices()});
 
 async function loadData(){
