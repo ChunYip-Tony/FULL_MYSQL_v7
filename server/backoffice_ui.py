@@ -2121,6 +2121,17 @@ BACKOFFICE_HTML = r'''<!doctype html>
   }
   body.mobile-batch-detail-active #mobileDetailPage>.m-bottomnav button{min-height:42px;font-size:8px}
 }
+
+@media(min-width:760px){
+  .desktop-marketplace-badge{
+    background:linear-gradient(135deg,rgba(37,99,235,.30),rgba(8,145,178,.24))!important;
+    border-color:rgba(125,211,252,.28)!important;
+    color:#e8f6ff!important;
+    font-size:8px!important;
+    font-weight:950!important;
+    letter-spacing:.08em!important;
+  }
+}
 </style>
 </head>
 <body>
@@ -2128,7 +2139,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <header class="appbar">
   <div class="top">
     <div class="brand"><div class="mark">🐟</div><div><strong>FULL MYSQL</strong><small>Seafood Backoffice · Store #1032 · Las Vegas · v__VERSION__</small></div></div>
-    <div class="topstat"><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
+    <div class="topstat"><span class="glass desktop-marketplace-badge">DESKTOP MARKETPLACE UI</span><span id="readyPill" class="glass">Checking...</span><span id="posPill" class="glass">POS —</span><span id="pricePill" class="glass">Price —</span></div>
   </div>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav" aria-label="Desktop Backoffice main menu">
