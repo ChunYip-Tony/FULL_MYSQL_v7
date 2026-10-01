@@ -1,3 +1,14 @@
+v7.0.319 Persistent Nonblocking Mobile Home Cache:
+- Fixes the v7.0.318 symptom where Price Change, Performance, and Ordering stayed on fallback labels because Home waited on a still-expensive summary build.
+- Home summary endpoint is now nonblocking: it returns the last successful snapshot immediately and refreshes operational calculations in a background thread.
+- Persists the last successful Home KPI snapshot in MySQL so redeploys can show known-good Price / Performance / Ordering values immediately while the new snapshot refreshes.
+- Startup now loads any persisted snapshot first and starts refresh asynchronously; Home requests never execute the heavyweight summary build inline.
+- Failed refreshes keep the last successful snapshot and expose backend refresh diagnostics instead of blanking Home.
+- Mobile Home polls only the lightweight summary endpoint while a refresh is running; it no longer repeats the full six-endpoint Home refresh.
+- Price / Performance / Ordering no longer render a false zero while the first summary is warming; existing neutral review labels remain until real KPI data is available.
+- Increases the compact Home card rows slightly again to reduce the remaining lower-screen whitespace while staying materially smaller than v7.0.316.
+Version: 7.0.319 Single-Service Edition
+
 v7.0.318 Fast Mobile Home Summary:
 - Replaces the mobile Home fan-out to full Pricing Review, two full Ordering Reviews, and Performance Range with one cached /v1/backoffice/home-summary endpoint.
 - Prewarms the Home summary after API startup and caches operational summary math for 120 seconds so normal Home loads do not repeat heavyweight review calculations.
