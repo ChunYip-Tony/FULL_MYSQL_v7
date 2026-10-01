@@ -50,7 +50,7 @@ def _run_pause_requested(run_id:int) -> bool:
             cur.close()
 
 
-def _touch_run(run_id:int, *, stage:str|None=None) -> None:
+def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=None) -> None:
     payload={
         'worker':WORKER,
         'heartbeat_at':datetime.utcnow().isoformat()+'Z',
@@ -58,6 +58,10 @@ def _touch_run(run_id:int, *, stage:str|None=None) -> None:
     }
     if stage:
         payload['phase3_stage']=stage
+    if progress_payload:
+        for key,value in progress_payload.items():
+            if key.startswith('progress_'):
+                payload[key]=value
     with db_conn() as conn:
         cur=conn.cursor()
         try:
@@ -875,7 +879,7 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
             raise Phase3PauseRequested(stage)
         _write_runtime_health('BUSY',run_id,stage)
         try:
-            _touch_run(run_id,stage=stage)
+            _touch_run(run_id,stage=stage,progress_payload=payload)
         except Exception:
             pass
 
