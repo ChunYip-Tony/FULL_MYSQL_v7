@@ -1000,6 +1000,40 @@ def web_upload_249_source_evidence(request:Request,upc:str='24945000000'):
         cur.close()
         return json.loads(json.dumps(result,default=j))
 
+@app.get('/v1/web-upload/diagnostics/recent-pos-files')
+def web_upload_diagnostics_recent_pos_files(request:Request,response:Response,limit:int=40):
+    """Read-only POS ingest trace used to diagnose missing canonical coverage."""
+    _browser_upload_guard(request)
+    response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma']='no-cache'
+    response.headers['Expires']='0'
+    limit=max(1,min(int(limit or 40),100))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT f.file_id,f.batch_id,f.original_filename,f.source_type,
+                      f.processing_status AS file_status,f.source_row_count,
+                      f.error_count,f.duplicate_of_file_id,
+                      f.coverage_type,f.coverage_start_date,f.coverage_end_date,
+                      f.header_period_start_date,f.header_period_end_date,
+                      f.filename_date_candidate,f.report_generated_at,
+                      f.date_semantics_status,f.file_sha256,
+                      b.processing_status AS batch_status,b.upload_started_at,b.completed_at
+               FROM ingest_file f
+               JOIN ingest_batch b ON b.batch_id=f.batch_id
+               WHERE f.source_type='sales_by_price_type'
+               ORDER BY f.file_id DESC
+               LIMIT %s""",
+            (limit,),
+        )
+        rows=cur.fetchall()
+        cur.close()
+    return json.loads(json.dumps({
+        'count':len(rows),
+        'rows':rows,
+    },default=j))
+
+
 @app.get('/v1/web-upload/recent')
 def web_upload_recent(request:Request,response:Response,limit:int=8):
     _browser_upload_guard(request)
