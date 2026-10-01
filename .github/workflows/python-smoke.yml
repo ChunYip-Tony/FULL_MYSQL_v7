@@ -322,7 +322,9 @@ jobs:
 
           a28src=inspect.getsource(a28.repair_active_28d_uom)
           assert 'ARTICLE_MANUAL_FROZEN_PACK_PLUS_MONTHLY_PI_BASE_V7303' in inspect.getsource(a28._safe_frozen_pack_cross_source_mapping)
-          assert a28src.index('_safe_frozen_pack_cross_source_mapping') < a28src.index('_has_current_uom')
+          assert '# 0b) Strong two-source packaged-item authority:' in a28src
+          assert 'cross = _safe_frozen_pack_cross_source_mapping' in a28src
+          assert 'if _has_current_uom(cur, upc_id):' in a28src
           assert '_latest_monthly_pi_frozen_base_source' in a28src
 
           nsrc=inspect.getsource(normalize._normalize_identity_row)
