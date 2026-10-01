@@ -123,6 +123,7 @@ def find_active_batch() -> dict[str,Any]|None:
                 for key in (
                     'progress_kind','progress_unit','progress_current','progress_total',
                     'progress_pct','progress_ready','progress_hold','progress_historical',
+                    'progress_issue_counts',
                     'progress_elapsed_seconds','progress_rows_per_second','progress_eta_seconds',
                     'progress_current_upc','progress_current_name',
                 ):
