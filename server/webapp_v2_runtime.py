@@ -2701,6 +2701,11 @@ def bulk_ordering_suggestions(
                     "family_article_number":fam.get("main_article_number"),
                     "family_article_name":fam.get("family_description"),
                     "reason":str(family_oh.get("status") or "OH_UNAVAILABLE"),
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":family_oh.get("quantity"),
+                    "oh_uom":family_oh.get("uom"),
                 })
                 continue
 
@@ -2712,13 +2717,47 @@ def bulk_ordering_suggestions(
                     "family_article_number":fam.get("main_article_number"),
                     "family_article_name":fam.get("family_description"),
                     "reason":"OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED",
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":family_oh.get("quantity"),
+                    "oh_uom":family_oh.get("uom"),
+                    "demand_uom":demand_uom or None,
                 })
                 continue
 
             raw_oh=_d(family_oh.get("quantity"))
             ordering_oh=max(Decimal("0"),raw_oh)
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-            if not active_28 or dos is None or (dos>=Decimal("7") and not include_sufficient_stock):
+            if not active_28:
+                skipped.append({
+                    "family_id":fid,
+                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_name":fam.get("family_description"),
+                    "reason":"NO_28D_SALES",
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":ordering_oh,
+                    "oh_uom":demand_uom,
+                    "dos":dos,
+                })
+                continue
+            if dos is None:
+                skipped.append({
+                    "family_id":fid,
+                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_name":fam.get("family_description"),
+                    "reason":"NO_7D_VELOCITY",
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":ordering_oh,
+                    "oh_uom":demand_uom,
+                    "dos":dos,
+                })
+                continue
+            if dos>=Decimal("7") and not include_sufficient_stock:
                 continue
 
             regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
@@ -2729,6 +2768,12 @@ def bulk_ordering_suggestions(
                     "family_article_number":fam.get("main_article_number"),
                     "family_article_name":fam.get("family_description"),
                     "reason":"REGULAR_BASELINE_UNAVAILABLE",
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":ordering_oh,
+                    "oh_uom":demand_uom,
+                    "dos":dos,
                 })
                 continue
 
