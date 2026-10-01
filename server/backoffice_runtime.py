@@ -2786,7 +2786,9 @@ def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
         if persisted is not None:
             with _HOME_SUMMARY_CACHE_LOCK:
                 _HOME_SUMMARY_CACHE_VALUE = persisted
-                _HOME_SUMMARY_CACHE_AT = time.monotonic()
+                # Persisted snapshot is immediately usable but intentionally
+                # stale so a current background refresh starts at once.
+                _HOME_SUMMARY_CACHE_AT = 0.0
             cached = persisted
 
     age = time.monotonic() - _HOME_SUMMARY_CACHE_AT if cached is not None else None
@@ -2820,7 +2822,7 @@ def warm_backoffice_home_summary() -> None:
     if persisted is not None:
         with _HOME_SUMMARY_CACHE_LOCK:
             _HOME_SUMMARY_CACHE_VALUE = persisted
-            _HOME_SUMMARY_CACHE_AT = time.monotonic()
+            _HOME_SUMMARY_CACHE_AT = 0.0
     _request_home_summary_refresh()
 
 
