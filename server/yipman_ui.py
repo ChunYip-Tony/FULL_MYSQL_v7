@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v328';
+const CACHE='yipman-v329';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -60,11 +60,12 @@ YIPMAN_HTML = r'''<!doctype html>
 <link rel="icon" href="/app/yipman/icon.svg" type="image/svg+xml">
 <title>Yipman</title>
 <style>
-:root{--bg:#f6f7f9;--paper:#fff;--ink:#16202a;--muted:#71808d;--line:#e1e6ea;--blue:#0d4f8b;--blue2:#1d6fb8;--red:#d62828;--redbg:#fff0f0;--green:#25734a;--greenbg:#edf8f2;--amber:#966700;--amberbg:#fff8e5;--shadow:0 9px 25px rgba(18,38,56,.08)}
+:root{--bg:#f6f7f9;--paper:#fff;--ink:#16202a;--muted:#71808d;--line:#e1e6ea;--blue:#0d4f8b;--blue2:#1d6fb8;--red:#d62828;--redbg:#fff0f0;--green:#25734a;--greenbg:#edf8f2;--amber:#966700;--amberbg:#fff8e5;--ambersoft:#fff8e5;--shadow:0 9px 25px rgba(18,38,56,.08)}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overscroll-behavior-y:contain}
 body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:pointer}.hide{display:none!important}
-#app{height:100%;position:relative;overflow:hidden;padding-top:env(safe-area-inset-top)}
+#app{height:100%;position:relative;overflow:hidden;padding-top:env(safe-area-inset-top,0px)}
+@media (display-mode:standalone),(display-mode:fullscreen){#app{padding-top:max(env(safe-area-inset-top,0px),30px)}}
 .header{padding:9px 13px 10px}.head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{font-size:21px;font-weight:950;letter-spacing:-.04em}.brand span{color:var(--blue)}.ver{display:block;font-size:9px;color:var(--muted);font-weight:700;margin-top:1px}
 .dbbtn{width:40px;height:40px;border:0;border-radius:14px;background:#fff;box-shadow:var(--shadow);font-size:18px}
@@ -147,7 +148,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
       <div class="priority"><div class="ph"><span>NEEDS ATTENTION</span><span>LIVE</span></div><div id="priorityRows"><div class="loading">Loading priorities…</div></div></div>
     </section>
 
-    <section class="page" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><form class="search2" id="quickForm"><input id="quickInput" placeholder="Search salmon, 240739, UPC…" autocomplete="off"><button>SEARCH</button></form><div id="quickRows"><div class="empty">Search an item to begin.</div></div></section>
+    <section class="page" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="empty">Use the search bar above. Results appear automatically.</div></div></section>
 
     <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">UPCOMING 7 DAYS</div></div><div class="daybar" id="dayBar"></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div>FAMILY / RECEIVING</div><div>OH</div><div>ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
 
@@ -172,8 +173,9 @@ const iso=d=>d.toISOString().slice(0,10);
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='home', priceCat='ALL', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0;
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
-async function api(url,opt={}){const c=new AbortController(),tm=setTimeout(()=>c.abort(),opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}finally{clearTimeout(tm)}}
+async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
 function renderView(id){
   if(!$('#'+id))id='home';
   current=id;
@@ -372,17 +374,20 @@ function bindQuickRows(){
  $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
 }
 async function loadQuick(q){
- const box=$('#quickRows');box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
+ const query=String(q||'').trim(), box=$('#quickRows');
+ if(!query){quickRequestSeq++;lastQuickQuery='';box.innerHTML='<div class="empty">Use the search bar above. Results appear automatically.</div>';return}
+ const requestId=++quickRequestSeq;lastQuickQuery=query;box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(q),{timeoutMs:14000});
+  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(query),{timeoutMs:18000});
+  if(requestId!==quickRequestSeq)return;
   const rows=d.rows||[];
   if(!rows.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
   box.innerHTML=quickGroupedHtml(rows);
   bindQuickRows();
- }catch(e){box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
-$('#quickForm').onsubmit=e=>{e.preventDefault();const q=$('#quickInput').value.trim();if(q)loadQuick(q)};
-$('#globalForm').onsubmit=e=>{e.preventDefault();const q=$('#globalInput').value.trim();if(!q)return;$('#quickInput').value=q;go('quick');loadQuick(q);$('#globalInput').blur()};
+$('#globalForm').onsubmit=e=>{e.preventDefault();const q=$('#globalInput').value.trim();if(!q)return;go('quick');clearTimeout(quickSearchTimer);loadQuick(q);$('#globalInput').blur()};
+$('#globalInput').addEventListener('input',()=>{if(current!=='quick')return;clearTimeout(quickSearchTimer);const q=$('#globalInput').value.trim();if(!q){loadQuick('');return}quickSearchTimer=setTimeout(()=>loadQuick(q),260)});
 
 async function openUpc(upc){
  sheet('Loading…',upc,'<div class="loading">Loading current item detail…</div>');
@@ -398,11 +403,15 @@ function buildDays(){
  for(let i=0;i<7;i++){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+i);const b=document.createElement('button');b.className='day';b.dataset.offset=i;b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()+'</span>';b.onclick=()=>loadOrder(i);bar.appendChild(b)}
 }
 async function loadOrder(offset){
- const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);$$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));$('#orderStatus').textContent='Loading '+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';$('#orderRows').innerHTML='<div class="loading">Checking receiving cadence and coverage…</div>';
+ const requestId=++orderRequestSeq;
+ const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));$('#orderStatus').textContent='Loading '+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';$('#orderRows').innerHTML='<div class="loading">Checking receiving cadence and coverage…</div>';
  const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate;
  try{
   let data=null;
-  for(let i=0;i<10;i++){data=await api(url,{timeoutMs:14000});const s=String(data.analysis_status||'').toUpperCase();if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(s)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;$('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';await new Promise(r=>setTimeout(r,1500))}
+  for(let i=0;i<10;i++){
+   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+orderDate+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
+   if(requestId!==orderRequestSeq)return;
+   const s=String(data.analysis_status||'').toUpperCase();if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(s)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;$('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';await new Promise(r=>setTimeout(r,1500))}
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
   if(['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(String(data?.cache_status||'').toUpperCase())){
     $('#orderStatus').textContent='Still calculating best-available delivery suggestions…';
@@ -422,7 +431,7 @@ async function loadOrder(offset){
     : (data.selected_delivery_weekday||'Selected day')+' · '+rows.length+' receiving famil'+(rows.length===1?'y':'ies');
   $('#orderRows').innerHTML=rows.slice(0,16).map((r,i)=>'<div class="orow '+(r.attention?'urgent':'')+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmt(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+fmt(r.suggested_delivery_qty)+'<span>'+esc(r.suggested_delivery_uom||'')+'</span></div></div>').join('')||'<div class="empty">No receiving family has observed '+esc(data.selected_delivery_weekday||'this weekday')+' receipt evidence in the available 180-day history.</div>';
   $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(rows[Number(x.dataset.order)]));
- }catch(e){$('#orderStatus').textContent='Ordering failed';$('#orderRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ }catch(e){if(requestId!==orderRequestSeq)return;$('#orderStatus').textContent='Ordering temporarily unavailable';$('#orderRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Pull down to retry.</div>'}
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[];
@@ -482,7 +491,7 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){if(current==='home')await loadHome();else if(current==='quick'){const q=$('#quickInput').value.trim();if(q)await loadQuick(q)}else if(current==='order')await loadOrder(Number($('.day.on')?.dataset.offset||0));else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
+async function refreshCurrent(){if(current==='home')await loadHome();else if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q)}else if(current==='order')await loadOrder(Number($('.day.on')?.dataset.offset||0));else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
 
 const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
 const initialView=['home','quick','order','price','data'].includes(initialHash)?initialHash:'home';
