@@ -572,7 +572,12 @@ def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: di
     return reasons
 
 
-def ordering_review(category: str = "ALL", delivery_date: date | None = None) -> dict[str, Any]:
+def ordering_review(
+    category: str = "ALL",
+    delivery_date: date | None = None,
+    *,
+    best_available_delivery_evidence: bool = False,
+) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "FRESH", "FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
@@ -585,16 +590,17 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         expected_through=completed_through_date()
+        source_limit=60 if best_available_delivery_evidence else 1
         pos_latest_days=source_data_days(
             cur,
             "sales_by_price_type",
-            limit=1,
+            limit=source_limit,
             up_to=expected_through,
         )
         mvt_latest_days=source_data_days(
             cur,
             "movement",
-            limit=1,
+            limit=source_limit,
             up_to=expected_through,
         )
         pos_through=pos_latest_days[0]["date"] if pos_latest_days else None
@@ -605,8 +611,14 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
         if mvt_through!=expected_through:
             missing_required_sources.append("MVT")
 
-        available_dates=[x for x in (pos_through,mvt_through) if x is not None]
-        common_data_through=min(available_dates) if len(available_dates)==2 else None
+        if best_available_delivery_evidence:
+            pos_dates={x["date"] for x in pos_latest_days if x.get("date") is not None}
+            mvt_dates={x["date"] for x in mvt_latest_days if x.get("date") is not None}
+            common_dates=sorted(pos_dates & mvt_dates)
+            common_data_through=common_dates[-1] if common_dates else None
+        else:
+            available_dates=[x for x in (pos_through,mvt_through) if x is not None]
+            common_data_through=min(available_dates) if len(available_dates)==2 else None
         stale_days=(
             max(0,(expected_through-common_data_through).days)
             if common_data_through is not None else None
@@ -692,9 +704,22 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
                     fid=int(fam["family_id"])
                     events=event_map.get(fid) or []
                     receipt=_last_receipt_base_summary_from_events(events)
-                    pattern=_delivery_pattern(events,after_date=delivery_date)
+                    pattern=_delivery_pattern(
+                        events,
+                        after_date=delivery_date,
+                        lookback_days=(180 if best_available_delivery_evidence else 84),
+                    )
                     delivery_day=_delivery_day_evidence(pattern,delivery_date)
-                    if delivery_day.get("eligible"):
+                    observed_count=int(delivery_day.get("observed_count") or 0)
+                    best_available_match=bool(
+                        best_available_delivery_evidence and observed_count>=1
+                    )
+                    if delivery_day.get("eligible") or best_available_match:
+                        if best_available_match and not delivery_day.get("eligible"):
+                            delivery_day=dict(delivery_day)
+                            delivery_day["eligible"]=True
+                            delivery_day["best_available_low_confidence"]=True
+                            delivery_day["eligibility_rule"]="YIPMAN_ANY_OBSERVED_RECEIPT_ON_SELECTED_WEEKDAY_WITHIN_180_DAYS"
                         eligible_family_ids.append(fid)
                         delivery_cache[fid]=(receipt,pattern,delivery_day)
                     else:
@@ -860,7 +885,13 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             "incoming_field_used": False,
             "write_enabled": False,
             "delivery_date_filter": "RECENT_12_WEEK_CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
-            "delivery_day_eligibility": "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE",
+            "delivery_day_eligibility": (
+                "ANY_OBSERVED_SELECTED_WEEKDAY_WITHIN_180_DAYS"
+                if best_available_delivery_evidence
+                else "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE"
+            ),
+            "delivery_evidence_lookback_days": 180 if best_available_delivery_evidence else 84,
+            "best_available_delivery_evidence": bool(best_available_delivery_evidence),
             "delivery_day_prefilter_before_heavy_math": True,
             "stale_estimate_allowed": True,
             "stale_estimate_basis": "LATEST_COMMON_CANONICAL_POS_AND_MVT_DATE",
@@ -879,10 +910,14 @@ _ORDERING_REVIEW_LAST_ERROR: dict[str,str] = {}
 _ORDERING_REVIEW_CACHE_TTL_SECONDS = 120.0
 
 
-def _ordering_review_cache_key(category: str, delivery_date: date) -> str:
-    # Versioned key prevents a prior hard-block snapshot from masking the
-    # stale-estimate behavior introduced in V5.
-    return f"V5|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+def _ordering_review_cache_key(
+    category: str,
+    delivery_date: date,
+    *,
+    best_available_delivery_evidence: bool = False,
+) -> str:
+    mode="YIPMAN180" if best_available_delivery_evidence else "STANDARD84"
+    return f"V6|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -938,10 +973,19 @@ def _persist_ordering_review(cache_key: str, value: dict[str,Any]) -> None:
         cur.close()
 
 
-def _ordering_review_refresh_worker(category: str, delivery_date: date, cache_key: str) -> None:
+def _ordering_review_refresh_worker(
+    category: str,
+    delivery_date: date,
+    cache_key: str,
+    best_available_delivery_evidence: bool = False,
+) -> None:
     try:
         _ORDERING_REVIEW_LAST_ERROR.pop(cache_key,None)
-        value=ordering_review(category=category,delivery_date=delivery_date)
+        value=ordering_review(
+            category=category,
+            delivery_date=delivery_date,
+            best_available_delivery_evidence=best_available_delivery_evidence,
+        )
         _persist_ordering_review(cache_key,value)
         with _ORDERING_REVIEW_CACHE_LOCK:
             _ORDERING_REVIEW_CACHE_VALUES[cache_key]=value
@@ -953,14 +997,19 @@ def _ordering_review_refresh_worker(category: str, delivery_date: date, cache_ke
             _ORDERING_REVIEW_REFRESHING.discard(cache_key)
 
 
-def _request_ordering_review_refresh(category: str, delivery_date: date, cache_key: str) -> None:
+def _request_ordering_review_refresh(
+    category: str,
+    delivery_date: date,
+    cache_key: str,
+    best_available_delivery_evidence: bool = False,
+) -> None:
     with _ORDERING_REVIEW_CACHE_LOCK:
         if cache_key in _ORDERING_REVIEW_REFRESHING:
             return
         _ORDERING_REVIEW_REFRESHING.add(cache_key)
     threading.Thread(
         target=_ordering_review_refresh_worker,
-        args=(category,delivery_date,cache_key),
+        args=(category,delivery_date,cache_key,best_available_delivery_evidence),
         name=f"ordering-review-{delivery_date.isoformat()}",
         daemon=True,
     ).start()
@@ -970,15 +1019,25 @@ def cached_ordering_review(
     category: str = "ALL",
     delivery_date: date | None = None,
     force: bool = False,
+    *,
+    best_available_delivery_evidence: bool = False,
 ) -> dict[str,Any]:
     """Return delivery-date Ordering immediately; heavy analysis refreshes in background."""
     if delivery_date is None:
-        return ordering_review(category=category,delivery_date=None)
+        return ordering_review(
+            category=category,
+            delivery_date=None,
+            best_available_delivery_evidence=best_available_delivery_evidence,
+        )
 
     cat=str(category or "ALL").strip().upper()
     if cat not in {"ALL","FRESH","FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
-    key=_ordering_review_cache_key(cat,delivery_date)
+    key=_ordering_review_cache_key(
+        cat,
+        delivery_date,
+        best_available_delivery_evidence=best_available_delivery_evidence,
+    )
 
     with _ORDERING_REVIEW_CACHE_LOCK:
         cached=_ORDERING_REVIEW_CACHE_VALUES.get(key)
@@ -1004,7 +1063,12 @@ def cached_ordering_review(
         or age>=_ORDERING_REVIEW_CACHE_TTL_SECONDS
     )
     if force or stale:
-        _request_ordering_review_refresh(cat,delivery_date,key)
+        _request_ordering_review_refresh(
+            cat,
+            delivery_date,
+            key,
+            best_available_delivery_evidence,
+        )
 
     with _ORDERING_REVIEW_CACHE_LOCK:
         refreshing=key in _ORDERING_REVIEW_REFRESHING
@@ -3164,13 +3228,12 @@ def warm_backoffice_home_summary() -> None:
     _request_home_summary_refresh()
 
 
-def _pricing_review_data_health() -> dict[str, Any]:
-    """Required-source freshness gate for operational price-change decisions.
+def _pricing_review_data_health(*, allow_stale_estimate: bool = False) -> dict[str, Any]:
+    """Resolve completed POS/MVT freshness for pricing decisions.
 
-    Price suggestions depend on completed POS history plus current OH/DOH, which
-    in turn depends on movement roll-forward. If either required daily source is
-    behind the latest completed business day, do not present an older queue as
-    current.
+    Back Office keeps the strict current-day gate by default. Yipman may opt
+    into a clearly labelled best-available estimate using the latest date that
+    is canonical in both POS and MVT.
     """
     expected_through = completed_through_date()
     with db_conn() as conn:
@@ -3178,34 +3241,83 @@ def _pricing_review_data_health() -> dict[str, Any]:
         pos_days = source_data_days(
             cur,
             "sales_by_price_type",
-            limit=1,
+            limit=60,
             up_to=expected_through,
         )
         mvt_days = source_data_days(
             cur,
             "movement",
-            limit=1,
+            limit=60,
             up_to=expected_through,
         )
         cur.close()
+
     pos_through = pos_days[0]["date"] if pos_days else None
     mvt_through = mvt_days[0]["date"] if mvt_days else None
+    pos_dates = {x["date"] for x in pos_days if x.get("date") is not None}
+    mvt_dates = {x["date"] for x in mvt_days if x.get("date") is not None}
+    common_dates = sorted(pos_dates & mvt_dates)
+    common_data_through = common_dates[-1] if common_dates else None
+
     missing = []
     if pos_through != expected_through:
         missing.append("POS")
     if mvt_through != expected_through:
         missing.append("MVT")
+
+    current = not missing
+    estimate_available = bool(
+        allow_stale_estimate
+        and not current
+        and common_data_through is not None
+    )
+    status = (
+        "CURRENT"
+        if current
+        else ("STALE_ESTIMATE_AVAILABLE" if estimate_available else "BLOCKED_STALE_REQUIRED_DATA")
+    )
+    data_through = expected_through if current else common_data_through
+    stale_days = (
+        max(0, (expected_through - data_through).days)
+        if data_through is not None else None
+    )
     return {
-        "status": "CURRENT" if not missing else "BLOCKED_STALE_REQUIRED_DATA",
+        "status": status,
+        "decision_mode": (
+            "CURRENT"
+            if current
+            else ("STALE_ESTIMATE" if estimate_available else "BLOCKED")
+        ),
         "expected_through": expected_through,
+        "data_through": data_through,
+        "stale_calendar_days": stale_days,
         "pos_data_through": pos_through,
         "movement_data_through": mvt_through,
         "missing_required_sources": missing,
-        "rule": "PRICE_REVIEW_REQUIRES_CURRENT_COMPLETED_POS_AND_MVT",
+        "rule": (
+            "YIPMAN_BEST_AVAILABLE_COMMON_POS_MVT_DATE"
+            if allow_stale_estimate
+            else "PRICE_REVIEW_REQUIRES_CURRENT_COMPLETED_POS_AND_MVT"
+        ),
+        "warning": (
+            None
+            if current
+            else (
+                f"Estimate uses existing POS and MVT through {data_through}; "
+                f"required completed data is through {expected_through}."
+                if estimate_available
+                else "Required POS/MVT sources are stale and no common usable date is available."
+            )
+        ),
     }
 
-
-def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted: bool = False) -> dict[str, Any]:
+def pricing_review(
+    category: str = "ALL",
+    limit: int = 1000,
+    *,
+    include_accepted: bool = False,
+    allow_stale_estimate: bool = False,
+) -> dict[str, Any]:
     """Pricing suggestions with CURRENT fields from live Quick Check serving.
 
     Accepted suggestions are suppressed only while the current-price evidence
@@ -3218,10 +3330,12 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
     if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
 
-    data_health = _pricing_review_data_health()
-    if data_health["status"] != "CURRENT":
+    data_health = _pricing_review_data_health(
+        allow_stale_estimate=allow_stale_estimate
+    )
+    if data_health["status"] not in {"CURRENT", "STALE_ESTIMATE_AVAILABLE"}:
         return {
-            "contract_version": "BACKOFFICE_PRICING_REVIEW_V6",
+            "contract_version": "BACKOFFICE_PRICING_REVIEW_V7_BEST_AVAILABLE",
             "category": cat,
             "report_date": None,
             "summary": {
@@ -3241,7 +3355,12 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
             },
         }
 
-    report = performance_report(category=cat, limit=limit)
+    estimate_only = data_health["status"] == "STALE_ESTIMATE_AVAILABLE"
+    report = performance_report(
+        category=cat,
+        limit=limit,
+        report_date=(data_health.get("data_through") if estimate_only else None),
+    )
     rows = [dict(x) for x in (report.get("top_urgent_price_suggestions") or [])]
 
     upcs = [
@@ -3329,6 +3448,11 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
         row["current_serving_overlay_status"] = (
             "READY" if resolved_price else "STALE_OR_MISSING_CURRENT_PRICE"
         )
+        row["data_status"] = data_health.get("status")
+        row["data_through"] = data_health.get("data_through")
+        row["expected_through"] = data_health.get("expected_through")
+        row["stale_calendar_days"] = data_health.get("stale_calendar_days")
+        row["estimate_only"] = estimate_only
 
         candidate = row.get("candidate_price")
         if candidate is not None and current_cost is not None and _d(candidate) > 0:
@@ -3361,7 +3485,7 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
         visible_rows.append(row)
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V6",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V7_BEST_AVAILABLE",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
@@ -3375,6 +3499,9 @@ def pricing_review(category: str = "ALL", limit: int = 1000, *, include_accepted
             "current_price_display_authority": "LIVE_CANONICAL_PRICE_RESOLUTION_AT_RESPONSE_TIME_WITH_SOURCE_AND_ASOF",
             "current_price_rule": "TODAY_LATEST_VALID_PRICE_LIST_VS_LATEST_COMPLETED_BUSINESS_DAY_SINGLE_DATE_POS_SOLD_EVENT; OLDER PRICE EVIDENCE_IS_HISTORY_ONLY; SAME_DAY_PRICE_LIST_WINS",
             "current_cost_display_authority": "QUICK_CHECK_CURRENT_AT_RESPONSE_TIME",
+            "best_available_estimate_allowed": bool(allow_stale_estimate),
+            "estimate_basis": "LATEST_COMMON_CANONICAL_POS_AND_MVT_DATE",
+            "estimate_is_clearly_labelled": True,
             "source_contract": report.get("price_suggestion_rules"),
         },
     }
@@ -3389,6 +3516,7 @@ def accept_price_suggestion(
     current_price_asof_date: date | None,
     candidate_price: Decimal | None,
     actor: str | None,
+    allow_stale_estimate: bool = False,
 ) -> dict[str, Any]:
     upc=str(ean_upc or "").strip()
     if not upc:
@@ -3398,7 +3526,12 @@ def accept_price_suggestion(
 
     # Recompute including already accepted rows so the click is bound to the
     # currently valid server-side suggestion rather than a stale browser row.
-    snapshot=pricing_review(category="ALL",limit=1000,include_accepted=True)
+    snapshot=pricing_review(
+        category="ALL",
+        limit=1000,
+        include_accepted=True,
+        allow_stale_estimate=allow_stale_estimate,
+    )
     row=next((x for x in snapshot.get("rows",[]) if str(x.get("upc") or "")==upc),None)
     if not row:
         raise ValueError("PRICE_SUGGESTION_NOT_CURRENTLY_AVAILABLE")

@@ -3706,6 +3706,75 @@ def backoffice_pricing_accept(
     return json.loads(json.dumps(result,default=j))
 
 
+@app.get('/v1/yipman/ordering-review')
+def yipman_ordering(category:str='ALL', delivery_date:str|None=None):
+    try:
+        parsed_delivery=None
+        if delivery_date:
+            try:
+                parsed_delivery=date.fromisoformat(str(delivery_date))
+            except ValueError:
+                raise ValueError('DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
+        result=(
+            backoffice_cached_ordering_review(
+                category=category,
+                delivery_date=parsed_delivery,
+                best_available_delivery_evidence=True,
+            )
+            if parsed_delivery is not None
+            else backoffice_ordering_review(
+                category=category,
+                best_available_delivery_evidence=True,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman ordering review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/pricing-review')
+def yipman_pricing(category:str='ALL',limit:int=1000):
+    try:
+        result=backoffice_pricing_review(
+            category=category,
+            limit=limit,
+            allow_stale_estimate=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman pricing review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/pricing-review/{upc}/accept')
+def yipman_pricing_accept(
+    upc: str,
+    body: BackofficePriceAcceptRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=backoffice_accept_price_suggestion(
+            ean_upc=upc,
+            current_price=body.current_price,
+            current_price_source=body.current_price_source,
+            current_price_asof_date=body.current_price_asof_date,
+            candidate_price=body.candidate_price,
+            actor=actor,
+            allow_stale_estimate=True,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'REFRESH_REQUIRED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman price suggestion accept failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
 @app.get('/v1/app/v2/search')
 def app_v2_search(q:str,limit:int=30):
     try:
