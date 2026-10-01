@@ -1,3 +1,15 @@
+v7.0.339 Ordering + Pricing Best-Available No-Grace Mode:
+- Removes POS/MVT freshness/grace gating from Ordering and Price Suggestion while keeping source dates visible.
+- Missing POS/MVT dates no longer block module-level suggestions; missing dates are excluded, never treated as zero.
+- Ordering uses latest available POS demand history and latest available MVT receipt/inventory evidence independently.
+- Ordering forecast starts after the latest usable MVT date so missing later movement days are forecast instead of hard-blocking.
+- Price Suggestion uses the latest available POS date as its performance anchor even when MVT is a few days behind.
+- Home summary remains actionable in stale-but-usable source conditions.
+- Ordering cache advanced to V10 and Home persistent cache advanced to MOBILE_HOME_V339 so strict-gate payloads are not reused.
+- Mobile Ordering retries transient Failed to fetch / aborted / network errors while the best-available cache is warming.
+- Global 3 PM grace remains only for upload-health / QA monitoring; it no longer gates Ordering or Price Suggestion.
+Version: 7.0.339 Single-Service Edition
+
 v7.0.338 Full-Family Receipt Double-Count Audit + Reconciliation Guard:
 - Audits canonical receipt history across every Seafood family for 107+109 legacy exposure and physical duplicate candidates.
 - Order-delivery reconciliation now uses only physical 101/109 receipt stages (plus 102/110 reversals); 107/108 valuation stages can no longer inflate received quantity.

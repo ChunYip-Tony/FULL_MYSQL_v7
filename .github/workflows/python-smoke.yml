@@ -80,6 +80,48 @@ jobs:
           print('mvt-close-contract-ok')
           PY
 
+      - name: Validate Ordering and Pricing no-grace best-available policy
+        run: |
+          python - <<'PY'
+          import inspect
+          import backoffice_runtime as b
+
+          order_sig=inspect.signature(b.ordering_review)
+          cached_sig=inspect.signature(b.cached_ordering_review)
+          pricing_sig=inspect.signature(b.pricing_review)
+          health_sig=inspect.signature(b._pricing_review_data_health)
+
+          assert order_sig.parameters['best_available_delivery_evidence'].default is True
+          assert cached_sig.parameters['best_available_delivery_evidence'].default is True
+          assert pricing_sig.parameters['allow_stale_estimate'].default is True
+          assert health_sig.parameters['allow_stale_estimate'].default is True
+
+          order_src=inspect.getsource(b.ordering_review)
+          assert 'source_limit=60' in order_src
+          assert 'can_estimate=pos_through is not None and mvt_through is not None' in order_src
+          assert 'up_to=mvt_through' in order_src
+          assert 'forecast_start_date=mvt_through+timedelta(days=1)' in order_src
+          assert 'common_dates=' not in order_src
+          assert 'requires_common_pos_mvt_date":False' in order_src
+          assert 'missing_dates_block_suggestions":False' in order_src
+
+          price_src=inspect.getsource(b._pricing_review_data_health)
+          assert 'BEST_AVAILABLE_INDEPENDENT_POS_MVT_NO_FRESHNESS_GATE' in price_src
+          assert 'common_dates' not in price_src
+          assert 'data_through = expected_through if current else pos_through' in price_src
+
+          home_src=inspect.getsource(b._build_backoffice_home_summary)
+          assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
+          cache_src=inspect.getsource(b._ordering_review_cache_key)
+          assert 'V10_BEST_AVAILABLE_NO_GRACE' in cache_src
+
+          # Global upload-health grace still exists, but it is not a suggestion gate.
+          import business_clock as clock
+          assert clock.MVT_DAILY_GRACE_HOUR==15
+          assert clock.POS_DAILY_GRACE_HOUR==15
+          print('ordering-pricing-no-grace-best-available=PASS')
+          PY
+
       - name: Validate canonical physical receipt semantics
         run: |
           python - <<'PY'

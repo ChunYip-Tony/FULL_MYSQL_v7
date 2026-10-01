@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v338';
+const CACHE='yipman-v339';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -656,7 +656,7 @@ function renderOrderRoster(rows,data,h,stale){
  });
  renderedOrderRows=visible;
  $('#orderStatus').innerHTML=stale
-  ? '<div class="estimatebar">ESTIMATE · Existing POS + MVT through '+esc(h?.data_through||'—')+'. Missing day(s) are forecast forward to delivery.</div>'
+  ? '<div class="estimatebar">BEST AVAILABLE · POS '+esc(h?.pos_data_through||'—')+' · MVT '+esc(h?.movement_data_through||'—')+'. Missing source dates are ignored, not zero-filled; missing MVT days are forecast forward.</div>'
   : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster';
  $('#orderRows').innerHTML=visible.map((r,i)=>{
   const state=orderState(r), q=orderQty(r), reason=orderReasonLabel(r.roster_reason);
@@ -685,7 +685,7 @@ async function loadOrder(offset){
  try{
   let data=null;
   for(let i=0;i<10;i++){
-   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
+   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out|failed to fetch|network|aborted/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · retrying best-available ordering data';await new Promise(r=>setTimeout(r,1200));continue}throw e}
    if(requestId!==orderRequestSeq)return;
    const status=String(data.analysis_status||'').toUpperCase();
    if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;
@@ -706,7 +706,7 @@ async function loadOrder(offset){
   if(finalStatus==='UNAVAILABLE'){
     const missing=(h.missing_required_sources||[]).join(' + ')||'POS / MVT';
     $('#orderStatus').textContent='Ordering unavailable';
-    $('#orderRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required through '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'<br>'+esc(missing)+'</div>';
+    $('#orderRows').innerHTML='<div class="empty">No usable POS or MVT history is available for a best-available estimate.<br>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'<br>'+esc(missing)+'</div>';
     return;
   }
 
@@ -715,7 +715,7 @@ async function loadOrder(offset){
     $('#orderCol2').textContent='RECEIPT';
     $('#orderCol3').textContent='UOM';
     $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+appDate(orderDate)+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
-    $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/107/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
+    $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/109 physical receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
     $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
     return;
   }
@@ -747,7 +747,7 @@ function openOrder(r){
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
  '<div class="dmetrics"><div class="dm"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>CURRENT OH</span></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
- (r.estimate_only?'<div class="estimatebar">Best available estimate · data through '+esc(r.data_through||'—')+' · required through '+esc(r.expected_through||'—')+'.</div>':'')+
+ (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  '<br><br><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
  '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmtNullable(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
@@ -764,7 +764,7 @@ async function loadPrices(){
   const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}), h=d.data_health||{};
   if(String(h.status||'').includes('BLOCKED')){
     $('#priceStatus').textContent='Price estimate unavailable';
-    $('#priceRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</div>';
+    $('#priceRows').innerHTML='<div class="empty">No usable POS or MVT history is available for a best-available price estimate.<br>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</div>';
     return;
   }
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE';
@@ -779,7 +779,7 @@ async function loadPrices(){
   });
   const rows=filtered.slice(0,24);
   const filterLabel=priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
-  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">ESTIMATE · Sales + movement through '+esc(h.data_through||'—')+'. Current price/cost evidence is still resolved live where available.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
+  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled; current price/cost evidence is resolved live where available.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
   $('#priceRows').innerHTML=rows.map((r,i)=>{
     const days=(r.observed_delivery_days||[]).map(x=>String(x.weekday||'').slice(0,3).toUpperCase()+' '+fmt(x.receipt_date_count,0)).join(' · ');
     return '<div class="pcard" data-price="'+i+'"><div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.review_status||'Pricing review')+'</small></div><div class="badge '+(r.priority_240_249_mismatch?'red':stale?'amber':'green')+'">'+(r.priority_240_249_mismatch?'240≠249':stale?'ESTIMATE':'REVIEW')+'</div></div><div class="compare"><div class="pbox"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="arrow">→</div><div class="pbox"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div></div><div class="why">OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · 7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day'+(r.gp_per_day_opportunity!=null?' · GP$/day lift '+money(r.gp_per_day_opportunity):'')+(days?' · RECEIPTS '+esc(days):'')+'</div></div>';
@@ -794,7 +794,7 @@ function openPrice(r){
  const delivery=(r.observed_delivery_days||[]).map(x=>esc(x.weekday||'')+' '+fmt(x.receipt_date_count,0)+' receipt date'+(Number(x.receipt_date_count||0)===1?'':'s')).join('<br>');
  sheet(r.name||r.upc,r.upc||'Price review',
  '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div><div class="dm"><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>OH</span></div></div>'+
- (r.estimate_only?'<div class="estimatebar">ESTIMATE · completed POS/MVT evidence through '+esc(r.data_through||'—')+' · required through '+esc(r.expected_through||'—')+'.</div>':'')+
+ (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
  '<div class="detail"><b>Optimization basis</b><br>Maximum supported GP$/day from recent completed selling-price history, constrained by Company A/B/C range when available; freshness and OH determine urgency.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  '<br><br><b>Current evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+

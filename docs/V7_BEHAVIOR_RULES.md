@@ -23,6 +23,16 @@
 - Reversals follow the same separation: 102 reverses 101, 108 reverses 107 cost-stage evidence, and 110 reverses 109 physical receipt.
 - Delivery history, last receipt, observed delivery weekdays, ordering cadence, and delivery quantities must use physical receipt stages only and must never sum 107 + 109.
 
+## Ordering and Pricing best-available source policy
+
+- Ordering and Price Suggestion do **not** wait for the POS/MVT daily grace cutoff and do not hard-block merely because one or more recent POS or MVT upload dates are missing.
+- Use the newest available canonical POS days for sales/velocity/price-response history and the newest available canonical MVT days for receipt cadence/inventory movement evidence.
+- Missing source dates are excluded from supported-day calculations; they are never converted to zero.
+- Ordering forecasts missing calendar days after the latest usable MVT evidence instead of blocking the suggestion.
+- Price optimization may use newer POS evidence even when MVT is a few days behind; POS and MVT data-through dates remain visible separately.
+- The 3 PM POS/MVT grace policy remains valid for upload-health/QA monitoring only. It is not a gating rule for Ordering or Price Suggestion.
+- Non-freshness blockers such as unresolved UOM, missing cost, invalid identity, or unavailable inventory evidence still fail closed for the affected item.
+
 ## Single-Service deployment rule
 
 - v7.0.1 Single-Service Edition runs the HTTPS API and background worker in one App Platform service/container.

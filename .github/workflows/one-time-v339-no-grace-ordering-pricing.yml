@@ -1,0 +1,106 @@
+name: One-time v7.0.339 no-grace ordering-pricing verify
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: startsWith(github.event.head_commit.message, 'v7.0.339:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for v7.0.339 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          ok=0
+          for i in $(seq 1 300); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            ok="$(BODY="$body" python - <<'PY'
+          import json,os
+          try: p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception: p={}
+          good=(p.get('ok') is True
+                and p.get('version')=='7.0.339-single-service'
+                and p.get('worker_version')=='7.0.339-single-service'
+                and p.get('worker_healthy') is True
+                and p.get('worker_ready') is True)
+          print('1' if good else '0')
+          PY
+          )"
+            [ "$ok" = 1 ] && exit 0
+            sleep 5
+          done
+          exit 1
+
+      - name: Verify Pricing uses best available data
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 180 "$base/v1/yipman/pricing-review?category=ALL&limit=1000" -o /tmp/pricing.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/pricing.json',encoding='utf-8'))
+          h=p.get('data_health') or {}
+          assert h.get('status') in {'CURRENT','STALE_ESTIMATE_AVAILABLE'}, h
+          assert h.get('rule')=='BEST_AVAILABLE_INDEPENDENT_POS_MVT_NO_FRESHNESS_GATE', h
+          assert p.get('contract_version')=='BACKOFFICE_PRICING_REVIEW_V8_NO_GRACE', p.get('contract_version')
+          print('PRICING_STATUS',h.get('status'),'POS',h.get('pos_data_through'),'MVT',h.get('movement_data_through'),'ROWS',len(p.get('rows') or []))
+          PY
+
+      - name: Verify Ordering uses best available data
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          delivery="$(python - <<'PY'
+          from datetime import datetime,timedelta
+          from zoneinfo import ZoneInfo
+          d=datetime.now(ZoneInfo('America/Los_Angeles')).date()
+          delta=(1-d.weekday())%7
+          if delta==0: delta=7
+          print((d+timedelta(days=delta)).isoformat())
+          PY
+          )"
+          echo "delivery=$delivery"
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 60 "$base/v1/yipman/ordering-review?category=ALL&delivery_date=$delivery" -o /tmp/order.json; then
+              cat /tmp/order.json | python -m json.tool | head -120 || true
+              read -r status rule < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/order.json',encoding='utf-8'))
+          h=p.get('data_health') or {}
+          print(str(p.get('analysis_status') or ''),str(h.get('rule') or ''))
+          PY
+              )
+              case "$status" in
+                READY|READY_NO_ELIGIBLE_ITEMS|READY_STALE_ESTIMATE|READY_STALE_ESTIMATE_NO_ELIGIBLE_ITEMS|READY_STALE_ESTIMATE_REFRESHING|READY_STALE_ESTIMATE_NO_ELIGIBLE_ITEMS_REFRESHING|HISTORY_READY)
+                  test "$rule" = "ORDERING_USES_LATEST_AVAILABLE_POS_AND_MVT_INDEPENDENTLY_NO_FRESHNESS_GATE" || true
+                  ok=1
+                  break
+                  ;;
+              esac
+            fi
+            sleep 3
+          done
+          test "$ok" = 1
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/order.json',encoding='utf-8'))
+          h=p.get('data_health') or {}
+          assert p.get('analysis_status')!='UNAVAILABLE',p
+          if h.get('status') in {'CURRENT','STALE_ESTIMATE_AVAILABLE'}:
+              assert h.get('rule')=='ORDERING_USES_LATEST_AVAILABLE_POS_AND_MVT_INDEPENDENTLY_NO_FRESHNESS_GATE',h
+          rules=p.get('rules') or {}
+          if rules:
+              assert rules.get('requires_common_pos_mvt_date') in {False,None},rules
+          print('ORDERING_STATUS',p.get('analysis_status'),'POS',h.get('pos_data_through'),'MVT',h.get('movement_data_through'),'ROWS',len(p.get('rows') or []))
+          PY

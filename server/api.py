@@ -3659,9 +3659,13 @@ def backoffice_ordering(category:str='ALL', delivery_date:str|None=None):
             backoffice_cached_ordering_review(
                 category=category,
                 delivery_date=parsed_delivery,
+                best_available_delivery_evidence=True,
             )
             if parsed_delivery is not None
-            else backoffice_ordering_review(category=category)
+            else backoffice_ordering_review(
+                category=category,
+                best_available_delivery_evidence=True,
+            )
         )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
@@ -3673,7 +3677,11 @@ def backoffice_ordering(category:str='ALL', delivery_date:str|None=None):
 @app.get('/v1/backoffice/pricing-review')
 def backoffice_pricing(category:str='ALL',limit:int=1000):
     try:
-        result=backoffice_pricing_review(category=category,limit=limit)
+        result=backoffice_pricing_review(
+            category=category,
+            limit=limit,
+            allow_stale_estimate=True,
+        )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:

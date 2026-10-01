@@ -4263,7 +4263,7 @@ function mobileRenderList(){
     }).join('');
     if(state.orderHealth?.staleEstimate){
       const h=state.orderHealth;
-      const warning='<div class="m-warning"><b>⚠ Estimate using existing data through '+esc(h.dataThrough||'—')+'.</b><br>Required through '+esc(h.expectedThrough||'—')+' · POS '+esc(h.posThrough||'—')+' · MVT '+esc(h.movementThrough||'—')+'.<br>The suggestion includes forecast depletion for the missing day(s) before delivery.</div>';
+      const warning='<div class="m-warning"><b>⚠ BEST AVAILABLE · POS '+esc(h.posThrough||'—')+' · MVT '+esc(h.movementThrough||'—')+'.</b><br>Missing dates are ignored, not zero-filled; missing MVT days are forecast into the delivery calculation.</div>';
       html=warning+(html||'<div class="m-empty">No eligible families for this delivery date using the available data.</div>');
     }
   }else if(mobileState.module==='inventory'){
@@ -4291,12 +4291,12 @@ function mobileRenderList(){
   if(!html&&mobileState.module==='ordering'&&state.orderHealth?.blocked){
     const h=state.orderHealth;
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
-    html='<div class="m-error"><b>Ordering unavailable — no common usable POS + MVT date.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing source: '+esc(missing)+'. A stale estimate is shown whenever both POS and MVT have at least one common usable date.</div>';
+    html='<div class="m-error"><b>Ordering unavailable — usable source history is missing.</b><br><br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Need at least one canonical POS day and one canonical MVT day. Recent missing dates do not otherwise block suggestions.</div>';
   }
   if(!html&&mobileState.module==='price'&&state.priceHealth?.blocked){
     const h=state.priceHealth;
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
-    html='<div class="m-error"><b>Price Change blocked — required data is not current.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing/currentness issue: '+esc(missing)+'.<br>Upload or finish ingestion for the missing completed day, then refresh Price Change.</div>';
+    html='<div class="m-error"><b>Price Change unavailable — usable source history is missing.</b><br><br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Need at least one canonical POS day and one canonical MVT day. Recent missing dates do not otherwise block price suggestions.</div>';
   }
   if(!html&&mobileState.module==='price'&&!state.priceHealth?.blocked&&!state.priceLoadError){
     const suppressed=Number(state.priceMeta?.suppressedAccepted||0);
@@ -5336,7 +5336,7 @@ async function loadOrders(){
       }catch(e){
         // Network can drop once during a rolling worker restart. Because the
         // analysis itself is now server-side async, this retry is lightweight.
-        if(String(e?.message||e)!=='Failed to fetch')throw e;
+        if(!/failed to fetch|timed out|network|aborted/i.test(String(e?.message||e)))throw e;
         await new Promise(resolve=>setTimeout(resolve,800));
         d=await api(url,{timeoutMs:12000});
       }
@@ -5430,13 +5430,13 @@ function renderOrders(){
   if(h.blocked){
     $('#orderCount').textContent='BLOCKED';
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
-    $('#orderRows').innerHTML=`<tr><td colspan="9" class="empty"><b>Ordering unavailable — no common usable POS + MVT date.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing source: ${esc(missing)}. A stale estimate is shown whenever both sources have a common usable date.</td></tr>`;
+    $('#orderRows').innerHTML=`<tr><td colspan="9" class="empty"><b>Ordering unavailable — usable source history is missing.</b><br>POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Need at least one canonical POS day and one canonical MVT day. Recent missing dates do not otherwise block suggestions.</td></tr>`;
     return
   }
   const a=orderRows();
   $('#orderCount').textContent=h.staleEstimate?`${a.length} families · ESTIMATE`:`${a.length} families`;
   const warning=h.staleEstimate
-    ? `<tr><td colspan="9"><div style="padding:10px 12px;border:1px solid #efd49d;background:#fff4d9;border-radius:12px;color:#8a5a00"><b>⚠ Estimate using data through ${esc(h.dataThrough||'—')}.</b> Required through ${esc(h.expectedThrough||'—')} · POS ${esc(h.posThrough||'—')} · MVT ${esc(h.movementThrough||'—')}. Missing day(s) are forecast forward into the delivery coverage calculation.</div></td></tr>`
+    ? `<tr><td colspan="9"><div style="padding:10px 12px;border:1px solid #efd49d;background:#fff4d9;border-radius:12px;color:#8a5a00"><b>⚠ BEST AVAILABLE · POS ${esc(h.posThrough||'—')} · MVT ${esc(h.movementThrough||'—')}.</b> Missing dates are ignored, not zero-filled; missing MVT days are forecast into delivery coverage.</div></td></tr>`
     : '';
   const body=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span>${r.estimate_only?' <span class="pill yellow">ESTIMATE</span>':''}</td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('');
   $('#orderRows').innerHTML=warning+(body||'<tr><td colspan="9" class="empty">No eligible families: none currently meet the Ordering rules.</td></tr>');
@@ -5504,7 +5504,7 @@ function renderPrices(){
   if(h.blocked){
     $('#priceCount').textContent='BLOCKED';
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
-    $('#priceRows').innerHTML=`<tr><td colspan="12" class="empty"><b>Price Change is blocked by stale required data.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing/currentness issue: ${esc(missing)}. Upload/finish ingestion for the missing completed day, then refresh.</td></tr>`;
+    $('#priceRows').innerHTML=`<tr><td colspan="12" class="empty"><b>Price Change unavailable — usable source history is missing.</b><br>POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Need at least one canonical POS day and one canonical MVT day. Recent missing dates do not otherwise block suggestions.</td></tr>`;
     return
   }
   const rows=filteredPrices();
