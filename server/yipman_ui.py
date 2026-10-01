@@ -94,7 +94,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qhidebtn{width:100%;border:0;background:#f5f7f9;color:#5c6974;padding:7px 10px;text-align:left;font-size:8px;font-weight:900;border-top:1px solid var(--line)}.qhidden{display:none}.qhidden.on{display:block}.qhiddennote{font-size:7px;color:var(--muted);padding:6px 10px;background:#fafbfc;border-top:1px solid var(--line)}
 .empty{background:#fff;border-radius:16px;padding:20px;text-align:center;font-size:10px;color:var(--muted);box-shadow:var(--shadow)}
 .daybar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;margin-bottom:8px}.daybar::-webkit-scrollbar{display:none}.day{min-width:49px;border:0;border-radius:14px;background:#fff;padding:8px 4px;box-shadow:0 4px 12px rgba(18,38,56,.05);text-align:center}.day b{display:block;font-size:8px;color:var(--muted)}.day strong{display:block;font-size:17px;margin-top:1px}.day span{display:block;font-size:7px;color:var(--muted)}.day.on{background:var(--blue);color:#fff}.day.on b,.day.on span{color:#dbeafa}
-.list{background:#fff;border-radius:16px;box-shadow:var(--shadow);overflow:hidden}.lh,.orow{display:grid;grid-template-columns:1fr 58px 64px;padding:0 11px}.lh{background:#eef2f5;padding-top:8px;padding-bottom:8px;font-size:7px;font-weight:900;color:#5d6974}.orow{border-top:1px solid var(--line)}.orow>div{padding:10px 0}.orow .name{font-size:11px;font-weight:900}.orow .sub{font-size:7px;color:var(--muted);margin-top:2px}.cell{text-align:right;font-size:11px;font-weight:900}.cell span{display:block;font-size:7px;color:var(--muted)}.orow.urgent{box-shadow:inset 4px 0 0 var(--red)}.rtrace{display:grid;gap:4px;margin-top:6px}.rtrace-line{display:flex;align-items:center;gap:4px;min-width:0;font-size:8px;font-weight:950;line-height:1.15}.rpo,.rgr{display:inline-flex;align-items:center;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:7px;padding:4px 5px;border:1px solid}.rpo{background:var(--amberbg);border-color:#ecd99f;color:#775500}.rgr{background:var(--greenbg);border-color:#cbe6d6;color:var(--green)}.rtrace-arrow{color:#91a0ab;font-weight:950;flex:0 0 auto}.rtrace-more{font-size:7px;color:var(--muted);font-weight:850}.receipt-event{padding:8px 0;border-top:1px solid var(--line)}.receipt-event:first-child{border-top:0}.receipt-pair{font-weight:950;color:#263743}.receipt-meta{font-size:9px;color:var(--muted);margin-top:2px}
+.order-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;margin:0 0 8px}.order-summary{font-size:8px;font-weight:900;color:#52616d;line-height:1.25}.order-controls{display:flex;gap:5px}.order-controls label{display:grid;gap:2px;font-size:6px;font-weight:950;color:var(--muted);letter-spacing:.04em}.order-controls select{border:1px solid var(--line);background:#fff;border-radius:9px;padding:5px 20px 5px 7px;font-size:8px;font-weight:900;color:#263743;max-width:118px}
+.list{background:#fff;border-radius:16px;box-shadow:var(--shadow);overflow:hidden}.lh,.orow{display:grid;grid-template-columns:1fr 58px 64px;padding:0 11px}.lh{background:#eef2f5;padding-top:8px;padding-bottom:8px;font-size:7px;font-weight:900;color:#5d6974}.orow{border-top:1px solid var(--line)}.orow>div{padding:10px 0}.orow .name{font-size:11px;font-weight:900}.orow .sub{font-size:7px;color:var(--muted);margin-top:2px}.cell{text-align:right;font-size:11px;font-weight:900}.cell span{display:block;font-size:7px;color:var(--muted)}.orow.urgent{box-shadow:inset 4px 0 0 var(--red)}.orow.review{box-shadow:inset 4px 0 0 #d19a00}.orow.zero{box-shadow:inset 4px 0 0 #9aa6af}.orderstate{display:inline-flex;margin-left:4px;padding:2px 5px;border-radius:999px;background:#edf2f6;color:#5b6873;font-size:6px;font-weight:950;vertical-align:1px}.orderstate.order{background:#e8f6ee;color:#167648}.orderstate.review{background:#fff4d6;color:#805d00}.rtrace{display:grid;gap:4px;margin-top:6px}.rtrace-line{display:flex;align-items:center;gap:4px;min-width:0;font-size:8px;font-weight:950;line-height:1.15}.rpo,.rgr{display:inline-flex;align-items:center;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:7px;padding:4px 5px;border:1px solid}.rpo{background:var(--amberbg);border-color:#ecd99f;color:#775500}.rgr{background:var(--greenbg);border-color:#cbe6d6;color:var(--green)}.rtrace-arrow{color:#91a0ab;font-weight:950;flex:0 0 auto}.rtrace-more{font-size:7px;color:var(--muted);font-weight:850}.receipt-event{padding:8px 0;border-top:1px solid var(--line)}.receipt-event:first-child{border-top:0}.receipt-pair{font-weight:950;color:#263743}.receipt-meta{font-size:9px;color:var(--muted);margin-top:2px}
 .filters{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}.filters::-webkit-scrollbar{display:none}.pill{border:0;border-radius:999px;background:#fff;padding:7px 10px;font-size:8px;font-weight:900;color:#5e6a75;white-space:nowrap}.pill.on{background:#1f2c38;color:#fff}
 .pricecards{display:grid;gap:7px}.pcard{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:var(--shadow)}.ptop{display:flex;justify-content:space-between;gap:8px}.ptop b{font-size:12px}.ptop small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.compare{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:7px;margin-top:9px}.pbox{background:#f5f7f9;border-radius:11px;padding:8px}.pbox b{font-size:16px}.pbox span{display:block;font-size:7px;color:var(--muted)}.arrow{font-size:15px;font-weight:900;color:#98a3ac}.why{font-size:8px;line-height:1.35;color:#5d6974;margin-top:8px}
 .datagrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.dcard{background:#fff;border-radius:16px;padding:10px;box-shadow:var(--shadow)}.dcard h3{font-size:10px;margin:0 0 7px}.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}.stage{padding:6px 2px;text-align:center;background:#f1f4f6;border-radius:8px;border-top:4px solid #8d99a3}.stage b{display:block;font-size:6px}.stage span{font-size:6px;color:var(--muted)}.stage.ok{border-top-color:var(--green)}.stage.warn{border-top-color:#d19a00}.stage.bad{border-top-color:var(--red)}.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.c{text-align:center;font-size:7px}.dot{width:12px;height:12px;border-radius:50%;background:var(--green);margin:3px auto 0}.dot.warn{background:#d19a00}.dot.bad{background:var(--red)}.batchrow{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-top:1px solid var(--line)}.batchrow b{font-size:9px}.batchrow span{display:block;font-size:7px;color:var(--muted);margin-top:2px}
@@ -224,7 +225,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 
     <section class="page" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="empty">Use the search bar above. Results appear automatically.</div></div></section>
 
-    <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">14-DAY DELIVERY VIEW</div></div><div class="daybar" id="dayBar"></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
+    <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">14-DAY DELIVERY VIEW</div></div><div class="daybar" id="dayBar"></div><div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
 
     <section class="page" id="price"><div class="topline"><h2>Price Review</h2><div class="hint">BY DELIVERY PATTERN</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
@@ -257,6 +258,7 @@ const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='home', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0;
+let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
 function renderView(id){
@@ -606,11 +608,74 @@ function receiptMovementLabel(x){
  if(s.startsWith('109_110'))return '109/110';
  return s||'—';
 }
+function fmtNullable(v,d=1){return v===null||v===undefined||v===''?'—':fmt(v,d)}
+function orderQty(r){
+ if(r?.suggested_delivery_qty===null||r?.suggested_delivery_qty===undefined||r?.suggested_delivery_qty==='')return null;
+ const n=Number(r.suggested_delivery_qty);return Number.isFinite(n)?n:null;
+}
+function orderState(r){
+ const explicit=String(r?.roster_status||'').toUpperCase();
+ if(['ORDER','ZERO_ORDER','REVIEW'].includes(explicit))return explicit;
+ const q=orderQty(r);return q===null?'REVIEW':q>0?'ORDER':'ZERO_ORDER';
+}
+function orderReasonLabel(reason){
+ const x=String(reason||'').toUpperCase();
+ const labels={
+  'FAMILY_UOM_UNRESOLVED':'UOM',
+  'OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED':'OH / UOM',
+  'REGULAR_BASELINE_UNAVAILABLE':'BASELINE',
+  'NO_28D_SALES':'NO 28D SALES',
+  'NO_7D_VELOCITY':'NO 7D VELOCITY',
+  'ORDERING_CALCULATION_UNAVAILABLE':'CALCULATION'
+ };
+ return labels[x]||x.replaceAll('_',' ')||'REVIEW';
+}
+function renderOrderRoster(rows,data,h,stale){
+ lastOrderRows=Array.isArray(rows)?rows:[];
+ lastOrderData=data||{};
+ lastOrderStale=!!stale;
+ const all=lastOrderRows;
+ const summary=data?.roster_summary||{};
+ const counts={
+  total:Number(summary.observed_family_count??all.length),
+  order:Number(summary.order_count??all.filter(r=>orderState(r)==='ORDER').length),
+  zero:Number(summary.zero_order_count??all.filter(r=>orderState(r)==='ZERO_ORDER').length),
+  review:Number(summary.review_count??all.filter(r=>orderState(r)==='REVIEW').length)
+ };
+ $('#orderSummary').textContent='OBSERVED '+counts.total+' · ORDER '+counts.order+' · 0 ORDER '+counts.zero+' · REVIEW '+counts.review;
+ let visible=all.filter(r=>orderFilter==='ALL'||orderState(r)===orderFilter);
+ const dos=r=>{const v=r?.details?.dos;if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
+ const obs=r=>Number(r?.delivery_day_observed_count||0);
+ visible=[...visible].sort((a,b)=>{
+  if(orderSort==='QTY')return (orderQty(b)??-1)-(orderQty(a)??-1)||String(a.family_name||'').localeCompare(String(b.family_name||''));
+  if(orderSort==='DOS')return (dos(a)??999999)-(dos(b)??999999)||String(a.family_name||'').localeCompare(String(b.family_name||''));
+  if(orderSort==='OBSERVED')return obs(b)-obs(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
+  if(orderSort==='NAME')return String(a.family_name||'').localeCompare(String(b.family_name||''));
+  const rank=r=>orderState(r)==='ORDER'?0:orderState(r)==='REVIEW'?1:2;
+  return rank(a)-rank(b)||((orderQty(b)??-1)-(orderQty(a)??-1))||String(a.family_name||'').localeCompare(String(b.family_name||''));
+ });
+ renderedOrderRows=visible;
+ $('#orderStatus').innerHTML=stale
+  ? '<div class="estimatebar">ESTIMATE · Existing POS + MVT through '+esc(h?.data_through||'—')+'. Missing day(s) are forecast forward to delivery.</div>'
+  : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster';
+ $('#orderRows').innerHTML=visible.map((r,i)=>{
+  const state=orderState(r), q=orderQty(r), reason=orderReasonLabel(r.roster_reason);
+  const cls=(r.attention?' urgent':'')+(state==='REVIEW'?' review':state==='ZERO_ORDER'?' zero':'');
+  const stateLabel=state==='ORDER'?'ORDER':state==='REVIEW'?'REVIEW':'0 ORDER';
+  const orderText=state==='REVIEW'?'REVIEW':fmtNullable(q);
+  const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
+  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span></div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
+ }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
+ $('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+}
+$('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
+$('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 async function loadOrder(offset){
  const requestId=++orderRequestSeq;
  const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);
  $$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));
  const isPast=offset<0;
+ $('#orderTools').style.display=isPast?'none':'grid';
  $('#orderCol1').textContent='FAMILY / RECEIVING';
  $('#orderCol2').textContent=isPast?'RECEIPT':'OH';
  $('#orderCol3').textContent=isPast?'UOM':'ORDER';
@@ -650,7 +715,7 @@ async function loadOrder(offset){
     $('#orderCol2').textContent='RECEIPT';
     $('#orderCol3').textContent='UOM';
     $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+appDate(orderDate)+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
-    $('#orderRows').innerHTML=rows.slice(0,24).map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/107/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
+    $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/107/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
     $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
     return;
   }
@@ -658,11 +723,7 @@ async function loadOrder(offset){
   $('#orderCol2').textContent='OH';
   $('#orderCol3').textContent='ORDER';
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||finalStatus.startsWith('READY_STALE_ESTIMATE');
-  $('#orderStatus').innerHTML=stale
-    ? '<div class="estimatebar">ESTIMATE · Existing POS + MVT through '+esc(h.data_through||'—')+'. Missing day(s) are forecast forward to delivery.</div>'
-    : (data.selected_delivery_weekday||'Selected day')+' · '+rows.length+' receiving famil'+(rows.length===1?'y':'ies');
-  $('#orderRows').innerHTML=rows.slice(0,16).map((r,i)=>'<div class="orow '+(r.attention?'urgent':'')+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmt(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+fmt(r.suggested_delivery_qty)+'<span>'+esc(r.suggested_delivery_uom||'')+'</span></div></div>').join('')||'<div class="empty">No receiving family has observed '+esc(data.selected_delivery_weekday||'this weekday')+' receipt evidence in the available 180-day history.</div>';
-  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(rows[Number(x.dataset.order)]));
+  renderOrderRoster(rows,data,h,stale);
  }catch(e){
   if(requestId!==orderRequestSeq)return;
   $('#orderStatus').textContent='Ordering temporarily unavailable';
@@ -681,14 +742,17 @@ function openOrderHistory(r){
  '<br><b>Basis</b><br>Actual canonical receipt movements on the selected past date. PO and GR are paired from the same canonical receipt event. Base UOM is used when all receipt events reconcile; otherwise the common entry UOM is shown.</div>');
 }
 function openOrder(r){
- const d=r.details||{}, reasons=d.reasons||[];
+ const d=r.details||{}, reasons=d.reasons||[], state=orderState(r), reason=orderReasonLabel(r.roster_reason);
+ const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
+ const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
- '<div class="dmetrics"><div class="dm"><b>'+fmt(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>CURRENT OH</span></div><div class="dm"><b>'+fmt(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+fmt(r.suggested_delivery_qty)+' '+esc(r.suggested_delivery_uom||'')+'</b><span>'+(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER')+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>CURRENT OH</span></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">Best available estimate · data through '+esc(r.data_through||'—')+' · required through '+esc(r.expected_through||'—')+'.</div>':'')+
- '<div class="detail"><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
- '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmt(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
- '<br><br><b>Demand</b><br>7D '+fmt(d.qty_7d)+' · 28D '+fmt(d.qty_28d)+' · DOS '+fmt(d.dos)+
- '<br><br><b>Projected at delivery</b><br>'+fmt(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+
+ '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
+ '<br><br><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
+ '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmtNullable(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
+ '<br><br><b>Demand</b><br>7D '+fmtNullable(d.qty_7d)+' · 28D '+fmtNullable(d.qty_28d)+' · DOS '+fmtNullable(d.dos)+
+ '<br><br><b>Projected at delivery</b><br>'+fmtNullable(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+
  '<br><br><b>Delivery evidence</b><br>'+fmt(r.delivery_day_observed_count,0)+' / '+fmt(r.delivery_day_receipt_count,0)+' receipt dates · '+fmt(r.delivery_day_confidence_pct,0)+'% confidence'+
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
 }
