@@ -4264,7 +4264,7 @@ function mobileRenderList(){
     if(state.orderHealth?.staleEstimate){
       const h=state.orderHealth;
       const warning='<div class="m-warning"><b>⚠ Estimate using existing data through '+esc(h.dataThrough||'—')+'.</b><br>Required through '+esc(h.expectedThrough||'—')+' · POS '+esc(h.posThrough||'—')+' · MVT '+esc(h.movementThrough||'—')+'.<br>The suggestion includes forecast depletion for the missing day(s) before delivery.</div>';
-      html=warning+html;
+      html=warning+(html||'<div class="m-empty">No eligible families for this delivery date using the available data.</div>');
     }
   }else if(mobileState.module==='inventory'){
     html=subgroup240249Units(rows).map(unit=>{
@@ -4291,7 +4291,7 @@ function mobileRenderList(){
   if(!html&&mobileState.module==='ordering'&&state.orderHealth?.blocked){
     const h=state.orderHealth;
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
-    html='<div class="m-error"><b>Ordering blocked — required data is not current.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing/currentness issue: '+esc(missing)+'.<br>Upload or finish ingestion for the missing completed day, then refresh Ordering.</div>';
+    html='<div class="m-error"><b>Ordering unavailable — no common usable POS + MVT date.</b><br><br>Required through '+esc(h.expectedThrough||'—')+'<br>POS through '+esc(h.posThrough||'—')+'<br>MVT through '+esc(h.movementThrough||'—')+'<br><br>Missing source: '+esc(missing)+'. A stale estimate is shown whenever both POS and MVT have at least one common usable date.</div>';
   }
   if(!html&&mobileState.module==='price'&&state.priceHealth?.blocked){
     const h=state.priceHealth;
@@ -5430,7 +5430,7 @@ function renderOrders(){
   if(h.blocked){
     $('#orderCount').textContent='BLOCKED';
     const missing=(h.missing||[]).join(' + ')||'POS / MVT';
-    $('#orderRows').innerHTML=`<tr><td colspan="9" class="empty"><b>Ordering is blocked by stale required data.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing/currentness issue: ${esc(missing)}. Upload/finish ingestion for the missing completed day, then refresh.</td></tr>`;
+    $('#orderRows').innerHTML=`<tr><td colspan="9" class="empty"><b>Ordering unavailable — no common usable POS + MVT date.</b><br>Required through ${esc(h.expectedThrough||'—')} · POS through ${esc(h.posThrough||'—')} · MVT through ${esc(h.movementThrough||'—')}<br>Missing source: ${esc(missing)}. A stale estimate is shown whenever both sources have a common usable date.</td></tr>`;
     return
   }
   const a=orderRows();
