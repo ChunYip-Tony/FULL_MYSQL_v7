@@ -2384,6 +2384,83 @@ def _quick_receiving_article_context(
                 receipt_history_by_article[art] = history
                 receipt_by_article[art] = history[0]
 
+    # Family 7D Receipt is a separate receiving metric from Family Selling MVT.
+    # It sums only canonical physical 101/109 receipt events across the latest
+    # seven completed movement-data days. 107 is cost evidence only and is
+    # already excluded by the physical receipt stage selection above.
+    receipt_dates_7 = {
+        x["date"]
+        for x in movement_days_7
+        if x.get("date") is not None
+    }
+    receipt_7d_by_family: dict[int, dict[str, Any]] = {}
+    for fid in fids:
+        family_receipt_articles = {
+            str(source_by_family.get(fid) or "").strip(),
+            *{
+                str(a or "").strip()
+                for a in candidates.get(fid, {})
+            },
+        }
+        family_receipt_articles.discard("")
+        all_known_entries = [
+            e
+            for art in family_receipt_articles
+            for e in per_article.get(art, [])
+        ]
+        entries_7 = [
+            e for e in all_known_entries
+            if e.get("date") in receipt_dates_7
+        ]
+        uoms_7 = {
+            str(e.get("uom") or "").strip().upper()
+            for e in entries_7
+            if str(e.get("uom") or "").strip()
+        }
+        known_uoms = {
+            str(e.get("uom") or "").strip().upper()
+            for e in all_known_entries
+            if str(e.get("uom") or "").strip()
+        }
+        if entries_7 and len(uoms_7) == 1 and all(
+            e.get("quantity") is not None for e in entries_7
+        ):
+            receipt_7d_by_family[fid] = {
+                "quantity": sum(
+                    (_d(e.get("quantity")) for e in entries_7),
+                    Decimal("0"),
+                ),
+                "uom": next(iter(uoms_7)),
+                "status": "READY",
+                "receipt_day_count": len({
+                    e.get("date") for e in entries_7 if e.get("date") is not None
+                }),
+                "basis": "CANONICAL_PHYSICAL_101_109_LATEST_7_COMPLETED_MVT_DAYS",
+            }
+        elif entries_7:
+            receipt_7d_by_family[fid] = {
+                "quantity": None,
+                "uom": None,
+                "status": "HOLD_MIXED_OR_MISSING_RECEIPT_UOM",
+                "receipt_day_count": len({
+                    e.get("date") for e in entries_7 if e.get("date") is not None
+                }),
+                "basis": "CANONICAL_PHYSICAL_101_109_LATEST_7_COMPLETED_MVT_DAYS",
+            }
+        else:
+            fallback_uom = (
+                next(iter(known_uoms))
+                if len(known_uoms) == 1
+                else str((canonical_family_metric.get(fid) or {}).get("uom") or "").strip().upper() or None
+            )
+            receipt_7d_by_family[fid] = {
+                "quantity": Decimal("0"),
+                "uom": fallback_uom,
+                "status": "READY_ZERO_RECEIPTS",
+                "receipt_day_count": 0,
+                "basis": "CANONICAL_PHYSICAL_101_109_LATEST_7_COMPLETED_MVT_DAYS",
+            }
+
     day_count = len(movement_days_7)
 
     def _norm_desc(value: Any) -> str:
@@ -2742,6 +2819,11 @@ def _quick_receiving_article_context(
             "family_receipt_uom": family_receipt.get("uom"),
             "family_receipt_source": family_receipt.get("source"),
             "family_receipt_history": receipt_history_by_article.get(str(source_article or ""), []),
+            "family_receipt_7d_qty": (receipt_7d_by_family.get(fid) or {}).get("quantity"),
+            "family_receipt_7d_uom": (receipt_7d_by_family.get(fid) or {}).get("uom"),
+            "family_receipt_7d_status": (receipt_7d_by_family.get(fid) or {}).get("status"),
+            "family_receipt_7d_day_count": (receipt_7d_by_family.get(fid) or {}).get("receipt_day_count"),
+            "family_receipt_7d_basis": (receipt_7d_by_family.get(fid) or {}).get("basis"),
             "receiving_articles": articles,
             "upc_map": upc_map,
             "family_group_movement_7d": family_qty,
@@ -2788,11 +2870,185 @@ def _quick_receiving_article_context(
         }
     return out
 
+def _quick_price_preview_by_upc(
+    cur,
+    rows: list[dict[str, Any]],
+    live_prices: dict[int, dict[str, Any] | None],
+) -> dict[int, dict[str, Any]]:
+    """Compact Quick Check pricing preview for the already-selected UPC rows.
+
+    CURRENT price uses the same live resolver as Price Review. SUGGEST uses the
+    same 14-completed-sales-day GP$/day candidate engine and qualification
+    gates as the main Price Review, plus mandatory 240=249 price equality.
+    """
+    prepared: list[dict[str, Any]] = []
+    for raw in rows:
+        row = dict(raw)
+        uid = int(row["upc_id"]) if row.get("upc_id") is not None else None
+        live = live_prices.get(uid) if uid is not None else None
+        if live:
+            row["current_price"] = live.get("price")
+            row["current_price_type"] = live.get("type")
+            row["current_price_source"] = live.get("source")
+            row["current_price_asof_date"] = live.get("date")
+        else:
+            row["current_price"] = None
+            row["current_price_type"] = None
+            row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
+            row["current_price_asof_date"] = None
+        prepared.append(row)
+
+    days = source_data_days(
+        cur,
+        "sales_by_price_type",
+        limit=14,
+        up_to=completed_through_date(),
+    )
+    daily = _batch_daily_sales_by_price_type(cur, prepared, days)
+    anchor = max((x["date"] for x in days), default=None)
+    previews: dict[int, dict[str, Any]] = {}
+
+    for row in prepared:
+        if row.get("upc_id") is None:
+            continue
+        uid = int(row["upc_id"])
+        current = row.get("current_price")
+        preview = {
+            "suggested_price": None,
+            "suggestion_status": "UNAVAILABLE",
+            "suggestion_basis": None,
+        }
+        m14 = _batch_sales_metric(daily, days, uid, 14)
+        q14 = _d(m14.get("sold_quantity"))
+        current_oh = (
+            _d(row.get("current_oh"))
+            if row.get("current_oh") is not None else None
+        )
+        pclass = str(row.get("product_class") or "").upper()
+        doh = _d(row.get("doh")) if row.get("doh") is not None else None
+        freshness_qualified = (
+            (pclass == "FRESH" and doh is not None and doh > Decimal("7"))
+            or (pclass == "FROZEN" and doh is not None and doh > Decimal("60"))
+            or (pclass not in {"FRESH", "FROZEN"})
+        )
+        day_obs = (
+            (daily.get(uid) or {}).get(anchor, {})
+            if anchor is not None else {}
+        )
+        report_day_types = {
+            str(k).upper()
+            for k in (day_obs.get("price_types") or {}).keys()
+        }
+        qualified = bool(
+            current_oh is not None
+            and current_oh > 0
+            and q14 > 0
+            and freshness_qualified
+            and str(row.get("quick_check_status") or "").upper() == "READY"
+            and "SALE" not in report_day_types
+        )
+        if qualified:
+            opt = _gp_day_price_suggestion_from_batch(
+                row, uid, daily, days
+            )
+            candidate = opt.get("suggested_price")
+            if opt.get("status") == "READY" and candidate is not None:
+                if current is not None and abs(_d(candidate) - _d(current)) <= Decimal("0.25"):
+                    preview.update({
+                        "suggestion_status": "NO_ACTION_WITHIN_0_25",
+                        "suggestion_basis": opt.get("basis"),
+                    })
+                else:
+                    preview.update({
+                        "suggested_price": candidate,
+                        "suggestion_status": "READY",
+                        "suggestion_basis": opt.get("basis"),
+                    })
+            else:
+                preview.update({
+                    "suggestion_status": str(opt.get("reason") or opt.get("status") or "UNAVAILABLE"),
+                    "suggestion_basis": opt.get("basis"),
+                })
+        elif "SALE" in report_day_types:
+            preview["suggestion_status"] = "ACTIVE_SALE_EXCLUDED"
+        elif str(row.get("quick_check_status") or "").upper() != "READY":
+            preview["suggestion_status"] = "QA_NOT_READY"
+        elif current_oh is None or current_oh <= 0:
+            preview["suggestion_status"] = "NO_POSITIVE_OH"
+        elif q14 <= 0:
+            preview["suggestion_status"] = "NO_14D_SALES"
+        elif not freshness_qualified:
+            preview["suggestion_status"] = "FRESHNESS_GATE_NOT_MET"
+        previews[uid] = preview
+
+    # Canonical 240 is the price authority for its confirmed 249 service form.
+    # A 249 form must not surface an independent candidate that breaks equality.
+    pairs: dict[tuple[int, str], dict[str, dict[str, Any]]] = {}
+    for row in prepared:
+        sig = _seafood_upc_group_signature(
+            row.get("family_id"), row.get("ean_upc")
+        )
+        prefix = _numeric_key(row.get("ean_upc"))[:3]
+        if sig is not None and prefix in {"240", "249"}:
+            pairs.setdefault(sig, {})[prefix] = row
+
+    for members in pairs.values():
+        main = members.get("240")
+        service = members.get("249")
+        if not main or not service:
+            continue
+        main_uid = int(main["upc_id"]) if main.get("upc_id") is not None else None
+        service_uid = int(service["upc_id"]) if service.get("upc_id") is not None else None
+        if main_uid is None or service_uid is None:
+            continue
+        main_preview = previews.setdefault(main_uid, {
+            "suggested_price": None,
+            "suggestion_status": "UNAVAILABLE",
+            "suggestion_basis": None,
+        })
+        service_preview = previews.setdefault(service_uid, {
+            "suggested_price": None,
+            "suggestion_status": "UNAVAILABLE",
+            "suggestion_basis": None,
+        })
+        main_current = main.get("current_price")
+        service_current = service.get("current_price")
+        main_candidate = main_preview.get("suggested_price")
+
+        if main_candidate is not None:
+            service_preview.update({
+                "suggested_price": main_candidate,
+                "suggestion_status": "READY",
+                "suggestion_basis": "MANDATORY_240_249_EQUALITY_TO_240_SUGGESTION",
+            })
+        elif (
+            main_current is not None
+            and service_current is not None
+            and _d(main_current) > 0
+            and _d(service_current) > 0
+            and _d(main_current) != _d(service_current)
+        ):
+            service_preview.update({
+                "suggested_price": main_current,
+                "suggestion_status": "READY_URGENT_240_249_MISMATCH",
+                "suggestion_basis": "MANDATORY_240_249_EQUALITY_TO_240_CURRENT_PRICE",
+            })
+        else:
+            service_preview.update({
+                "suggested_price": None,
+                "suggestion_status": "NO_INDEPENDENT_249_CHANGE",
+                "suggestion_basis": "MANDATORY_240_249_EQUALITY",
+            })
+
+    return previews
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",
     query: str | None = None,
     lightweight: bool = False,
+    include_price_preview: bool = False,
 ) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
@@ -2946,11 +3202,18 @@ def inventory_review(
         )
 
         family_cache: dict[int, dict[str, Any]] = {}
-        # Keep mobile Quick Check search on the identity / movement fast path.
-        # Live current-price resolution can touch Price List + POS lineage and is
-        # intentionally deferred to the asynchronous Pricing Review overlay in
-        # the UI. Full/non-lightweight Inventory still resolves price here.
-        live_prices = {} if lightweight else _bulk_live_current_prices(cur, qrows)
+        # Lightweight search stays fast by default. Yipman can explicitly request
+        # one set-based CURRENT-price + SUGGEST preview pass for the returned
+        # rows without enabling family OH roll-forward.
+        resolve_live_price = (not lightweight) or bool(include_price_preview)
+        live_prices = (
+            _bulk_live_current_prices(cur, qrows)
+            if resolve_live_price else {}
+        )
+        price_previews = (
+            _quick_price_preview_by_upc(cur, qrows, live_prices)
+            if include_price_preview else {}
+        )
         out = []
         for row in qrows:
             live_price = (
@@ -3100,6 +3363,11 @@ def inventory_review(
                     "family_receipt_uom": family_ctx.get("family_receipt_uom"),
                     "family_receipt_source": family_ctx.get("family_receipt_source"),
                     "family_receipt_history": family_ctx.get("family_receipt_history", []),
+                    "family_receipt_7d_qty": family_ctx.get("family_receipt_7d_qty"),
+                    "family_receipt_7d_uom": family_ctx.get("family_receipt_7d_uom"),
+                    "family_receipt_7d_status": family_ctx.get("family_receipt_7d_status"),
+                    "family_receipt_7d_day_count": family_ctx.get("family_receipt_7d_day_count"),
+                    "family_receipt_7d_basis": family_ctx.get("family_receipt_7d_basis"),
                     "receiving_receipt_history": assigned_receiving_row.get("receipt_history", []),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),
@@ -3115,6 +3383,18 @@ def inventory_review(
                     "price_type": row.get("current_price_type"),
                     "price_source": row.get("current_price_source"),
                     "price_as_of": row.get("current_price_asof_date"),
+                    "suggest_price": (
+                        price_previews.get(int(row["upc_id"]), {}).get("suggested_price")
+                        if row.get("upc_id") is not None else None
+                    ),
+                    "suggest_price_status": (
+                        price_previews.get(int(row["upc_id"]), {}).get("suggestion_status")
+                        if row.get("upc_id") is not None else None
+                    ),
+                    "suggest_price_basis": (
+                        price_previews.get(int(row["upc_id"]), {}).get("suggestion_basis")
+                        if row.get("upc_id") is not None else None
+                    ),
                     "sweet_spot_price": row.get("sweet_spot_price"),
                     "company_price_a": row.get("company_price_a"),
                     "company_price_b": row.get("company_price_b"),
@@ -3147,7 +3427,7 @@ def inventory_review(
         cur.close()
 
     return {
-        "contract_version": "BACKOFFICE_INVENTORY_V7",
+        "contract_version": "BACKOFFICE_INVENTORY_V8_QUICK_PRICE_RECEIPT",
         "category": cat,
         "query": q or None,
         "count": len(out),
@@ -3171,8 +3451,12 @@ def inventory_review(
             "subgroup_qty_basis": "SUM_INDIVIDUAL_UPC_POS_QTY_ONLY_WHEN_DISPLAY_UOM_MATCHES",
             "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",
             "lightweight": bool(lightweight),
+            "include_price_preview": bool(include_price_preview),
+            "quick_price_preview_rule": "SAME_14D_GP_PER_DAY_ENGINE_AND_QUALIFICATION_AS_PRICE_REVIEW_PLUS_240_249_EQUALITY",
+            "family_receipt_7d_rule": "CANONICAL_PHYSICAL_101_109_LATEST_7_COMPLETED_MVT_DAYS;107_COST_STAGE_EXCLUDED",
             "lightweight_skips": (
-                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD","LIVE_CURRENT_PRICE_RESOLUTION_DEFERRED_TO_UI"]
+                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD"]
+                + ([] if include_price_preview else ["LIVE_CURRENT_PRICE_AND_SUGGEST_PREVIEW"])
                 if lightweight
                 else []
             ),

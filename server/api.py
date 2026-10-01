@@ -3631,13 +3631,20 @@ def backoffice_lineage_audit():
 
 
 @app.get('/v1/backoffice/inventory')
-def backoffice_inventory(category:str='ALL',limit:int=300,q:str|None=None,lightweight:bool=False):
+def backoffice_inventory(
+    category:str='ALL',
+    limit:int=300,
+    q:str|None=None,
+    lightweight:bool=False,
+    include_price_preview:bool=False,
+):
     try:
         result=backoffice_inventory_review(
             limit=limit,
             category=category,
             query=q,
             lightweight=lightweight,
+            include_price_preview=include_price_preview,
         )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})

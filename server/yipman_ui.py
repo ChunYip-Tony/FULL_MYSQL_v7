@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v341';
+const CACHE='yipman-v342';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -204,6 +204,54 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .qreceivingrow{padding:4px 6px}
   .qrname{font-size:8px}.qdelivery b{font-size:9px}.qdelivery span{font-size:7px}
   .qsapkpis{gap:6px}
+}
+
+
+/* V342 Quick Check: compact metric hierarchy + price strip. */
+.qfamily{border-radius:13px;margin-bottom:6px;border-left-width:4px}
+.qfhead{display:block;padding:6px 7px;gap:0}
+.qfidentity{min-width:0}
+.qfamily .qlabel{font-size:7px}
+.qfamily .qfnum{font-size:17px;line-height:1}
+.qfamily .qfname{font-size:21px;font-weight:1000;line-height:1.02;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip}
+.qfamily .qmeta{font-size:7px;margin-top:2px}
+.qffocus{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:5px}
+.qffocusbox{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;background:rgba(255,255,255,.58);border:1px solid rgba(95,105,113,.14);border-radius:8px;padding:4px 6px}
+.qffocusbox small{display:block;font-size:6px;color:#6d7b86;font-weight:950;line-height:1}
+.qffocusbox span{display:block;font-size:6px;color:#849099;font-weight:850;line-height:1;margin-top:2px;white-space:nowrap}
+.qffocusbox b{font-size:21px;line-height:1;font-weight:1000;letter-spacing:-.03em;white-space:nowrap}
+.qffocusbox.receipt b{color:#26343e}
+.qreceivingrow{padding:4px 6px}
+.qsap{margin:4px 5px;border-left-width:3px;border-radius:9px}
+.qsaphead{padding:4px 6px}
+.qsaprole{font-size:6px}.qsapnum{font-size:13px}
+.qsapkpis{display:none}
+.qsapmetric{text-align:right;white-space:nowrap}
+.qsapmetric small{display:block;font-size:5px;color:#75828c;font-weight:950;line-height:1}
+.qsapmetric b{display:block;font-size:17px;font-weight:1000;line-height:1;margin-top:1px}
+.qsapmetric span{display:block;font-size:6px;color:#7e8a93;font-weight:850;line-height:1;margin-top:2px}
+.qupc{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:5px 6px}
+.qupcmain{min-width:0}
+.qupcname{font-size:16px!important;font-weight:1000;line-height:1.03;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
+.qready{display:block;font-size:7px;margin-top:2px}
+.qupcmetrics{text-align:right;white-space:nowrap;padding-top:1px}
+.qupcmetrics small{display:block;font-size:5px;color:#75828c;font-weight:950;line-height:1}
+.qupcmetrics b{display:block;font-size:16px!important;font-weight:1000;line-height:1;margin-top:1px}
+.qupcmetrics span{display:block;font-size:6px!important;color:#7e8a93;margin-top:2px}
+.qupcprices{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:1px}
+.qprice{min-width:0;border:1px solid #dce3e7;background:#f7f9fa;border-radius:6px;padding:3px 2px;text-align:center}
+.qprice.suggest{background:#e9f5ff;border-color:#bddaf1}
+.qprice.comp{background:#fff}
+.qprice.companyc{background:#fff8e6;border-color:#ead89d}
+.qprice small{display:block;font-size:5px;font-weight:950;color:#7a8790;line-height:1;white-space:nowrap}
+.qprice b{display:block;font-size:9px;font-weight:950;line-height:1;margin-top:2px;white-space:nowrap}
+.qprice.suggest b{color:#0d5b99}.qprice.companyc b{color:#7b5a00}
+.qhidebtn{padding:5px 6px}
+@media(max-width:430px){
+  .qfamily .qfname{font-size:20px}
+  .qffocusbox b{font-size:20px}
+  .qupcname,.qupcmetrics b{font-size:15px!important}
+  .qprice b{font-size:8.5px}
 }
 
 </style>
@@ -421,7 +469,10 @@ function quickFamilyGroups(rows){
      source_avg_qty_day:r.family_source_avg_qty_day,
      source_movement_uom:r.family_source_movement_uom||'',
      family_receipt_verified:!!r.family_receipt_verified,
-     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]
+     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],
+     family_receipt_7d_qty:r.family_receipt_7d_qty??null,
+     family_receipt_7d_uom:r.family_receipt_7d_uom||'',
+     family_receipt_7d_status:r.family_receipt_7d_status||''
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -499,8 +550,19 @@ function quickFamilyGroups(rows){
  return out;
 }
 function quickUpcHtml(r){
- const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'';
- return '<div class="qupc" data-upc="'+esc(r.upc||'')+'"><div class="qupcmain"><div class="qupctop"><span class="qrole '+role.cls+'">'+esc(role.label)+'</span><span class="qupccode">'+esc(r.upc||'—')+'</span></div><div class="qupcname">'+esc(r.name||r.upc||'')+'</div></div><div class="qupcmetrics"><b>'+fmt(r.qty_7d)+' '+esc(uom)+'</b><span>7D Qty · '+fmt(r.velocity_7d)+' /day</span><span class="qready">'+esc(r.readiness||'')+'</span></div></div>';
+ const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'',active=hasActivity(r.qty_7d);
+ const priceStrip=active?'<div class="qupcprices">'+
+   '<div class="qprice"><small>CURRENT</small><b>'+money(r.price)+'</b></div>'+
+   '<div class="qprice suggest"><small>SUGGEST</small><b>'+money(r.suggest_price)+'</b></div>'+
+   '<div class="qprice comp"><small>COMP A</small><b>'+money(r.company_price_a)+'</b></div>'+
+   '<div class="qprice comp"><small>COMP B</small><b>'+money(r.company_price_b)+'</b></div>'+
+   '<div class="qprice comp companyc"><small>COMP C</small><b>'+money(r.company_price_c)+'</b></div>'+
+ '</div>':'';
+ return '<div class="qupc" data-upc="'+esc(r.upc||'')+'">'+
+   '<div class="qupcmain"><div class="qupctop"><span class="qrole '+role.cls+'">'+esc(role.label)+'</span><span class="qupccode">'+esc(r.upc||'—')+'</span></div>'+
+   '<div class="qupcname">'+esc(r.name||r.upc||'')+'</div><span class="qready">'+esc(r.readiness||'')+'</span></div>'+
+   '<div class="qupcmetrics"><small>UPC 7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(r.velocity_7d)+' '+esc(uom)+'</span></div>'+
+   priceStrip+'</div>';
 }
 function hiddenUpcs(rows,id){
  if(!rows.length)return '';
@@ -519,13 +581,20 @@ function quickReceivingRowHtml(a){
 function quickSellingHtml(a,idx,seq,{inactive=false}={}){
  const uom=String(a.movement_uom||''),rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
  const hid='q-upc-'+idx+'-'+seq;
- return '<section class="qsap"><div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div></div><div class="qsapkpis"><div class="qsapkpi"><small>7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b></div><div class="qsapkpi"><small>AVG/DAY</small><b>'+fmt(a.avg_qty_day)+' '+esc(uom)+'</b></div></div></div>'+
+ return '<section class="qsap"><div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div></div>'+
+   '<div class="qsapmetric"><small>SAP 7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(a.avg_qty_day)+' '+esc(uom)+'</span></div></div>'+
    active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+(inactive?'<div class="qhiddennote">Inactive SAP Selling Article · no 7D MVT and no active UPC.</div>':'')+'</section>';
 }
 function quickGroupedHtml(rows){
  return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
-   const uom=g.group_uom||'',recon=String(g.reconciliation||'').toUpperCase();
-   const familyHead='<div class="qfhead"><div><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div><div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div><div class="qfkpis"><div class="qkpi"><small>7D TOTAL SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div><div class="qkpi"><small>AVG/DAY</small><b>'+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</b></div></div></div>';
+   const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',recon=String(g.reconciliation||'').toUpperCase();
+   const familyHead='<div class="qfhead">'+
+     '<div class="qfidentity"><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div>'+
+     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div>'+
+     '<div class="qffocus">'+
+       '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
+       '<div class="qffocusbox receipt"><div><small>7D RECEIPT</small><span>PHYSICAL · DE-DUPED</span></div><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b></div>'+
+     '</div></div>';
    const receivingHtml=g.receiving.map(quickReceivingRowHtml).join('');
    const visible=[],hidden=[];
    for(const a of (g.selling||[])){
@@ -547,7 +616,7 @@ async function loadQuick(q){
  if(!query){quickRequestSeq++;lastQuickQuery='';box.innerHTML='<div class="empty">Use the search bar above. Results appear automatically.</div>';return}
  const requestId=++quickRequestSeq;lastQuickQuery=query;box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(query),{timeoutMs:18000});
+  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_price_preview=true&q='+encodeURIComponent(query),{timeoutMs:18000});
   if(requestId!==quickRequestSeq)return;
   const rows=d.rows||[];
   if(!rows.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
