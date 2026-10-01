@@ -686,6 +686,141 @@ def ordering_review(
             limit=180,
             up_to=common_data_through,
         )
+
+        # Yipman 14-day calendar includes the prior 7 dates. Past selections
+        # are actual canonical receipt history, not a retroactive order forecast.
+        if (
+            best_available_delivery_evidence
+            and delivery_date is not None
+            and delivery_date < business_today()
+        ):
+            history_rows: list[dict[str, Any]] = []
+            movement_dates={x["date"] for x in receipt_days if x.get("date") is not None}
+            for kind in kinds:
+                candidate_families=_ordering_candidate_families(cur,kind)
+                event_map=_family_receipt_events_bulk(
+                    cur,
+                    [int(x["family_id"]) for x in candidate_families],
+                    data_days=receipt_days,
+                )
+                for fam in candidate_families:
+                    fid=int(fam["family_id"])
+                    day_events=[
+                        x for x in (event_map.get(fid) or [])
+                        if x.get("posting_date")==delivery_date
+                        and x.get("receipt_quantity") is not None
+                        and _d(x.get("receipt_quantity"))>0
+                    ]
+                    if not day_events:
+                        continue
+
+                    base_events=[
+                        x for x in day_events
+                        if x.get("base_receipt_quantity") is not None
+                        and _d(x.get("base_receipt_quantity"))>0
+                        and x.get("base_receipt_uom")
+                    ]
+                    base_uoms={
+                        str(x.get("base_receipt_uom") or "").upper()
+                        for x in base_events
+                    }
+                    if base_events and len(base_events)==len(day_events) and len(base_uoms)==1:
+                        receipt_qty=sum(
+                            (_d(x.get("base_receipt_quantity")) for x in base_events),
+                            Decimal("0"),
+                        )
+                        receipt_uom=next(iter(base_uoms))
+                        receipt_qty_basis="BASE_UOM"
+                    else:
+                        entry_uoms={
+                            str(x.get("receipt_uom") or "").upper()
+                            for x in day_events if x.get("receipt_uom")
+                        }
+                        if len(entry_uoms)==1 and all(
+                            x.get("receipt_quantity") is not None for x in day_events
+                        ):
+                            receipt_qty=sum(
+                                (_d(x.get("receipt_quantity")) for x in day_events),
+                                Decimal("0"),
+                            )
+                            receipt_uom=next(iter(entry_uoms))
+                            receipt_qty_basis="ENTRY_UOM"
+                        else:
+                            receipt_qty=None
+                            receipt_uom="MIXED"
+                            receipt_qty_basis="MIXED_UOM"
+
+                    receiving_articles=sorted({
+                        str(x.get("article_number") or "").strip()
+                        for x in day_events
+                        if str(x.get("article_number") or "").strip()
+                    })
+                    history_rows.append({
+                        "family_id":fid,
+                        "family_name":fam.get("family_description"),
+                        "family_article":fam.get("main_article_number"),
+                        "receiving_article":(
+                            receiving_articles[0] if len(receiving_articles)==1
+                            else (" + ".join(receiving_articles) if receiving_articles else None)
+                        ),
+                        "receiving_articles":receiving_articles,
+                        "selected_delivery_date":delivery_date,
+                        "delivery_day":[
+                            "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+                        ][delivery_date.weekday()],
+                        "category":kind,
+                        "receipt_qty":receipt_qty,
+                        "receipt_uom":receipt_uom,
+                        "receipt_qty_basis":receipt_qty_basis,
+                        "receipt_event_count":len(day_events),
+                        "receipt_events":[
+                            {
+                                "article_number":x.get("article_number"),
+                                "quantity":x.get("base_receipt_quantity")
+                                if x.get("base_receipt_quantity") is not None
+                                else x.get("receipt_quantity"),
+                                "uom":x.get("base_receipt_uom")
+                                or x.get("receipt_uom"),
+                                "purchase_order":x.get("purchase_order"),
+                                "vendor_code":x.get("vendor_code"),
+                                "receipt_stage_basis":x.get("receipt_stage_basis"),
+                            }
+                            for x in day_events
+                        ],
+                    })
+
+            history_rows.sort(
+                key=lambda x:(
+                    -float(x.get("receipt_qty") or 0),
+                    str(x.get("family_name") or ""),
+                )
+            )
+            selected_weekday=[
+                "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+            ][delivery_date.weekday()]
+            cur.close()
+            return {
+                "contract_version":"BACKOFFICE_ORDERING_REVIEW_V6_YIPMAN_HISTORY",
+                "category":cat,
+                "selected_delivery_date":delivery_date,
+                "selected_delivery_weekday":selected_weekday,
+                "analysis_status":"HISTORY_READY",
+                "history_mode":True,
+                "movement_date_available":delivery_date in movement_dates,
+                "data_health":ordering_data_health,
+                "count":len(history_rows),
+                "rows":history_rows,
+                "skipped":[],
+                "skipped_breakdown":{},
+                "inputs":{"history_date":delivery_date},
+                "rules":{
+                    "decision_level":"FAMILY_ARTICLE_AND_RECEIVING_ARTICLE",
+                    "history_basis":"ACTUAL_CANONICAL_101_107_109_RECEIPTS_ON_SELECTED_DATE",
+                    "receipt_quantity_basis":"BASE_UOM_WHEN_RECONCILABLE_ELSE_ENTRY_UOM",
+                    "write_enabled":False,
+                },
+            }
+
         for kind in kinds:
             delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
             eligible_family_ids: list[int] | None = None
@@ -3450,7 +3585,8 @@ def pricing_review(
             cur = conn.cursor(dictionary=True)
             placeholders = ",".join(["%s"] * len(upcs))
             cur.execute(
-                f"""SELECT upc_id,ean_upc,current_price,current_price_type,
+                f"""SELECT upc_id,ean_upc,family_id,product_class,
+                           current_price,current_price_type,
                            current_price_source,current_price_asof_date,
                            current_cost_per_selling_unit,cost_source,cost_date,
                            current_oh,current_oh_uom,doh,
@@ -3465,6 +3601,31 @@ def pricing_review(
                 for r in cur.fetchall()
             }
             latest_acceptance_by_upc=_latest_price_acceptances(cur,upcs)
+
+            family_ids=sorted({
+                int(r["family_id"])
+                for r in live_by_upc.values()
+                if r.get("family_id") is not None
+            })
+            delivery_pattern_by_family: dict[int,dict[str,Any]] = {}
+            if family_ids:
+                receipt_days=source_data_days(
+                    cur,
+                    "movement",
+                    limit=180,
+                    up_to=completed_through_date(),
+                )
+                event_map=_family_receipt_events_bulk(
+                    cur,
+                    family_ids,
+                    data_days=receipt_days,
+                )
+                for fid in family_ids:
+                    delivery_pattern_by_family[fid]=_delivery_pattern(
+                        event_map.get(fid) or [],
+                        after_date=business_today(),
+                        lookback_days=180,
+                    )
             cur.close()
 
     for row in rows:
@@ -3514,6 +3675,28 @@ def pricing_review(
         row["expected_through"] = data_health.get("expected_through")
         row["stale_calendar_days"] = data_health.get("stale_calendar_days")
         row["estimate_only"] = estimate_only
+
+        family_id=live.get("family_id")
+        pattern=(
+            delivery_pattern_by_family.get(int(family_id))
+            if family_id is not None else None
+        )
+        observed_days=list((pattern or {}).get("observed_delivery_days") or [])
+        row["observed_delivery_days"]=[
+            {
+                "weekday":x.get("weekday"),
+                "weekday_number":x.get("weekday_number"),
+                "receipt_date_count":x.get("receipt_date_count"),
+                "confidence_percent":x.get("confidence_percent"),
+            }
+            for x in observed_days
+        ]
+        row["observed_delivery_weekdays"]=[
+            str(x.get("weekday") or "").upper()
+            for x in observed_days
+            if str(x.get("weekday") or "").strip()
+        ]
+        row["delivery_history_lookback_days"]=(pattern or {}).get("lookback_days")
 
         candidate = row.get("candidate_price")
         if candidate is not None and current_cost is not None and _d(candidate) > 0:

@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v330';
+const CACHE='yipman-v331';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -98,7 +98,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .filters{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;margin-bottom:8px}.filters::-webkit-scrollbar{display:none}.pill{border:0;border-radius:999px;background:#fff;padding:7px 10px;font-size:8px;font-weight:900;color:#5e6a75;white-space:nowrap}.pill.on{background:#1f2c38;color:#fff}
 .pricecards{display:grid;gap:7px}.pcard{background:#fff;border-radius:16px;padding:11px 12px;box-shadow:var(--shadow)}.ptop{display:flex;justify-content:space-between;gap:8px}.ptop b{font-size:12px}.ptop small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.compare{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:7px;margin-top:9px}.pbox{background:#f5f7f9;border-radius:11px;padding:8px}.pbox b{font-size:16px}.pbox span{display:block;font-size:7px;color:var(--muted)}.arrow{font-size:15px;font-weight:900;color:#98a3ac}.why{font-size:8px;line-height:1.35;color:#5d6974;margin-top:8px}
 .datagrid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.dcard{background:#fff;border-radius:16px;padding:10px;box-shadow:var(--shadow)}.dcard h3{font-size:10px;margin:0 0 7px}.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:3px}.stage{padding:6px 2px;text-align:center;background:#f1f4f6;border-radius:8px;border-top:4px solid #8d99a3}.stage b{display:block;font-size:6px}.stage span{font-size:6px;color:var(--muted)}.stage.ok{border-top-color:var(--green)}.stage.warn{border-top-color:#d19a00}.stage.bad{border-top-color:var(--red)}.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.c{text-align:center;font-size:7px}.dot{width:12px;height:12px;border-radius:50%;background:var(--green);margin:3px auto 0}.dot.warn{background:#d19a00}.dot.bad{background:var(--red)}.batchrow{display:grid;grid-template-columns:1fr auto;gap:6px;padding:8px 0;border-top:1px solid var(--line)}.batchrow b{font-size:9px}.batchrow span{display:block;font-size:7px;color:var(--muted);margin-top:2px}
-.nav{position:absolute;left:10px;right:10px;bottom:calc(9px + env(safe-area-inset-bottom));height:57px;display:grid;grid-template-columns:repeat(5,1fr);background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:18px;box-shadow:0 9px 24px rgba(18,38,56,.12);backdrop-filter:blur(10px);z-index:10}.nav button{border:0;background:transparent;color:#73808a;font-size:7px;font-weight:850}.nav i{display:block;font-style:normal;font-size:16px;margin-bottom:2px}.nav button.on{color:var(--blue)}
+.nav{position:absolute;left:10px;right:10px;bottom:calc(9px + env(safe-area-inset-bottom));height:57px;display:grid;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:18px;box-shadow:0 9px 24px rgba(18,38,56,.12);backdrop-filter:blur(10px);z-index:10}.nav button{border:0;background:transparent;color:#73808a;font-size:7px;font-weight:850}.nav i{display:block;font-style:normal;font-size:16px;margin-bottom:2px}.nav button.on{color:var(--blue)}
 .overlay{position:absolute;inset:0;background:rgba(15,25,34,.34);display:none;align-items:flex-end;z-index:30}.overlay.on{display:flex}.sheet{width:100%;max-height:68%;overflow:auto;background:#f7f8fa;border-radius:23px 23px 0 0}.shead{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:12px 13px;display:flex;justify-content:space-between;gap:8px;border-radius:23px 23px 0 0}.shead h3{font-size:17px;margin:0}.shead p{font-size:8px;color:var(--muted);margin:2px 0 0}.close{width:34px;height:34px;border:0;border-radius:11px;background:#eef1f3;font-size:17px}.sbody{padding:9px 11px 13px}.dmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.dm{background:#fff;border-radius:12px;padding:9px}.dm b{font-size:14px;display:block}.dm span{font-size:7px;color:var(--muted)}.detail{background:#fff;border-radius:12px;padding:9px;margin-top:6px;font-size:9px;line-height:1.4;color:#53616d}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.actions button{border:0;border-radius:11px;padding:9px;font-size:8px;font-weight:900}.primary{background:var(--blue);color:#fff}.secondary{background:#e6ebef;color:#2f3e49}
 .toast{position:absolute;left:12px;right:12px;bottom:76px;background:#1f2d39;color:#fff;padding:9px 11px;border-radius:13px;font-size:9px;font-weight:850;display:none;z-index:40}.toast.on{display:block}
 .ptr{position:absolute;left:0;right:0;top:0;height:0;overflow:hidden;z-index:50;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}.ptr div{background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:999px;padding:6px 10px;margin-bottom:6px;font-size:9px;font-weight:900;color:var(--blue)}
@@ -116,7 +116,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qlabel{font-size:9px}.qfnum{font-size:20px}.qfname{font-size:15px}.qmeta{font-size:9px}.qkpi small{font-size:8px}.qkpi b{font-size:15px}
 .qrecvrole{font-size:8px}.qrecvnum{font-size:17px}.qrecvname{font-size:12px}.qrecvkpi small{font-size:8px}.qrecvkpi b{font-size:14px}
 .qrole{font-size:8px}.qupccode{font-size:10px}.qupcname{font-size:14px}.qupcmetrics b{font-size:14px}.qupcmetrics span,.qready{font-size:9px}.qhidebtn{font-size:10px}.qhiddennote{font-size:9px}
-.day b{font-size:10px}.day strong{font-size:21px}.day span{font-size:9px}
+.day b{font-size:10px}.day strong{font-size:21px}.day span{font-size:9px}.day.past{opacity:.72}.day.today{outline:2px solid rgba(13,79,139,.28);outline-offset:1px}
 .lh{font-size:9px}.orow .name{font-size:14px}.orow .sub{font-size:9px}.cell{font-size:14px}.cell span{font-size:9px}
 .pill{font-size:10px}.ptop b{font-size:15px}.ptop small{font-size:10px}.pbox b{font-size:20px}.pbox span{font-size:9px}.why{font-size:10px}
 .dcard h3{font-size:13px}.stage b{font-size:8px}.stage span{font-size:8px}.batchrow b{font-size:11px}.batchrow span{font-size:9px}
@@ -149,20 +149,20 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   <main class="workspace">
     <section class="page on" id="home">
       <div class="topline"><h2>Today</h2><div class="hint" id="todayLabel">YIPMAN</div></div>
-      <div class="hero"><small>SEAFOOD OPERATIONS</small><h3 id="attentionTitle">Loading current work…</h3><p id="attentionSub">Current FULL MYSQL serving data</p><div class="stats"><div class="stat"><b id="homeOrder">—</b><span>POS SALES</span></div><div class="stat"><b id="homePrice">—</b><span>MVT</span></div><div class="stat"><b id="homeHealth">—</b><span>OH SNAPSHOT</span></div></div></div>
+      <div class="hero"><small>SEAFOOD OPERATIONS</small><h3 id="attentionTitle">Loading current work…</h3><p id="attentionSub">Current FULL MYSQL serving data</p><div class="stats"><div class="stat"><b id="homeOrder">—</b><span>POS SALES</span></div><div class="stat"><b id="homePrice">—</b><span>MVT</span></div><div class="stat"><b id="homeHealth">—</b><span>PRICE LIST</span></div></div></div>
       <div class="launch"><button data-go="quick"><i>⌕</i><b>Quick Check</b><span>Search current Family / UPC data</span><em>MOST USED</em></button><button data-go="order"><i>▤</i><b>Ordering</b><span>Receipt cadence + sales history</span><em id="orderMini">LOADING</em></button><button data-go="price"><i>$</i><b>Price Review</b><span>Completed-day price optimization</span><em id="priceMini">LOADING</em></button><button data-go="data"><i>▦</i><b>Data Center</b><span>Freshness / uploads / batches</span><em id="dataMini">LOADING</em></button></div>
       <div class="priority"><div class="ph"><span>NEEDS ATTENTION</span><span>NOW</span></div><div id="priorityRows"><div class="loading">Loading priorities…</div></div></div>
     </section>
 
     <section class="page" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="empty">Use the search bar above. Results appear automatically.</div></div></section>
 
-    <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">UPCOMING 7 DAYS</div></div><div class="daybar" id="dayBar"></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div>FAMILY / RECEIVING</div><div>OH</div><div>ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
+    <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">14-DAY DELIVERY VIEW</div></div><div class="daybar" id="dayBar"></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
 
-    <section class="page" id="price"><div class="topline"><h2>Price Review</h2><div class="hint">ACTIONABLE ONLY</div></div><div class="filters"><button class="pill on" data-cat="ALL">ALL</button><button class="pill" data-cat="FRESH">FRESH</button><button class="pill" data-cat="FROZEN">FROZEN</button><button class="pill" data-cat="LIVE">LIVE</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
+    <section class="page" id="price"><div class="topline"><h2>Price Review</h2><div class="hint">BY DELIVERY PATTERN</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
     <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">BACK OFFICE UNCHANGED</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
-    <nav class="nav"><button class="on" data-go="home"><i>⌂</i>HOME</button><button data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="data"><i>▦</i>DATA</button></nav>
+    <nav class="nav"><button class="on" data-go="home"><i>⌂</i>HOME</button><button data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
     <div class="exitoverlay" id="exitOverlay"><div class="exitbox"><h3>Exit Yipman?</h3><p>Your current view will close. No inventory, ordering, or price data will be changed.</p><div class="exitactions"><button class="exitcancel" id="exitCancel">Stay</button><button class="exitconfirm" id="exitConfirm">Exit</button></div></div></div>
     <div class="toast" id="toast"></div>
@@ -178,7 +178,7 @@ const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
 const iso=d=>d.toISOString().slice(0,10);
 const shortDate=v=>{const m=String(v||'').match(/^\d{4}-(\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]:'—'};
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='home', priceCat='ALL', orderDate=null, pullStart=null, pull=0;
+let current='home', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', orderRequestSeq=0;
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
@@ -248,6 +248,7 @@ async function loadHome(){
   const posDate=latest?.POS?.date||sourceHealth.pos_data_through||null;
   const mvtDate=latest?.MVT?.date||sourceHealth.movement_data_through||null;
   const ohDate=latest?.OH?.date||null;
+  const priceListDate=latest?.PRICE?.date||null;
   const oc=num(oh.family_count)||0, oa=num(oh.attention_count)||0, pc=num(ph.qualified_count)||0, pairUrgent=num(ph.urgent_240_249_count)||0;
   const due=(health?.rows||[]).filter(x=>x.required_daily_due), complete=due.filter(x=>x.overall_status==='COMPLETE').length;
   const hp=due.length?Math.round(complete/due.length*100):100;
@@ -255,13 +256,13 @@ async function loadHome(){
   // The blue card is source freshness, not a vague EST counter.
   $('#homeOrder').textContent=shortDate(posDate);
   $('#homePrice').textContent=shortDate(mvtDate);
-  $('#homeHealth').textContent=shortDate(ohDate);
+  $('#homeHealth').textContent=shortDate(priceListDate);
 
   $('#orderMini').textContent=stale?'ESTIMATE · THRU '+shortDate(dataThrough):(oa?oa+' NEED ATTENTION':oc+' TO REVIEW');
   $('#priceMini').textContent=stale?'ESTIMATE · THRU '+shortDate(dataThrough):pc+' ACTIONABLE';
-  $('#dataMini').textContent='POS '+shortDate(posDate)+' · OH '+shortDate(ohDate);
+  $('#dataMini').textContent='PRICE '+shortDate(priceListDate)+' · OH '+shortDate(ohDate);
 
-  const freshness='POS '+shortDate(posDate)+' · MVT '+shortDate(mvtDate)+' · OH '+shortDate(ohDate);
+  const freshness='POS '+shortDate(posDate)+' · MVT '+shortDate(mvtDate)+' · PRICE '+shortDate(priceListDate);
   if(stale){
     $('#attentionTitle').textContent='Best-available analysis · thru '+shortDate(dataThrough);
     $('#attentionSub').textContent=freshness+' · ESTIMATE MODE';
@@ -434,22 +435,43 @@ async function openUpc(upc){
 
 function buildDays(){
  const bar=$('#dayBar');bar.innerHTML='';
- for(let i=0;i<7;i++){const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+i);const b=document.createElement('button');b.className='day';b.dataset.offset=i;b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()+'</span>';b.onclick=()=>loadOrder(i);bar.appendChild(b)}
+ // 14 dates: prior 7 days through the next 6 days. Today is initially centered.
+ for(let offset=-7;offset<=6;offset++){
+  const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);
+  const b=document.createElement('button');
+  b.className='day'+(offset<0?' past':'')+(offset===0?' today':'');
+  b.dataset.offset=offset;
+  b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()+'</span>';
+  b.onclick=()=>loadOrder(offset);
+  bar.appendChild(b);
+ }
+ requestAnimationFrame(()=>bar.querySelector('.day.today')?.scrollIntoView({behavior:'auto',block:'nearest',inline:'center'}));
 }
 async function loadOrder(offset){
  const requestId=++orderRequestSeq;
- const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));$('#orderStatus').textContent='Loading '+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';$('#orderRows').innerHTML='<div class="loading">Checking receiving cadence and coverage…</div>';
+ const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);
+ $$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));
+ const isPast=offset<0;
+ $('#orderCol1').textContent='FAMILY / RECEIVING';
+ $('#orderCol2').textContent=isPast?'RECEIPT':'OH';
+ $('#orderCol3').textContent=isPast?'UOM':'ORDER';
+ $('#orderStatus').textContent=(isPast?'Loading delivery history for ':'Loading ')+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';
+ $('#orderRows').innerHTML='<div class="loading">'+(isPast?'Checking actual canonical receipts…':'Checking receiving cadence and coverage…')+'</div>';
  const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate;
  try{
   let data=null;
   for(let i=0;i<10;i++){
    try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+orderDate+' · waiting for ordering cache';await new Promise(r=>setTimeout(r,1200));continue}throw e}
    if(requestId!==orderRequestSeq)return;
-   const s=String(data.analysis_status||'').toUpperCase();if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(s)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;$('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';await new Promise(r=>setTimeout(r,1500))}
+   const status=String(data.analysis_status||'').toUpperCase();
+   if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;
+   $('#orderStatus').textContent='Calculating '+orderDate+' · receipt cadence first';
+   await new Promise(r=>setTimeout(r,1500));
+  }
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
   if(['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(String(data?.cache_status||'').toUpperCase())){
-    $('#orderStatus').textContent='Still calculating best-available delivery suggestions…';
-    $('#orderRows').innerHTML='<div class="empty">Yipman is analyzing receipt cadence, OH and sales history. Pull down to refresh in a few seconds.</div>';
+    $('#orderStatus').textContent='Still calculating best-available delivery view…';
+    $('#orderRows').innerHTML='<div class="empty">Yipman is analyzing receipt history, OH and sales. Pull down to refresh in a few seconds.</div>';
     return;
   }
   if(finalStatus==='REFRESH_FAILED'){
@@ -457,15 +479,44 @@ async function loadOrder(offset){
     $('#orderRows').innerHTML='<div class="empty">'+esc(data?.refresh_error||'Pull down to retry.')+'</div>';
     return;
   }
-  if(finalStatus==='UNAVAILABLE'){const missing=(h.missing_required_sources||[]).join(' + ')||'POS / MVT';$('#orderStatus').textContent='Ordering unavailable';$('#orderRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required through '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'<br>'+esc(missing)+'</div>';return}
-  const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||finalStatus.startsWith('READY_STALE_ESTIMATE');
+  if(finalStatus==='UNAVAILABLE'){
+    const missing=(h.missing_required_sources||[]).join(' + ')||'POS / MVT';
+    $('#orderStatus').textContent='Ordering unavailable';
+    $('#orderRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required through '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'<br>'+esc(missing)+'</div>';
+    return;
+  }
+
   const rows=data?.rows||[];
+  if(data?.history_mode||finalStatus==='HISTORY_READY'){
+    $('#orderCol2').textContent='RECEIPT';
+    $('#orderCol3').textContent='UOM';
+    $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+orderDate+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
+    $('#orderRows').innerHTML=rows.slice(0,24).map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div></div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical 101/107/109 receipt was recorded on '+esc(orderDate)+'.</div>';
+    $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
+    return;
+  }
+
+  $('#orderCol2').textContent='OH';
+  $('#orderCol3').textContent='ORDER';
+  const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||finalStatus.startsWith('READY_STALE_ESTIMATE');
   $('#orderStatus').innerHTML=stale
     ? '<div class="estimatebar">ESTIMATE · Existing POS + MVT through '+esc(h.data_through||'—')+'. Missing day(s) are forecast forward to delivery.</div>'
     : (data.selected_delivery_weekday||'Selected day')+' · '+rows.length+' receiving famil'+(rows.length===1?'y':'ies');
   $('#orderRows').innerHTML=rows.slice(0,16).map((r,i)=>'<div class="orow '+(r.attention?'urgent':'')+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmt(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+fmt(r.suggested_delivery_qty)+'<span>'+esc(r.suggested_delivery_uom||'')+'</span></div></div>').join('')||'<div class="empty">No receiving family has observed '+esc(data.selected_delivery_weekday||'this weekday')+' receipt evidence in the available 180-day history.</div>';
   $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(rows[Number(x.dataset.order)]));
- }catch(e){if(requestId!==orderRequestSeq)return;$('#orderStatus').textContent='Ordering temporarily unavailable';$('#orderRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Pull down to retry.</div>'}
+ }catch(e){
+  if(requestId!==orderRequestSeq)return;
+  $('#orderStatus').textContent='Ordering temporarily unavailable';
+  $('#orderRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Pull down to retry.</div>';
+ }
+}
+function openOrderHistory(r){
+ const events=Array.isArray(r.receipt_events)?r.receipt_events:[];
+ sheet(r.family_name||'Delivery history','Family '+esc(r.family_article||'—')+' · '+esc(r.selected_delivery_date||orderDate),
+ '<div class="dmetrics"><div class="dm"><b>'+fmt(r.receipt_qty)+' '+esc(r.receipt_uom||'')+'</b><span>ACTUAL RECEIPT</span></div><div class="dm"><b>'+fmt(r.receipt_event_count,0)+'</b><span>RECEIPT EVENTS</span></div><div class="dm"><b>'+esc(r.category||'—')+'</b><span>CATEGORY</span></div></div>'+
+ '<div class="detail"><b>Receiving article(s)</b><br>'+esc((r.receiving_articles||[]).join(' + ')||r.receiving_article||'—')+
+ (events.length?'<br><br><b>Receipt detail</b><br>'+events.map(x=>'• '+esc(x.article_number||'Article')+' · '+fmt(x.quantity)+' '+esc(x.uom||'')+(x.purchase_order?' · PO '+esc(x.purchase_order):'')).join('<br>'):'')+
+ '<br><br><b>Basis</b><br>Actual canonical receipt movements on the selected past date. Base UOM is used when all receipt events reconcile; otherwise the common entry UOM is shown.</div>');
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[];
@@ -481,22 +532,45 @@ function openOrder(r){
 }
 
 async function loadPrices(){
- $('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';$('#priceStatus').textContent='Current price uses latest valid evidence';
+ $('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';
+ $('#priceStatus').textContent='Current price uses latest valid evidence';
  try{
-  const d=await api('/v1/yipman/pricing-review?category='+encodeURIComponent(priceCat)+'&limit=1000',{timeoutMs:30000}), h=d.data_health||{};
-  if(String(h.status||'').includes('BLOCKED')){$('#priceStatus').textContent='Price estimate unavailable';$('#priceRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</div>';return}
+  const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}), h=d.data_health||{};
+  if(String(h.status||'').includes('BLOCKED')){
+    $('#priceStatus').textContent='Price estimate unavailable';
+    $('#priceRows').innerHTML='<div class="empty">No common usable POS + MVT date.<br>Required '+esc(h.expected_through||'—')+' · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</div>';
+    return;
+  }
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE';
-  const rows=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||num(r.price_gap_pct)===null||num(r.price_gap_pct)>=3).slice(0,20);
-  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">ESTIMATE · Sales + movement through '+esc(h.data_through||'—')+'. Current price/cost evidence is still resolved live where available.</div>':'')+(rows.length+' actionable · '+Number(d.suppressed_accepted_count||0)+' accepted hidden');
-  $('#priceRows').innerHTML=rows.map((r,i)=>'<div class="pcard" data-price="'+i+'"><div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.review_status||'Pricing review')+'</small></div><div class="badge '+(r.priority_240_249_mismatch?'red':stale?'amber':'green')+'">'+(r.priority_240_249_mismatch?'240≠249':stale?'ESTIMATE':'REVIEW')+'</div></div><div class="compare"><div class="pbox"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="arrow">→</div><div class="pbox"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div></div><div class="why">OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · 7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day'+(r.gp_per_day_opportunity!=null?' · GP$/day lift '+money(r.gp_per_day_opportunity):'')+'</div></div>').join('')||'<div class="empty">No meaningful price change is supported by the available completed-day history.</div>';
+  const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||num(r.price_gap_pct)===null||num(r.price_gap_pct)>=3);
+  const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
+  const filtered=meaningful.filter(r=>{
+    if(priceFilter==='LIVE')return String(r.category||'').toUpperCase()==='LIVE';
+    const days=observed(r);
+    if(priceFilter==='TUE')return days.includes('TUESDAY');
+    if(priceFilter==='FRI_SAT')return days.includes('FRIDAY')||days.includes('SATURDAY');
+    return true;
+  });
+  const rows=filtered.slice(0,24);
+  const filterLabel=priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
+  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">ESTIMATE · Sales + movement through '+esc(h.data_through||'—')+'. Current price/cost evidence is still resolved live where available.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
+  $('#priceRows').innerHTML=rows.map((r,i)=>{
+    const days=(r.observed_delivery_days||[]).map(x=>String(x.weekday||'').slice(0,3).toUpperCase()+' '+fmt(x.receipt_date_count,0)).join(' · ');
+    return '<div class="pcard" data-price="'+i+'"><div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.review_status||'Pricing review')+'</small></div><div class="badge '+(r.priority_240_249_mismatch?'red':stale?'amber':'green')+'">'+(r.priority_240_249_mismatch?'240≠249':stale?'ESTIMATE':'REVIEW')+'</div></div><div class="compare"><div class="pbox"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="arrow">→</div><div class="pbox"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div></div><div class="why">OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · 7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day'+(r.gp_per_day_opportunity!=null?' · GP$/day lift '+money(r.gp_per_day_opportunity):'')+(days?' · RECEIPTS '+esc(days):'')+'</div></div>';
+  }).join('')||'<div class="empty">No actionable price suggestion matches this delivery-pattern filter.</div>';
   $$('[data-price]').forEach(x=>x.onclick=()=>openPrice(rows[Number(x.dataset.price)]));
- }catch(e){$('#priceStatus').textContent='Price review failed';$('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ }catch(e){
+  $('#priceStatus').textContent='Price review failed';
+  $('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+ }
 }
 function openPrice(r){
+ const delivery=(r.observed_delivery_days||[]).map(x=>esc(x.weekday||'')+' '+fmt(x.receipt_date_count,0)+' receipt date'+(Number(x.receipt_date_count||0)===1?'':'s')).join('<br>');
  sheet(r.name||r.upc,r.upc||'Price review',
  '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div><div class="dm"><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>OH</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">ESTIMATE · completed POS/MVT evidence through '+esc(r.data_through||'—')+' · required through '+esc(r.expected_through||'—')+'.</div>':'')+
  '<div class="detail"><b>Optimization basis</b><br>Maximum supported GP$/day from recent completed selling-price history, constrained by Company A/B/C range when available; freshness and OH determine urgency.'+
+ '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  '<br><br><b>Current evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
  '<br><br><b>Sales / stock</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · DOH '+fmt(r.doh)+
  (r.gp_per_day_opportunity!=null?'<br><br><b>Estimated GP$/day opportunity</b><br>'+money(r.gp_per_day_opportunity):'')+
@@ -505,8 +579,18 @@ function openPrice(r){
  const c=$('#priceClose');if(c)c.onclick=()=>closeSheet(true);
  const a=$('#priceAccept');if(a)a.onclick=()=>acceptPrice(r,a);
 }
-async function acceptPrice(r,b){b.disabled=true;b.textContent='SAVING…';try{await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price}),timeoutMs:30000});closeSheet(true);toast('Accepted · hidden until evidence changes');loadPrices();loadHome()}catch(e){b.disabled=false;b.textContent='ACCEPTED';toast(e.message)}}
-$$('.pill[data-cat]').forEach(b=>b.onclick=()=>{priceCat=b.dataset.cat;$$('.pill[data-cat]').forEach(x=>x.classList.toggle('on',x===b));loadPrices()});
+async function acceptPrice(r,b){
+ b.disabled=true;b.textContent='SAVING…';
+ try{
+  await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price}),timeoutMs:30000});
+  closeSheet(true);toast('Accepted · hidden until evidence changes');loadPrices();loadHome();
+ }catch(e){b.disabled=false;b.textContent='ACCEPTED';toast(e.message)}
+}
+$$('[data-price-filter]').forEach(b=>b.onclick=()=>{
+ priceFilter=b.dataset.priceFilter;
+ $$('[data-price-filter]').forEach(x=>x.classList.toggle('on',x===b));
+ loadPrices();
+});
 
 async function loadData(){
  try{
