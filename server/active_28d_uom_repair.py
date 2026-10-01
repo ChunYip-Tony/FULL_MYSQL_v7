@@ -562,6 +562,8 @@ def _safe_frozen_pack_cross_source_mapping(
               "article_manual_row": row,
               "monthly_pi_rows": base_rows,
               "pack_detail": pack_detail,
+              "upc_match": ("EXACT_NUMERIC" if lookup_key == exact_key else "DETERMINISTIC_RETAIL_CHECK_DIGIT_ALIAS"),
+              "lookup_key": lookup_key,
           })
 
     signatures = {
