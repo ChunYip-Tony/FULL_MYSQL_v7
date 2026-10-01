@@ -25,6 +25,7 @@ from webapp_v2_runtime import (
     _batch_sales_metric,
     _canonical_report_date_sales,
     _delivery_pattern,
+    _delivery_day_evidence,
     _family_effective_oh,
     _family_receipt_events,
     _gp_day_price_suggestion_from_batch,
@@ -568,7 +569,7 @@ def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: di
     return reasons
 
 
-def ordering_review(category: str = "ALL") -> dict[str, Any]:
+def ordering_review(category: str = "ALL", delivery_date: date | None = None) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "FRESH", "FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
@@ -622,14 +623,25 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
             up_to=expected_through,
         )
         for kind in kinds:
-            bulk = bulk_ordering_suggestions(kind)
+            bulk = bulk_ordering_suggestions(kind, expected_delivery_date=delivery_date)
             inputs[kind] = bulk.get("inputs")
             skipped.extend(bulk.get("skipped") or [])
             for s in bulk.get("suggestions") or []:
                 fid = int(s["family_id"])
                 events = _family_receipt_events(cur, fid, data_days=receipt_days)
                 receipt = _last_receipt_base_summary_from_events(events)
-                pattern = _delivery_pattern(events)
+                pattern = _delivery_pattern(events, after_date=delivery_date)
+                delivery_day = _delivery_day_evidence(pattern, delivery_date) if delivery_date else None
+                if delivery_date is not None and not delivery_day.get("eligible"):
+                    skipped.append({
+                        "family_id":fid,
+                        "family_article_number":s.get("family_article_number"),
+                        "family_article_name":s.get("family_article_name"),
+                        "reason":"DELIVERY_DAY_NOT_OBSERVED_ENOUGH",
+                        "delivery_date":delivery_date,
+                        "delivery_day_evidence":delivery_day,
+                    })
+                    continue
                 receiving_article = receipt.get("receiving_article") or _fallback_receiving_article(
                     cur, fid, str(s.get("family_article_number") or "") or None
                 )
@@ -646,6 +658,12 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
                     "last_receipt_status": receipt.get("status"),
                     "ordering_frequency": _frequency_label(pattern),
                     "ordering_frequency_raw": pattern.get("frequency"),
+                    "selected_delivery_date": delivery_date,
+                    "delivery_day": delivery_day.get("weekday") if delivery_day else None,
+                    "delivery_day_observed_count": delivery_day.get("observed_count") if delivery_day else None,
+                    "delivery_day_receipt_count": delivery_day.get("receipt_date_count") if delivery_day else pattern.get("receipt_date_count"),
+                    "delivery_day_confidence_pct": delivery_day.get("confidence_percent") if delivery_day else pattern.get("confidence_percent"),
+                    "delivery_day_confidence": delivery_day.get("confidence") if delivery_day else pattern.get("confidence"),
                     "suggested_delivery_qty": s.get("suggested_order_qty"),
                     "suggested_delivery_uom": s.get("suggested_order_uom"),
                     "category": s.get("category"),
@@ -666,7 +684,18 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
                         "regular_baseline": s.get("regular_baseline"),
                         "receiving_articles_on_last_receipt": receipt.get("receiving_articles"),
                         "delivery_pattern": pattern,
-                        "reasons": _suggestion_reason(s, pattern, receipt),
+                        "delivery_day_evidence": delivery_day,
+                        "reasons": _suggestion_reason(s, pattern, receipt) + (
+                            [{
+                                "title":"Selected delivery day",
+                                "detail":(
+                                    f"Observed {delivery_day.get('weekday')} "
+                                    f"{delivery_day.get('observed_count')}/{delivery_day.get('receipt_date_count')} receipt dates "
+                                    f"in the recent {delivery_day.get('lookback_days')} day window · "
+                                    f"{delivery_day.get('confidence_percent')}% confidence."
+                                ),
+                            }] if delivery_day else []
+                        ),
                     },
                 }
                 rows.append(row)
@@ -687,8 +716,13 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
         else ("READY" if rows else "READY_NO_ELIGIBLE_ITEMS")
     )
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V2",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V3",
         "category": cat,
+        "selected_delivery_date": delivery_date,
+        "selected_delivery_weekday": (
+            ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][delivery_date.weekday()]
+            if delivery_date else None
+        ),
         "analysis_status": analysis_status,
         "data_health": ordering_data_health,
         "count": len(rows),
@@ -702,6 +736,8 @@ def ordering_review(category: str = "ALL") -> dict[str, Any]:
             "last_receipt_quantity_basis": "MOVEMENT_BASE_UOM_ONLY",
             "incoming_field_used": False,
             "write_enabled": False,
+            "delivery_date_filter": "RECENT_12_WEEK_CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
+            "delivery_day_eligibility": "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE",
         },
     }
 
