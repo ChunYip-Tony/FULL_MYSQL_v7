@@ -3349,16 +3349,26 @@ async function mobileSubmitUpload(){
   try{
     const label=(mNode('mUploadNote').value||'').trim()||('Mobile Backoffice upload '+new Date().toLocaleString());
     const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
-    if(created.created===false){result.innerHTML='<p>An active batch is already processing. Upload was not started.</p>';toast('Active batch already processing');return}
     const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');
+    const uploaded=[];
     for(let i=0;i<files.length;i++){
       result.innerHTML='<p>Uploading '+(i+1)+' / '+files.length+' · '+esc(files[i].name)+'</p>';
-      const fd=new FormData();fd.append('file',files[i]);await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd});
+      const fd=new FormData();fd.append('file',files[i]);
+      const u=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd});
+      uploaded.push(u);
+      result.innerHTML='<p><b>File received.</b><br>'+esc(uploadCoverageText(u))+'</p>'+uploadEvidenceHtml(uploaded);
     }
     result.innerHTML='<p>Committing batch and starting processing…</p>';
-    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});
-    $('#uploadFiles').value='';toast('Upload accepted; batch processing started');await mobileOpenModule('batches');
-  }catch(e){result.innerHTML='<p>'+esc(e.message)+'</p>';toast(e.message)}finally{const z=mNode('mStartUpload');if(z)z.disabled=false}
+    const commit=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});
+    result.innerHTML='<p><b>Upload verified · Batch #'+esc(commit.batch_id||created.batch_id||'—')+'</b></p>'+uploadEvidenceHtml(uploaded);
+    $('#uploadFiles').value='';
+    toast('Upload verified · '+uploaded.map(uploadCoverageText).join(' | '),4800);
+    await new Promise(resolve=>setTimeout(resolve,900));
+    await mobileOpenModule('batches');
+  }catch(e){
+    result.innerHTML='<p><b>UPLOAD NOT COMMITTED.</b><br>'+esc(e.message)+'</p>';
+    toast('UPLOAD NOT COMMITTED · '+String(e.message||e),4800)
+  }finally{const z=mNode('mStartUpload');if(z)z.disabled=false}
 }
 
 function mobileCurrentDepthToHome(){
