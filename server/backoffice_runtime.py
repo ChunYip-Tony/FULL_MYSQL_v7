@@ -572,7 +572,12 @@ def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: di
     return reasons
 
 
-def ordering_review(category: str = "ALL", delivery_date: date | None = None) -> dict[str, Any]:
+def ordering_review(
+    category: str = "ALL",
+    delivery_date: date | None = None,
+    *,
+    best_available_delivery_evidence: bool = False,
+) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "FRESH", "FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
@@ -692,9 +697,22 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
                     fid=int(fam["family_id"])
                     events=event_map.get(fid) or []
                     receipt=_last_receipt_base_summary_from_events(events)
-                    pattern=_delivery_pattern(events,after_date=delivery_date)
+                    pattern=_delivery_pattern(
+                        events,
+                        after_date=delivery_date,
+                        lookback_days=(180 if best_available_delivery_evidence else 84),
+                    )
                     delivery_day=_delivery_day_evidence(pattern,delivery_date)
-                    if delivery_day.get("eligible"):
+                    observed_count=int(delivery_day.get("observed_count") or 0)
+                    best_available_match=bool(
+                        best_available_delivery_evidence and observed_count>=1
+                    )
+                    if delivery_day.get("eligible") or best_available_match:
+                        if best_available_match and not delivery_day.get("eligible"):
+                            delivery_day=dict(delivery_day)
+                            delivery_day["eligible"]=True
+                            delivery_day["best_available_low_confidence"]=True
+                            delivery_day["eligibility_rule"]="YIPMAN_ANY_OBSERVED_RECEIPT_ON_SELECTED_WEEKDAY_WITHIN_180_DAYS"
                         eligible_family_ids.append(fid)
                         delivery_cache[fid]=(receipt,pattern,delivery_day)
                     else:
@@ -860,7 +878,13 @@ def ordering_review(category: str = "ALL", delivery_date: date | None = None) ->
             "incoming_field_used": False,
             "write_enabled": False,
             "delivery_date_filter": "RECENT_12_WEEK_CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
-            "delivery_day_eligibility": "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE",
+            "delivery_day_eligibility": (
+                "ANY_OBSERVED_SELECTED_WEEKDAY_WITHIN_180_DAYS"
+                if best_available_delivery_evidence
+                else "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE"
+            ),
+            "delivery_evidence_lookback_days": 180 if best_available_delivery_evidence else 84,
+            "best_available_delivery_evidence": bool(best_available_delivery_evidence),
             "delivery_day_prefilter_before_heavy_math": True,
             "stale_estimate_allowed": True,
             "stale_estimate_basis": "LATEST_COMMON_CANONICAL_POS_AND_MVT_DATE",
@@ -879,10 +903,14 @@ _ORDERING_REVIEW_LAST_ERROR: dict[str,str] = {}
 _ORDERING_REVIEW_CACHE_TTL_SECONDS = 120.0
 
 
-def _ordering_review_cache_key(category: str, delivery_date: date) -> str:
-    # Versioned key prevents a prior hard-block snapshot from masking the
-    # stale-estimate behavior introduced in V5.
-    return f"V5|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+def _ordering_review_cache_key(
+    category: str,
+    delivery_date: date,
+    *,
+    best_available_delivery_evidence: bool = False,
+) -> str:
+    mode="YIPMAN180" if best_available_delivery_evidence else "STANDARD84"
+    return f"V6|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -938,10 +966,19 @@ def _persist_ordering_review(cache_key: str, value: dict[str,Any]) -> None:
         cur.close()
 
 
-def _ordering_review_refresh_worker(category: str, delivery_date: date, cache_key: str) -> None:
+def _ordering_review_refresh_worker(
+    category: str,
+    delivery_date: date,
+    cache_key: str,
+    best_available_delivery_evidence: bool = False,
+) -> None:
     try:
         _ORDERING_REVIEW_LAST_ERROR.pop(cache_key,None)
-        value=ordering_review(category=category,delivery_date=delivery_date)
+        value=ordering_review(
+            category=category,
+            delivery_date=delivery_date,
+            best_available_delivery_evidence=best_available_delivery_evidence,
+        )
         _persist_ordering_review(cache_key,value)
         with _ORDERING_REVIEW_CACHE_LOCK:
             _ORDERING_REVIEW_CACHE_VALUES[cache_key]=value
@@ -953,14 +990,19 @@ def _ordering_review_refresh_worker(category: str, delivery_date: date, cache_ke
             _ORDERING_REVIEW_REFRESHING.discard(cache_key)
 
 
-def _request_ordering_review_refresh(category: str, delivery_date: date, cache_key: str) -> None:
+def _request_ordering_review_refresh(
+    category: str,
+    delivery_date: date,
+    cache_key: str,
+    best_available_delivery_evidence: bool = False,
+) -> None:
     with _ORDERING_REVIEW_CACHE_LOCK:
         if cache_key in _ORDERING_REVIEW_REFRESHING:
             return
         _ORDERING_REVIEW_REFRESHING.add(cache_key)
     threading.Thread(
         target=_ordering_review_refresh_worker,
-        args=(category,delivery_date,cache_key),
+        args=(category,delivery_date,cache_key,best_available_delivery_evidence),
         name=f"ordering-review-{delivery_date.isoformat()}",
         daemon=True,
     ).start()
@@ -970,15 +1012,25 @@ def cached_ordering_review(
     category: str = "ALL",
     delivery_date: date | None = None,
     force: bool = False,
+    *,
+    best_available_delivery_evidence: bool = False,
 ) -> dict[str,Any]:
     """Return delivery-date Ordering immediately; heavy analysis refreshes in background."""
     if delivery_date is None:
-        return ordering_review(category=category,delivery_date=None)
+        return ordering_review(
+            category=category,
+            delivery_date=None,
+            best_available_delivery_evidence=best_available_delivery_evidence,
+        )
 
     cat=str(category or "ALL").strip().upper()
     if cat not in {"ALL","FRESH","FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
-    key=_ordering_review_cache_key(cat,delivery_date)
+    key=_ordering_review_cache_key(
+        cat,
+        delivery_date,
+        best_available_delivery_evidence=best_available_delivery_evidence,
+    )
 
     with _ORDERING_REVIEW_CACHE_LOCK:
         cached=_ORDERING_REVIEW_CACHE_VALUES.get(key)
@@ -1004,7 +1056,12 @@ def cached_ordering_review(
         or age>=_ORDERING_REVIEW_CACHE_TTL_SECONDS
     )
     if force or stale:
-        _request_ordering_review_refresh(cat,delivery_date,key)
+        _request_ordering_review_refresh(
+            cat,
+            delivery_date,
+            key,
+            best_available_delivery_evidence,
+        )
 
     with _ORDERING_REVIEW_CACHE_LOCK:
         refreshing=key in _ORDERING_REVIEW_REFRESHING
