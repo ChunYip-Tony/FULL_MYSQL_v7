@@ -191,8 +191,9 @@ function go(id,{push=true}={}){
 }
 $$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
 function sheet(title,sub,html){
+  const wasOpen=$('#overlay').classList.contains('on');
   $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
-  if(historyReady){history.pushState({yipman:true,view:current,detail:true},'', '#'+current+'/detail');detailHistory=true}
+  if(historyReady&&!wasOpen){history.pushState({yipman:true,view:current,detail:true},'', '#'+current+'/detail');detailHistory=true}
 }
 function closeSheet(useHistory=true){
   if(!$('#overlay').classList.contains('on'))return;
