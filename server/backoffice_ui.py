@@ -5390,25 +5390,74 @@ $('#qaRefresh').onclick=loadQA;
 
 async function loadDatabaseOverview(){
   const err=$('#dbOverviewError');if(err)err.innerHTML='';
-  try{
-    const [h,a,r,q]=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
-    state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
-    const latest=state.recent[0]||null;
-    const currentRoot=$('#dbOverviewActive');
-    const latestRoot=$('#dbLatestBatch');
+  const [hRes,aRes,rRes,qRes]=await Promise.allSettled([
+    api('/healthz',{timeoutMs:12000}),
+    api('/v1/web-upload/active',{timeoutMs:12000}),
+    api('/v1/web-upload/recent?limit=8',{timeoutMs:15000}),
+    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000})
+  ]);
+
+  const h=hRes.status==='fulfilled'?hRes.value:null;
+  const a=aRes.status==='fulfilled'?aRes.value:null;
+  const r=rRes.status==='fulfilled'?rRes.value:null;
+  const q=qRes.status==='fulfilled'?qRes.value:null;
+
+  if(a)state.active=a.active_batch||null;
+  if(r)state.recent=r.batches||[];
+  if(q){state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[]}
+
+  const activeId=String(state.active?.batch_id||state.active?.id||'');
+  const latest=(state.recent||[]).find(b=>!activeId||String(b.batch_id||b.id)!==activeId)||null;
+
+  const currentRoot=$('#dbOverviewActive');
+  const latestRoot=$('#dbLatestBatch');
+
+  if(aRes.status==='fulfilled'){
     currentRoot.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);
-    latestRoot.innerHTML=latest?(activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)):'<div class="empty">No completed batch history.</div>';
     wireRecoveryButtons(currentRoot);
     wireActiveBatchButtons(currentRoot);
+  }else{
+    currentRoot.innerHTML='<div class="error">Current processing status unavailable.</div>';
+  }
+
+  if(rRes.status==='fulfilled'){
+    latestRoot.innerHTML=latest
+      ? activeCard({...latest,status:latest.processing_status||latest.phase3_status,batch_label:latest.batch_label||'Latest completed'})+rebuildActionHtml(latest,true)
+      : '<div class="empty">No completed batch history.</div>';
     wireRecoveryButtons(latestRoot);
-    $('#dbProcessingSummary').textContent=state.active?`Batch #${state.active.batch_id||'—'} is processing`:(latest?`Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`:'No active batch');
+  }else{
+    latestRoot.innerHTML='<div class="error">Completed batch history unavailable.</div>';
+  }
+
+  const ps=$('#dbProcessingSummary');
+  if(ps)ps.textContent=state.active
+    ? `Batch #${state.active.batch_id||'—'} · ${state.active.active_run_status||state.active.processing_status||'processing'}`
+    : latest
+      ? `Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`
+      : 'No active batch';
+
+  if(q){
     const fixable=state.qaIssues.filter(x=>x.can_fix).length;
     $('#dbQASummary').textContent=state.qaIssues.length?`${state.qaIssues.length} open · ${fixable} fixable`:'No open QA issues';
-    $('#dbHealthSummary').textContent=h.ok?`Service healthy · ${h.version||''}`:'Service health needs attention';
-    $('#dbUploadSummary').textContent=state.active?'Wait for current batch to finish':'Ready for a new source batch';
-    const hasProblem=!h.ok||state.qaIssues.some(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase()));
-    const status=$('#dbOverallStatus');status.textContent=hasProblem?'ATTENTION':(state.active?'PROCESSING':'READY');status.className='pill '+(hasProblem?'amber':state.active?'sea':'green');
-  }catch(e){if(err)err.innerHTML=`<div class="error">${esc(e.message)}</div>`;const st=$('#dbOverallStatus');if(st){st.textContent='CHECK FAILED';st.className='pill red'}}
+  }else{
+    $('#dbQASummary').textContent='QA summary unavailable';
+  }
+
+  $('#dbHealthSummary').textContent=h?(h.ok?`Service healthy · ${h.version||''}`:'Service health needs attention'):'Health check unavailable';
+  $('#dbUploadSummary').textContent=state.active?'Wait for current batch to finish':'Ready for a new source batch';
+
+  const highQa=q?state.qaIssues.some(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase())):false;
+  const failures=[hRes,aRes,rRes,qRes].filter(x=>x.status==='rejected').length;
+  const status=$('#dbOverallStatus');
+  if(failures){
+    status.textContent='PARTIAL';
+    status.className='pill amber';
+    if(err)err.innerHTML='<div class="calc"><b>Database Home partially loaded.</b> '+failures+' source request(s) did not respond. Available sections remain live.</div>';
+  }else{
+    const hasProblem=!h?.ok||highQa;
+    status.textContent=hasProblem?'ATTENTION':(state.active?'PROCESSING':'READY');
+    status.className='pill '+(hasProblem?'amber':state.active?'sea':'green');
+  }
 }
 function batchResumeEligible(b){
   const status=String(b?.processing_status||b?.status||'').toUpperCase();
