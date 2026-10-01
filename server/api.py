@@ -1000,6 +1000,69 @@ def web_upload_249_source_evidence(request:Request,upc:str='24945000000'):
         cur.close()
         return json.loads(json.dumps(result,default=j))
 
+@app.get('/v1/web-upload/diagnostics/batch-id/{batch_id}')
+def web_upload_diagnostics_batch_id(batch_id:int,request:Request,response:Response):
+    """Read-only exact batch trace for recovery/QA diagnostics."""
+    _browser_upload_guard(request)
+    response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
+    bid=int(batch_id)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT batch_id,batch_key,batch_label,processing_status,
+                          upload_started_at,completed_at,file_count,source_row_count,
+                          error_count,notes
+                   FROM ingest_batch
+                   WHERE batch_id=%s
+                   LIMIT 1""",
+                (bid,),
+            )
+            batch=cur.fetchone()
+            if not batch:
+                raise HTTPException(404,'Batch not found')
+            cur.execute(
+                """SELECT file_id,original_filename,source_type,processing_status,
+                          source_row_count,error_count,duplicate_of_file_id,
+                          coverage_start_date,coverage_end_date,
+                          header_period_start_date,header_period_end_date,
+                          date_semantics_status,upload_timestamp
+                   FROM ingest_file
+                   WHERE batch_id=%s
+                   ORDER BY file_id""",
+                (bid,),
+            )
+            files=cur.fetchall()
+            cur.execute(
+                """SELECT batch_id,result_status,blocking_issue_count,
+                          source_file_count,processed_sheet_count,source_row_count,
+                          normalized_row_count,qa_hold_row_count,skipped_row_count,
+                          updated_at,detail_json
+                   FROM phase2c_batch_result
+                   WHERE batch_id=%s
+                   LIMIT 1""",
+                (bid,),
+            )
+            p2=cur.fetchone()
+            cur.execute(
+                """SELECT pipeline_run_id,stage_name,run_number,processing_status,
+                          code_version,started_at,completed_at,error_count,detail_json
+                   FROM pipeline_run
+                   WHERE batch_id=%s
+                   ORDER BY pipeline_run_id""",
+                (bid,),
+            )
+            runs=cur.fetchall()
+        finally:
+            cur.close()
+    return json.loads(json.dumps({
+        'batch':batch,
+        'files':files,
+        'phase2c':p2,
+        'runs':runs,
+    },default=j))
+
+
 @app.get('/v1/web-upload/diagnostics/recent-pos-files')
 def web_upload_diagnostics_recent_pos_files(request:Request,response:Response,limit:int=40):
     """Read-only POS ingest trace used to diagnose missing canonical coverage."""
