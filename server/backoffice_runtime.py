@@ -1013,7 +1013,7 @@ def cached_ordering_review(
     # Never present a prior completed-data-day snapshot as current Ordering.
     if cached is None or not data_current:
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V4_ASYNC",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V5_ASYNC_STALE_ESTIMATE",
             "category":cat,
             "selected_delivery_date":delivery_date,
             "selected_delivery_weekday":[
@@ -1039,7 +1039,7 @@ def cached_ordering_review(
 
     return {
         **cached,
-        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V4_ASYNC",
+        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V5_ASYNC_STALE_ESTIMATE",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
         "refresh_error":err,
