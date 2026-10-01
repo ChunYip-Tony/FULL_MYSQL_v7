@@ -1004,8 +1004,52 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
                 )
 
     if pack:
-        _insert_evidence(cur, 'ARTICLE', article_id, 'PACK_TEXT_OBSERVED', ctx, 'pack', pack,
-                         {'note': 'Pack text is evidence only; no automatic UOM conversion is inferred.'})
+        pack_extra: dict[str, Any] = {
+            'note': 'Pack text retained as structured source evidence; conversion is applied only for user-confirmed tab semantics.'
+        }
+        parsed_pack = _structured_pack_weight(pack)
+        if parsed_pack:
+            pack_extra['structured_pack'] = {
+                k: str(v) if isinstance(v, Decimal) else v
+                for k, v in parsed_pack.items()
+            }
+        _insert_evidence(cur, 'ARTICLE', article_id, 'PACK_TEXT_OBSERVED', ctx, 'pack', pack, pack_extra)
+
+        # Monthly PI Fresh/Live: D is Pack Size and E is Receiving Unit.
+        # A simple explicit weight pack (e.g. 60LB) establishes LB as Base UOM
+        # and 1 Receiving Unit = 60 LB. This is a source-schema rule, not a
+        # description-text inference.
+        if (
+            ctx.source_type == 'monthly_pi_form'
+            and (
+                _norm_header(ctx.sheet_name) == 'fresh'
+                or _norm_header(ctx.sheet_name).startswith('fresh ')
+                or _norm_header(ctx.sheet_name) == 'live'
+                or _norm_header(ctx.sheet_name).startswith('live ')
+            )
+            and parsed_pack
+            and parsed_pack.get('pattern') == 'SINGLE_WEIGHT'
+        ):
+            receiving_token = _source_token(_get(row, colmap, 'receiving_uom'))
+            base_token = str(parsed_pack.get('base_uom') or '')
+            base_uom_id, base_canonical = _canonical_uom(cur, ctx.source_type, base_token)
+            if base_uom_id is not None:
+                _ensure_article_uom_role(cur, article_id, 'BASE_INVENTORY', base_uom_id, ctx, base_token)
+            _insert_evidence(
+                cur,
+                'ARTICLE',
+                article_id,
+                'RECEIVING_PACK_CONVERSION_OBSERVED',
+                ctx,
+                'pack',
+                pack,
+                {
+                    'receiving_uom': receiving_token,
+                    'base_uom': base_canonical or base_token,
+                    'base_qty_per_receiving_unit': str(parsed_pack['total_base_qty']),
+                    'resolution_rule': 'MONTHLY_PI_FRESH_LIVE_D_PACK_E_RECEIVING',
+                },
+            )
 
     status = 'NORMALIZED'
     if family_status == 'QA_HOLD' or main_anchor_status == 'QA_HOLD' or upc_status == 'QA_HOLD':
@@ -1256,7 +1300,10 @@ def normalize_batch(batch_id: int) -> dict[str, Any]:
                             _json_obj(h['raw_payload']),
                         )
                         if f['source_type'] == 'article_manual'
-                        else _build_column_map(_json_obj(h['raw_payload']))
+                        else _monthly_pi_column_map(
+                            sh['sheet_name'],
+                            _json_obj(h['raw_payload']),
+                        )
                     )
                     # Only treat sheets with explicit Article + Main Article headers as product-identity sheets.
                     if 'article' not in colmap or 'main_article' not in colmap:
