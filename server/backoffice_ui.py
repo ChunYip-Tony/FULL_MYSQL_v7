@@ -920,6 +920,166 @@ BACKOFFICE_HTML = r'''<!doctype html>
     }
   }
 
+  /* v7.0.316 · compact live-operations Home */
+  .mobilehome.on .m-topbar{
+    min-height:clamp(76px,10.6dvh,94px)!important;
+    margin-bottom:clamp(3px,.7dvh,6px)!important;
+    padding:clamp(5px,.75dvh,7px) 7px clamp(6px,.9dvh,8px)!important;
+  }
+  .mobilehome.on:before{
+    height:clamp(102px,13.7dvh,128px)!important;
+    border-radius:0 0 28px 28px!important;
+  }
+  .mobilehome.on:after{
+    top:clamp(76px,10.2dvh,96px)!important;
+    height:25px!important;
+  }
+  .mobilehome.on .m-market-title{display:none!important}
+  .mobilehome.on .m-brand{max-width:calc(100% - 94px)!important}
+  .mobilehome.on .m-version-title{
+    font-size:clamp(17px,4.65vw,23px)!important;
+    line-height:1.02!important;
+    max-width:calc(100vw - 116px)!important;
+  }
+  .mobilehome.on .m-home-subline{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    min-width:0;
+    margin-top:6px;
+    white-space:nowrap;
+  }
+  .mobilehome.on .m-storeline,
+  .mobilehome.on .m-home-updated{
+    display:block!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    background:transparent!important;
+    color:rgba(255,255,255,.82)!important;
+    font-size:clamp(8.5px,1.25dvh,10px)!important;
+    font-weight:750!important;
+    letter-spacing:0!important;
+    line-height:1.15!important;
+    backdrop-filter:none!important;
+  }
+  .mobilehome.on .m-home-updated{
+    color:rgba(210,247,243,.68)!important;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .mobilehome.on .m-header-fish{
+    right:clamp(53px,14vw,70px)!important;
+    bottom:-13px!important;
+    font-size:clamp(46px,7.2dvh,61px)!important;
+    opacity:.22!important;
+  }
+  .mobilehome.on .m-status{
+    min-height:29px!important;
+    padding:5px 9px!important;
+    font-size:clamp(8.5px,1.2dvh,10px)!important;
+  }
+  .mobilehome.on .m-modgrid{
+    margin-top:clamp(3px,.55dvh,5px)!important;
+    gap:clamp(6px,.95dvh,9px)!important;
+  }
+  .mobilehome.on .m-module{
+    justify-content:flex-start!important;
+    border-radius:18px!important;
+    padding:
+      clamp(8px,1.05dvh,10px)
+      clamp(9px,2.45vw,12px)
+      clamp(27px,3.8dvh,33px)!important;
+  }
+  .mobilehome.on .m-module .ico{
+    width:clamp(32px,4.6dvh,39px)!important;
+    height:clamp(32px,4.6dvh,39px)!important;
+    border-radius:12px!important;
+    font-size:clamp(16px,2.25dvh,19px)!important;
+    margin-bottom:clamp(5px,.72dvh,7px)!important;
+  }
+  .mobilehome.on .m-module:after{
+    right:9px!important;
+    top:8px!important;
+    width:24px!important;
+    height:24px!important;
+    font-size:17px!important;
+  }
+  .mobilehome.on .m-module b{
+    max-width:92%!important;
+    font-size:clamp(14px,1.95dvh,17px)!important;
+    line-height:1.08!important;
+  }
+  .mobilehome.on .m-module .m-desc{
+    max-width:96%!important;
+    margin-top:clamp(3px,.5dvh,5px)!important;
+    font-size:clamp(8.5px,1.2dvh,10px)!important;
+    line-height:1.2!important;
+    -webkit-line-clamp:1!important;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .mobilehome.on .m-cardstatus{
+    position:relative;
+    z-index:5;
+    display:inline-flex;
+    align-items:center;
+    width:max-content;
+    max-width:92%;
+    min-height:18px;
+    margin-top:clamp(5px,.72dvh,7px);
+    padding:3px 6px;
+    border:1px solid #dce7e5;
+    border-radius:999px;
+    background:#f4f8f7;
+    color:#536b6d;
+    font-size:clamp(7px,1.02dvh,8.5px);
+    line-height:1;
+    font-weight:900;
+    letter-spacing:.015em;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .mobilehome.on .m-cardstatus.good{background:#e7f7ee;border-color:#c5e9d3;color:#177047}
+  .mobilehome.on .m-cardstatus.warn{background:#fff4d9;border-color:#ecd79f;color:#8a5a00}
+  .mobilehome.on .m-cardstatus.bad{background:#ffe9e5;border-color:#efc7bf;color:#a33a31}
+  .mobilehome.on .m-cardstatus.neutral{background:#eff6f6;border-color:#d8e7e6;color:#426d70}
+  .mobilehome.on .m-module:before{
+    height:clamp(20px,3.15dvh,27px)!important;
+    border-radius:46% 54% 17px 17px / 44% 42% 17px 17px!important;
+    opacity:.72!important;
+  }
+  .mobilehome.on .seafood-art,
+  .mobilehome.on .m-module:nth-child(1) .seafood-art,
+  .mobilehome.on .m-module:nth-child(2) .seafood-art,
+  .mobilehome.on .m-module:nth-child(4) .seafood-art,
+  .mobilehome.on .m-module:nth-child(5) .seafood-art,
+  .mobilehome.on .m-module:nth-child(6) .seafood-art{
+    right:7px!important;
+    bottom:clamp(8px,1.35dvh,11px)!important;
+    font-size:clamp(25px,4.25dvh,33px)!important;
+    filter:drop-shadow(0 5px 6px rgba(8,64,72,.11))!important;
+  }
+  @media(max-height:700px) and (max-width:759px){
+    .mobilehome.on .m-topbar{min-height:62px!important}
+    .mobilehome.on:before{height:88px!important}
+    .mobilehome.on:after{top:63px!important;height:21px!important}
+    .mobilehome.on .m-version-title{font-size:16px!important}
+    .mobilehome.on .m-home-subline{margin-top:4px}
+    .mobilehome.on .m-storeline,.mobilehome.on .m-home-updated{font-size:8px!important}
+    .mobilehome.on .m-header-fish{font-size:39px!important;bottom:-9px!important}
+    .mobilehome.on .m-module{padding:6px 8px 23px!important}
+    .mobilehome.on .m-module .ico{width:29px!important;height:29px!important;font-size:15px!important;margin-bottom:4px!important}
+    .mobilehome.on .m-module b{font-size:13px!important}
+    .mobilehome.on .m-module .m-desc{font-size:7.5px!important;margin-top:2px!important}
+    .mobilehome.on .m-cardstatus{min-height:16px;margin-top:4px;padding:2px 5px;font-size:6.5px!important}
+    .mobilehome.on .m-module:before{height:18px!important}
+    .mobilehome.on .seafood-art{font-size:22px!important;bottom:7px!important}
+  }
+
+
   /* Non-home mobile navigation: always pinned to the viewing-window bottom */
   .mobile-listpage.on,.mobile-detailpage.on{
     padding-bottom:calc(82px + env(safe-area-inset-bottom));
@@ -2574,18 +2734,21 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div class="m-brand">
       <strong class="m-version-title">v__VERSION__</strong>
       <span class="m-market-title">SEAFOOD MARKET</span>
-      <small class="m-storeline">Store #1032 · Las Vegas</small>
+      <div class="m-home-subline">
+        <small class="m-storeline">Store #1032 · Las Vegas</small>
+        <small id="mHomeUpdated" class="m-home-updated">Updating…</small>
+      </div>
     </div>
     <span class="m-header-fish" aria-hidden="true">🐟</span>
     <span id="mServicePill" class="m-status">Checking…</span>
   </div>
   <div class="m-modgrid">
-    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span class="m-desc">Check price, cost and recent sales</span><span class="seafood-art" aria-hidden="true">🐟</span></button>
-    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">🏷️</span><b>Price Change</b><span class="m-desc">Review and accept price changes</span><span class="seafood-art" aria-hidden="true">🦐</span></button>
-    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span class="m-desc">Analyze sales, velocity and GP$</span><span class="seafood-art" aria-hidden="true">🐚</span></button>
-    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span class="m-desc">Review family-level order suggestions</span><span class="seafood-art" aria-hidden="true">🦀</span></button>
-    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span class="m-desc">View stock, OH and DOS</span><span class="seafood-art" aria-hidden="true">🦪</span></button>
-    <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span class="m-desc" id="mDataModuleMeta">Uploads, QA, processing and data health</span><span class="seafood-art" aria-hidden="true">🐠</span></button>
+    <button class="m-module" type="button" data-mobile-module="quick"><span class="ico">🔎</span><b>Quick Check</b><span class="m-desc">Price · cost · recent sales</span><span class="m-cardstatus neutral" id="mQuickModuleMeta">Loading status…</span><span class="seafood-art" aria-hidden="true">🐟</span></button>
+    <button class="m-module" type="button" data-mobile-module="price"><span class="ico">🏷️</span><b>Price Change</b><span class="m-desc">Review price recommendations</span><span class="m-cardstatus neutral" id="mPriceModuleMeta">Loading status…</span><span class="seafood-art" aria-hidden="true">🦐</span></button>
+    <button class="m-module" type="button" data-mobile-module="performance"><span class="ico">📊</span><b>Performance</b><span class="m-desc">Sales · velocity · GP$</span><span class="m-cardstatus neutral" id="mPerformanceModuleMeta">Loading status…</span><span class="seafood-art" aria-hidden="true">🐚</span></button>
+    <button class="m-module" type="button" data-mobile-module="ordering"><span class="ico">🛒</span><b>Ordering</b><span class="m-desc">Family-level order suggestions</span><span class="m-cardstatus neutral" id="mOrderingModuleMeta">Loading status…</span><span class="seafood-art" aria-hidden="true">🦀</span></button>
+    <button class="m-module" type="button" data-mobile-module="inventory"><span class="ico">📦</span><b>Inventory</b><span class="m-desc">Stock · OH · DOS</span><span class="m-cardstatus neutral" id="mInventoryModuleMeta">Loading status…</span><span class="seafood-art" aria-hidden="true">🦪</span></button>
+    <button class="m-module" type="button" data-mobile-module="data"><span class="ico">🗄️</span><b>Data</b><span class="m-desc">Uploads · batches · QA</span><span class="m-cardstatus neutral" id="mDataModuleMeta">Loading status…</span><span class="seafood-art" aria-hidden="true">🐠</span></button>
   </div>
 </section>
 
@@ -3262,19 +3425,82 @@ function mobileRenderPerformanceTools(){
 }
 async function mobileRefreshHome(){
   if(!isMobileBackoffice())return;
-  try{
-    const res=await Promise.all([api('/healthz'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=5'),api('/v1/backoffice/qa-review?limit=300')]);
-    const h=res[0]||{},a=res[1]||{},r=res[2]||{},q=res[3]||{};
-    state.active=a.active_batch||null;state.recent=r.batches||[];state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[];
-    const sp=mNode('mServicePill');if(sp){sp.textContent=h.ok?'ONLINE':'SERVICE ISSUE';sp.className='m-status '+(h.ok?'good':'bad')}
-    const dm=mNode('mDataModuleMeta'),latest=state.recent[0]||null;
-    if(dm){
-      const qa=state.qaIssues.length?state.qaIssues.length+' QA open':'No QA holds';
-      const batch=state.active?'Batch #'+(state.active.batch_id||state.active.id||'—')+' processing':(latest?'Latest batch #'+(latest.batch_id||'—'):'No recent batch');
-      dm.textContent=batch+' · '+qa;
-    }
-  }catch(e){
-    const sp=mNode('mServicePill');if(sp){sp.textContent='CHECK FAILED';sp.className='m-status bad'}
+  const setCard=(id,text,tone='neutral')=>{
+    const el=mNode(id);if(!el)return;
+    el.textContent=text;
+    el.className='m-cardstatus '+tone;
+  };
+  const requests=[
+    api('/healthz',{timeoutMs:9000}),
+    api('/v1/app/dashboard',{timeoutMs:12000}),
+    api('/v1/web-upload/active',{timeoutMs:10000}),
+    api('/v1/web-upload/recent?limit=5',{timeoutMs:10000}),
+    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:12000}),
+    api('/v1/backoffice/data-health?days=14',{timeoutMs:14000})
+  ];
+  const res=await Promise.allSettled(requests);
+  const value=i=>res[i]?.status==='fulfilled'?res[i].value:null;
+  const h=value(0),dash=value(1),a=value(2),r=value(3),q=value(4),dh=value(5);
+
+  const sp=mNode('mServicePill');
+  if(sp){
+    const ok=Boolean(h?.ok);
+    sp.textContent=h?(ok?'ONLINE':'SERVICE ISSUE'):'CHECK FAILED';
+    sp.className='m-status '+(ok?'good':'bad');
+  }
+
+  if(a)state.active=a.active_batch||null;
+  if(r)state.recent=r.batches||[];
+  if(q){
+    state.qaIssues=q.issues||[];
+    state.qaHistory=q.resolution_history||[];
+  }
+
+  const quick=dash?.quick_check||null;
+  if(quick){
+    const ready=Number(quick.ready_rows||0),hold=Number(quick.qa_hold_rows||0);
+    setCard('mQuickModuleMeta',ready+' READY · '+hold+' HOLD',hold?'warn':'good');
+  }else setCard('mQuickModuleMeta','STATUS UNAVAILABLE','neutral');
+
+  const price=dash?.price_change||null;
+  if(price){
+    const review=Number(price.pending_review||0),execute=Number(price.approved_for_execution||0);
+    setCard('mPriceModuleMeta',review+' REVIEW · '+execute+' TO EXECUTE',(review||execute)?'warn':'good');
+  }else setCard('mPriceModuleMeta','WORKFLOW STATUS UNAVAILABLE','neutral');
+
+  if(dh){
+    const complete=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
+    setCard('mPerformanceModuleMeta',complete+'/14 COMPLETE DATA DAYS',complete>=13?'good':(complete?'warn':'bad'));
+  }else if(quick?.latest_published_at){
+    const published=String(quick.latest_published_at).slice(0,10);
+    setCard('mPerformanceModuleMeta','PUBLISHED '+published,'neutral');
+  }else setCard('mPerformanceModuleMeta','DATA STATUS UNAVAILABLE','neutral');
+
+  const order=dash?.order_workflow||null,orderCfg=dash?.ordering||{};
+  if(order){
+    const drafts=Number(order.draft||0),policies=Number(orderCfg.enabled_policy_count||0);
+    setCard('mOrderingModuleMeta',drafts+' DRAFT · '+policies+' POLICIES',drafts?'warn':'good');
+  }else setCard('mOrderingModuleMeta','WORKFLOW STATUS UNAVAILABLE','neutral');
+
+  const inv=dash?.inventory_attention||null,dumping=dash?.dumping||{};
+  if(inv){
+    const negative=Number(inv.negative_stock_actionable_owner_count||0);
+    const dump=Number(dumping.pending||0);
+    setCard('mInventoryModuleMeta',negative+' NEGATIVE · '+dump+' DUMP',(negative||dump)?'warn':'good');
+  }else setCard('mInventoryModuleMeta','STOCK STATUS UNAVAILABLE','neutral');
+
+  const latest=state.recent?.[0]||null;
+  const qaCount=Array.isArray(state.qaIssues)?state.qaIssues.length:0;
+  if(state.active||latest||q){
+    const batch=state.active
+      ? 'BATCH #'+(state.active.batch_id||state.active.id||'—')+' PROCESSING'
+      : (latest?'BATCH #'+(latest.batch_id||'—'):'NO RECENT BATCH');
+    setCard('mDataModuleMeta',batch+' · '+qaCount+' QA',qaCount?'warn':'good');
+  }else setCard('mDataModuleMeta','BATCH / QA STATUS UNAVAILABLE','neutral');
+
+  const updated=mNode('mHomeUpdated');
+  if(updated){
+    updated.textContent='Updated '+new Date().toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
   }
 }
 function showMobileHome({scroll=true,historyMode='push'}={}){
