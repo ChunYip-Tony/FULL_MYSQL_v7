@@ -2099,6 +2099,28 @@ BACKOFFICE_HTML = r'''<!doctype html>
   .m-batch-prev{display:flex;justify-content:space-between;gap:7px;margin-top:7px;padding:6px 7px;border-radius:9px;background:#f5f8f7;font-size:8px}
   .m-batch-prev b{font-size:9px}.m-batch-prev span{color:var(--muted);text-align:right}
 }
+
+@media(max-width:759px){
+  body.mobile-batch-detail-active{overflow:hidden}
+  body.mobile-batch-detail-active .shell{
+    height:100dvh;max-height:100dvh;min-height:100dvh;
+    overflow:hidden;padding-bottom:max(4px,env(safe-area-inset-bottom))
+  }
+  body.mobile-batch-detail-active #mobileDetailPage.on{
+    height:100%;min-height:0;display:flex;flex-direction:column;overflow:hidden
+  }
+  body.mobile-batch-detail-active #mobileDetailPage .m-pagehead{
+    flex:0 0 auto;margin-bottom:6px;padding-top:max(6px,env(safe-area-inset-top));padding-bottom:7px
+  }
+  body.mobile-batch-detail-active #mobileDetailPage .m-back{width:40px;height:40px;min-width:40px}
+  body.mobile-batch-detail-active #mobileDetailPage .m-pagetitle{font-size:18px}
+  body.mobile-batch-detail-active #mobileDetailPage .m-pagesub{font-size:9px}
+  body.mobile-batch-detail-active #mobileDetailContent{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}
+  body.mobile-batch-detail-active #mobileDetailPage>.m-bottomnav{
+    position:static;flex:0 0 auto;margin:6px -9px 0;padding:5px 8px max(5px,env(safe-area-inset-bottom))
+  }
+  body.mobile-batch-detail-active #mobileDetailPage>.m-bottomnav button{min-height:42px;font-size:8px}
+}
 </style>
 </head>
 <body>
@@ -2490,6 +2512,10 @@ function mobileInitHistory(){
 function mobileScreen(name,{scroll=true}={}){
   ['mobileHome','mobileListPage','mobileDetailPage'].forEach(id=>mNode(id)?.classList.toggle('on',id===name));
   document.body.classList.toggle('mobile-home-active',name==='mobileHome'&&isMobileBackoffice());
+  document.body.classList.toggle(
+    'mobile-batch-detail-active',
+    name==='mobileDetailPage'&&isMobileBackoffice()&&mobileState.module==='batches'&&String(mobileState.currentDetailKey||'').startsWith('active:')
+  );
   if(scroll)window.scrollTo({top:0,behavior:'smooth'});
 }
 function mobileBadgeClass(v){
