@@ -113,7 +113,7 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V12_ROSTER_OH_BEST_AVAILABLE' in cache_src
+          assert 'V13_FAMILY_BASE_UOM_DEMAND' in cache_src
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -124,6 +124,10 @@ jobs:
           oh_src=inspect.getsource(v2._family_effective_oh_for_ordering)
           assert 'blockers!={"MOVEMENT_DAILY_COVERAGE_GAP"}' in oh_src
           assert 'BEST_AVAILABLE_OH_TO_LATEST_CANONICAL_MVT' in oh_src
+          family_sales_src=inspect.getsource(v2._family_sales_series)
+          assert 'EXPLICIT_POS_SELLING_TO_COMMON_BASE_UOM' in family_sales_src
+          assert 'base_qty_per_selling_unit' in family_sales_src
+          assert 'MIXED_ACTIVE_SELLING_UOM_WITHOUT_COMMON_BASE_CONVERSION' in family_sales_src
 
           # Global upload-health grace still exists, but it is not a suggestion gate.
           import business_clock as clock
