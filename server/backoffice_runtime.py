@@ -828,6 +828,7 @@ def ordering_review(
 
         for kind in kinds:
             delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
+            candidate_family_map: dict[int,dict[str,Any]] = {}
             eligible_family_ids: list[int] | None = None
 
             # Delivery-date mode must filter on receipt cadence before running
@@ -835,6 +836,9 @@ def ordering_review(
             if delivery_date is not None:
                 eligible_family_ids=[]
                 candidate_families=_ordering_candidate_families(cur,kind)
+                candidate_family_map={
+                    int(x["family_id"]):x for x in candidate_families
+                }
                 event_map=_family_receipt_events_bulk(
                     cur,
                     [int(x["family_id"]) for x in candidate_families],
@@ -896,7 +900,14 @@ def ordering_review(
                 bulk=bulk_ordering_suggestions(kind,**bulk_kwargs)
 
             inputs[kind] = bulk.get("inputs")
-            skipped.extend(bulk.get("skipped") or [])
+            bulk_skipped=list(bulk.get("skipped") or [])
+            skipped.extend(bulk_skipped)
+            bulk_skipped_by_family={
+                int(x["family_id"]):x
+                for x in bulk_skipped
+                if x.get("family_id") is not None
+            }
+            emitted_family_ids: set[int] = set()
             for s in bulk.get("suggestions") or []:
                 fid = int(s["family_id"])
                 if delivery_date is not None:
@@ -936,6 +947,12 @@ def ordering_review(
                     "delivery_day_confidence": delivery_day.get("confidence") if delivery_day else pattern.get("confidence"),
                     "suggested_delivery_qty": s.get("suggested_order_qty"),
                     "suggested_delivery_uom": s.get("suggested_order_uom"),
+                    "roster_status": (
+                        "ORDER"
+                        if _d(s.get("suggested_order_qty"))>0
+                        else "ZERO_ORDER"
+                    ),
+                    "roster_reason": None,
                     "category": s.get("category"),
                     "data_status": ordering_data_health.get("status"),
                     "data_through": common_data_through,
@@ -986,14 +1003,130 @@ def ordering_review(
                     },
                 }
                 rows.append(row)
+                emitted_family_ids.add(fid)
+
+            # Delivery-date mode is a receipt-cadence roster first. Never hide a
+            # Family merely because demand/OH/UOM math could not produce a
+            # numeric recommendation. Every Family with observed selected-day
+            # receipt evidence is returned with ORDER, ZERO_ORDER, or REVIEW.
+            if delivery_date is not None:
+                no_recent_sales_reasons={"NO_28D_SALES","NO_7D_VELOCITY"}
+                for fid in eligible_family_ids or []:
+                    if fid in emitted_family_ids:
+                        continue
+                    fam=candidate_family_map.get(fid) or {}
+                    cached=delivery_cache.get(fid)
+                    if not cached:
+                        continue
+                    receipt,pattern,delivery_day=cached
+                    calc=bulk_skipped_by_family.get(fid) or {}
+                    reason=str(calc.get("reason") or "ORDERING_CALCULATION_UNAVAILABLE")
+                    no_recent_sales=reason in no_recent_sales_reasons
+                    receiving_article=receipt.get("receiving_article") or _fallback_receiving_article(
+                        cur,
+                        fid,
+                        str(fam.get("main_article_number") or "") or None,
+                    )
+                    roster_uom=(
+                        calc.get("demand_uom")
+                        or calc.get("oh_uom")
+                        or receipt.get("base_uom")
+                    )
+                    rows.append({
+                        "family_id":fid,
+                        "family_name":fam.get("family_description"),
+                        "family_article":fam.get("main_article_number"),
+                        "receiving_article":receiving_article,
+                        "oh":calc.get("oh"),
+                        "oh_uom":calc.get("oh_uom") or roster_uom,
+                        "last_receipt_date":receipt.get("date"),
+                        "last_receipt_qty_base":receipt.get("quantity"),
+                        "last_receipt_base_uom":receipt.get("base_uom"),
+                        "last_receipt_status":receipt.get("status"),
+                        "ordering_frequency":_frequency_label(pattern),
+                        "ordering_frequency_raw":pattern.get("frequency"),
+                        "selected_delivery_date":delivery_date,
+                        "delivery_day":delivery_day.get("weekday"),
+                        "delivery_day_observed_count":delivery_day.get("observed_count"),
+                        "delivery_day_receipt_count":delivery_day.get("receipt_date_count"),
+                        "delivery_day_confidence_pct":delivery_day.get("confidence_percent"),
+                        "delivery_day_confidence":delivery_day.get("confidence"),
+                        "suggested_delivery_qty":Decimal("0") if no_recent_sales else None,
+                        "suggested_delivery_uom":roster_uom,
+                        "roster_status":"ZERO_ORDER" if no_recent_sales else "REVIEW",
+                        "roster_reason":reason,
+                        "category":kind,
+                        "data_status":ordering_data_health.get("status"),
+                        "data_through":common_data_through,
+                        "expected_through":expected_through,
+                        "stale_calendar_days":stale_days,
+                        "estimate_only":bool(missing_required_sources),
+                        "attention":not no_recent_sales,
+                        "details":{
+                            "qty_7d":calc.get("qty_7d"),
+                            "qty_28d":calc.get("qty_28d"),
+                            "velocity_7d":calc.get("velocity_7d"),
+                            "dos":calc.get("dos"),
+                            "effective_oh_raw":calc.get("oh"),
+                            "ordering_oh_used":calc.get("oh"),
+                            "forecast_total_usage":None,
+                            "forecast_usage_before_delivery":None,
+                            "projected_oh_at_delivery":None,
+                            "regular_baseline":None,
+                            "receiving_articles_on_last_receipt":receipt.get("receiving_articles"),
+                            "delivery_pattern":pattern,
+                            "delivery_day_evidence":delivery_day,
+                            "roster_reason":reason,
+                            "reasons":[
+                                {
+                                    "title":"Roster status",
+                                    "detail":(
+                                        "Observed delivery Family retained in the selected-day roster. "
+                                        + (
+                                            "No numeric order is suggested because recent demand is inactive or has no usable 7D velocity."
+                                            if no_recent_sales else
+                                            f"Order quantity requires review because {reason}."
+                                        )
+                                    ),
+                                },
+                                {
+                                    "title":"Selected delivery day",
+                                    "detail":(
+                                        f"Observed {delivery_day.get('weekday')} "
+                                        f"{delivery_day.get('observed_count')}/{delivery_day.get('receipt_date_count')} receipt dates "
+                                        f"in the recent {delivery_day.get('lookback_days')} day window · "
+                                        f"{delivery_day.get('confidence_percent')}% confidence."
+                                    ),
+                                },
+                            ],
+                        },
+                    })
         cur.close()
 
     rows.sort(
         key=lambda x: (
+            0 if str(x.get("roster_status") or "")=="ORDER" else (
+                1 if str(x.get("roster_status") or "")=="REVIEW" else 2
+            ),
             -float(x.get("suggested_delivery_qty") or 0),
             str(x.get("family_name") or ""),
         )
     )
+    roster_summary={
+        "observed_family_count":len(rows) if delivery_date is not None else None,
+        "order_count":sum(
+            1 for x in rows
+            if str(x.get("roster_status") or "")=="ORDER"
+        ),
+        "zero_order_count":sum(
+            1 for x in rows
+            if str(x.get("roster_status") or "")=="ZERO_ORDER"
+        ),
+        "review_count":sum(
+            1 for x in rows
+            if str(x.get("roster_status") or "")=="REVIEW"
+        ),
+    }
     skipped_breakdown=dict(
         Counter(str(x.get("reason") or "UNKNOWN") for x in skipped)
     )
@@ -1004,7 +1137,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V5_STALE_ESTIMATE",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V10_COMPLETE_DELIVERY_ROSTER",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_delivery_weekday": (
@@ -1015,6 +1148,7 @@ def ordering_review(
         "data_health": ordering_data_health,
         "count": len(rows),
         "rows": rows,
+        "roster_summary": roster_summary,
         "skipped": skipped,
         "skipped_breakdown": skipped_breakdown,
         "inputs": inputs,
@@ -1024,7 +1158,7 @@ def ordering_review(
             "last_receipt_quantity_basis": "MOVEMENT_BASE_UOM_ONLY",
             "incoming_field_used": False,
             "write_enabled": False,
-            "delivery_date_filter": "RECENT_12_WEEK_CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
+            "delivery_date_filter": "CANONICAL_101_107_109_WEEKDAY_EVIDENCE",
             "delivery_day_eligibility": (
                 "ANY_OBSERVED_SELECTED_WEEKDAY_WITHIN_180_DAYS"
                 if best_available_delivery_evidence
@@ -1032,6 +1166,8 @@ def ordering_review(
             ),
             "delivery_evidence_lookback_days": 180 if best_available_delivery_evidence else 84,
             "best_available_delivery_evidence": bool(best_available_delivery_evidence),
+            "delivery_roster_complete": bool(delivery_date),
+            "observed_family_is_never_hidden_by_order_math": bool(delivery_date),
             "delivery_day_prefilter_before_heavy_math": True,
             "stale_estimate_allowed": True,
             "stale_estimate_basis": "LATEST_COMMON_CANONICAL_POS_AND_MVT_DATE",
@@ -1057,7 +1193,7 @@ def _ordering_review_cache_key(
     best_available_delivery_evidence: bool = False,
 ) -> str:
     mode="YIPMAN180" if best_available_delivery_evidence else "STANDARD84"
-    return f"V6|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+    return f"V7|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
