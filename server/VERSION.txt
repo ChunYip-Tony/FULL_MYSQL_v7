@@ -1,3 +1,12 @@
+v7.0.322 Ordering Delivery Prefilter + Single Request:
+- Fixes mobile Ordering browser-level “Failed to fetch” caused by two simultaneous heavyweight Fresh/Frozen ordering reviews.
+- Delivery-date mode now evaluates recent 12-week canonical receipt cadence first and only runs expensive 28D demand, OH, baseline, and suggestion math for families that match the selected delivery day.
+- Adds family_ids prefilter support to the bulk ordering engine so nonmatching families are skipped before heavy calculations.
+- Mobile and desktop Ordering now load through one category=ALL review request rather than two concurrent category requests.
+- Adds one controlled retry for a browser-level Failed to fetch during a rolling worker restart.
+- Keeps the v7.0.320/321 delivery-date calendar, observed-day confidence, full active roster including zero suggestions, family-level OH, and coverage rules unchanged.
+Version: 7.0.322 Single-Service Edition
+
 v7.0.321 Ordering Rolling-Deploy Compatibility:
 - Prevents the mobile Ordering page from failing when a rolling deployment briefly mixes a v7.0.320 Backoffice caller with an older bulk_ordering_suggestions function signature.
 - Uses the full v7.0.320 delivery-date roster when the new signature is available.
