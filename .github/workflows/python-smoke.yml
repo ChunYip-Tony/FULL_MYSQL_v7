@@ -188,6 +188,9 @@ jobs:
           echo "=== RECENT ==="
           curl -fsS --max-time 60 "$base/v1/web-upload/recent?limit=8" || true
           echo
+          echo "=== BATCH 22 ==="
+          curl -fsS --max-time 60 "$base/v1/web-upload/diagnostics/batch-id/22" || true
+          echo
 
       - name: Validate Backoffice DOM collection bindings
         run: |
