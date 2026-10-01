@@ -1,3 +1,14 @@
+v7.0.326 Ordering Stale Estimate Mode:
+- Ordering no longer hard-blocks when the newest completed POS or MVT day is missing but both sources still have a common usable historical date.
+- Uses the latest common canonical POS+MVT date as the operational data-through date and labels every affected suggestion ESTIMATE / STALE rather than presenting it as current.
+- Forecast depletion begins on the calendar day after the common data-through date, so missing day(s) are included before the selected delivery and next-delivery coverage window.
+- Mobile and desktop Ordering show an amber warning with Required Through, POS Through, MVT Through, common Data Through, and estimate status while still showing family suggestions.
+- Ordering detail shows the stale data basis and explains how missing days were forecast into the recommendation.
+- Hard block remains only when no common usable POS+MVT date exists.
+- Ordering cache key is versioned to V5 so prior hard-block snapshots cannot mask the new estimate mode.
+- Built on current main after Yipman production deploy v7.0.325.
+Version: 7.0.326 Single-Service Edition
+
 v7.0.323 Async Cached Ordering + Bulk Receipt Cadence:
 - Removes the browser's long-lived dependency on heavy Ordering calculations. Delivery-date Ordering now returns immediately from a persistent cache or REFRESHING state while the full calculation runs in a background worker.
 - Mobile Ordering polls the lightweight cached endpoint and shows “Calculating delivery suggestions…” instead of surfacing browser-level Failed to fetch during a long analysis.
