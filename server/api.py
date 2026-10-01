@@ -3599,9 +3599,18 @@ def backoffice_inventory(category:str='ALL',limit:int=300,q:str|None=None,lightw
 
 
 @app.get('/v1/backoffice/ordering-review')
-def backoffice_ordering(category:str='ALL'):
+def backoffice_ordering(category:str='ALL', delivery_date:str|None=None):
     try:
-        result=backoffice_ordering_review(category=category)
+        parsed_delivery=None
+        if delivery_date:
+            try:
+                parsed_delivery=date.fromisoformat(str(delivery_date))
+            except ValueError:
+                raise ValueError('DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
+        result=backoffice_ordering_review(
+            category=category,
+            delivery_date=parsed_delivery,
+        )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
