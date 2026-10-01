@@ -1112,15 +1112,21 @@ def _family_receipt_events(
     file_ids=sorted(set(canonical.values()))
     ph=",".join(["%s"]*len(file_ids))
     cur.execute(
-        f"""SELECT file_id,raw_id,source_row_number,article_id,article_number,
-                   movement_type,posting_date,entry_quantity,entry_uom_code,
-                   base_quantity,base_uom_code,amount_local_currency,
-                   article_document,purchase_order,vendor_code
-            FROM movement_history
-            WHERE family_id=%s
-              AND file_id IN ({ph})
-              AND movement_type IN ('101','102','107','108','109','110')
-            ORDER BY posting_date,file_id,raw_id,source_row_number""",
+        f"""SELECT m.file_id,m.raw_id,m.source_row_number,m.article_id,m.article_number,
+                   m.movement_type,m.posting_date,m.entry_quantity,m.entry_uom_code,
+                   m.base_quantity,m.base_uom_code,m.amount_local_currency,
+                   m.article_document AS normalized_article_document,
+                   COALESCE(
+                     NULLIF(TRIM(m.article_document),''),
+                     NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.Q')),'')
+                   ) AS article_document,
+                   m.purchase_order,m.vendor_code
+            FROM movement_history m
+            LEFT JOIN raw_movement r ON r.raw_id=m.raw_id
+            WHERE m.family_id=%s
+              AND m.file_id IN ({ph})
+              AND m.movement_type IN ('101','102','107','108','109','110')
+            ORDER BY m.posting_date,m.file_id,m.raw_id,m.source_row_number""",
         (int(family_id),*file_ids),
     )
     rows=[
@@ -1171,6 +1177,11 @@ def _family_receipt_events(
             "article_number":key[2],
             "purchase_order":key[3],
             "article_document":key[4],
+            "article_document_source":(
+                "NORMALIZED_ARTICLE_DOCUMENT"
+                if any(str(x.get("normalized_article_document") or "").strip() for x in chosen)
+                else ("RAW_REFERENCE_Q_FALLBACK" if key[4] else None)
+            ),
             "vendor_code":next((x.get("vendor_code") for x in chosen if x.get("vendor_code")),None),
             "receipt_quantity":qty,
             "receipt_uom":uom,
@@ -1217,15 +1228,21 @@ def _family_receipt_events_bulk(
     fam_ph=",".join(["%s"]*len(ids))
     file_ph=",".join(["%s"]*len(file_ids))
     cur.execute(
-        f"""SELECT family_id,file_id,raw_id,source_row_number,article_id,article_number,
-                   movement_type,posting_date,entry_quantity,entry_uom_code,
-                   base_quantity,base_uom_code,amount_local_currency,
-                   article_document,purchase_order,vendor_code
-            FROM movement_history
-            WHERE family_id IN ({fam_ph})
-              AND file_id IN ({file_ph})
-              AND movement_type IN ('101','102','107','108','109','110')
-            ORDER BY family_id,posting_date,file_id,raw_id,source_row_number""",
+        f"""SELECT m.family_id,m.file_id,m.raw_id,m.source_row_number,m.article_id,m.article_number,
+                   m.movement_type,m.posting_date,m.entry_quantity,m.entry_uom_code,
+                   m.base_quantity,m.base_uom_code,m.amount_local_currency,
+                   m.article_document AS normalized_article_document,
+                   COALESCE(
+                     NULLIF(TRIM(m.article_document),''),
+                     NULLIF(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.Q')),'')
+                   ) AS article_document,
+                   m.purchase_order,m.vendor_code
+            FROM movement_history m
+            LEFT JOIN raw_movement r ON r.raw_id=m.raw_id
+            WHERE m.family_id IN ({fam_ph})
+              AND m.file_id IN ({file_ph})
+              AND m.movement_type IN ('101','102','107','108','109','110')
+            ORDER BY m.family_id,m.posting_date,m.file_id,m.raw_id,m.source_row_number""",
         (*ids,*file_ids),
     )
     rows=[
@@ -1278,6 +1295,11 @@ def _family_receipt_events_bulk(
             "article_number":key[3],
             "purchase_order":key[4],
             "article_document":key[5],
+            "article_document_source":(
+                "NORMALIZED_ARTICLE_DOCUMENT"
+                if any(str(x.get("normalized_article_document") or "").strip() for x in chosen)
+                else ("RAW_REFERENCE_Q_FALLBACK" if key[5] else None)
+            ),
             "vendor_code":next((x.get("vendor_code") for x in chosen if x.get("vendor_code")),None),
             "receipt_quantity":qty,
             "receipt_uom":uom,
