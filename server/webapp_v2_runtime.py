@@ -3446,11 +3446,106 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
     # Legacy fallback for families whose OH is genuinely child-owned.
     return _family_owner_positions(cur,rows,use_child_true_stock=True)
 
+
+def _family_effective_oh_for_ordering(
+    cur,
+    rows: list[dict[str,Any]],
+    *,
+    allow_incomplete_movement_coverage: bool=False,
+) -> dict[str,Any]:
+    """Ordering-only best-available OH.
+
+    Missing MVT calendar dates do not turn an observed delivery Family into
+    REVIEW. If the only roll-forward blocker is MOVEMENT_DAILY_COVERAGE_GAP,
+    use the latest OH/True Stock anchor plus canonical MVT days that exist.
+    UOM, movement-type, and scope blockers still fail closed.
+    """
+    strict=_family_effective_oh(cur,rows)
+    if (
+        strict.get("status")=="READY"
+        or not allow_incomplete_movement_coverage
+        or not rows
+    ):
+        return strict
+
+    family_id=next(
+        (int(x["family_id"]) for x in rows if x.get("family_id") is not None),
+        None,
+    )
+    if family_id is None:
+        return strict
+
+    def _estimate(pos: dict[str,Any] | None, source: str, extra: dict[str,Any]) -> dict[str,Any] | None:
+        if not pos:
+            return None
+        blockers={
+            str(x or "").strip().upper()
+            for x in (pos.get("blockers") or [])
+            if str(x or "").strip()
+        }
+        if blockers!={"MOVEMENT_DAILY_COVERAGE_GAP"}:
+            return None
+        anchor=pos.get("anchor_quantity")
+        delta=pos.get("movement_delta")
+        uom=str(pos.get("uom") or "").strip().upper() or None
+        if anchor is None or delta is None or not uom:
+            return None
+        quantity=_d(anchor)+_d(delta)
+        return {
+            "status":"READY",
+            "quantity":quantity,
+            "uom":uom,
+            "source":source,
+            "movement_through_date":pos.get("movement_through_date"),
+            "best_available":True,
+            "coverage_gap_ignored_for_ordering":True,
+            "missing_movement_days":pos.get("missing_movement_days") or [],
+            "reason":"BEST_AVAILABLE_OH_TO_LATEST_CANONICAL_MVT",
+            "owners":[{
+                "scope_type":"FAMILY",
+                "owner_id":family_id,
+                "quantity":quantity,
+                "uom":uom,
+                "source":source,
+                "analysis_usable":True,
+                "blockers":["MOVEMENT_DAILY_COVERAGE_GAP"],
+            }],
+            **extra,
+        }
+
+    family_true=_active_family_true_stock(cur,family_id)
+    if family_true:
+        estimate=_estimate(
+            _actual_position(cur,family_true),
+            "FAMILY_TRUE_STOCK_BEST_AVAILABLE",
+            {
+                "family_true_stock_id":family_true.get("true_stock_id"),
+                "submitted_at":family_true.get("submitted_at"),
+            },
+        )
+        return estimate or strict
+
+    family_anchor=_family_system_oh_anchor(cur,rows)
+    if family_anchor:
+        estimate=_estimate(
+            _system_position(cur,family_anchor),
+            "FAMILY_SYSTEM_OH_BEST_AVAILABLE",
+            {
+                "anchor_on_hand_file_id":family_anchor.get("file_id"),
+                "anchor_date":family_anchor.get("observation_date"),
+            },
+        )
+        return estimate or strict
+
+    return strict
+
 def bulk_ordering_suggestions(
     order_type: str,
     *,
     ordering_date: date|None=None,
     expected_delivery_date: date|None=None,
+    include_sufficient_stock: bool=False,
+    family_ids: set[int]|list[int]|tuple[int,...]|None=None,
     promotion_involved: bool=False,
     promotion_start_date: date|None=None,
     promotion_end_date: date|None=None,
@@ -3564,6 +3659,9 @@ def bulk_ordering_suggestions(
             })
 
         families=_ordering_candidate_families(cur,kind)
+        if family_ids is not None:
+            allowed_family_ids={int(x) for x in family_ids}
+            families=[x for x in families if int(x.get("family_id")) in allowed_family_ids]
         suggestions=[]
         skipped=[]
 
@@ -3593,7 +3691,11 @@ def bulk_ordering_suggestions(
 
             active_28=_d(m28.get("sold_quantity"))>0
             vel7=m7.get("velocity_per_supported_day")
-            family_oh=_family_effective_oh(cur,rows)
+            family_oh=_family_effective_oh_for_ordering(
+                cur,
+                rows,
+                allow_incomplete_movement_coverage=bool(include_sufficient_stock),
+            )
             if family_oh.get("status")!="READY" or family_oh.get("quantity") is None:
                 skipped.append({
                     "family_id":fid,
@@ -3618,8 +3720,35 @@ def bulk_ordering_suggestions(
             ordering_oh=max(Decimal("0"),raw_oh)
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
 
-            # User rule: only active 28-supported-day sellers with DOS < 7.
-            if not active_28 or dos is None or dos>=Decimal("7"):
+            if not active_28:
+                skipped.append({
+                    "family_id":fid,
+                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_name":fam.get("family_description"),
+                    "reason":"NO_28D_SALES",
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":ordering_oh,
+                    "oh_uom":demand_uom,
+                    "dos":dos,
+                })
+                continue
+            if dos is None and not include_sufficient_stock:
+                skipped.append({
+                    "family_id":fid,
+                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_name":fam.get("family_description"),
+                    "reason":"NO_7D_VELOCITY",
+                    "qty_7d":m7.get("sold_quantity"),
+                    "qty_28d":m28.get("sold_quantity"),
+                    "velocity_7d":vel7,
+                    "oh":ordering_oh,
+                    "oh_uom":demand_uom,
+                    "dos":dos,
+                })
+                continue
+            if dos is not None and dos>=Decimal("7") and not include_sufficient_stock:
                 continue
 
             regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
@@ -3696,6 +3825,14 @@ def bulk_ordering_suggestions(
                 "supported_days_28d":m28.get("supported_day_count"),
                 "velocity_7d":vel7,
                 "dos":dos,
+                "delivery_roster_demand_basis":(
+                    "28D_REGULAR_BASELINE_FALLBACK"
+                    if dos is None else "7D_VELOCITY_PLUS_28D_REGULAR_BASELINE"
+                ),
+                "oh_best_available":bool(family_oh.get("best_available")),
+                "oh_source":family_oh.get("source"),
+                "oh_movement_through_date":family_oh.get("movement_through_date"),
+                "oh_missing_movement_days":family_oh.get("missing_movement_days") or [],
                 "regular_baseline":regular,
                 "promotion_involved":bool(promo_items_for_family),
                 "promotion_items":promo_items_for_family,
@@ -3730,7 +3867,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V2",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V3_BEST_AVAILABLE_ROSTER",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -3749,7 +3886,12 @@ def bulk_ordering_suggestions(
         },
         "eligibility":{
             "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
-            "dos_threshold":"LESS_THAN_7_DAYS",
+            "dos_threshold":(
+                "ALL_ACTIVE_FAMILIES_WHEN_DELIVERY_DATE_ROSTER"
+                if include_sufficient_stock else "LESS_THAN_7_DAYS"
+            ),
+            "include_sufficient_stock":bool(include_sufficient_stock),
+            "family_prefilter_applied":family_ids is not None,
             "negative_effective_oh_for_ordering":"TREAT_AS_ZERO",
         },
         "suggestion_count":len(suggestions),
@@ -3765,6 +3907,8 @@ def bulk_ordering_suggestions(
             "family_promotion_demand_method":"FAMILY_REGULAR_MINUS_PROMO_UPC_REGULAR_PLUS_PROMO_UPC_SALE",
             "tpr_is_promotion":False,
             "coverage_target":"THROUGH_DAY_BEFORE_NEXT_NEXT_DELIVERY",
+            "delivery_roster_oh_rule":"WHEN_ONLY_MVT_DAILY_COVERAGE_IS_MISSING_USE_OH_ANCHOR_PLUS_AVAILABLE_CANONICAL_MVT_AND_FORECAST_FORWARD",
+            "uom_or_movement_semantic_blockers_still_require_review":True,
             "saved":False,
             "submitted":False,
         },
