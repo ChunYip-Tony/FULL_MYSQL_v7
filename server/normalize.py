@@ -1134,28 +1134,47 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
                 k: str(v) if isinstance(v, Decimal) else v
                 for k, v in parsed_pack.items()
             }
-        _insert_evidence(cur, 'ARTICLE', article_id, 'PACK_TEXT_OBSERVED', ctx, 'pack', pack, pack_extra)
 
-        # Monthly PI Fresh/Live: D is Pack Size and E is Receiving Unit.
-        # An explicit structured weight pack (e.g. 60LB or 1/60LB) establishes
-        # LB as Base UOM and the full pack weight per Receiving Unit. This is a
-        # source-schema rule, not a
-        # description-text inference.
+        monthly_pack = None
         if (
             ctx.source_type == 'monthly_pi_form'
-            and (
-                _norm_header(ctx.sheet_name) == 'fresh'
-                or _norm_header(ctx.sheet_name).startswith('fresh ')
-                or _norm_header(ctx.sheet_name) == 'live'
-                or _norm_header(ctx.sheet_name).startswith('live ')
-            )
-            and parsed_pack
+            and _norm_header(ctx.sheet_name) in {'fresh&live', 'fresh & live', 'fresh live'}
         ):
-            receiving_token = _source_token(_get(row, colmap, 'receiving_uom'))
-            base_token = str(parsed_pack.get('base_uom') or '')
-            base_uom_id, base_canonical = _canonical_uom(cur, ctx.source_type, base_token)
-            if base_uom_id is not None:
-                _ensure_article_uom_role(cur, article_id, 'BASE_INVENTORY', base_uom_id, ctx, base_token)
+            monthly_pack = _monthly_pi_pack_structure(
+                pack,
+                _get(row, colmap, 'order_uom'),
+            )
+            if monthly_pack:
+                pack_extra['monthly_pi_pack_structure'] = {
+                    k: str(v) if isinstance(v, Decimal) else v
+                    for k, v in monthly_pack.items()
+                }
+
+        _insert_evidence(cur, 'ARTICLE', article_id, 'PACK_TEXT_OBSERVED', ctx, 'pack', pack, pack_extra)
+
+        # Current Monthly PI FRESH&LIVE source:
+        # D = Packing Size and E = Order Unit. The receiving container is
+        # primarily encoded in D (60LB/CV -> CV; 40LB/BAG -> BAG). E is used
+        # only as a fallback container for forms like 5/2LB + E=CV.
+        if monthly_pack:
+            base_token = str(monthly_pack.get('base_uom') or '').upper().strip()
+            receiving_token = str(monthly_pack.get('receiving_uom') or '').upper().strip()
+            factor = monthly_pack.get('base_qty_per_receiving_unit')
+
+            base_uom_id = None
+            base_canonical = None
+            if base_token:
+                base_uom_id, base_canonical = _canonical_uom(cur, ctx.source_type, base_token)
+                if base_uom_id is not None:
+                    _ensure_article_uom_role(cur, article_id, 'BASE_INVENTORY', base_uom_id, ctx, base_token)
+
+            receiving_uom_id = None
+            receiving_canonical = None
+            if receiving_token:
+                receiving_uom_id, receiving_canonical = _canonical_uom(cur, ctx.source_type, receiving_token)
+                if receiving_uom_id is not None:
+                    _ensure_article_uom_role(cur, article_id, 'RECEIVING', receiving_uom_id, ctx, receiving_token)
+
             _insert_evidence(
                 cur,
                 'ARTICLE',
@@ -1165,10 +1184,12 @@ def _normalize_identity_row(cur, ctx: RowContext, row: dict[str, Any], colmap: d
                 'pack',
                 pack,
                 {
-                    'receiving_uom': receiving_token,
-                    'base_uom': base_canonical or base_token,
-                    'base_qty_per_receiving_unit': str(parsed_pack['total_base_qty']),
-                    'resolution_rule': 'MONTHLY_PI_FRESH_LIVE_D_PACK_E_RECEIVING',
+                    'order_uom': monthly_pack.get('order_uom'),
+                    'receiving_uom': receiving_canonical or receiving_token or None,
+                    'base_uom': base_canonical or base_token or None,
+                    'base_qty_per_receiving_unit': str(factor) if factor is not None else None,
+                    'pattern': monthly_pack.get('pattern'),
+                    'resolution_rule': 'MONTHLY_PI_FRESH_LIVE_D_PACK_E_ORDER_V7304',
                 },
             )
 
