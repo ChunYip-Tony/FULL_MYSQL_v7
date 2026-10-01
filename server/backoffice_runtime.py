@@ -1196,7 +1196,10 @@ def _ordering_review_cache_key(
     best_available_delivery_evidence: bool = False,
 ) -> str:
     mode="YIPMAN180" if best_available_delivery_evidence else "STANDARD84"
-    return f"V7|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+    # Cache schema V8: GR semantics changed to validated 5014-only receipt docs.
+    # Do not reuse persisted V7 payloads that may contain generic SAP document
+    # numbers (for example 4920...) in the GR field.
+    return f"V8_GR5014|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
