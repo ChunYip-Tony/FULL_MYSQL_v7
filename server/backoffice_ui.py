@@ -2324,7 +2324,7 @@ function pill(status){const s=String(status||'UNKNOWN').toUpperCase();let c='blu
 function toast(t,ms=2200){const x=$('#toast');x.textContent=t;x.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove('on'),Math.max(1200,Number(ms||2200)))}
 function uploadSourceLabel(v){
   const k=String(v||'').toLowerCase();
-  return ({sales_by_price_type:'POS Sales',movement:'MVT',price_list:'Price List',on_hand:'OH',live_fresh_suggestion:'Live / Fresh',frozen_inventory:'Frozen',article_manual:'Article Manual'})[k]||String(v||'Unknown');
+  return ({sales_by_price_type:'POS Sales',movement:'MVT',price_list:'Price List',on_hand:'OH',live_fresh_suggestion:'Live / Fresh',frozen_inventory:'Frozen',article_manual:'Article Manual',monthly_pi_form:'Monthly PI'})[k]||String(v||'Unknown');
 }
 function uploadCoverageText(u){
   const start=u?.coverage_start_date||u?.header_period_start_date||null;
@@ -3597,52 +3597,58 @@ function issueLabel(code){
     OH_MOVEMENT_ROLLFORWARD_BLOCKED:'OH rollforward blocked'
   })[k]||String(code||'Issue').replaceAll('_',' ');
 }
+function batchPhaseStripHtml(b){
+  const runStatus=String(b?.active_run_status||'').toUpperCase();
+  const p=phase3ProgressState(b);
+  const p2=String(b?.processing_status||'').toUpperCase();
+  const ingestDone=Number(b?.file_count||0)>0;
+  const phase2Done=ingestDone&&(
+    p2==='PHASE2C_READY'||p2==='PHASE3_QA_HOLD'||p2==='QUICK_CHECK_READY'||
+    p2==='QUICK_CHECK_READY_WITH_HOLDS'||Boolean(b?.active_pipeline_run_id)
+  );
+  const phase3Active=['QUEUED','STARTED','PAUSE_REQUESTED'].includes(runStatus);
+  const finalDone=['PHASE3_QA_HOLD','QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'].includes(p2)&&!phase3Active;
+  const steps=[
+    {n:'1',label:'Ingest',state:ingestDone?'done':'wait',sub:ingestDone?'✓':'—'},
+    {n:'2',label:'Phase 2C',state:phase2Done?'done':'wait',sub:phase2Done?'✓':'—'},
+    {n:'3',label:'Phase 3',state:phase3Active?'live':finalDone?'done':'wait',sub:phase3Active?(p.hasRowProgress?fmt(p.pct,0)+'%':'RUN'):(finalDone?'✓':'—')},
+    {n:'4',label:'Finalize',state:finalDone?'done':'wait',sub:finalDone?'✓':'—'}
+  ];
+  return '<div class="m-batch-steps">'+steps.map(x=>
+    '<div class="m-batch-step '+x.state+'"><span>'+esc(x.n)+'</span><b>'+esc(x.label)+'</b><small>'+esc(x.sub)+'</small></div>'
+  ).join('')+'</div>';
+}
+
 function phase3MonitorHtml(b){
   const p=phase3ProgressState(b);
   const heartbeatText=p.heartbeatKnown
-    ? 'Heartbeat '+Math.max(0,Math.round(p.heartbeatAge))+'s'
-    : 'Heartbeat pending';
+    ? Math.max(0,Math.round(p.heartbeatAge))+'s heartbeat'
+    : 'heartbeat pending';
   const stageNo=p.idx>=0?(p.idx+1):0;
 
   if(p.hasRowProgress){
     const eta=p.eta===null?'—':compactDuration(p.eta);
-    const current=p.currentUpc
-      ? '<div class="calc" style="margin:8px 0 0;padding:8px 10px"><small>Currently processing</small><br><b>'+esc(p.currentUpc)+'</b>'+(p.currentName?' · '+esc(p.currentName):'')+'</div>'
-      : '';
-    return '<div id="mPhase3Monitor" class="m-detailsection" style="padding:10px">'+
-      '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'+
-        '<div><b id="mPhase3Stage">'+esc(p.stageLabel)+'</b><div class="meta">Processing by '+esc(b?.active_progress_unit||'row')+'</div></div>'+
-        '<span id="mPhase3Heartbeat" class="pill '+(p.heartbeatFresh?'green':'amber')+'">'+esc(p.healthText)+'</span>'+
-      '</div>'+
-      '<div style="display:grid;grid-template-columns:1.4fr .8fr;gap:8px;align-items:end;margin-top:8px">'+
-        '<div><span id="mPhase3RowCount" style="font-size:25px;font-weight:900">'+fmt(p.rowCurrent,0)+' <small style="font-size:14px;color:#6b7b82">/ '+fmt(p.rowTotal,0)+'</small></span><div class="meta">UPC rows completed</div></div>'+
-        '<div style="text-align:right"><span id="mPhase3Pct" style="font-size:25px;font-weight:900;color:#087f83">'+fmt(p.pct,1)+'%</span><div class="meta">Progress</div></div>'+
-      '</div>'+
-      '<div class="progress" style="height:10px;margin:8px 0"><span id="mPhase3ProgressBar" style="width:'+p.pct+'%;transition:width .35s ease"></span></div>'+
-      current+
-      '<div id="mPhase3Stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px;text-align:center">'+
-        '<div><b>'+compactDuration(p.elapsed)+'</b><div class="meta">Elapsed</div></div>'+
-        '<div><b>'+fmt(p.speed,2)+'/s</b><div class="meta">Speed</div></div>'+
-        '<div><b>'+esc(eta)+'</b><div class="meta">ETA</div></div>'+
-      '</div>'+
-      '<div id="mPhase3Results" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px">'+
-        '<div class="calc" style="margin:0;padding:6px;text-align:center"><b>'+fmt(p.ready,0)+'</b><div class="meta">Ready</div></div>'+
-        '<div class="calc" style="margin:0;padding:6px;text-align:center"><b>'+fmt(p.hold,0)+'</b><div class="meta">QA Hold</div></div>'+
-        '<div class="calc" style="margin:0;padding:6px;text-align:center"><b>'+fmt(p.historical,0)+'</b><div class="meta">Historical</div></div>'+
-      '</div>'+
-      '<p id="mPhase3ProgressText" class="meta" style="margin:7px 0 0">Stage '+stageNo+'/'+PHASE3_PROGRESS_STAGES.length+' · '+esc(heartbeatText)+' · refresh 3s</p>'+
+    return '<div id="mPhase3Monitor" class="m-batch-progress">'+
+      '<div class="m-batch-progress-head"><div><b id="mPhase3Stage">'+esc(p.stageLabel)+'</b><small>By '+esc(b?.active_progress_unit||'row')+'</small></div>'+
+      '<span id="mPhase3Heartbeat" class="m-batch-live '+(p.heartbeatFresh?'good':'warn')+'">'+esc(p.healthText)+'</span></div>'+
+      '<div class="m-batch-progress-main"><div><strong id="mPhase3RowCount">'+fmt(p.rowCurrent,0)+' <i>/ '+fmt(p.rowTotal,0)+'</i></strong><small>UPC rows</small></div>'+
+      '<div class="pct"><strong id="mPhase3Pct">'+fmt(p.pct,1)+'%</strong><small>complete</small></div></div>'+
+      '<div class="progress m-batch-bar"><span id="mPhase3ProgressBar" style="width:'+p.pct+'%"></span></div>'+
+      '<div class="m-batch-current"><small>Processing</small><b>'+esc(p.currentUpc||'—')+'</b>'+(p.currentName?'<span>'+esc(p.currentName)+'</span>':'')+'</div>'+
+      '<div class="m-batch-speed"><span><b>'+compactDuration(p.elapsed)+'</b><small>Elapsed</small></span><span><b>'+fmt(p.speed,2)+'/s</b><small>Speed</small></span><span><b>'+esc(eta)+'</b><small>ETA</small></span></div>'+
+      '<div id="mPhase3Results" class="m-batch-live-results"><span class="ready"><b>'+fmt(p.ready,0)+'</b><small>Ready</small></span><span class="hold"><b>'+fmt(p.hold,0)+'</b><small>Hold</small></span><span class="hist"><b>'+fmt(p.historical,0)+'</b><small>Historical</small></span></div>'+
+      '<div id="mPhase3ProgressText" class="m-batch-foot">Stage '+stageNo+'/'+PHASE3_PROGRESS_STAGES.length+' · '+esc(heartbeatText)+' · refresh 3s</div>'+
     '</div>';
   }
 
-  return '<div id="mPhase3Monitor" class="m-detailsection" style="padding:10px">'+
-    '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center">'+
-      '<b id="mPhase3Stage">'+esc(p.stageLabel)+'</b>'+
-      '<span id="mPhase3Heartbeat" class="pill '+(p.heartbeatFresh?'green':p.runStatus==='QUEUED'?'blue':'amber')+'">'+esc(p.healthText)+'</span>'+
-    '</div>'+
-    '<div class="progress" style="height:9px;margin:8px 0"><span id="mPhase3ProgressBar" style="width:'+p.pct+'%;transition:width .35s ease"></span></div>'+
-    '<p id="mPhase3ProgressText" class="meta">Stage '+stageNo+'/'+PHASE3_PROGRESS_STAGES.length+' · '+fmt(p.pct,0)+'% · '+esc(heartbeatText)+'</p>'+
+  return '<div id="mPhase3Monitor" class="m-batch-progress">'+
+    '<div class="m-batch-progress-head"><b id="mPhase3Stage">'+esc(p.stageLabel)+'</b>'+
+    '<span id="mPhase3Heartbeat" class="m-batch-live '+(p.heartbeatFresh?'good':p.runStatus==='QUEUED'?'':'warn')+'">'+esc(p.healthText)+'</span></div>'+
+    '<div class="progress m-batch-bar"><span id="mPhase3ProgressBar" style="width:'+p.pct+'%"></span></div>'+
+    '<div id="mPhase3ProgressText" class="m-batch-foot">Stage '+stageNo+'/'+PHASE3_PROGRESS_STAGES.length+' · '+fmt(p.pct,0)+'% · '+esc(heartbeatText)+'</div>'+
   '</div>';
 }
+
 function updateMobilePhase3Monitor(b){
   const box=mNode('mPhase3Monitor');if(!box)return;
   // Re-render the compact monitor so row counters, ETA, current UPC and live
