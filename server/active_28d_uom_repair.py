@@ -572,6 +572,10 @@ def _related_prefix_evidence(cur, target: dict[str, Any]) -> dict[str, Any] | No
 def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
     active, valid_day_count, latest_valid_date = _active_selling_upcs(cur, batch_id)
     upc_rows, article_units, manual_stats = _latest_article_manual_source(cur, 7)
+    monthly_pi_base_rows, monthly_pi_stats = _latest_monthly_pi_frozen_base_source(
+        cur,
+        preferred_batch_id=batch_id,
+    )
 
     result: dict[str, Any] = {
         "version": VERSION,
@@ -582,11 +586,14 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
             "historical_upcs_touched": 0,
         },
         "article_manual": manual_stats,
+        "monthly_pi": monthly_pi_stats,
         "active_upcs_examined": len(active),
         "already_has_current_uom": 0,
         "repaired_authoritative_prefix_lb": 0,
         "repaired_source_supported": 0,
+        "repaired_frozen_pack_cross_source": 0,
         "held_historical_uom_conflict": 0,
+        "held_cross_source_conflict": 0,
         "held_no_safe_evidence": 0,
         "repaired": [],
         "held_conflicts": [],
@@ -596,8 +603,77 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
         upc_id = int(target["upc_id"])
         upc = str(target["ean_upc"])
 
-        # 0a) Exact user-confirmed non-prefix Seafood UOM authority.
-        exact_uom=USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
+        # 0a) Latest user-confirmed Seafood prefix authority. Prefix items are
+        # sold by LB; this remains stronger than packaged-item inference.
+        if _authoritative_seafood_lb_prefix(upc) and _is_current_seafood_upc(cur, upc_id):
+            if _apply_uom(
+                cur,
+                upc_id,
+                "LB",
+                "USER_CONFIRMED_SEAFOOD_PREFIX_LB_V7175",
+            ):
+                result["repaired_authoritative_prefix_lb"] += 1
+                result["repaired"].append({
+                    "upc": upc,
+                    "uom": "LB",
+                    "base_uom": "LB",
+                    "base_qty_per_selling_unit": "1",
+                    "method": "USER_CONFIRMED_SEAFOOD_PREFIX_LB_V7175",
+                    "authority": "SEAFOOD_PREFIX_RULE",
+                })
+                continue
+
+        # 0b) Strong two-source packaged-item authority:
+        #   Article Manual Frozen Pack D/E/G = UPC / pack / Selling Unit
+        #   Monthly PI Frozen E = Base Unit
+        # Run BEFORE the "already has UOM" short-circuit so an existing
+        # selling-only PACK/BX/PAC mapping can be enriched with Base + factor.
+        cross = _safe_frozen_pack_cross_source_mapping(
+            cur,
+            target,
+            upc_rows,
+            monthly_pi_base_rows,
+        )
+        if cross:
+            exact_uom = USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
+            if exact_uom and str(cross["selling_uom"]).upper() != str(exact_uom).upper():
+                result["held_cross_source_conflict"] += 1
+                result["held_conflicts"].append({
+                    "upc": upc,
+                    "rule": cross["rule"],
+                    "reason": "ARTICLE_MANUAL_SELLING_UOM_CONFLICTS_WITH_EXACT_USER_AUTHORITY",
+                    "article_manual_selling_uom": cross["selling_uom"],
+                    "user_confirmed_selling_uom": exact_uom,
+                })
+                continue
+
+            _insert_uom_mapping(
+                cur,
+                upc_id,
+                int(cross["selling_uom_id"]),
+                int(cross["base_uom_id"]),
+                Decimal(str(cross["factor"])),
+                cross["rule"],
+            )
+            result["repaired_source_supported"] += 1
+            result["repaired_frozen_pack_cross_source"] += 1
+            result["repaired"].append({
+                "upc": upc,
+                "uom": cross["selling_uom"],
+                "base_uom": cross["base_uom"],
+                "base_qty_per_selling_unit": str(cross["factor"]),
+                "method": cross["rule"],
+                "conversion_basis": cross["conversion_basis"],
+                "article_manual_pack": cross["article_manual_row"].get("pack"),
+                "article_manual_article": cross["article_manual_row"].get("article"),
+                "monthly_pi_base_evidence": cross["monthly_pi_rows"],
+            })
+            continue
+
+        # 0c) Exact user-confirmed non-prefix Seafood Selling-UOM fallback.
+        # It remains useful when the cross-source base conversion is not yet
+        # available, but it intentionally does not invent a Base UOM/factor.
+        exact_uom = USER_CONFIRMED_EXACT_SEAFOOD_UOM.get(upc)
         if exact_uom and _is_current_seafood_upc(cur, upc_id):
             if _apply_uom(
                 cur,
@@ -611,24 +687,6 @@ def repair_active_28d_uom(cur, batch_id: int) -> dict[str, Any]:
                     "uom": exact_uom,
                     "method": "USER_CONFIRMED_EXACT_SEAFOOD_UOM_V7182",
                     "authority": "EXACT_USER_CONFIRMATION",
-                })
-                continue
-
-        # 0b) Latest user-confirmed Seafood prefix authority. This outranks stale
-        # historical/current UOM observations for CURRENT-ACTIVE Seafood UPCs.
-        if _authoritative_seafood_lb_prefix(upc) and _is_current_seafood_upc(cur, upc_id):
-            if _apply_uom(
-                cur,
-                upc_id,
-                "LB",
-                "USER_CONFIRMED_SEAFOOD_PREFIX_LB_V7175",
-            ):
-                result["repaired_authoritative_prefix_lb"] += 1
-                result["repaired"].append({
-                    "upc": upc,
-                    "uom": "LB",
-                    "method": "USER_CONFIRMED_SEAFOOD_PREFIX_LB_V7175",
-                    "authority": "SEAFOOD_PREFIX_RULE",
                 })
                 continue
 
