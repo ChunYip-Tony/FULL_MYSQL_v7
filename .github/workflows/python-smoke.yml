@@ -173,6 +173,22 @@ jobs:
           curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=30&q=249527&lightweight=false" || true
           echo
 
+      - name: Diagnose current production upload state
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 30 "$base/healthz" || true
+          echo
+          echo "=== ACTIVE ==="
+          curl -fsS --max-time 30 "$base/v1/web-upload/active" || true
+          echo
+          echo "=== RECENT ==="
+          curl -fsS --max-time 60 "$base/v1/web-upload/recent?limit=8" || true
+          echo
+
       - name: Validate Backoffice DOM collection bindings
         run: |
           python - <<'PY'
