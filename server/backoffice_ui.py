@@ -2132,6 +2132,191 @@ BACKOFFICE_HTML = r'''<!doctype html>
     letter-spacing:.08em!important;
   }
 }
+
+/* Desktop Marketplace v2 · structural redesign */
+.workspace{display:contents}
+.desktop-commandbar{display:none}
+.desktop-module-hero,.desktop-overview-hero,.desktop-kpi-row,.desktop-workgrid{display:none}
+
+@media(min-width:760px){
+  body{min-width:1120px}
+  .shell{
+    display:grid!important;
+    grid-template-columns:246px minmax(0,1fr)!important;
+    grid-template-rows:auto!important;
+    align-items:start!important;
+    gap:16px!important;
+    padding:12px 14px 28px!important;
+  }
+  .appbar{
+    grid-column:1!important;
+    grid-row:1!important;
+    height:calc(100vh - 24px)!important;
+    top:12px!important;
+    border-radius:18px!important;
+  }
+  .workspace{
+    grid-column:2!important;
+    grid-row:1!important;
+    min-width:0;
+    display:block;
+  }
+
+  .desktop-commandbar{
+    position:sticky;
+    top:12px;
+    z-index:18;
+    min-height:68px;
+    display:grid;
+    grid-template-columns:minmax(210px,.75fr) minmax(340px,1.35fr) auto;
+    gap:14px;
+    align-items:center;
+    margin-bottom:14px;
+    padding:10px 12px 10px 15px;
+    border:1px solid #dfe6ef;
+    border-radius:16px;
+    background:rgba(255,255,255,.94);
+    box-shadow:0 9px 25px rgba(31,48,74,.07);
+    backdrop-filter:blur(14px);
+  }
+  .desktop-command-copy{min-width:0}
+  .desktop-command-eyebrow{font-size:8px;font-weight:950;letter-spacing:.11em;color:#2c6fc5}
+  .desktop-command-title{font-size:18px;line-height:1.05;font-weight:950;letter-spacing:-.03em;color:#132641;margin-top:2px}
+  .desktop-command-sub{font-size:9px;color:#778499;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .desktop-global-search{
+    min-width:0;height:44px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;
+    padding:4px 5px 4px 12px;border:1px solid #d9e2ee;border-radius:12px;background:#f7f9fc;
+  }
+  .desktop-global-search>span{font-size:19px;color:#6d7f94}
+  .desktop-global-search input{min-width:0;border:0;outline:0;background:transparent;font-size:12px;color:#21344e}
+  .desktop-global-search button{height:34px;border:0;border-radius:9px;padding:0 14px;background:#183b67;color:#fff;font-size:10px;font-weight:900}
+  .desktop-command-meta{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+  .desktop-store-chip,.desktop-version-chip{display:inline-flex;align-items:center;min-height:31px;padding:5px 8px;border:1px solid #e0e6ee;border-radius:9px;background:#fff;font-size:8px;font-weight:900;white-space:nowrap;color:#53647a}
+  .desktop-version-chip{background:#eef5ff;color:#245fb8;border-color:#d4e2f8}
+
+  .view{grid-column:auto!important}
+  .view>.panel{margin-top:0}
+  .desktop-module-hero,.desktop-overview-hero,.desktop-kpi-row,.desktop-workgrid{display:grid}
+
+  .desktop-overview-hero{
+    grid-template-columns:minmax(0,1fr) 210px;
+    gap:22px;
+    min-height:230px;
+    align-items:center;
+    padding:30px 34px;
+    border-radius:24px;
+    color:#fff;
+    background:
+      radial-gradient(circle at 78% 18%,rgba(62,191,208,.28),transparent 24%),
+      radial-gradient(circle at 18% 120%,rgba(47,124,213,.34),transparent 40%),
+      linear-gradient(128deg,#071d37 0%,#0b3151 52%,#0b6070 100%);
+    box-shadow:0 18px 42px rgba(15,39,65,.18);
+    overflow:hidden;
+    position:relative;
+  }
+  .desktop-overview-hero:after{
+    content:"";position:absolute;right:-80px;bottom:-110px;width:420px;height:260px;border-radius:50%;
+    border:30px solid rgba(255,255,255,.045);transform:rotate(-12deg)
+  }
+  .desktop-overview-copy{position:relative;z-index:2;max-width:850px}
+  .desktop-overview-kicker,.desktop-module-kicker{font-size:9px;font-weight:950;letter-spacing:.12em;opacity:.78}
+  .desktop-overview-copy h1{font-size:38px;line-height:1.02;letter-spacing:-.05em;margin:9px 0 10px;max-width:720px}
+  .desktop-overview-copy p{font-size:13px;line-height:1.55;color:rgba(255,255,255,.74);max-width:760px;margin:0}
+  .desktop-overview-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+  .desktop-hero-btn{min-height:38px;border:1px solid rgba(255,255,255,.22);border-radius:10px;padding:8px 13px;background:rgba(255,255,255,.09);color:#fff;font-size:10px;font-weight:900}
+  .desktop-hero-btn.primary{background:#fff;color:#12395a;border-color:#fff}
+  .desktop-overview-seal{
+    position:relative;z-index:2;justify-self:end;width:176px;height:176px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border:1px solid rgba(255,255,255,.16);border-radius:50%;background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 10px rgba(255,255,255,.025)
+  }
+  .desktop-overview-seal span{font-size:54px}.desktop-overview-seal b{font-size:16px;margin-top:3px}.desktop-overview-seal small{font-size:9px;color:rgba(255,255,255,.7);margin-top:4px}
+
+  .desktop-kpi-row{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:12px}
+  .desktop-kpi-card{
+    position:relative;min-height:112px;padding:14px 13px 13px;border:1px solid #e1e7ef;border-radius:16px;background:#fff;
+    box-shadow:0 6px 18px rgba(30,47,70,.05);overflow:hidden
+  }
+  .desktop-kpi-card:before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:#4d77a8}
+  .desktop-kpi-card.blue:before{background:#2f72df}.desktop-kpi-card.green:before{background:#16a36d}.desktop-kpi-card.purple:before{background:#7354d7}.desktop-kpi-card.orange:before{background:#e98925}.desktop-kpi-card.red:before{background:#dd5151}.desktop-kpi-card.cyan:before{background:#0e9da6}
+  .desktop-kpi-card small{display:block;font-size:8px;font-weight:950;letter-spacing:.06em;color:#7b8798}
+  .desktop-kpi-card b{display:block;font-size:26px;line-height:1;margin-top:12px;color:#132740;letter-spacing:-.04em}
+  .desktop-kpi-card span{display:block;font-size:9px;line-height:1.35;color:#788698;margin-top:8px}
+
+  .desktop-workgrid{grid-template-columns:minmax(0,1.45fr) minmax(320px,.55fr);gap:12px;margin-top:12px;align-items:start}
+  .desktop-workcard{border:1px solid #e0e7ef;border-radius:18px;background:#fff;box-shadow:0 7px 22px rgba(31,48,74,.05);overflow:hidden}
+  .desktop-workcard-wide{grid-row:span 2}
+  .desktop-workhead{min-height:62px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border-bottom:1px solid #e8edf3;background:#fbfcfe}
+  .desktop-workhead small{display:block;font-size:8px;font-weight:950;letter-spacing:.09em;color:#8390a1}
+  .desktop-workhead h2{font-size:15px;line-height:1.1;margin:3px 0 0;color:#172b45}
+  .desktop-text-btn{border:0;background:transparent;color:#2768bd;font-size:9px;font-weight:900}
+  .desktop-queue-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0}
+  .desktop-queue-column{min-width:0;border-right:1px solid #e9edf2}.desktop-queue-column:last-child{border-right:0}
+  .desktop-queue-title{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;padding:12px 12px;background:#f8fafc;border-bottom:1px solid #edf1f5}
+  .desktop-queue-title>span{font-size:18px}.desktop-queue-title b{display:block;font-size:11px}.desktop-queue-title small{display:block;font-size:8px;color:#8a96a6;margin-top:2px}
+  .desktop-queue-title button{border:0;border-radius:7px;background:#fff;color:#3467a4;padding:5px 7px;font-size:8px;font-weight:900}
+  .desktop-queue-item{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;min-height:58px;padding:8px 10px;border-bottom:1px solid #edf1f5}
+  .desktop-queue-item:last-child{border-bottom:0}
+  .desktop-queue-icon{width:28px;height:28px;border-radius:8px;background:#edf4fb;display:grid;place-items:center;font-size:12px;font-weight:950;color:#315f98}
+  .desktop-queue-item b{display:block;font-size:10px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .desktop-queue-item span:not(.desktop-queue-icon){display:block;font-size:8px;line-height:1.35;color:#7a8798;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .desktop-queue-item em,.desktop-batch-row em{font-style:normal;font-size:8px;font-weight:950;padding:4px 6px;border-radius:999px;background:#eef3f8;color:#586a80;white-space:nowrap}
+  .desktop-queue-item em.bad,.desktop-batch-row em.bad{background:#ffeded;color:#bc3535}.desktop-queue-item em.warn,.desktop-batch-row em.warn{background:#fff2dd;color:#a6650d}.desktop-queue-item em.good,.desktop-batch-row em.good{background:#e9f7ef;color:#11734f}.desktop-queue-item em.purple{background:#f1edff;color:#6849c3}.desktop-queue-item em.orange{background:#fff0df;color:#b86116}
+  .desktop-queue-empty{padding:22px 12px;color:#8a96a6;font-size:9px;text-align:center}
+
+  .desktop-freshness-board,.desktop-recent-list{padding:7px 12px 10px}
+  .desktop-source-row{display:grid;grid-template-columns:10px minmax(0,1fr);gap:8px;align-items:center;padding:8px 2px;border-bottom:1px solid #eef2f5}.desktop-source-row:last-child{border-bottom:0}
+  .desktop-source-dot{width:8px;height:8px;border-radius:50%;background:#b5c0cb}.desktop-source-dot.good{background:#19a66d}.desktop-source-dot.bad{background:#df5656}
+  .desktop-source-row b{display:block;font-size:10px}.desktop-source-row small{display:block;font-size:8px;color:#7d8998;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .desktop-batch-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:9px 2px;border-bottom:1px solid #eef2f5}.desktop-batch-row:last-child{border-bottom:0}
+  .desktop-batch-row b{display:block;font-size:10px}.desktop-batch-row span{display:block;font-size:8px;color:#7d8998;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  .desktop-module-hero{
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:20px;
+    align-items:center;
+    min-height:150px;
+    margin-bottom:12px;
+    padding:22px 26px;
+    border-radius:20px;
+    color:#fff;
+    box-shadow:0 12px 30px rgba(31,48,74,.12);
+  }
+  .desktop-module-hero h1{font-size:28px;line-height:1.05;letter-spacing:-.04em;margin:7px 0 7px}
+  .desktop-module-hero p{font-size:11px;line-height:1.5;max-width:850px;margin:0;color:rgba(255,255,255,.78)}
+  .desktop-hero-icon{font-size:52px;filter:drop-shadow(0 8px 16px rgba(0,0,0,.13))}
+  .desktop-quick-hero{grid-template-columns:minmax(0,1fr) minmax(360px,.8fr);background:linear-gradient(130deg,#0a3158,#145d83 58%,#178a96)}
+  .desktop-inventory-hero{background:linear-gradient(130deg,#0b4d58,#147b7e)}
+  .desktop-pricing-hero{background:linear-gradient(130deg,#3b2b75,#6544b8 60%,#8660d7)}
+  .desktop-ordering-hero{background:linear-gradient(130deg,#70451c,#bb6820 62%,#de8a31)}
+  .desktop-performance-hero{background:linear-gradient(130deg,#0d5542,#16825d 58%,#29a873)}
+  .desktop-data-hero{background:linear-gradient(130deg,#123957,#176677 60%,#1b8c8f)}
+  .desktop-hero-search{height:52px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;padding:5px;border-radius:13px;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.18)}
+  .desktop-hero-search input{min-width:0;border:0;outline:0;border-radius:9px;padding:0 12px;background:#fff;color:#16304c;font-size:12px}
+  .desktop-hero-search button{border:0;border-radius:9px;padding:0 16px;background:#fff;color:#15476c;font-size:10px;font-weight:950}
+
+  body[data-desktop-view="quick"] #desktopQuickHero{display:grid}
+  body[data-desktop-view="quick"] #desktopInventoryHero{display:none}
+  body[data-desktop-view="inventory"] #desktopQuickHero{display:none}
+  body[data-desktop-view="inventory"] #desktopInventoryHero{display:grid}
+
+  #inventory .panel,#pricing .panel,#ordering .panel,#sales .panel,#database>.panel{border-radius:18px}
+  #inventory .panelhead,#pricing .panelhead,#ordering .panelhead,#sales .panelhead,#database>.panel .panelhead{min-height:66px}
+  body[data-desktop-view="quick"] #inventory .panelhead{display:none}
+  body[data-desktop-view="quick"] #inventory .toolrow{border-top:0}
+  body[data-desktop-view="overview"] .desktop-commandbar{border-color:#cfdceb}
+
+  @media(max-width:1380px){
+    .desktop-kpi-row{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .desktop-workgrid{grid-template-columns:1fr}
+    .desktop-workcard-wide{grid-row:auto}
+    .desktop-commandbar{grid-template-columns:minmax(180px,.65fr) minmax(300px,1fr) auto}
+  }
+}
+@media(max-width:759px){
+  .workspace{display:contents}
+  .desktop-commandbar,.desktop-overview-hero,.desktop-kpi-row,.desktop-workgrid,.desktop-module-hero{display:none!important}
+}
+
 </style>
 </head>
 <body>
@@ -2143,7 +2328,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   </div>
   <form id="searchForm" class="searchbar"><input id="searchInput" placeholder="Search UPC, Article, Family, Item"><button class="btn glass">Search</button></form>
   <nav class="nav" aria-label="Desktop Backoffice main menu">
-    <button class="navbtn on" data-view="quick">🔎 Quick Check</button>
+    <button class="navbtn on" data-view="overview">⌂ Overview</button>
+    <button class="navbtn" data-view="quick">🔎 Quick Check</button>
     <button class="navbtn" data-view="pricing">🏷️ Price Suggestions</button>
     <button class="navbtn" data-view="sales">📊 Performance Report</button>
     <button class="navbtn" data-view="ordering">🛒 Ordering Review</button>
@@ -2151,6 +2337,23 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <button class="navbtn" data-view="database">🗄️ Data & QA</button>
   </nav>
 </header>
+<main class="workspace">
+  <div class="desktop-commandbar" aria-label="Desktop command bar">
+    <div class="desktop-command-copy">
+      <div id="desktopPageEyebrow" class="desktop-command-eyebrow">SEAFOOD OPERATIONS</div>
+      <div id="desktopPageTitle" class="desktop-command-title">Overview</div>
+      <div id="desktopPageSub" class="desktop-command-sub">Store #1032 · Las Vegas</div>
+    </div>
+    <form id="desktopGlobalSearchForm" class="desktop-global-search">
+      <span>⌕</span>
+      <input id="desktopGlobalSearch" type="search" autocomplete="off" placeholder="Search Article #, UPC, family, or item name">
+      <button type="submit">Search</button>
+    </form>
+    <div class="desktop-command-meta">
+      <span class="desktop-store-chip">📍 Store #1032 · Las Vegas</span>
+      <span class="desktop-version-chip">v__VERSION__</span>
+    </div>
+  </div>
 <section id="mobileHome" class="mobilehome" aria-label="Mobile Backoffice Home">
   <div class="m-topbar">
     <div class="m-brand">
@@ -2208,7 +2411,66 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <button type="button" data-mobile-home>⌂<br>Home</button><button type="button" data-mobile-module="quick">⌕<br>Quick</button><button type="button" data-mobile-module="price">$<br>Price</button><button type="button" data-mobile-module="data">▦<br>Data</button>
   </nav>
 </section>
-<section id="inventory" class="view on"><div class="panel">
+
+<section id="overview" class="view on">
+  <div class="desktop-overview-hero">
+    <div class="desktop-overview-copy">
+      <span class="desktop-overview-kicker">FULL MYSQL · SEAFOOD BACKOFFICE</span>
+      <h1>Seafood Operations Command Center</h1>
+      <p>One desktop workspace for pricing, ordering, inventory, PI, QA, data freshness, and daily decision work.</p>
+      <div class="desktop-overview-actions">
+        <button class="desktop-hero-btn primary" type="button" data-go-view="quick">Open Quick Check</button>
+        <button class="desktop-hero-btn" type="button" data-go-view="pricing">Review Prices</button>
+        <button class="desktop-hero-btn" type="button" data-go-view="database" data-go-db="dboverview">Upload / Data Health</button>
+      </div>
+    </div>
+    <div class="desktop-overview-seal">
+      <span>🐟</span>
+      <b>Store #1032</b>
+      <small>Las Vegas · Seafood</small>
+    </div>
+  </div>
+
+  <div id="desktopOverviewError"></div>
+  <div id="desktopOverviewKpis" class="desktop-kpi-row">
+    <div class="desktop-kpi-card"><small>Loading</small><b>—</b><span>Current operational snapshot</span></div>
+  </div>
+
+  <div class="desktop-workgrid">
+    <section class="desktop-workcard desktop-workcard-wide">
+      <div class="desktop-workhead"><div><small>WORK QUEUE</small><h2>What needs attention now</h2></div><span id="desktopWorkQueueStatus" class="pill blue">CHECKING</span></div>
+      <div id="desktopWorkQueues" class="desktop-queue-grid"><div class="loading">Loading operational queues…</div></div>
+    </section>
+
+    <section class="desktop-workcard">
+      <div class="desktop-workhead"><div><small>DATA FRESHNESS</small><h2>Required source status</h2></div><button class="desktop-text-btn" type="button" data-go-view="database" data-go-db="dbdata">Open Data Health →</button></div>
+      <div id="desktopFreshnessBoard" class="desktop-freshness-board"><div class="loading">Loading data health…</div></div>
+    </section>
+
+    <section class="desktop-workcard">
+      <div class="desktop-workhead"><div><small>PROCESSING</small><h2>Recent batches</h2></div><button class="desktop-text-btn" type="button" data-go-view="database" data-go-db="dboverview">Open Uploads →</button></div>
+      <div id="desktopRecentBatches" class="desktop-recent-list"><div class="loading">Loading batches…</div></div>
+    </section>
+  </div>
+</section>
+
+<section id="inventory" class="view">
+  <div id="desktopQuickHero" class="desktop-module-hero desktop-quick-hero">
+    <div>
+      <span class="desktop-module-kicker">QUICK CHECK</span>
+      <h1>Find the item. See the whole operating picture.</h1>
+      <p>Velocity-first results with current price, cost, OH, family relationships, receipts, and 240 / 249 evidence.</p>
+    </div>
+    <form id="desktopQuickSearchForm" class="desktop-hero-search">
+      <input id="desktopQuickSearch" type="search" autocomplete="off" placeholder="Try salmon, 240, 1341, UPC, or article #">
+      <button type="submit">Search</button>
+    </form>
+  </div>
+  <div id="desktopInventoryHero" class="desktop-module-hero desktop-inventory-hero">
+    <div><span class="desktop-module-kicker">INVENTORY / PI</span><h1>Inventory position and physical-count control</h1><p>Review effective family OH, activity, DOS, and True Stock actions without mixing selling-UPC quantity with family movement.</p></div>
+    <div class="desktop-hero-icon">📦</div>
+  </div>
+<div class="panel">
  <div class="panelhead"><div><div class="title">Inventory Ledger</div><div class="sub">Read-only system data. OH / True Stock is the only editable value.</div></div><span class="pill blue">OH WRITE ONLY</span></div>
  <div class="toolrow">
    <div class="filters"><button class="filter invfilter on" data-cat="ALL">All</button><button class="filter invfilter" data-cat="FRESH">Fresh</button><button class="filter invfilter" data-cat="LIVE">Live</button><button class="filter invfilter" data-cat="FROZEN">Frozen</button></div>
@@ -2225,13 +2487,16 @@ BACKOFFICE_HTML = r'''<!doctype html>
 
 
 
-<section id="ordering" class="view"><div class="panel">
+<section id="ordering" class="view">
+<div class="desktop-module-hero desktop-ordering-hero"><div><span class="desktop-module-kicker">REPLENISHMENT</span><h1>Ordering Review</h1><p>Family / receiving-article planning with cadence, latest receipt evidence, coverage, and coming-delivery suggestions.</p></div><div class="desktop-hero-icon">🛒</div></div>
+<div class="panel">
  <div class="panelhead"><div><div class="title">Ordering Overview</div><div class="sub">Receiving / Ordering Article + Family Article decision level. Selling UPCs appear only inside Details.</div></div><span class="pill blue">READ ONLY</span></div>
  <div class="toolrow"><div class="filters"><button class="filter ordfilter on" data-filter="ALL">All</button><button class="filter ordfilter" data-filter="FRESH">Fresh</button><button class="filter ordfilter" data-filter="FROZEN">Frozen</button><button class="filter ordfilter" data-filter="ATTENTION">Needs Attention</button></div><div class="tools"><select id="orderSort" class="select"><option value="suggested">Highest Suggested Qty</option><option value="receipt">Most Recent Receipt</option><option value="oh">Lowest OH</option><option value="frequency">Ordering Frequency</option><option value="family">Family A → Z</option></select><span id="orderCount" class="pill sea">—</span></div></div>
  <div id="orderError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Family Name</th><th>Receiving Article</th><th>Family Article</th><th>OH</th><th>Last Receipt Date</th><th>Last Receipt Qty · Base UOM</th><th>Ordering Frequency</th><th>Coming Delivery Qty Suggestion</th><th></th></tr></thead><tbody id="orderRows"></tbody></table></div>
 </div></section>
 
 <section id="sales" class="view">
+<div class="desktop-module-hero desktop-performance-hero"><div><span class="desktop-module-kicker">PERFORMANCE</span><h1>Seafood Performance Report</h1><p>Completed canonical dates only. Analyze sales, GP$, GP%, velocity, average sold price, and top item contribution.</p></div><div class="desktop-hero-icon">📈</div></div>
 <div class="panel">
  <div class="panelhead"><div><div class="title">Performance</div><div class="sub">All Seafood together. Select completed canonical dates, then sort the item-level analysis.</div></div><span class="pill blue">RANGE ANALYSIS</span></div>
  <div class="toolrow">
@@ -2257,6 +2522,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </section>
 
 <section id="pricing" class="view">
+<div class="desktop-module-hero desktop-pricing-hero"><div><span class="desktop-module-kicker">PRICING CONTROL</span><h1>Price Suggestions</h1><p>Actionable pricing work ranked by 240 / 249 mismatches, GP$/day opportunity, OH / DOH risk, and supported sales evidence.</p></div><div class="desktop-hero-icon">🏷️</div></div>
 <div class="panel">
  <div class="panelhead"><div><div class="title">Pricing Review</div><div class="sub">Explainable price suggestions. Accepted records your decision only; change the actual price on the other computer.</div></div><span class="pill blue">REVIEW / ACCEPT</span></div>
  <div class="toolrow">
@@ -2288,6 +2554,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 </section>
 
 <section id="database" class="view">
+  <div class="desktop-module-hero desktop-data-hero"><div><span class="desktop-module-kicker">DATA OPERATIONS</span><h1>Uploads, Data Health & QA</h1><p>Run the daily ingest workflow, see source freshness, inspect batch processing, and resolve controlled QA holds.</p></div><div class="desktop-hero-icon">🗄️</div></div>
   <div class="panel">
     <div class="panelhead">
       <div><div class="title">Database Center</div><div class="sub">Upload, current processing, latest result, history, QA, and Data Health.</div></div>
@@ -2363,6 +2630,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div id="dataEvents" class="batchgrid" style="display:none"></div>
   </div></div>
 </section>
+</main>
 
 <div id="drawerBack" class="drawerback"></div><aside id="drawer" class="drawer"><div class="drawerhead"><div><div id="drawerTitle" class="drawertitle">Details</div><div id="drawerSub" class="drawersub"></div></div><button id="drawerClose" class="btn small">Close</button></div><div id="drawerBody" class="drawerbody"></div><div id="drawerFoot" class="drawerfoot"></div></aside>
 <div id="toast" class="toast"></div>
@@ -2433,9 +2701,9 @@ const DB_TAB_HASH={dboverview:'home',dbdata:'health',dbqa:'qa'};
 const HASH_DB_TAB={home:'dboverview',overview:'dboverview',upload:'dboverview',processing:'dboverview',qa:'dbqa',health:'dbdata'};
 function routeFromHash(){
   const raw=decodeURIComponent((location.hash||'').replace(/^#/,'').trim().toLowerCase());
-  if(!raw)return {view:'quick',dbTab:null};
+  if(!raw)return {view:'overview',dbTab:null};
   const [view,sub]=raw.split('/');
-  if(['quick','inventory','sales','ordering','pricing'].includes(view))return {view,dbTab:null};
+  if(['overview','quick','inventory','sales','ordering','pricing'].includes(view))return {view,dbTab:null};
   if(view==='database')return {view:'database',dbTab:HASH_DB_TAB[sub]||'dboverview'};
   return {view:'quick',dbTab:null};
 }
@@ -2449,9 +2717,24 @@ function syncRouteHash(view,dbTab=null,{replace=false}={}){
   if(replace)history.replaceState(null,'',next);
   else history.pushState(null,'',next);
 }
+const DESKTOP_PAGE_META={
+  overview:['SEAFOOD OPERATIONS','Overview','Daily command center · Store #1032 · Las Vegas'],
+  quick:['PRODUCT INTELLIGENCE','Quick Check','Search, validate, and act from one item workspace'],
+  pricing:['PRICING CONTROL','Price Suggestions','Prioritized pricing actions and supported evidence'],
+  sales:['PERFORMANCE','Performance Report','Completed-day sales and gross-profit analysis'],
+  ordering:['REPLENISHMENT','Ordering Review','Family / receiving-article coverage planning'],
+  inventory:['INVENTORY CONTROL','Inventory / PI','Effective OH, physical count, DOS, and discrepancies'],
+  database:['DATA OPERATIONS','Data & QA','Uploads, processing, freshness, and controlled QA']
+};
+function desktopSetCommandBar(view){
+  const m=DESKTOP_PAGE_META[view]||DESKTOP_PAGE_META.overview;
+  const e=$('#desktopPageEyebrow'),t=$('#desktopPageTitle'),s=$('#desktopPageSub');
+  if(e)e.textContent=m[0];if(t)t.textContent=m[1];if(s)s.textContent=m[2];
+}
 function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
   const actualView=view==='quick'?'inventory':view;
   document.body.dataset.desktopView=view;
+  desktopSetCommandBar(view);
   document.querySelectorAll('.view').forEach(x=>x.classList.toggle('on',x.id===actualView));
   document.querySelectorAll('.navbtn').forEach(x=>x.classList.toggle('on',x.dataset.view===view));
   const invTitle=document.querySelector('#inventory .title');
@@ -2460,6 +2743,7 @@ function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
   if(invSub)invSub.textContent=view==='quick'
     ?'Search Article #, UPC, Family or item. Results stay velocity-first; details open in the right-side workspace.'
     :'Review effective OH, selling activity and PI evidence. True Stock / OH remains the only editable inventory value.';
+  if(actualView==='overview')loadDesktopOverview();
   if(actualView==='inventory')loadInventory();
   if(actualView==='sales')loadSell();
   if(actualView==='ordering')loadOrders();
@@ -4072,6 +4356,91 @@ function closeDrawerUser(){
 }
 $('#drawerClose').onclick=closeDrawerUser;$('#drawerBack').onclick=closeDrawerUser;
 
+function desktopSeverityRank(v){
+  const s=String(v||'').toUpperCase();
+  return s==='CRITICAL'?4:s==='HIGH'?3:s==='MEDIUM'?2:s==='LOW'?1:0;
+}
+function desktopQueueItem(icon,title,meta,badge,badgeClass=''){
+  return '<div class="desktop-queue-item"><span class="desktop-queue-icon">'+icon+'</span><div><b>'+esc(title||'—')+'</b><span>'+esc(meta||'')+'</span></div>'+(badge?'<em class="'+esc(badgeClass)+'">'+esc(badge)+'</em>':'')+'</div>';
+}
+function desktopLatestSource(d,key,label){
+  const x=(d?.latest||{})[key]||{};
+  const cls=x.date?'good':'bad';
+  return '<div class="desktop-source-row"><span class="desktop-source-dot '+cls+'"></span><div><b>'+esc(label)+'</b><small>'+esc(x.date||'Missing')+(x.file?' · '+esc(x.file):'')+'</small></div></div>';
+}
+function desktopBatchRow(b){
+  const status=String(b?.phase3_status||b?.processing_status||b?.status||'—');
+  const bad=/HOLD|FAIL|ERROR|BLOCK/i.test(status);
+  const good=/READY|COMPLETE|PASS/i.test(status);
+  return '<div class="desktop-batch-row"><div><b>Batch #'+esc(b?.batch_id||'—')+'</b><span>'+esc(b?.batch_label||b?.original_filename||'Recent processing')+'</span></div><em class="'+(bad?'bad':good?'good':'warn')+'">'+esc(status)+'</em></div>';
+}
+async function loadDesktopOverview(){
+  if(isMobileBackoffice())return;
+  const err=$('#desktopOverviewError');if(err)err.innerHTML='';
+  $('#desktopWorkQueueStatus').textContent='CHECKING';
+  const calls=[
+    api('/healthz',{timeoutMs:12000}),
+    api('/v1/backoffice/inventory?category=ALL&limit=300&lightweight=true',{timeoutMs:25000}),
+    api('/v1/backoffice/pricing-review?category=ALL&limit=1000',{timeoutMs:30000}),
+    api('/v1/backoffice/ordering-review?category=FRESH',{timeoutMs:30000}),
+    api('/v1/backoffice/ordering-review?category=FROZEN',{timeoutMs:30000}),
+    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:25000}),
+    api('/v1/backoffice/data-health?days=14',{timeoutMs:25000}),
+    api('/v1/web-upload/active',{timeoutMs:20000}),
+    api('/v1/web-upload/recent?limit=5',{timeoutMs:20000})
+  ];
+  const r=await Promise.allSettled(calls);
+  const val=i=>r[i].status==='fulfilled'?r[i].value:null;
+  const h=val(0)||{},inv=val(1)||{},price=val(2)||{},of=val(3)||{},oz=val(4)||{},qa=val(5)||{},dh=val(6)||{},active=val(7)||{},recent=val(8)||{};
+  const inventory=inv.rows||[];
+  const priceRows=price.rows||[];
+  const orderRows=[...(of.rows||[]),...(oz.rows||[])];
+  const qaRows=qa.issues||[];
+  const positiveOh=inventory.filter(x=>Number(x.family_oh||0)>0).length;
+  const sold7=inventory.filter(x=>Number(x.qty_7d||0)>0).length;
+  const actionable=priceRows.filter(x=>String(x.review_status||'').toUpperCase()==='ACTIONABLE'||x.priority_240_249_mismatch).length;
+  const orderAttention=orderRows.filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).length;
+  const completedDays=(dh.rows||[]).filter(x=>String(x.overall_status||'').toUpperCase()==='COMPLETE').length;
+  const highQa=qaRows.filter(x=>desktopSeverityRank(x.severity)>=3).length;
+  $('#desktopOverviewKpis').innerHTML=
+    '<div class="desktop-kpi-card blue"><small>ACTIVE / LOADED ITEMS</small><b>'+fmt(inventory.length,0)+'</b><span>'+fmt(sold7,0)+' sold in latest 7D evidence</span></div>'+
+    '<div class="desktop-kpi-card green"><small>POSITIVE FAMILY OH</small><b>'+fmt(positiveOh,0)+'</b><span>Items with current positive OH</span></div>'+
+    '<div class="desktop-kpi-card purple"><small>PRICE ACTIONS</small><b>'+fmt(actionable,0)+'</b><span>Actionable or 240 / 249 priority</span></div>'+
+    '<div class="desktop-kpi-card orange"><small>ORDERING ATTENTION</small><b>'+fmt(orderAttention,0)+'</b><span>Suggested or attention families</span></div>'+
+    '<div class="desktop-kpi-card red"><small>OPEN QA</small><b>'+fmt(qaRows.length,0)+'</b><span>'+fmt(highQa,0)+' high / critical</span></div>'+
+    '<div class="desktop-kpi-card cyan"><small>COMPLETE DATA DAYS</small><b>'+fmt(completedDays,0)+'/14</b><span>POS + MVT canonical completeness</span></div>';
+
+  const urgentPrice=[...priceRows].sort((a,b)=>Number(Boolean(b.priority_240_249_mismatch))-Number(Boolean(a.priority_240_249_mismatch))||Number(b.urgency_score||0)-Number(a.urgency_score||0)).slice(0,4);
+  const urgentOrder=[...orderRows].filter(x=>x.attention||Number(x.suggested_delivery_qty||0)>0).sort((a,b)=>Number(b.suggested_delivery_qty||0)-Number(a.suggested_delivery_qty||0)).slice(0,4);
+  const urgentQa=[...qaRows].sort((a,b)=>desktopSeverityRank(b.severity)-desktopSeverityRank(a.severity)||Number(b.oh||0)-Number(a.oh||0)).slice(0,4);
+
+  $('#desktopWorkQueues').innerHTML=
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><span>🏷️</span><div><b>Pricing</b><small>'+fmt(actionable,0)+' actions</small></div><button data-go-view="pricing">Open</button></div>'+
+      (urgentPrice.map(x=>desktopQueueItem('＄',x.name||x.upc,(x.upc||'')+' · '+(x.primary_reason_text||x.review_status||''),x.priority_240_249_mismatch?'240≠249':money(x.candidate_price),x.priority_240_249_mismatch?'bad':'purple')).join('')||'<div class="desktop-queue-empty">No price actions.</div>')+'</div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><span>🛒</span><div><b>Ordering</b><small>'+fmt(orderAttention,0)+' families</small></div><button data-go-view="ordering">Open</button></div>'+
+      (urgentOrder.map(x=>desktopQueueItem('→',x.family_name||x.family_article,(x.receiving_article||'')+' · OH '+fmt(x.oh)+' '+(x.oh_uom||''),fmt(x.suggested_delivery_qty)+' '+(x.suggested_delivery_uom||''),'orange')).join('')||'<div class="desktop-queue-empty">No order attention.</div>')+'</div>'+
+    '<div class="desktop-queue-column"><div class="desktop-queue-title"><span>🧩</span><div><b>QA</b><small>'+fmt(qaRows.length,0)+' open</small></div><button data-go-view="database" data-go-db="dbqa">Open</button></div>'+
+      (urgentQa.map(x=>desktopQueueItem('!',x.item_name||x.name||x.ean_upc||x.article_number,x.issue_code||x.reason||x.issue_type||'',String(x.severity||'REVIEW'),desktopSeverityRank(x.severity)>=3?'bad':'warn')).join('')||'<div class="desktop-queue-empty">No open QA issues.</div>')+'</div>';
+
+  $('#desktopFreshnessBoard').innerHTML=
+    desktopLatestSource(dh,'POS','POS Sales')+
+    desktopLatestSource(dh,'MVT','Movement (MVT)')+
+    desktopLatestSource(dh,'PRICE','Price List')+
+    desktopLatestSource(dh,'OH','OH Report')+
+    desktopLatestSource(dh,'LIVE_FRESH','Live / Fresh')+
+    desktopLatestSource(dh,'FROZEN','Frozen');
+
+  const current=active.active_batch;
+  const batches=[...(current?[{...current,batch_label:'Current processing'}]:[]),...(recent.batches||[])].slice(0,6);
+  $('#desktopRecentBatches').innerHTML=batches.map(desktopBatchRow).join('')||'<div class="desktop-queue-empty">No recent batches.</div>';
+  const workStatus=$('#desktopWorkQueueStatus');
+  const attention=actionable+orderAttention+qaRows.length;
+  workStatus.textContent=attention?fmt(attention,0)+' ITEMS':'CLEAR';
+  workStatus.className='pill '+(highQa?'red':attention?'amber':'green');
+
+  const failed=r.filter(x=>x.status==='rejected').length;
+  if(failed&&err)err.innerHTML='<div class="calc"><b>Overview partially loaded.</b> '+failed+' source request(s) did not respond; module pages remain available.</div>';
+}
 async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').textContent=h.ok?'SERVICE READY':'SERVICE ISSUE';$('#readyPill').style.color=h.ok?'#bff3d2':'#ffd0c8'}catch(e){$('#readyPill').textContent='SERVICE ERROR'}}
 async function loadInventory(){
  const requestSeq=++inventoryLoadSeq;
@@ -5135,7 +5504,26 @@ function openDataHealthDetail(dateKey){
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
 
-$('#searchForm').onsubmit=e=>{e.preventDefault();state.inventorySearch=$('#searchInput').value.trim();state.invCat='ALL';document.querySelectorAll('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));show('quick')};
+function desktopGo(view,dbTab=null){
+  if(view==='database')show('database',{dbTab:dbTab||'dboverview'});
+  else show(view);
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-go-view]');if(!b)return;
+  e.preventDefault();desktopGo(b.dataset.goView,b.dataset.goDb||null);
+});
+function desktopSubmitSearch(value){
+  const q=String(value||'').trim();
+  state.inventorySearch=q;state.invCat='ALL';
+  $('#searchInput').value=q;
+  const qi=$('#desktopQuickSearch');if(qi)qi.value=q;
+  const gi=$('#desktopGlobalSearch');if(gi)gi.value=q;
+  document.querySelectorAll('.invfilter').forEach(x=>x.classList.toggle('on',x.dataset.cat==='ALL'));
+  show('quick');
+}
+$('#searchForm').onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#searchInput').value)};
+const dg=$('#desktopGlobalSearchForm');if(dg)dg.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopGlobalSearch').value)};
+const dq=$('#desktopQuickSearchForm');if(dq)dq.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopQuickSearch').value)};
 async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else restoreRoute({replaceMissing:true});setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000)}boot();
 })();
 </script>
