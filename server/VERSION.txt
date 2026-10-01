@@ -1,3 +1,10 @@
+v7.0.308 Completed Batch Status Card Fix:
+- Latest Completed Batch no longer reuses the active-run progress renderer.
+- Completed batches show their actual Phase 3 status, terminal Run ID, batch blockers, QC READY count, QC HOLD count, and completion timestamp.
+- The false STARTING label and false Open Issues = 0 display are removed from completed batches.
+- QA_HOLD batches warn that unresolved blockers must be fixed before another rebuild; rebuild alone does not clear identity/data blockers.
+Version: 7.0.308 Single-Service Edition
+
 v7.0.307 Batch 22 Retail-Barcode Alias Repair:
 - Phase 3 UOM repair now reuses deterministic UPC-A/EAN check-digit aliases when POS stores a shortened Seafood UPC and Article Manual stores the authoritative retail barcode.
 - Alias matching is blocked when the longer candidate already exists as a different ACTIVE selling UPC, preventing double mapping or double counting.

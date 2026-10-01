@@ -5225,7 +5225,13 @@ function rebuildActionHtml(b,compact=false){
   if(active){
     return `<div style="${compact?'margin-top:8px':'margin-top:10px'}"><div class="calc" style="margin:0"><b>Phase 3 rebuild active</b> · Run #${esc(active.active_pipeline_run_id||'—')} · ${esc(active.active_run_status||'ACTIVE')}</div><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn primary" disabled>⏳ Rebuild Active</button></div></div>`;
   }
-  return `<div style="${compact?'margin-top:8px':'margin-top:10px'};display:flex;justify-content:flex-end"><button class="btn primary batch-rebuild-btn" data-batch="${esc(b.batch_id)}">🔄 Rebuild Phase 3 / QA</button></div>`;
+  const q=b?.qa_summary?.phase3||{};
+  const blockerRaw=b?.phase3_blockers ?? q.blocking_issue_count;
+  const blockers=Number.isFinite(Number(blockerRaw))?Number(blockerRaw):0;
+  const warning=blockers>0
+    ? `<div class="calc" style="${compact?'margin-top:8px':'margin-top:10px'}"><b>${fmt(blockers,0)} batch blocker${blockers===1?'':'s'} remain.</b> Fix the underlying QA mapping/data issue first. Rebuild only recalculates with the current rules; it does not clear unresolved blockers by itself.</div>`
+    : '';
+  return warning+`<div style="${compact?'margin-top:8px':'margin-top:10px'};display:flex;justify-content:flex-end"><button class="btn primary batch-rebuild-btn" data-batch="${esc(b.batch_id)}">${blockers>0?'🔄 Rebuild After QA Fixes':'🔄 Rebuild Phase 3 / QA'}</button></div>`;
 }
 function wireRecoveryButtons(root=document){
   root.querySelectorAll('.batch-resume-btn').forEach(btn=>{
@@ -5347,7 +5353,25 @@ async function rebuildPhase3(id){
 }
 function activeCard(a){
   if(!a)return '<div class="empty">No active batch.</div>';
-  const id=a.batch_id||a.id||'—',runStatus=a.active_run_status||null,status=runStatus||a.processing_status||a.status||'PROCESSING';
+  const id=a.batch_id||a.id||'—';
+  const runStatus=String(a.active_run_status||'').toUpperCase();
+  const activeRun=Boolean(a.active_pipeline_run_id)&&['QUEUED','STARTED','PAUSE_REQUESTED'].includes(runStatus);
+  if(!activeRun){
+    const q=a?.qa_summary||{},p3=q.phase3||{};
+    const status=a.phase3_status||a.processing_status||a.status||'COMPLETED';
+    const runId=a?.pipeline_run?.pipeline_run_id||a.pipeline_run_id||'—';
+    const blockerRaw=a.phase3_blockers ?? p3.blocking_issue_count;
+    const readyRaw=a.quick_check_ready_rows ?? p3.quick_check_ready_rows;
+    const holdRaw=a.quick_check_hold_rows ?? p3.quick_check_hold_rows;
+    const blockers=Number.isFinite(Number(blockerRaw))?Number(blockerRaw):0;
+    const ready=Number.isFinite(Number(readyRaw))?Number(readyRaw):0;
+    const hold=Number.isFinite(Number(holdRaw))?Number(holdRaw):0;
+    const completed=a.completed_at?' · Completed '+esc(a.completed_at):'';
+    return '<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #'+esc(id)+'</div><div class="meta">'+esc(a.batch_label||'Completed batch')+'</div></div>'+pill(status)+'</div>'+
+      '<div class="batchmeta"><div><small>Files</small><b>'+fmt(a.file_count,0)+'</b></div><div><small>Run</small><b>'+esc(runId)+'</b></div><div><small>Blockers</small><b>'+fmt(blockers,0)+'</b></div></div>'+
+      '<div class="meta" style="margin-top:7px"><b>'+fmt(ready,0)+' READY · '+fmt(hold,0)+' HOLD</b>'+completed+'</div></div>';
+  }
+  const status=runStatus||a.processing_status||a.status||'PROCESSING';
   const p=phase3ProgressState(a);
   const progress=p.hasRowProgress
     ? '<div style="margin-top:8px"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+fmt(p.rowCurrent,0)+' / '+fmt(p.rowTotal,0)+' UPC</b><b>'+fmt(p.pct,1)+'%</b></div><div class="progress" style="height:8px;margin:5px 0"><span style="width:'+p.pct+'%"></span></div><div class="meta">'+esc(p.currentUpc||p.stageLabel)+(p.speed?' · '+fmt(p.speed,2)+' rows/s':'')+(p.eta!==null?' · ETA '+compactDuration(p.eta):'')+'</div></div>'

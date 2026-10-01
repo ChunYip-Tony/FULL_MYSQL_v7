@@ -204,6 +204,11 @@ jobs:
               text,
           )
           assert not bad, f"Single-element $() used as collection: {bad}"
+          assert "const activeRun=Boolean(a.active_pipeline_run_id)" in text
+          assert "<small>Blockers</small>" in text
+          assert "READY · '+fmt(hold,0)+' HOLD" in text
+          assert "Rebuild After QA Fixes" in text
+          assert "does not clear unresolved blockers by itself" in text
           print('backoffice-dom-bindings=PASS')
           PY
 
