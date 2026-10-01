@@ -2880,15 +2880,22 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
     live_issue_counts: dict[str, int] = defaultdict(int)
     total_rows = len(products)
     progress_started = time.monotonic()
+    progress_last_emit = {'at': progress_started}
 
     def report_row_progress(current: int, p: dict[str, Any] | None = None, *, force: bool = False):
         if not progress:
             return
-        # Keep progress writes cheap: exact row count, emitted every 25 rows,
-        # plus start/final events. The worker stores this in pipeline_run detail.
-        if not force and current % 25 != 0:
+        # Exact progress without flooding MySQL: emit at least every 10 rows,
+        # or every ~3 seconds when rows are slow, plus start/final events.
+        now = time.monotonic()
+        if (
+            not force
+            and current % 10 != 0
+            and (now - progress_last_emit['at']) < 3.0
+        ):
             return
-        elapsed = max(0.001, time.monotonic() - progress_started)
+        progress_last_emit['at'] = now
+        elapsed = max(0.001, now - progress_started)
         speed = (Decimal(current) / Decimal(str(elapsed))) if current > 0 else Decimal('0')
         remaining = max(0, total_rows - current)
         eta = (Decimal(remaining) / speed) if speed > 0 else None
