@@ -912,10 +912,16 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
             base_uom = (_text(p.get(base_uom_col)) or '').upper() or None
             amount = _num(p.get(amount_col))
             sales_value = _num(p.get(sales_value_col))
+            # Prefer the explicit SAP Material/Article Document value, but
+            # fall back per-row to Reference when the document column exists
+            # yet is blank. Some MVT exports include both headers but only
+            # populate Reference with the GR/material-document number.
             art_doc = (
                 _text(p.get(article_doc_col))
-                if article_doc_col else _text(p.get(reference_col))
+                if article_doc_col else None
             )
+            if not art_doc:
+                art_doc = _text(p.get(reference_col))
             po = _text(p.get(po_col))
             vendor = _text(p.get(vendor_col))
             cur.execute(
@@ -924,7 +930,22 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
                     movement_type,posting_date,entry_quantity,entry_uom_code,base_quantity,base_uom_code,
                     amount_local_currency,sales_value,article_document,purchase_order,vendor_code,cost_center)
                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                   ON DUPLICATE KEY UPDATE article_id=VALUES(article_id),family_id=VALUES(family_id)""",
+                   ON DUPLICATE KEY UPDATE
+                       article_id=VALUES(article_id),
+                       family_id=VALUES(family_id),
+                       description=VALUES(description),
+                       movement_type=VALUES(movement_type),
+                       posting_date=VALUES(posting_date),
+                       entry_quantity=VALUES(entry_quantity),
+                       entry_uom_code=VALUES(entry_uom_code),
+                       base_quantity=VALUES(base_quantity),
+                       base_uom_code=VALUES(base_uom_code),
+                       amount_local_currency=VALUES(amount_local_currency),
+                       sales_value=VALUES(sales_value),
+                       article_document=VALUES(article_document),
+                       purchase_order=VALUES(purchase_order),
+                       vendor_code=VALUES(vendor_code),
+                       cost_center=VALUES(cost_center)""",
                 (batch_id, f['file_id'], sh['sheet_id'], rr['raw_id'], rr['source_row_number'], article_num, article_id, family_id,
                  desc, mvt, posting, entry_qty, entry_uom, base_qty, base_uom, amount, sales_value, art_doc, po, vendor, cost_center),
             )
