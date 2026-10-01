@@ -1136,7 +1136,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V12_ROSTER_OH_BEST_AVAILABLE",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V13_FAMILY_BASE_UOM",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_delivery_weekday": (
@@ -1197,7 +1197,7 @@ def _ordering_review_cache_key(
     # Cache schema V8: GR semantics changed to validated 5014-only receipt docs.
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
-    return f"V12_ROSTER_OH_BEST_AVAILABLE|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+    return f"V13_FAMILY_BASE_UOM_DEMAND|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -1340,7 +1340,7 @@ def cached_ordering_review(
     if cached is None and already_refreshing:
         expected_now=completed_through_date()
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V12_ASYNC_ROSTER_OH_BEST_AVAILABLE",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V13_ASYNC_FAMILY_BASE_UOM",
             "category":cat,
             "selected_delivery_date":delivery_date,
             "selected_delivery_weekday":[
@@ -1401,7 +1401,7 @@ def cached_ordering_review(
         has_rows=bool(cached.get("rows"))
         return {
             **cached,
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V12_ASYNC_ROSTER_OH_BEST_AVAILABLE",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V13_ASYNC_FAMILY_BASE_UOM",
             "analysis_status":(
                 "READY_STALE_ESTIMATE_REFRESHING"
                 if has_rows else
@@ -1417,7 +1417,7 @@ def cached_ordering_review(
     # in the standard Back Office path.
     if cached is None or not data_current:
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V12_ASYNC_ROSTER_OH_BEST_AVAILABLE",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V13_ASYNC_FAMILY_BASE_UOM",
             "category":cat,
             "selected_delivery_date":delivery_date,
             "selected_delivery_weekday":[
@@ -1443,7 +1443,7 @@ def cached_ordering_review(
 
     return {
         **cached,
-        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V12_ASYNC_ROSTER_OH_BEST_AVAILABLE",
+        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V13_ASYNC_FAMILY_BASE_UOM",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
         "refresh_error":err,
