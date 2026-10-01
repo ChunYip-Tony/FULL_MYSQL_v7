@@ -20,11 +20,11 @@ jobs:
           set -euo pipefail
           curl -fsS --max-time 30 https://seal-app-tkkkd.ondigitalocean.app/healthz
           echo
-      - name: 249528 actual raw POS evidence
+      - name: 249527 actual raw POS evidence
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 120 'https://seal-app-tkkkd.ondigitalocean.app/v1/web-upload/diagnostics/249-source-evidence?upc=24952800000'
+          curl -fsS --max-time 120 'https://seal-app-tkkkd.ondigitalocean.app/v1/web-upload/diagnostics/249-source-evidence?upc=24952700000'
           echo
       - name: Current lineage audit
         shell: bash
@@ -32,9 +32,9 @@ jobs:
           set -euo pipefail
           curl -fsS --max-time 120 'https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/lineage-audit'
           echo
-      - name: Current 249528 serving state
+      - name: Current 249527 serving state
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS --max-time 60 'https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=30&q=249528&lightweight=false'
+          curl -fsS --max-time 60 'https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=30&q=249527&lightweight=false'
           echo

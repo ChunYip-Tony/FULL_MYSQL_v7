@@ -539,3 +539,117 @@ jobs:
           echo
           curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240533&lightweight=true"
           echo
+
+      - name: Diagnose 249527 production POS lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          echo "=== HEALTH ==="
+          curl -fsS --max-time 30 "$base/healthz"
+          echo
+          echo "=== 249527 SOURCE EVIDENCE ==="
+          curl -fsS --max-time 120 "$base/v1/web-upload/diagnostics/249-source-evidence?upc=24952700000" || true
+          echo
+          echo "=== 249527 CURRENT SERVING ==="
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=249527&lightweight=false"
+          echo
+          echo "=== 240527 CURRENT SERVING ==="
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=240527&lightweight=false"
+          echo
+
+      - name: Rebuild Phase 3 on deployed v7.0.299 and verify 249527
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+
+          health="$(curl -fsS --max-time 30 "$base/healthz")"
+          echo "$health"
+          HEALTH="$health" python - <<'PY'
+          import json, os
+          p=json.loads(os.environ['HEALTH'])
+          assert p.get('version')=='7.0.299-single-service', p
+          assert p.get('worker_version')=='7.0.299-single-service', p
+          assert p.get('worker_ready') is True, p
+          PY
+
+          curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+          cat /tmp/active.json
+          active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json',encoding='utf-8'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+          if [ "$active" != "0" ]; then
+            echo "UPLOAD_PIPELINE_BUSY"
+            exit 1
+          fi
+
+          curl -fsS --max-time 30 "$base/v1/web-upload/recent?limit=30" -o /tmp/recent.json
+          cat /tmp/recent.json
+          batch_id="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/recent.json',encoding='utf-8'))
+          allowed={'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS','COMPLETED','READY','PHASE3_QA_HOLD'}
+          rows=p.get('batches') or []
+          row=next((x for x in rows if str(x.get('phase3_status') or '').upper() in allowed
+                    or str(x.get('processing_status') or '').upper() in allowed),None)
+          if not row:
+              raise SystemExit('NO_REBUILDABLE_BATCH')
+          print(int(row['batch_id']))
+          PY
+          )"
+          echo "REBUILD_BATCH_ID=$batch_id"
+
+          curl -fsS --max-time 60 -X POST "$base/v1/web-upload/batches/$batch_id/rebuild-phase3" -o /tmp/rebuild.json
+          cat /tmp/rebuild.json
+          read -r run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json',encoding='utf-8'))
+          if p.get('version_fence_pass') is not True:
+              raise SystemExit('VERSION_FENCE_FAIL')
+          print(p.get('pipeline_run_id') or '',p.get('session_id') or '')
+          PY
+          )
+          test -n "$run_id"
+          test -n "$session_id"
+
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$session_id" -o /tmp/session.json
+            state="$(RUN_ID="$run_id" python - <<'PY'
+          import json,os
+          rid=int(os.environ['RUN_ID'])
+          p=json.load(open('/tmp/session.json',encoding='utf-8'))
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid),None)
+          if not run:
+              print('MISSING')
+          else:
+              print(str(run.get('processing_status') or ''))
+          PY
+          )"
+            echo "REBUILD_STATE=$state"
+            case "$state" in
+              COMPLETED) break ;;
+              QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED)
+                cat /tmp/session.json
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+
+          curl -fsS --max-time 90 "$base/v1/backoffice/inventory?category=ALL&limit=50&q=249527&lightweight=false" -o /tmp/post.json
+          cat /tmp/post.json
+          python - <<'PY'
+          import json
+          from decimal import Decimal
+          p=json.load(open('/tmp/post.json',encoding='utf-8'))
+          row=next((r for r in (p.get('rows') or []) if str(r.get('upc') or '')=='24952700000'),None)
+          if not row:
+              raise SystemExit('249527_NOT_RETURNED')
+          print('POST_REBUILD_249527_QTY_7D='+str(row.get('qty_7d')))
+          print('POST_REBUILD_249527_READINESS='+str(row.get('readiness')))
+          PY
+
