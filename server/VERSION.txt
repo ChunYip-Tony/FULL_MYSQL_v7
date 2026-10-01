@@ -1,3 +1,10 @@
+v7.0.341 101 GR Required:
+- Corrects Yipman receipt trace semantics: movement 101 is a physical GR and must have a 5014... GR/material-document number.
+- Removes the temporary "101 RECEIPT" fallback label. Missing 101 GR now shows as GR UNRESOLVED and is treated as a data defect.
+- Receipt audit now resolves GR from normalized article_document, raw Reference Q, or any raw MVT cell and reports direct 101 rows missing GR.
+- Yipman shell cache advanced to v341.
+Version: 7.0.341 Single-Service Edition
+
 v7.0.340 Yipman Physical Receipt Trace Clarity:
 - Direct 101 receipts now display as "101 RECEIPT" instead of "GR —".
 - 107+109 blocked-stock deliveries display the physical 109 GR; 107 remains cost-stage evidence only.

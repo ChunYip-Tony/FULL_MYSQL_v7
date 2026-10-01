@@ -1,0 +1,54 @@
+name: One-time v7.0.341 101 GR audit
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  audit:
+    if: startsWith(github.event.head_commit.message, 'v7.0.341:')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Wait for v7.0.341 API
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          ok=0
+          for i in $(seq 1 240); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            ok="$(BODY="$body" python - <<'PY'
+          import json,os
+          try: p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception: p={}
+          print('1' if p.get('ok') is True and p.get('version')=='7.0.341-single-service' else '0')
+          PY
+          )"
+            [ "$ok" = 1 ] && break
+            sleep 5
+          done
+          test "$ok" = 1
+      - name: Audit all direct 101 receipts for GR
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 180 "$base/v1/yipman/receipt-audit?lookback_days=365" -o /tmp/audit.json
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/audit.json',encoding='utf-8'))
+          print('AUDIT_STATUS',p.get('status'))
+          print('DATA_THROUGH',p.get('data_through'))
+          print('FAMILIES_WITH_RECEIPTS',p.get('families_with_receipt_evidence'))
+          print('DIRECT_101_MISSING_GR',p.get('direct_101_missing_gr_count'))
+          print('PHYSICAL_DUPLICATE_CANDIDATES',p.get('physical_duplicate_candidate_count'))
+          missing=p.get('families_with_direct_101_missing_gr') or []
+          if missing:
+              print('MISSING_101_GR_FAMILIES',json.dumps(missing,default=str))
+          assert p.get('current_physical_receipt_types')==['101','109'],p
+          assert int(p.get('direct_101_missing_gr_count') or 0)==0,p
+          assert int(p.get('physical_duplicate_candidate_count') or 0)==0,p
+          print('DIRECT_101_GR_AUDIT=PASS')
+          PY
