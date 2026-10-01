@@ -1,3 +1,12 @@
+v7.0.317 Mobile Home Density + Operational KPI Semantics:
+- Shrinks the six Home cards another ~20-25% by stopping the 2x3 grid from stretching to fill the full viewport; unused space remains below the dashboard for safer mobile spacing.
+- Further reduces header height, seafood decoration size, and wave height while keeping the approved two-column seafood-market theme.
+- Price Change Home KPI now comes from the actual qualified Pricing Review queue, including 240≠249 urgent mismatches, instead of the legacy proposal workflow counts.
+- Ordering Home KPI now comes from actual Fresh + Frozen Family/Receiving-Article ordering reviews and shows Family count plus Needs Attention count instead of draft/policy workflow counts.
+- Performance Home KPI now shows the latest completed supported sales date with Sales$ and historical-cost GP$ from the one-day Performance range.
+- Quick Check, Inventory, Data/QA, existing module navigation, desktop UI, and business rules remain unchanged.
+Version: 7.0.317 Single-Service Edition
+
 v7.0.316 Mobile Home Operations Dashboard:
 - Compacts the six mobile Home cards while preserving the approved 2 x 3 seafood-market layout and navigation.
 - Adds resilient live Home status badges for Quick Check readiness, price-change workflow, completed data days, ordering workflow, inventory attention, and Data/QA.
