@@ -207,6 +207,35 @@ jobs:
           print('backoffice-dom-bindings=PASS')
           PY
 
+      - name: Validate live mobile batch progress contract
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import phase3, worker, v7_ingest
+
+          ui=Path('backoffice_ui.py').read_text(encoding='utf-8')
+          p3=inspect.getsource(phase3.rebuild_quick_check)
+          touch=inspect.getsource(worker._touch_run)
+          active=inspect.getsource(v7_ingest.find_active_batch)
+
+          assert "'progress_kind': 'ROW_COUNT'" in p3
+          assert "'progress_current': current" in p3
+          assert "'progress_total': total_rows" in p3
+          assert "current % 10" in p3 and "3.0" in p3
+          assert "progress_payload" in touch
+          assert "'progress_current_upc'" in touch
+          assert "payload[key]=None" in touch
+          assert "'active_files'" in active
+          assert "'progress_issue_counts'" in active
+          assert 'function batchPhaseStripHtml' in ui
+          assert 'function mobileBatchIssueRowsHtml' in ui
+          assert 'm-batch-progress-main' in ui
+          assert 'mobile-batch-detail-active' in ui
+          assert 'Current Errors / Issues' in ui
+          print('mobile-batch-live-progress=PASS')
+          PY
+
       - name: Validate Backoffice pricing and inventory contracts
         run: |
           python - <<'PY'
