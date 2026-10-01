@@ -1,3 +1,10 @@
+v7.0.311 Batch 22 Active UPC Identity Repair:
+- Adds user-approved identity-only Family mappings for 24912400000 -> 3400124, 4029551013 -> 3405995, 4029551952 -> 3480504, and 6501700000 -> 1366620.
+- Fixes active identity repair so a full retail-barcode/check-digit alias can supply evidence while the actual shortened POS UPC receives the confirmed Family link.
+- Official-report alias repair now also links the raw POS UPC rather than only repairing the longer evidence barcode.
+- Identity recovery does not invent or overwrite cost conversion rules; UOM/cost continue through their separate evidence hierarchy.
+Version: 7.0.311 Single-Service Edition
+
 v7.0.308 Completed Batch Status Card Fix:
 - Latest Completed Batch no longer reuses the active-run progress renderer.
 - Completed batches show their actual Phase 3 status, terminal Run ID, batch blockers, QC READY count, QC HOLD count, and completion timestamp.

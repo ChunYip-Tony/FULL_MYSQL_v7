@@ -138,6 +138,49 @@ def confirmed_operational_uom_basis(cur, family_id: int | None) -> dict[str, Any
             return dict(basis)
     return None
 
+USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001 = (
+    {
+        "ean_upc": "24912400000",
+        "family_article": "3400124",
+        "source_note": (
+            "USER_APPROVED_BATCH22_IDENTITY_20261001: BUTTER FISH (Fried Service). "
+            "User approved the reviewed Batch 22 resolution 24912400000 -> Family/Main 3400124. "
+            "Identity only; do not infer a new UOM or cost conversion from this authority."
+        ),
+    },
+    {
+        "ean_upc": "4029551013",
+        "family_article": "3405995",
+        "source_note": (
+            "USER_APPROVED_BATCH22_IDENTITY_20261001: TOBIKKO WASHABI 1/12EA. "
+            "User approved the reviewed Batch 22 resolution 4029551013 -> Family/Main 3405995. "
+            "The shortened POS spelling is also consistent with retail check-digit alias 40295510136. "
+            "Identity only; UOM/cost remain governed by their own evidence hierarchy."
+        ),
+    },
+    {
+        "ean_upc": "4029551952",
+        "family_article": "3480504",
+        "source_note": (
+            "USER_APPROVED_BATCH22_IDENTITY_20261001: ABALONE STYLE SHELLFISH. "
+            "User approved the reviewed Batch 22 resolution 4029551952 -> Family/Main 3480504. "
+            "The shortened POS spelling is also consistent with retail check-digit alias 40295519528. "
+            "Identity only; UOM/cost remain governed by their own evidence hierarchy."
+        ),
+    },
+    {
+        "ean_upc": "6501700000",
+        "family_article": "1366620",
+        "source_note": (
+            "USER_APPROVED_BATCH22_IDENTITY_20261001: LIVE BLACK MUSSEL LB. "
+            "User approved the reviewed Batch 22 resolution 6501700000 -> Family/Main 1366620. "
+            "The shortened POS spelling is also consistent with retail check-digit alias 65017000009. "
+            "Identity only; UOM/cost remain governed by their own evidence hierarchy."
+        ),
+    },
+)
+
+
 USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930 = (
     # Shrimp Family 1351311 — confirmed directly from Article Manual Table 1.
     # These are operational Selling-Article relationships, not Receiving-Article

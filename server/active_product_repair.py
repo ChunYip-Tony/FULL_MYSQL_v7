@@ -11,7 +11,10 @@ from data_coverage import source_data_days
 from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from upc_aliases import service_249_canonical_base
-from manual_overrides import apply_manual_upc_overrides
+from manual_overrides import (
+    apply_manual_upc_overrides,
+    USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001,
+)
 from normalize import (
     RowContext,
     _build_column_map,
@@ -630,10 +633,16 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         'examined': len(issues),
         'source_batch_issue_count': len(source_batch_issues),
         'global_current_candidate_count': len(global_current),
+        'repaired_user_confirmed_family': 0,
         'repaired_article_manual': 0,
         'repaired_official_report': 0,
         'already_repaired': 0,
         'unresolved': [],
+    }
+    user_family_overrides = {
+        str(x.get('ean_upc') or '').strip(): x
+        for x in USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001
+        if str(x.get('ean_upc') or '').strip()
     }
 
     for item in issues:
@@ -642,6 +651,44 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         if existing and _active_family_for_upc(cur, int(existing['upc_id'])) is not None:
             result['already_repaired'] += 1
             continue
+
+        approved = user_family_overrides.get(str(ean))
+        if approved:
+            target_main = str(approved.get('family_article') or '').strip()
+            cur.execute(
+                "SELECT family_id FROM product_family WHERE main_article_number=%s LIMIT 1",
+                (target_main,),
+            )
+            fam = cur.fetchone()
+            if fam:
+                ok, why = _confirm_unique_family_link(
+                    cur,
+                    ean,
+                    int(fam['family_id']),
+                    'USER_CONFIRMED_ACTIVE_UPC_FAMILY_V7311',
+                    {
+                        'source': 'USER_APPROVED_BATCH22_IDENTITY_20261001',
+                        'target_main_article': target_main,
+                        'source_note': approved.get('source_note'),
+                        'identity_only': True,
+                    },
+                )
+                if ok:
+                    result['repaired_user_confirmed_family'] += 1
+                    continue
+                approved_detail = {
+                    'source': 'USER_APPROVED_BATCH22_IDENTITY_20261001',
+                    'reason': why,
+                    'target_main_article': target_main,
+                }
+            else:
+                approved_detail = {
+                    'source': 'USER_APPROVED_BATCH22_IDENTITY_20261001',
+                    'reason': 'TARGET_FAMILY_NOT_READY',
+                    'target_main_article': target_main,
+                }
+        else:
+            approved_detail = None
 
         key = _numeric_key(ean)
         canonical_alias=_existing_upca_canonical(cur, ean)
@@ -654,11 +701,15 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         for ckey in dict.fromkeys(candidate_keys):
             mcands.extend(manual.get(ckey or '', []))
         if mcands:
+            # Evidence may live on the full retail barcode, but the current
+            # POS spelling is the object that must receive the Family link.
             ok, detail = _apply_article_manual_candidate(
                 cur,
-                canonical_alias or ean,
+                ean,
                 mcands,
             )
+            if canonical_alias and canonical_alias != ean:
+                detail['evidence_retail_barcode_alias'] = canonical_alias
             if ok:
                 result['repaired_article_manual'] += 1
                 continue
@@ -671,13 +722,16 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
         if len(families) == 1:
             ok, why = _confirm_unique_family_link(
                 cur,
-                canonical_alias or ean,
+                ean,
                 families[0],
-                'ACTIVE_IDENTITY_REPAIR_OFFICIAL_REPORT_UNIQUE_FAMILY_V7182',
+                'ACTIVE_IDENTITY_REPAIR_OFFICIAL_REPORT_UNIQUE_FAMILY_V7311',
                 {
                     'source': 'OFFICIAL_COMPANY_REPORT',
                     'observation_ids': [int(x['company_price_observation_id']) for x in ocands[:50]],
                     'source_types': sorted({str(x['source_type']) for x in ocands}),
+                    'evidence_retail_barcode_alias': (
+                        canonical_alias if canonical_alias and canonical_alias != ean else None
+                    ),
                 },
             )
             if ok:
@@ -695,6 +749,7 @@ def _repair_active_identity(cur, batch_id: int) -> dict[str, Any]:
 
         unresolved = {
             'upc': ean,
+            'user_confirmed_family': approved_detail,
             'article_manual': candidate_detail,
             'official_report': official_detail,
         }

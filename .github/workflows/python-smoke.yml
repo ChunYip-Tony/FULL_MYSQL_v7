@@ -464,6 +464,34 @@ jobs:
           print('upc-4816-ea-authority=PASS')
           PY
 
+      - name: Validate Batch 22 active UPC family authority
+        run: |
+          python - <<'PY'
+          import inspect
+          import manual_overrides as m
+          import active_product_repair as a
+
+          expected={
+              '24912400000':'3400124',
+              '4029551013':'3405995',
+              '4029551952':'3480504',
+              '6501700000':'1366620',
+          }
+          actual={
+              str(x.get('ean_upc')):str(x.get('family_article'))
+              for x in m.USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001
+          }
+          assert actual==expected, actual
+
+          src=inspect.getsource(a._repair_active_identity)
+          assert 'USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001' in src
+          assert "'repaired_user_confirmed_family'" in src
+          assert 'canonical_alias or ean' not in src
+          assert "_apply_article_manual_candidate(\n                cur,\n                ean," in src
+          assert "_confirm_unique_family_link(\n                cur,\n                ean," in src
+          print('batch22-active-upc-family-authority=PASS')
+          PY
+
       - name: Validate current price authority contract
         run: |
           python - <<'PY'
