@@ -186,7 +186,7 @@ jobs:
           assert '.quicksearch{border-width:2.4px}' in ui
           assert "orderitemcard tone'+(i%5)" in ui
           assert "pcard tone'+(i%5)" in ui
-          assert 'receiving_article_name' in ui
+          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
           assert 'h.article_name' in ui
           assert '.stockflowgrid{display:grid;grid-template-columns:' in ui
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
