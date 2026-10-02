@@ -5074,11 +5074,18 @@ def _gp_day_price_suggestion_from_batch(
         if cost is not None else []
     )
 
+    current_within_company_range=(
+        None
+        if not refs or current is None
+        else bool(company_low <= current <= company_high)
+    )
+
     base={
         "company_prices":refs,
         "company_range_low":company_low,
         "company_range_high":company_high,
         "has_company_reference":bool(refs),
+        "current_within_company_range":current_within_company_range,
         "historical_window_supported_days":14,
         "sweet_spot_price":sweet,
         "current_price_used":current,
@@ -6068,8 +6075,9 @@ def performance_report(
                 else None
             )
 
-            # No price-change suggestion is needed when the live current
-            # price is already within +/- $0.25 of the supported candidate.
+            # The $0.25 tolerance suppresses ordinary noise only. It must not
+            # hide Company-range violations, freshness/velocity tests, or a
+            # measured positive GP$/day opportunity.
             tested_sweet = (
                 _d(row.get("sweet_spot_price"))
                 if row.get("sweet_spot_price") is not None
@@ -6086,7 +6094,42 @@ def performance_report(
                 or current is None
                 or abs(tested_sweet-_d(current)) <= Decimal("0.25")
             )
-            if target_close and tested_close:
+            outside_company_range = bool(
+                has_company
+                and price_opt.get("current_within_company_range") in (False, 0)
+            )
+            freshness_velocity_test = bool(
+                current_oh is not None
+                and current_oh > 0
+                and (
+                    (
+                        pclass in {"FRESH","LIVE"}
+                        and (
+                            (v7 is not None and _d(v7) <= 0)
+                            or (trend_ratio is not None and trend_ratio < Decimal("0.80"))
+                            or (
+                                doh_for_gate is not None
+                                and doh_for_gate >= Decimal("5")
+                            )
+                        )
+                    )
+                    or (
+                        pclass == "FROZEN"
+                        and doh_for_gate is not None
+                        and doh_for_gate >= Decimal("60")
+                    )
+                )
+            )
+            positive_gp_day_test = bool(
+                gp_day_gain is not None and gp_day_gain > 0
+            )
+            if (
+                target_close
+                and tested_close
+                and not outside_company_range
+                and not freshness_velocity_test
+                and not positive_gp_day_test
+            ):
                 summary["price_tolerance_suppressed"]+=1
                 continue
 
@@ -6385,7 +6428,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V12_PROACTIVE_PRICE_TESTING",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V13_COMPACT_PRICE_PROGRESS",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
@@ -6420,8 +6463,8 @@ def performance_report(
             "cost_caveat":"Historical daily cost lineage is not yet exposed in V2 Performance; suggestions use current authoritative cost while sales evidence is cut off at report date.",
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
-            "price_change_tolerance":"SUPPRESS_WHEN_ABS_CURRENT_MINUS_SUGGESTED_LE_0.25",
-            "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY_FOR_ALL_CLASSES; DOH_CHANGES_URGENCY_NOT_ELIGIBILITY",
+            "price_change_tolerance":"SUPPRESS_ORDINARY_NOISE_WITHIN_0_25_ONLY; NEVER_SUPPRESS_240_249_MISMATCH_COMPANY_RANGE_VIOLATION_FRESHNESS_VELOCITY_TEST_OR_POSITIVE_GP_DAY_TEST",
+            "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY_FOR_ALL_CLASSES; INCLUDE_SLOW_FRESHNESS_ITEMS_GP_DAY_OPPORTUNITIES_CURRENT_GT_0_25_FROM_TESTED_AND_COMPANY_RANGE_VIOLATIONS",
             "price_240_249_rule":"WHEN_CONFIRMED_240_AND_249_FORMS_EXIST_IN_THE_SAME_FAMILY_PRODUCT_GROUP_THEIR_CURRENT_PRICES_MUST_MATCH; MISMATCH_IS_HIGHEST_PRIORITY",
             "price_249_reminder_rule":"ANY_240_PRICING_SUGGESTION_WITH_A_RELATED_249_MUST_REMIND_THE_USER_TO_CHANGE_249_TO_THE_SAME_ACCEPTED_PRICE",
             "urgency_primary_sort":"240_249_MISMATCH_FIRST_THEN_ACTIONABLE_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
