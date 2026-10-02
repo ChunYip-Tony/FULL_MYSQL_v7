@@ -2960,7 +2960,24 @@ BACKOFFICE_HTML = r'''<!doctype html>
   </div>
 <div class="panel">
  <div class="panelhead"><div><div class="title">Inventory Ledger</div><div class="sub">Read-only system data. OH / True Stock is the only editable value.</div></div><span class="pill blue">OH WRITE ONLY</span></div>
- <div class="toolrow">
+ <div id="desktopStockFlowTools" class="toolrow" style="display:none">
+   <div class="filters">
+     <button class="filter sffilter on" data-sfcat="ALL">All</button><button class="filter sffilter" data-sfcat="LIVE">Live</button><button class="filter sffilter" data-sfcat="FRESH">Fresh</button><button class="filter sffilter" data-sfcat="FROZEN">Frozen</button>
+     <button class="filter sfdelivery" data-sfdelivery="TUE_WED">Tue &amp; Wed observed</button><button class="filter sfdelivery" data-sfdelivery="THU_FRI">Thu &amp; Fri observed</button>
+   </div>
+   <div class="tools">
+     <select id="stockFlowSort" class="select">
+       <option value="difference_desc">Largest Difference ↓</option>
+       <option value="difference_asc">Smallest Difference ↑</option>
+       <option value="receipt_desc">Highest 7D Receipt</option>
+       <option value="selling_desc">Highest 7D Selling MVT</option>
+       <option value="ratio_desc">Highest Receipt / Selling %</option>
+       <option value="name">Family A → Z</option>
+     </select>
+     <span id="stockFlowCount" class="pill sea">—</span>
+   </div>
+ </div>
+ <div id="desktopInventoryTools" class="toolrow">
    <div class="filters"><button class="filter invfilter on" data-cat="ALL">All</button><button class="filter invfilter" data-cat="FRESH">Fresh</button><button class="filter invfilter" data-cat="LIVE">Live</button><button class="filter invfilter" data-cat="FROZEN">Frozen</button></div>
    <div class="tools">
      <select id="invStatusFilter" class="select"><option value="ALL">All Status</option><option value="READY">READY</option><option value="QA_HOLD">QA HOLD</option><option value="HISTORICAL_ONLY">Historical Only</option></select>
@@ -2970,7 +2987,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
      <span id="invSearchState" class="pill blue" style="display:none"></span><button id="clearInventorySearch" class="btn small" style="display:none">Clear Search</button><span id="invCount" class="pill sea">—</span>
    </div>
  </div>
- <div id="invError"></div><div class="tablewrap"><table class="table"><thead><tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>7D Velocity</th><th>Current Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr></thead><tbody id="invRows"></tbody></table></div>
+ <div id="invError"></div><div class="tablewrap"><table class="table"><thead id="invHead"><tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>7D Velocity</th><th>Current Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr></thead><tbody id="invRows"></tbody></table></div>
 </div></section>
 
 
@@ -3126,7 +3143,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
 <script>
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,quickPriceByUpc:{},quickPriceHealth:null,quickPriceLoadedAt:0,quickPriceLoading:false,quickPricePromise:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null,batchLoadWarning:''};
+const state={invCat:'ALL',inventorySearch:'',invStatus:'ALL',invOH:'ALL',invSales:'ALL',invSort:'vel7_oh_desc',stockFlow:[],stockFlowCategory:'ALL',stockFlowDelivery:'ALL',stockFlowSort:'difference_desc',stockFlowLoadedAt:0,salesStartDate:'',salesEndDate:'',salesSupportedDates:[],salesSort:'gp_desc',salesRows:[],salesRange:null,orderFilter:'ALL',orderHealth:null,priceCat:'ALL',priceStatus:'ALL',priceSort:'opportunity',priceText:'',priceHealth:null,priceLoadError:'',priceMeta:null,quickPriceByUpc:{},quickPriceHealth:null,quickPriceLoadedAt:0,quickPriceLoading:false,quickPricePromise:null,qaFilter:'ALL',qaText:'',qaSort:'oh_vel_desc',qaIssues:[],qaHistory:[],inventory:[],orders:[],prices:[],recent:[],active:null,dataHealth:null,batchLoadWarning:''};
 let mobileBatchProgressPollSeq=0;
 let mobileBatchStageTracker={runId:null,stage:null,since:0};
 const PHASE3_PROGRESS_STAGES=[
@@ -5115,6 +5132,9 @@ async function loadHealth(){try{const h=await api('/healthz');$('#readyPill').te
 async function loadInventory(){
  const requestSeq=++inventoryLoadSeq;
  const q=String(state.inventorySearch||'').trim();
+ const desktopQuick=!isMobileBackoffice()&&String(document.body.dataset.desktopView||'')==='quick';
+ if(desktopQuick&&!q)return loadDesktopStockFlow(requestSeq);
+ setQuickInventoryMode(false);
  const cat=String(state.invCat||'ALL');
  const err=$('#invError');
  err.innerHTML='';
@@ -5124,35 +5144,102 @@ async function loadInventory(){
    const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=${light?120:300}&lightweight=${light?'true':'false'}${q?'&q='+encodeURIComponent(q):''}`;
    const requestTimeoutMs=light?12000:20000;
    const d=await api(url,{timeoutMs:requestTimeoutMs});
-
-   // A slower previous live-search response must never overwrite the newest
-   // query's results. The server echoes its query so we validate both request
-   // sequence and query identity before mutating shared Inventory state.
    if(requestSeq!==inventoryLoadSeq)return false;
    if(String(state.inventorySearch||'').trim()!==q)return false;
    if(String(d.query||'').trim()!==q)return false;
-
    state.inventory=d.rows||[];
    const badge=$('#invSearchState'),clear=$('#clearInventorySearch');
-   if(q){
-     badge.textContent=`Search: ${q}`;
-     badge.style.display='inline-flex';
-     clear.style.display='inline-flex';
-   }else{
-     badge.style.display='none';
-     clear.style.display='none';
-   }
+   if(q){badge.textContent=`Search: ${q}`;badge.style.display='inline-flex';clear.style.display='inline-flex'}
+   else{badge.style.display='none';clear.style.display='none'}
    renderInventory();
    return true;
  }catch(e){
    if(requestSeq!==inventoryLoadSeq)return false;
    const rawMsg=e?.message||String(e);
-   const msg=(e?.name==='AbortError'||/timed out/i.test(rawMsg))
-     ? 'Search timed out. Please retry.'
-     : rawMsg;
+   const msg=(e?.name==='AbortError'||/timed out/i.test(rawMsg))?'Search timed out. Please retry.':rawMsg;
    err.innerHTML=`<div class="error">${esc(msg)}</div>`;
    $('#invRows').innerHTML='';
    throw new Error(msg);
+ }
+}
+function setQuickInventoryMode(stockFlow){
+ const sf=$('#desktopStockFlowTools'),inv=$('#desktopInventoryTools'),head=$('#invHead');
+ if(sf)sf.style.display=stockFlow?'flex':'none';
+ if(inv)inv.style.display=stockFlow?'none':'flex';
+ if(head)head.innerHTML=stockFlow
+   ?'<tr><th>Family</th><th>Category / Delivery</th><th>7D Selling MVT</th><th>7D Receipt</th><th>Difference</th><th>Receipt / Selling</th><th>Recent Receipt #1</th><th>Recent Receipt #2</th></tr>'
+   :'<tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>7D Velocity</th><th>Current Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr>';
+}
+function stockFlowObservedNums(r){
+ const a=Array.isArray(r?.observed_delivery_weekday_numbers)?r.observed_delivery_weekday_numbers.map(Number).filter(Number.isInteger):[];
+ if(a.length)return [...new Set(a)];
+ return [...new Set((Array.isArray(r?.observed_delivery_days)?r.observed_delivery_days:[]).map(x=>Number(x?.weekday_number)).filter(Number.isInteger))];
+}
+function stockFlowRows(){
+ let rows=[...(state.stockFlow||[])];
+ if(state.stockFlowCategory!=='ALL')rows=rows.filter(r=>String(r.category||'').toUpperCase().includes(state.stockFlowCategory));
+ if(state.stockFlowDelivery!=='ALL'){
+   rows=rows.filter(r=>{
+     const d=stockFlowObservedNums(r);
+     return state.stockFlowDelivery==='TUE_WED'?d.some(x=>x===1||x===2):d.some(x=>x===3||x===4);
+   });
+ }
+ const n=v=>{const x=Number(v);return Number.isFinite(x)?x:null};
+ const s=state.stockFlowSort||'difference_desc';
+ if(s==='difference_desc')rows.sort((a,b)=>(n(b.receipt_minus_selling_7d)??-Infinity)-(n(a.receipt_minus_selling_7d)??-Infinity));
+ if(s==='difference_asc')rows.sort((a,b)=>(n(a.receipt_minus_selling_7d)??Infinity)-(n(b.receipt_minus_selling_7d)??Infinity));
+ if(s==='receipt_desc')rows.sort((a,b)=>(n(b.family_receipt_7d_qty)??-Infinity)-(n(a.family_receipt_7d_qty)??-Infinity));
+ if(s==='selling_desc')rows.sort((a,b)=>(n(b.family_group_movement_7d)??-Infinity)-(n(a.family_group_movement_7d)??-Infinity));
+ if(s==='ratio_desc')rows.sort((a,b)=>(n(b.receipt_to_selling_ratio)??-Infinity)-(n(a.receipt_to_selling_ratio)??-Infinity));
+ if(s==='name')rows.sort((a,b)=>String(a.family_name||'').localeCompare(String(b.family_name||'')));
+ return rows;
+}
+function sfRecentCell(x,uom){
+ if(!x)return '<span class="meta">—</span>';
+ return '<b>'+esc(x.date||x.receipt_date||'—')+'</b><div class="meta">'+fmt(x.quantity??x.receipt_qty)+' '+esc(x.uom||x.receipt_uom||uom||'')+'</div>';
+}
+function renderDesktopStockFlow(){
+ setQuickInventoryMode(true);
+ const rows=stockFlowRows();
+ const cnt=$('#stockFlowCount');if(cnt)cnt.textContent=rows.length+' Stock Flow item'+(rows.length===1?'':'s');
+ const head=$('#invError');if(head)head.innerHTML='<div class="calc"><b>Stock Flow Watch</b> · Family level · 7D receipts ≥ 150% of 7D selling movement · default sort is largest Difference.</div>';
+ $('#invRows').innerHTML=rows.map(r=>{
+   const uom=r.family_group_movement_uom||r.family_receipt_7d_uom||'';
+   const ruom=r.family_receipt_7d_uom||uom;
+   const diff=Number(r.receipt_minus_selling_7d);
+   const ratio=Number(r.receipt_to_selling_ratio);
+   const over=Number.isFinite(ratio)?((ratio-1)*100).toFixed(0)+'%':'—';
+   const hist=(Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]).slice(0,2);
+   const obs=(Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[]).filter(x=>x&&x.weekday).map(x=>String(x.weekday).slice(0,3).toUpperCase()).slice(0,4).join(' / ');
+   const noRecentSale=!r.recent_promotion_event;
+   return '<tr class="stockflow-row" data-stock-family="'+esc(r.family_article||r.family_id||'')+'">'+
+     '<td><button type="button" class="desktop-item-btn stockflow-family-btn" data-family="'+esc(r.family_article||r.family_id||'')+'"><div class="name">'+esc(r.family_article||'—')+' · '+esc(r.family_name||'Unmapped Family')+'</div><div class="meta">Family Article</div></button></td>'+
+     '<td><b>'+esc(String(r.category||'').toUpperCase())+'</b><div class="meta">'+(obs?'Observed '+esc(obs):'No observed delivery day')+'</div></td>'+
+     '<td><b>'+fmt(r.family_group_movement_7d)+' '+esc(uom)+'</b><div class="meta">Avg/day '+fmt(r.family_group_avg_qty_day)+' '+esc(uom)+'</div></td>'+
+     '<td><b>'+fmt(r.family_receipt_7d_qty)+' '+esc(ruom)+'</b><div class="meta">'+fmt(r.family_receipt_7d_day_count,0)+' receipt day / 7D</div></td>'+
+     '<td style="'+(noRecentSale?'background:#fff0f2;':'background:#eef7ff;')+'"><b style="font-size:15px;'+(noRecentSale?'color:#b82f45;':'')+'">'+(Number.isFinite(diff)&&diff>=0?'+':'')+fmt(diff)+' '+esc(uom)+'</b><div class="meta">'+(noRecentSale?'NO RECENT SALE':'RECENT SALE')+'</div></td>'+
+     '<td><b>'+esc(over)+'</b><div class="meta">receipt vs selling</div></td>'+
+     '<td>'+sfRecentCell(hist[0],ruom)+'</td><td>'+sfRecentCell(hist[1],ruom)+'</td></tr>';
+ }).join('')||'<tr><td colspan="8" class="empty">No Stock Flow items match the selected filters.</td></tr>';
+ $$('.stockflow-family-btn').forEach(b=>b.onclick=()=>desktopSubmitSearch(b.dataset.family));
+}
+async function loadDesktopStockFlow(requestSeq){
+ setQuickInventoryMode(true);
+ const err=$('#invError');err.innerHTML='';
+ $('#invRows').innerHTML='<tr><td colspan="8" class="loading">Loading Stock Flow…</td></tr>';
+ try{
+   const d=await api('/v1/yipman/stock-flow?limit=100',{timeoutMs:20000});
+   if(requestSeq!==inventoryLoadSeq)return false;
+   state.stockFlow=d.rows||[];
+   state.stockFlowLoadedAt=Date.now();
+   renderDesktopStockFlow();
+   return true;
+ }catch(e){
+   if(requestSeq!==inventoryLoadSeq)return false;
+   if(state.stockFlow.length){renderDesktopStockFlow();err.insertAdjacentHTML('beforeend','<div class="error">Refresh failed. Showing last loaded Stock Flow · '+esc(e.message||e)+'</div>');return false}
+   err.innerHTML='<div class="error">'+esc(e.message||'Unable to load Stock Flow')+'</div>';
+   $('#invRows').innerHTML='';
+   return false;
  }
 }
 function filteredInventoryRows(){
@@ -5201,7 +5288,10 @@ $('#invStatusFilter').onchange=e=>{state.invStatus=e.target.value;renderInventor
 $('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
 $('#invSalesFilter').onchange=e=>{state.invSales=e.target.value;renderInventory()};
 $('#invSort').onchange=e=>{state.invSort=e.target.value;renderInventory()};
-$('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';loadInventory()};
+$('#stockFlowSort').onchange=e=>{state.stockFlowSort=e.target.value;renderDesktopStockFlow()};
+$('.sffilter').forEach(b=>b.onclick=()=>{state.stockFlowCategory=b.dataset.sfcat;$('.sffilter').forEach(x=>x.classList.toggle('on',x===b));renderDesktopStockFlow()});
+$('.sfdelivery').forEach(b=>b.onclick=()=>{const v=b.dataset.sfdelivery;state.stockFlowDelivery=state.stockFlowDelivery===v?'ALL':v;$('.sfdelivery').forEach(x=>x.classList.toggle('on',x.dataset.sfdelivery===state.stockFlowDelivery));renderDesktopStockFlow()});
+$('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';const qi=$('#desktopQuickSearch');if(qi)qi.value='';loadInventory()};
 
 
 function openDesktopQuickDetail(upc){
