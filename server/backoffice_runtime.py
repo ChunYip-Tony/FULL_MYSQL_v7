@@ -501,6 +501,210 @@ def _last_receipt_base_summary_from_events(events: list[dict[str,Any]]) -> dict[
     }
 
 
+
+def _article_manual_family_pack_context(
+    cur,
+    family_article: str | None,
+) -> dict[str, Any]:
+    """Return the newest Article Manual receiving-pack evidence for a Family.
+
+    Authoritative Seafood tab semantics:
+      Fresh Fish / Live Fish / Shrimp / Fish Ball / Frozen Fish -> column G
+      Frozen Pack -> column E
+
+    Do not fall back to an older Article Manual file when the newest file that
+    contains the Family has a blank pack field; stale pack data must not be
+    presented as current authority.
+    """
+    main=str(family_article or "").strip()
+    if not main:
+        return {
+            "pack_size":None,
+            "pack_size_options":[],
+            "status":"FAMILY_ARTICLE_MISSING",
+            "source":"ARTICLE_MANUAL",
+            "file_id":None,
+        }
+
+    cur.execute(
+        """SELECT f.file_id,sh.sheet_name,r.raw_id,
+                  JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.E')) AS col_e,
+                  JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.G')) AS col_g
+           FROM ingest_file f
+           JOIN ingest_sheet sh ON sh.file_id=f.file_id
+           JOIN raw_article_manual r ON r.sheet_id=sh.sheet_id
+           WHERE f.source_type='article_manual'
+             AND f.processing_status='INGESTED'
+             AND LOWER(TRIM(sh.sheet_name)) IN
+                 ('fresh fish','live fish','shrimp','fish ball','frozen fish','frozen pack')
+             AND r.source_row_number>COALESCE(sh.header_row_number,0)
+             AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A')))=%s
+           ORDER BY COALESCE(f.upload_timestamp,f.report_generated_at) DESC,
+                    f.file_id DESC,r.raw_id DESC""",
+        (main,),
+    )
+    rows=cur.fetchall()
+    if not rows:
+        return {
+            "pack_size":None,
+            "pack_size_options":[],
+            "status":"NO_ARTICLE_MANUAL_ROW",
+            "source":"ARTICLE_MANUAL",
+            "file_id":None,
+        }
+
+    newest_file=int(rows[0]["file_id"])
+    options=[]
+    for row in rows:
+        if int(row.get("file_id") or 0)!=newest_file:
+            continue
+        tab=str(row.get("sheet_name") or "").strip().lower()
+        raw=row.get("col_e") if tab=="frozen pack" else row.get("col_g")
+        value=str(raw or "").strip()
+        if not value or value.upper() in {"N/A","NA","NONE","NULL","NAN","-","—"}:
+            continue
+        if value not in options:
+            options.append(value)
+
+    if len(options)==1:
+        return {
+            "pack_size":options[0],
+            "pack_size_options":options,
+            "status":"READY",
+            "source":"ARTICLE_MANUAL",
+            "file_id":newest_file,
+        }
+    if len(options)>1:
+        return {
+            "pack_size":None,
+            "pack_size_options":options,
+            "status":"MULTIPLE_PACK_SIZES",
+            "source":"ARTICLE_MANUAL",
+            "file_id":newest_file,
+        }
+    return {
+        "pack_size":None,
+        "pack_size_options":[],
+        "status":"PACK_SIZE_MISSING",
+        "source":"ARTICLE_MANUAL",
+        "file_id":newest_file,
+    }
+
+
+def _observed_receipt_pack_size(event: dict[str, Any]) -> str | None:
+    """Derive an observed Base-per-Receiving-UOM pack ratio from one receipt.
+
+    This is fallback evidence only when Article Manual does not provide a single
+    current pack size. It is intentionally not used when entry/base UOM are the
+    same because that would invent a case/pack conversion.
+    """
+    entry_qty=event.get("receipt_quantity")
+    base_qty=event.get("base_receipt_quantity")
+    entry_uom=str(event.get("receipt_uom") or "").strip().upper()
+    base_uom=str(event.get("base_receipt_uom") or "").strip().upper()
+    if (
+        entry_qty is None
+        or base_qty is None
+        or not entry_uom
+        or not base_uom
+        or entry_uom==base_uom
+        or _d(entry_qty)<=0
+        or _d(base_qty)<=0
+    ):
+        return None
+    ratio=_d(base_qty)/_d(entry_qty)
+    if ratio<=0:
+        return None
+    ratio_text=format(ratio.normalize(),"f")
+    return f"{ratio_text} {base_uom} / {entry_uom}"
+
+
+def _historical_receiving_article_summary(
+    cur,
+    family_article: str | None,
+    events: list[dict[str, Any]],
+    limit: int = 8,
+) -> list[dict[str, Any]]:
+    """Summarize historically used Receiving Articles for an ordering Family."""
+    pack=_article_manual_family_pack_context(cur,family_article)
+    grouped: dict[str,dict[str,Any]] = {}
+
+    for event in events or []:
+        article=str(event.get("article_number") or "").strip()
+        posting_date=event.get("posting_date")
+        receipt_qty=event.get("receipt_quantity")
+        base_qty=event.get("base_receipt_quantity")
+        if not article or posting_date is None:
+            continue
+        if (
+            (receipt_qty is None or _d(receipt_qty)<=0)
+            and (base_qty is None or _d(base_qty)<=0)
+        ):
+            continue
+
+        slot=grouped.setdefault(
+            article,
+            {
+                "article_number":article,
+                "last_receipt_date":posting_date,
+                "receipt_event_count":0,
+                "observed_pack_size":None,
+                "observed_pack_date":None,
+            },
+        )
+        slot["receipt_event_count"]+=1
+        if posting_date>slot["last_receipt_date"]:
+            slot["last_receipt_date"]=posting_date
+
+        observed=_observed_receipt_pack_size(event)
+        if observed and (
+            slot.get("observed_pack_date") is None
+            or posting_date>=slot["observed_pack_date"]
+        ):
+            slot["observed_pack_size"]=observed
+            slot["observed_pack_date"]=posting_date
+
+    out=[]
+    for slot in grouped.values():
+        if pack.get("status")=="READY" and pack.get("pack_size"):
+            pack_size=pack.get("pack_size")
+            pack_source="ARTICLE_MANUAL"
+            pack_status="READY"
+        elif slot.get("observed_pack_size"):
+            pack_size=slot.get("observed_pack_size")
+            pack_source="HISTORICAL_RECEIPT_CONVERSION"
+            pack_status="OBSERVED"
+        elif pack.get("pack_size_options"):
+            opts=list(pack.get("pack_size_options") or [])
+            pack_size=" / ".join(opts[:2])+(" …" if len(opts)>2 else "")
+            pack_source="ARTICLE_MANUAL"
+            pack_status="MULTIPLE"
+        else:
+            pack_size=None
+            pack_source=pack.get("source") or "ARTICLE_MANUAL"
+            pack_status=pack.get("status") or "MISSING"
+
+        out.append({
+            "article_number":slot["article_number"],
+            "last_receipt_date":slot["last_receipt_date"],
+            "receipt_event_count":slot["receipt_event_count"],
+            "pack_size":pack_size,
+            "pack_size_status":pack_status,
+            "pack_size_source":pack_source,
+            "article_manual_file_id":pack.get("file_id"),
+        })
+
+    out.sort(
+        key=lambda x:(
+            -(x["last_receipt_date"].toordinal() if x.get("last_receipt_date") else 0),
+            -int(x.get("receipt_event_count") or 0),
+            str(x.get("article_number") or ""),
+        )
+    )
+    return out[:max(1,min(int(limit or 8),20))]
+
+
+
 def _fallback_receiving_article(cur, family_id: int, family_article: str | None) -> str | None:
     cur.execute(
         """SELECT a.article_number
@@ -1037,6 +1241,7 @@ def ordering_review(
 
         for kind in kinds:
             delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
+            delivery_event_cache: dict[int,list[dict[str,Any]]] = {}
             candidate_family_map: dict[int,dict[str,Any]] = {}
             eligible_family_ids: list[int] | None = None
 
@@ -1056,6 +1261,7 @@ def ordering_review(
                 for fam in candidate_families:
                     fid=int(fam["family_id"])
                     events=event_map.get(fid) or []
+                    delivery_event_cache[fid]=events
                     receipt=_last_receipt_base_summary_from_events(events)
                     pattern=_delivery_pattern(
                         events,
@@ -1129,6 +1335,7 @@ def ordering_review(
                         # family_ids: never leak a nonmatching delivery family.
                         continue
                     receipt,pattern,delivery_day=cached
+                    events=delivery_event_cache.get(fid) or []
                 else:
                     events = _family_receipt_events(cur, fid, data_days=receipt_days)
                     receipt = _last_receipt_base_summary_from_events(events)
@@ -1138,11 +1345,22 @@ def ordering_review(
                 receiving_article = receipt.get("receiving_article") or _fallback_receiving_article(
                     cur, fid, str(s.get("family_article_number") or "") or None
                 )
+                suggested_qty=s.get("suggested_order_qty")
+                historical_receiving_articles=(
+                    _historical_receiving_article_summary(
+                        cur,
+                        str(s.get("family_article_number") or "") or None,
+                        events,
+                    )
+                    if suggested_qty is not None and _d(suggested_qty)>0
+                    else []
+                )
                 row = {
                     "family_id": fid,
                     "family_name": s.get("family_article_name"),
                     "family_article": s.get("family_article_number"),
                     "receiving_article": receiving_article,
+                    "historical_receiving_articles": historical_receiving_articles,
                     "oh": s.get("ordering_oh_used"),
                     "oh_uom": s.get("uom"),
                     "last_receipt_date": receipt.get("date"),
@@ -1207,6 +1425,7 @@ def ordering_review(
                         "weekday_usage_forecast_basis":s.get("weekday_usage_forecast_basis"),
                         "regular_baseline":s.get("regular_baseline"),
                         "receiving_articles_on_last_receipt": receipt.get("receiving_articles"),
+                        "historical_receiving_articles": historical_receiving_articles,
                         "delivery_pattern": pattern,
                         "delivery_day_evidence": delivery_day,
                         "reasons": _suggestion_reason(s, pattern, receipt)
@@ -1269,6 +1488,7 @@ def ordering_review(
                         "family_name":fam.get("family_description"),
                         "family_article":fam.get("main_article_number"),
                         "receiving_article":receiving_article,
+                        "historical_receiving_articles":[],
                         "oh":calc.get("oh"),
                         "oh_uom":calc.get("oh_uom") or roster_uom,
                         "last_receipt_date":receipt.get("date"),
@@ -1370,7 +1590,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V18_WEEKDAY_USAGE",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V19_RECEIVING_PACK",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
@@ -1441,7 +1661,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V18_WEEKDAY_USAGE|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V19_RECEIVING_PACK|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
