@@ -3699,6 +3699,7 @@ def backoffice_inventory(
     q:str|None=None,
     lightweight:bool=False,
     include_price_preview:bool=False,
+    include_oh:bool=False,
 ):
     try:
         result=backoffice_inventory_review(
@@ -3707,6 +3708,7 @@ def backoffice_inventory(
             query=q,
             lightweight=lightweight,
             include_price_preview=include_price_preview,
+            include_oh=include_oh,
         )
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
