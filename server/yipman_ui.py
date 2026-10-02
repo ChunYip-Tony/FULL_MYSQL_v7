@@ -482,6 +482,12 @@ const gpText=(price,cost)=>{
   if(p===null||c===null||p<=0)return 'GP —';
   return 'GP '+(((p-c)/p)*100).toFixed(1)+'%';
 };
+const retailPoint=v=>{
+  const n=num(v);if(n===null)return null;
+  const endings=[.29,.49,.59,.69,.79,.99],whole=Math.floor(n),c=[];
+  for(let d=Math.max(0,whole-1);d<=whole+2;d++)for(const e of endings)c.push(d+e);
+  return c.sort((a,b)=>Math.abs(a-n)-Math.abs(b-n)||a-b)[0];
+};
 const iso=d=>d.toISOString().slice(0,10);
 const shortDate=v=>{const m=String(v||'').match(/^\d{4}-(\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]:'—'};
 const appDate=v=>{
@@ -762,7 +768,7 @@ function quickFamilyGroups(rows){
 function quickUpcHtml(r){
  const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'',active=hasActivity(r.qty_7d);
  const pm=v=>num(v)===null?'—':money(v);
- const testedText=v=>num(v)===null?'Not set':money(v);
+ const testedText=v=>{const p=retailPoint(v);return p===null?'Not set':money(p)};
  const comp=(label,attr,val,cls='')=>num(val)===null?'':'<div class="qprice comp '+cls+'"><small>'+label+'</small><b '+attr+'>'+pm(val)+'</b></div>';
  const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
    '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
