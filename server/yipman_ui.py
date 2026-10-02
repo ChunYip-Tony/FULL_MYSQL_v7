@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v353';
+const CACHE='yipman-v354';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -238,14 +238,15 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qupcmetrics small{display:block;font-size:5px;color:#75828c;font-weight:950;line-height:1}
 .qupcmetrics b{display:block;font-size:16px!important;font-weight:1000;line-height:1;margin-top:1px}
 .qupcmetrics span{display:block;font-size:6px!important;color:#7e8a93;margin-top:2px}
-.qupcprices{grid-column:1/-1;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:3px;margin-top:1px}
+.qupcprices{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:3px;margin-top:1px}
 .qprice{min-width:0;border:1px solid #dce3e7;background:#f7f9fa;border-radius:6px;padding:3px 2px;text-align:center}
-.qprice.suggest{background:#e9f5ff;border-color:#bddaf1}
+.qprice.tested{background:#ecf8ef;border-color:#b9dec3}
+.qprice.testing{background:#fff5df;border-color:#ebcf93}
 .qprice.comp{background:#fff}
 .qprice.companyc{background:#fff8e6;border-color:#ead89d}
 .qprice small{display:block;font-size:5px;font-weight:950;color:#7a8790;line-height:1;white-space:nowrap}
 .qprice b{display:block;font-size:9px;font-weight:950;line-height:1;margin-top:2px;white-space:nowrap}
-.qprice.suggest b{color:#0d5b99}.qprice.companyc b{color:#7b5a00}
+.qprice.tested b{color:#24723a}.qprice.testing b{color:#9a6200}.qprice.companyc b{color:#7b5a00}
 .qhidebtn{padding:5px 6px}
 @media(max-width:430px){
   .qfamily .qfname{font-size:20px}
@@ -335,7 +336,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 (()=>{
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
+const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
 const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
 const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
 const iso=d=>d.toISOString().slice(0,10);
@@ -614,13 +615,15 @@ function quickFamilyGroups(rows){
 }
 function quickUpcHtml(r){
  const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'',active=hasActivity(r.qty_7d);
- const pm=v=>num(v)===null?'…':money(v);
+ const pm=v=>num(v)===null?'—':money(v);
+ const comp=(label,attr,val,cls='')=>num(val)===null?'':'<div class="qprice comp '+cls+'"><small>'+label+'</small><b '+attr+'>'+pm(val)+'</b></div>';
  const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
    '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
-   '<div class="qprice suggest"><small>SUGGEST</small><b data-q-suggest>'+pm(r.suggest_price)+'</b></div>'+
-   '<div class="qprice comp"><small>COMP A</small><b data-q-comp-a>'+pm(r.company_price_a)+'</b></div>'+
-   '<div class="qprice comp"><small>COMP B</small><b data-q-comp-b>'+pm(r.company_price_b)+'</b></div>'+
-   '<div class="qprice comp companyc"><small>COMP C</small><b data-q-comp-c>'+pm(r.company_price_c)+'</b></div>'+
+   '<div class="qprice tested"><small>TESTED</small><b data-q-tested>'+pm(r.sweet_spot_price)+'</b></div>'+
+   '<div class="qprice testing"><small>TESTING</small><b data-q-testing>…</b></div>'+
+   comp('COMP A','data-q-comp-a',r.company_price_a)+
+   comp('COMP B','data-q-comp-b',r.company_price_b)+
+   comp('COMP C','data-q-comp-c',r.company_price_c,'companyc')+
  '</div>':'';
  return '<div class="qupc" data-upc="'+esc(r.upc||'')+'">'+
    '<div class="qupcmain"><div class="qupctop"><span class="qrole '+role.cls+'">'+esc(role.label)+'</span><span class="qupccode">'+esc(r.upc||'—')+'</span></div>'+
@@ -700,14 +703,18 @@ async function hydrateQuickPrices(rows,requestId){
     if(!row)return;
     const set=(sel,val)=>{const n=card.querySelector(sel);if(n)n.textContent=num(val)===null?'—':money(val)};
     set('[data-q-current]',row.current_price);
-    set('[data-q-suggest]',row.suggested_price);
+    set('[data-q-tested]',row.tested_price);
+    set('[data-q-testing]',row.testing_price);
     set('[data-q-comp-a]',row.company_price_a);
     set('[data-q-comp-b]',row.company_price_b);
     set('[data-q-comp-c]',row.company_price_c);
     const strip=card.querySelector('[data-qprice-status]');
     if(strip){
       strip.dataset.qpriceStatus=String(row.suggestion_status||'READY');
-      strip.title='Current: '+String(row.current_price_source||'—')+(row.current_price_asof_date?' · '+String(row.current_price_asof_date):'')+' | Suggest: '+String(row.suggestion_status||'—');
+      strip.title='Current: '+String(row.current_price_source||'—')+(row.current_price_asof_date?' · '+String(row.current_price_asof_date):'')+
+        ' | Tested: '+(num(row.tested_price)===null?'—':money(row.tested_price))+
+        ' | Testing: '+(num(row.testing_price)===null?'—':money(row.testing_price))+
+        ' | '+String(row.suggestion_reason||row.suggestion_status||'—');
     }
   });
  }catch(e){
@@ -1032,7 +1039,7 @@ async function loadPrices(opts={}){
     return;
   }
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||String(d.cache_status||'').toUpperCase()==='STALE_REFRESHING';
-  const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||num(r.price_gap_pct)===null||num(r.price_gap_pct)>=3);
+  const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||r.actionable||['TESTED_PRICE','TESTING_PRICE'].includes(String(r.suggestion_reason_code||'')));
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
   const filtered=meaningful.filter(r=>{
     if(priceFilter==='LIVE')return String(r.category||'').toUpperCase()==='LIVE';
@@ -1046,7 +1053,10 @@ async function loadPrices(opts={}){
   $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled; current price/cost evidence is resolved live where available.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
   $('#priceRows').innerHTML=rows.map((r,i)=>{
     const days=(r.observed_delivery_days||[]).map(x=>String(x.weekday||'').slice(0,3).toUpperCase()+' '+fmt(x.receipt_date_count,0)).join(' · ');
-    return '<div class="pcard" data-price="'+i+'"><div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.review_status||'Pricing review')+'</small></div><div class="badge '+(r.priority_240_249_mismatch?'red':stale?'amber':'green')+'">'+(r.priority_240_249_mismatch?'240≠249':stale?'ESTIMATE':'REVIEW')+'</div></div><div class="compare"><div class="pbox"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="arrow">→</div><div class="pbox"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div></div><div class="why">OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · 7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day'+(r.gp_per_day_opportunity!=null?' · GP$/day lift '+money(r.gp_per_day_opportunity):'')+(days?' · RECEIPTS '+esc(days):'')+'</div></div>';
+    const code=String(r.suggestion_reason_code||'');
+    const actionLabel=code==='TESTED_PRICE'?'TESTED':code==='TESTING_PRICE'?'TESTING':r.priority_240_249_mismatch?'PAIR FIX':'PRICE';
+    const badgeLabel=r.priority_240_249_mismatch?'240≠249':code==='TESTED_PRICE'?'TESTED':code==='TESTING_PRICE'?'TESTING':stale?'ESTIMATE':'REVIEW';
+    return '<div class="pcard" data-price="'+i+'"><div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.suggestion_reason||r.primary_reason_text||r.review_status||'Pricing review')+'</small></div><div class="badge '+(r.priority_240_249_mismatch?'red':code==='TESTING_PRICE'||stale?'amber':'green')+'">'+badgeLabel+'</div></div><div class="compare"><div class="pbox"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="arrow">→</div><div class="pbox"><b>'+money(r.candidate_price)+'</b><span>'+actionLabel+'</span></div></div><div class="why">TESTED '+money(r.tested_price)+' · TESTING '+money(r.testing_price)+' · OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · 7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day'+(days?' · RECEIPTS '+esc(days):'')+'</div></div>';
   }).join('')||'<div class="empty">No actionable price suggestion matches this delivery-pattern filter.</div>';
   $$('[data-price]').forEach(x=>x.onclick=()=>openPrice(rows[Number(x.dataset.price)]));
  }catch(e){
@@ -1058,15 +1068,18 @@ async function loadPrices(opts={}){
 }
 function openPrice(r){
  const delivery=(r.observed_delivery_days||[]).map(x=>esc(x.weekday||'')+' '+fmt(x.receipt_date_count,0)+' receipt date'+(Number(x.receipt_date_count||0)===1?'':'s')).join('<br>');
+ const code=String(r.suggestion_reason_code||'');
+ const actionLabel=code==='TESTED_PRICE'?'TESTED PRICE':code==='TESTING_PRICE'?'TESTING PRICE':r.priority_240_249_mismatch?'PAIR FIX':'PRICE ACTION';
  sheet(r.name||r.upc,r.upc||'Price review',
- '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.candidate_price)+'</b><span>BEST SUPPORTED</span></div><div class="dm"><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>OH</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.candidate_price)+'</b><span>'+actionLabel+'</span></div><div class="dm"><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>OH</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
- '<div class="detail"><b>Optimization basis</b><br>Maximum supported GP$/day from recent completed selling-price history, constrained by Company A/B/C range when available; freshness and OH determine urgency.'+
+ '<div class="detail"><b>Price path</b><br>TESTED '+money(r.tested_price)+' · TESTING '+money(r.testing_price)+
+ '<br><br><b>Reason</b><br>'+esc(r.suggestion_reason||r.primary_reason_text||r.review_blocker||'Pricing review')+
+ '<br><br><b>Testing rule</b><br>Move gradually toward the internally supported sweet-spot target. Use the nearest observed price within a 5% step when available; otherwise move no more than 5% per test.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  '<br><br><b>Current evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
  '<br><br><b>Sales / stock</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · DOH '+fmt(r.doh)+
- (r.gp_per_day_opportunity!=null?'<br><br><b>Estimated GP$/day opportunity</b><br>'+money(r.gp_per_day_opportunity):'')+
- '<br><br><b>Reason</b><br>'+esc(r.primary_reason_text||r.review_blocker||'Pricing review')+(Array.isArray(r.reasons)&&r.reasons.length?'<br>'+r.reasons.map(x=>'• '+esc(x)).join('<br>'):'')+'</div>'+
+ (Array.isArray(r.reasons)&&r.reasons.length?'<br><br><b>Supporting signals</b><br>'+r.reasons.map(x=>'• '+esc(x)).join('<br>'):'')+'</div>'+
  (String(r.review_status||'').toUpperCase()==='ACTIONABLE'&&r.current_price!=null&&r.candidate_price!=null?'<div class="actions"><button class="secondary" id="priceClose">NOT NOW</button><button class="primary" id="priceAccept">ACCEPTED</button></div>':''));
  const c=$('#priceClose');if(c)c.onclick=()=>closeSheet(true);
  const a=$('#priceAccept');if(a)a.onclick=()=>acceptPrice(r,a);
