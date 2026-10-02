@@ -4929,7 +4929,7 @@ def pricing_review(
     )
     if data_health["status"] not in {"CURRENT", "STALE_ESTIMATE_AVAILABLE"}:
         return {
-            "contract_version": "BACKOFFICE_PRICING_REVIEW_V8_NO_GRACE",
+            "contract_version": "BACKOFFICE_PRICING_REVIEW_V9_PROACTIVE_TESTING",
             "category": cat,
             "report_date": None,
             "summary": {
@@ -5134,7 +5134,7 @@ def pricing_review(
             base_actionable
             and tested_price is not None
             and tested_price > _d(current_cost)
-            and abs(tested_price - _d(current_price)) > Decimal("0.01")
+            and abs(tested_price - _d(current_price)) > Decimal("0.25")
         ):
             action_price = tested_price
             reason_code = "TESTED_PRICE"
@@ -5198,7 +5198,7 @@ def pricing_review(
         visible_rows.append(row)
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V8_NO_GRACE",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V9_PROACTIVE_TESTING",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": report.get("summary"),
@@ -5217,7 +5217,7 @@ def pricing_review(
             "estimate_is_clearly_labelled": True,
             "tested_price": "HISTORICAL_SWEET_SPOT_FROM_ACTUAL_SALES_GP_DOLLARS_PER_DAY",
             "testing_price": "GRADUAL_STEP_TOWARD_INTERNAL_SUPPORTED_TARGET; NEAREST_OBSERVED_PRICE_WITHIN_5PCT ELSE MAX_5PCT STEP",
-            "price_action_priority": "PAIR_FIX_THEN_TESTED_PRICE_THEN_TESTING_PRICE",
+            "price_action_priority": "PAIR_FIX_THEN_TESTED_PRICE_WHEN_CURRENT_MORE_THAN_0_25_AWAY_THEN_TESTING_PRICE",
             "source_contract": report.get("price_suggestion_rules"),
         },
     }
