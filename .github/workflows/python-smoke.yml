@@ -156,6 +156,9 @@ jobs:
           src=inspect.getsource(v2.performance_report)
           assert v2._retail_price_point(Decimal('9.71'))==Decimal('9.69')
           assert v2._retail_price_point(Decimal('4.64'))==Decimal('4.69')
+          assert v2._retail_price_point(Decimal('3.54'))==Decimal('3.49')
+          assert v2._retail_price_point(Decimal('2.54'))==Decimal('2.49')
+          assert v2._retail_price_point(Decimal('3.58'))==Decimal('3.59')
           assert v2._retail_price_point(Decimal('17.09'))==Decimal('16.99')
           assert v2._retail_price_point(Decimal('9.71'),min_price=Decimal('9.70'))==Decimal('9.79')
           from backoffice_runtime import (
@@ -173,10 +176,12 @@ jobs:
           )
           assert MIN_TEST_PRICE_STEP==Decimal('0.45')
           assert path['testing_anchor_price']==Decimal('8.99')
+          assert path['raw_tested_price']==Decimal('9.71')
+          assert path['tested_price']==Decimal('9.69')
           assert path['target_sweet_spot_price']==Decimal('11.29')
           assert path['testing_price']==Decimal('9.49')
           assert path['testing_price']-path['testing_anchor_price']>=Decimal('0.45')
-          assert str(path['testing_price'])[-2:] in {'29','49','69','79','99'}
+          assert str(path['testing_price'])[-2:] in {'29','49','59','69','79','99'}
 
           # Do not publish a Testing price too close to Current.
           assert _next_testing_price(Decimal('8.99'),Decimal('9.29')) is None
@@ -213,7 +218,11 @@ jobs:
           assert 'reason_code = "SWEET_SPOT_GAP"' in review_src
           assert 'reason_code = "GP_DOLLAR_TEST"' in review_src
           assert 'reason_code = "COMPANY_RANGE"' in review_src
-          assert 'STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_MAX_GP_PER_DAY' in review_src
+          assert 'STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_ROUNDED_TO_RETAIL_POINT' in review_src
+          assert 'current_gp_pct_at_current_cost' in review_src
+          assert 'tested_gp_pct_at_current_cost' in review_src
+          assert 'testing_gp_pct_at_current_cost' in review_src
+          assert 'V2_RETAIL_59_TESTED_GP' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
 
           assert 'if not has_oh or not history_gate:' in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
@@ -245,12 +254,18 @@ jobs:
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
           assert 'Testing must move at least $0.45 up or down' in ui
+          assert '.29 / .49 / .59 / .69 / .79 / .99' in ui
+          assert 'ppgp' in ui
+          assert 'pcostline' in ui
+          assert 'raw_tested_price' in ui
           assert '.29 / .49 / .69 / .79 / .99' in ui
           assert 'Tested stays the actual proved historical price' in ui
           desktop=Path('desktop_workstation_v366.py').read_text(encoding='utf-8')
           assert "['Testing',money(pr&&pr.testing_price)" in desktop
           assert "testing=r.testing_price" in desktop
-          assert "min $0.45 from Current" in desktop
+          assert "retail sweet spot · GP " in desktop
+          assert "Tested GP%" in desktop
+          assert "Testing GP%" in desktop
           print('controlled-price-progress=PASS')
           PY
 
