@@ -887,9 +887,9 @@ async function initOrdering(force=false){
 }
 $('#deliveryDateCard').onclick=()=>{orderSelectMode='DELIVERY';updateOrderWindowUI()};
 $('#nextDeliveryDateCard').onclick=()=>{orderSelectMode='NEXT';updateOrderWindowUI()};
-$('[data-order-mode]').forEach(b=>b.onclick=()=>{
+$$('[data-order-mode]').forEach(b=>b.onclick=()=>{
  const mode=b.dataset.orderMode;
- $('[data-order-mode]').forEach(x=>x.classList.toggle('on',x===b));
+ $$('[data-order-mode]').forEach(x=>x.classList.toggle('on',x===b));
  $('#regularOrderPanel').classList.toggle('hide',mode!=='REGULAR');
  $('#promotionOrderPanel').classList.toggle('hide',mode!=='PROMOTION');
  if(mode==='REGULAR')initOrdering();
