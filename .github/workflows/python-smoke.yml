@@ -239,6 +239,10 @@ jobs:
           assert 'IGNORE 12 HOURS' in ui
           assert 'priceIgnoredThisVisit.has(id)' in ui
           assert 'PRICE_IGNORE_MS=12*60*60*1000' in ui
+          assert '.page{display:none;height:100%;overflow-y:auto;overflow-x:hidden' in ui
+          assert 'grid-template-columns:minmax(0,1fr) minmax(0,1fr)' in ui
+          assert '#data{overflow-x:hidden}' in ui
+          assert 'p.scrollTop=0;p.scrollLeft=0' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
           assert 'Ignore 12 hours' in desktop
