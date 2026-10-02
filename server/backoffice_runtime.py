@@ -3238,6 +3238,147 @@ def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
     }
 
 
+
+def best_sellers_review(limit: int = 8) -> dict[str, Any]:
+    """Fast Family-level Best Sellers payload for the Yipman empty-search home.
+
+    This intentionally avoids inventory_review() and the full Family -> Article
+    -> UPC Quick Check lineage build. Family 7D movement is already published in
+    quick_check_current; canonical physical receipts are loaded only for the
+    small selected Family set.
+    """
+    limit=max(1,min(int(limit or 8),20))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        movement_days_7=source_data_days(
+            cur,
+            "movement",
+            limit=7,
+            up_to=completed_through_date(),
+        )
+        day_count=len(movement_days_7)
+
+        cur.execute(
+            """SELECT family_id,
+                      MAX(main_article_number) AS family_article,
+                      MAX(family_description) AS family_name,
+                      MAX(product_class) AS category,
+                      MAX(family_movement_7d) AS family_movement_7d,
+                      MAX(family_movement_uom) AS family_movement_uom
+               FROM quick_check_current
+               WHERE family_id IS NOT NULL
+                 AND family_movement_7d IS NOT NULL
+                 AND family_movement_7d > 0
+                 AND COALESCE(quick_check_status,'') <> 'HISTORICAL_ONLY'
+               GROUP BY family_id
+               ORDER BY MAX(family_movement_7d) DESC, family_id
+               LIMIT %s""",
+            (limit,),
+        )
+        families=cur.fetchall()
+        fids=[int(x["family_id"]) for x in families if x.get("family_id") is not None]
+
+        recent_events=_family_receipt_events_bulk(
+            cur,
+            fids,
+            data_day_limit=60,
+        ) if fids else {}
+        completed_7_dates={x["date"] for x in movement_days_7}
+
+        rows=[]
+        for family in families:
+            fid=int(family["family_id"])
+            movement_qty=family.get("family_movement_7d")
+            movement_uom=str(family.get("family_movement_uom") or "").strip().upper()
+            events=[
+                x for x in recent_events.get(fid,[])
+                if x.get("posting_date") is not None
+                and x.get("receipt_quantity") is not None
+                and _d(x.get("receipt_quantity")) > 0
+            ]
+
+            def receipt_value(event: dict[str,Any]) -> tuple[Any,str|None]:
+                base_uom=str(event.get("base_receipt_uom") or "").strip().upper()
+                entry_uom=str(event.get("receipt_uom") or "").strip().upper()
+                if (
+                    movement_uom
+                    and base_uom == movement_uom
+                    and event.get("base_receipt_quantity") is not None
+                ):
+                    return event.get("base_receipt_quantity"),base_uom
+                if (
+                    movement_uom
+                    and entry_uom == movement_uom
+                    and event.get("receipt_quantity") is not None
+                ):
+                    return event.get("receipt_quantity"),entry_uom
+                if event.get("base_receipt_quantity") is not None and base_uom:
+                    return event.get("base_receipt_quantity"),base_uom
+                return event.get("receipt_quantity"),entry_uom or None
+
+            history=[]
+            for event in events[:2]:
+                qty,uom=receipt_value(event)
+                history.append({
+                    "date":event.get("posting_date"),
+                    "quantity":qty,
+                    "uom":uom,
+                })
+
+            events_7=[x for x in events if x.get("posting_date") in completed_7_dates]
+            normalized=[receipt_value(x) for x in events_7]
+            uoms={u for _,u in normalized if u}
+            missing_qty=any(q is None for q,_ in normalized)
+            if normalized and len(uoms)==1 and not missing_qty:
+                receipt_qty=sum((_d(q) for q,_ in normalized),Decimal("0"))
+                receipt_uom=next(iter(uoms))
+                receipt_status="READY"
+            elif not normalized:
+                receipt_qty=Decimal("0")
+                receipt_uom=movement_uom or None
+                receipt_status="READY_ZERO_RECEIPTS"
+            else:
+                receipt_qty=None
+                receipt_uom=None
+                receipt_status="HOLD_MIXED_OR_MISSING_RECEIPT_UOM"
+
+            rows.append({
+                "family_id":fid,
+                "family_article":family.get("family_article"),
+                "family_name":family.get("family_name"),
+                "category":family.get("category"),
+                "family_group_movement_7d":movement_qty,
+                "family_group_movement_uom":movement_uom or None,
+                "family_group_avg_qty_day":(
+                    _d(movement_qty)/Decimal(day_count)
+                    if movement_qty is not None and day_count > 0
+                    else None
+                ),
+                "family_group_movement_days_7d":day_count,
+                "family_receipt_7d_qty":receipt_qty,
+                "family_receipt_7d_uom":receipt_uom,
+                "family_receipt_7d_count":len(events_7),
+                "family_receipt_7d_status":receipt_status,
+                "family_receipt_history":history,
+            })
+
+        rows.sort(
+            key=lambda x:(
+                -float(x.get("family_group_avg_qty_day") or 0),
+                -float(x.get("family_group_movement_7d") or 0),
+                str(x.get("family_name") or ""),
+            )
+        )
+        cur.close()
+
+    return {
+        "contract_version":"YIPMAN_BEST_SELLERS_V1",
+        "count":len(rows),
+        "movement_day_count":day_count,
+        "rows":rows,
+    }
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",
