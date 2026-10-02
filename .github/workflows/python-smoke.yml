@@ -751,6 +751,14 @@ jobs:
           assert "/v1/yipman/stock-flow?limit=40" in text
           assert "Stock Flow Watch" in text
           assert "DIFFERENCE ↓" in text
+          assert "/v1/app/v2/performance/range?" in text
+          assert "/v1/app/v2/performance/latest-date" in text
+          assert "function aiDateFromQuestion" in text
+          assert "function aiAnswerPerformance" in text
+          assert "FULL MYSQL · live operational answers" in text
+          assert "Today’s attention" in text
+          assert "Important reminders first" not in text
+          assert "data-ai-question=" not in text
           assert "receipt_minus_selling_7d" in text
           assert "next_delivery_date=" in text
           print('yipman-dom-bindings=PASS')
