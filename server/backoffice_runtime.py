@@ -529,6 +529,151 @@ def _frequency_label(pattern: dict[str, Any]) -> str:
     return "No receipt pattern"
 
 
+
+def yipman_ordering_calendar(days: int = 28) -> dict[str, Any]:
+    """Return future delivery dates highlighted from actual receipt weekday history.
+
+    This is a read-only selector helper for Yipman Regular Ordering.  A future
+    date is marked observed when its weekday has canonical physical receipt
+    evidence (101 or physical 109) in the recent 180-day movement window.
+    Defaults prefer the two strongest observed weekdays across Seafood
+    Families, while every observed weekday remains visible to the user.
+    """
+    horizon=max(14,min(int(days or 28),42))
+    today=business_today()
+    weekday_names=[
+        "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
+    ]
+    weekday_stats={
+        i:{
+            "weekday":weekday_names[i],
+            "weekday_index":i,
+            "family_ids":set(),
+            "receipt_dates":set(),
+            "receipt_event_count":0,
+        }
+        for i in range(7)
+    }
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        receipt_days=source_data_days(
+            cur,
+            "movement",
+            limit=180,
+            up_to=completed_through_date(),
+        )
+        families: dict[int,dict[str,Any]]={}
+        for kind in ("FRESH","FROZEN"):
+            for fam in _ordering_candidate_families(cur,kind):
+                families[int(fam["family_id"])]=fam
+
+        event_map=_family_receipt_events_bulk(
+            cur,
+            list(families),
+            data_days=receipt_days,
+        ) if families else {}
+
+        for fid,events in event_map.items():
+            family_weekdays=set()
+            for event in events or []:
+                posting_date=event.get("posting_date")
+                quantity=event.get("receipt_quantity")
+                if (
+                    posting_date is None
+                    or quantity is None
+                    or _d(quantity)<=0
+                ):
+                    continue
+                wd=posting_date.weekday()
+                family_weekdays.add(wd)
+                weekday_stats[wd]["receipt_dates"].add(posting_date)
+                weekday_stats[wd]["receipt_event_count"]+=1
+            for wd in family_weekdays:
+                weekday_stats[wd]["family_ids"].add(int(fid))
+        cur.close()
+
+    ranked=[
+        {
+            "weekday":x["weekday"],
+            "weekday_index":x["weekday_index"],
+            "observed_family_count":len(x["family_ids"]),
+            "observed_receipt_date_count":len(x["receipt_dates"]),
+            "receipt_event_count":x["receipt_event_count"],
+        }
+        for x in weekday_stats.values()
+        if x["family_ids"]
+    ]
+    ranked.sort(
+        key=lambda x:(
+            -int(x["observed_family_count"]),
+            -int(x["observed_receipt_date_count"]),
+            int(x["weekday_index"]),
+        )
+    )
+    primary_weekdays={int(x["weekday_index"]) for x in ranked[:2]}
+
+    date_rows=[]
+    for offset in range(horizon):
+        d=today+timedelta(days=offset)
+        stat=weekday_stats[d.weekday()]
+        observed=bool(stat["family_ids"])
+        date_rows.append({
+            "date":d,
+            "weekday":weekday_names[d.weekday()],
+            "weekday_index":d.weekday(),
+            "observed":observed,
+            "primary_observed":bool(observed and d.weekday() in primary_weekdays),
+            "observed_family_count":len(stat["family_ids"]),
+            "observed_receipt_date_count":len(stat["receipt_dates"]),
+        })
+
+    primary_dates=[x for x in date_rows if x["primary_observed"]]
+    observed_dates=[x for x in date_rows if x["observed"]]
+    default_delivery=(
+        primary_dates[0]["date"]
+        if primary_dates else (
+            observed_dates[0]["date"] if observed_dates else today
+        )
+    )
+    default_next=next(
+        (
+            x["date"] for x in primary_dates
+            if x["date"]>default_delivery
+        ),
+        None,
+    )
+    if default_next is None:
+        default_next=next(
+            (
+                x["date"] for x in observed_dates
+                if x["date"]>default_delivery
+            ),
+            default_delivery+timedelta(days=7),
+        )
+
+    return {
+        "contract_version":"YIPMAN_ORDERING_CALENDAR_V1",
+        "generated_for_date":today,
+        "lookback_days":180,
+        "horizon_days":horizon,
+        "primary_observed_weekdays":[
+            x for x in ranked
+            if int(x["weekday_index"]) in primary_weekdays
+        ],
+        "observed_weekdays":ranked,
+        "dates":date_rows,
+        "default_delivery_date":default_delivery,
+        "default_next_delivery_date":default_next,
+        "rules":{
+            "receipt_basis":"CANONICAL_PHYSICAL_101_109",
+            "observed_date_highlight":"ANY_RECEIPT_WEEKDAY_EVIDENCE_IN_180D",
+            "default_date_basis":"TOP_TWO_WEEKDAYS_BY_FAMILY_COUNT_THEN_RECEIPT_DATE_COUNT",
+            "write_enabled":False,
+        },
+    }
+
+
 def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: dict[str, Any]) -> list[dict[str, str]]:
     uom = str(row.get("uom") or "")
     reasons = [
