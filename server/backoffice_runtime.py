@@ -618,6 +618,56 @@ def _observed_receipt_pack_size(event: dict[str, Any]) -> str | None:
     return f"{ratio_text} {base_uom} / {entry_uom}"
 
 
+
+def _article_description_map(
+    cur,
+    article_numbers: list[str] | set[str] | tuple[str, ...],
+) -> dict[str, str]:
+    """Resolve human-readable SAP Article names without guessing."""
+    arts=sorted({
+        str(x or "").strip()
+        for x in article_numbers or []
+        if str(x or "").strip()
+    })
+    if not arts:
+        return {}
+
+    ph=",".join(["%s"]*len(arts))
+    out: dict[str,str]={}
+    cur.execute(
+        f"""SELECT article_number,article_description
+            FROM article
+            WHERE article_number IN ({ph})
+              AND article_description IS NOT NULL
+              AND TRIM(article_description)<>''""",
+        tuple(arts),
+    )
+    for row in cur.fetchall():
+        art=str(row.get("article_number") or "").strip()
+        desc=str(row.get("article_description") or "").strip()
+        if art and desc:
+            out[art]=desc
+
+    missing=[x for x in arts if x not in out]
+    if missing:
+        mph=",".join(["%s"]*len(missing))
+        cur.execute(
+            f"""SELECT article_number,MAX(description) AS article_description
+                FROM movement_history
+                WHERE article_number IN ({mph})
+                  AND description IS NOT NULL
+                  AND TRIM(description)<>''
+                GROUP BY article_number""",
+            tuple(missing),
+        )
+        for row in cur.fetchall():
+            art=str(row.get("article_number") or "").strip()
+            desc=str(row.get("article_description") or "").strip()
+            if art and desc:
+                out[art]=desc
+    return out
+
+
 def _historical_receiving_article_summary(
     cur,
     family_article: str | None,
@@ -663,6 +713,7 @@ def _historical_receiving_article_summary(
             slot["observed_pack_size"]=observed
             slot["observed_pack_date"]=posting_date
 
+    article_names=_article_description_map(cur,set(grouped))
     out=[]
     for slot in grouped.values():
         if pack.get("status")=="READY" and pack.get("pack_size"):
@@ -685,6 +736,7 @@ def _historical_receiving_article_summary(
 
         out.append({
             "article_number":slot["article_number"],
+            "article_name":article_names.get(slot["article_number"]),
             "last_receipt_date":slot["last_receipt_date"],
             "receipt_event_count":slot["receipt_event_count"],
             "pack_size":pack_size,
@@ -1354,11 +1406,17 @@ def ordering_review(
                     if suggested_qty is not None and _d(suggested_qty)>0
                     else []
                 )
+                receiving_names=_article_description_map(
+                    cur,
+                    [receiving_article] if receiving_article else [],
+                )
+                receiving_article_name=receiving_names.get(str(receiving_article or "").strip())
                 row = {
                     "family_id": fid,
                     "family_name": s.get("family_article_name"),
                     "family_article": s.get("family_article_number"),
                     "receiving_article": receiving_article,
+                    "receiving_article_name": receiving_article_name,
                     "historical_receiving_articles": historical_receiving_articles,
                     "oh": s.get("ordering_oh_used"),
                     "oh_uom": s.get("uom"),
@@ -4094,112 +4152,196 @@ def _recent_family_sale_event_from_batch(
     sales_days: list[dict[str, Any]],
     target_uom: str,
 ) -> dict[str, Any] | None:
-    """Return the newest SALE event found on any related UPC in the 28-day window.
+    """Return the newest SALE event plus its full-week incremental sales lift.
 
-    TPR is never promotion. The Family is flagged when at least one related UPC
-    has positive SALE quantity. Event quantity is published only when every
-    SALE-active UPC can be converted safely into the Stock Flow Family UOM.
+    Promotion week = the latest 7 completed canonical POS sales days ending on
+    the SALE event end date. Actual week quantity includes every price type for
+    the Family. The normal-week baseline is the average Family quantity on
+    non-SALE completed days outside that promotion week, multiplied by the
+    promotion-week supported-day count. Missing dates are ignored, never zero.
+    TPR is never promotion.
     """
-    uom = str(target_uom or "").strip().upper()
-    ordered_days = sorted(
+    uom=str(target_uom or "").strip().upper()
+    ordered_days=sorted(
         [x.get("date") for x in sales_days if x.get("date") is not None]
     )
     if not ordered_days or not family_rows:
         return None
 
-    sale_days: dict[date, dict[str, Any]] = {}
+    def convert_row_qty(row: dict[str,Any], qty: Decimal) -> Decimal | None:
+        selling_uom=str(row.get("selling_uom") or "").strip().upper()
+        base_uom=str(row.get("base_uom") or "").strip().upper()
+        factor=row.get("base_qty_per_selling_unit")
+        if not uom:
+            return None
+        if selling_uom and selling_uom==uom:
+            return qty
+        if base_uom and base_uom==uom and factor is not None:
+            factor_d=_d(factor)
+            if factor_d>0:
+                return qty*factor_d
+        return None
+
+    family_day: dict[date,dict[str,Any]]={}
     for day in ordered_days:
-        total = Decimal("0")
-        has_sale = False
-        qty_ready = bool(uom)
-        upcs: set[str] = set()
+        total=Decimal("0")
+        total_ready=bool(uom)
+        sale_total=Decimal("0")
+        sale_ready=bool(uom)
+        has_sale=False
+        upcs:set[str]=set()
         for row in family_rows:
             if row.get("upc_id") is None:
                 continue
-            obs = (daily_by_upc.get(int(row["upc_id"])) or {}).get(day) or {}
-            sale = (obs.get("price_types") or {}).get("SALE")
-            if not sale:
-                continue
-            qty = _d(sale.get("sold_quantity"))
-            if qty <= 0:
-                continue
-            has_sale = True
-            upcs.add(str(row.get("ean_upc") or row.get("upc_id") or ""))
-            selling_uom = str(row.get("selling_uom") or "").strip().upper()
-            base_uom = str(row.get("base_uom") or "").strip().upper()
-            factor = row.get("base_qty_per_selling_unit")
-            if selling_uom and selling_uom == uom:
-                total += qty
-            elif base_uom and base_uom == uom and factor is not None:
-                factor_d = _d(factor)
-                if factor_d > 0:
-                    total += qty * factor_d
+            obs=(daily_by_upc.get(int(row["upc_id"])) or {}).get(day) or {}
+            all_qty=_d(obs.get("sold_quantity"))
+            if all_qty!=0:
+                converted=convert_row_qty(row,all_qty)
+                if converted is None:
+                    total_ready=False
                 else:
-                    qty_ready = False
-            else:
-                qty_ready = False
-        if has_sale:
-            sale_days[day] = {
-                "quantity": total if qty_ready else None,
-                "quantity_ready": qty_ready,
-                "related_upcs": sorted(x for x in upcs if x),
-            }
+                    total+=converted
 
+            sale=(obs.get("price_types") or {}).get("SALE")
+            if sale:
+                sale_qty=_d(sale.get("sold_quantity"))
+                if sale_qty>0:
+                    has_sale=True
+                    upcs.add(str(row.get("ean_upc") or row.get("upc_id") or ""))
+                    converted_sale=convert_row_qty(row,sale_qty)
+                    if converted_sale is None:
+                        sale_ready=False
+                    else:
+                        sale_total+=converted_sale
+
+        family_day[day]={
+            "total_quantity":total if total_ready else None,
+            "total_quantity_ready":total_ready,
+            "has_sale":has_sale,
+            "sale_quantity":sale_total if sale_ready and has_sale else None,
+            "sale_quantity_ready":sale_ready and has_sale,
+            "related_upcs":sorted(x for x in upcs if x),
+        }
+
+    sale_days={
+        day:info
+        for day,info in family_day.items()
+        if info.get("has_sale")
+    }
     if not sale_days:
         return None
 
-    events: list[dict[str, Any]] = []
-    start: date | None = None
-    end: date | None = None
-    event_qty = Decimal("0")
-    event_qty_ready = True
-    event_sale_days = 0
-    event_upcs: set[str] = set()
+    events:list[dict[str,Any]]=[]
+    start:date|None=None
+    end:date|None=None
+    event_qty=Decimal("0")
+    event_qty_ready=True
+    event_sale_days=0
+    event_upcs:set[str]=set()
 
     def close_event() -> None:
-        nonlocal start, end, event_qty, event_qty_ready, event_sale_days, event_upcs
+        nonlocal start,end,event_qty,event_qty_ready,event_sale_days,event_upcs
         if start is None or end is None:
             return
         events.append({
-            "promotion_type": "SALE",
-            "start_date": start,
-            "end_date": end,
-            "sale_quantity": event_qty if event_qty_ready else None,
-            "sale_quantity_uom": uom if event_qty_ready and uom else None,
-            "sale_quantity_status": (
-                "READY" if event_qty_ready and uom
-                else "UNRESOLVED_MIXED_UOM"
-            ),
-            "sale_observed_day_count": event_sale_days,
-            "related_upcs": sorted(event_upcs),
-            "window_supported_day_count": len(ordered_days),
-            "is_active_on_latest_supported_day": end == ordered_days[-1],
-            "promotion_definition": "PRICE_TYPE_SALE_ONLY",
-            "tpr_is_promotion": False,
+            "promotion_type":"SALE",
+            "start_date":start,
+            "end_date":end,
+            "sale_quantity":event_qty if event_qty_ready else None,
+            "sale_quantity_uom":uom if event_qty_ready and uom else None,
+            "sale_quantity_status":"READY" if event_qty_ready and uom else "UNRESOLVED_MIXED_UOM",
+            "sale_observed_day_count":event_sale_days,
+            "related_upcs":sorted(event_upcs),
+            "window_supported_day_count":len(ordered_days),
+            "is_active_on_latest_supported_day":end==ordered_days[-1],
+            "promotion_definition":"PRICE_TYPE_SALE_ONLY",
+            "tpr_is_promotion":False,
         })
-        start = None
-        end = None
-        event_qty = Decimal("0")
-        event_qty_ready = True
-        event_sale_days = 0
-        event_upcs = set()
+        start=None
+        end=None
+        event_qty=Decimal("0")
+        event_qty_ready=True
+        event_sale_days=0
+        event_upcs=set()
 
     for day in ordered_days:
-        info = sale_days.get(day)
+        info=sale_days.get(day)
         if info is None:
             close_event()
             continue
         if start is None:
-            start = day
-        end = day
-        event_sale_days += 1
+            start=day
+        end=day
+        event_sale_days+=1
         event_upcs.update(info.get("related_upcs") or [])
-        if info.get("quantity_ready") and info.get("quantity") is not None:
-            event_qty += _d(info.get("quantity"))
+        if info.get("sale_quantity_ready") and info.get("sale_quantity") is not None:
+            event_qty+=_d(info.get("sale_quantity"))
         else:
-            event_qty_ready = False
+            event_qty_ready=False
     close_event()
-    return events[-1] if events else None
+    if not events:
+        return None
+
+    latest=events[-1]
+    event_end=latest["end_date"]
+    supported_to_event=[d for d in ordered_days if d<=event_end]
+    promo_week_days=supported_to_event[-7:]
+    promo_week_set=set(promo_week_days)
+
+    actual_ready=bool(promo_week_days)
+    actual_qty=Decimal("0")
+    for day in promo_week_days:
+        info=family_day.get(day) or {}
+        if not info.get("total_quantity_ready") or info.get("total_quantity") is None:
+            actual_ready=False
+            break
+        actual_qty+=_d(info.get("total_quantity"))
+
+    baseline_days=[
+        day for day in ordered_days
+        if day not in promo_week_set
+        and not (family_day.get(day) or {}).get("has_sale")
+        and (family_day.get(day) or {}).get("total_quantity_ready")
+        and (family_day.get(day) or {}).get("total_quantity") is not None
+    ]
+    baseline_qty=sum(
+        (_d((family_day.get(day) or {}).get("total_quantity")) for day in baseline_days),
+        Decimal("0"),
+    )
+    baseline_daily=(
+        baseline_qty/Decimal(len(baseline_days))
+        if baseline_days else None
+    )
+    expected_week=(
+        baseline_daily*Decimal(len(promo_week_days))
+        if baseline_daily is not None and promo_week_days else None
+    )
+    extra_qty=(
+        actual_qty-expected_week
+        if actual_ready and expected_week is not None else None
+    )
+
+    latest.update({
+        "promotion_week_start_date":promo_week_days[0] if promo_week_days else None,
+        "promotion_week_end_date":promo_week_days[-1] if promo_week_days else None,
+        "promotion_week_supported_day_count":len(promo_week_days),
+        "promotion_week_actual_qty":actual_qty if actual_ready else None,
+        "promotion_week_expected_nonpromo_qty":expected_week,
+        "promotion_week_extra_qty":extra_qty,
+        "promotion_week_extra_qty_uom":uom if extra_qty is not None and uom else None,
+        "promotion_week_extra_qty_status":(
+            "READY"
+            if extra_qty is not None and uom and len(baseline_days)>=3
+            else "INSUFFICIENT_NONPROMO_BASELINE"
+            if len(baseline_days)<3
+            else "UNRESOLVED_MIXED_UOM"
+        ),
+        "nonpromo_baseline_daily_qty":baseline_daily,
+        "nonpromo_baseline_day_count":len(baseline_days),
+        "week_comparison_definition":"LATEST_7_COMPLETED_POS_DAYS_ENDING_AT_PROMO_EVENT_END_VS_NON_SALE_28D_DAILY_BASELINE",
+    })
+    return latest
+
 
 
 def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
@@ -4355,7 +4497,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V2_RECENT_PROMOTION_28D",
+        "contract_version": "YIPMAN_STOCK_FLOW_V3_PROMOTION_WEEK_EXTRA_QTY",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4370,7 +4512,9 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "promotion_scope": "ANY_RELATED_FAMILY_UPC",
             "promotion_definition": "PRICE_TYPE_SALE_ONLY",
             "tpr_is_promotion": False,
-            "promotion_quantity": "MOST_RECENT_SALE_EVENT_POS_QTY_IN_FAMILY_MOVEMENT_UOM_WHEN_SAFE",
+            "promotion_quantity": "PROMOTION_WEEK_EXTRA_QTY_VS_NON_SALE_28D_DAILY_BASELINE",
+            "promotion_week": "LATEST_7_COMPLETED_POS_DAYS_ENDING_AT_PROMO_EVENT_END",
+            "nonpromotion_baseline": "NON_SALE_COMPLETED_DAYS_OUTSIDE_PROMOTION_WEEK_IN_28D_WINDOW",
         },
     }
 
