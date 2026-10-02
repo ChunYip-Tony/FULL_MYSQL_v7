@@ -4192,6 +4192,7 @@ def _recent_family_sale_event_from_batch(
         total=Decimal("0")
         total_ready=bool(uom)
         sale_total=Decimal("0")
+        sale_sales_amount=Decimal("0")
         sale_ready=bool(uom)
         has_sale=False
         upcs:set[str]=set()
@@ -4213,6 +4214,7 @@ def _recent_family_sale_event_from_batch(
                 if sale_qty>0:
                     has_sale=True
                     upcs.add(str(row.get("ean_upc") or row.get("upc_id") or ""))
+                    sale_sales_amount+=_d(sale.get("sales_amount"))
                     converted_sale=convert_row_qty(row,sale_qty)
                     if converted_sale is None:
                         sale_ready=False
@@ -4225,6 +4227,7 @@ def _recent_family_sale_event_from_batch(
             "has_sale":has_sale,
             "sale_quantity":sale_total if sale_ready and has_sale else None,
             "sale_quantity_ready":sale_ready and has_sale,
+            "sale_sales_amount":sale_sales_amount if has_sale else None,
             "related_upcs":sorted(x for x in upcs if x),
         }
 
@@ -4240,12 +4243,13 @@ def _recent_family_sale_event_from_batch(
     start:date|None=None
     end:date|None=None
     event_qty=Decimal("0")
+    event_sales_amount=Decimal("0")
     event_qty_ready=True
     event_sale_days=0
     event_upcs:set[str]=set()
 
     def close_event() -> None:
-        nonlocal start,end,event_qty,event_qty_ready,event_sale_days,event_upcs
+        nonlocal start,end,event_qty,event_sales_amount,event_qty_ready,event_sale_days,event_upcs
         if start is None or end is None:
             return
         events.append({
@@ -4255,6 +4259,17 @@ def _recent_family_sale_event_from_batch(
             "sale_quantity":event_qty if event_qty_ready else None,
             "sale_quantity_uom":uom if event_qty_ready and uom else None,
             "sale_quantity_status":"READY" if event_qty_ready and uom else "UNRESOLVED_MIXED_UOM",
+            "sale_sales_amount":event_sales_amount,
+            "avg_promotion_selling_price":(
+                event_sales_amount/event_qty
+                if event_qty_ready and event_qty>0 else None
+            ),
+            "avg_promotion_selling_price_uom":uom if event_qty_ready and event_qty>0 and uom else None,
+            "avg_promotion_selling_price_status":(
+                "READY"
+                if event_qty_ready and event_qty>0 and uom
+                else "UNRESOLVED_MIXED_UOM"
+            ),
             "sale_observed_day_count":event_sale_days,
             "related_upcs":sorted(event_upcs),
             "window_supported_day_count":len(ordered_days),
@@ -4265,6 +4280,7 @@ def _recent_family_sale_event_from_batch(
         start=None
         end=None
         event_qty=Decimal("0")
+        event_sales_amount=Decimal("0")
         event_qty_ready=True
         event_sale_days=0
         event_upcs=set()
@@ -4279,6 +4295,7 @@ def _recent_family_sale_event_from_batch(
         end=day
         event_sale_days+=1
         event_upcs.update(info.get("related_upcs") or [])
+        event_sales_amount+=_d(info.get("sale_sales_amount"))
         if info.get("sale_quantity_ready") and info.get("sale_quantity") is not None:
             event_qty+=_d(info.get("sale_quantity"))
         else:
@@ -4502,7 +4519,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V3_PROMOTION_WEEK_EXTRA_QTY",
+        "contract_version": "YIPMAN_STOCK_FLOW_V4_PROMO_AVG_PRICE",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4518,6 +4535,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "promotion_definition": "PRICE_TYPE_SALE_ONLY",
             "tpr_is_promotion": False,
             "promotion_quantity": "PROMOTION_WEEK_EXTRA_QTY_VS_NON_SALE_28D_DAILY_BASELINE",
+            "average_promotion_selling_price": "SALE_EVENT_SALES_DOLLARS_DIVIDED_BY_SALE_EVENT_QTY_IN_FAMILY_MOVEMENT_UOM",
             "promotion_week": "LATEST_7_COMPLETED_POS_DAYS_ENDING_AT_PROMO_EVENT_END",
             "nonpromotion_baseline": "NON_SALE_COMPLETED_DAYS_OUTSIDE_PROMOTION_WEEK_IN_28D_WINDOW",
         },
