@@ -209,6 +209,9 @@ jobs:
           assert 'PRICE_IGNORE_MS=30*60*1000' in ui
           assert 'STRONGEST PROVED' in ui
           assert '.pricepath' in ui
+          assert '.pp b{display:block;font-size:19px' in ui
+          assert '.pm b{display:block;font-size:11px' in ui
+          assert '.pcard-actions button{border-radius:8px;padding:7px 9px;font-size:8px' in ui
           print('controlled-price-progress=PASS')
           PY
 
