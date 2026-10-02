@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v379';
+const CACHE='yipman-v380';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -118,6 +118,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;min-width:0}.c{min-width:0;text-align:center;font-size:8px;color:#5f6d78;font-weight:850}.dot{width:13px;height:13px;border-radius:50%;background:var(--green);margin:4px auto 0}.dot.warn{background:#d19a00}.dot.bad{background:var(--red)}
 .currentbatch{display:grid;gap:8px}.cbtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.cbid b{display:block;font-size:18px;line-height:1.05}.cbid span{display:block;font-size:9px;color:var(--muted);margin-top:3px}.cbstatus{flex:0 0 auto;max-width:58%;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:950;line-height:1.15;text-align:center;white-space:normal}.cbstatus.red{background:var(--redbg);color:var(--red)}.cbstatus.amber{background:var(--amberbg);color:var(--amber)}.cbstatus.green{background:var(--greenbg);color:var(--green)}
 .cbmeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.cbmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbmeta b{display:block;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cblive{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f6f8fa;border:1px solid #e6ecef;border-radius:10px;padding:7px 8px}.cblive-main{display:flex;align-items:center;gap:6px;min-width:0}.cblive-dot{width:9px;height:9px;border-radius:50%;background:#9aa6af;box-shadow:0 0 0 3px rgba(154,166,175,.12);flex:0 0 auto}.cblive-dot.running{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.13)}.cblive-dot.queued{background:#d19a00;box-shadow:0 0 0 3px rgba(209,154,0,.13)}.cblive-dot.stuck{background:#d93025;box-shadow:0 0 0 3px rgba(217,48,37,.13)}.cblive b{font-size:9px;line-height:1.15}.cblive span{font-size:7px;color:var(--muted);font-weight:800;white-space:nowrap}.cblivecheck{font-size:7px!important;color:#788690!important}
+.cbprogress{background:#f8fafb;border:1px solid #e7ecef;border-radius:10px;padding:8px}.cbprogress-top{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}.cbprogress-top b{font-size:11px}.cbprogress-top span{font-size:8px;color:var(--muted);font-weight:850}.cbbar{height:6px;background:#e3e9ed;border-radius:999px;overflow:hidden;margin-top:6px}.cbbar i{display:block;height:100%;background:#1488c6;border-radius:999px;transition:width .25s ease}.cbprogress-sub{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:7px;color:#667581;font-weight:850}.cbprogress-sub span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
 .batchrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;padding:9px 0;border-top:1px solid var(--line);align-items:start}.batchrow:first-child{border-top:0}.batchrow>div{min-width:0}.batchrow b{display:block;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batchrow span{display:block;min-width:0;font-size:8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.batchdate{font-size:8px!important;color:#84909a!important;white-space:nowrap}.batchstate{display:inline-block!important;width:auto;border-radius:999px;padding:3px 6px;background:#f3f6f8;color:#5f6d78!important;font-size:7px!important;font-weight:900;line-height:1.15}.batchstate.hold{background:var(--redbg);color:var(--red)!important}.batchstate.ready{background:var(--greenbg);color:var(--green)!important}
 .qaresolutioncard{grid-column:1/-1}.qareshead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.qareshead h3{margin-bottom:2px}.qareshead p{margin:0;font-size:8px;line-height:1.3;color:var(--muted);font-weight:750}.qaresbadge{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:#eef3f7;color:#51606c;font-size:8px;font-weight:950}.qaresbadge.bad{background:var(--redbg);color:var(--red)}.qaresbadge.ok{background:var(--greenbg);color:var(--green)}
 .qaresstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.qaresstat{background:#f6f8fa;border-radius:9px;padding:7px}.qaresstat small{display:block;font-size:6px;color:var(--muted);font-weight:950}.qaresstat b{display:block;font-size:13px;margin-top:2px}
@@ -133,6 +136,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .cal{gap:6px}.c{font-size:9px}.dot{width:14px;height:14px}
   .cbid b{font-size:20px}.cbid span{font-size:10px}.cbstatus{font-size:9px;max-width:64%}
   .cbmeta small{font-size:7px}.cbmeta b{font-size:11px}
+  .cblive{padding:8px 9px}.cblive b{font-size:11px}.cblive span,.cblivecheck{font-size:8px!important}.cblive-dot{width:10px;height:10px}
+  .cbprogress{padding:9px}.cbprogress-top b{font-size:13px}.cbprogress-top span{font-size:9px}.cbprogress-sub{font-size:8px}.cbbar{height:7px}
+  .cbrunmeta small{font-size:7px}.cbrunmeta b{font-size:10px}.cbcurrentitem small{font-size:7px}.cbcurrentitem b{font-size:11px}.cbwarn{font-size:9px}
   .batchrow{padding:10px 0}.batchrow b{font-size:13px}.batchrow span{font-size:9px}.batchstate{font-size:8px!important}
   .qaresolutioncard{grid-column:auto}.qareshead p{font-size:9px}.qaresbadge{font-size:9px}.qaresstat small{font-size:7px}.qaresstat b{font-size:16px}.qagroup b{font-size:12px}.qagroup span{font-size:9px}.qagroup button{font-size:9px}.qaresactions button{font-size:10px;padding:10px}.qaitem b{font-size:14px}.qaitem small,.qaitemreason{font-size:10px}.qaflag{font-size:8px}
 }
@@ -583,7 +589,7 @@ const appDate=v=>{
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
@@ -597,6 +603,7 @@ function renderView(id){
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
   const p=$('#'+id);if(p){p.scrollTop=0;p.scrollLeft=0}
   if(id!=='order'){clearTimeout(orderRetryTimer);orderRetryTimer=null}
+  if(id!=='data'){clearTimeout(dataLiveTimer);dataLiveTimer=null}
   if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
   if(id==='order')initOrdering();
   if(id==='price')loadPrices();
@@ -1764,21 +1771,81 @@ async function rebuildQAFromDataCenter(){
  const btn=$('#qaRebuild');if(btn){btn.disabled=true;btn.textContent='QUEUING…'}
  try{await api('/v1/web-upload/batches/'+encodeURIComponent(dataQaBatchId)+'/rebuild-phase3',{method:'POST',timeoutMs:30000});toast('QA rebuild queued');setTimeout(()=>loadData(),900)}catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent='REBUILD QA'}}
 }
+function fmtElapsedSeconds(v){
+ const n=num(v);if(n===null||n<0)return '—';
+ const sec=Math.round(n);if(sec<60)return sec+'s';
+ const m=Math.floor(sec/60),s=sec%60;if(m<60)return m+'m '+s+'s';
+ const h=Math.floor(m/60),mm=m%60;return h+'h '+mm+'m';
+}
+function batchLiveState(b){
+ const run=String(b?.active_run_status||'').toUpperCase();
+ const fresh=b?.active_heartbeat_fresh===true;
+ const age=num(b?.active_heartbeat_age_seconds);
+ const batch=String(b?.processing_status||'').toUpperCase();
+ if(run==='STARTED'&&fresh)return {key:'running',label:'RUNNING',sub:'heartbeat '+(age!==null?fmtElapsedSeconds(age)+' ago':'live')};
+ if(run==='STARTED'&&!fresh)return {key:'stuck',label:'POSSIBLY STUCK',sub:age!==null?('no heartbeat for '+fmtElapsedSeconds(age)):'live heartbeat missing'};
+ if(run==='QUEUED')return {key:'queued',label:'QUEUED',sub:'waiting for worker'};
+ if(run==='PAUSE_REQUESTED')return {key:'queued',label:'PAUSING',sub:'pause requested'};
+ if(batch.includes('HOLD'))return {key:'idle',label:'NOT RUNNING',sub:'QA hold · action required'};
+ if(/READY|PUBLISH|COMPLETED/.test(batch))return {key:'running',label:'COMPLETE / READY',sub:'no active worker required'};
+ return {key:'idle',label:'NOT RUNNING',sub:friendlySignal(batch||'no active run')};
+}
+function renderLivePipeline(b){
+ const st=String(b?.processing_status||'NONE').toUpperCase(),run=String(b?.active_run_status||'').toUpperCase();
+ $('#pipe').innerHTML='<div class="stage '+(st!=='NONE'?'ok':'')+'"><b>UPLOAD</b><span>'+(st==='NONE'?'—':'DONE')+'</span></div><div class="stage '+(/INGEST|PHASE|QUICK|READY|RELEASE/.test(st)?'ok':'')+'"><b>INGEST</b><span>'+(/INGEST|PHASE|QUICK|READY|RELEASE/.test(st)?'DONE':'—')+'</span></div><div class="stage '+(/HOLD/.test(st)?'bad':/PHASE3|QUICK|READY/.test(st)?'ok':run==='STARTED'?'warn':'')+'"><b>QA</b><span>'+esc(st.includes('HOLD')?'HOLD':/PHASE3|QUICK|READY/.test(st)?'DONE':run==='STARTED'?'RUN':'WAIT')+'</span></div><div class="stage '+(/QUICK_CHECK_READY/.test(st)?'ok':run==='STARTED'?'warn':'')+'"><b>PUBLISH</b><span>'+(/QUICK_CHECK_READY/.test(st)?'READY':run==='STARTED'?'WORK':'WAIT')+'</span></div>';
+}
+function renderCurrentBatchPanel(b){
+ if(!b?.batch_id){$('#currentBatch').innerHTML='<div class="empty">No active or recent batch.</div>';return}
+ const st=String(b.processing_status||'NONE').toUpperCase(),statusLabel=friendlySignal(st);
+ const statusClass=st.includes('HOLD')?'red':(/READY|PUBLISH/.test(st)?'green':'amber');
+ const live=batchLiveState(b),pctNum=num(b.active_progress_pct),hasPct=pctNum!==null,pct=hasPct?Math.max(0,Math.min(100,pctNum)):0;
+ const cur=num(b.active_progress_current),tot=num(b.active_progress_total),hasCounts=cur!==null&&tot!==null&&tot>0;
+ const stage=b.active_phase3_stage||b.active_last_phase3_stage||b.active_stage_name||'—';
+ const elapsed=fmtElapsedSeconds(b.active_progress_elapsed_seconds),eta=fmtElapsedSeconds(b.active_progress_eta_seconds);
+ const rate=num(b.active_progress_rows_per_second),hbAge=fmtElapsedSeconds(b.active_heartbeat_age_seconds);
+ const runId=b.active_pipeline_run_id||b.pipeline_run_id||'—';
+ const issueTotal=b.active_issue_total??b.open_issue_total??b.error_count??b.qa_hold_count??0;
+ const ready=b.active_progress_ready,hold=b.active_progress_hold,hist=b.active_progress_historical;
+ const item=[b.active_progress_current_upc,b.active_progress_current_name].filter(Boolean).join(' · ');
+ const progressLabel=hasPct?(pct.toFixed(pct%1?1:0)+'%'):hasCounts?(fmt(cur,0)+' / '+fmt(tot,0)):String(b.active_progress_kind||'Processing');
+ const progressDetail=hasCounts?(fmt(cur,0)+' of '+fmt(tot,0)+' '+esc(b.active_progress_unit||'rows')):(b.active_progress_kind?friendlySignal(b.active_progress_kind):'No numeric progress reported yet');
+ const alert=live.key==='stuck'?'<div class="cbwarn"><b>Heartbeat is stale.</b> The run still says STARTED, but the worker is not reporting live progress. Open the batch detail or refresh before deciding to rerun it.</div>':'';
+ $('#currentBatch').innerHTML='<div class="currentbatch" data-batch="'+esc(b.session_id||b.batch_key||'')+'">'+
+  '<div class="cbtop"><div class="cbid"><b>Batch #'+esc(b.batch_id)+'</b><span>'+esc(b.batch_label||'Current processing batch')+'</span></div><span class="cbstatus '+statusClass+'">'+esc(statusLabel)+'</span></div>'+
+  '<div class="cblive"><div class="cblive-main"><i class="cblive-dot '+esc(live.key)+'"></i><div><b>'+esc(live.label)+'</b><span>'+esc(live.sub)+'</span></div></div><span class="cblivecheck">LIVE · 5s</span></div>'+
+  '<div class="cbprogress"><div class="cbprogress-top"><b>'+esc(friendlySignal(stage))+'</b><span>'+esc(progressLabel)+'</span></div><div class="cbbar"><i style="width:'+(hasPct?pct:(hasCounts?Math.max(3,Math.min(100,(cur/tot)*100)):0)).toFixed(1)+'%"></i></div><div class="cbprogress-sub"><span>'+progressDetail+'</span><span>'+((ready!=null||hold!=null)?('Ready '+fmt(ready,0)+' · Hold '+fmt(hold,0)):(hist!=null?('Historical '+fmt(hist,0)):'Run #'+esc(runId)))+'</span></div></div>'+
+  '<div class="cbrunmeta"><div><small>RUN</small><b>#'+esc(runId)+'</b></div><div><small>HEARTBEAT</small><b>'+esc(hbAge)+'</b></div><div><small>ELAPSED</small><b>'+esc(elapsed)+'</b></div><div><small>ETA</small><b>'+esc(eta)+'</b></div></div>'+
+  '<div class="cbmeta"><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(issueTotal,0)+'</b></div><div><small>RATE</small><b>'+(rate!==null?fmt(rate,1)+'/s':'—')+'</b></div></div>'+
+  (item?'<div class="cbcurrentitem"><small>CURRENT WORK ITEM</small><b>'+esc(item)+'</b></div>':'')+alert+'</div>';
+ const el=$('#currentBatch [data-batch]');if(el)el.onclick=()=>openBatch(el.dataset.batch,b);
+}
+function scheduleDataLivePoll(){
+ clearTimeout(dataLiveTimer);dataLiveTimer=null;
+ if(current==='data')dataLiveTimer=setTimeout(pollDataLive,5000);
+}
+async function pollDataLive(){
+ if(current!=='data')return;
+ try{
+  const active=await api('/v1/web-upload/active',{timeoutMs:9000});
+  const b=active.active_batch||active.latest_batch||{};
+  renderLivePipeline(b);renderCurrentBatchPanel(b);
+ }catch(e){
+  const live=$('#currentBatch .cblivecheck');if(live)live.textContent='LIVE CHECK FAILED';
+ }finally{scheduleDataLivePoll()}
+}
 async function loadData(){
  try{
   const [health,active,recent,qa]=await Promise.all([api('/v1/backoffice/data-health?days=14',{timeoutMs:12000}),api('/v1/web-upload/active',{timeoutMs:12000}),api('/v1/web-upload/recent?limit=4',{timeoutMs:12000}),api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000})]);
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
-  const b=active.active_batch||active.latest_batch||{};const st=String(b.processing_status||'NONE').toUpperCase();
-  $('#pipe').innerHTML='<div class="stage '+(st!=='NONE'?'ok':'')+'"><b>UPLOAD</b><span>'+(st==='NONE'?'—':'DONE')+'</span></div><div class="stage '+(/INGEST|PHASE|QUICK|READY/.test(st)?'ok':'')+'"><b>INGEST</b><span>'+(/INGEST|PHASE|QUICK|READY/.test(st)?'DONE':'—')+'</span></div><div class="stage '+(/HOLD/.test(st)?'bad':/PHASE3|QUICK|READY/.test(st)?'ok':'warn')+'"><b>QA</b><span>'+esc(st.includes('HOLD')?'HOLD':/PHASE3|QUICK|READY/.test(st)?'DONE':'WAIT')+'</span></div><div class="stage '+(/QUICK_CHECK_READY/.test(st)?'ok':'warn')+'"><b>PUBLISH</b><span>'+(/QUICK_CHECK_READY/.test(st)?'READY':'WAIT')+'</span></div>';
-  const statusLabel=friendlySignal(st);
-  const statusClass=st.includes('HOLD')?'red':(/READY|PUBLISH/.test(st)?'green':'amber');
-  $('#currentBatch').innerHTML=b.batch_id?'<div class="currentbatch" data-batch="'+esc(b.session_id||b.batch_key||'')+'"><div class="cbtop"><div class="cbid"><b>Batch #'+esc(b.batch_id)+'</b><span>'+esc(b.batch_label||'Current processing batch')+'</span></div><span class="cbstatus '+statusClass+'">'+esc(statusLabel)+'</span></div><div class="cbmeta"><div><small>RUN</small><b>#'+esc(b.active_pipeline_run_id||b.pipeline_run_id||'—')+'</b></div><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(b.open_issue_total??b.error_count??b.qa_hold_count,0)+'</b></div></div></div>':'<div class="empty">No active batch.</div>';
+  const b=active.active_batch||active.latest_batch||{};
+  renderLivePipeline(b);
+  renderCurrentBatchPanel(b);
   renderQAResolution(qa,b);
   const rb=recent.batches||recent.rows||[];$('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();const cls=xs.includes('HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':'');return '<div class="batchrow"><div><b>Batch #'+esc(x.batch_id||'—')+'</b><span class="batchstate'+cls+'">'+esc(friendlySignal(xs||'—'))+'</span></div><span class="batchdate">'+esc(String(x.completed_at||x.upload_started_at||'').slice(0,10))+'</span></div>'}).join('')||'<div class="empty">No recent batches.</div>';
-  $$('[data-batch]').forEach(x=>x.onclick=()=>openBatch(x.dataset.batch,b));
- }catch(e){$('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>'}
+  scheduleDataLivePoll();
+ }catch(e){$('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>';scheduleDataLivePoll()}
 }
-async function openBatch(session,basic){sheet('Batch #'+esc(basic.batch_id||'—'),basic.processing_status||'','<div class="loading">Loading processing detail…</div>');if(!session){$('#sheetBody').innerHTML='<div class="detail">Session ID unavailable in active summary.</div>';return}try{const d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{timeoutMs:12000}), b=d.batch||{}, p=d.phase3||{}, q=d.qa_summary||{};$('#sheetBody').innerHTML='<div class="dmetrics"><div class="dm"><b>'+esc(b.processing_status||'—')+'</b><span>BATCH STATUS</span></div><div class="dm"><b>'+fmt(p.quick_check_ready_rows,0)+'</b><span>READY ROWS</span></div><div class="dm"><b>'+fmt(p.quick_check_hold_rows,0)+'</b><span>QA HOLD</span></div></div><div class="detail"><b>Phase 3</b><br>'+esc(p.result_status||'—')+'<br><br><b>Open blockers</b><br>'+fmt(p.blocking_issue_count,0)+(q.reason_counts?'<br>'+Object.entries(q.reason_counts).slice(0,8).map(([k,v])=>'• '+esc(k)+': '+fmt(v,0)).join('<br>'):'')+'</div>'}catch(e){$('#sheetBody').innerHTML='<div class="detail">'+esc(e.message)+'</div>'}}
+async function openBatch(session,basic){sheet('Batch #'+esc(basic.batch_id||'—'),basic.processing_status||'','<div class="loading">Loading processing detail…</div>');if(!session){$('#sheetBody').innerHTML='<div class="detail">Session ID unavailable in active summary.</div>';return}try{const d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{timeoutMs:12000}), b=d.batch||{}, p=d.phase3||{}, q=d.qa_summary||{},live=batchLiveState(basic);$('#sheetBody').innerHTML='<div class="dmetrics"><div class="dm"><b>'+esc(live.label)+'</b><span>LIVE STATE</span></div><div class="dm"><b>'+fmt(p.quick_check_ready_rows,0)+'</b><span>READY ROWS</span></div><div class="dm"><b>'+fmt(p.quick_check_hold_rows,0)+'</b><span>QA HOLD</span></div></div><div class="detail"><b>Worker / heartbeat</b><br>'+esc(live.sub)+' · worker '+esc(basic.active_worker||'—')+'<br><br><b>Current stage</b><br>'+esc(friendlySignal(basic.active_phase3_stage||basic.active_last_phase3_stage||basic.active_stage_name||p.result_status||'—'))+'<br><br><b>Progress</b><br>'+esc(basic.active_progress_pct!=null?(fmt(basic.active_progress_pct,1)+'%'):'—')+' · '+fmt(basic.active_progress_current,0)+' / '+fmt(basic.active_progress_total,0)+' '+esc(basic.active_progress_unit||'')+'<br>Elapsed '+esc(fmtElapsedSeconds(basic.active_progress_elapsed_seconds))+' · ETA '+esc(fmtElapsedSeconds(basic.active_progress_eta_seconds))+' · Rate '+(basic.active_progress_rows_per_second!=null?fmt(basic.active_progress_rows_per_second,1)+'/s':'—')+'<br><br><b>Phase 3</b><br>'+esc(p.result_status||'—')+'<br><br><b>Open blockers</b><br>'+fmt(p.blocking_issue_count,0)+(q.reason_counts?'<br>'+Object.entries(q.reason_counts).slice(0,8).map(([k,v])=>'• '+esc(k)+': '+fmt(v,0)).join('<br>'):'')+'</div>'}catch(e){$('#sheetBody').innerHTML='<div class="detail">'+esc(e.message)+'</div>'}}
 
 function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
