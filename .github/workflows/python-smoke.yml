@@ -212,6 +212,9 @@ jobs:
           assert '.pp b{display:block;font-size:19px' in ui
           assert '.pm b{display:block;font-size:11px' in ui
           assert '.pcard-actions button{border-radius:8px;padding:7px 9px;font-size:8px' in ui
+          assert 'data-price-filter="CORE_UPC">240 / 245 / 247 / 249' in ui
+          assert "priceFilter='CORE_UPC'" in ui
+          assert "['240','245','247','249'].some(prefix=>digits.startsWith(prefix))" in ui
           print('controlled-price-progress=PASS')
           PY
 
