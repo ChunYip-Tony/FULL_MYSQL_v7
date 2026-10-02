@@ -138,12 +138,139 @@ YIPMAN_DESKTOP_JS = r"""
  async function promoOrders(){const box=$('#ydOrderMain');box.innerHTML='<div class="loading">Loading promotion lists…</div>';try{const d=await api('/v1/yipman/promotion-lists?limit=30');D.promoLists=d.rows||d.lists||[];box.innerHTML='<div class="card"><div class="cardhead"><h3>Promotion Ordering</h3><span class="badge purple">WEEKLY + WEEKEND</span></div><div class="cardbody"><div class="row2"><div><div class="tiny">PROMOTION LIST</div><select class="select" id="ydPromo" style="width:100%;margin-top:4px">'+D.promoLists.map(x=>'<option value="'+esc(x.list_id||x.id)+'">'+esc(x.list_name||x.name||('List #'+(x.list_id||x.id)))+'</option>').join('')+'</select></div><div><div class="tiny">TEMPORARY TRUE STOCK</div><div class="note amber" style="margin-top:4px">Promotion only. Regular Order continues to use system/current inventory.</div></div></div><button class="btn primary" id="ydPromoCalc" style="margin-top:9px">Calculate Promotion Forecast</button><div id="ydPromoOut"></div></div></div>';$('#ydPromoCalc').onclick=calcPromo}catch(e){box.innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
  async function calcPromo(){const out=$('#ydPromoOut');out.innerHTML='<div class="loading">Calculating…</div>';try{const d=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_id:Number($('#ydPromo').value),delivery_date:D.delivery,next_delivery_date:D.next,temporary_oh_overrides:{}})}),a=d.rows||d.items||[];out.innerHTML='<div class="tablewrap" style="margin-top:10px"><table><thead><tr><th>Item</th><th>Promo Type</th><th>Predicted Use</th><th>System OH</th><th>Suggested</th></tr></thead><tbody>'+a.map(x=>'<tr><td><b>'+esc(x.family_name||x.item_name||x.upc||'—')+'</b></td><td>'+esc(x.promotion_type||x.promo_type||'—')+'</td><td>'+fmt(x.predicted_usage||x.forecast_usage)+'</td><td>'+fmt(x.current_oh||x.system_oh)+' '+esc(x.uom||x.order_uom||'')+'</td><td><b>'+fmt(x.suggested_qty||x.suggested_order_qty)+' '+esc(x.uom||x.order_uom||'')+'</b></td></tr>').join('')+'</tbody></table></div>'}catch(e){out.innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
  async function historyOrders(){const box=$('#ydOrderMain');box.innerHTML='<div class="card"><div class="cardbody"><div class="actions"><label class="tiny">PAST DELIVERY DATE</label><input id="ydHistDate" class="input" type="date"><button id="ydHistRun" class="btn primary">Load Actual Receipts</button></div><div id="ydHistOut" style="margin-top:9px"></div></div></div>';$('#ydHistRun').onclick=async()=>{const o=$('#ydHistOut'),d=$('#ydHistDate').value;if(!d)return;o.innerHTML='<div class="loading">Loading receipt events…</div>';try{const x=await api('/v1/yipman/ordering-review?category=ALL&delivery_date='+encodeURIComponent(d)),a=x.rows||[];o.innerHTML='<div class="tablewrap"><table><thead><tr><th>Family / Receiving</th><th>Receipt</th><th>UOM</th><th>Events</th></tr></thead><tbody>'+a.map(r=>'<tr><td><b>'+esc(r.family_name||r.family_article)+'</b><div class="tiny">Receiving '+esc(r.receiving_article||'—')+'</div></td><td>'+fmt(r.receipt_qty)+'</td><td>'+esc(r.receipt_uom||'—')+'</td><td>'+fmt(r.receipt_event_count,0)+'</td></tr>').join('')+'</tbody></table></div>'}catch(e){o.innerHTML='<div class="error">'+esc(e.message)+'</div>'}}}
- async function loadPrice(){const root=$('#yd-price');if(!root.dataset.init){root.dataset.init='1';root.innerHTML='<div class="pagehead"><div><h2>Price Suggestions</h2><p>Integrity + freshness velocity + GP$/day + strongest proved Tested price + company range.</p></div><div class="actions"><span class="badge red" id="ydPActions">— actionable</span><button class="btn">Show ignored</button><button class="btn">Export</button></div></div><div class="split"><div><div class="pfilters"><div class="filterbox"><label>UPC / Rule</label><div class="actions">'+['240','245','247','249'].map((x,i)=>'<button class="btn '+(i===0?'primary':'')+'" data-pf="'+x+'">'+x+'</button>').join('')+'<button class="btn" data-pf="live">Live</button></div></div><div class="filterbox"><label>Observed Delivery Group</label><div class="actions"><button class="btn" data-pf="tue">Observed Tuesday</button><button class="btn" data-pf="fri">Observed Friday / Sat</button><button class="btn" data-pf="all">All actionable</button></div></div></div><div id="ydPQueue" class="pqueue"><div class="loading">Loading pricing review…</div></div></div><aside id="ydPAnalysis" class="analysis"><div class="card"><div class="loading">Select a price suggestion.</div></div></aside></div>';$$('[data-pf]',root).forEach(b=>b.onclick=()=>{D.priceFilter=b.dataset.pf;$$('[data-pf]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()})}
-  try{const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000');D.prices=(d.rows||[]).filter(x=>x.priority_240_249_mismatch||x.actionable||String(x.suggestion_reason_code||''));$('#ydPc').textContent=D.prices.length;$('#ydPActions').textContent=D.prices.length+' actionable';renderPriceQueue()}catch(e){$('#ydPQueue').innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
- function prefix(r){return String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3)}
- function pfRows(){return D.prices.filter(r=>{if(D.ignored.has(String(r.upc)))return false;if(['240','245','247','249'].includes(D.priceFilter))return prefix(r)===D.priceFilter;if(D.priceFilter==='live')return String(r.category).toUpperCase()==='LIVE';const days=(r.observed_delivery_weekdays||[]).map(x=>String(x).toUpperCase());if(D.priceFilter==='tue')return days.includes('TUESDAY');if(D.priceFilter==='fri')return days.includes('FRIDAY')||days.includes('SATURDAY');return true}).slice(0,60)}
- function renderPriceQueue(){const a=pfRows();$('#ydPQueue').innerHTML=a.map((r,i)=>'<article class="pcard" data-upc="'+esc(r.upc)+'" style="--pc:'+(r.priority_240_249_mismatch?'#d94159':r.company_range_violation?'#e2a00e':'#7658e8')+'"><div class="ptop"><div class="pname"><b>'+esc(r.name||r.upc)+'</b><div>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</div></div><div class="pm"><label>Current</label><strong>'+money(r.current_price)+'</strong><div class="tiny">'+esc(r.current_price_source||'')+' · '+pct(r.current_price_gp_pct)+'</div></div><div class="pm"><label>Tested</label><strong style="color:#08728f">'+money(r.tested_price)+'</strong><div class="tiny">'+pct(r.tested_price_gp_pct)+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</div></div><div class="pm"><label>Testing</label><strong style="color:#6849d7">'+money(r.testing_price)+'</strong><div class="tiny">'+pct(r.testing_price_gp_pct)+'</div></div><div class="pm"><label>Cost</label><strong>'+money(r.current_cost)+'</strong><div class="tiny">'+esc(r.selling_uom||'')+'</div></div><div><span class="badge '+(r.priority_240_249_mismatch?'red':r.company_range_violation?'amber':'purple')+'">'+esc(r.priority_240_249_mismatch?'240 ≠ 249':r.company_range_violation?'Company range':'Velocity / GP$ test')+'</span></div><button class="btn">Analyze</button></div></article>').join('')||'<div class="loading">No actionable price suggestion matches this filter.</div>';$$('.pcard','#ydPQueue').forEach(c=>c.onclick=()=>{selectPrice(c.dataset.upc);$$('.pcard','#ydPQueue').forEach(x=>x.classList.remove('selected'));c.classList.add('selected')});if(a[0])selectPrice(a[0].upc)}
- async function selectPrice(upc){const r=D.prices.find(x=>String(x.upc)===String(upc));if(!r)return;$('#ydPAnalysis').innerHTML='<div class="card"><div class="cardhead"><div><h3>'+esc(r.name||'Price Analysis')+'</h3><div class="tiny">UPC '+esc(r.upc)+' · '+esc(r.category||'')+'</div></div><span class="badge '+(r.priority_240_249_mismatch?'red':'blue')+'">'+esc(r.review_status||'ACTIONABLE')+'</span></div><div class="cardbody"><div class="row3"><div class="kpi"><label>Current</label><strong>'+money(r.current_price)+'</strong><small>'+esc(r.current_price_source||'—')+' · '+pct(r.current_price_gp_pct)+'</small></div><div class="kpi"><label>Tested</label><strong>'+money(r.tested_price)+'</strong><small>retail aligned · '+pct(r.tested_price_gp_pct)+'</small></div><div class="kpi"><label>Testing</label><strong>'+money(r.testing_price)+'</strong><small>'+(num(r.testing_price)===null?'None active':'controlled test · '+pct(r.testing_price_gp_pct))+'</small></div></div><div class="sectiontitle">Inventory + Sales</div><div class="kv"><span>Current Cost</span><span>'+money(r.current_cost)+' / '+esc(r.selling_uom||'unit')+'</span><span>OH</span><span>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</span><span>DOH</span><span>'+fmt(r.doh)+'</span><span>7D Qty</span><span>'+fmt(r.qty_7d)+'</span><span>14D Qty</span><span>'+fmt(r.qty_14d)+'</span><span>28D Qty</span><span>'+fmt(r.qty_28d)+'</span><span>7D Velocity</span><span>'+fmt(r.velocity_7d)+'/day</span><span>Current GP$/day</span><span>'+money(r.current_gp_per_day_7d)+'</span><span>Candidate GP$/day</span><span>'+money(r.candidate_expected_gp_per_day)+'</span></div><div class="sectiontitle">Company Range + 240/249</div><div class="kv"><span>Company A</span><span>'+money(r.company_price_a)+'</span><span>Company B</span><span>'+money(r.company_price_b)+'</span><span>Company C</span><span>'+money(r.company_price_c)+'</span><span>Applicable range</span><span>'+(r.company_range_low!=null?money(r.company_range_low)+' – '+money(r.company_range_high):'—')+'</span><span>240 Main</span><span>'+esc(r.related_240_upc||'—')+' · '+money(r.related_240_current_price)+'</span><span>249 Service</span><span>'+esc(r.related_249_upc||'—')+' · '+money(r.related_249_current_price)+'</span><span>240 = 249</span><span>'+((r.related_249_present&&r.price_240_249_equal===false)?'MISMATCH':'PASS / N/A')+'</span></div><div class="sectiontitle">Why Suggested</div><div class="note '+(r.priority_240_249_mismatch?'red':'blue')+'">'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</div><div id="ydPTrend" class="sectiontitle">Price Response History</div><div id="ydPTrendBox" class="loading">Loading 14-day response…</div><div class="actions" style="margin-top:8px"><button class="btn danger" id="ydIgnore">Ignore 30 min</button><button class="btn primary" id="ydAccept">Accepted</button></div></div></div>';$('#ydIgnore').onclick=()=>{D.ignored.add(String(r.upc));renderPriceQueue();toast('Ignored for this visit')};$('#ydAccept').onclick=()=>acceptPrice(r);try{const d=await api('/v1/app/v2/upc/'+encodeURIComponent(r.upc)+'/price?trend_supported_days=14'),a=d.price_vs_sales_trend?.rows||[];$('#ydPTrendBox').className='tablewrap';$('#ydPTrendBox').innerHTML='<table><thead><tr><th>Date</th><th>Qty</th><th>Avg Price</th><th>GP$</th></tr></thead><tbody>'+a.slice(-14).reverse().map(x=>'<tr><td>'+esc(x.date||'')+'</td><td>'+fmt(x.sold_quantity)+'</td><td>'+money(x.avg_sold_price)+'</td><td>'+money(x.gp_dollars)+'</td></tr>').join('')+'</tbody></table>'}catch(e){$('#ydPTrendBox').innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
+ async function loadPrice(force=false){
+  const root=$('#yd-price');
+  if(!root.dataset.init){
+    root.dataset.init='1';
+    root.innerHTML='<div class="pagehead"><div><h2>Price Suggestions</h2><p>Current price integrity + freshness velocity + GP$/day + strongest proved Tested price + controlled Testing price.</p></div><div class="actions"><span class="badge red" id="ydPActions">— actionable</span><button class="btn" id="ydPShowIgnored">Show ignored</button><button class="btn" id="ydPRefresh">Refresh analysis</button><button class="btn">Export</button></div></div>'+
+      '<div class="pfilters">'+
+        '<div class="filterbox"><label>UPC / OPERATIONAL GROUP</label><div class="actions"><button class="btn primary" data-pf="all">All actionable</button>'+['240','245','247','249'].map(x=>'<button class="btn" data-pf="'+x+'">'+x+'</button>').join('')+'<button class="btn" data-pf="live">Live</button><button class="btn" data-pf="tue">Observed Tuesday</button><button class="btn" data-pf="fri">Observed Friday / Sat</button></div></div>'+
+        '<div class="filterbox"><label>REASON</label><div class="actions"><button class="btn primary" data-pr="all">All</button><button class="btn" data-pr="pair">240 ≠ 249</button><button class="btn" data-pr="velocity">Velocity / Freshness</button><button class="btn" data-pr="sweet">Sweet spot</button><button class="btn" data-pr="range">Outside range</button><button class="btn" data-pr="gp">GP$/day</button></div></div>'+
+      '</div>'+
+      '<div class="actions" style="margin:0 0 9px"><input id="ydPSearch" class="input priceSearch" placeholder="Search price suggestions by UPC / name / family"><span class="small" id="ydPStatus">Loading current analysis…</span></div>'+
+      '<div id="ydPriceSummary" class="priceSummary"></div>'+
+      '<div class="split"><div id="ydPQueue"><div class="loading">Loading pricing review…</div></div><aside id="ydPAnalysis" class="analysis"><div class="card"><div class="loading">Select a price suggestion.</div></div></aside></div>';
+    $$('[data-pf]',root).forEach(b=>b.onclick=()=>{D.priceFilter=b.dataset.pf;$$('[data-pf]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $('#ydPSearch').oninput=e=>{D.priceSearch=e.target.value.trim().toLowerCase();renderPriceQueue()};
+    $('#ydPShowIgnored').onclick=()=>{D.priceShowIgnored=!D.priceShowIgnored;$('#ydPShowIgnored').textContent=D.priceShowIgnored?'Hide ignored':'Show ignored';renderPriceQueue()};
+    $('#ydPRefresh').onclick=()=>{D.priceRetry=0;refreshPriceData(true,0)};
+  }
+  if(force||!D.priceMeta) await refreshPriceData(force,0); else renderPriceQueue();
+}
+function priceIgnoreMap(){
+  try{
+    const raw=JSON.parse(localStorage.getItem('yipman_price_ignore_v372')||'{}'),now=Date.now(),out={};
+    Object.entries(raw).forEach(([k,v])=>{if(Number(v)>now)out[k]=Number(v)});
+    localStorage.setItem('yipman_price_ignore_v372',JSON.stringify(out));
+    return out;
+  }catch{return {}}
+}
+function priceIsIgnored(upc){return Number(priceIgnoreMap()[String(upc)]||0)>Date.now()}
+function ignorePrice30(upc){
+  const m=priceIgnoreMap();m[String(upc)]=Date.now()+30*60*1000;
+  localStorage.setItem('yipman_price_ignore_v372',JSON.stringify(m));
+}
+function clearPriceIgnore(upc){const m=priceIgnoreMap();delete m[String(upc)];localStorage.setItem('yipman_price_ignore_v372',JSON.stringify(m))}
+async function refreshPriceData(force=false,attempt=0){
+  const q=$('#ydPQueue');if(q)q.innerHTML='<div class="loading">'+(attempt?'Refreshing price evidence…':'Loading current Price Suggestions…')+'</div>';
+  try{
+    const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000'+(force?'&force=true':''));
+    D.priceMeta=d;
+    const raw=d.rows||[];
+    const meaningful=raw.filter(r=>r.priority_240_249_mismatch||r.actionable||String(r.suggestion_reason_code||''));
+    D.prices=meaningful;
+    $('#ydPc').textContent=meaningful.length;
+    $('#ydPActions').textContent=meaningful.length+' actionable';
+    const h=d.data_health||{},status=String(d.analysis_status||'READY'),cache=String(d.cache_status||'');
+    $('#ydPStatus').textContent=(h.status||status)+' · POS '+(h.pos_data_through||'—')+' · MVT '+(h.movement_data_through||'—')+(cache?' · '+cache:'');
+    renderPriceSummary();
+    if(meaningful.length){
+      D.priceRetry=0;renderPriceQueue();return;
+    }
+    const accepted=Number(d.suppressed_accepted_count||0);
+    const shouldRetry=attempt<4&&(d.refreshing||cache==='WARMING'||cache==='STALE_REFRESHING'||attempt===0);
+    if(shouldRetry){
+      renderPriceQueue(true);
+      if(attempt===0&&!force){try{await api('/v1/yipman/pricing-review?category=ALL&limit=1000&force=true')}catch{}}
+      setTimeout(()=>{if(D.mod==='price')refreshPriceData(false,attempt+1)},1800+attempt*900);
+      return;
+    }
+    renderPriceQueue(false);
+    if(accepted>0)$('#ydPStatus').textContent+=' · '+accepted+' accepted suggestions hidden';
+  }catch(e){
+    D.priceMeta={refresh_error:e.message};
+    renderPriceSummary();
+    if(q)q.innerHTML='<div class="priceEmpty"><h3>Price analysis temporarily unavailable</h3><p>'+esc(e.message)+'</p><button class="btn primary" id="ydPriceRetryNow">Retry now</button></div>';
+    const b=$('#ydPriceRetryNow');if(b)b.onclick=()=>refreshPriceData(true,0);
+  }
+}
+function prefix(r){return String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3)}
+function priceReasonMatch(r){
+  const code=String(r.suggestion_reason_code||'').toUpperCase();
+  if(D.priceReason==='pair')return r.priority_240_249_mismatch||code==='PAIR_FIX';
+  if(D.priceReason==='velocity')return code==='VELOCITY_TEST';
+  if(D.priceReason==='sweet')return code==='SWEET_SPOT_GAP';
+  if(D.priceReason==='range')return code==='COMPANY_RANGE'||r.company_range_violation;
+  if(D.priceReason==='gp')return code==='GP_DOLLAR_TEST';
+  return true;
+}
+function pfRows(){
+  return D.prices.filter(r=>{
+    const ignored=priceIsIgnored(r.upc);
+    if(ignored&&!D.priceShowIgnored)return false;
+    if(!priceReasonMatch(r))return false;
+    if(D.priceSearch&&!([r.upc,r.name,r.family_article_number,r.family_name].join(' ').toLowerCase().includes(D.priceSearch)))return false;
+    if(['240','245','247','249'].includes(D.priceFilter)&&prefix(r)!==D.priceFilter)return false;
+    if(D.priceFilter==='live'&&String(r.category||'').toUpperCase()!=='LIVE')return false;
+    const days=(r.observed_delivery_weekdays||[]).map(x=>String(x).toUpperCase());
+    if(D.priceFilter==='tue'&&!days.includes('TUESDAY'))return false;
+    if(D.priceFilter==='fri'&&!days.includes('FRIDAY')&&!days.includes('SATURDAY'))return false;
+    return true;
+  }).slice(0,80)
+}
+function renderPriceSummary(){
+  const rows=D.prices||[],count=code=>rows.filter(r=>String(r.suggestion_reason_code||'').toUpperCase()===code).length;
+  const pair=rows.filter(r=>r.priority_240_249_mismatch||String(r.suggestion_reason_code||'').toUpperCase()==='PAIR_FIX').length;
+  const lift=rows.reduce((s,r)=>{const a=num(r.candidate_expected_gp_per_day),b=num(r.current_gp_per_day_7d);return s+(a!==null&&b!==null&&a>b?a-b:0)},0);
+  const box=$('#ydPriceSummary');if(!box)return;
+  box.innerHTML='<div class="kpi"><label>Actionable</label><strong>'+rows.length+'</strong><small>current queue</small></div>'+
+    '<div class="kpi"><label>240 ≠ 249</label><strong>'+pair+'</strong><small>mandatory integrity</small></div>'+
+    '<div class="kpi"><label>Velocity tests</label><strong>'+count('VELOCITY_TEST')+'</strong><small>freshness control</small></div>'+
+    '<div class="kpi"><label>Sweet spot gap</label><strong>'+count('SWEET_SPOT_GAP')+'</strong><small>> $0.25 from Tested</small></div>'+
+    '<div class="kpi"><label>Company range</label><strong>'+count('COMPANY_RANGE')+'</strong><small>outside A/B/C range</small></div>'+
+    '<div class="kpi"><label>Est. GP$/day lift</label><strong>'+money(lift)+'</strong><small>supported candidates</small></div>';
+}
+function reasonMeta(r){
+  const code=String(r.suggestion_reason_code||'').toUpperCase();
+  if(r.priority_240_249_mismatch||code==='PAIR_FIX')return ['240 ≠ 249','red'];
+  if(code==='COMPANY_RANGE')return ['Outside range','red'];
+  if(code==='VELOCITY_TEST')return ['Velocity / freshness','blue'];
+  if(code==='SWEET_SPOT_GAP')return ['Sweet spot','amber'];
+  if(code==='GP_DOLLAR_TEST')return ['GP$/day','purple'];
+  return ['Review','blue'];
+}
+function renderPriceQueue(refreshing=false){
+  const a=pfRows(),box=$('#ydPQueue');if(!box)return;
+  if(!a.length){
+    const d=D.priceMeta||{},h=d.data_health||{},accepted=Number(d.suppressed_accepted_count||0);
+    box.innerHTML='<div class="priceEmpty"><h3>'+(refreshing?'Rebuilding current Price Suggestions…':'No actionable suggestion matches the current filters')+'</h3>'+
+      '<p>'+(refreshing?'The pricing cache is refreshing automatically. This page will update without a manual reload.':accepted&&!(D.prices||[]).length?'All current matching suggestions are accepted/hidden until price evidence changes.':'Try All actionable, clear the search, or refresh the analysis. If the queue is truly empty, the diagnostics below show why.')+'</p>'+
+      '<div class="diaggrid"><div class="kpi"><label>Analysis</label><strong>'+esc(d.analysis_status||'—')+'</strong></div><div class="kpi"><label>Data health</label><strong>'+esc(h.status||'—')+'</strong><small>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</small></div><div class="kpi"><label>Accepted hidden</label><strong>'+accepted+'</strong><small>'+esc(d.refresh_error||'no refresh error')+'</small></div></div>'+
+      '<div class="actions" style="margin-top:10px"><button class="btn primary" id="ydPriceEmptyRefresh">Refresh analysis</button><button class="btn" id="ydPriceEmptyAll">Show all actionable</button></div></div>';
+    const r=$('#ydPriceEmptyRefresh');if(r)r.onclick=()=>refreshPriceData(true,0);
+    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.priceFilter='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$$('[data-pf]').forEach(x=>x.classList.toggle('primary',x.dataset.pf==='all'));$$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
+    $('#ydPAnalysis').innerHTML='<div class="card"><div class="loading">Select a price suggestion when the queue is available.</div></div>';
+    return;
+  }
+  box.innerHTML='<div class="card"><div class="cardhead"><h3>Price Action Queue</h3><span class="badge blue">Showing '+a.length+' of '+D.prices.length+'</span></div><div class="tablewrap"><table class="priceTable"><thead><tr><th>#</th><th>Article / UPC</th><th>Current</th><th>Tested</th><th>Testing</th><th>OH</th><th>DOH</th><th>7D Vel</th><th>28D Vel</th><th>GP$/day</th><th>Reason</th><th>Action</th></tr></thead><tbody>'+
+    a.map((r,i)=>{const m=reasonMeta(r),ignored=priceIsIgnored(r.upc);return '<tr class="pick priceRow '+(ignored?'ignored':'')+'" data-upc="'+esc(r.upc)+'"><td>'+(i+1)+'</td><td class="priceItem"><b>'+esc(r.name||r.upc)+'</b><div class="tiny">'+esc(r.upc)+' · '+esc(r.family_article_number||r.family_name||'')+'</div></td><td><span class="priceMain">'+money(r.current_price)+'</span><div class="tiny">'+esc(r.current_price_type||r.current_price_source||'')+'</div></td><td><span class="priceTested">'+money(r.tested_price)+'</span><div class="tiny">'+pct(r.tested_price_gp_pct)+'</div></td><td><span class="priceTesting">'+money(r.testing_price)+'</span><div class="tiny">'+(num(r.testing_price)===null?'None active':pct(r.testing_price_gp_pct))+'</div></td><td><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></td><td>'+fmt(r.doh)+'</td><td>'+fmt(r.velocity_7d)+'/d</td><td>'+fmt(r.velocity_28d)+'/d</td><td><b>'+money(r.current_gp_per_day_7d)+'</b></td><td><span class="reasonTag '+m[1]+'">'+esc(m[0])+'</span></td><td><button class="btn priceReviewBtn" data-review="'+esc(r.upc)+'">'+(ignored?'Restore':'Review')+'</button></td></tr>'}).join('')+
+    '</tbody></table></div></div>';
+  $$('.priceRow',box).forEach(tr=>tr.onclick=e=>{if(e.target.closest('button'))return;$$('.priceRow',box).forEach(x=>x.classList.remove('selected'));tr.classList.add('selected');selectPrice(tr.dataset.upc)});
+  $$('.priceReviewBtn',box).forEach(b=>b.onclick=e=>{e.stopPropagation();const upc=b.dataset.review;if(priceIsIgnored(upc)){clearPriceIgnore(upc);renderPriceQueue()}else selectPrice(upc)});
+  const first=a.find(r=>!priceIsIgnored(r.upc))||a[0];if(first)selectPrice(first.upc);
+}
+async function selectPrice(upc){const r=D.prices.find(x=>String(x.upc)===String(upc));if(!r)return;$('#ydPAnalysis').innerHTML='<div class="card"><div class="cardhead"><div><h3>'+esc(r.name||'Price Analysis')+'</h3><div class="tiny">UPC '+esc(r.upc)+' · '+esc(r.category||'')+'</div></div><span class="badge '+(r.priority_240_249_mismatch?'red':'blue')+'">'+esc(r.review_status||'ACTIONABLE')+'</span></div><div class="cardbody"><div class="row3"><div class="kpi"><label>Current</label><strong>'+money(r.current_price)+'</strong><small>'+esc(r.current_price_source||'—')+' · '+pct(r.current_price_gp_pct)+'</small></div><div class="kpi"><label>Tested</label><strong>'+money(r.tested_price)+'</strong><small>retail aligned · '+pct(r.tested_price_gp_pct)+'</small></div><div class="kpi"><label>Testing</label><strong>'+money(r.testing_price)+'</strong><small>'+(num(r.testing_price)===null?'None active':'controlled test · '+pct(r.testing_price_gp_pct))+'</small></div></div><div class="sectiontitle">Inventory + Sales</div><div class="kv"><span>Current Cost</span><span>'+money(r.current_cost)+' / '+esc(r.selling_uom||'unit')+'</span><span>OH</span><span>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</span><span>DOH</span><span>'+fmt(r.doh)+'</span><span>7D Qty</span><span>'+fmt(r.qty_7d)+'</span><span>14D Qty</span><span>'+fmt(r.qty_14d)+'</span><span>28D Qty</span><span>'+fmt(r.qty_28d)+'</span><span>7D Velocity</span><span>'+fmt(r.velocity_7d)+'/day</span><span>Current GP$/day</span><span>'+money(r.current_gp_per_day_7d)+'</span><span>Candidate GP$/day</span><span>'+money(r.candidate_expected_gp_per_day)+'</span></div><div class="sectiontitle">Company Range + 240/249</div><div class="kv"><span>Company A</span><span>'+money(r.company_price_a)+'</span><span>Company B</span><span>'+money(r.company_price_b)+'</span><span>Company C</span><span>'+money(r.company_price_c)+'</span><span>Applicable range</span><span>'+(r.company_range_low!=null?money(r.company_range_low)+' – '+money(r.company_range_high):'—')+'</span><span>240 Main</span><span>'+esc(r.related_240_upc||'—')+' · '+money(r.related_240_current_price)+'</span><span>249 Service</span><span>'+esc(r.related_249_upc||'—')+' · '+money(r.related_249_current_price)+'</span><span>240 = 249</span><span>'+((r.related_249_present&&r.price_240_249_equal===false)?'MISMATCH':'PASS / N/A')+'</span></div><div class="sectiontitle">Why Suggested</div><div class="note '+(r.priority_240_249_mismatch?'red':'blue')+'">'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</div><div id="ydPTrend" class="sectiontitle">Price Response History</div><div id="ydPTrendBox" class="loading">Loading 14-day response…</div><div class="actions" style="margin-top:8px"><button class="btn danger" id="ydIgnore">Ignore 30 min</button><button class="btn primary" id="ydAccept">Accepted</button></div></div></div>';$('#ydIgnore').onclick=()=>{D.ignored.add(String(r.upc));renderPriceQueue();toast('Ignored for this visit')};$('#ydAccept').onclick=()=>acceptPrice(r);try{const d=await api('/v1/app/v2/upc/'+encodeURIComponent(r.upc)+'/price?trend_supported_days=14'),a=d.price_vs_sales_trend?.rows||[];$('#ydPTrendBox').className='tablewrap';$('#ydPTrendBox').innerHTML='<table><thead><tr><th>Date</th><th>Qty</th><th>Avg Price</th><th>GP$</th></tr></thead><tbody>'+a.slice(-14).reverse().map(x=>'<tr><td>'+esc(x.date||'')+'</td><td>'+fmt(x.sold_quantity)+'</td><td>'+money(x.avg_sold_price)+'</td><td>'+money(x.gp_dollars)+'</td></tr>').join('')+'</tbody></table>'}catch(e){$('#ydPTrendBox').innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
  async function acceptPrice(r){try{await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price})});D.ignored.add(String(r.upc));renderPriceQueue();toast('Accepted · hidden until evidence changes')}catch(e){toast(e.message)}}
  async function loadPerformance(){const root=$('#yd-performance');if(!root.dataset.init){root.dataset.init='1';root.innerHTML='<div class="pagehead"><div><h2>Performance</h2><p>Completed-day sales and GP analysis with top sellers, negative movers and management drivers.</p></div><div class="actions"><select id="ydPerfStart" class="select"></select><select id="ydPerfEnd" class="select"></select><button id="ydPerfRun" class="btn primary">Run Report</button></div></div><div id="ydPerfMain"><div class="loading">Loading performance dates…</div></div>';$('#ydPerfRun').onclick=runPerf}
   try{const d=await api('/v1/app/v2/performance/dates?limit=180'),a=(d.dates||[]).map(x=>String(x.date||'')).filter(Boolean).sort();if(!$('#ydPerfStart').options.length){$('#ydPerfStart').innerHTML=a.map(x=>'<option>'+x+'</option>').join('');$('#ydPerfEnd').innerHTML=a.map(x=>'<option>'+x+'</option>').join('');if(a.length){$('#ydPerfEnd').value=a[a.length-1];$('#ydPerfStart').value=a[Math.max(0,a.length-7)]}}runPerf()}catch(e){$('#ydPerfMain').innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
