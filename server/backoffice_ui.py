@@ -14,8 +14,7 @@ except ImportError:
 def backoffice_html(version: str = "") -> str:
     v = str(version or "")
     html = BACKOFFICE_HTML.replace("__VERSION__", v)
-    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + "
-/* V399 Desktop Operations polish: denser, clearer, less empty, more workstation-like. */
+    desktop_operations_v399_css = r'''/* V399 Desktop Operations polish: denser, clearer, less empty, more workstation-like. */
 @media (min-width:901px){
   body[data-desktop-view="overview"] .workspace{background:#f4f7fb!important}
   body[data-desktop-view="overview"] #overview{max-width:1680px;margin:0 auto}
@@ -72,7 +71,8 @@ def backoffice_html(version: str = "") -> str:
     body[data-desktop-view="overview"] .desktop-kpi-row{grid-template-columns:repeat(3,1fr)!important}
   }
 }
-</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
+'''
+    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + desktop_operations_v399_css + "</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
     html = html.replace("</body>", "<script id=\"desktop-workstation-v366-js\">" + DESKTOP_WORKSTATION_JS + "</script><script id=\"desktop-data-center-v368-js\">" + DESKTOP_DATA_CENTER_V368_JS + "</script></body>")
     return html
 
@@ -5347,8 +5347,8 @@ $('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
 $('#invSalesFilter').onchange=e=>{state.invSales=e.target.value;renderInventory()};
 $('#invSort').onchange=e=>{state.invSort=e.target.value;renderInventory()};
 $('#stockFlowSort').onchange=e=>{state.stockFlowSort=e.target.value;renderDesktopStockFlow()};
-$('.sffilter').forEach(b=>b.onclick=()=>{state.stockFlowCategory=b.dataset.sfcat;$('.sffilter').forEach(x=>x.classList.toggle('on',x===b));renderDesktopStockFlow()});
-$('.sfdelivery').forEach(b=>b.onclick=()=>{const v=b.dataset.sfdelivery;state.stockFlowDelivery=state.stockFlowDelivery===v?'ALL':v;$('.sfdelivery').forEach(x=>x.classList.toggle('on',x.dataset.sfdelivery===state.stockFlowDelivery));renderDesktopStockFlow()});
+$$('.sffilter').forEach(b=>b.onclick=()=>{state.stockFlowCategory=b.dataset.sfcat;$$('.sffilter').forEach(x=>x.classList.toggle('on',x===b));renderDesktopStockFlow()});
+$$('.sfdelivery').forEach(b=>b.onclick=()=>{const v=b.dataset.sfdelivery;state.stockFlowDelivery=state.stockFlowDelivery===v?'ALL':v;$$('.sfdelivery').forEach(x=>x.classList.toggle('on',x.dataset.sfdelivery===state.stockFlowDelivery));renderDesktopStockFlow()});
 $('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';const qi=$('#desktopQuickSearch');if(qi)qi.value='';loadInventory()};
 
 

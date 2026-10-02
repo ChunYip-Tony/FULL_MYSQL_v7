@@ -1013,6 +1013,19 @@ def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: di
                 f"{row.get('freshness_uncovered_usage')} {uom} of later forecast demand requires an earlier/split delivery."
             ),
         })
+    if row.get("freshness_adjustment_applied"):
+        reasons.append({
+            "title":"Current OH freshness adjustment",
+            "detail":(
+                f"Latest valid receipt {row.get('freshness_latest_receipt_date')}; "
+                f"current DOH {row.get('freshness_current_doh')}; freshness threshold "
+                f"{row.get('freshness_threshold_days')} days. "
+                f"Projected discard {row.get('freshness_projected_discard_qty')} {uom}; "
+                f"only {row.get('freshness_existing_oh_credit')} {uom} of existing OH is credited "
+                f"to this delivery window. Ordering increased by "
+                f"{row.get('freshness_order_qty_lift')} {uom} versus treating all OH as fresh."
+            ),
+        })
     if receipt.get("date"):
         reasons.append({
             "title":"Last receipt",
@@ -1450,6 +1463,11 @@ def ordering_review(
                     "pre_delivery_stockout_risk":bool(s.get("pre_delivery_stockout_risk")),
                     "pre_delivery_stockout_qty":s.get("pre_delivery_stockout_qty"),
                     "freshness_coverage_capped":bool(s.get("freshness_coverage_capped")),
+                    "freshness_adjustment_applied":bool(s.get("freshness_adjustment_applied")),
+                    "freshness_projected_discard_qty":s.get("freshness_projected_discard_qty"),
+                    "freshness_current_doh":s.get("freshness_current_doh"),
+                    "freshness_discard_date":s.get("freshness_discard_date"),
+                    "freshness_order_qty_lift":s.get("freshness_order_qty_lift"),
                     "attention": bool(
                         (
                             s.get("dos") is not None
@@ -1457,6 +1475,7 @@ def ordering_review(
                         )
                         or bool(s.get("pre_delivery_stockout_risk"))
                         or bool(s.get("freshness_coverage_capped"))
+                        or bool(s.get("freshness_adjustment_applied"))
                     ),
                     "details": {
                         "qty_7d": s.get("qty_7d"),
@@ -1476,6 +1495,18 @@ def ordering_review(
                         "freshness_coverage_capped":s.get("freshness_coverage_capped"),
                         "freshness_uncovered_usage":s.get("freshness_uncovered_usage"),
                         "effective_coverage_end_date":s.get("effective_coverage_end_date"),
+                        "freshness_threshold_days":s.get("freshness_threshold_days"),
+                        "freshness_reference_status":s.get("freshness_reference_status"),
+                        "freshness_latest_receipt_date":s.get("freshness_latest_receipt_date"),
+                        "freshness_current_doh":s.get("freshness_current_doh"),
+                        "freshness_discard_date":s.get("freshness_discard_date"),
+                        "freshness_existing_oh_credit":s.get("freshness_existing_oh_credit"),
+                        "freshness_projected_discard_qty":s.get("freshness_projected_discard_qty"),
+                        "freshness_projected_discard_before_delivery":s.get("freshness_projected_discard_before_delivery"),
+                        "freshness_projected_discard_during_coverage":s.get("freshness_projected_discard_during_coverage"),
+                        "suggested_order_qty_without_freshness":s.get("suggested_order_qty_without_freshness"),
+                        "freshness_order_qty_lift":s.get("freshness_order_qty_lift"),
+                        "freshness_adjustment_applied":s.get("freshness_adjustment_applied"),
                         "regular_forecast_confidence":s.get("regular_forecast_confidence"),
                         "daily_forecast":s.get("daily_forecast"),
                         "weekday_usage_forecast":s.get("weekday_usage_forecast"),
