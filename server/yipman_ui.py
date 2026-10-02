@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v373';
+const CACHE='yipman-v374';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1422,8 +1422,8 @@ function openOrder(r){
 }
 
 
-const PRICE_IGNORE_KEY='yipman-price-ignore-v361';
-const PRICE_IGNORE_MS=30*60*1000;
+const PRICE_IGNORE_KEY='yipman-price-ignore-v374';
+const PRICE_IGNORE_MS=12*60*60*1000;
 let priceIgnoreMemory={};
 function readPriceIgnores(){
   try{
@@ -1448,7 +1448,7 @@ function ignorePriceSuggestion(r){
   priceIgnoredThisVisit.add(id);
   const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
   if($('#overlay').classList.contains('on'))closeSheet(true);
-  toast('Ignored for 30 minutes');
+  toast('Ignored for 12 hours');
   loadPrices({quiet:true});
 }
 function priceReasonMeta(r,stale=false){
@@ -1524,7 +1524,7 @@ async function loadPrices(opts={}){
   const ignoredCount=patternFiltered.filter(priceIsIgnored).length;
   const rows=patternFiltered.filter(r=>!priceIsIgnored(r)).slice(0,24);
   const filterLabel=priceFilter.startsWith('UPC_')?(priceFilter.slice(4)+' UPC'):priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
-  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+ignoredCount+' ignored <30m · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
+  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+ignoredCount+' ignored <12h';
 
   $('#priceRows').innerHTML=rows.map((r,i)=>{
     const meta=priceReasonMeta(r,stale),prog=priceProgress(r),signals=priceSignals(r);
@@ -1560,7 +1560,7 @@ async function loadPrices(opts={}){
         '<br><b>Test target:</b> '+money(r.testing_target_price||r.target_sweet_spot_price)+
         (detailSignals?'<br><b>Signals:</b><br>'+detailSignals:'')+
       '</div></details>'+
-      '<div class="pcard-actions"><button class="pdetail" data-price-detail="'+i+'">DETAIL</button><button class="pignore" data-price-ignore="'+i+'">IGNORE 30 MIN</button></div>'+
+      '<div class="pcard-actions"><button class="pdetail" data-price-detail="'+i+'">DETAIL</button><button class="pignore" data-price-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
     '</article>';
   }).join('')||'<div class="empty">No actionable price suggestion matches this delivery-pattern filter.</div>';
 
@@ -1597,16 +1597,8 @@ function openPrice(r){
  '<br><br><b>Pricing rule</b><br>Retail-facing Tested, suggested sweet-spot targets, and Testing prices use the nearest normal store ending: .29 / .49 / .59 / .69 / .79 / .99. Testing must still move at least $0.45 from Current. Raw proved sweet-spot evidence is preserved in Detail when rounding changes the displayed Tested price. Re-check completed-day velocity and GP$/day before the next step.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
- '<div class="actions"><button class="secondary" id="priceIgnore30">IGNORE 30 MIN</button>'+(String(r.review_status||'').toUpperCase()==='ACTIONABLE'&&r.current_price!=null&&r.candidate_price!=null?'<button class="primary" id="priceAccept">ACCEPTED</button>':'')+'</div>');
- const ig=$('#priceIgnore30');if(ig)ig.onclick=()=>ignorePriceSuggestion(r);
- const a=$('#priceAccept');if(a)a.onclick=()=>acceptPrice(r,a);
-}
-async function acceptPrice(r,b){
- b.disabled=true;b.textContent='SAVING…';
- try{
-  await api('/v1/yipman/pricing-review/'+encodeURIComponent(r.upc)+'/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({current_price:r.current_price,current_price_source:r.current_price_source,current_price_asof_date:r.current_price_observed_date,candidate_price:r.candidate_price}),timeoutMs:30000});
-  closeSheet(true);toast('Accepted · hidden until evidence changes');loadPrices();
- }catch(e){b.disabled=false;b.textContent='ACCEPTED';toast(e.message)}
+ '<div class="actions"><button class="secondary" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
+ const ig=$('#priceIgnore12h');if(ig)ig.onclick=()=>ignorePriceSuggestion(r);
 }
 $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
  priceFilter=b.dataset.priceFilter;
