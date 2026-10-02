@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v388';
+const CACHE='yipman-v389';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -614,8 +614,12 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .orderrecvarticle .receivingname{display:block;font-size:9px;line-height:1.16;color:#344b5e;font-weight:950;margin-top:2px;white-space:normal}
 #price .pcard{border-width:1.5px}
 #price .pcard .pp,#price .pcard .pcost,#price .pcard .pm{background-color:rgba(255,255,255,.68)}
-.stockpromo .promolift{display:block;font-size:9px;line-height:1.15;color:#164f24;font-weight:1000;margin-top:2px;white-space:nowrap}
+.stockpromo .promolift{display:inline-block;font-size:9px;line-height:1.15;color:#102917;font-weight:1000;margin-top:3px;white-space:nowrap;background:#fff34a;border-radius:999px;padding:2px 7px}
 .stockpromo .promobasis{display:block;font-size:6.5px;line-height:1.15;color:#245b32;font-weight:900;margin-top:2px;white-space:nowrap}
+.stockdiff.promoted>b{display:inline-block;background:#fff34a;border-radius:999px;padding:2px 7px;margin-top:3px}
+.stockpromo .promoprice{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:4px;background:#fff34a;border-radius:999px;padding:3px 7px;color:#102917;white-space:nowrap}
+.stockpromo .promoprice small{display:block;font-size:6.5px!important;color:#1c3a22!important;font-weight:1000!important;margin:0!important}
+.stockpromo .promoprice b{display:block;font-size:9px!important;line-height:1.05!important;color:#102917!important;font-weight:1000!important;margin:0!important}
 
 </style>
 </head>
@@ -1419,7 +1423,10 @@ function stockFlowFamilyHtml(g,idx){
  const promoExtra=promo&&String(promo.promotion_week_extra_qty_status||'').toUpperCase()==='READY'&&num(promo.promotion_week_extra_qty)!==null
    ? '<span class="promolift">EXTRA '+(num(promo.promotion_week_extra_qty)>=0?'+':'')+fmt(promo.promotion_week_extra_qty)+' '+esc(promo.promotion_week_extra_qty_uom||uom)+'</span><span class="promobasis">VS NORMAL NON-PROMO WEEK</span>'
    : '<span class="promobasis">EXTRA QTY BASELINE UNAVAILABLE</span>';
- const promoHtml=promo?'<div class="stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+'</div>':'';
+ const promoPrice=promo&&String(promo.avg_promotion_selling_price_status||'').toUpperCase()==='READY'&&num(promo.avg_promotion_selling_price)!==null
+   ? '<span class="promoprice"><small>AVG PROMO PRICE</small><b>'+money(promo.avg_promotion_selling_price)+' / '+esc(promo.avg_promotion_selling_price_uom||uom)+'</b></span>'
+   : '';
+ const promoHtml=promo?'<div class="stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+promoPrice+'</div>':'';
  return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="stockdiff'+(promo?' promoted':'')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(ratio===null?'—':((ratio-1)*100).toFixed(0)+'% over selling')+'</span>'+promoHtml+'</div></div>'+
    '<div class="bestmetrics"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div></div>'+
