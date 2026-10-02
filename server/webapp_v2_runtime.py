@@ -2539,17 +2539,60 @@ def _family_regular_baseline(
             "regular_supported_day_count":0,
             "regular_sold_quantity":None,
             "regular_velocity_per_supported_day":None,
+            "regular_velocity_by_weekday":{},
+            "confidence":"NONE",
         }
     regular=[x for x in s["rows"] if not x.get("has_sale")]
     qty=sum((_d(x["sold_quantity"]) for x in regular),Decimal("0"))
     n=len(regular)
+    overall=(qty/Decimal(n)) if n else None
+
+    # Selected delivery windows can contain very different weekday demand.
+    # Use weekday evidence when it exists, but shrink it toward the overall
+    # regular baseline so one unusually high/low historical weekday cannot
+    # dominate the order forecast. Two pseudo-days is a conservative prior.
+    weekday_velocity={}
+    weekday_detail={}
+    prior_days=Decimal("2")
+    for wd in range(7):
+        matches=[
+            x for x in regular
+            if x.get("date") is not None and int(x["date"].weekday())==wd
+        ]
+        wd_qty=sum((_d(x["sold_quantity"]) for x in matches),Decimal("0"))
+        wd_n=len(matches)
+        raw=(wd_qty/Decimal(wd_n)) if wd_n else None
+        smoothed=(
+            (wd_qty+_d(overall)*prior_days)/(Decimal(wd_n)+prior_days)
+            if overall is not None else None
+        )
+        weekday_velocity[wd]=smoothed
+        weekday_detail[wd]={
+            "supported_day_count":wd_n,
+            "sold_quantity":wd_qty,
+            "raw_velocity":raw,
+            "smoothed_velocity":smoothed,
+        }
+
+    confidence=(
+        "HIGH" if n>=14
+        else "MEDIUM" if n>=7
+        else "LOW" if n>=3
+        else "VERY_LOW" if n
+        else "NONE"
+    )
     return {
         "status":"READY" if n else "NO_REGULAR_BASELINE",
         "uom":s["uom"],
         "requested_supported_days":supported_day_limit,
         "regular_supported_day_count":n,
         "regular_sold_quantity":qty,
-        "regular_velocity_per_supported_day":(qty/Decimal(n) if n else None),
+        "regular_velocity_per_supported_day":overall,
+        "regular_velocity_by_weekday":weekday_velocity,
+        "regular_weekday_detail":weekday_detail,
+        "weekday_shrinkage_prior_days":prior_days,
+        "forecast_method":"WEEKDAY_SMOOTHED_TO_OVERALL_REGULAR_BASELINE",
+        "confidence":confidence,
         "sale_days_excluded":len(s["rows"])-n,
         "tpr_treated_as_regular":True,
         "missing_calendar_dates_are_zero":False,
@@ -3081,6 +3124,15 @@ def bulk_ordering_suggestions(
             total=Decimal("0")
             before_delivery=Decimal("0")
             coverage_usage=Decimal("0")
+            requested_coverage_usage=Decimal("0")
+            freshness_uncovered_usage=Decimal("0")
+            requested_coverage_days=max(0,(next_next-delivery).days)
+            freshness_limit_days=7 if kind=="FRESH" else None
+            effective_coverage_end=(
+                min(next_next,delivery+timedelta(days=freshness_limit_days))
+                if freshness_limit_days is not None else next_next
+            )
+            freshness_coverage_capped=bool(effective_coverage_end<next_next)
             segments={
                 "REGULAR":Decimal("0"),
                 "PROMOTION":Decimal("0"),
@@ -3090,6 +3142,7 @@ def bulk_ordering_suggestions(
                 "PROMOTION_COVERAGE":Decimal("0"),
             }
             daily_forecast=[]
+            weekday_vel=regular.get("regular_velocity_by_weekday") or {}
             day=order_day
             while day<next_next:
                 is_promo=bool(
@@ -3097,7 +3150,8 @@ def bulk_ordering_suggestions(
                     and item_promo_start<=day<=item_promo_end
                 )
                 segment="PROMOTION" if is_promo else "REGULAR"
-                use_vel=_d(promo_vel if is_promo else reg_vel)
+                regular_day_vel=weekday_vel.get(day.weekday(),reg_vel)
+                use_vel=_d(promo_vel if is_promo else regular_day_vel)
                 total+=use_vel
                 segments[segment]+=use_vel
                 if day<delivery:
@@ -3105,19 +3159,26 @@ def bulk_ordering_suggestions(
                     segments[segment+"_BEFORE_DELIVERY"]+=use_vel
                     phase="BEFORE_DELIVERY"
                 else:
-                    coverage_usage+=use_vel
-                    segments[segment+"_COVERAGE"]+=use_vel
-                    phase="COVERAGE"
+                    requested_coverage_usage+=use_vel
+                    if day<effective_coverage_end:
+                        coverage_usage+=use_vel
+                        segments[segment+"_COVERAGE"]+=use_vel
+                        phase="COVERAGE"
+                    else:
+                        freshness_uncovered_usage+=use_vel
+                        phase="OUTSIDE_FRESHNESS_CAP"
                 daily_forecast.append({
                     "date":day,
                     "phase":phase,
                     "price_regime":segment,
                     "forecast_quantity":use_vel,
+                    "regular_weekday_velocity":regular_day_vel,
                 })
                 day+=timedelta(days=1)
 
             projected_at_delivery=ordering_oh-before_delivery
             usable_at_delivery=max(Decimal("0"),projected_at_delivery)
+            pre_delivery_stockout_qty=max(Decimal("0"),-projected_at_delivery)
             suggested=max(Decimal("0"),coverage_usage-usable_at_delivery)
             suggestions.append({
                 "family_id":fid,
@@ -3160,10 +3221,18 @@ def bulk_ordering_suggestions(
                 "forecast_regular_before_delivery":segments["REGULAR_BEFORE_DELIVERY"],
                 "forecast_promotion_before_delivery":segments["PROMOTION_BEFORE_DELIVERY"],
                 "forecast_coverage_usage":coverage_usage,
+                "forecast_requested_coverage_usage":requested_coverage_usage,
                 "forecast_regular_coverage":segments["REGULAR_COVERAGE"],
                 "forecast_promotion_coverage":segments["PROMOTION_COVERAGE"],
                 "projected_oh_at_delivery":projected_at_delivery,
                 "usable_oh_at_delivery":usable_at_delivery,
+                "pre_delivery_stockout_risk":pre_delivery_stockout_qty>0,
+                "pre_delivery_stockout_qty":pre_delivery_stockout_qty,
+                "requested_coverage_days":requested_coverage_days,
+                "effective_coverage_end_date":effective_coverage_end-timedelta(days=1),
+                "freshness_coverage_capped":freshness_coverage_capped,
+                "freshness_uncovered_usage":freshness_uncovered_usage,
+                "regular_forecast_confidence":regular.get("confidence"),
                 "daily_forecast":daily_forecast,
                 "suggested_order_qty":suggested,
                 "suggested_order_uom":demand_uom,
@@ -3177,7 +3246,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V3_PROMOTION_ITEM_WINDOWS",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V4_ORDERING_QUALITY",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -3224,7 +3293,10 @@ def bulk_ordering_suggestions(
             "promotion_types":["WEEKLY_THURSDAY_TO_THURSDAY","WEEKEND_FRIDAY_TO_SUNDAY"],
             "temporary_oh_override_is_request_only":True,
             "temporary_oh_override_writes_database":False,
-            "suggested_order_basis":"COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY",
+            "suggested_order_basis":"FRESHNESS_ELIGIBLE_COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY",
+            "regular_forecast_method":"WEEKDAY_SMOOTHED_NON_PROMO_VELOCITY",
+            "pre_delivery_shortage_is_not_backordered_into_future_delivery":True,
+            "fresh_live_coverage_cap_days":7,
             "saved":False,
             "submitted":False,
         },
