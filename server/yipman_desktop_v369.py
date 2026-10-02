@@ -231,9 +231,9 @@ YIPMAN_DESKTOP_JS = r"""
       '<div class="actions stickyTools" style="margin:0 0 9px"><input id="ydPSearch" class="input priceSearch" placeholder="Search price suggestions by UPC / name / family"><select id="ydPSort" class="select"><option value="urgency">Sort: Urgency first</option><option value="gp_lift">Sort: GP$/day opportunity</option><option value="doh">Sort: Highest DOH</option><option value="oh">Sort: Highest OH</option><option value="velocity_low">Sort: Lowest 7D velocity</option><option value="gap">Sort: Largest price gap</option><option value="name">Sort: Name A–Z</option></select><span class="small" id="ydPStatus">Loading current analysis…</span></div>'+
       '<div id="ydPriceSummary" class="priceSummary"></div>'+
       '<div class="split"><div id="ydPQueue"><div class="loading">Loading pricing review…</div></div><aside id="ydPAnalysis" class="analysis"><div class="card"><div class="loading">Select a price suggestion.</div></div></aside></div>';
-    $('[data-pfx]',root).forEach(b=>b.onclick=()=>{D.pricePrefix=b.dataset.pfx;$('[data-pfx]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
-    $('[data-pop]',root).forEach(b=>b.onclick=()=>{D.priceOperational=b.dataset.pop;$('[data-pop]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
-    $('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pfx]',root).forEach(b=>b.onclick=()=>{D.pricePrefix=b.dataset.pfx;$$('[data-pfx]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pop]',root).forEach(b=>b.onclick=()=>{D.priceOperational=b.dataset.pop;$$('[data-pop]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
     $('#ydPSearch').oninput=e=>{D.priceSearch=e.target.value.trim().toLowerCase();renderPriceQueue()};
     $('#ydPSort').value=D.priceSort||'urgency';
     $('#ydPSort').onchange=e=>{D.priceSort=e.target.value||'urgency';renderPriceQueue()};
@@ -394,7 +394,7 @@ function renderPriceQueue(refreshing=false){
       '<div class="diaggrid"><div class="kpi"><label>Analysis</label><strong>'+esc(d.analysis_status||'—')+'</strong></div><div class="kpi"><label>Data health</label><strong>'+esc(h.status||'—')+'</strong><small>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</small></div><div class="kpi"><label>Accepted hidden</label><strong>'+accepted+'</strong><small>'+esc(d.refresh_error||'no refresh error')+'</small></div></div>'+
       '<div class="actions" style="margin-top:10px"><button class="btn primary" id="ydPriceEmptyRefresh">Refresh analysis</button><button class="btn" id="ydPriceEmptyAll">Show all actionable</button></div></div>';
     const r=$('#ydPriceEmptyRefresh');if(r)r.onclick=()=>refreshPriceData(true,0);
-    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.pricePrefix='all';D.priceOperational='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$('[data-pfx]').forEach(x=>x.classList.toggle('primary',x.dataset.pfx==='all'));$('[data-pop]').forEach(x=>x.classList.toggle('primary',x.dataset.pop==='all'));$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
+    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.pricePrefix='all';D.priceOperational='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$$('[data-pfx]').forEach(x=>x.classList.toggle('primary',x.dataset.pfx==='all'));$$('[data-pop]').forEach(x=>x.classList.toggle('primary',x.dataset.pop==='all'));$$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
     $('#ydPAnalysis').innerHTML='<div class="card"><div class="loading">Select a price suggestion when the queue is available.</div></div>';
     return;
   }
