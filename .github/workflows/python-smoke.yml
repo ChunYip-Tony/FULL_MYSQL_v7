@@ -162,10 +162,12 @@ jobs:
           assert '"recent_promotion_event": recent_promotion' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'ANY_RELATED_FAMILY_UPC' in src
-          assert 'YIPMAN_STOCK_FLOW_V3_PROMOTION_WEEK_EXTRA_QTY' in src
+          assert 'YIPMAN_STOCK_FLOW_V4_PROMO_AVG_PRICE' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
+          assert 'avg_promotion_selling_price' in helper
+          assert 'sale_sales_amount' in helper
           assert 'nonpromo_baseline_daily_qty' in helper
           assert 'LATEST_7_COMPLETED_POS_DAYS_ENDING_AT_PROMO_EVENT_END_VS_NON_SALE_28D_DAILY_BASELINE' in helper
           assert '"related_upcs":sorted(event_upcs)' in helper.replace(' ','')
@@ -175,6 +177,10 @@ jobs:
           assert 'recent_promotion_event:r.recent_promotion_event||null' in ui
           assert "RECENT SALE · " in ui
           assert 'promotion_week_extra_qty' in ui
+          assert 'AVG PROMO PRICE' in ui
+          assert '.stockdiff.promoted>b{display:inline-block;background:#fff34a' in ui
+          assert '.stockpromo .promolift{display:inline-block' in ui
+          assert '.stockpromo .promoprice{display:flex' in ui
           assert 'VS NORMAL NON-PROMO WEEK' in ui
           assert "promo?' promoted':''" in ui
           assert '.quicksearch{border-width:2.4px}' in ui
@@ -182,7 +188,7 @@ jobs:
           assert "pcard tone'+(i%5)" in ui
           assert 'receiving_article_name' in ui
           assert 'h.article_name' in ui
-          assert "const CACHE='yipman-v388'" in ui
+          assert "const CACHE='yipman-v389'" in ui
           print('stock-flow-promo-week-lift-v388=PASS')
           PY
 
