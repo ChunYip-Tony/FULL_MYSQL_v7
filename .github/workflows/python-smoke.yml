@@ -344,6 +344,9 @@ jobs:
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+          assert 'Family Receipt Summary' in desktop
+          assert 'All linked Receiving Articles · physical 101/109' in desktop
+          assert "Receiving Article '+esc(receiving)" not in desktop
           assert 'Ignore 12 hours' in desktop
           assert 'ignorePrice12h' in desktop
           assert 'Mark Accepted' not in desktop
