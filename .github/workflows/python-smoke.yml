@@ -543,7 +543,7 @@ jobs:
           order_src=inspect.getsource(webapp_v2_runtime.bulk_ordering_suggestions)
           assert '"weekday_usage_forecast"' in order_src
           assert 'HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS' in order_src
-                    print('canonical-physical-receipt-semantics=PASS')
+          print('canonical-physical-receipt-semantics=PASS')
           PY
 
       - name: Validate all-UPC source lineage normalization
