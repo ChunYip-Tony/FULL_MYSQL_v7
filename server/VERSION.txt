@@ -1,3 +1,13 @@
+v7.0.392 Compact Stock Flow Layout:
+- Reorganized Yipman Quick Check Stock Flow cards into a compact flow-first layout: Family identity, 7D selling, 7D receipt, Difference, recent SALE context, then recent receipts.
+- 7D Selling MVT, 7D Receipt, and Difference now sit on the same compact row for faster side-by-side comparison.
+- The top-right card indicator now shows percent over selling instead of repeating the Difference amount.
+- Families with no recent SALE event use a light-red Difference container and explicit NO RECENT SALE state.
+- Families with a recent SALE event retain the green Difference state; SALE details remain in a separate compact context strip.
+- Existing Stock Flow receipt links, sorting, 28-day SALE evidence, promotion lift, average promotion price, search, and navigation behavior are preserved.
+- Yipman shell cache advanced to v392.
+Version: 7.0.392 Single-Service Edition
+
 v7.0.390 Quick Check Receipt Reconciliation Fix:
 - Family/Main Article physical 101/109 receipts are now shown as real Receiving Article rows even when linked Receiving Articles also exist.
 - Each Receiving Article row now shows its own 7D receipt subtotal from the same canonical physical receipt pool used by Family 7D Receipt.

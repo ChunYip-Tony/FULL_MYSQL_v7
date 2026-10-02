@@ -182,13 +182,17 @@ jobs:
           assert '.stockpromo .promolift{display:inline-block' in ui
           assert '.stockpromo .promoprice{display:flex' in ui
           assert 'VS NORMAL NON-PROMO WEEK' in ui
-          assert "promo?' promoted':''" in ui
+          assert "promo?' promoted':' nosale'" in ui
           assert '.quicksearch{border-width:2.4px}' in ui
           assert "orderitemcard tone'+(i%5)" in ui
           assert "pcard tone'+(i%5)" in ui
           assert 'receiving_article_name' in ui
           assert 'h.article_name' in ui
-          assert "const CACHE='yipman-v391'" in ui
+          assert '.stockflowgrid{display:grid;grid-template-columns:' in ui
+          assert '.stockdiff.nosale{background:#ffe9e9' in ui
+          assert 'NO RECENT SALE' in ui
+          assert 'OVER SELLING' in ui
+          assert "const CACHE='yipman-v392'" in ui
           print('stock-flow-promo-week-lift-v388=PASS')
           PY
 
