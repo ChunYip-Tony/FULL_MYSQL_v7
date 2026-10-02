@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v360';
+const CACHE='yipman-v361';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -372,6 +372,39 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 }
 .nav button:active{transform:scale(.985)}
 
+
+/* V361 Price Suggestions: compact three-price path + dense evidence/progress. */
+#price .topline{margin-bottom:5px}
+#price .filters{margin-bottom:5px}
+#priceStatus{font-size:9px!important;line-height:1.25!important;margin-bottom:5px!important}
+.pricecards{gap:6px}
+.pcard{border:1px solid #e0e6eb;border-radius:14px;padding:9px 10px;box-shadow:0 4px 14px rgba(18,38,56,.065)}
+.ptop{align-items:flex-start;gap:6px}.ptop>div:first-child{min-width:0}
+.ptop b{display:block;font-size:14px!important;line-height:1.08;white-space:normal}
+.ptop small{font-size:8px!important;line-height:1.2;margin-top:2px}
+.pbadge{flex:0 0 auto;border-radius:999px;padding:4px 6px;font-size:7px;font-weight:950;white-space:nowrap}
+.pbadge.red{background:var(--redbg);color:var(--red)}.pbadge.amber{background:var(--amberbg);color:var(--amber)}.pbadge.green{background:var(--greenbg);color:var(--green)}
+.pricepath{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:7px}
+.pp{min-width:0;border:1px solid #e3e8ec;background:#f5f7f9;border-radius:9px;padding:6px 7px}
+.pp.tested{background:#fff9e4;border-color:#efdda0}.pp.testing{background:#eaf7ff;border-color:#c5e5f5}
+.pp small{display:block;font-size:6px;font-weight:950;letter-spacing:.05em;color:#7c8892;line-height:1}
+.pp b{display:block;font-size:17px;line-height:1;margin-top:3px;font-weight:1000;white-space:nowrap}
+.pp span{display:block;font-size:6px;color:#7c8892;font-weight:850;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp.tested b{color:#7a5a00}.pp.testing b{color:#0878ad}
+.pmetrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-top:5px}
+.pm{min-width:0;border:1px solid #e8edf0;background:#fafbfc;border-radius:7px;padding:4px 5px}
+.pm small{display:block;font-size:5.5px;font-weight:950;color:#8a959e;line-height:1}
+.pm b{display:block;font-size:10px;font-weight:950;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pprogress{margin-top:5px;background:#f8fafb;border:1px solid #e7ecef;border-radius:8px;padding:5px 6px}
+.pprogress-line{display:flex;align-items:center;justify-content:space-between;gap:7px;font-size:7px;color:#5f6d78;font-weight:850;line-height:1.2}
+.pprogress-line b{font-size:8px;color:#263744}.pprogress-line strong{font-size:8px;color:#0878ad;white-space:nowrap}
+.pbar{height:4px;background:#e4eaee;border-radius:999px;overflow:hidden;margin-top:4px}.pbar i{display:block;height:100%;background:#118fc6;border-radius:999px}
+.pchips{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px}.pchip{border:1px solid #e3e8ec;background:#fafbfc;color:#5f6d78;border-radius:6px;padding:3px 5px;font-size:6.5px;font-weight:950}
+.preason{margin-top:5px;border-top:1px solid #edf1f3;padding-top:5px}.preason summary{list-style:none;cursor:pointer;color:#0879b3;font-size:7px;font-weight:950}.preason div{margin-top:4px;color:#64727e;font-size:7px;line-height:1.4;font-weight:750}
+.pcard-actions{display:grid;grid-template-columns:1fr auto;gap:5px;margin-top:6px}.pcard-actions button{border-radius:8px;padding:6px 8px;font-size:7px;font-weight:950}
+.pdetail{border:0;background:#173047;color:#fff}.pignore{border:1px solid #d9e1e6;background:#fff;color:#586773}
+@media(max-width:390px){.pp b{font-size:16px}.pm b{font-size:9px}.pcard{padding:8px 9px}}
+
 </style>
 </head>
 <body>
@@ -415,7 +448,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
       </div>
     </section>
 
-    <section class="page" id="price"><div class="topline"><h2>Price Review</h2><div class="hint">BY DELIVERY PATTERN</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
+    <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">COMPACT · LIVE PROGRESS</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
     <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">BACK OFFICE UNCHANGED</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
@@ -1360,6 +1393,62 @@ function openOrder(r){
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
 }
 
+
+const PRICE_IGNORE_KEY='yipman-price-ignore-v361';
+const PRICE_IGNORE_MS=30*60*1000;
+let priceIgnoreMemory={};
+function readPriceIgnores(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(PRICE_IGNORE_KEY)||'{}');
+    if(raw&&typeof raw==='object'){priceIgnoreMemory=raw;return raw}
+  }catch{}
+  return priceIgnoreMemory||{};
+}
+function writePriceIgnores(v){
+  priceIgnoreMemory=v||{};
+  try{localStorage.setItem(PRICE_IGNORE_KEY,JSON.stringify(priceIgnoreMemory))}catch{}
+}
+function priceIgnoreId(r){return String(r?.upc||'').trim()}
+function priceIsIgnored(r){
+  const id=priceIgnoreId(r);if(!id)return false;
+  const map=readPriceIgnores(),ts=Number(map[id]||0);
+  return ts>0&&(Date.now()-ts)<PRICE_IGNORE_MS;
+}
+function ignorePriceSuggestion(r){
+  const id=priceIgnoreId(r);if(!id)return;
+  const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
+  if($('#overlay').classList.contains('on'))closeSheet(true);
+  toast('Ignored for 30 minutes');
+  loadPrices({quiet:true});
+}
+function priceReasonMeta(r,stale=false){
+  const code=String(r?.suggestion_reason_code||'');
+  if(r?.priority_240_249_mismatch||code==='PAIR_FIX')return {label:'240≠249',cls:'red',testing:'NOT A TEST'};
+  if(code==='COMPANY_RANGE')return {label:'RANGE',cls:'red',testing:'NOT A TEST'};
+  if(code==='VELOCITY_TEST')return {label:'VELOCITY',cls:'amber',testing:'FRESHNESS TEST'};
+  if(code==='SWEET_SPOT_GAP')return {label:'SWEET SPOT',cls:'amber',testing:'NEXT STEP'};
+  if(code==='GP_DOLLAR_TEST')return {label:'GP$ TEST',cls:'green',testing:'NEXT STEP'};
+  return {label:stale?'ESTIMATE':'REVIEW',cls:stale?'amber':'green',testing:'NEXT STEP'};
+}
+function priceProgress(r){
+  const v7=num(r?.velocity_7d),v28=num(r?.velocity_28d);
+  if(v7===null||v28===null||v28<=0)return {pct:null,label:'Velocity '+fmt(v7)+' /day',delta:'28D baseline —'};
+  const ratio=v7/v28,delta=(ratio-1)*100,pct=Math.max(0,Math.min(100,ratio*100));
+  return {pct,label:'Velocity '+fmt(v7)+' /day',delta:'vs 28D '+fmt(v28)+' /day · '+(delta>=0?'+':'')+delta.toFixed(0)+'%'};
+}
+function priceSignals(r){
+  const out=[],code=String(r?.suggestion_reason_code||'');
+  if(r?.priority_240_249_mismatch||code==='PAIR_FIX')out.push('240≠249');
+  if(code==='COMPANY_RANGE'||r?.company_range_violation)out.push('OUTSIDE COMPANY RANGE');
+  if(code==='VELOCITY_TEST')out.push('SLOW / FRESHNESS');
+  if(r?.slow_velocity_trend)out.push('7D < 80% OF 28D');
+  const d=num(r?.doh);if(d!==null&&['FRESH','LIVE'].includes(String(r?.category||'').toUpperCase())&&d>=5)out.push('DOH 5+');
+  if(code==='SWEET_SPOT_GAP')out.push('>$0.25 FROM TESTED');
+  if(code==='GP_DOLLAR_TEST')out.push('GP$/DAY OPPORTUNITY');
+  return out.slice(0,4);
+}
+function friendlySignal(v){return String(v||'').replaceAll('_',' ').replace(/s+/g,' ').trim()}
+
 function schedulePriceRetry(requestId,delayMs=3000){
  clearTimeout(priceRetryTimer);
  priceRetryTimer=setTimeout(()=>{
@@ -1371,7 +1460,7 @@ async function loadPrices(opts={}){
  const requestId=++priceRequestSeq;
  clearTimeout(priceRetryTimer);
  if(!quiet)$('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';
- $('#priceStatus').textContent='Current price uses latest valid evidence';
+ $('#priceStatus').textContent='Current · strongest proved Tested · controlled Testing';
  try{
   const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:12000});
   if(requestId!==priceRequestSeq)return;
@@ -1379,7 +1468,7 @@ async function loadPrices(opts={}){
   const cacheStatus=String(d.cache_status||'').toUpperCase();
   const warming=analysisStatus==='REFRESHING'||cacheStatus==='WARMING';
   if(warming){
-    $('#priceStatus').textContent='Building current Price Review…';
+    $('#priceStatus').textContent='Building current Price Suggestions…';
     $('#priceRows').innerHTML='<div class="loading">Pricing analysis is running in the background. Yipman will retry automatically.</div>';
     schedulePriceRetry(requestId,3000);
     return;
@@ -1391,49 +1480,90 @@ async function loadPrices(opts={}){
     return;
   }
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||String(d.cache_status||'').toUpperCase()==='STALE_REFRESHING';
-  const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||r.actionable||['TESTED_PRICE','TESTING_PRICE'].includes(String(r.suggestion_reason_code||'')));
+  const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||r.actionable||String(r.suggestion_reason_code||''));
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
-  const filtered=meaningful.filter(r=>{
+  const patternFiltered=meaningful.filter(r=>{
     if(priceFilter==='LIVE')return String(r.category||'').toUpperCase()==='LIVE';
     const days=observed(r);
     if(priceFilter==='TUE')return days.includes('TUESDAY');
     if(priceFilter==='FRI_SAT')return days.includes('FRIDAY')||days.includes('SATURDAY');
     return true;
   });
-  const rows=filtered.slice(0,24);
+  const ignoredCount=patternFiltered.filter(priceIsIgnored).length;
+  const rows=patternFiltered.filter(r=>!priceIsIgnored(r)).slice(0,24);
   const filterLabel=priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
-  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled; current price/cost evidence is resolved live where available.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
+  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+ignoredCount+' ignored <30m · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
+
   $('#priceRows').innerHTML=rows.map((r,i)=>{
-    const days=(r.observed_delivery_days||[]).map(x=>String(x.weekday||'').slice(0,3).toUpperCase()+' '+fmt(x.receipt_date_count,0)).join(' · ');
-    const code=String(r.suggestion_reason_code||'');
-    const actionLabel=code==='TESTED_PRICE'?'TESTED':code==='TESTING_PRICE'?'TESTING':r.priority_240_249_mismatch?'PAIR FIX':'PRICE';
-    const badgeLabel=r.priority_240_249_mismatch?'240≠249':code==='TESTED_PRICE'?'TESTED':code==='TESTING_PRICE'?'TESTING':stale?'ESTIMATE':'REVIEW';
-    return '<div class="pcard" data-price="'+i+'"><div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.suggestion_reason||r.primary_reason_text||r.review_status||'Pricing review')+'</small></div><div class="badge '+(r.priority_240_249_mismatch?'red':code==='TESTING_PRICE'||stale?'amber':'green')+'">'+badgeLabel+'</div></div><div class="compare"><div class="pbox"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="arrow">→</div><div class="pbox"><b>'+money(r.candidate_price)+'</b><span>'+actionLabel+'</span></div></div><div class="why">TESTED '+money(r.tested_price)+' · TESTING '+money(r.testing_price)+' · OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · 7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day'+(days?' · RECEIPTS '+esc(days):'')+'</div></div>';
+    const meta=priceReasonMeta(r,stale),prog=priceProgress(r),signals=priceSignals(r);
+    const tested=num(r.tested_price),testing=num(r.testing_price),cur=num(r.current_price);
+    const gap=(tested!==null&&cur!==null)?Math.abs(tested-cur):null;
+    const gpNow=num(r.current_gp_per_day_7d),gpTarget=num(r.candidate_expected_gp_per_day);
+    const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
+    const companyText=(companyLow!==null&&companyHigh!==null)?money(companyLow)+'–'+money(companyHigh):'—';
+    const detailSignals=(Array.isArray(r.reasons)?r.reasons:[]).map(x=>'• '+esc(friendlySignal(x))).join('<br>');
+    return '<article class="pcard" data-price="'+i+'">'+
+      '<div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
+      '<div class="pricepath">'+
+        '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+'</span></div>'+
+        '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>STRONGEST PROVED</span></div>'+
+        '<div class="pp testing"><small>TESTING</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+'</span></div>'+
+      '</div>'+
+      '<div class="pmetrics">'+
+        '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
+        '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
+        '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
+        '<div class="pm"><small>'+(gap!==null?'TESTED GAP':'DOH')+'</small><b>'+(gap!==null?money(gap):fmt(r.doh))+'</b></div>'+
+      '</div>'+
+      '<div class="pprogress"><div class="pprogress-line"><span><b>'+esc(prog.label)+'</b> · '+esc(prog.delta)+'</span><strong>'+(gpNow!==null?('GP$/d '+money(gpNow)):'GP$/d —')+'</strong></div>'+
+        (prog.pct===null?'':'<div class="pbar"><i style="width:'+prog.pct.toFixed(0)+'%"></i></div>')+
+        (gpTarget!==null?'<div class="pprogress-line" style="margin-top:4px"><span>Supported target evidence</span><strong>'+money(gpTarget)+'/day</strong></div>':'')+
+      '</div>'+
+      (signals.length?'<div class="pchips">'+signals.map(x=>'<span class="pchip">'+esc(x)+'</span>').join('')+'</div>':'')+
+      '<details class="preason"><summary>DETAIL REASON + EVIDENCE ▾</summary><div>'+
+        '<b>Why:</b> '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+
+        '<br><b>Current evidence:</b> '+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
+        '<br><b>Company range:</b> '+esc(companyText)+(r.company_range_violation?' · CURRENT OUTSIDE':'')+
+        '<br><b>Test target:</b> '+money(r.testing_target_price||r.target_sweet_spot_price)+
+        (detailSignals?'<br><b>Signals:</b><br>'+detailSignals:'')+
+      '</div></details>'+
+      '<div class="pcard-actions"><button class="pdetail" data-price-detail="'+i+'">DETAIL</button><button class="pignore" data-price-ignore="'+i+'">IGNORE 30 MIN</button></div>'+
+    '</article>';
   }).join('')||'<div class="empty">No actionable price suggestion matches this delivery-pattern filter.</div>';
-  $$('[data-price]').forEach(x=>x.onclick=()=>openPrice(rows[Number(x.dataset.price)]));
+
+  $$('[data-price]').forEach(x=>x.onclick=e=>{
+    if(e.target.closest('button,details,summary'))return;
+    openPrice(rows[Number(x.dataset.price)]);
+  });
+  $$('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
+  $$('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
  }catch(e){
   if(requestId!==priceRequestSeq)return;
-  $('#priceStatus').textContent='Price review temporarily unavailable';
+  $('#priceStatus').textContent='Price suggestions temporarily unavailable';
   $('#priceRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Yipman will retry automatically.</div>';
   schedulePriceRetry(requestId,6000);
  }
 }
 function openPrice(r){
  const delivery=(r.observed_delivery_days||[]).map(x=>esc(x.weekday||'')+' '+fmt(x.receipt_date_count,0)+' receipt date'+(Number(x.receipt_date_count||0)===1?'':'s')).join('<br>');
- const code=String(r.suggestion_reason_code||'');
- const actionLabel=code==='TESTED_PRICE'?'TESTED PRICE':code==='TESTING_PRICE'?'TESTING PRICE':r.priority_240_249_mismatch?'PAIR FIX':'PRICE ACTION';
- sheet(r.name||r.upc,r.upc||'Price review',
- '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.candidate_price)+'</b><span>'+actionLabel+'</span></div><div class="dm"><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>OH</span></div></div>'+
+ const meta=priceReasonMeta(r,false),signals=(Array.isArray(r.reasons)?r.reasons:[]).map(x=>'• '+esc(friendlySignal(x))).join('<br>');
+ const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
+ const company=(companyLow!==null&&companyHigh!==null)?money(companyLow)+' – '+money(companyHigh):'—';
+ sheet(r.name||r.upc,r.upc||'Price suggestion',
+ '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · BEST PROVED</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TESTING · '+esc(meta.testing)+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
- '<div class="detail"><b>Price path</b><br>TESTED '+money(r.tested_price)+' · TESTING '+money(r.testing_price)+
- '<br><br><b>Reason</b><br>'+esc(r.suggestion_reason||r.primary_reason_text||r.review_blocker||'Pricing review')+
- '<br><br><b>Testing rule</b><br>Move gradually toward the internally supported sweet-spot target. Use the nearest observed price within a 5% step when available; otherwise move no more than 5% per test.'+
+ '<div class="detail"><b>Suggested action</b><br>'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+
+ '<br><br><b>Price path</b><br>Current '+money(r.current_price)+' → Testing '+money(r.testing_price)+' · Tested '+money(r.tested_price)+
+ '<br>Action price '+money(r.candidate_price)+(r.testing_target_price?(' · eventual test target '+money(r.testing_target_price)):'')+
+ '<br><br><b>Progress now</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · 28D '+fmt(r.velocity_28d)+' /day · DOH '+fmt(r.doh)+
+ '<br>GP$/day now '+money(r.current_gp_per_day_7d)+' · supported target evidence '+money(r.candidate_expected_gp_per_day)+
+ '<br><br><b>Company A/B/C range</b><br>'+esc(company)+(r.company_range_violation?' · CURRENT OUTSIDE RANGE':'')+
+ '<br><br><b>Current price evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
+ '<br><br><b>Testing rule</b><br>Start from CURRENT. Move one controlled step toward the applicable target; prefer an observed nearby price and cap ordinary tests at 5%. Re-check completed-day velocity and GP$/day before the next step.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
- '<br><br><b>Current evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
- '<br><br><b>Sales / stock</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · DOH '+fmt(r.doh)+
- (Array.isArray(r.reasons)&&r.reasons.length?'<br><br><b>Supporting signals</b><br>'+r.reasons.map(x=>'• '+esc(x)).join('<br>'):'')+'</div>'+
- (String(r.review_status||'').toUpperCase()==='ACTIONABLE'&&r.current_price!=null&&r.candidate_price!=null?'<div class="actions"><button class="secondary" id="priceClose">NOT NOW</button><button class="primary" id="priceAccept">ACCEPTED</button></div>':''));
- const c=$('#priceClose');if(c)c.onclick=()=>closeSheet(true);
+ (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
+ '<div class="actions"><button class="secondary" id="priceIgnore30">IGNORE 30 MIN</button>'+(String(r.review_status||'').toUpperCase()==='ACTIONABLE'&&r.current_price!=null&&r.candidate_price!=null?'<button class="primary" id="priceAccept">ACCEPTED</button>':'')+'</div>');
+ const ig=$('#priceIgnore30');if(ig)ig.onclick=()=>ignorePriceSuggestion(r);
  const a=$('#priceAccept');if(a)a.onclick=()=>acceptPrice(r,a);
 }
 async function acceptPrice(r,b){
