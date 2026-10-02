@@ -2638,6 +2638,7 @@ def _quick_receiving_article_context(
         if x.get("date") is not None
     }
     receipt_7d_by_family: dict[int, dict[str, Any]] = {}
+    family_receipt_history_by_family: dict[int, list[dict[str, Any]]] = {}
     for fid in fids:
         family_receipt_articles = {
             str(source_by_family.get(fid) or "").strip(),
@@ -2652,6 +2653,58 @@ def _quick_receiving_article_context(
             for art in family_receipt_articles
             for e in per_article.get(art, [])
         ]
+
+        # RECENT RECEIPTS must use the same Family-wide physical receipt pool as
+        # the 7D Receipt total. Previously it looked only at the Family/source
+        # Article, so a Family could correctly show positive 7D Receipt while
+        # incorrectly displaying "No recent receipt" when the GR posted to a
+        # linked Receiving Article.
+        family_entries_by_date: dict[Any, list[dict[str, Any]]] = {}
+        for entry in all_known_entries:
+            if entry.get("date") is not None:
+                family_entries_by_date.setdefault(entry.get("date"), []).append(entry)
+        family_history: list[dict[str, Any]] = []
+        for receipt_date, date_entries in family_entries_by_date.items():
+            date_uoms = {
+                str(x.get("uom") or "").strip().upper()
+                for x in date_entries
+                if str(x.get("uom") or "").strip()
+            }
+            date_qty = None
+            date_uom = None
+            if (
+                len(date_uoms) == 1
+                and all(x.get("quantity") is not None for x in date_entries)
+            ):
+                date_uom = next(iter(date_uoms))
+                date_qty = sum(
+                    (_d(x.get("quantity")) for x in date_entries),
+                    Decimal("0"),
+                )
+            family_history.append({
+                "verified": True,
+                "movement_type": "101/109",
+                "date": receipt_date,
+                "weekday": (
+                    receipt_date.strftime("%A")
+                    if hasattr(receipt_date, "strftime")
+                    else None
+                ),
+                "quantity": date_qty,
+                "uom": date_uom,
+                "receipt_event_count": sum(
+                    int(x.get("receipt_event_count") or 0)
+                    for x in date_entries
+                ),
+                "receiving_article_count": len(date_entries),
+                "source": "MVT_PHYSICAL_101_109_FAMILY_DAILY_AGGREGATE",
+            })
+        family_history.sort(
+            key=lambda x: str(x.get("date") or ""),
+            reverse=True,
+        )
+        family_receipt_history_by_family[fid] = family_history[:2]
+
         entries_7 = [
             e for e in all_known_entries
             if e.get("date") in receipt_dates_7
@@ -2815,7 +2868,12 @@ def _quick_receiving_article_context(
     out: dict[int, dict[str, Any]] = {}
     for fid, row in family_rows.items():
         source_article = source_by_family.get(fid)
-        family_receipt = receipt_by_article.get(str(source_article or ""), {})
+        family_receipt_history = family_receipt_history_by_family.get(fid, [])
+        family_receipt = (
+            family_receipt_history[0]
+            if family_receipt_history
+            else receipt_by_article.get(str(source_article or ""), {})
+        )
 
         articles: list[dict[str, Any]] = []
 
@@ -3062,7 +3120,7 @@ def _quick_receiving_article_context(
             "family_receipt_qty": family_receipt.get("quantity"),
             "family_receipt_uom": family_receipt.get("uom"),
             "family_receipt_source": family_receipt.get("source"),
-            "family_receipt_history": receipt_history_by_article.get(str(source_article or ""), []),
+            "family_receipt_history": family_receipt_history,
             "family_receipt_7d_qty": (receipt_7d_by_family.get(fid) or {}).get("quantity"),
             "family_receipt_7d_uom": (receipt_7d_by_family.get(fid) or {}).get("uom"),
             "family_receipt_7d_status": (receipt_7d_by_family.get(fid) or {}).get("status"),
