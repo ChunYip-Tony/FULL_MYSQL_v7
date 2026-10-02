@@ -443,7 +443,7 @@ const appDate=v=>{
   return mo+'/'+d+' '+wd;
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, pullStart=null, pull=0;
+let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
@@ -904,6 +904,23 @@ function updateOrderWindowUI(){
  $('#nextDeliveryDateCard').classList.toggle('pick',orderSelectMode==='NEXT');
  const end=dateLocal(orderNextDate);if(end)end.setDate(end.getDate()-1);
  $('#orderCoverageText').textContent=appDate(orderDate)+' → '+(end?appDate(iso(end)):'—');
+ $('#orderCoverageSub').textContent=orderMode==='PROMOTION'
+  ?'Each day is forecast as promotion-price or regular-price usage for the selected promotion list.'
+  :'Predict usage from delivery through the day before next delivery using the best available data at viewing time.';
+}
+function upcomingWeekday(jsWeekday){
+ const d=new Date();d.setHours(12,0,0,0);
+ const add=(jsWeekday-d.getDay()+7)%7;
+ d.setDate(d.getDate()+add);
+ return iso(d);
+}
+function setPromotionDefaultDates(){
+ if(!$('#promoWeeklyStart').value)$('#promoWeeklyStart').value=upcomingWeekday(4);
+ if(!$('#promoWeekendStart').value)$('#promoWeekendStart').value=upcomingWeekday(5);
+}
+async function runActiveOrdering(){
+ if(orderMode==='PROMOTION')return loadPromotionOrder();
+ return loadOrder(orderDate);
 }
 function buildDays(){
  const bar=$('#dayBar');if(!bar)return;bar.innerHTML='';
@@ -923,7 +940,7 @@ function buildDays(){
     if(dayIso<=orderDate){toast('Next delivery must be after delivery date');return}
     orderNextDate=dayIso;orderSelectMode='DELIVERY';
    }
-   buildDays();updateOrderWindowUI();loadOrder(orderDate);
+   buildDays();updateOrderWindowUI();runActiveOrdering();
   };
   bar.appendChild(b);
  }
@@ -939,7 +956,8 @@ async function initOrdering(force=false){
     orderCalendarLoaded=true;
    }catch(e){
     orderObservedWeekdays=new Map([[1,{observed:true,family_count:1}],[4,{observed:true,family_count:1}]]);
-    $('#orderStatus').textContent='Observed calendar fallback · '+e.message;
+    if(orderMode==='REGULAR')$('#orderStatus').textContent='Observed calendar fallback · '+e.message;
+    else $('#promoOrderStatus').textContent='Observed calendar fallback · '+e.message;
    }
   }
   if(!orderDate){
@@ -952,19 +970,132 @@ async function initOrdering(force=false){
    if(!orderDate){const d=new Date(base);d.setDate(d.getDate()+1);orderDate=iso(d)}
   }
   if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+  setPromotionDefaultDates();
   buildDays();updateOrderWindowUI();
-  await loadOrder(orderDate);
+  if(orderMode==='PROMOTION')await loadPromotionLists();
+  await runActiveOrdering();
  })();
  try{return await orderInitPromise}finally{orderInitPromise=null}
 }
 $('#deliveryDateCard').onclick=()=>{orderSelectMode='DELIVERY';updateOrderWindowUI()};
 $('#nextDeliveryDateCard').onclick=()=>{orderSelectMode='NEXT';updateOrderWindowUI()};
+
+async function loadPromotionLists(){
+ try{
+  const data=await api('/v1/yipman/promotion-lists?limit=30',{timeoutMs:12000});
+  const rows=data.rows||[];
+  const select=$('#promoListSelect');
+  const keep=String(promoListId||select.value||'');
+  select.innerHTML='<option value="">Choose promotion list…</option>'+rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready'+(Number(x.review_count||0)?' · '+fmt(x.review_count,0)+' review':'')+'</option>').join('');
+  if(keep&&rows.some(x=>String(x.list_id)===keep)){select.value=keep;promoListId=Number(keep)}
+  else if(!promoListId&&rows.length){promoListId=Number(rows[0].list_id);select.value=String(promoListId)}
+  promoListsLoaded=true;
+  if(promoListId)await loadPromotionListDetail(false);
+ }catch(e){
+  $('#promoListStatus').textContent='Promotion lists unavailable · '+e.message;
+ }
+}
+async function loadPromotionListDetail(recalculate=true){
+ if(!promoListId){promoListDetail=null;$('#promoListStatus').textContent='Choose or import a promotion list.';return}
+ try{
+  const d=await api('/v1/yipman/promotion-lists/'+promoListId,{timeoutMs:12000});
+  promoListDetail=d;
+  const weekly=(d.items||[]).filter(x=>x.mapping_status==='READY'&&x.promotion_type==='WEEKLY').length;
+  const weekend=(d.items||[]).filter(x=>x.mapping_status==='READY'&&x.promotion_type==='WEEKEND').length;
+  $('#promoListStatus').textContent=String(d.list_name||'Promotion List')+' · '+fmt(d.ready_count,0)+' READY · '+fmt(d.review_count,0)+' REVIEW';
+  $('#promoSummary').innerHTML='<span class="promo-type weekly">WEEKLY '+weekly+'</span><span class="promo-type weekend">WEEKEND '+weekend+'</span>'+(Number(d.review_count||0)?'<span class="promo-type" style="background:#ffe8e8;color:#9a2f2f">REVIEW '+fmt(d.review_count,0)+'</span>':'');
+  if(recalculate)await loadPromotionOrder();
+ }catch(e){
+  promoListDetail=null;$('#promoListStatus').textContent='Unable to load promotion list · '+e.message;
+ }
+}
+$('#promoListSelect').onchange=async e=>{
+ promoListId=e.target.value?Number(e.target.value):null;
+ promoTempOH.clear();
+ await loadPromotionListDetail(true);
+};
+$('#promoImportBtn').onclick=()=>$('#promoFileInput').click();
+$('#promoFileInput').onchange=async e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ const weekly=$('#promoWeeklyStart').value, weekend=$('#promoWeekendStart').value;
+ if(!weekly||!weekend){toast('Choose Weekly and Weekend start dates first');e.target.value='';return}
+ $('#promoListStatus').textContent='Importing '+file.name+'…';
+ try{
+  const form=new FormData();form.append('file',file);
+  const qs=new URLSearchParams({list_name:file.name,weekly_start_date:weekly,weekend_start_date:weekend});
+  const d=await api('/v1/yipman/promotion-lists/import?'+qs.toString(),{method:'POST',body:form,timeoutMs:45000});
+  promoListId=Number(d.list_id);promoTempOH.clear();
+  await loadPromotionLists();
+  $('#promoListSelect').value=String(promoListId);
+  await loadPromotionListDetail(true);
+  toast('Promotion list imported');
+ }catch(err){
+  $('#promoListStatus').textContent='Import failed · '+err.message;
+ }finally{e.target.value=''}
+};
+
+function renderPromotionRows(data){
+ promoLastRows=Array.isArray(data?.rows)?data.rows:[];
+ const reviewItems=(promoListDetail?.items||[]).filter(x=>x.mapping_status!=='READY');
+ const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b><br>'+reviewItems.slice(0,5).map(x=>esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)).join('<br>')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
+ $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
+  const p=r.promotion_list_item||{}, type=String(p.promotion_type||'').toUpperCase();
+  const temp=!!r.temporary_oh_override_used;
+  const oh=r.current_oh_for_calculation;
+  const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage, totalNeed=r.forecast_coverage_usage;
+  return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
+   '<div class="promo-metrics"><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>'+(temp?'TEMP TRUE STOCK':'CURRENT OH')+'</small><b>'+fmtNullable(oh)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+
+   '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · TEMP OH only for this calculation':'')+'</div></div></div>';
+ }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
+ $$('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
+}
+async function loadPromotionOrder(){
+ if(orderMode!=='PROMOTION')return;
+ if(!promoListId){$('#promoOrderStatus').textContent='Choose or import a promotion list.';$('#promoRows').innerHTML='<div class="empty">No promotion list selected.</div>';return}
+ if(!orderDate||!orderNextDate)return;
+ $('#promoOrderStatus').textContent='Calculating promotion + regular usage for '+appDate(orderDate)+' → '+appDate(orderNextDate)+'…';
+ try{
+  const body={
+   list_id:promoListId,
+   delivery_date:orderDate,
+   next_delivery_date:orderNextDate,
+   temporary_oh_overrides:[...promoTempOH.values()]
+  };
+  const data=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeoutMs:45000});
+  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' calculated · coverage through '+appDate(data.coverage_end_date)+' · temporary OH values are NOT saved';
+  renderPromotionRows(data);
+ }catch(e){
+  $('#promoOrderStatus').textContent='Promotion calculation unavailable · '+e.message;
+  $('#promoRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+ }
+}
+function openPromoTempOH(r){
+ if(!r)return;
+ const fid=Number(r.family_id), existing=promoTempOH.get(fid);
+ const value=existing?.quantity??r.current_oh_system??r.current_oh_for_calculation??0;
+ sheet(
+  r.family_article_name||'Temporary True Stock',
+  'Promotion Ordering only · nothing is written to FULL MYSQL',
+  '<div class="detail"><b>System OH</b><br>'+fmtNullable(r.current_oh_system)+' '+esc(r.uom||'')+'<br><br><b>Observed True Stock</b><br><input id="promoOHInput" type="number" min="0" step="0.1" inputmode="decimal" value="'+esc(value)+'" style="width:100%;font-size:24px;font-weight:900;padding:10px;border:2px solid #d6dde3;border-radius:12px"><br><br><div class="estimatebar">Temporary reference only. Save & Recalculate does not create True Stock, PI, dumping, OH history, or any database inventory change.</div><div class="actions"><button id="promoOHReset">RESET TO SYSTEM OH</button><button class="primary" id="promoOHSave">SAVE & RECALCULATE</button></div></div>'
+ );
+ $('#promoOHSave').onclick=()=>{
+  const qty=Number($('#promoOHInput').value);
+  if(!Number.isFinite(qty)||qty<0){toast('Enter a valid stock quantity');return}
+  promoTempOH.set(fid,{family_id:fid,family_article_number:r.family_article_number,quantity:qty,uom:r.uom});
+  closeSheet(true);setTimeout(loadPromotionOrder,80);
+ };
+ $('#promoOHReset').onclick=()=>{
+  promoTempOH.delete(fid);closeSheet(true);setTimeout(loadPromotionOrder,80);
+ };
+}
 $$('[data-order-mode]').forEach(b=>b.onclick=()=>{
- const mode=b.dataset.orderMode;
+ orderMode=b.dataset.orderMode;
  $$('[data-order-mode]').forEach(x=>x.classList.toggle('on',x===b));
- $('#regularOrderPanel').classList.toggle('hide',mode!=='REGULAR');
- $('#promotionOrderPanel').classList.toggle('hide',mode!=='PROMOTION');
- if(mode==='REGULAR')initOrdering();
+ $('#regularOrderPanel').classList.toggle('hide',orderMode!=='REGULAR');
+ $('#promotionOrderPanel').classList.toggle('hide',orderMode!=='PROMOTION');
+ updateOrderWindowUI();
+ if(orderMode==='PROMOTION')loadPromotionLists().then(()=>loadPromotionOrder());
+ else loadOrder(orderDate);
 });
 function receiptTracePairs(r){
  const events=Array.isArray(r?.receipt_events)?r.receipt_events:[];
