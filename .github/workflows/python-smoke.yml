@@ -113,7 +113,7 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V16_TWO_DATE_WINDOW' in cache_src
+          assert 'V17_ORDERING_QUALITY' in cache_src
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -143,6 +143,57 @@ jobs:
           assert clock.MVT_DAILY_GRACE_HOUR==15
           assert clock.POS_DAILY_GRACE_HOUR==15
           print('ordering-pricing-no-grace-best-available=PASS')
+          PY
+
+      - name: Validate Yipman Ordering suggestion quality
+        run: |
+          python - <<'PY'
+          from datetime import date
+          from decimal import Decimal
+          from pathlib import Path
+          import webapp_v2_runtime as v2
+          import backoffice_runtime as bo
+
+          # Regular forecast must distinguish weekday demand but shrink sparse
+          # weekday evidence toward the overall non-promo baseline.
+          series={
+              'status':'READY','uom':'LB',
+              'rows':[
+                  {'date':date(2026,9,21),'sold_quantity':Decimal('10'),'has_sale':False},
+                  {'date':date(2026,9,22),'sold_quantity':Decimal('20'),'has_sale':False},
+                  {'date':date(2026,9,28),'sold_quantity':Decimal('14'),'has_sale':False},
+                  {'date':date(2026,9,29),'sold_quantity':Decimal('22'),'has_sale':False},
+                  {'date':date(2026,9,30),'sold_quantity':Decimal('99'),'has_sale':True},
+              ]
+          }
+          baseline=v2._family_regular_baseline(None,[],prepared_series=series)
+          assert baseline['regular_supported_day_count']==4
+          assert baseline['sale_days_excluded']==1
+          assert baseline['forecast_method']=='WEEKDAY_SMOOTHED_TO_OVERALL_REGULAR_BASELINE'
+          assert baseline['regular_velocity_by_weekday'][0] != baseline['regular_velocity_by_weekday'][1]
+
+          src=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          assert 'pre_delivery_stockout_qty=max' in src
+          assert 'coverage_usage-usable_at_delivery' in src
+          assert 'freshness_limit_days=7 if kind=="FRESH" else None' in src
+          assert 'OUTSIDE_FRESHNESS_CAP' in src
+          assert 'CURRENT_RECENT_FAMILY_RUN_RATE' in src
+          assert 'POST_DELIVERY_NON_PROMO_BASELINE' in src
+          assert 'pre_delivery_velocity":"RECENT_FAMILY_251_252_RUN_RATE_WITH_WEEKDAY_SHAPE"' in src
+          assert 'pre_delivery_shortage_is_not_backordered_into_future_delivery' in src
+
+          bo_src=Path('backoffice_runtime.py').read_text(encoding='utf-8')
+          assert bo_src.count('def yipman_ordering_calendar(')==1
+          assert 'V17_ORDERING_QUALITY' in bo_src
+          assert 'pre_delivery_stockout_risk' in bo_src
+          assert 'regular_forecast_method":"WEEKDAY_SMOOTHED_NON_PROMO_VELOCITY"' in bo_src
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert 'Preferred observed delivery day' in ui
+          assert 'orderNextDate=nextObservedAfter(orderDate)' in ui
+          assert 'STOCKOUT BEFORE DELIVERY' in ui
+          assert 'Coverage need' in ui
+          print('yipman-ordering-suggestion-quality=PASS')
           PY
 
       - name: Validate Yipman Ordering loading recovery
@@ -178,12 +229,21 @@ jobs:
           p._validate_window('WEEKEND',date(2026,10,2),date(2026,10,4))
 
           runtime=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          # Regression guard: there must be exactly ONE active production engine.
+          assert runtime.count('def bulk_ordering_suggestions(')==1
+          sig=inspect.signature(v2.bulk_ordering_suggestions)
+          assert 'next_delivery_date' in sig.parameters
+          assert 'temporary_oh_overrides' in sig.parameters
+          active_bulk=inspect.getsource(v2.bulk_ordering_suggestions)
+          assert 'WEBAPP_V2_BULK_ORDERING_V6_UNIFIED' in active_bulk
           assert 'temporary_oh_overrides' in runtime
           assert 'REQUEST_ONLY_NOT_SAVED' in runtime
           assert 'promotion_start_date") or promotion_start_date' in runtime
           assert 'forecast_promotion_coverage' in runtime
           assert 'forecast_regular_coverage' in runtime
-          assert 'COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY' in runtime
+          assert 'coverage_usage-usable_at_delivery' in active_bulk
+          assert 'pre_delivery_stockout_qty=max' in active_bulk
+          assert 'TEMPORARY_OH_ONLY_FOR_PROMOTION_ORDERING' in active_bulk
 
           promo=Path('promotion_ordering.py').read_text(encoding='utf-8')
           assert 'temporary_oh_persisted":False' in promo

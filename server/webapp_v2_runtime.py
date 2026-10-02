@@ -2241,10 +2241,9 @@ def _ordering_family_movement_metrics(
 ) -> dict[str,Any]:
     """Read Family 251-252 demand directly from canonical movement history.
 
-    Uses exact canonical (file_id, posting_date) pairs. This preserves the
-    Family base UOM even when the latest 7 completed MVT days contain zero
-    movement, allowing a 28-day Family movement fallback instead of forcing
-    Ordering back to incompatible UPC selling UOMs.
+    Returns both the total and zero-filled canonical daily rows. The daily rows
+    allow Ordering to learn weekday shape without treating missing source dates
+    as zero.
     """
     days=list(data_days or [])
     if not days:
@@ -2254,6 +2253,7 @@ def _ordering_family_movement_metrics(
             "uom":None,
             "velocity_per_supported_day":None,
             "supported_day_count":0,
+            "rows":[],
             "basis":"NO_CANONICAL_MVT_DAYS",
         }
 
@@ -2264,51 +2264,85 @@ def _ordering_family_movement_metrics(
         args.extend([int(d["file_id"]),d["date"]])
 
     cur.execute(
-        f"""SELECT base_uom_code,SUM(net_sold_quantity) AS q
+        f"""SELECT posting_date,base_uom_code,SUM(net_sold_quantity) AS q
             FROM family_movement_observation
             WHERE family_id=%s
               AND ({' OR '.join(clauses)})
-            GROUP BY base_uom_code""",
+            GROUP BY posting_date,base_uom_code""",
         tuple(args),
     )
-    rows=[
+    raw=[
         x for x in cur.fetchall()
         if x.get("q") is not None
         and str(x.get("base_uom_code") or "").strip()
     ]
-    if not rows:
+    if not raw:
         return {
             "status":"UNAVAILABLE",
             "quantity":Decimal("0"),
             "uom":None,
             "velocity_per_supported_day":None,
             "supported_day_count":len(days),
+            "rows":[{"date":d["date"],"sold_quantity":Decimal("0")} for d in days],
             "basis":"NO_251_252_ROWS_IN_WINDOW",
         }
-    if len(rows)!=1:
+
+    uoms={
+        str(x.get("base_uom_code") or "").strip().upper()
+        for x in raw
+    }
+    if len(uoms)!=1:
         return {
             "status":"BLOCKED_FAMILY_MOVEMENT_INCONSISTENT",
             "quantity":None,
             "uom":None,
             "velocity_per_supported_day":None,
             "supported_day_count":len(days),
+            "rows":[],
             "basis":"MULTIPLE_FAMILY_MOVEMENT_UOMS",
-            "observed_uoms":sorted({
-                str(x.get("base_uom_code") or "").strip().upper()
-                for x in rows
-            }),
+            "observed_uoms":sorted(uoms),
         }
 
-    qty=_d(rows[0].get("q"))
-    uom=str(rows[0].get("base_uom_code") or "").strip().upper()
+    uom=next(iter(uoms))
+    by_date={d["date"]:Decimal("0") for d in days}
+    for x in raw:
+        dt=x.get("posting_date")
+        if dt in by_date:
+            by_date[dt]+=_d(x.get("q"))
+    rows=[
+        {"date":d["date"],"sold_quantity":by_date[d["date"]]}
+        for d in sorted(days,key=lambda x:x["date"])
+    ]
+    qty=sum((_d(x["sold_quantity"]) for x in rows),Decimal("0"))
     return {
         "status":"READY",
         "quantity":qty,
         "uom":uom,
         "velocity_per_supported_day":qty/Decimal(len(days)),
         "supported_day_count":len(days),
+        "rows":rows,
         "basis":"FAMILY_251_MINUS_252_CANONICAL_COMPLETED_MVT_DAYS",
     }
+
+
+def _smoothed_weekday_velocity(
+    daily_rows: list[dict[str,Any]],
+    overall_velocity: Any,
+    prior_days: int=2,
+) -> dict[int,Decimal]:
+    """Shrink sparse weekday movement toward the current overall velocity."""
+    overall=_d(overall_velocity)
+    prior=Decimal(max(1,int(prior_days or 2)))
+    out={}
+    for wd in range(7):
+        matches=[
+            x for x in (daily_rows or [])
+            if x.get("date") is not None and int(x["date"].weekday())==wd
+        ]
+        qty=sum((_d(x.get("sold_quantity")) for x in matches),Decimal("0"))
+        n=Decimal(len(matches))
+        out[wd]=(qty+overall*prior)/(n+prior) if n+prior>0 else overall
+    return out
 
 
 def _ordering_family_movement_7d(
@@ -2539,17 +2573,60 @@ def _family_regular_baseline(
             "regular_supported_day_count":0,
             "regular_sold_quantity":None,
             "regular_velocity_per_supported_day":None,
+            "regular_velocity_by_weekday":{},
+            "confidence":"NONE",
         }
     regular=[x for x in s["rows"] if not x.get("has_sale")]
     qty=sum((_d(x["sold_quantity"]) for x in regular),Decimal("0"))
     n=len(regular)
+    overall=(qty/Decimal(n)) if n else None
+
+    # Selected delivery windows can contain very different weekday demand.
+    # Use weekday evidence when it exists, but shrink it toward the overall
+    # regular baseline so one unusually high/low historical weekday cannot
+    # dominate the order forecast. Two pseudo-days is a conservative prior.
+    weekday_velocity={}
+    weekday_detail={}
+    prior_days=Decimal("2")
+    for wd in range(7):
+        matches=[
+            x for x in regular
+            if x.get("date") is not None and int(x["date"].weekday())==wd
+        ]
+        wd_qty=sum((_d(x["sold_quantity"]) for x in matches),Decimal("0"))
+        wd_n=len(matches)
+        raw=(wd_qty/Decimal(wd_n)) if wd_n else None
+        smoothed=(
+            (wd_qty+_d(overall)*prior_days)/(Decimal(wd_n)+prior_days)
+            if overall is not None else None
+        )
+        weekday_velocity[wd]=smoothed
+        weekday_detail[wd]={
+            "supported_day_count":wd_n,
+            "sold_quantity":wd_qty,
+            "raw_velocity":raw,
+            "smoothed_velocity":smoothed,
+        }
+
+    confidence=(
+        "HIGH" if n>=14
+        else "MEDIUM" if n>=7
+        else "LOW" if n>=3
+        else "VERY_LOW" if n
+        else "NONE"
+    )
     return {
         "status":"READY" if n else "NO_REGULAR_BASELINE",
         "uom":s["uom"],
         "requested_supported_days":supported_day_limit,
         "regular_supported_day_count":n,
         "regular_sold_quantity":qty,
-        "regular_velocity_per_supported_day":(qty/Decimal(n) if n else None),
+        "regular_velocity_per_supported_day":overall,
+        "regular_velocity_by_weekday":weekday_velocity,
+        "regular_weekday_detail":weekday_detail,
+        "weekday_shrinkage_prior_days":prior_days,
+        "forecast_method":"WEEKDAY_SMOOTHED_TO_OVERALL_REGULAR_BASELINE",
+        "confidence":confidence,
         "sale_days_excluded":len(s["rows"])-n,
         "tpr_treated_as_regular":True,
         "missing_calendar_dates_are_zero":False,
@@ -2817,418 +2894,6 @@ def _ordering_candidate_families(cur, kind: str) -> list[dict[str,Any]]:
             out.append(fam)
     return out
 
-
-def bulk_ordering_suggestions(
-    order_type: str,
-    *,
-    ordering_date: date|None=None,
-    expected_delivery_date: date|None=None,
-    next_delivery_date: date|None=None,
-    include_sufficient_stock: bool=False,
-    family_ids: set[int]|list[int]|tuple[int,...]|None=None,
-    promotion_involved: bool=False,
-    promotion_start_date: date|None=None,
-    promotion_end_date: date|None=None,
-    promotion_items: list[dict[str,Any]]|None=None,
-    temporary_oh_overrides: list[dict[str,Any]]|None=None,
-) -> dict[str,Any]:
-    """Read-only Family Article ordering simulator for the main Ordering page."""
-    kind=str(order_type or "").strip().upper()
-    if kind not in {"FRESH","FROZEN"}:
-        raise ValueError("ORDER_TYPE_MUST_BE_FRESH_OR_FROZEN")
-    order_day=ordering_date or business_today()
-    default_weekday=4 if kind=="FRESH" else 1  # Friday / Tuesday
-    delivery=expected_delivery_date or _strict_next_weekday(order_day,default_weekday)
-    if delivery < order_day:
-        raise ValueError("EXPECTED_DELIVERY_BEFORE_ORDER_DATE")
-    next_next=next_delivery_date or (delivery+timedelta(days=7))
-    if next_next <= delivery:
-        raise ValueError("NEXT_DELIVERY_MUST_BE_AFTER_DELIVERY_DATE")
-
-    promo_map={}
-    normalized_promo_items=[]
-    for raw_item in promotion_items or []:
-        item=dict(raw_item)
-        key=str(item.get("family_article_number") or item.get("family_id") or "").strip()
-        if not key:
-            continue
-        item_start=item.get("promotion_start_date") or promotion_start_date
-        item_end=item.get("promotion_end_date") or promotion_end_date
-        if isinstance(item_start,str):
-            item_start=date.fromisoformat(item_start)
-        if isinstance(item_end,str):
-            item_end=date.fromisoformat(item_end)
-        item["promotion_start_date"]=item_start
-        item["promotion_end_date"]=item_end
-        if item_start is not None and item_end is not None:
-            inferred=_promotion_type(item_start,item_end)
-            supplied=str(item.get("promotion_type") or inferred).strip().upper()
-            item["promotion_type"]=supplied
-            item["inferred_promotion_type"]=inferred
-        promo_map[key]=item
-        if item.get("family_id") is not None:
-            promo_map[str(item.get("family_id"))]=item
-        if item.get("family_article_number"):
-            promo_map[str(item.get("family_article_number"))]=item
-        normalized_promo_items.append(item)
-
-    temp_oh_map={}
-    for raw_override in temporary_oh_overrides or []:
-        override=dict(raw_override)
-        key=str(override.get("family_article_number") or override.get("family_id") or "").strip()
-        if not key:
-            continue
-        qty=override.get("quantity")
-        if qty is None:
-            raise ValueError("TEMPORARY_OH_QUANTITY_REQUIRED")
-        qty_d=Decimal(str(qty))
-        if qty_d < 0:
-            raise ValueError("TEMPORARY_OH_NEGATIVE")
-        override["quantity"]=qty_d
-        temp_oh_map[key]=override
-        if override.get("family_id") is not None:
-            temp_oh_map[str(override.get("family_id"))]=override
-        if override.get("family_article_number"):
-            temp_oh_map[str(override.get("family_article_number"))]=override
-
-    if promotion_involved:
-        if not promo_map:
-            raise ValueError("PROMOTION_ITEMS_REQUIRED")
-        for item in normalized_promo_items:
-            item_start=item.get("promotion_start_date")
-            item_end=item.get("promotion_end_date")
-            if item_start is None or item_end is None:
-                raise ValueError("PROMOTION_ITEM_DATES_REQUIRED")
-            if item_end < item_start:
-                raise ValueError("PROMOTION_END_BEFORE_START")
-            inferred=str(item.get("inferred_promotion_type") or "OTHER").upper()
-            supplied=str(item.get("promotion_type") or inferred).upper()
-            if supplied not in {"WEEKLY","WEEKEND"}:
-                raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_OR_WEEKEND")
-            if inferred != supplied:
-                raise ValueError("PROMOTION_DATES_DO_NOT_MATCH_TYPE")
-            if item.get("promotion_price") is None:
-                raise ValueError("PROMOTION_ITEM_PRICE_REQUIRED")
-            if Decimal(str(item.get("promotion_price"))) <= 0:
-                raise ValueError("PROMOTION_ITEM_PRICE_INVALID")
-
-    with db_conn() as conn:
-        cur=conn.cursor(dictionary=True)
-        shared_sales_days_28=_canonical_sales_days(cur,limit=28)
-        families=_ordering_candidate_families(cur,kind)
-        if family_ids is not None:
-            allowed_family_ids={int(x) for x in family_ids}
-            families=[x for x in families if int(x.get("family_id")) in allowed_family_ids]
-        suggestions=[]
-        skipped=[]
-
-        for fam in families:
-            fid=int(fam["family_id"])
-            cur.execute(
-                """SELECT * FROM quick_check_current
-                   WHERE family_id=%s
-                     AND quick_check_status IN ('READY','QA_HOLD','HISTORICAL_ONLY')
-                   ORDER BY ean_upc""",
-                (fid,),
-            )
-            rows=cur.fetchall()
-            if not rows:
-                continue
-
-            m28=_family_sales_series(cur,rows,28,data_days=shared_sales_days_28)
-            m7=_family_sales_tail(m28,7)
-            if m28.get("status")!="READY" or m7.get("status")!="READY":
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"FAMILY_UOM_UNRESOLVED",
-                })
-                continue
-
-            active_28=_d(m28.get("sold_quantity"))>0
-            vel7=m7.get("velocity_per_supported_day")
-            demand_uom=str(m7.get("uom") or "").upper()
-            fam_key=str(fam.get("main_article_number") or "")
-            promo_item=promo_map.get(fam_key) or promo_map.get(str(fid))
-            temp_override=temp_oh_map.get(fam_key) or temp_oh_map.get(str(fid))
-            family_oh=_family_effective_oh(cur,rows)
-
-            if temp_override is None and (
-                family_oh.get("status")!="READY" or family_oh.get("quantity") is None
-            ):
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":str(family_oh.get("status") or "OH_UNAVAILABLE"),
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
-                    "velocity_7d":vel7,
-                    "oh":family_oh.get("quantity"),
-                    "oh_uom":family_oh.get("uom"),
-                })
-                continue
-
-            system_oh_uom=str(family_oh.get("uom") or "").upper()
-            if temp_override is not None:
-                override_uom=str(temp_override.get("uom") or demand_uom).strip().upper()
-                if not demand_uom or override_uom!=demand_uom:
-                    skipped.append({
-                        "family_id":fid,
-                        "family_article_number":fam.get("main_article_number"),
-                        "family_article_name":fam.get("family_description"),
-                        "reason":"TEMPORARY_OH_UOM_MISMATCH",
-                        "temporary_oh_uom":override_uom or None,
-                        "demand_uom":demand_uom or None,
-                    })
-                    continue
-                raw_oh=(
-                    _d(family_oh.get("quantity"))
-                    if family_oh.get("quantity") is not None else None
-                )
-                ordering_oh=_d(temp_override.get("quantity"))
-                oh_uom=demand_uom
-                temporary_oh_used=True
-            else:
-                oh_uom=system_oh_uom
-                if not oh_uom or oh_uom!=demand_uom:
-                    skipped.append({
-                        "family_id":fid,
-                        "family_article_number":fam.get("main_article_number"),
-                        "family_article_name":fam.get("family_description"),
-                        "reason":"OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED",
-                        "qty_7d":m7.get("sold_quantity"),
-                        "qty_28d":m28.get("sold_quantity"),
-                        "velocity_7d":vel7,
-                        "oh":family_oh.get("quantity"),
-                        "oh_uom":family_oh.get("uom"),
-                        "demand_uom":demand_uom or None,
-                    })
-                    continue
-                raw_oh=_d(family_oh.get("quantity"))
-                ordering_oh=max(Decimal("0"),raw_oh)
-                temporary_oh_used=False
-            dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-            if not active_28 and not (promotion_involved and promo_item):
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"NO_28D_SALES",
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
-                    "velocity_7d":vel7,
-                    "oh":ordering_oh,
-                    "oh_uom":demand_uom,
-                    "dos":dos,
-                })
-                continue
-            if dos is None and not include_sufficient_stock:
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"NO_7D_VELOCITY",
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
-                    "velocity_7d":vel7,
-                    "oh":ordering_oh,
-                    "oh_uom":demand_uom,
-                    "dos":dos,
-                })
-                continue
-            if dos>=Decimal("7") and not include_sufficient_stock:
-                continue
-
-            regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
-            reg_vel=regular.get("regular_velocity_per_supported_day")
-            if reg_vel is None:
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"REGULAR_BASELINE_UNAVAILABLE",
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
-                    "velocity_7d":vel7,
-                    "oh":ordering_oh,
-                    "oh_uom":demand_uom,
-                    "dos":dos,
-                })
-                continue
-
-            promo_history=_family_historical_sale_periods(cur,rows,365) if promo_item else []
-            promo_baseline=None
-            promo_vel=None
-            promo_fallback=False
-            item_promo_start=None
-            item_promo_end=None
-            if promotion_involved and promo_item:
-                item_promo_start=promo_item.get("promotion_start_date")
-                item_promo_end=promo_item.get("promotion_end_date")
-                promo_baseline=_family_promotion_baseline(
-                    promo_history,
-                    item_promo_start,
-                    item_promo_end,
-                    promo_item.get("promotion_price"),
-                )
-                promo_vel=promo_baseline.get("promotion_velocity_per_day")
-                if promo_vel is None:
-                    promo_vel=reg_vel
-                    promo_fallback=True
-
-            total=Decimal("0")
-            before_delivery=Decimal("0")
-            coverage_usage=Decimal("0")
-            segments={
-                "REGULAR":Decimal("0"),
-                "PROMOTION":Decimal("0"),
-                "REGULAR_BEFORE_DELIVERY":Decimal("0"),
-                "PROMOTION_BEFORE_DELIVERY":Decimal("0"),
-                "REGULAR_COVERAGE":Decimal("0"),
-                "PROMOTION_COVERAGE":Decimal("0"),
-            }
-            daily_forecast=[]
-            day=order_day
-            while day<next_next:
-                is_promo=bool(
-                    promotion_involved and promo_item
-                    and item_promo_start<=day<=item_promo_end
-                )
-                segment="PROMOTION" if is_promo else "REGULAR"
-                use_vel=_d(promo_vel if is_promo else reg_vel)
-                total+=use_vel
-                segments[segment]+=use_vel
-                if day<delivery:
-                    before_delivery+=use_vel
-                    segments[segment+"_BEFORE_DELIVERY"]+=use_vel
-                    phase="BEFORE_DELIVERY"
-                else:
-                    coverage_usage+=use_vel
-                    segments[segment+"_COVERAGE"]+=use_vel
-                    phase="COVERAGE"
-                daily_forecast.append({
-                    "date":day,
-                    "phase":phase,
-                    "price_regime":segment,
-                    "forecast_quantity":use_vel,
-                })
-                day+=timedelta(days=1)
-
-            projected_at_delivery=ordering_oh-before_delivery
-            usable_at_delivery=max(Decimal("0"),projected_at_delivery)
-            suggested=max(Decimal("0"),coverage_usage-usable_at_delivery)
-            suggestions.append({
-                "family_id":fid,
-                "family_article_number":fam.get("main_article_number"),
-                "family_article_name":fam.get("family_description"),
-                "category":kind,
-                "effective_oh_raw":raw_oh,
-                "ordering_oh_used":ordering_oh,
-                "temporary_oh_override_used":temporary_oh_used,
-                "temporary_oh_override":(
-                    {
-                        "quantity":ordering_oh,
-                        "uom":demand_uom,
-                        "persistence":"REQUEST_ONLY_NOT_SAVED",
-                    }
-                    if temporary_oh_used else None
-                ),
-                "negative_oh_treated_as_zero":bool(raw_oh is not None and raw_oh<0),
-                "uom":demand_uom,
-                "qty_7d":m7.get("sold_quantity"),
-                "supported_days_7d":m7.get("supported_day_count"),
-                "qty_28d":m28.get("sold_quantity"),
-                "supported_days_28d":m28.get("supported_day_count"),
-                "velocity_7d":vel7,
-                "dos":dos,
-                "delivery_roster_demand_basis":(
-                    "28D_REGULAR_BASELINE_FALLBACK"
-                    if dos is None else "7D_VELOCITY_PLUS_28D_REGULAR_BASELINE"
-                ),
-                "regular_baseline":regular,
-                "promotion_involved":bool(promo_item),
-                "promotion_item":promo_item,
-                "promotion_baseline":promo_baseline,
-                "historical_promotions":promo_history[:5],
-                "promotion_fallback_to_regular":promo_fallback,
-                "forecast_regular_usage":segments["REGULAR"],
-                "forecast_promotion_usage":segments["PROMOTION"],
-                "forecast_total_usage":total,
-                "forecast_usage_before_delivery":before_delivery,
-                "forecast_regular_before_delivery":segments["REGULAR_BEFORE_DELIVERY"],
-                "forecast_promotion_before_delivery":segments["PROMOTION_BEFORE_DELIVERY"],
-                "forecast_coverage_usage":coverage_usage,
-                "forecast_regular_coverage":segments["REGULAR_COVERAGE"],
-                "forecast_promotion_coverage":segments["PROMOTION_COVERAGE"],
-                "projected_oh_at_delivery":projected_at_delivery,
-                "usable_oh_at_delivery":usable_at_delivery,
-                "daily_forecast":daily_forecast,
-                "suggested_order_qty":suggested,
-                "suggested_order_uom":demand_uom,
-                "readiness":(
-                    "READY" if any(str(x.get("quick_check_status") or "")=="READY" for x in rows)
-                    else str(rows[0].get("quick_check_status") or "UNKNOWN")
-                ),
-            })
-
-        suggestions.sort(key=lambda x:(float(x.get("dos") or 999999),-float(x.get("qty_28d") or 0),str(x.get("family_article_name") or "")))
-        cur.close()
-
-    return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V3_PROMOTION_ITEM_WINDOWS",
-        "order_type":kind,
-        "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
-        "inputs":{
-            "ordering_date":order_day,
-            "expected_delivery_date":delivery,
-            "expected_delivery_default_source":(
-                "USER_INPUT" if expected_delivery_date is not None
-                else ("FOLLOWING_FRIDAY" if kind=="FRESH" else "FOLLOWING_TUESDAY")
-            ),
-            "next_delivery_date":next_next,
-            "next_next_delivery_date":next_next,
-            "next_delivery_date_source":(
-                "USER_INPUT" if next_delivery_date is not None
-                else "LEGACY_PLUS_7_DAYS"
-            ),
-            "promotion_involved":bool(promotion_involved),
-            "promotion_start_date":promotion_start_date,
-            "promotion_end_date":promotion_end_date,
-            "promotion_items":normalized_promo_items,
-            "temporary_oh_override_count":len(temporary_oh_overrides or []),
-        },
-        "eligibility":{
-            "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
-            "dos_threshold":(
-                "ALL_ACTIVE_FAMILIES_WHEN_DELIVERY_DATE_ROSTER"
-                if include_sufficient_stock else "LESS_THAN_7_DAYS"
-            ),
-            "include_sufficient_stock":bool(include_sufficient_stock),
-            "family_prefilter_applied":family_ids is not None,
-            "negative_effective_oh_for_ordering":"TREAT_AS_ZERO",
-        },
-        "suggestion_count":len(suggestions),
-        "suggestions":suggestions,
-        "skipped_count":len(skipped),
-        "skipped":skipped,
-        "rules":{
-            "sales_history":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
-            "missing_source_dates_count_as_zero":False,
-            "promotion_definition":"PRICE_TYPE_SALE_ONLY",
-            "tpr_is_promotion":False,
-            "coverage_target":"THROUGH_DAY_BEFORE_SELECTED_NEXT_DELIVERY",
-            "coverage_window_user_selectable":True,
-            "promotion_window_per_item":True,
-            "promotion_types":["WEEKLY_THURSDAY_TO_THURSDAY","WEEKEND_FRIDAY_TO_SUNDAY"],
-            "temporary_oh_override_is_request_only":True,
-            "temporary_oh_override_writes_database":False,
-            "suggested_order_basis":"COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY",
-            "saved":False,
-            "submitted":False,
-        },
-    }
 
 def _pi_owner_key(system_oh: dict[str,Any]) -> tuple[str,int] | None:
     scope=str(system_oh.get("scope_type") or "").upper()
@@ -3890,141 +3555,153 @@ def bulk_ordering_suggestions(
     *,
     ordering_date: date|None=None,
     expected_delivery_date: date|None=None,
+    next_delivery_date: date|None=None,
     include_sufficient_stock: bool=False,
     family_ids: set[int]|list[int]|tuple[int,...]|None=None,
     promotion_involved: bool=False,
     promotion_start_date: date|None=None,
     promotion_end_date: date|None=None,
     promotion_items: list[dict[str,Any]]|None=None,
+    temporary_oh_overrides: list[dict[str,Any]]|None=None,
 ) -> dict[str,Any]:
-    """Read-only Family Article ordering simulator for the main Ordering page.
+    """Single production Ordering engine.
 
-    Promotion selection/evidence is UPC-level. Final replenishment remains
-    Family Article level.
+    Family 251-252 movement remains the Family demand/UOM authority. POS is used
+    for activity, non-promotion velocity, weekday shape, and promotion history
+    when it resolves into the same Family base UOM. The selected Delivery and
+    Next Delivery dates define the coverage window.
     """
     kind=str(order_type or "").strip().upper()
     if kind not in {"FRESH","FROZEN"}:
         raise ValueError("ORDER_TYPE_MUST_BE_FRESH_OR_FROZEN")
 
     order_day=ordering_date or business_today()
-    default_weekday=4 if kind=="FRESH" else 1  # Friday / Tuesday
+    default_weekday=4 if kind=="FRESH" else 1
     delivery=expected_delivery_date or _strict_next_weekday(order_day,default_weekday)
     if delivery < order_day:
         raise ValueError("EXPECTED_DELIVERY_BEFORE_ORDER_DATE")
-    next_next=delivery+timedelta(days=7)
+    next_delivery=next_delivery_date or (delivery+timedelta(days=7))
+    if next_delivery <= delivery:
+        raise ValueError("NEXT_DELIVERY_MUST_BE_AFTER_DELIVERY_DATE")
+    if temporary_oh_overrides and not promotion_involved:
+        raise ValueError("TEMPORARY_OH_ONLY_FOR_PROMOTION_ORDERING")
 
-    raw_promo_items=promotion_items or []
-    if promotion_involved:
-        if promotion_start_date is None or promotion_end_date is None:
-            raise ValueError("PROMOTION_DATES_REQUIRED")
-        if promotion_end_date < promotion_start_date:
-            raise ValueError("PROMOTION_END_BEFORE_START")
-        if not raw_promo_items:
-            raise ValueError("PROMOTION_ITEMS_REQUIRED")
-        for item in raw_promo_items:
-            if not str(item.get("upc") or "").strip():
-                raise ValueError("PROMOTION_ITEM_UPC_REQUIRED")
-            if item.get("promotion_price") is None:
-                raise ValueError("PROMOTION_ITEM_PRICE_REQUIRED")
-            if Decimal(str(item.get("promotion_price"))) <= 0:
-                raise ValueError("PROMOTION_ITEM_PRICE_INVALID")
+    raw_promo_items=[dict(x) for x in (promotion_items or [])]
+    temp_oh_map={}
+    for raw in temporary_oh_overrides or []:
+        item=dict(raw)
+        key=str(item.get("family_article_number") or item.get("family_id") or "").strip()
+        if not key:
+            continue
+        qty=item.get("quantity")
+        if qty is None:
+            raise ValueError("TEMPORARY_OH_QUANTITY_REQUIRED")
+        qty_d=_d(qty)
+        if qty_d<0:
+            raise ValueError("TEMPORARY_OH_NEGATIVE")
+        item["quantity"]=qty_d
+        for k in (
+            str(item.get("family_id") or "").strip(),
+            str(item.get("family_article_number") or "").strip(),
+        ):
+            if k:
+                temp_oh_map[k]=item
+
+    if promotion_involved and not raw_promo_items:
+        raise ValueError("PROMOTION_ITEMS_REQUIRED")
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
-        # One canonical 28-day window is reused across every family. This
-        # prevents the Ordering overview from re-reading the same POS coverage
-        # and UPC history three times per family (28D, 7D, regular baseline).
         shared_sales_days_28=_canonical_sales_days(cur,limit=28)
         shared_movement_days_7=source_data_days(
-            cur,
-            "movement",
-            limit=7,
-            up_to=completed_through_date(),
+            cur,"movement",limit=7,up_to=completed_through_date(),
         )
         shared_movement_days_28=source_data_days(
-            cur,
-            "movement",
-            limit=28,
-            up_to=completed_through_date(),
+            cur,"movement",limit=28,up_to=completed_through_date(),
         )
 
-        # Resolve every selected promotion item to one canonical UPC.
-        promo_by_family: dict[int,list[dict[str,Any]]] = {}
-        seen_promo_upcs=set()
-        for item in raw_promo_items:
-            raw_upc=str(item.get("upc") or "").strip()
-            nk=_numeric_key(raw_upc)
-            cur.execute(
-                """SELECT * FROM quick_check_current
-                   WHERE ean_upc=%s
-                      OR (
-                           ean_upc REGEXP '^[0-9]+$'
-                           AND TRIM(LEADING '0' FROM ean_upc)=%s
-                         )
-                   ORDER BY CASE quick_check_status
-                              WHEN 'READY' THEN 0
-                              WHEN 'QA_HOLD' THEN 1
-                              ELSE 2
-                            END
-                   LIMIT 1""",
-                (raw_upc,nk),
-            )
-            prow=cur.fetchone()
-            if not prow:
-                raise ValueError(f"PROMOTION_UPC_NOT_FOUND:{raw_upc}")
-
-            canonical_upc=str(prow.get("ean_upc") or raw_upc)
-            if canonical_upc in seen_promo_upcs:
-                raise ValueError(f"DUPLICATE_PROMOTION_UPC:{canonical_upc}")
-            seen_promo_upcs.add(canonical_upc)
-
-            pclass=_ordering_family_bucket(
-                cur,
-                int(prow["family_id"]),
-                prow.get("product_class"),
-                prow.get("cost_source"),
-            )
-            if pclass!=kind:
-                raise ValueError(
-                    f"PROMOTION_UPC_CATEGORY_MISMATCH:{canonical_upc}:{pclass or 'UNRESOLVED'}:{kind}"
+        # Normalize family promotion items. Legacy UPC items are resolved to
+        # their Family so both old callers and the Promotion List workflow use
+        # the same Family-level forecast engine.
+        promo_map={}
+        normalized_promo_items=[]
+        for raw in raw_promo_items:
+            item=dict(raw)
+            if not item.get("family_id") and not item.get("family_article_number"):
+                raw_upc=str(item.get("upc") or "").strip()
+                if not raw_upc:
+                    raise ValueError("PROMOTION_ITEM_FAMILY_OR_UPC_REQUIRED")
+                nk=_numeric_key(raw_upc)
+                cur.execute(
+                    """SELECT family_id,main_article_number,family_description,ean_upc
+                       FROM quick_check_current
+                       WHERE ean_upc=%s
+                          OR (
+                               ean_upc REGEXP '^[0-9]+$'
+                               AND TRIM(LEADING '0' FROM ean_upc)=%s
+                             )
+                       ORDER BY CASE quick_check_status
+                                  WHEN 'READY' THEN 0
+                                  WHEN 'QA_HOLD' THEN 1
+                                  ELSE 2
+                                END
+                       LIMIT 1""",
+                    (raw_upc,nk),
                 )
+                mapped=cur.fetchone()
+                if not mapped:
+                    raise ValueError(f"PROMOTION_UPC_NOT_FOUND:{raw_upc}")
+                item["family_id"]=int(mapped["family_id"])
+                item["family_article_number"]=mapped.get("main_article_number")
+                item["family_article_name"]=mapped.get("family_description")
+                item["upc"]=mapped.get("ean_upc") or raw_upc
 
-            upc_id=int(prow["upc_id"])
-            upc_history=_historical_sale_periods(cur,upc_id,365)
-            upc_regular=_regular_baseline(cur,upc_id,28)
-            promo_baseline=(
-                _promotion_forecast_baseline(
-                    cur,
-                    upc_id,
-                    promotion_start_date,
-                    promotion_end_date,
-                    Decimal(str(item.get("promotion_price"))),
-                )
-                if promotion_involved else None
-            )
-            promo_by_family.setdefault(int(prow["family_id"]),[]).append({
-                "upc":canonical_upc,
-                "upc_id":upc_id,
-                "upc_name":prow.get("selling_description"),
-                "selling_uom":prow.get("selling_uom"),
-                "family_id":prow.get("family_id"),
-                "family_article_number":prow.get("main_article_number"),
-                "family_article_name":prow.get("family_description"),
-                "promotion_price":Decimal(str(item.get("promotion_price"))),
-                "historical_promotions":upc_history,
-                "regular_baseline":upc_regular,
-                "promotion_baseline":promo_baseline,
-            })
+            item_start=item.get("promotion_start_date") or promotion_start_date
+            item_end=item.get("promotion_end_date") or promotion_end_date
+            if isinstance(item_start,str):
+                item_start=date.fromisoformat(item_start)
+            if isinstance(item_end,str):
+                item_end=date.fromisoformat(item_end)
+            if item_start is None or item_end is None:
+                raise ValueError("PROMOTION_ITEM_DATES_REQUIRED")
+            if item_end<item_start:
+                raise ValueError("PROMOTION_END_BEFORE_START")
+            item["promotion_start_date"]=item_start
+            item["promotion_end_date"]=item_end
+            inferred=_promotion_type(item_start,item_end)
+            supplied=str(item.get("promotion_type") or inferred).strip().upper()
+            if supplied not in {"WEEKLY","WEEKEND"}:
+                raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_OR_WEEKEND")
+            if inferred!=supplied:
+                raise ValueError("PROMOTION_DATES_DO_NOT_MATCH_TYPE")
+            item["promotion_type"]=supplied
+            if item.get("promotion_price") is None or _d(item.get("promotion_price"))<=0:
+                raise ValueError("PROMOTION_ITEM_PRICE_REQUIRED")
+            item["promotion_price"]=_d(item.get("promotion_price"))
+
+            keys={
+                str(item.get("family_id") or "").strip(),
+                str(item.get("family_article_number") or "").strip(),
+            }
+            existing=next((promo_map[k] for k in keys if k and k in promo_map),None)
+            if existing is not None:
+                raise ValueError("DUPLICATE_PROMOTION_FAMILY")
+            for k in keys:
+                if k:
+                    promo_map[k]=item
+            normalized_promo_items.append(item)
 
         families=_ordering_candidate_families(cur,kind)
         if family_ids is not None:
             allowed_family_ids={int(x) for x in family_ids}
             families=[x for x in families if int(x.get("family_id")) in allowed_family_ids]
+
         suggestions=[]
         skipped=[]
 
         for fam in families:
             fid=int(fam["family_id"])
+            fam_article=str(fam.get("main_article_number") or "")
             cur.execute(
                 """SELECT * FROM quick_check_current
                    WHERE family_id=%s
@@ -4038,19 +3715,9 @@ def bulk_ordering_suggestions(
 
             m28=_family_sales_series(cur,rows,28,data_days=shared_sales_days_28)
             m7=_family_sales_tail(m28,7)
-            family_mvt7=_ordering_family_movement_metrics(
-                cur,
-                fid,
-                shared_movement_days_7,
-            )
-            family_mvt28=_ordering_family_movement_metrics(
-                cur,
-                fid,
-                shared_movement_days_28,
-            )
+            family_mvt7=_ordering_family_movement_metrics(cur,fid,shared_movement_days_7)
+            family_mvt28=_ordering_family_movement_metrics(cur,fid,shared_movement_days_28)
 
-            # POS determines whether the Family is active. Replenishment
-            # quantity/UOM uses Family 251-252 first.
             if m28.get("status")=="READY":
                 active_28=_d(m28.get("sold_quantity"))>0
                 qty_28_display=m28.get("sold_quantity")
@@ -4058,10 +3725,7 @@ def bulk_ordering_suggestions(
                 active_28=any(_d(x.get("pos_qty_30d"))>0 for x in rows)
                 qty_28_display=None
 
-            if (
-                family_mvt7.get("status")=="READY"
-                and _d(family_mvt7.get("quantity"))>0
-            ):
+            if family_mvt7.get("status")=="READY" and family_mvt7.get("uom"):
                 demand_source="FAMILY_251_252_7D"
                 demand_uom=str(family_mvt7.get("uom") or "").upper()
                 qty_7_display=family_mvt7.get("quantity")
@@ -4073,29 +3737,13 @@ def bulk_ordering_suggestions(
                 )
                 vel7=family_mvt7.get("velocity_per_supported_day")
                 supported_7=family_mvt7.get("supported_day_count")
-            elif (
-                family_mvt28.get("status")=="READY"
-                and _d(family_mvt28.get("quantity"))>0
-            ):
-                # No recent 7D Family movement/UOM evidence: use the broader
-                # Family 251/252 history rather than incompatible UPC POS UOM.
+            elif family_mvt28.get("status")=="READY" and family_mvt28.get("uom"):
                 demand_source="FAMILY_251_252_28D_FALLBACK"
                 demand_uom=str(family_mvt28.get("uom") or "").upper()
-                qty_7_display=(
-                    family_mvt7.get("quantity")
-                    if family_mvt7.get("status")=="READY"
-                    and str(family_mvt7.get("uom") or "").upper()==demand_uom
-                    else Decimal("0")
-                )
+                qty_7_display=Decimal("0")
                 qty_28_display=family_mvt28.get("quantity")
                 vel7=family_mvt28.get("velocity_per_supported_day")
                 supported_7=family_mvt28.get("supported_day_count")
-            elif family_mvt7.get("status")=="READY":
-                demand_source="FAMILY_251_252_7D_ZERO"
-                demand_uom=str(family_mvt7.get("uom") or "").upper()
-                qty_7_display=family_mvt7.get("quantity")
-                vel7=family_mvt7.get("velocity_per_supported_day")
-                supported_7=family_mvt7.get("supported_day_count")
             elif m7.get("status")=="READY":
                 demand_source="UPC_POS_FALLBACK"
                 demand_uom=str(m7.get("uom") or "").upper()
@@ -4105,44 +3753,73 @@ def bulk_ordering_suggestions(
             else:
                 skipped.append({
                     "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_number":fam_article,
                     "family_article_name":fam.get("family_description"),
                     "reason":"FAMILY_UOM_UNRESOLVED",
                 })
                 continue
 
+            promo_item=promo_map.get(str(fid)) or promo_map.get(fam_article)
+            temp_override=temp_oh_map.get(str(fid)) or temp_oh_map.get(fam_article)
             family_oh=_family_effective_oh_for_ordering(
                 cur,
                 rows,
                 allow_incomplete_movement_coverage=bool(include_sufficient_stock),
             )
-            if family_oh.get("status")!="READY" or family_oh.get("quantity") is None:
+
+            if temp_override is None and (
+                family_oh.get("status")!="READY" or family_oh.get("quantity") is None
+            ):
                 skipped.append({
                     "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_number":fam_article,
                     "family_article_name":fam.get("family_description"),
                     "reason":str(family_oh.get("status") or "OH_UNAVAILABLE"),
+                    "qty_7d":qty_7_display,
+                    "qty_28d":qty_28_display,
+                    "velocity_7d":vel7,
                 })
                 continue
 
-            oh_uom=str(family_oh.get("uom") or "").upper()
-            if not oh_uom or oh_uom!=demand_uom:
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED",
-                })
-                continue
+            system_raw_oh=(
+                _d(family_oh.get("quantity"))
+                if family_oh.get("quantity") is not None else None
+            )
+            if temp_override is not None:
+                override_uom=str(temp_override.get("uom") or demand_uom).strip().upper()
+                if override_uom!=demand_uom:
+                    skipped.append({
+                        "family_id":fid,
+                        "family_article_number":fam_article,
+                        "family_article_name":fam.get("family_description"),
+                        "reason":"TEMPORARY_OH_UOM_MISMATCH",
+                        "temporary_oh_uom":override_uom,
+                        "demand_uom":demand_uom,
+                    })
+                    continue
+                ordering_oh=_d(temp_override.get("quantity"))
+                temporary_oh_used=True
+            else:
+                oh_uom=str(family_oh.get("uom") or "").upper()
+                if not oh_uom or oh_uom!=demand_uom:
+                    skipped.append({
+                        "family_id":fid,
+                        "family_article_number":fam_article,
+                        "family_article_name":fam.get("family_description"),
+                        "reason":"OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED",
+                        "oh":family_oh.get("quantity"),
+                        "oh_uom":family_oh.get("uom"),
+                        "demand_uom":demand_uom,
+                    })
+                    continue
+                ordering_oh=max(Decimal("0"),_d(family_oh.get("quantity")))
+                temporary_oh_used=False
 
-            raw_oh=_d(family_oh.get("quantity"))
-            ordering_oh=max(Decimal("0"),raw_oh)
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-
-            if not active_28:
+            if not active_28 and not (promotion_involved and promo_item):
                 skipped.append({
                     "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_number":fam_article,
                     "family_article_name":fam.get("family_description"),
                     "reason":"NO_28D_SALES",
                     "qty_7d":qty_7_display,
@@ -4156,106 +3833,196 @@ def bulk_ordering_suggestions(
             if dos is None and not include_sufficient_stock:
                 skipped.append({
                     "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
+                    "family_article_number":fam_article,
                     "family_article_name":fam.get("family_description"),
                     "reason":"NO_7D_VELOCITY",
-                    "qty_7d":qty_7_display,
-                    "qty_28d":qty_28_display,
-                    "velocity_7d":vel7,
-                    "oh":ordering_oh,
-                    "oh_uom":demand_uom,
-                    "dos":dos,
                 })
                 continue
             if dos is not None and dos>=Decimal("7") and not include_sufficient_stock:
                 continue
 
-            if demand_source.startswith("FAMILY_251_252"):
+            # Regular demand: use non-SALE POS when it reconciles to the same
+            # Family base UOM. Otherwise preserve Family 251-252 movement as
+            # the demand authority and use 28D movement only for weekday shape.
+            pos_regular=(
+                _family_regular_baseline(cur,rows,28,prepared_series=m28)
+                if m28.get("status")=="READY" else {}
+            )
+            if (
+                pos_regular.get("status")=="READY"
+                and str(pos_regular.get("uom") or "").upper()==demand_uom
+                and pos_regular.get("regular_velocity_per_supported_day") is not None
+            ):
+                regular=dict(pos_regular)
+                regular["basis"]="POS_NON_SALE_RECONCILED_TO_FAMILY_BASE_UOM"
+                reg_vel=_d(regular.get("regular_velocity_per_supported_day"))
+                weekday_vel=regular.get("regular_velocity_by_weekday") or {}
+            else:
+                reg_vel=_d(vel7)
+                movement_shape=(
+                    family_mvt28.get("rows")
+                    if family_mvt28.get("status")=="READY"
+                    and str(family_mvt28.get("uom") or "").upper()==demand_uom
+                    else family_mvt7.get("rows")
+                )
+                weekday_vel=_smoothed_weekday_velocity(movement_shape or [],reg_vel)
+                reg_days=len(movement_shape or [])
                 regular={
                     "status":"READY_FAMILY_MOVEMENT_BASELINE",
                     "uom":demand_uom,
-                    "regular_supported_day_count":supported_7,
+                    "regular_supported_day_count":reg_days,
                     "regular_sold_quantity":(
-                        qty_28_display
-                        if demand_source=="FAMILY_251_252_28D_FALLBACK"
-                        else qty_7_display
+                        family_mvt28.get("quantity")
+                        if family_mvt28.get("status")=="READY"
+                        and str(family_mvt28.get("uom") or "").upper()==demand_uom
+                        else family_mvt7.get("quantity")
                     ),
-                    "regular_velocity_per_supported_day":vel7,
+                    "regular_velocity_per_supported_day":reg_vel,
+                    "regular_velocity_by_weekday":weekday_vel,
                     "basis":(
-                        "FAMILY_251_MINUS_252_28D_FALLBACK_VELOCITY"
-                        if demand_source=="FAMILY_251_252_28D_FALLBACK"
-                        else "FAMILY_251_MINUS_252_7D_CURRENT_VELOCITY"
+                        "FAMILY_251_MINUS_252_CURRENT_LEVEL_WITH_28D_WEEKDAY_SHAPE"
+                        if movement_shape else
+                        "FAMILY_251_MINUS_252_FLAT_CURRENT_VELOCITY"
+                    ),
+                    "confidence":(
+                        "HIGH" if reg_days>=21
+                        else "MEDIUM" if reg_days>=7
+                        else "LOW"
                     ),
                     "sale_days_excluded":None,
                 }
-            else:
-                regular=_family_regular_baseline(cur,rows,28,prepared_series=m28)
-            reg_vel=regular.get("regular_velocity_per_supported_day")
-            if reg_vel is None:
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"REGULAR_BASELINE_UNAVAILABLE",
-                })
-                continue
 
-            promo_items_for_family=promo_by_family.get(fid,[])
+            # Inventory at the future delivery date should reflect the
+            # CURRENT run-rate, not the slower/faster historical regular-price
+            # baseline used for post-delivery coverage. Shape current demand by
+            # recent Family 251-252 weekdays when available.
+            current_shape_rows=(
+                family_mvt28.get("rows")
+                if family_mvt28.get("status")=="READY"
+                and str(family_mvt28.get("uom") or "").upper()==demand_uom
+                else family_mvt7.get("rows")
+            )
+            current_weekday_vel=_smoothed_weekday_velocity(
+                current_shape_rows or [],
+                vel7 if vel7 is not None else reg_vel,
+            )
+
+            promo_baseline=None
+            promo_vel=None
             promo_fallback=False
-            promo_family_vel=_d(reg_vel)
+            if promotion_involved and promo_item:
+                history=_family_historical_sale_periods(cur,rows,365)
+                promo_baseline=_family_promotion_baseline(
+                    history,
+                    promo_item["promotion_start_date"],
+                    promo_item["promotion_end_date"],
+                    promo_item["promotion_price"],
+                )
+                selected=promo_baseline.get("selected_history") or []
+                selected_uoms={
+                    str(x.get("uom") or "").upper()
+                    for x in selected if x.get("uom")
+                }
+                candidate=promo_baseline.get("promotion_velocity_per_day")
+                if candidate is not None and (not selected_uoms or selected_uoms=={demand_uom}):
+                    promo_vel=_d(candidate)
+                else:
+                    promo_vel=reg_vel
+                    promo_fallback=True
 
-            if promotion_involved and promo_items_for_family:
-                # Family promotion-day demand:
-                # family regular demand
-                # - promoted UPC regular demand
-                # + promoted UPC observed SALE demand.
-                for pitem in promo_items_for_family:
-                    upc_reg=(
-                        pitem.get("regular_baseline",{})
-                        .get("regular_velocity_per_supported_day")
-                    )
-                    baseline=pitem.get("promotion_baseline") or {}
-                    upc_sale=baseline.get("promotion_velocity_per_day")
-
-                    if upc_reg is None:
-                        upc_reg=Decimal("0")
-                    if upc_sale is None:
-                        # No invented uplift: keep this UPC at its regular rate.
-                        upc_sale=upc_reg
-                        promo_fallback=True
-
-                    promo_family_vel=max(
-                        Decimal("0"),
-                        promo_family_vel-_d(upc_reg)+_d(upc_sale),
-                    )
+            requested_coverage_days=max(0,(next_delivery-delivery).days)
+            freshness_limit_days=7 if kind=="FRESH" else None
+            effective_coverage_end=(
+                min(next_delivery,delivery+timedelta(days=freshness_limit_days))
+                if freshness_limit_days is not None else next_delivery
+            )
+            freshness_coverage_capped=bool(effective_coverage_end<next_delivery)
 
             total=Decimal("0")
             before_delivery=Decimal("0")
+            coverage_usage=Decimal("0")
+            requested_coverage_usage=Decimal("0")
+            freshness_uncovered_usage=Decimal("0")
+            segments={
+                "REGULAR":Decimal("0"),
+                "PROMOTION":Decimal("0"),
+                "REGULAR_BEFORE_DELIVERY":Decimal("0"),
+                "PROMOTION_BEFORE_DELIVERY":Decimal("0"),
+                "REGULAR_COVERAGE":Decimal("0"),
+                "PROMOTION_COVERAGE":Decimal("0"),
+            }
+            daily_forecast=[]
             day=order_day
-            segments={"REGULAR":Decimal("0"),"PROMOTION":Decimal("0")}
-
-            while day<next_next:
+            while day<next_delivery:
                 is_promo=bool(
-                    promotion_involved
-                    and promo_items_for_family
-                    and promotion_start_date<=day<=promotion_end_date
+                    promotion_involved and promo_item
+                    and promo_item["promotion_start_date"]<=day<=promo_item["promotion_end_date"]
                 )
-                use_vel=_d(promo_family_vel if is_promo else reg_vel)
+                segment="PROMOTION" if is_promo else "REGULAR"
+                coverage_regular_vel=_d(weekday_vel.get(day.weekday(),reg_vel))
+                current_regular_vel=_d(
+                    current_weekday_vel.get(
+                        day.weekday(),
+                        vel7 if vel7 is not None else reg_vel,
+                    )
+                )
+                regular_day_vel=(
+                    current_regular_vel if day<delivery else coverage_regular_vel
+                )
+                use_vel=_d(promo_vel if is_promo else regular_day_vel)
                 total+=use_vel
-                segments["PROMOTION" if is_promo else "REGULAR"]+=use_vel
+                segments[segment]+=use_vel
                 if day<delivery:
                     before_delivery+=use_vel
+                    segments[segment+"_BEFORE_DELIVERY"]+=use_vel
+                    phase="BEFORE_DELIVERY"
+                else:
+                    requested_coverage_usage+=use_vel
+                    if day<effective_coverage_end:
+                        coverage_usage+=use_vel
+                        segments[segment+"_COVERAGE"]+=use_vel
+                        phase="COVERAGE"
+                    else:
+                        freshness_uncovered_usage+=use_vel
+                        phase="OUTSIDE_FRESHNESS_CAP"
+                daily_forecast.append({
+                    "date":day,
+                    "phase":phase,
+                    "price_regime":segment,
+                    "forecast_quantity":use_vel,
+                    "regular_weekday_velocity":regular_day_vel,
+                    "regular_velocity_basis":(
+                        "CURRENT_RECENT_FAMILY_RUN_RATE"
+                        if day<delivery else
+                        "POST_DELIVERY_NON_PROMO_BASELINE"
+                    ),
+                })
                 day+=timedelta(days=1)
 
-            suggested=max(Decimal("0"),total-ordering_oh)
+            projected_at_delivery=ordering_oh-before_delivery
+            usable_at_delivery=max(Decimal("0"),projected_at_delivery)
+            pre_delivery_stockout_qty=max(Decimal("0"),-projected_at_delivery)
+            suggested=max(Decimal("0"),coverage_usage-usable_at_delivery)
+
             suggestions.append({
                 "family_id":fid,
-                "family_article_number":fam.get("main_article_number"),
+                "family_article_number":fam_article,
                 "family_article_name":fam.get("family_description"),
                 "category":kind,
-                "effective_oh_raw":raw_oh,
+                "effective_oh_raw":system_raw_oh,
                 "ordering_oh_used":ordering_oh,
-                "negative_oh_treated_as_zero":raw_oh<0,
+                "temporary_oh_override_used":temporary_oh_used,
+                "temporary_oh_override":(
+                    {
+                        "quantity":ordering_oh,
+                        "uom":demand_uom,
+                        "persistence":"REQUEST_ONLY_NOT_SAVED",
+                    }
+                    if temporary_oh_used else None
+                ),
+                "negative_oh_treated_as_zero":bool(
+                    system_raw_oh is not None and system_raw_oh<0 and not temporary_oh_used
+                ),
                 "uom":demand_uom,
                 "qty_7d":qty_7_display,
                 "supported_days_7d":supported_7,
@@ -4265,9 +4032,7 @@ def bulk_ordering_suggestions(
                 "dos":dos,
                 "family_movement_7d":family_mvt7.get("quantity"),
                 "family_movement_28d":family_mvt28.get("quantity"),
-                "family_movement_uom":(
-                    family_mvt7.get("uom") or family_mvt28.get("uom")
-                ),
+                "family_movement_uom":family_mvt7.get("uom") or family_mvt28.get("uom"),
                 "demand_source":demand_source,
                 "delivery_roster_demand_basis":(
                     "FAMILY_251_MINUS_252_28D_FALLBACK"
@@ -4279,44 +4044,59 @@ def bulk_ordering_suggestions(
                     )
                 ),
                 "oh_best_available":bool(family_oh.get("best_available")),
-                "oh_source":family_oh.get("source"),
+                "oh_source":(
+                    "TEMPORARY_OBSERVED_TRUE_STOCK_REQUEST_ONLY"
+                    if temporary_oh_used else family_oh.get("source")
+                ),
                 "oh_movement_through_date":family_oh.get("movement_through_date"),
                 "oh_missing_movement_days":family_oh.get("missing_movement_days") or [],
                 "regular_baseline":regular,
-                "promotion_involved":bool(promo_items_for_family),
-                "promotion_items":promo_items_for_family,
-                "promotion_family_velocity_per_day":(
-                    promo_family_vel if promo_items_for_family else None
-                ),
+                "regular_forecast_confidence":regular.get("confidence"),
+                "promotion_involved":bool(promo_item),
+                "promotion_item":promo_item,
+                "promotion_baseline":promo_baseline,
+                "promotion_family_velocity_per_day":promo_vel,
                 "promotion_fallback_to_regular":promo_fallback,
                 "forecast_regular_usage":segments["REGULAR"],
                 "forecast_promotion_usage":segments["PROMOTION"],
                 "forecast_total_usage":total,
                 "forecast_usage_before_delivery":before_delivery,
-                "projected_oh_at_delivery":ordering_oh-before_delivery,
+                "forecast_regular_before_delivery":segments["REGULAR_BEFORE_DELIVERY"],
+                "forecast_promotion_before_delivery":segments["PROMOTION_BEFORE_DELIVERY"],
+                "forecast_coverage_usage":coverage_usage,
+                "forecast_requested_coverage_usage":requested_coverage_usage,
+                "forecast_regular_coverage":segments["REGULAR_COVERAGE"],
+                "forecast_promotion_coverage":segments["PROMOTION_COVERAGE"],
+                "projected_oh_at_delivery":projected_at_delivery,
+                "usable_oh_at_delivery":usable_at_delivery,
+                "pre_delivery_stockout_risk":pre_delivery_stockout_qty>0,
+                "pre_delivery_stockout_qty":pre_delivery_stockout_qty,
+                "requested_coverage_days":requested_coverage_days,
+                "effective_coverage_end_date":effective_coverage_end-timedelta(days=1),
+                "freshness_coverage_capped":freshness_coverage_capped,
+                "freshness_uncovered_usage":freshness_uncovered_usage,
+                "daily_forecast":daily_forecast,
                 "suggested_order_qty":suggested,
                 "suggested_order_uom":demand_uom,
                 "readiness":(
                     "READY"
-                    if any(
-                        str(x.get("quick_check_status") or "")=="READY"
-                        for x in rows
-                    )
+                    if any(str(x.get("quick_check_status") or "")=="READY" for x in rows)
                     else str(rows[0].get("quick_check_status") or "UNKNOWN")
                 ),
             })
 
         suggestions.sort(
             key=lambda x:(
+                0 if x.get("pre_delivery_stockout_risk") else 1,
                 float(x.get("dos") or 999999),
-                -float(x.get("qty_28d") or 0),
+                -float(x.get("suggested_order_qty") or 0),
                 str(x.get("family_article_name") or ""),
             )
         )
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V5_FAMILY_MVT_28D_FALLBACK",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V6_UNIFIED",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -4327,11 +4107,15 @@ def bulk_ordering_suggestions(
                 if expected_delivery_date is not None
                 else ("FOLLOWING_FRIDAY" if kind=="FRESH" else "FOLLOWING_TUESDAY")
             ),
-            "next_next_delivery_date":next_next,
+            "next_delivery_date":next_delivery,
+            "next_delivery_date_source":(
+                "USER_INPUT" if next_delivery_date is not None else "LEGACY_PLUS_7_DAYS"
+            ),
             "promotion_involved":bool(promotion_involved),
             "promotion_start_date":promotion_start_date,
             "promotion_end_date":promotion_end_date,
-            "promotion_items":raw_promo_items,
+            "promotion_items":normalized_promo_items,
+            "temporary_oh_override_count":len(temporary_oh_overrides or []),
         },
         "eligibility":{
             "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
@@ -4348,16 +4132,22 @@ def bulk_ordering_suggestions(
         "skipped_count":len(skipped),
         "skipped":skipped,
         "rules":{
+            "single_production_engine":True,
             "sales_history":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
-            "ordering_demand_authority":"FAMILY_251_MINUS_252_7D_FIRST;28D_FAMILY_MVT_FALLBACK_WHEN_7D_HAS_NO_UOM;UPC_POS_ONLY_LAST_FALLBACK",
-            "upc_pos_role":"ACTIVE_FAMILY_AND_PRICE_TYPE_EVIDENCE;NOT_FAMILY_ORDER_QTY_AUTHORITY",
+            "ordering_demand_authority":"FAMILY_251_MINUS_252_FIRST;UPC_POS_LAST_FALLBACK",
+            "pre_delivery_velocity":"RECENT_FAMILY_251_252_RUN_RATE_WITH_WEEKDAY_SHAPE",
+            "regular_velocity":"NON_SALE_POS_WHEN_RECONCILED_TO_FAMILY_BASE_UOM_ELSE_FAMILY_MOVEMENT",
+            "weekday_forecast":"SMOOTHED_TO_CURRENT_OVERALL_VELOCITY",
             "missing_source_dates_count_as_zero":False,
             "promotion_definition":"PRICE_TYPE_SALE_ONLY",
-            "promotion_item_identity":"UPC",
-            "promotion_reference_history":"SELECTED_UPC_SALE_HISTORY",
-            "family_promotion_demand_method":"FAMILY_REGULAR_MINUS_PROMO_UPC_REGULAR_PLUS_PROMO_UPC_SALE",
+            "promotion_window_per_item":True,
+            "promotion_types":["WEEKLY_THURSDAY_TO_THURSDAY","WEEKEND_FRIDAY_TO_SUNDAY"],
             "tpr_is_promotion":False,
-            "coverage_target":"THROUGH_DAY_BEFORE_NEXT_NEXT_DELIVERY",
+            "coverage_target":"DELIVERY_DATE_THROUGH_DAY_BEFORE_SELECTED_NEXT_DELIVERY",
+            "pre_delivery_shortage_is_not_backordered_into_future_delivery":True,
+            "fresh_live_coverage_cap_days":7,
+            "temporary_oh_override_is_request_only":True,
+            "temporary_oh_override_writes_database":False,
             "delivery_roster_oh_rule":"WHEN_ONLY_MVT_DAILY_COVERAGE_IS_MISSING_USE_OH_ANCHOR_PLUS_AVAILABLE_CANONICAL_MVT_AND_FORECAST_FORWARD",
             "uom_or_movement_semantic_blockers_still_require_review":True,
             "saved":False,

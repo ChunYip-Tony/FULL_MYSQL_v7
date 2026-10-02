@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v357';
+const CACHE='yipman-v358';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -120,8 +120,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .day b{font-size:10px}.day strong{font-size:21px}.day span{font-size:9px}.day.past{opacity:.72}.day.today{outline:2px solid rgba(13,79,139,.28);outline-offset:1px}
 .order-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}.order-tab{border:1px solid var(--line);background:#fff;border-radius:13px;padding:10px 7px;font-size:11px;font-weight:950}.order-tab.on{background:#142033;color:#fff;border-color:#142033}
 .order-date-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}.order-date-card{border:2px solid #d8e0e6;background:#fff;border-radius:14px;padding:8px 9px;text-align:left}.order-date-card small{display:block;font-size:7px;color:var(--muted);font-weight:950}.order-date-card b{display:block;font-size:15px;margin-top:2px}.order-date-card span{display:block;font-size:7px;color:var(--green);font-weight:900;margin-top:2px}.order-date-card.delivery{border-color:#3b82f6;background:#eff6ff}.order-date-card.next{border-color:#8b5cf6;background:#f5f3ff}.order-date-card.pick{box-shadow:0 0 0 2px rgba(17,24,39,.12)}
-.day.observed{background:#eaf8ef;border:1px solid #a8dfbd}.day.observed span{color:#23784d}.day.delivery{background:#2563eb;color:#fff;outline:2px solid #2563eb}.day.delivery b,.day.delivery span{color:#dbeafe}.day.next{background:#7c3aed;color:#fff;outline:2px solid #7c3aed}.day.next b,.day.next span{color:#ede9fe}
-.order-coverage{background:#142033;color:#fff;border-radius:13px;padding:8px 10px;margin:0 0 8px}.order-coverage small{display:block;font-size:7px;color:#b8c4d2;font-weight:950}.order-coverage b{display:block;font-size:16px;margin-top:2px}.order-coverage span{display:block;font-size:8px;color:#ccd6e2;margin-top:2px}
+.day.observed{background:#eef9f2;border:1px solid #b9e4c8}.day.observed span{color:#23784d}.day.preferred{background:#def6e7;border:2px solid #70ca94}.day.preferred span{color:#17683c;font-weight:950}.day.delivery{background:#2563eb;color:#fff;outline:2px solid #2563eb}.day.delivery b,.day.delivery span{color:#dbeafe}.day.next{background:#7c3aed;color:#fff;outline:2px solid #7c3aed}.day.next b,.day.next span{color:#ede9fe}
+.order-risk{display:inline-block;margin-left:5px;border-radius:999px;padding:2px 5px;font-size:6px;font-weight:950;background:#ffe7e7;color:#a12424}.order-lowconf{display:inline-block;margin-left:4px;border-radius:999px;padding:2px 5px;font-size:6px;font-weight:950;background:#fff4d8;color:#855d00}.order-coverage{background:#142033;color:#fff;border-radius:13px;padding:8px 10px;margin:0 0 8px}.order-coverage small{display:block;font-size:7px;color:#b8c4d2;font-weight:950}.order-coverage b{display:block;font-size:16px;margin-top:2px}.order-coverage span{display:block;font-size:8px;color:#ccd6e2;margin-top:2px}
 .promo-shell{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:13px}.promo-shell h3{font-size:16px;margin:0}.promo-shell p{font-size:9px;color:var(--muted);line-height:1.4}.promo-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.promo-type{border-radius:999px;padding:6px 8px;font-size:8px;font-weight:950}.promo-type.weekly{background:#f0eaff;color:#6b21a8}.promo-type.weekend{background:#fff4d6;color:#8a5b00}
 
 .promo-controls{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px}.promo-controls select,.promo-date-inputs input{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;padding:9px;font-size:10px;font-weight:850}.promo-import{border:0;border-radius:11px;background:#142033;color:#fff;padding:9px 11px;font-size:9px;font-weight:950}.promo-date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.promo-date-inputs label{font-size:7px;color:var(--muted);font-weight:950}.promo-date-inputs input{display:block;margin-top:3px;padding:7px}
@@ -883,15 +883,21 @@ function dateLocal(v){
  if(!m)return null;
  return new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0);
 }
-function isObservedDate(v){
- const d=dateLocal(v);return !!(d&&orderObservedWeekdays.get(d.getDay()===0?6:d.getDay()-1)?.observed);
+function orderWeekdayInfo(v){
+ const d=dateLocal(v);if(!d)return null;
+ return orderObservedWeekdays.get(d.getDay()===0?6:d.getDay()-1)||null;
 }
+function isObservedDate(v){return !!orderWeekdayInfo(v)?.observed}
+function isPreferredDate(v){return !!orderWeekdayInfo(v)?.preferred}
 function nextObservedAfter(v){
  const start=dateLocal(v)||new Date();
- for(let i=1;i<=21;i++){
-  const d=new Date(start);d.setDate(d.getDate()+i);
-  const wd=d.getDay()===0?6:d.getDay()-1;
-  if(orderObservedWeekdays.get(wd)?.observed)return iso(d);
+ for(const preferredOnly of [true,false]){
+  for(let i=1;i<=21;i++){
+   const d=new Date(start);d.setDate(d.getDate()+i);
+   const wd=d.getDay()===0?6:d.getDay()-1;
+   const info=orderObservedWeekdays.get(wd);
+   if(info?.observed&&(!preferredOnly||info?.preferred))return iso(d);
+  }
  }
  const fallback=new Date(start);fallback.setDate(fallback.getDate()+7);return iso(fallback);
 }
@@ -899,8 +905,8 @@ function updateOrderWindowUI(){
  if(!orderDate||!orderNextDate)return;
  $('#deliveryDateText').textContent=appDate(orderDate);
  $('#nextDeliveryDateText').textContent=appDate(orderNextDate);
- $('#deliveryObservedText').textContent=isObservedDate(orderDate)?'★ Observed delivery day':'Manual delivery date';
- $('#nextObservedText').textContent=isObservedDate(orderNextDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#deliveryObservedText').textContent=isPreferredDate(orderDate)?'★ Preferred observed delivery day':isObservedDate(orderDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#nextObservedText').textContent=isPreferredDate(orderNextDate)?'★ Preferred observed delivery day':isObservedDate(orderNextDate)?'★ Observed delivery day':'Manual delivery date';
  $('#deliveryDateCard').classList.toggle('pick',orderSelectMode==='DELIVERY');
  $('#nextDeliveryDateCard').classList.toggle('pick',orderSelectMode==='NEXT');
  const end=dateLocal(orderNextDate);if(end)end.setDate(end.getDate()-1);
@@ -929,13 +935,15 @@ function buildDays(){
   const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);
   const dayIso=iso(d), wd=d.getDay()===0?6:d.getDay()-1, obs=orderObservedWeekdays.get(wd);
   const b=document.createElement('button');
-  b.className='day'+(offset===0?' today':'')+(obs?.observed?' observed':'')+(dayIso===orderDate?' delivery':'')+(dayIso===orderNextDate?' next':'');
+  b.className='day'+(offset===0?' today':'')+(obs?.observed?' observed':'')+(obs?.preferred?' preferred':'')+(dayIso===orderDate?' delivery':'')+(dayIso===orderNextDate?' next':'');
   b.dataset.offset=offset;b.dataset.date=dayIso;
   b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+(obs?.observed?'OBS · '+Number(obs.family_count||0):d.toLocaleDateString(undefined,{month:'short'}).toUpperCase())+'</span>';
   b.onclick=()=>{
    if(orderSelectMode==='DELIVERY'){
     orderDate=dayIso;
-    if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+    // A new Delivery date gets a fresh default Next Delivery. The user can
+    // still override Next Delivery immediately afterward.
+    orderNextDate=nextObservedAfter(orderDate);
     orderSelectMode='NEXT';
    }else{
     if(dayIso<=orderDate){toast('Next delivery must be after delivery date');return}
@@ -955,6 +963,8 @@ async function initOrdering(force=false){
     const d=await api('/v1/yipman/ordering-calendar?lookback_days=180',{timeoutMs:18000});
     orderObservedWeekdays=new Map((d.rows||[]).map(x=>[Number(x.weekday_number),x]));
     orderCalendarLoaded=true;
+    if(!orderDate&&d.default_delivery_date)orderDate=String(d.default_delivery_date);
+    if(!orderNextDate&&d.default_next_delivery_date)orderNextDate=String(d.default_next_delivery_date);
    }catch(e){
     orderObservedWeekdays=new Map([[1,{observed:true,family_count:1}],[4,{observed:true,family_count:1}]]);
     if(orderMode==='REGULAR')$('#orderStatus').textContent='Observed calendar fallback · '+e.message;
@@ -963,10 +973,12 @@ async function initOrdering(force=false){
   }
   if(!orderDate){
    const base=new Date();base.setHours(12,0,0,0);
-   for(let i=1;i<=14;i++){
-    const d=new Date(base);d.setDate(d.getDate()+i);
-    const wd=d.getDay()===0?6:d.getDay()-1;
-    if(orderObservedWeekdays.get(wd)?.observed){orderDate=iso(d);break}
+   for(const preferredOnly of [true,false]){
+    for(let i=1;i<=14&&!orderDate;i++){
+     const d=new Date(base);d.setDate(d.getDate()+i);
+     const wd=d.getDay()===0?6:d.getDay()-1, info=orderObservedWeekdays.get(wd);
+     if(info?.observed&&(!preferredOnly||info?.preferred)){orderDate=iso(d);break}
+    }
    }
    if(!orderDate){const d=new Date(base);d.setDate(d.getDate()+1);orderDate=iso(d)}
   }
@@ -1196,13 +1208,14 @@ function renderOrderRoster(rows,data,h,stale){
  let visible=all.filter(r=>orderFilter==='ALL'||orderState(r)===orderFilter);
  const dos=r=>{const v=r?.details?.dos;if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
  const obs=r=>Number(r?.delivery_day_observed_count||0);
+ const conf=r=>({HIGH:0,MEDIUM:1,LOW:2,NONE:3}[String(r?.delivery_day_confidence||'NONE').toUpperCase()]??3);
  visible=[...visible].sort((a,b)=>{
   if(orderSort==='QTY')return (orderQty(b)??-1)-(orderQty(a)??-1)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='DOS')return (dos(a)??999999)-(dos(b)??999999)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='OBSERVED')return obs(b)-obs(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='NAME')return String(a.family_name||'').localeCompare(String(b.family_name||''));
   const rank=r=>orderState(r)==='ORDER'?0:orderState(r)==='REVIEW'?1:2;
-  return rank(a)-rank(b)||((orderQty(b)??-1)-(orderQty(a)??-1))||String(a.family_name||'').localeCompare(String(b.family_name||''));
+  return rank(a)-rank(b)||conf(a)-conf(b)||((orderQty(b)??-1)-(orderQty(a)??-1))||String(a.family_name||'').localeCompare(String(b.family_name||''));
  });
  renderedOrderRows=visible;
  $('#orderStatus').innerHTML=stale
@@ -1214,7 +1227,9 @@ function renderOrderRoster(rows,data,h,stale){
   const stateLabel=state==='ORDER'?'ORDER':state==='REVIEW'?'REVIEW':'0 ORDER';
   const orderText=state==='REVIEW'?'REVIEW':fmtNullable(q);
   const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
-  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span></div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
+  const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
+  const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
+  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -1327,8 +1342,11 @@ function openOrder(r){
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  '<br><br><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
  '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmtNullable(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
- '<br><br><b>Demand</b><br>7D '+fmtNullable(d.qty_7d)+' · 28D '+fmtNullable(d.qty_28d)+' · DOS '+fmtNullable(d.dos)+
- '<br><br><b>Projected at delivery</b><br>'+fmtNullable(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+
+ '<br><br><b>Demand</b><br>7D '+fmtNullable(d.qty_7d)+' · 28D '+fmtNullable(d.qty_28d)+' · DOS '+fmtNullable(d.dos)+' · Forecast confidence '+esc(d.regular_forecast_confidence||'—')+
+ '<br><br><b>Coverage need</b><br>'+fmtNullable(d.forecast_coverage_usage)+' '+esc(r.oh_uom||'')+' from Delivery through the eligible coverage end'+
+ '<br><br><b>Projected at delivery</b><br>'+fmtNullable(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+' · usable '+fmtNullable(d.usable_oh_at_delivery)+' '+esc(r.oh_uom||'')+
+ (d.pre_delivery_stockout_risk?'<br><br><b>⚠ Pre-delivery stockout risk</b><br>'+fmtNullable(d.pre_delivery_stockout_qty)+' '+esc(r.oh_uom||'')+' projected short before the selected delivery. This shortage is NOT added to the later order.':'')+
+ (d.freshness_coverage_capped?'<br><br><b>⚠ Freshness guard</b><br>Fresh/Live coverage is capped at 7 days. Later demand requires an earlier or split delivery.':'')+
  '<br><br><b>Delivery evidence</b><br>'+fmt(r.delivery_day_observed_count,0)+' / '+fmt(r.delivery_day_receipt_count,0)+' receipt dates · '+fmt(r.delivery_day_confidence_pct,0)+'% confidence'+
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
 }

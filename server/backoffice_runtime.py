@@ -530,153 +530,31 @@ def _frequency_label(pattern: dict[str, Any]) -> str:
 
 
 
-def yipman_ordering_calendar(days: int = 28) -> dict[str, Any]:
-    """Return future delivery dates highlighted from actual receipt weekday history.
+def yipman_ordering_calendar(
+    lookback_days: int = 180,
+    days: int = 28,
+) -> dict[str, Any]:
+    """Return observed delivery weekdays plus preferred future defaults.
 
-    This is a read-only selector helper for Yipman Regular Ordering.  A future
-    date is marked observed when its weekday has canonical physical receipt
-    evidence (101 or physical 109) in the recent 180-day movement window.
-    Defaults prefer the two strongest observed weekdays across Seafood
-    Families, while every observed weekday remains visible to the user.
+    Every weekday with canonical physical receipt evidence remains highlighted.
+    Defaults use the strongest observed weekdays so one-off receipt history does
+    not become the automatic Delivery / Next Delivery pair.
     """
+    lookback=max(28,min(int(lookback_days or 180),180))
     horizon=max(14,min(int(days or 28),42))
     today=business_today()
-    weekday_names=[
-        "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
-    ]
+    names=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
     weekday_stats={
-        i:{
-            "weekday":weekday_names[i],
-            "weekday_index":i,
+        wd:{
+            "weekday":names[wd],
+            "weekday_number":wd,
             "family_ids":set(),
             "receipt_dates":set(),
             "receipt_event_count":0,
         }
-        for i in range(7)
+        for wd in range(7)
     }
 
-    with db_conn() as conn:
-        cur=conn.cursor(dictionary=True)
-        receipt_days=source_data_days(
-            cur,
-            "movement",
-            limit=180,
-            up_to=completed_through_date(),
-        )
-        families: dict[int,dict[str,Any]]={}
-        for kind in ("FRESH","FROZEN"):
-            for fam in _ordering_candidate_families(cur,kind):
-                families[int(fam["family_id"])]=fam
-
-        event_map=_family_receipt_events_bulk(
-            cur,
-            list(families),
-            data_days=receipt_days,
-        ) if families else {}
-
-        for fid,events in event_map.items():
-            family_weekdays=set()
-            for event in events or []:
-                posting_date=event.get("posting_date")
-                quantity=event.get("receipt_quantity")
-                if (
-                    posting_date is None
-                    or quantity is None
-                    or _d(quantity)<=0
-                ):
-                    continue
-                wd=posting_date.weekday()
-                family_weekdays.add(wd)
-                weekday_stats[wd]["receipt_dates"].add(posting_date)
-                weekday_stats[wd]["receipt_event_count"]+=1
-            for wd in family_weekdays:
-                weekday_stats[wd]["family_ids"].add(int(fid))
-        cur.close()
-
-    ranked=[
-        {
-            "weekday":x["weekday"],
-            "weekday_index":x["weekday_index"],
-            "observed_family_count":len(x["family_ids"]),
-            "observed_receipt_date_count":len(x["receipt_dates"]),
-            "receipt_event_count":x["receipt_event_count"],
-        }
-        for x in weekday_stats.values()
-        if x["family_ids"]
-    ]
-    ranked.sort(
-        key=lambda x:(
-            -int(x["observed_family_count"]),
-            -int(x["observed_receipt_date_count"]),
-            int(x["weekday_index"]),
-        )
-    )
-    primary_weekdays={int(x["weekday_index"]) for x in ranked[:2]}
-
-    date_rows=[]
-    for offset in range(horizon):
-        d=today+timedelta(days=offset)
-        stat=weekday_stats[d.weekday()]
-        observed=bool(stat["family_ids"])
-        date_rows.append({
-            "date":d,
-            "weekday":weekday_names[d.weekday()],
-            "weekday_index":d.weekday(),
-            "observed":observed,
-            "primary_observed":bool(observed and d.weekday() in primary_weekdays),
-            "observed_family_count":len(stat["family_ids"]),
-            "observed_receipt_date_count":len(stat["receipt_dates"]),
-        })
-
-    primary_dates=[x for x in date_rows if x["primary_observed"]]
-    observed_dates=[x for x in date_rows if x["observed"]]
-    default_delivery=(
-        primary_dates[0]["date"]
-        if primary_dates else (
-            observed_dates[0]["date"] if observed_dates else today
-        )
-    )
-    default_next=next(
-        (
-            x["date"] for x in primary_dates
-            if x["date"]>default_delivery
-        ),
-        None,
-    )
-    if default_next is None:
-        default_next=next(
-            (
-                x["date"] for x in observed_dates
-                if x["date"]>default_delivery
-            ),
-            default_delivery+timedelta(days=7),
-        )
-
-    return {
-        "contract_version":"YIPMAN_ORDERING_CALENDAR_V1",
-        "generated_for_date":today,
-        "lookback_days":180,
-        "horizon_days":horizon,
-        "primary_observed_weekdays":[
-            x for x in ranked
-            if int(x["weekday_index"]) in primary_weekdays
-        ],
-        "observed_weekdays":ranked,
-        "dates":date_rows,
-        "default_delivery_date":default_delivery,
-        "default_next_delivery_date":default_next,
-        "rules":{
-            "receipt_basis":"CANONICAL_PHYSICAL_101_109",
-            "observed_date_highlight":"ANY_RECEIPT_WEEKDAY_EVIDENCE_IN_180D",
-            "default_date_basis":"TOP_TWO_WEEKDAYS_BY_FAMILY_COUNT_THEN_RECEIPT_DATE_COUNT",
-            "write_enabled":False,
-        },
-    }
-
-
-def yipman_ordering_calendar(lookback_days: int = 180) -> dict[str, Any]:
-    """Summarize observed Seafood receiving weekdays for the Ordering picker."""
-    lookback=max(28,min(int(lookback_days or 180),180))
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         mvt_days=source_data_days(
@@ -685,7 +563,7 @@ def yipman_ordering_calendar(lookback_days: int = 180) -> dict[str, Any]:
             limit=lookback,
             up_to=completed_through_date(),
         )
-        families_by_id: dict[int,dict[str,Any]] = {}
+        families_by_id: dict[int,dict[str,Any]]={}
         for kind in ("FRESH","FROZEN"):
             for fam in _ordering_candidate_families(cur,kind):
                 families_by_id[int(fam["family_id"])]=fam
@@ -695,90 +573,190 @@ def yipman_ordering_calendar(lookback_days: int = 180) -> dict[str, Any]:
             family_ids,
             data_days=mvt_days,
         ) if family_ids else {}
-        family_counts=Counter()
-        receipt_counts=Counter()
+
         for fid in family_ids:
-            pattern=_delivery_pattern(
-                event_map.get(fid) or [],
-                after_date=business_today(),
-                lookback_days=lookback,
-            )
-            for obs in pattern.get("observed_delivery_days") or []:
-                wd=int(obs.get("weekday_number"))
-                count=int(obs.get("receipt_date_count") or 0)
-                if count<=0:
+            family_weekdays=set()
+            for event in event_map.get(fid) or []:
+                posting_date=event.get("posting_date")
+                quantity=event.get("receipt_quantity")
+                if posting_date is None or quantity is None or _d(quantity)<=0:
                     continue
-                family_counts[wd]+=1
-                receipt_counts[wd]+=count
+                wd=int(posting_date.weekday())
+                family_weekdays.add(wd)
+                weekday_stats[wd]["receipt_dates"].add(posting_date)
+                weekday_stats[wd]["receipt_event_count"]+=1
+            for wd in family_weekdays:
+                weekday_stats[wd]["family_ids"].add(fid)
         cur.close()
 
-    names=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-    rows=[]
-    for wd,name in enumerate(names):
-        rows.append({
-            "weekday":name,
-            "weekday_number":wd,
-            "family_count":int(family_counts.get(wd,0)),
-            "receipt_date_count":int(receipt_counts.get(wd,0)),
-            "observed":bool(family_counts.get(wd,0)),
-        })
-    rows.sort(
+    ranked=[
+        {
+            "weekday":x["weekday"],
+            "weekday_number":x["weekday_number"],
+            "family_count":len(x["family_ids"]),
+            "receipt_date_count":len(x["receipt_dates"]),
+            "receipt_event_count":x["receipt_event_count"],
+            "observed":bool(x["family_ids"]),
+        }
+        for x in weekday_stats.values()
+        if x["family_ids"]
+    ]
+    ranked.sort(
         key=lambda x:(
             -int(x["family_count"]),
             -int(x["receipt_date_count"]),
             int(x["weekday_number"]),
         )
     )
+
+    preferred=set()
+    if ranked:
+        preferred.add(int(ranked[0]["weekday_number"]))
+        if len(ranked)>=2:
+            top_count=int(ranked[0]["family_count"])
+            second_count=int(ranked[1]["family_count"])
+            secondary_threshold=max(2,(top_count+9)//10)
+            if second_count>=secondary_threshold:
+                preferred.add(int(ranked[1]["weekday_number"]))
+
+    row_by_wd={int(x["weekday_number"]):x for x in ranked}
+    rows=[]
+    for wd,name in enumerate(names):
+        source=row_by_wd.get(wd) or {}
+        rows.append({
+            "weekday":name,
+            "weekday_number":wd,
+            "family_count":int(source.get("family_count") or 0),
+            "receipt_date_count":int(source.get("receipt_date_count") or 0),
+            "receipt_event_count":int(source.get("receipt_event_count") or 0),
+            "observed":bool(source),
+            "preferred":wd in preferred,
+        })
+    rows.sort(
+        key=lambda x:(
+            0 if x["preferred"] else 1,
+            -int(x["family_count"]),
+            -int(x["receipt_date_count"]),
+            int(x["weekday_number"]),
+        )
+    )
+
+    dates=[]
+    for offset in range(0,horizon+1):
+        d=today+timedelta(days=offset)
+        wd=int(d.weekday())
+        stat=next((x for x in rows if int(x["weekday_number"])==wd),None) or {}
+        dates.append({
+            "date":d,
+            "weekday":names[wd],
+            "weekday_number":wd,
+            "observed":bool(stat.get("observed")),
+            "preferred":bool(stat.get("preferred")),
+            "family_count":int(stat.get("family_count") or 0),
+            "receipt_date_count":int(stat.get("receipt_date_count") or 0),
+        })
+
+    future=[x for x in dates if x["date"]>today]
+    preferred_dates=[x for x in future if x["preferred"]]
+    observed_dates=[x for x in future if x["observed"]]
+    default_delivery=(
+        preferred_dates[0]["date"]
+        if preferred_dates else (
+            observed_dates[0]["date"] if observed_dates else today+timedelta(days=1)
+        )
+    )
+    default_next=next(
+        (x["date"] for x in preferred_dates if x["date"]>default_delivery),
+        None,
+    )
+    if default_next is None:
+        default_next=next(
+            (x["date"] for x in observed_dates if x["date"]>default_delivery),
+            default_delivery+timedelta(days=7),
+        )
+
     return {
-        "contract_version":"YIPMAN_ORDERING_CALENDAR_V1",
-        "as_of":business_today(),
+        "contract_version":"YIPMAN_ORDERING_CALENDAR_V2_PREFERRED_DAYS",
+        "as_of":today,
         "movement_data_through":mvt_days[0]["date"] if mvt_days else None,
         "lookback_days":lookback,
+        "horizon_days":horizon,
         "rows":rows,
+        "dates":dates,
+        "preferred_weekdays":sorted(preferred),
+        "default_delivery_date":default_delivery,
+        "default_next_delivery_date":default_next,
         "rules":{
             "receipt_basis":"CANONICAL_PHYSICAL_101_109",
-            "observed_means_at_least_one_recent_receipt_for_a_family_on_that_weekday":True,
+            "all_observed_days_remain_visible":True,
+            "preferred_defaults":"TOP_WEEKDAY_PLUS_SECOND_IF_AT_LEAST_10_PERCENT_OF_TOP_AND_AT_LEAST_2_FAMILIES",
+            "one_off_observed_days_are_not_removed":True,
             "write_enabled":False,
         },
     }
 
 
 def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: dict[str, Any]) -> list[dict[str, str]]:
-    uom = str(row.get("uom") or "")
-    reasons = [
+    uom=str(row.get("uom") or "")
+    coverage=row.get("forecast_coverage_usage")
+    projected=row.get("projected_oh_at_delivery")
+    usable=row.get("usable_oh_at_delivery")
+    shortage=row.get("pre_delivery_stockout_qty")
+    reasons=[
         {
-            "title": "Family demand",
-            "detail": (
+            "title":"Family demand",
+            "detail":(
                 f"7D family movement {row.get('qty_7d')} {uom}; "
-                f"28D family movement {row.get('qty_28d')} {uom}."
+                f"28D family movement {row.get('qty_28d')} {uom}. "
+                f"Regular forecast confidence {row.get('regular_forecast_confidence') or '—'}."
             ),
         },
         {
-            "title": "Inventory position",
-            "detail": f"Usable Family OH for ordering: {row.get('ordering_oh_used')} {uom}; DOS {row.get('dos')}."
-        },
-        {
-            "title": "Coverage window",
-            "detail": (
-                f"Forecast demand through the next delivery cycle is {row.get('forecast_total_usage')} {uom}; "
-                f"suggested coming delivery quantity is {row.get('suggested_order_qty')} {row.get('suggested_order_uom') or uom}."
+            "title":"Inventory at delivery",
+            "detail":(
+                f"Current ordering OH {row.get('ordering_oh_used')} {uom}; "
+                f"forecast usage before delivery {row.get('forecast_usage_before_delivery')} {uom}; "
+                f"projected OH at delivery {projected} {uom}; usable {usable} {uom}."
             ),
         },
         {
-            "title": "Receiving cadence",
-            "detail": _frequency_label(pattern),
+            "title":"Coverage window",
+            "detail":(
+                f"Eligible demand after delivery is {coverage} {uom}; "
+                f"suggested delivery quantity is {row.get('suggested_order_qty')} "
+                f"{row.get('suggested_order_uom') or uom}."
+            ),
+        },
+        {
+            "title":"Receiving cadence",
+            "detail":_frequency_label(pattern),
         },
     ]
+    if _d(shortage)>0:
+        reasons.append({
+            "title":"Pre-delivery stockout risk",
+            "detail":(
+                f"Projected shortage before this delivery is {shortage} {uom}. "
+                "That lost-sales risk is flagged separately and is not backordered into a delivery that arrives later."
+            ),
+        })
+    if row.get("freshness_coverage_capped"):
+        reasons.append({
+            "title":"Freshness guard",
+            "detail":(
+                "The selected next-delivery interval exceeds the Fresh/Live 7-day freshness limit. "
+                f"Order coverage is capped through {row.get('effective_coverage_end_date')}; "
+                f"{row.get('freshness_uncovered_usage')} {uom} of later forecast demand requires an earlier/split delivery."
+            ),
+        })
     if receipt.get("date"):
-        reasons.append(
-            {
-                "title": "Last receipt",
-                "detail": (
-                    f"Last receipt {receipt.get('date')} · {receipt.get('quantity')} "
-                    f"{receipt.get('base_uom') or ''} in Base UOM."
-                ),
-            }
-        )
+        reasons.append({
+            "title":"Last receipt",
+            "detail":(
+                f"Last receipt {receipt.get('date')} · {receipt.get('quantity')} "
+                f"{receipt.get('base_uom') or ''} in Base UOM."
+            ),
+        })
     return reasons
 
 
@@ -1185,12 +1163,16 @@ def ordering_review(
                     "expected_through": expected_through,
                     "stale_calendar_days": stale_days,
                     "estimate_only": bool(missing_required_sources),
+                    "pre_delivery_stockout_risk":bool(s.get("pre_delivery_stockout_risk")),
+                    "pre_delivery_stockout_qty":s.get("pre_delivery_stockout_qty"),
+                    "freshness_coverage_capped":bool(s.get("freshness_coverage_capped")),
                     "attention": bool(
                         (
                             s.get("dos") is not None
                             and _d(s.get("dos")) < Decimal("3")
                         )
-                        or _d(s.get("projected_oh_at_delivery")) < 0
+                        or bool(s.get("pre_delivery_stockout_risk"))
+                        or bool(s.get("freshness_coverage_capped"))
                     ),
                     "details": {
                         "qty_7d": s.get("qty_7d"),
@@ -1199,10 +1181,20 @@ def ordering_review(
                         "dos": s.get("dos"),
                         "effective_oh_raw": s.get("effective_oh_raw"),
                         "ordering_oh_used": s.get("ordering_oh_used"),
-                        "forecast_total_usage": s.get("forecast_total_usage"),
-                        "forecast_usage_before_delivery": s.get("forecast_usage_before_delivery"),
-                        "projected_oh_at_delivery": s.get("projected_oh_at_delivery"),
-                        "regular_baseline": s.get("regular_baseline"),
+                        "forecast_total_usage":s.get("forecast_total_usage"),
+                        "forecast_usage_before_delivery":s.get("forecast_usage_before_delivery"),
+                        "forecast_coverage_usage":s.get("forecast_coverage_usage"),
+                        "forecast_requested_coverage_usage":s.get("forecast_requested_coverage_usage"),
+                        "projected_oh_at_delivery":s.get("projected_oh_at_delivery"),
+                        "usable_oh_at_delivery":s.get("usable_oh_at_delivery"),
+                        "pre_delivery_stockout_risk":s.get("pre_delivery_stockout_risk"),
+                        "pre_delivery_stockout_qty":s.get("pre_delivery_stockout_qty"),
+                        "freshness_coverage_capped":s.get("freshness_coverage_capped"),
+                        "freshness_uncovered_usage":s.get("freshness_uncovered_usage"),
+                        "effective_coverage_end_date":s.get("effective_coverage_end_date"),
+                        "regular_forecast_confidence":s.get("regular_forecast_confidence"),
+                        "daily_forecast":s.get("daily_forecast"),
+                        "regular_baseline":s.get("regular_baseline"),
                         "receiving_articles_on_last_receipt": receipt.get("receiving_articles"),
                         "delivery_pattern": pattern,
                         "delivery_day_evidence": delivery_day,
@@ -1367,7 +1359,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V16_TWO_DATE_WINDOW",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V17_ORDERING_QUALITY",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
@@ -1407,7 +1399,11 @@ def ordering_review(
             "stale_estimate_basis": "LATEST_AVAILABLE_CANONICAL_POS_AND_MVT_INDEPENDENT",
             "stale_forecast_starts_day_after_latest_mvt": True,
             "delivery_roster_oh_best_available": "IF_ONLY_MOVEMENT_DAILY_COVERAGE_GAP_USE_OH_ANCHOR_PLUS_AVAILABLE_CANONICAL_MVT",
-            "uom_and_movement_semantic_errors_still_review": True,
+            "uom_and_movement_semantic_errors_still_review":True,
+            "regular_forecast_method":"WEEKDAY_SMOOTHED_NON_PROMO_VELOCITY",
+            "pre_delivery_shortage_is_not_added_to_future_order":True,
+            "fresh_live_coverage_cap_days":7,
+            "cache_schema":"V17_ORDERING_QUALITY",
         },
     }
 
@@ -1434,7 +1430,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V16_TWO_DATE_WINDOW|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V17_ORDERING_QUALITY|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -1583,7 +1579,7 @@ def cached_ordering_review(
     if cached is None and already_refreshing:
         expected_now=completed_through_date()
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V17_ASYNC_ORDERING_QUALITY",
             "category":cat,
             "selected_delivery_date":delivery_date,
             "selected_next_delivery_date":next_delivery_date,
@@ -1646,7 +1642,7 @@ def cached_ordering_review(
         has_rows=bool(cached.get("rows"))
         return {
             **cached,
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V17_ASYNC_ORDERING_QUALITY",
             "analysis_status":(
                 "READY_STALE_ESTIMATE_REFRESHING"
                 if has_rows else
@@ -1662,7 +1658,7 @@ def cached_ordering_review(
     # in the standard Back Office path.
     if cached is None or not data_current:
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V17_ASYNC_ORDERING_QUALITY",
             "category":cat,
             "selected_delivery_date":delivery_date,
             "selected_next_delivery_date":next_delivery_date,
@@ -1689,7 +1685,7 @@ def cached_ordering_review(
 
     return {
         **cached,
-        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
+        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V17_ASYNC_ORDERING_QUALITY",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
         "refresh_error":err,
