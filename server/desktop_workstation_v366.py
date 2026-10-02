@@ -212,6 +212,40 @@ DESKTOP_WORKSTATION_JS = r"""
     if(cache.pricing&&Date.now()-cache.pricingAt<60000)return cache.pricing;
     cache.pricing=await getJson('/v1/yipman/pricing-review?category=ALL&limit=1000');cache.pricingAt=Date.now();return cache.pricing;
   }
+  async function familyAnalysis(family){
+    activeAnalysis={view:'quick',key:family};loading('quick','Item Intelligence','Family '+family);
+    try{
+      var d=await getJson('/v1/backoffice/inventory?category=ALL&limit=100&lightweight=false&q='+encodeURIComponent(family));
+      var rows=(d.rows||[]).filter(function(x){return String(x.family_article||'')===String(family)});
+      if(!rows.length)rows=d.rows||[];
+      if(!rows.length)throw new Error('Family not found');
+      rows.sort(function(a,b){return n(b.qty_7d)-n(a.qty_7d)});
+      var r=rows[0],rec=Array.isArray(r.family_receipt_history)?r.family_receipt_history:[];
+      var uom=r.family_group_movement_uom||r.family_source_movement_uom||r.family_receipt_7d_uom||r.family_oh_uom||'';
+      var familyMvt=r.family_group_movement_7d!=null?r.family_group_movement_7d:r.family_source_movement_7d;
+      var familyAvg=r.family_group_avg_qty_day!=null?r.family_group_avg_qty_day:r.family_source_avg_qty_day;
+      var upcs=rows.slice(0,12).map(function(x){
+        return '<tr><td><b>'+esc(x.upc||'—')+'</b><div class="meta">'+esc(x.name||'')+'</div></td><td>'+fmt(x.qty_7d)+' '+esc(x.selling_uom||'')+'</td><td>'+fmt(x.velocity_7d)+' /d</td><td>'+money(x.price)+'</td><td>'+money(x.cost)+'</td><td>'+pct(x.gp_pct)+'</td></tr>';
+      }).join('');
+      var receipts=rec.slice(0,6).map(function(x){
+        return '<tr><td>'+esc(x.receipt_date||x.date||'—')+'</td><td><b>'+fmt(x.receipt_qty!=null?x.receipt_qty:x.quantity)+' '+esc(x.receipt_uom||x.uom||'')+'</b></td><td>'+esc(x.receipt_movement_type||x.movement_type||'GR')+'</td><td>'+esc(x.purchase_order||x.po_number||'—')+'</td><td>'+esc(x.gr_number||x.document_number||'—')+'</td></tr>';
+      }).join('');
+      var html='<div class="v366-metrics">'+
+        metric('Family 7D MVT',fmt(familyMvt)+' '+uom,fmt(familyAvg)+' / day')+
+        metric('7D Receipt',fmt(r.family_receipt_7d_qty)+' '+(r.family_receipt_7d_uom||uom),fmt(r.family_receipt_7d_day_count)+' receipt day(s)')+
+        metric('Effective OH',fmt(r.family_oh)+' '+(r.family_oh_uom||uom),'DOS '+fmt(r.dos))+
+      '</div>'+
+      '<div class="v366-section"><h4>Family / Inventory</h4>'+kv([
+        ['Family Article',family],['Category',r.category||'—'],['Receiving / Ordering #',r.receiving_article||r.family_source_article||'—'],
+        ['Effective OH',fmt(r.family_oh)+' '+(r.family_oh_uom||uom)],['DOH',fmt(r.doh)],['DOS',fmt(r.dos)],['Readiness',r.readiness||'—']
+      ])+'</div>'+
+      '<div class="v366-section"><h4>Recent Family Receipts</h4>'+(receipts?'<table class="v366-mini-table"><thead><tr><th>Date</th><th>Qty</th><th>MVT</th><th>PO</th><th>GR</th></tr></thead><tbody>'+receipts+'</tbody></table>':'<div class="v366-side-empty">No recent receipt detail.</div>')+'</div>'+
+      '<div class="v366-section"><h4>Related UPCs · velocity order</h4><table class="v366-mini-table"><thead><tr><th>UPC / Item</th><th>7D Qty</th><th>Velocity</th><th>Price</th><th>Cost</th><th>GP%</th></tr></thead><tbody>'+upcs+'</tbody></table></div>'+
+      '<div class="v366-actions"><button class="v366-action primary" data-v366-open-original="quick-family" data-key="'+esc(family)+'">Open Family Search</button></div>';
+      setSide('quick',String(family)+' · '+(r.family_name||r.name||'Family'),(r.category||'')+' · '+rows.length+' linked UPC'+(rows.length===1?'':'s'),html);
+      wireSideActions();
+    }catch(e){setSide('quick','Item Intelligence','Unable to load Family '+family,'<div class="v366-note warn">'+esc(e.message||e)+'</div>')}
+  }
   async function quickAnalysis(upc){
     activeAnalysis={view:'quick',key:upc};loading('quick','Item Intelligence','UPC '+upc);
     try{
@@ -419,6 +453,7 @@ DESKTOP_WORKSTATION_JS = r"""
     var db=q('#database');if(db)new MutationObserver(function(){if(q('#database.view.on'))setTimeout(dataAnalysis,120)}).observe(db,{childList:true,subtree:true});
   }
   document.addEventListener('click',function(e){
+    var sf=e.target.closest('.stockflow-family-btn');if(sf){e.preventDefault();setTimeout(function(){familyAnalysis(sf.dataset.family)},0);return}
     var qd=e.target.closest('.quickdetailbtn');if(qd){setTimeout(function(){quickAnalysis(qd.dataset.upc)},0);return}
     var od=e.target.closest('.orderdetail');if(od){setTimeout(function(){orderAnalysis(od.dataset.family)},0);return}
     var pd=e.target.closest('.pricedetail');if(pd){setTimeout(function(){priceAnalysis(pd.dataset.upc)},0);return}
