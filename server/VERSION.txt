@@ -1,3 +1,13 @@
+v7.0.390 Quick Check Receipt Reconciliation Fix:
+- Family/Main Article physical 101/109 receipts are now shown as real Receiving Article rows even when linked Receiving Articles also exist.
+- Each Receiving Article row now shows its own 7D receipt subtotal from the same canonical physical receipt pool used by Family 7D Receipt.
+- Family receipt aggregate remains fallback-only and is no longer substituted for an actual Article row.
+- Desktop Quick Check labels Family receipt aggregates as Family Receipt Summary instead of attributing them to one Receiving Article.
+- 107 remains cost-stage evidence only; physical received quantity continues to come from 101 or 109.
+- Regression guards cover source-Article receipt visibility, per-Article 7D subtotals, and desktop aggregate attribution.
+- Yipman shell cache advanced to v390.
+Version: 7.0.390 Single-Service Edition
+
 v7.0.389 Yipman Stock Flow Promo Price Highlight:
 - Recent promotion Stock Flow cards now show weighted AVG PROMO PRICE for the most recent SALE event.
 - AVG PROMO PRICE = SALE-event sales dollars divided by SALE-event quantity converted into the Family movement UOM.
