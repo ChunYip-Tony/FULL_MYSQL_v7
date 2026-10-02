@@ -1,3 +1,14 @@
+v7.0.385 Yipman Ordering Card Ownership Clarity:
+- Future Ordering suggestions now render as separate standalone Family cards instead of visually continuous rows.
+- Each card repeats FAMILY / RECEIVING, OH, and ORDER headers so users can immediately see which values belong to which suggested Family.
+- Historical Receiving Article / Pack Size information is visually nested inside the same parent card under “RELATED RECEIVING ARTICLES FOR THIS ITEM”.
+- Nested history uses an inset light-blue panel, stronger spacing, and a Family label to prevent history from being mistaken for the next suggested item.
+- Pack size remains right-aligned beside its specific historical Receiving Article.
+- Past-date actual receipt-history mode keeps the existing table/list presentation.
+- No ordering calculation, receiving-history, pack-size authority, AI, Quick Check, or Price Review business logic changed.
+- Yipman shell cache advanced to v385.
+Version: 7.0.385 Single-Service Edition
+
 v7.0.384 Yipman Ordering Receiving-Pack History:
 - Ordering suggestions with a positive order quantity now show historically used Receiving Articles for that Family.
 - Each historical Receiving Article shows its most recent receipt date, receipt-event count, and Pack Size.
