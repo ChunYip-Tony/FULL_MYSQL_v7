@@ -147,6 +147,37 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
+      - name: Validate Stock Flow 28-day related-UPC promotion context
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import backoffice_runtime as bo
+
+          src=inspect.getsource(bo.yipman_best_sellers)
+          helper=inspect.getsource(bo._recent_family_sale_event_from_batch)
+          assert 'limit=28' in src
+          assert '"sales_by_price_type"' in src
+          assert 'WHERE family_id IN ({ph})' in src
+          assert "HISTORICAL_ONLY" not in src.split('sales_days_28',1)[1].split('rows: list',1)[0]
+          assert '"recent_promotion_event": recent_promotion' in src
+          assert 'PRICE_TYPE_SALE_ONLY' in src
+          assert 'ANY_RELATED_FAMILY_UPC' in src
+          assert '(obs.get("price_types") or {}).get("SALE")' in helper
+          assert 'TPR' in helper
+          assert 'UNRESOLVED_MIXED_UOM' in helper
+          assert '"related_upcs": sorted(event_upcs)' in helper
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert '.stockdiff.promoted{background:#8df08f' in ui
+          assert 'recent_promotion_event:r.recent_promotion_event||null' in ui
+          assert "RECENT SALE · " in ui
+          assert "SOLD '+fmt(promo.sale_quantity)" in ui
+          assert "promo?' promoted':''" in ui
+          assert "const CACHE='yipman-v386'" in ui
+          print('stock-flow-related-upc-promo-28d=PASS')
+          PY
+
       - name: Validate controlled pricing path, freshness tests, and compact progress UI
         run: |
           python - <<'PY'
