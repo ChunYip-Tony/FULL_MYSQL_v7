@@ -287,7 +287,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .header{position:relative;z-index:20;background:rgba(246,247,249,.98);backdrop-filter:blur(12px)}
 .workspace{height:calc(100% - 62px)}
 #quick{padding-bottom:calc(154px + env(safe-area-inset-bottom))}
-.nav{grid-template-columns:repeat(3,1fr)}
+.nav{grid-template-columns:repeat(3,1fr);z-index:30}
+.dbbtn{position:relative;z-index:31;pointer-events:auto}
 .quicksearch{position:absolute;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:12;margin:0;display:grid;grid-template-columns:42px minmax(0,1fr) 64px;align-items:center;min-height:60px;border:2px solid #1769e0;border-radius:18px;padding:5px 7px;background:#fff;box-shadow:0 9px 24px rgba(13,79,139,.20)}
 .quicksearch:focus-within{border-color:#075b9b;box-shadow:0 10px 27px rgba(13,79,139,.25)}
 .quicksearch>span{display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:10px;background:#e8f3ff;color:#0d5f9f;font-size:20px;font-weight:950}
@@ -1077,7 +1078,6 @@ history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView)
 historyReady=true;
 buildDays();
 renderView(initialView);
-if(initialView==='quick'&&!$('#globalInput').value.trim())loadBestSellers();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();
 </script>
