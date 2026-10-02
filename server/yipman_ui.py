@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v387';
+const CACHE='yipman-v388';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -589,6 +589,33 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .aicomposer input:focus{border-color:#1769e0;box-shadow:0 0 0 3px rgba(23,105,224,.10)}
 .aicomposer button{width:54px;min-height:52px;border:0;border-radius:14px;background:#1b3448;color:#ffd84d;font-size:22px;font-weight:1000}
 @media(max-width:370px){.aiheadcopy h2{font-size:23px}.aiheadcopy p{font-size:9px}.aibubble{font-size:12px;padding:11px 12px}.aibubble b{font-size:13px}.aicomposer input{font-size:15px}}
+
+
+/* V388 clarity pass: thicker Quick Search + article color separation. */
+.quicksearch{border-width:2.4px}
+
+#order .orderitemcard,
+#price .pcard{
+  --article-accent:#ddb916;
+  --article-wash:#fff3b7;
+  background:linear-gradient(100deg,var(--article-wash),#fff 62%);
+  border-color:var(--article-accent);
+  border-left:5px solid var(--article-accent)!important;
+}
+#order .orderitemcard.tone1,#price .pcard.tone1{--article-accent:#58bd70;--article-wash:#e2f6e6}
+#order .orderitemcard.tone2,#price .pcard.tone2{--article-accent:#4a9de2;--article-wash:#e6f2fc}
+#order .orderitemcard.tone3,#price .pcard.tone3{--article-accent:#ef72a5;--article-wash:#fde7ef}
+#order .orderitemcard.tone4,#price .pcard.tone4{--article-accent:#9b7be0;--article-wash:#eee8fb}
+#order .orderitemhead{background:rgba(255,255,255,.62);border-bottom-color:rgba(80,95,110,.14)}
+#order .orderrecvhistory{border-color:color-mix(in srgb,var(--article-accent) 45%,#d8e5ef);background:rgba(255,255,255,.58)}
+#order .orderrecvhistoryhead{background:rgba(255,255,255,.56);border-bottom-color:rgba(80,95,110,.12)}
+#order .receivingline{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:7px;row-gap:2px;align-items:baseline}
+#order .receivingline .receivingname{grid-column:2;font-size:10px;color:#465d70;font-weight:900;line-height:1.18;white-space:normal;overflow:visible}
+#order .orderrecvarticle .receivingname{display:block;font-size:9px;line-height:1.16;color:#344b5e;font-weight:950;margin-top:2px;white-space:normal}
+#price .pcard{border-width:1.5px}
+#price .pcard .pp,#price .pcard .pcost,#price .pcard .pm{background-color:rgba(255,255,255,.68)}
+.stockpromo .promolift{display:block;font-size:9px;line-height:1.15;color:#164f24;font-weight:1000;margin-top:2px;white-space:nowrap}
+.stockpromo .promobasis{display:block;font-size:6.5px;line-height:1.15;color:#245b32;font-weight:900;margin-top:2px;white-space:nowrap}
 
 </style>
 </head>
@@ -1389,8 +1416,10 @@ function stockFlowFamilyHtml(g,idx){
  const count=num(g.family_receipt_7d_day_count),diff=num(g.receipt_minus_selling_7d),ratio=num(g.receipt_to_selling_ratio),promo=g.recent_promotion_event||null;
  const recent=history.length?history.map(x=>'<button type="button" class="bestreceipt receiptlink" data-receipt-family="'+esc(g.family_id??'')+'" data-receipt-article="" data-receipt-date="'+esc(x.date||'')+'"><span>'+esc(quickReceiptDay(x.date))+'</span><b>'+fmt(x.quantity)+' '+esc(x.uom||receiptUom)+'</b></button>').join(''):'<div class="bestreceipt"><span>No recent receipt</span><b>—</b></div>';
  const promoRange=promo?(shortDate(promo.start_date)+(String(promo.end_date||'')&&String(promo.end_date)!==String(promo.start_date)?'–'+shortDate(promo.end_date):'')):'';
- const promoQty=promo&&String(promo.sale_quantity_status||'').toUpperCase()==='READY'&&num(promo.sale_quantity)!==null?'<span>SOLD '+fmt(promo.sale_quantity)+' '+esc(promo.sale_quantity_uom||uom)+'</span>':'';
- const promoHtml=promo?'<div class="stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoQty+'</div>':'';
+ const promoExtra=promo&&String(promo.promotion_week_extra_qty_status||'').toUpperCase()==='READY'&&num(promo.promotion_week_extra_qty)!==null
+   ? '<span class="promolift">EXTRA '+(num(promo.promotion_week_extra_qty)>=0?'+':'')+fmt(promo.promotion_week_extra_qty)+' '+esc(promo.promotion_week_extra_qty_uom||uom)+'</span><span class="promobasis">VS NORMAL NON-PROMO WEEK</span>'
+   : '<span class="promobasis">EXTRA QTY BASELINE UNAVAILABLE</span>';
+ const promoHtml=promo?'<div class="stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+'</div>':'';
  return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="stockdiff'+(promo?' promoted':'')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(ratio===null?'—':((ratio-1)*100).toFixed(0)+'% over selling')+'</span>'+promoHtml+'</div></div>'+
    '<div class="bestmetrics"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div></div>'+
@@ -1804,11 +1833,11 @@ function renderOrderRoster(rows,data,h,stale){
   const shownHist=hist.slice(0,3);
   const histHtml=shownHist.length
     ? '<div class="orderrecvhistory"><div class="orderrecvhistoryhead"><span class="orderrecvhistoryicon">◇</span><b>RELATED RECEIVING ARTICLES FOR THIS ITEM</b><span>FAMILY '+esc(r.family_article||'—')+'</span></div>'
-      +shownHist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b><span>Last received '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK SIZE</span></div></div>').join('')
+      +shownHist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span>Last received '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK SIZE</span></div></div>').join('')
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  return '<article class="orderitemcard'+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY / RECEIVING</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="receivingline"><span>RECEIVING</span><b>'+esc(r.receiving_article||'—')+'</b></div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY / RECEIVING</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="receivingline"><span>RECEIVING</span><b>'+esc(r.receiving_article||'—')+'</b>'+(r.receiving_article_name?'<span class="receivingname">'+esc(r.receiving_article_name)+'</span>':'')+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -2086,7 +2115,7 @@ async function loadPrices(opts={}){
     const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
     const companyText=(companyLow!==null&&companyHigh!==null)?money(companyLow)+'–'+money(companyHigh):'—';
     const detailSignals=(Array.isArray(r.reasons)?r.reasons:[]).map(x=>'• '+esc(friendlySignal(x))).join('<br>');
-    return '<article class="pcard" data-price="'+i+'">'+
+    return '<article class="pcard tone'+(i%5)+'" data-price="'+i+'">'+
       '<div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
       '<div class="pricepath">'+
         '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div>'+
