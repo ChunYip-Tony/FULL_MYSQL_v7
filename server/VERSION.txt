@@ -1,3 +1,15 @@
+v7.0.388 Yipman Card Separation + Promotion Week Lift:
+- Quick Search border increased 20% from 2.0px to 2.4px.
+- Ordering suggestion cards and Price Review cards now cycle through the same five pastel article tones used by Stock Flow, improving visual separation between unrelated items.
+- Ordering Receiving Article now shows both the SAP Article number and resolved Article name when available.
+- Historical related Receiving Articles also show Article names beside their numbers and pack sizes.
+- Stock Flow recent promotion context no longer displays raw SALE-event sold quantity.
+- Stock Flow now displays promotion-week EXTRA quantity: actual Family sales over the latest 7 completed POS days ending at the recent SALE event end date minus the expected normal quantity from non-SALE completed days outside that week in the latest 28-day window.
+- Missing POS dates remain ignored rather than zero-filled; TPR remains non-promotion; unresolved mixed UOM or insufficient non-promo baseline does not fabricate an uplift.
+- Stock Flow contract advanced to YIPMAN_STOCK_FLOW_V3_PROMOTION_WEEK_EXTRA_QTY.
+- Yipman shell cache advanced to v388.
+Version: 7.0.388 Single-Service Edition
+
 v7.0.387 Stock Flow Recent Promotion Context:
 - Stock Flow Watch scans every related UPC in each qualifying Family for SALE history across the latest 28 completed canonical POS sales days.
 - TPR is not promotion; only PRICE_TYPE=SALE qualifies.
