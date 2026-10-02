@@ -209,8 +209,9 @@ jobs:
           assert 'YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW' in src
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
-          assert '— / Not established' in ui
-          assert '— / None active' in ui
+          assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
+          assert "setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'None')" in ui
+          assert '.qprice b.qempty' in ui
           assert 'hydrateQuickPrices(rows,requestId,attempt+1)' in ui
           assert 'price_review_analysis_status' in ui
           print('quick-check-canonical-tested-testing=PASS')
