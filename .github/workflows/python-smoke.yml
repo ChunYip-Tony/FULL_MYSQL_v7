@@ -257,6 +257,11 @@ jobs:
           assert 'APPLY_ARTICLE_FAMILY_FIX' in ui
           assert 'RAW source data is never changed' in ui
           assert 'class="cbmeta"' in ui
+          assert '#order .orow .name{font-size:15px' in ui
+          assert '#order .cell{font-size:15px' in ui
+          assert '#price .ptop b{font-size:17px!important}' in ui
+          assert '#price .pp b{font-size:23px}' in ui
+          assert '#price .pm b{font-size:13px}' in ui
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
