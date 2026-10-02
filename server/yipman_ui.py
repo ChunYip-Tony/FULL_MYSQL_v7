@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v367';
+const CACHE='yipman-v368';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1566,7 +1566,7 @@ function openPrice(r){
  '<br>GP$/day now '+money(r.current_gp_per_day_7d)+' · supported target evidence '+money(r.candidate_expected_gp_per_day)+
  '<br><br><b>Company A/B/C range</b><br>'+esc(company)+(r.company_range_violation?' · CURRENT OUTSIDE RANGE':'')+
  '<br><br><b>Current price evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
- '<br><br><b>Testing rule</b><br>Start from CURRENT. Testing must move at least $0.45 up or down when a test is shown. Prefer a supported observed price; for higher-priced items keep the gradual step around 5% of Current. Re-check completed-day velocity and GP$/day before the next step.'+
+ '<br><br><b>Testing rule</b><br>Start from CURRENT. Testing must move at least $0.45 up or down and use a normal store price ending: .29 / .49 / .69 / .79 / .99. Suggested sweet-spot targets use the same endings. Tested stays the actual proved historical price. Re-check completed-day velocity and GP$/day before the next step.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
  '<div class="actions"><button class="secondary" id="priceIgnore30">IGNORE 30 MIN</button>'+(String(r.review_status||'').toUpperCase()==='ACTIONABLE'&&r.current_price!=null&&r.candidate_price!=null?'<button class="primary" id="priceAccept">ACCEPTED</button>':'')+'</div>');
