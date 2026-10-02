@@ -145,6 +145,29 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
+      - name: Validate Quick Check canonical Tested Testing prices
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import backoffice_runtime as bo
+
+          src=inspect.getsource(bo.quick_price_preview)
+          assert 'cached_pricing_review(' in src
+          assert 'BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT' in src
+          assert 'SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'SAME_CANONICAL_TESTING_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert '_quick_price_preview_by_upc(' not in src
+          assert 'YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW' in src
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert '— / Not established' in ui
+          assert '— / None active' in ui
+          assert 'hydrateQuickPrices(rows,requestId,attempt+1)' in ui
+          assert 'price_review_analysis_status' in ui
+          print('quick-check-canonical-tested-testing=PASS')
+          PY
+
       - name: Validate Yipman Ordering suggestion quality
         run: |
           python - <<'PY'
