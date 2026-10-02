@@ -1,3 +1,11 @@
+v7.0.385 Stock Flow Recent Promotion Context:
+- Stock Flow Watch now checks the latest 28 completed canonical POS sales days for Family promotion history.
+- Promotion detection is SALE-only; TPR is not treated as promotion.
+- When a Family has a SALE event in that 28-day history, its Difference container is highlighted bright green.
+- The green Difference container shows the most recent SALE event date/range and the event POS sold quantity when all SALE-active UPC quantities can be safely converted to the Family movement UOM.
+- If event quantity cannot be safely resolved into the Family movement UOM, the event date is still shown but quantity is not guessed.
+Version: 7.0.385 Single-Service Edition
+
 v7.0.384 Yipman Ordering Receiving-Pack History:
 - Ordering suggestions with a positive order quantity now show historically used Receiving Articles for that Family.
 - Each historical Receiving Article shows its most recent receipt date, receipt-event count, and Pack Size.
