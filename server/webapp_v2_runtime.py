@@ -335,10 +335,15 @@ def _price_sales_trend(
     }
 
 def _promotion_type(start: date, end: date) -> str:
+    """Classify the two Store #1032 promotion windows.
+
+    WEEKLY is Thursday through the following Thursday, inclusive (8 days).
+    WEEKEND is Friday through Sunday, inclusive (3 days).
+    """
     duration = (end - start).days + 1
     if start.weekday() == 4 and end.weekday() == 6 and duration == 3:
         return "WEEKEND"
-    if start.weekday() == 3 and end.weekday() == 4 and duration == 9:
+    if start.weekday() == 3 and end.weekday() == 3 and duration == 8:
         return "WEEKLY"
     return "OTHER"
 
@@ -2825,6 +2830,7 @@ def bulk_ordering_suggestions(
     promotion_start_date: date|None=None,
     promotion_end_date: date|None=None,
     promotion_items: list[dict[str,Any]]|None=None,
+    temporary_oh_overrides: list[dict[str,Any]]|None=None,
 ) -> dict[str,Any]:
     """Read-only Family Article ordering simulator for the main Ordering page."""
     kind=str(order_type or "").strip().upper()
@@ -2840,19 +2846,67 @@ def bulk_ordering_suggestions(
         raise ValueError("NEXT_DELIVERY_MUST_BE_AFTER_DELIVERY_DATE")
 
     promo_map={}
-    for item in promotion_items or []:
+    normalized_promo_items=[]
+    for raw_item in promotion_items or []:
+        item=dict(raw_item)
         key=str(item.get("family_article_number") or item.get("family_id") or "").strip()
-        if key:
-            promo_map[key]=item
+        if not key:
+            continue
+        item_start=item.get("promotion_start_date") or promotion_start_date
+        item_end=item.get("promotion_end_date") or promotion_end_date
+        if isinstance(item_start,str):
+            item_start=date.fromisoformat(item_start)
+        if isinstance(item_end,str):
+            item_end=date.fromisoformat(item_end)
+        item["promotion_start_date"]=item_start
+        item["promotion_end_date"]=item_end
+        if item_start is not None and item_end is not None:
+            inferred=_promotion_type(item_start,item_end)
+            supplied=str(item.get("promotion_type") or inferred).strip().upper()
+            item["promotion_type"]=supplied
+            item["inferred_promotion_type"]=inferred
+        promo_map[key]=item
+        if item.get("family_id") is not None:
+            promo_map[str(item.get("family_id"))]=item
+        if item.get("family_article_number"):
+            promo_map[str(item.get("family_article_number"))]=item
+        normalized_promo_items.append(item)
+
+    temp_oh_map={}
+    for raw_override in temporary_oh_overrides or []:
+        override=dict(raw_override)
+        key=str(override.get("family_article_number") or override.get("family_id") or "").strip()
+        if not key:
+            continue
+        qty=override.get("quantity")
+        if qty is None:
+            raise ValueError("TEMPORARY_OH_QUANTITY_REQUIRED")
+        qty_d=Decimal(str(qty))
+        if qty_d < 0:
+            raise ValueError("TEMPORARY_OH_NEGATIVE")
+        override["quantity"]=qty_d
+        temp_oh_map[key]=override
+        if override.get("family_id") is not None:
+            temp_oh_map[str(override.get("family_id"))]=override
+        if override.get("family_article_number"):
+            temp_oh_map[str(override.get("family_article_number"))]=override
 
     if promotion_involved:
-        if promotion_start_date is None or promotion_end_date is None:
-            raise ValueError("PROMOTION_DATES_REQUIRED")
-        if promotion_end_date < promotion_start_date:
-            raise ValueError("PROMOTION_END_BEFORE_START")
         if not promo_map:
             raise ValueError("PROMOTION_ITEMS_REQUIRED")
-        for item in promo_map.values():
+        for item in normalized_promo_items:
+            item_start=item.get("promotion_start_date")
+            item_end=item.get("promotion_end_date")
+            if item_start is None or item_end is None:
+                raise ValueError("PROMOTION_ITEM_DATES_REQUIRED")
+            if item_end < item_start:
+                raise ValueError("PROMOTION_END_BEFORE_START")
+            inferred=str(item.get("inferred_promotion_type") or "OTHER").upper()
+            supplied=str(item.get("promotion_type") or inferred).upper()
+            if supplied not in {"WEEKLY","WEEKEND"}:
+                raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_OR_WEEKEND")
+            if inferred != supplied:
+                raise ValueError("PROMOTION_DATES_DO_NOT_MATCH_TYPE")
             if item.get("promotion_price") is None:
                 raise ValueError("PROMOTION_ITEM_PRICE_REQUIRED")
             if Decimal(str(item.get("promotion_price"))) <= 0:
@@ -2894,8 +2948,15 @@ def bulk_ordering_suggestions(
 
             active_28=_d(m28.get("sold_quantity"))>0
             vel7=m7.get("velocity_per_supported_day")
+            demand_uom=str(m7.get("uom") or "").upper()
+            fam_key=str(fam.get("main_article_number") or "")
+            promo_item=promo_map.get(fam_key) or promo_map.get(str(fid))
+            temp_override=temp_oh_map.get(fam_key) or temp_oh_map.get(str(fid))
             family_oh=_family_effective_oh(cur,rows)
-            if family_oh.get("status")!="READY" or family_oh.get("quantity") is None:
+
+            if temp_override is None and (
+                family_oh.get("status")!="READY" or family_oh.get("quantity") is None
+            ):
                 skipped.append({
                     "family_id":fid,
                     "family_article_number":fam.get("main_article_number"),
@@ -2909,27 +2970,47 @@ def bulk_ordering_suggestions(
                 })
                 continue
 
-            oh_uom=str(family_oh.get("uom") or "").upper()
-            demand_uom=str(m7.get("uom") or "").upper()
-            if not oh_uom or oh_uom!=demand_uom:
-                skipped.append({
-                    "family_id":fid,
-                    "family_article_number":fam.get("main_article_number"),
-                    "family_article_name":fam.get("family_description"),
-                    "reason":"OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED",
-                    "qty_7d":m7.get("sold_quantity"),
-                    "qty_28d":m28.get("sold_quantity"),
-                    "velocity_7d":vel7,
-                    "oh":family_oh.get("quantity"),
-                    "oh_uom":family_oh.get("uom"),
-                    "demand_uom":demand_uom or None,
-                })
-                continue
-
-            raw_oh=_d(family_oh.get("quantity"))
-            ordering_oh=max(Decimal("0"),raw_oh)
+            system_oh_uom=str(family_oh.get("uom") or "").upper()
+            if temp_override is not None:
+                override_uom=str(temp_override.get("uom") or demand_uom).strip().upper()
+                if not demand_uom or override_uom!=demand_uom:
+                    skipped.append({
+                        "family_id":fid,
+                        "family_article_number":fam.get("main_article_number"),
+                        "family_article_name":fam.get("family_description"),
+                        "reason":"TEMPORARY_OH_UOM_MISMATCH",
+                        "temporary_oh_uom":override_uom or None,
+                        "demand_uom":demand_uom or None,
+                    })
+                    continue
+                raw_oh=(
+                    _d(family_oh.get("quantity"))
+                    if family_oh.get("quantity") is not None else None
+                )
+                ordering_oh=_d(temp_override.get("quantity"))
+                oh_uom=demand_uom
+                temporary_oh_used=True
+            else:
+                oh_uom=system_oh_uom
+                if not oh_uom or oh_uom!=demand_uom:
+                    skipped.append({
+                        "family_id":fid,
+                        "family_article_number":fam.get("main_article_number"),
+                        "family_article_name":fam.get("family_description"),
+                        "reason":"OH_TO_FAMILY_DEMAND_UOM_UNRESOLVED",
+                        "qty_7d":m7.get("sold_quantity"),
+                        "qty_28d":m28.get("sold_quantity"),
+                        "velocity_7d":vel7,
+                        "oh":family_oh.get("quantity"),
+                        "oh_uom":family_oh.get("uom"),
+                        "demand_uom":demand_uom or None,
+                    })
+                    continue
+                raw_oh=_d(family_oh.get("quantity"))
+                ordering_oh=max(Decimal("0"),raw_oh)
+                temporary_oh_used=False
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-            if not active_28:
+            if not active_28 and not (promotion_involved and promo_item):
                 skipped.append({
                     "family_id":fid,
                     "family_article_number":fam.get("main_article_number"),
@@ -2977,17 +3058,19 @@ def bulk_ordering_suggestions(
                 })
                 continue
 
-            fam_key=str(fam.get("main_article_number") or "")
-            promo_item=promo_map.get(fam_key) or promo_map.get(str(fid))
             promo_history=_family_historical_sale_periods(cur,rows,365) if promo_item else []
             promo_baseline=None
             promo_vel=None
             promo_fallback=False
+            item_promo_start=None
+            item_promo_end=None
             if promotion_involved and promo_item:
+                item_promo_start=promo_item.get("promotion_start_date")
+                item_promo_end=promo_item.get("promotion_end_date")
                 promo_baseline=_family_promotion_baseline(
                     promo_history,
-                    promotion_start_date,
-                    promotion_end_date,
+                    item_promo_start,
+                    item_promo_end,
                     promo_item.get("promotion_price"),
                 )
                 promo_vel=promo_baseline.get("promotion_velocity_per_day")
@@ -2997,21 +3080,45 @@ def bulk_ordering_suggestions(
 
             total=Decimal("0")
             before_delivery=Decimal("0")
+            coverage_usage=Decimal("0")
+            segments={
+                "REGULAR":Decimal("0"),
+                "PROMOTION":Decimal("0"),
+                "REGULAR_BEFORE_DELIVERY":Decimal("0"),
+                "PROMOTION_BEFORE_DELIVERY":Decimal("0"),
+                "REGULAR_COVERAGE":Decimal("0"),
+                "PROMOTION_COVERAGE":Decimal("0"),
+            }
+            daily_forecast=[]
             day=order_day
-            segments={"REGULAR":Decimal("0"),"PROMOTION":Decimal("0")}
             while day<next_next:
                 is_promo=bool(
                     promotion_involved and promo_item
-                    and promotion_start_date<=day<=promotion_end_date
+                    and item_promo_start<=day<=item_promo_end
                 )
+                segment="PROMOTION" if is_promo else "REGULAR"
                 use_vel=_d(promo_vel if is_promo else reg_vel)
                 total+=use_vel
-                segments["PROMOTION" if is_promo else "REGULAR"]+=use_vel
+                segments[segment]+=use_vel
                 if day<delivery:
                     before_delivery+=use_vel
+                    segments[segment+"_BEFORE_DELIVERY"]+=use_vel
+                    phase="BEFORE_DELIVERY"
+                else:
+                    coverage_usage+=use_vel
+                    segments[segment+"_COVERAGE"]+=use_vel
+                    phase="COVERAGE"
+                daily_forecast.append({
+                    "date":day,
+                    "phase":phase,
+                    "price_regime":segment,
+                    "forecast_quantity":use_vel,
+                })
                 day+=timedelta(days=1)
 
-            suggested=max(Decimal("0"),total-ordering_oh)
+            projected_at_delivery=ordering_oh-before_delivery
+            usable_at_delivery=max(Decimal("0"),projected_at_delivery)
+            suggested=max(Decimal("0"),coverage_usage-usable_at_delivery)
             suggestions.append({
                 "family_id":fid,
                 "family_article_number":fam.get("main_article_number"),
@@ -3019,7 +3126,16 @@ def bulk_ordering_suggestions(
                 "category":kind,
                 "effective_oh_raw":raw_oh,
                 "ordering_oh_used":ordering_oh,
-                "negative_oh_treated_as_zero":raw_oh<0,
+                "temporary_oh_override_used":temporary_oh_used,
+                "temporary_oh_override":(
+                    {
+                        "quantity":ordering_oh,
+                        "uom":demand_uom,
+                        "persistence":"REQUEST_ONLY_NOT_SAVED",
+                    }
+                    if temporary_oh_used else None
+                ),
+                "negative_oh_treated_as_zero":bool(raw_oh is not None and raw_oh<0),
                 "uom":demand_uom,
                 "qty_7d":m7.get("sold_quantity"),
                 "supported_days_7d":m7.get("supported_day_count"),
@@ -3041,7 +3157,14 @@ def bulk_ordering_suggestions(
                 "forecast_promotion_usage":segments["PROMOTION"],
                 "forecast_total_usage":total,
                 "forecast_usage_before_delivery":before_delivery,
-                "projected_oh_at_delivery":ordering_oh-before_delivery,
+                "forecast_regular_before_delivery":segments["REGULAR_BEFORE_DELIVERY"],
+                "forecast_promotion_before_delivery":segments["PROMOTION_BEFORE_DELIVERY"],
+                "forecast_coverage_usage":coverage_usage,
+                "forecast_regular_coverage":segments["REGULAR_COVERAGE"],
+                "forecast_promotion_coverage":segments["PROMOTION_COVERAGE"],
+                "projected_oh_at_delivery":projected_at_delivery,
+                "usable_oh_at_delivery":usable_at_delivery,
+                "daily_forecast":daily_forecast,
                 "suggested_order_qty":suggested,
                 "suggested_order_uom":demand_uom,
                 "readiness":(
@@ -3054,7 +3177,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V2_TWO_DATE_WINDOW",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V3_PROMOTION_ITEM_WINDOWS",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -3073,7 +3196,8 @@ def bulk_ordering_suggestions(
             "promotion_involved":bool(promotion_involved),
             "promotion_start_date":promotion_start_date,
             "promotion_end_date":promotion_end_date,
-            "promotion_items":promotion_items or [],
+            "promotion_items":normalized_promo_items,
+            "temporary_oh_override_count":len(temporary_oh_overrides or []),
         },
         "eligibility":{
             "active_selling":"POSITIVE_QTY_IN_LATEST_28_COMPLETED_CANONICAL_POS_DAYS",
@@ -3096,6 +3220,11 @@ def bulk_ordering_suggestions(
             "tpr_is_promotion":False,
             "coverage_target":"THROUGH_DAY_BEFORE_SELECTED_NEXT_DELIVERY",
             "coverage_window_user_selectable":True,
+            "promotion_window_per_item":True,
+            "promotion_types":["WEEKLY_THURSDAY_TO_THURSDAY","WEEKEND_FRIDAY_TO_SUNDAY"],
+            "temporary_oh_override_is_request_only":True,
+            "temporary_oh_override_writes_database":False,
+            "suggested_order_basis":"COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY",
             "saved":False,
             "submitted":False,
         },

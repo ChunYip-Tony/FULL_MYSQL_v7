@@ -52,6 +52,13 @@ from qa_resolution import (
     resolve_article_family_issue as backoffice_resolve_article_family_issue,
 )
 from webapp_v2_runtime import search_items as v2_search_items, family_info as v2_family_info, upc_info as v2_upc_info, price_analysis as v2_price_analysis, ordering_analysis as v2_ordering_analysis, family_promotion_history as v2_family_promotion_history, pi_search_items as v2_pi_search_items, pi_item as v2_pi_item, submit_family_true_stock as v2_submit_family_true_stock, performance_report as v2_performance_report, performance_range as v2_performance_range, latest_performance_date as v2_latest_performance_date, performance_supported_dates as v2_performance_supported_dates
+from promotion_ordering import (
+    create_promotion_list as create_yipman_promotion_list,
+    list_promotion_lists as list_yipman_promotion_lists,
+    get_promotion_list as get_yipman_promotion_list,
+    calculate_promotion_order as calculate_yipman_promotion_order,
+    parse_promotion_upload as parse_yipman_promotion_upload,
+)
 from version import VERSION
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 
@@ -3526,6 +3533,21 @@ class BackofficePriceAcceptRequest(BaseModel):
     candidate_price: Decimal
 
 
+class YipmanPromotionListRequest(BaseModel):
+    list_name: str
+    items: list[dict[str,Any]]
+    weekly_start_date: date | None = None
+    weekend_start_date: date | None = None
+    source_filename: str | None = None
+
+
+class YipmanPromotionOrderRequest(BaseModel):
+    list_id: int
+    delivery_date: date
+    next_delivery_date: date
+    temporary_oh_overrides: list[dict[str,Any]] = []
+
+
 @app.get('/v1/backoffice/home-summary')
 def backoffice_home_summary_endpoint():
     try:
@@ -3759,6 +3781,93 @@ def backoffice_pricing_accept(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice price suggestion accept failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/promotion-lists')
+def yipman_promotion_lists(limit:int=20):
+    try:
+        result=list_yipman_promotion_lists(limit=limit)
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman promotion list load failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/promotion-lists/{list_id}')
+def yipman_promotion_list_detail(list_id:int):
+    try:
+        result=get_yipman_promotion_list(list_id)
+    except KeyError:
+        raise HTTPException(404,'Promotion list not found')
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman promotion list detail failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/promotion-lists')
+def yipman_save_promotion_list(
+    body:YipmanPromotionListRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=create_yipman_promotion_list(
+            body.list_name,
+            body.items,
+            weekly_start_date=body.weekly_start_date,
+            weekend_start_date=body.weekend_start_date,
+            source_filename=body.source_filename,
+            created_by=actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman promotion list save failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/promotion-lists/import')
+async def yipman_import_promotion_list(
+    file: UploadFile=File(...),
+    list_name:str|None=None,
+    weekly_start_date:date|None=None,
+    weekend_start_date:date|None=None,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        content=await file.read()
+        items=parse_yipman_promotion_upload(file.filename or 'promotion.xlsx',content)
+        result=create_yipman_promotion_list(
+            list_name or file.filename or 'Promotion List',
+            items,
+            weekly_start_date=weekly_start_date,
+            weekend_start_date=weekend_start_date,
+            source_filename=file.filename,
+            created_by=actor,
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman promotion list import failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/promotion-ordering/calculate')
+def yipman_promotion_order_calculate(body:YipmanPromotionOrderRequest):
+    try:
+        result=calculate_yipman_promotion_order(
+            body.list_id,
+            body.delivery_date,
+            body.next_delivery_date,
+            temporary_oh_overrides=body.temporary_oh_overrides,
+        )
+    except KeyError:
+        raise HTTPException(404,'Promotion list not found')
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman promotion ordering failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
