@@ -3193,7 +3193,9 @@ def _tested_testing_prices(
     current_price = _positive_price(current)
     tested_price = _positive_price(tested)
     target_price = _positive_price(target)
-    anchor = tested_price or current_price
+    # Testing always starts from the live CURRENT price. Tested is the
+    # strongest proved reference, never the starting point for a new action.
+    anchor = current_price
     testing_price = _next_testing_price(
         anchor,
         target_price,
@@ -3204,8 +3206,74 @@ def _tested_testing_prices(
         "testing_price": testing_price,
         "target_sweet_spot_price": target_price,
         "testing_anchor_price": anchor,
-        "testing_step_rule": "NEAREST_OBSERVED_PRICE_WITHIN_5PCT_ELSE_MAX_5PCT_STEP",
+        "testing_step_rule": "CURRENT_TO_TARGET_NEAREST_OBSERVED_WITHIN_5PCT_ELSE_MAX_5PCT_STEP",
     }
+
+
+def _freshness_velocity_target(
+    *,
+    current: Any,
+    current_cost: Any,
+    current_velocity: Any,
+    observed_candidates: list[dict[str, Any]] | None = None,
+    company_low: Any = None,
+    company_high: Any = None,
+) -> Decimal | None:
+    """Choose a conservative lower target for a freshness/velocity test.
+
+    Prefer a historically observed lower price that produced better velocity,
+    while staying above current cost and inside the applicable Company range.
+    If history has no qualifying lower point, use one exploratory 5% markdown
+    step subject to those same floors.
+    """
+    current_price = _positive_price(current)
+    cost = _positive_price(current_cost)
+    if current_price is None or cost is None:
+        return None
+
+    low = _positive_price(company_low)
+    high = _positive_price(company_high)
+    floor = cost + Decimal("0.01")
+    if low is not None:
+        floor = max(floor, low)
+    if floor >= current_price:
+        return None
+
+    velocity = _d(current_velocity) if current_velocity is not None else Decimal("0")
+    eligible: list[dict[str, Any]] = []
+    for item in observed_candidates or []:
+        price = _positive_price((item or {}).get("price"))
+        if price is None or not (floor <= price < current_price):
+            continue
+        if high is not None and price > high:
+            continue
+        observed_velocity = (
+            _d((item or {}).get("observed_velocity_per_day"))
+            if (item or {}).get("observed_velocity_per_day") is not None
+            else Decimal("0")
+        )
+        if observed_velocity <= velocity:
+            continue
+        eligible.append(item)
+
+    if eligible:
+        eligible.sort(
+            key=lambda x: (
+                float(x.get("gp_per_observed_day_at_current_cost") or Decimal("-999999")),
+                float(x.get("observed_velocity_per_day") or Decimal("0")),
+                float(x.get("price") or Decimal("0")),
+            ),
+            reverse=True,
+        )
+        return _positive_price(eligible[0].get("price"))
+
+    exploratory = (current_price * Decimal("0.95")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    exploratory = max(exploratory, floor)
+    if high is not None:
+        exploratory = min(exploratory, high)
+    return exploratory if exploratory < current_price - Decimal("0.01") else None
 
 
 def _quick_price_preview_by_upc(
@@ -5098,56 +5166,176 @@ def pricing_review(
 
         target_candidate = _positive_price(row.get("candidate_price"))
         tested_price = _positive_price(live.get("sweet_spot_price"))
-        path = _tested_testing_prices(
-            current=current_price,
-            tested=tested_price,
-            target=target_candidate,
-            observed_candidates=row.get("top_observed_candidates"),
-        )
-        testing_price = path.get("testing_price")
-        row["tested_price"] = tested_price
-        row["testing_price"] = testing_price
-        row["target_sweet_spot_price"] = target_candidate
-        row["testing_step_rule"] = path.get("testing_step_rule")
-
+        observed_candidates = list(row.get("top_observed_candidates") or [])
+        current_dec = _positive_price(current_price)
+        cost_dec = _positive_price(current_cost)
         current_oh = _d(live.get("current_oh")) if live.get("current_oh") is not None else None
+
+        row["tested_price"] = tested_price
+        row["tested_price_basis"] = "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_MAX_GP_PER_DAY"
+        row["target_sweet_spot_price"] = target_candidate
+        row["testing_price"] = None
+        row["testing_target_price"] = None
+        row["testing_price_basis"] = None
+        row["testing_step_rule"] = "CURRENT_TO_TARGET_NEAREST_OBSERVED_WITHIN_5PCT_ELSE_MAX_5PCT_STEP"
+
         base_actionable = bool(
             str(row.get("review_status") or "").upper() == "ACTIONABLE"
-            and current_price is not None
-            and _d(current_price) > 0
-            and current_cost is not None
-            and _d(current_cost) > 0
+            and current_dec is not None
+            and cost_dec is not None
             and current_oh is not None
             and current_oh > 0
         )
 
         pair_fix = bool(row.get("priority_240_249_mismatch"))
+        has_company = bool(row.get("has_company_reference"))
+        current_within_company = row.get("current_within_company_range")
+        outside_company = bool(
+            has_company and current_within_company in (False, 0)
+        )
+        company_low = _positive_price(row.get("company_range_low"))
+        company_high = _positive_price(row.get("company_range_high"))
+
+        pclass = str(row.get("category") or live.get("product_class") or "").upper()
+        velocity_7d = (
+            _d(row.get("velocity_7d"))
+            if row.get("velocity_7d") is not None else Decimal("0")
+        )
+        velocity_28d = (
+            _d(row.get("velocity_28d"))
+            if row.get("velocity_28d") is not None else Decimal("0")
+        )
+        doh = _d(row.get("doh")) if row.get("doh") is not None else None
+        slow_velocity = bool(
+            velocity_28d > 0 and velocity_7d < velocity_28d * Decimal("0.80")
+        )
+        freshness_test_needed = bool(
+            base_actionable
+            and (
+                (
+                    pclass in {"FRESH", "LIVE"}
+                    and (
+                        velocity_7d <= 0
+                        or slow_velocity
+                        or (doh is not None and doh >= Decimal("5"))
+                    )
+                )
+                or (
+                    pclass == "FROZEN"
+                    and doh is not None
+                    and doh >= Decimal("60")
+                )
+            )
+        )
+        tested_gap = bool(
+            base_actionable
+            and tested_price is not None
+            and tested_price > cost_dec
+            and abs(tested_price - current_dec) > Decimal("0.25")
+        )
+        gp_opportunity = (
+            _d(row.get("gp_per_day_opportunity"))
+            if row.get("gp_per_day_opportunity") is not None
+            else Decimal("0")
+        )
+
         action_price = None
         reason_code = None
         reason_text = None
+        testing_target = None
+        testing_price = None
 
         if pair_fix and target_candidate is not None and base_actionable:
             action_price = target_candidate
             reason_code = "PAIR_FIX"
             reason_text = "240=249 PRICE ALIGNMENT"
+        elif outside_company and base_actionable:
+            if company_low is not None and current_dec < company_low:
+                action_price = company_low
+            elif company_high is not None and current_dec > company_high:
+                action_price = company_high
+            if action_price is not None and action_price > cost_dec:
+                reason_code = "COMPANY_RANGE"
+                reason_text = "COMPANY PRICE RANGE CORRECTION"
+            else:
+                action_price = None
+        elif freshness_test_needed:
+            testing_target = _freshness_velocity_target(
+                current=current_dec,
+                current_cost=cost_dec,
+                current_velocity=velocity_7d,
+                observed_candidates=observed_candidates,
+                company_low=company_low,
+                company_high=company_high,
+            )
+            testing_price = _next_testing_price(
+                current_dec,
+                testing_target,
+                observed_candidates=observed_candidates,
+            )
+            if (
+                testing_price is not None
+                and testing_price > cost_dec
+                and abs(testing_price - current_dec) > Decimal("0.01")
+            ):
+                action_price = testing_price
+                reason_code = "VELOCITY_TEST"
+                reason_text = "FRESHNESS VELOCITY TEST"
+        elif tested_gap:
+            testing_target = tested_price
+            testing_price = _next_testing_price(
+                current_dec,
+                testing_target,
+                observed_candidates=observed_candidates,
+            )
+            if (
+                testing_price is not None
+                and testing_price > cost_dec
+                and abs(testing_price - current_dec) > Decimal("0.01")
+            ):
+                action_price = testing_price
+                reason_code = "SWEET_SPOT_GAP"
+                reason_text = "STEP TOWARD TESTED SWEET SPOT"
         elif (
             base_actionable
-            and tested_price is not None
-            and tested_price > _d(current_cost)
-            and abs(tested_price - _d(current_price)) > Decimal("0.25")
+            and gp_opportunity > 0
+            and target_candidate is not None
+            and target_candidate > cost_dec
+            and abs(target_candidate - current_dec) > Decimal("0.01")
         ):
-            action_price = tested_price
-            reason_code = "TESTED_PRICE"
-            reason_text = "TESTED SWEET SPOT"
-        elif (
-            base_actionable
-            and testing_price is not None
-            and testing_price > _d(current_cost)
-            and abs(testing_price - _d(current_price)) > Decimal("0.01")
-        ):
-            action_price = testing_price
-            reason_code = "TESTING_PRICE"
-            reason_text = "SWEET SPOT TEST"
+            testing_target = target_candidate
+            testing_price = _next_testing_price(
+                current_dec,
+                testing_target,
+                observed_candidates=observed_candidates,
+            )
+            if (
+                testing_price is not None
+                and testing_price > cost_dec
+                and abs(testing_price - current_dec) > Decimal("0.01")
+            ):
+                action_price = testing_price
+                reason_code = "GP_DOLLAR_TEST"
+                reason_text = "GP$/DAY CONTROLLED TEST"
+
+        row["testing_price"] = testing_price
+        row["testing_target_price"] = testing_target
+        row["testing_price_basis"] = (
+            "SLOW_MOVING_FRESHNESS_VELOCITY_TEST"
+            if reason_code == "VELOCITY_TEST"
+            else (
+                "CONTROLLED_STEP_TOWARD_STRONGEST_PROVED_TESTED_PRICE"
+                if reason_code == "SWEET_SPOT_GAP"
+                else (
+                    "CONTROLLED_GP_DOLLAR_OPPORTUNITY_TEST"
+                    if reason_code == "GP_DOLLAR_TEST"
+                    else None
+                )
+            )
+        )
+        row["freshness_test_needed"] = freshness_test_needed
+        row["slow_velocity_trend"] = slow_velocity
+        row["company_range_violation"] = outside_company
 
         row["candidate_price"] = action_price
         row["suggested_price"] = action_price
@@ -5156,34 +5344,38 @@ def pricing_review(
         row["actionable"] = action_price is not None
         row["review_status"] = "ACTIONABLE" if action_price is not None else "NO_PRICE_ACTION"
 
-        if action_price is not None and current_cost is not None and _d(action_price) > 0:
+        if action_price is not None and cost_dec is not None and _d(action_price) > 0:
             row["suggested_gp_pct_at_current_cost"] = (
-                (_d(action_price) - _d(current_cost)) / _d(action_price)
+                (_d(action_price) - cost_dec) / _d(action_price)
             )
         else:
             row["suggested_gp_pct_at_current_cost"] = None
 
-        if current_price is not None and action_price is not None and _d(current_price) > 0:
+        if current_dec is not None and action_price is not None:
             row["price_gap_pct"] = (
-                abs(_d(action_price) - _d(current_price))
-                / _d(current_price)
+                abs(_d(action_price) - current_dec)
+                / current_dec
                 * Decimal("100")
             )
             row["direction"] = (
                 "INCREASE"
-                if _d(action_price) > _d(current_price)
-                else ("DECREASE" if _d(action_price) < _d(current_price) else "KEEP")
+                if _d(action_price) > current_dec
+                else ("DECREASE" if _d(action_price) < current_dec else "KEEP")
             )
         else:
             row["price_gap_pct"] = None
             row["direction"] = "REVIEW"
 
-        if reason_code == "TESTED_PRICE":
-            row["primary_reason_text"] = "Tested sweet spot from observed sales / GP$/day history"
-        elif reason_code == "TESTING_PRICE":
-            row["primary_reason_text"] = "Next gradual sweet spot test toward the supported target"
-        elif reason_code == "PAIR_FIX":
+        if reason_code == "PAIR_FIX":
             row["primary_reason_text"] = "240/249 price equality correction"
+        elif reason_code == "COMPANY_RANGE":
+            row["primary_reason_text"] = "Current price is outside the applicable Company A/B/C range"
+        elif reason_code == "VELOCITY_TEST":
+            row["primary_reason_text"] = "Slow movement / freshness risk: test a small price reduction and re-check velocity"
+        elif reason_code == "SWEET_SPOT_GAP":
+            row["primary_reason_text"] = "Current price is more than $0.25 from the strongest proved sweet spot; move gradually"
+        elif reason_code == "GP_DOLLAR_TEST":
+            row["primary_reason_text"] = "Observed price history indicates potential GP$/day improvement; test one small step"
 
     suppressed_count=0
     visible_rows=[]
@@ -5215,9 +5407,9 @@ def pricing_review(
             "best_available_estimate_allowed": bool(allow_stale_estimate),
             "estimate_basis": "LATEST_AVAILABLE_CANONICAL_POS_AND_MVT_INDEPENDENT",
             "estimate_is_clearly_labelled": True,
-            "tested_price": "HISTORICAL_SWEET_SPOT_FROM_ACTUAL_SALES_GP_DOLLARS_PER_DAY",
-            "testing_price": "GRADUAL_STEP_TOWARD_INTERNAL_SUPPORTED_TARGET; NEAREST_OBSERVED_PRICE_WITHIN_5PCT ELSE MAX_5PCT STEP",
-            "price_action_priority": "PAIR_FIX_THEN_TESTED_PRICE_WHEN_CURRENT_MORE_THAN_0_25_AWAY_THEN_TESTING_PRICE",
+            "tested_price": "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_FROM_ACTUAL_SALES_GP_DOLLARS_PER_DAY",
+            "testing_price": "CURRENT_PRICE_BASED_CONTROLLED_STEP; PRIORITIZE_FRESHNESS_VELOCITY_WHEN_SLOW; OTHERWISE_STEP_TOWARD_TESTED_OR_GP_DOLLAR_TARGET; MAX_5PCT",
+            "price_action_priority": "PAIR_FIX_THEN_COMPANY_RANGE_THEN_FRESHNESS_VELOCITY_TEST_THEN_TESTED_SWEET_SPOT_GAP_THEN_GP_DOLLAR_TEST",
             "source_contract": report.get("price_suggestion_rules"),
         },
     }
