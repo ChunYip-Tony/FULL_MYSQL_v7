@@ -1203,6 +1203,8 @@ def ordering_review(
                         "effective_coverage_end_date":s.get("effective_coverage_end_date"),
                         "regular_forecast_confidence":s.get("regular_forecast_confidence"),
                         "daily_forecast":s.get("daily_forecast"),
+                        "weekday_usage_forecast":s.get("weekday_usage_forecast"),
+                        "weekday_usage_forecast_basis":s.get("weekday_usage_forecast_basis"),
                         "regular_baseline":s.get("regular_baseline"),
                         "receiving_articles_on_last_receipt": receipt.get("receiving_articles"),
                         "delivery_pattern": pattern,
