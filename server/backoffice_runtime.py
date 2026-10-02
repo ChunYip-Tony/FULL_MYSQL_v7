@@ -5124,7 +5124,14 @@ def inventory_review(
                     "avg_qty_day": family_ctx.get("family_source_avg_qty_day"),
                     "movement_days_7d": family_ctx.get("family_group_movement_days_7d"),
                     "movement_status": family_ctx.get("family_source_movement_status"),
-                    "receipt_history": family_ctx.get("family_receipt_history", []),
+                    # Never substitute the Family aggregate when the assigned
+                    # Receiving Article is the Family/Main Article itself.
+                    # Keep the source Article's actual physical receipt history.
+                    "receipt_history": family_ctx.get("family_source_receipt_history", []),
+                    "receipt_7d_qty": family_ctx.get("family_source_receipt_7d_qty"),
+                    "receipt_7d_uom": family_ctx.get("family_source_receipt_7d_uom"),
+                    "receipt_7d_status": family_ctx.get("family_source_receipt_7d_status"),
+                    "receipt_7d_day_count": family_ctx.get("family_source_receipt_7d_day_count"),
                 }
 
             out.append(
@@ -5177,6 +5184,12 @@ def inventory_review(
                     "family_source_movement_uom": family_ctx.get("family_source_movement_uom"),
                     "family_source_raw_movement_uom": family_ctx.get("family_source_raw_movement_uom"),
                     "family_source_movement_status": family_ctx.get("family_source_movement_status"),
+                    "family_source_receipt_verified": family_ctx.get("family_source_receipt_verified"),
+                    "family_source_receipt_history": family_ctx.get("family_source_receipt_history", []),
+                    "family_source_receipt_7d_qty": family_ctx.get("family_source_receipt_7d_qty"),
+                    "family_source_receipt_7d_uom": family_ctx.get("family_source_receipt_7d_uom"),
+                    "family_source_receipt_7d_status": family_ctx.get("family_source_receipt_7d_status"),
+                    "family_source_receipt_7d_day_count": family_ctx.get("family_source_receipt_7d_day_count"),
                     "family_receipt_verified": family_ctx.get("family_receipt_verified"),
                     "family_receipt_movement_type": family_ctx.get("family_receipt_movement_type"),
                     "family_receipt_date": family_ctx.get("family_receipt_date"),
@@ -5190,6 +5203,10 @@ def inventory_review(
                     "family_receipt_7d_day_count": family_ctx.get("family_receipt_7d_day_count"),
                     "family_receipt_7d_basis": family_ctx.get("family_receipt_7d_basis"),
                     "receiving_receipt_history": assigned_receiving_row.get("receipt_history", []),
+                    "receiving_receipt_7d_qty": assigned_receiving_row.get("receipt_7d_qty"),
+                    "receiving_receipt_7d_uom": assigned_receiving_row.get("receipt_7d_uom"),
+                    "receiving_receipt_7d_status": assigned_receiving_row.get("receipt_7d_status"),
+                    "receiving_receipt_7d_day_count": assigned_receiving_row.get("receipt_7d_day_count"),
                     "family_id": fid,
                     "family_article": row.get("main_article_number"),
                     "family_name": row.get("family_description"),
