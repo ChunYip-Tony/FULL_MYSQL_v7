@@ -9,7 +9,7 @@ YIPMAN_DESKTOP_CSS = r"""
   #ydesk .app{min-height:100vh;display:grid;grid-template-columns:220px minmax(0,1fr)}
   #ydesk .side{position:sticky;top:0;height:100vh;background:#fff;border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;z-index:30}
   #ydesk .brand{padding:2px 8px 14px}#ydesk .brand h1{margin:0;font-size:25px;letter-spacing:-.8px}#ydesk .brand h1 span{color:var(--blue)}#ydesk .brand small{font-size:10px;color:var(--muted)}
-  #ydesk .nav{display:flex;flex-direction:column;gap:3px}#ydesk .navbtn{border:0;background:transparent;color:#425873;border-radius:10px;padding:10px 11px;display:flex;align-items:center;gap:10px;text-align:left;font-size:13px;font-weight:780;width:100%}#ydesk .navbtn:hover{background:#f2f6fb}#ydesk .navbtn.active{background:#e9f3ff;color:#0868dc}#ydesk .navbtn .ico{width:21px;text-align:center;font-size:16px}
+  #ydesk .nav{position:static!important;left:auto!important;right:auto!important;bottom:auto!important;height:auto!important;display:flex!important;flex-direction:column!important;grid-template-columns:none!important;gap:3px!important;padding:0!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;z-index:auto!important}#ydesk .navbtn{border:0;background:transparent;color:#425873;border-radius:10px;padding:10px 11px;display:flex;align-items:center;gap:10px;text-align:left;font-size:13px;font-weight:780;width:100%}#ydesk .navbtn:hover{background:#f2f6fb}#ydesk .navbtn.active{background:#e9f3ff;color:#0868dc}#ydesk .navbtn .ico{width:21px;text-align:center;font-size:16px}
   #ydesk .sep{height:1px;background:#edf2f6;margin:9px 4px}#ydesk .sidefoot{margin-top:auto}#ydesk .fresh{border:1px solid var(--line);border-radius:12px;padding:10px;background:#fbfdff}#ydesk .fresh h4{margin:0 0 7px;font-size:11px}#ydesk .frow{display:flex;justify-content:space-between;font-size:10px;color:#586a7f;margin:5px 0}#ydesk .fdot{width:7px;height:7px;border-radius:50%;display:inline-block;background:var(--green);margin-left:4px}#ydesk .fdot.warn{background:var(--amber)}#ydesk .version{font-size:9px;color:#8390a0;padding:8px 3px 0}
   #ydesk .shell{min-width:0}#ydesk .topbar{height:62px;background:linear-gradient(100deg,var(--nav2),var(--nav));display:flex;align-items:center;gap:12px;padding:0 17px;color:#fff;position:sticky;top:0;z-index:25;box-shadow:0 2px 12px rgba(0,20,40,.13)}
   #ydesk .gsearch{height:40px;background:#fff;border-radius:13px;display:flex;align-items:center;gap:8px;padding:0 12px;width:min(680px,48vw);color:#6a7a8e}#ydesk .gsearch input{border:0;outline:0;flex:1;min-width:0;color:#142a43;font-size:13px}#ydesk .kbd{font-size:9px;background:#edf2f6;border-radius:5px;padding:2px 5px;color:#66778a}
@@ -47,7 +47,8 @@ YIPMAN_DESKTOP_JS = r"""
 (function(){
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
  const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),priceFilter:'240',quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
- const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+ const ctx=r=>typeof r==='string'?document.querySelector(r):r;
+ const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
  const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
