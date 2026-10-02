@@ -226,6 +226,13 @@ jobs:
           p._validate_window('WEEKEND',date(2026,10,2),date(2026,10,4))
 
           runtime=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          # Regression guard: there must be exactly ONE active production engine.
+          assert runtime.count('def bulk_ordering_suggestions(')==1
+          sig=inspect.signature(v2.bulk_ordering_suggestions)
+          assert 'next_delivery_date' in sig.parameters
+          assert 'temporary_oh_overrides' in sig.parameters
+          active_bulk=inspect.getsource(v2.bulk_ordering_suggestions)
+          assert 'WEBAPP_V2_BULK_ORDERING_V6_UNIFIED' in active_bulk
           assert 'temporary_oh_overrides' in runtime
           assert 'REQUEST_ONLY_NOT_SAVED' in runtime
           assert 'promotion_start_date") or promotion_start_date' in runtime
