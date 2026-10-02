@@ -379,7 +379,7 @@ async function resetQuickHome({push=true}={}){
   $('#quickClear').classList.remove('on');
   $('#globalForm').classList.remove('hide');
   renderView('quick');
-  await loadBestSellers();
+  if(bestSellerGroups)await loadBestSellers();
   $('#quick').scrollTop=0;
   if(push&&historyReady&&!wasQuick)history.pushState({yipman:true,view:'quick'},'', '#quick');
 }
