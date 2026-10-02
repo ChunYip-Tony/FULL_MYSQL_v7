@@ -1535,6 +1535,10 @@ def ordering_review(
                         fid,
                         str(fam.get("main_article_number") or "") or None,
                     )
+                    receiving_article_name=_article_description_map(
+                        cur,
+                        [receiving_article] if receiving_article else [],
+                    ).get(str(receiving_article or "").strip())
                     roster_uom=(
                         calc.get("demand_uom")
                         or calc.get("oh_uom")
@@ -1545,6 +1549,7 @@ def ordering_review(
                         "family_name":fam.get("family_description"),
                         "family_article":fam.get("main_article_number"),
                         "receiving_article":receiving_article,
+                        "receiving_article_name":receiving_article_name,
                         "historical_receiving_articles":[],
                         "oh":calc.get("oh"),
                         "oh_uom":calc.get("oh_uom") or roster_uom,
