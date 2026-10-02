@@ -246,6 +246,16 @@ jobs:
           assert '@media(max-width:430px){' in ui
           assert '.datagrid{grid-template-columns:1fr;gap:8px}' in ui
           assert 'class="currentbatch"' in ui
+          assert 'QA Resolution' in ui
+          assert '/v1/backoffice/qa-review?limit=300' in ui
+          assert '/v1/backoffice/qa-resolve' in ui
+          assert '/v1/backoffice/qa-resolve-cost-conversion' in ui
+          assert '/v1/backoffice/qa-resolve-article-family' in ui
+          assert '/rebuild-phase3' in ui
+          assert 'APPLY_QA_FIX' in ui
+          assert 'APPLY_COST_CONVERSION_FIX' in ui
+          assert 'APPLY_ARTICLE_FAMILY_FIX' in ui
+          assert 'RAW source data is never changed' in ui
           assert 'class="cbmeta"' in ui
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
