@@ -162,7 +162,7 @@ jobs:
           assert '"recent_promotion_event": recent_promotion' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'ANY_RELATED_FAMILY_UPC' in src
-          assert 'YIPMAN_STOCK_FLOW_V4_PROMO_AVG_PRICE' in src
+          assert 'YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -192,8 +192,8 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER SELLING' in ui
-          assert "const CACHE='yipman-v392'" in ui
-          print('stock-flow-promo-week-lift-v388=PASS')
+          assert "const CACHE='yipman-v399'" in ui
+          print('stock-flow-observed-delivery-v395=PASS')
           PY
 
       - name: Validate controlled pricing path, freshness tests, and compact progress UI
@@ -446,9 +446,11 @@ jobs:
           assert baseline['regular_velocity_by_weekday'][0] != baseline['regular_velocity_by_weekday'][1]
 
           src=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
-          assert 'pre_delivery_stockout_qty=max' in src
-          assert 'coverage_usage-usable_at_delivery' in src
+          assert 'pre_delivery_stockout_qty' in src
+          assert 'coverage_usage-freshness_existing_oh_credit' in src
           assert 'freshness_limit_days=7 if kind=="FRESH" else None' in src
+          assert 'freshness_projected_discard_qty' in src
+          assert 'freshness_order_qty_lift' in src
           assert 'OUTSIDE_FRESHNESS_CAP' in src
           assert 'CURRENT_RECENT_FAMILY_RUN_RATE' in src
           assert 'POST_DELIVERY_NON_PROMO_BASELINE' in src
@@ -500,6 +502,15 @@ jobs:
           assert v2._promotion_type(date(2026,10,1),date(2026,10,9)) == 'OTHER'
           p._validate_window('WEEKLY',date(2026,10,1),date(2026,10,8))
           p._validate_window('WEEKEND',date(2026,10,2),date(2026,10,4))
+          p._validate_window('CUSTOM',date(2026,10,5),date(2026,10,11))
+          normalized=p._normalize_item({
+              'upc':'24081600000',
+              'promotion_start_date':'2026-10-05',
+              'promotion_end_date':'2026-10-11',
+              'promotion_price':'8.99',
+          })
+          assert normalized['promotion_type']=='CUSTOM'
+          assert normalized['validation_errors']==[]
 
           runtime=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
           # Regression guard: there must be exactly ONE active production engine.
@@ -508,14 +519,15 @@ jobs:
           assert 'next_delivery_date' in sig.parameters
           assert 'temporary_oh_overrides' in sig.parameters
           active_bulk=inspect.getsource(v2.bulk_ordering_suggestions)
-          assert 'WEBAPP_V2_BULK_ORDERING_V6_UNIFIED' in active_bulk
+          assert 'WEBAPP_V2_BULK_ORDERING_V7_FRESHNESS_AWARE_OH' in active_bulk
           assert 'temporary_oh_overrides' in runtime
           assert 'REQUEST_ONLY_NOT_SAVED' in runtime
           assert 'promotion_start_date") or promotion_start_date' in runtime
           assert 'forecast_promotion_coverage' in runtime
           assert 'forecast_regular_coverage' in runtime
-          assert 'coverage_usage-usable_at_delivery' in active_bulk
-          assert 'pre_delivery_stockout_qty=max' in active_bulk
+          assert 'coverage_usage-freshness_existing_oh_credit' in active_bulk
+          assert 'freshness_projected_discard_qty' in active_bulk
+          assert 'freshness_order_qty_lift' in active_bulk
           assert 'TEMPORARY_OH_ONLY_FOR_PROMOTION_ORDERING' in active_bulk
 
           promo=Path('promotion_ordering.py').read_text(encoding='utf-8')
@@ -533,6 +545,10 @@ jobs:
           assert 'TEMP TRUE STOCK' in ui
           assert 'temporary OH values are NOT saved' in ui
           assert "data-order-mode=\"PROMOTION\"" in ui
+          assert 'id="promoManualBtn"' in ui
+          assert 'Manual Promotion' in ui
+          assert "promotion_type:'CUSTOM'" in ui
+          assert 'freshness_adjustment_applied' in ui
           print('yipman-promotion-ordering=PASS')
           PY
 
