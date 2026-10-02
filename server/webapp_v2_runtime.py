@@ -28,6 +28,62 @@ from receipt_semantics import physical_receipt_stage_rows
 
 WEEKDAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
 
+# Store-facing price points used for generated / suggested retail prices.
+# Tested sweet spots remain the actual observed historical price evidence and
+# are intentionally NOT rewritten to a different price point.
+RETAIL_PRICE_ENDINGS = (
+    Decimal("0.29"),
+    Decimal("0.49"),
+    Decimal("0.69"),
+    Decimal("0.79"),
+    Decimal("0.99"),
+)
+
+
+def _retail_price_point(
+    value: Any,
+    *,
+    min_price: Any = None,
+    max_price: Any = None,
+) -> Decimal | None:
+    """Return the nearest normal store retail price point.
+
+    Generated target/testing prices use endings .29/.49/.69/.79/.99. Optional
+    bounds preserve hard cost / Company-price guardrails. If no standard ending
+    exists inside the bounds, return None so the caller can preserve the hard
+    business constraint rather than fabricate an out-of-range price.
+    """
+    if value is None:
+        return None
+    try:
+        target = Decimal(str(value))
+    except Exception:
+        return None
+    if target <= 0:
+        return None
+
+    low = Decimal(str(min_price)) if min_price is not None else None
+    high = Decimal(str(max_price)) if max_price is not None else None
+    if low is not None and high is not None and low > high:
+        return None
+
+    whole = int(target)
+    candidates: list[Decimal] = []
+    for dollars in range(max(0, whole - 2), whole + 4):
+        base = Decimal(dollars)
+        for ending in RETAIL_PRICE_ENDINGS:
+            price = base + ending
+            if price <= 0:
+                continue
+            if low is not None and price < low:
+                continue
+            if high is not None and price > high:
+                continue
+            candidates.append(price)
+    if not candidates:
+        return None
+    return min(candidates, key=lambda p: (abs(p - target), p))
+
 
 def _d(value: Any) -> Decimal:
     if value is None:
@@ -4737,6 +4793,18 @@ def _gp_day_price_suggestion(
             "candidates":candidates,
         }
 
+    raw_supported_price=suggested
+    retail_floor=max(
+        cost + Decimal("0.01"),
+        company_c if company_c is not None else cost + Decimal("0.01"),
+    )
+    rounded_suggested=_retail_price_point(
+        suggested,
+        min_price=retail_floor,
+    )
+    if rounded_suggested is not None:
+        suggested=rounded_suggested
+
     sweet=(
         Decimal(str(row["sweet_spot_price"]))
         if row.get("sweet_spot_price") is not None else None
@@ -4747,6 +4815,8 @@ def _gp_day_price_suggestion(
     return {
         "status":"READY",
         "suggested_price":suggested,
+        "raw_supported_price":raw_supported_price,
+        "price_point_rounding":"NEAREST_OF_29_49_69_79_99",
         "basis":basis,
         "company_c_floor":company_c,
         "company_c_applied":company_c is not None,
@@ -5147,10 +5217,28 @@ def _gp_day_price_suggestion_from_batch(
             "suggested_price":None,
         }
 
+    raw_supported_price=suggested
+    retail_min=cost + Decimal("0.01")
+    if refs:
+        retail_min=max(retail_min,company_low)
+    rounded_suggested=_retail_price_point(
+        suggested,
+        min_price=retail_min,
+        max_price=(company_high if refs else None),
+    )
+    rounding_status="STANDARD_PRICE_POINT"
+    if rounded_suggested is not None:
+        suggested=rounded_suggested
+    else:
+        rounding_status="HARD_GUARDRAIL_FALLBACK"
+
     return {
         **base,
         "status":"READY",
         "suggested_price":suggested,
+        "raw_supported_price":raw_supported_price,
+        "price_point_rounding":"NEAREST_OF_29_49_69_79_99",
+        "price_point_rounding_status":rounding_status,
         "basis":basis,
         "selection_basis":selection,
         "expected_gp_per_day_from_observed_demand":expected_gp,
