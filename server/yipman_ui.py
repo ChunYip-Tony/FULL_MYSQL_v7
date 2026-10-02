@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v359';
+const CACHE='yipman-v360';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -255,7 +255,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qprice.companyc{background:#fff8e6;border-color:#ead89d}
 .qprice small{display:block;font-size:5px;font-weight:950;color:#7a8790;line-height:1;white-space:nowrap}
 .qprice b{display:block;font-size:9px;font-weight:950;line-height:1;margin-top:2px;white-space:nowrap}
-.qprice.tested b{color:#24723a}.qprice.testing b{color:#9a6200}.qprice.companyc b{color:#7b5a00}
+.qprice.tested b{color:#24723a}.qprice.testing b{color:#9a6200}.qprice.companyc b{color:#7b5a00}.qprice b.qempty{font-size:7.5px!important;font-weight:850;letter-spacing:-.01em}
 .qhidebtn{padding:5px 6px}
 @media(max-width:430px){
   .qfamily .qfname{font-size:20px}
@@ -710,7 +710,7 @@ function quickFamilyGroups(rows){
 function quickUpcHtml(r){
  const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'',active=hasActivity(r.qty_7d);
  const pm=v=>num(v)===null?'—':money(v);
- const testedText=v=>num(v)===null?'— / Not established':money(v);
+ const testedText=v=>num(v)===null?'Not set':money(v);
  const comp=(label,attr,val,cls='')=>num(val)===null?'':'<div class="qprice comp '+cls+'"><small>'+label+'</small><b '+attr+'>'+pm(val)+'</b></div>';
  const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
    '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
@@ -797,11 +797,11 @@ async function hydrateQuickPrices(rows,requestId,attempt=0){
     const row=byUpc.get(String(card.dataset.upc||''));
     if(!row)return;
     const set=(sel,val)=>{const n=card.querySelector(sel);if(n)n.textContent=num(val)===null?'—':money(val)};
-    const setPath=(sel,val,empty)=>{const n=card.querySelector(sel);if(n)n.textContent=num(val)===null?empty:money(val)};
+    const setPath=(sel,val,empty)=>{const n=card.querySelector(sel);if(n){const missing=num(val)===null;n.textContent=missing?empty:money(val);n.classList.toggle('qempty',missing)}};
     set('[data-q-current]',row.current_price);
-    setPath('[data-q-tested]',row.tested_price,'— / Not established');
+    setPath('[data-q-tested]',row.tested_price,'Not set');
     const pricingWarming=['REFRESHING','WARMING'].includes(String(d.price_review_analysis_status||'').toUpperCase())||String(d.price_review_cache_status||'').toUpperCase()==='WARMING';
-    setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'— / None active');
+    setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'None');
     set('[data-q-comp-a]',row.company_price_a);
     set('[data-q-comp-b]',row.company_price_b);
     set('[data-q-comp-c]',row.company_price_c);
