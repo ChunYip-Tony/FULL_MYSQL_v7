@@ -3746,16 +3746,51 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
                 canonical=pair_path_by_sig.get(sig)
                 inherited_240=canonical is not None
 
-            tested=_positive_price(row.get("sweet_spot_price"))
+            tested_evidence=_positive_price(row.get("sweet_spot_price"))
+            fallback_low=_positive_price(row.get("current_cost_per_selling_unit"))
+            if fallback_low is not None:
+                fallback_low += Decimal("0.01")
+            fallback_company_low=min(
+                [
+                    x for x in (
+                        _positive_price(row.get("company_price_a")),
+                        _positive_price(row.get("company_price_b")),
+                        _positive_price(row.get("company_price_c")),
+                    ) if x is not None
+                ],
+                default=None,
+            )
+            fallback_company_high=max(
+                [
+                    x for x in (
+                        _positive_price(row.get("company_price_a")),
+                        _positive_price(row.get("company_price_b")),
+                        _positive_price(row.get("company_price_c")),
+                    ) if x is not None
+                ],
+                default=None,
+            )
+            if fallback_company_low is not None:
+                fallback_low=max(fallback_low or fallback_company_low,fallback_company_low)
+            tested=(
+                _retail_price_point(
+                    tested_evidence,
+                    min_price=fallback_low,
+                    max_price=fallback_company_high,
+                )
+                if tested_evidence is not None else None
+            ) or tested_evidence
             testing=(
                 _positive_price(canonical.get("testing_price"))
                 if canonical is not None else None
             )
-            # If Price Review has the UPC, its Tested field is the display
-            # authority. It should equal quick_check_current.sweet_spot_price;
-            # prefer it explicitly so the two screens cannot drift.
+            # If Price Review has the UPC, its retail-aligned Tested field is
+            # the display authority; preserve the raw proved evidence separately.
             if canonical is not None and canonical.get("tested_price") is not None:
                 tested=_positive_price(canonical.get("tested_price"))
+                tested_evidence=_positive_price(
+                    canonical.get("tested_evidence_price")
+                ) or tested_evidence
 
             reason_code=(
                 str(canonical.get("suggestion_reason_code") or "")
@@ -3797,6 +3832,7 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
                 ),
                 "suggestion_reason":suggestion_reason,
                 "tested_price":tested,
+                "tested_evidence_price":tested_evidence,
                 "testing_price":testing,
                 "target_sweet_spot_price":(
                     canonical.get("target_sweet_spot_price")
