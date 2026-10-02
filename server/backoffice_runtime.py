@@ -35,6 +35,7 @@ from webapp_v2_runtime import (
     _gp_day_price_suggestion_from_batch,
     _performance_cost_for_day,
     _performance_range_cost_rows,
+    _retail_price_point,
     bulk_ordering_suggestions,
     performance_report,
     _numeric_key,
@@ -3190,19 +3191,33 @@ def _next_testing_price(
     anchor: Decimal | None,
     target: Decimal | None,
     observed_candidates: list[dict[str, Any]] | None = None,
+    *,
+    min_price: Decimal | None = None,
+    max_price: Decimal | None = None,
 ) -> Decimal | None:
-    """Move one meaningful controlled price-test step from Current toward target.
+    """Move one meaningful controlled test to a normal store price point.
 
-    A Testing price must be at least $0.45 away from Current; smaller changes
-    are intentionally suppressed because they are too close to create a useful
-    velocity / GP$/day test. For higher-priced items, the gradual ceiling stays
-    around 5% of Current. An actually observed price is preferred only when its
-    distance is between the $0.45 minimum and that gradual ceiling.
+    Testing is always >= $0.45 away from Current and always ends in one of the
+    standard merchandising endings: .29/.49/.69/.79/.99. The raw supported
+    target is first snapped to the nearest allowed store price point. A ~5%
+    step remains the gradual preference; when no valid store ending exists
+    inside that exact cap, the nearest valid price point toward target is used.
     """
     anchor = _positive_price(anchor)
     target = _positive_price(target)
+    low = _positive_price(min_price)
+    high = _positive_price(max_price)
     if anchor is None or target is None:
         return None
+
+    target_point = _retail_price_point(
+        target,
+        min_price=low,
+        max_price=high,
+    )
+    if target_point is None:
+        return None
+    target = target_point
     delta = target - anchor
     if abs(delta) < MIN_TEST_PRICE_STEP:
         return None
@@ -3212,43 +3227,67 @@ def _next_testing_price(
     )
     cap = max(MIN_TEST_PRICE_STEP, percent_step)
 
-    observed: list[Decimal] = []
-    for item in observed_candidates or []:
-        value = _positive_price((item or {}).get("price"))
-        if value is not None:
-            observed.append(value)
-
     if delta > 0:
-        nearby = sorted({
-            p for p in observed
-            if (
-                anchor + MIN_TEST_PRICE_STEP <= p <= target
-                and p - anchor <= cap
-            )
-        })
-        if nearby:
-            return nearby[0]
-        step = min(delta, cap)
+        floor=max(anchor + MIN_TEST_PRICE_STEP, low or Decimal("0.01"))
+        ceiling=min(target, high) if high is not None else target
+        strict_ceiling=min(ceiling, anchor + cap)
+        raw_step=min(target, anchor + cap)
     else:
-        nearby = sorted({
-            p for p in observed
-            if (
-                target <= p <= anchor - MIN_TEST_PRICE_STEP
-                and anchor - p <= cap
-            )
-        }, reverse=True)
-        if nearby:
-            return nearby[0]
-        step = max(delta, -cap)
+        floor=max(target, low) if low is not None else target
+        ceiling=min(anchor - MIN_TEST_PRICE_STEP, high) if high is not None else anchor - MIN_TEST_PRICE_STEP
+        strict_floor=max(floor, anchor - cap)
+        raw_step=max(target, anchor - cap)
 
-    result = (anchor + step).quantize(
-        Decimal("0.01"), rounding=ROUND_HALF_UP
-    )
-    if abs(result - anchor) < MIN_TEST_PRICE_STEP:
+    if floor > ceiling:
         return None
+
+    # Preserve nearby observed evidence when it is already a meaningful move.
+    observed_points: list[Decimal] = []
+    for item in observed_candidates or []:
+        raw = _positive_price((item or {}).get("price"))
+        if raw is None:
+            continue
+        raw_delta=raw-anchor
+        if delta > 0 and not (MIN_TEST_PRICE_STEP <= raw_delta <= cap):
+            continue
+        if delta < 0 and not (-cap <= raw_delta <= -MIN_TEST_PRICE_STEP):
+            continue
+        snapped=_retail_price_point(
+            raw,
+            min_price=floor,
+            max_price=ceiling,
+        )
+        if snapped is not None:
+            observed_points.append(snapped)
+    if observed_points:
+        return min(
+            set(observed_points),
+            key=lambda p: (abs(p-anchor), abs(p-raw_step), p),
+        )
+
+    # Prefer a standard price point inside the gradual cap.
     if delta > 0:
-        return min(result, target)
-    return max(result, target)
+        strict=_retail_price_point(
+            raw_step,
+            min_price=floor,
+            max_price=strict_ceiling,
+        ) if floor <= strict_ceiling else None
+    else:
+        strict=_retail_price_point(
+            raw_step,
+            min_price=strict_floor,
+            max_price=ceiling,
+        ) if strict_floor <= ceiling else None
+    if strict is not None:
+        return strict
+
+    # If the exact cap lands between normal store endings, use the nearest
+    # standard point in the correct direction rather than emitting e.g. $9.44.
+    return _retail_price_point(
+        raw_step,
+        min_price=floor,
+        max_price=ceiling,
+    )
 
 
 def _tested_testing_prices(
@@ -3257,10 +3296,17 @@ def _tested_testing_prices(
     tested: Any,
     target: Any,
     observed_candidates: list[dict[str, Any]] | None = None,
+    company_low: Any = None,
+    company_high: Any = None,
 ) -> dict[str, Any]:
     current_price = _positive_price(current)
     tested_price = _positive_price(tested)
-    target_price = _positive_price(target)
+    raw_target_price = _positive_price(target)
+    target_price = _retail_price_point(
+        raw_target_price,
+        min_price=_positive_price(company_low),
+        max_price=_positive_price(company_high),
+    ) if raw_target_price is not None else None
     # Testing always starts from the live CURRENT price. Tested is the
     # strongest proved reference, never the starting point for a new action.
     anchor = current_price
@@ -3268,11 +3314,15 @@ def _tested_testing_prices(
         anchor,
         target_price,
         observed_candidates=observed_candidates,
+        min_price=_positive_price(company_low),
+        max_price=_positive_price(company_high),
     )
     return {
         "tested_price": tested_price,
         "testing_price": testing_price,
         "target_sweet_spot_price": target_price,
+        "raw_target_sweet_spot_price": raw_target_price,
+        "price_point_rounding": "NEAREST_OF_29_49_69_79_99",
         "testing_anchor_price": anchor,
         "testing_step_rule": "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP",
     }
@@ -3440,6 +3490,8 @@ def _quick_price_preview_by_upc(
                 tested=tested,
                 target=target,
                 observed_candidates=opt.get("top_observed_candidates"),
+                company_low=opt.get("company_range_low"),
+                company_high=opt.get("company_range_high"),
             )
             preview.update(path)
             cost = _positive_price(row.get("current_cost_per_selling_unit"))
@@ -5239,7 +5291,18 @@ def pricing_review(
         ]
         row["delivery_history_lookback_days"]=(pattern or {}).get("lookback_days")
 
-        target_candidate = _positive_price(row.get("candidate_price"))
+        raw_target_candidate = _positive_price(row.get("candidate_price"))
+        company_low = _positive_price(row.get("company_range_low"))
+        company_high = _positive_price(row.get("company_range_high"))
+        target_candidate = (
+            _retail_price_point(
+                raw_target_candidate,
+                min_price=company_low,
+                max_price=company_high,
+            )
+            if raw_target_candidate is not None
+            else None
+        )
         tested_price = _positive_price(live.get("sweet_spot_price"))
         observed_candidates = list(row.get("top_observed_candidates") or [])
         current_dec = _positive_price(current_price)
@@ -5249,6 +5312,8 @@ def pricing_review(
         row["tested_price"] = tested_price
         row["tested_price_basis"] = "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_MAX_GP_PER_DAY"
         row["target_sweet_spot_price"] = target_candidate
+        row["raw_target_sweet_spot_price"] = raw_target_candidate
+        row["price_point_rounding"] = "NEAREST_OF_29_49_69_79_99"
         row["testing_price"] = None
         row["testing_target_price"] = None
         row["testing_price_basis"] = None
@@ -5268,9 +5333,6 @@ def pricing_review(
         outside_company = bool(
             has_company and current_within_company in (False, 0)
         )
-        company_low = _positive_price(row.get("company_range_low"))
-        company_high = _positive_price(row.get("company_range_high"))
-
         pclass = str(row.get("category") or live.get("product_class") or "").upper()
         velocity_7d = (
             _d(row.get("velocity_7d"))
@@ -5347,6 +5409,8 @@ def pricing_review(
                 current_dec,
                 testing_target,
                 observed_candidates=observed_candidates,
+                min_price=company_low,
+                max_price=company_high,
             )
             if (
                 testing_price is not None
@@ -5362,6 +5426,8 @@ def pricing_review(
                 current_dec,
                 testing_target,
                 observed_candidates=observed_candidates,
+                min_price=company_low,
+                max_price=company_high,
             )
             if (
                 testing_price is not None
@@ -5383,6 +5449,8 @@ def pricing_review(
                 current_dec,
                 testing_target,
                 observed_candidates=observed_candidates,
+                min_price=company_low,
+                max_price=company_high,
             )
             if (
                 testing_price is not None
