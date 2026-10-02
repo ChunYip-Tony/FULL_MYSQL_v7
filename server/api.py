@@ -42,6 +42,7 @@ from backoffice_runtime import (
     backoffice_home_summary,
     warm_backoffice_home_summary,
     yipman_best_sellers as backoffice_yipman_best_sellers,
+    yipman_receipt_event_detail as backoffice_yipman_receipt_event_detail,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -3645,6 +3646,26 @@ def yipman_best_sellers(limit:int=8):
         result=backoffice_yipman_best_sellers(limit=limit)
     except Exception as exc:
         raise HTTPException(500,f'Yipman best sellers failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+
+@app.get('/v1/yipman/receipt-event')
+def yipman_receipt_event(
+    family_id:int,
+    receipt_date:date,
+    article_number:str|None=None,
+):
+    try:
+        result=backoffice_yipman_receipt_event_detail(
+            family_id=family_id,
+            receipt_date=receipt_date,
+            article_number=article_number,
+        )
+    except ValueError as exc:
+        raise HTTPException(404,detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman receipt event failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
