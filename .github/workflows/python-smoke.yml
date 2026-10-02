@@ -153,6 +153,18 @@ jobs:
           import webapp_v2_runtime as v2
 
           src=inspect.getsource(v2.performance_report)
+          from backoffice_runtime import _tested_testing_prices, pricing_review
+          path=_tested_testing_prices(
+              current='8.99',
+              tested='8.97',
+              target='11.39',
+              observed_candidates=None,
+          )
+          assert path['testing_price'] is not None
+          assert path['testing_price'] > path['tested_price']
+          review_src=inspect.getsource(pricing_review)
+          assert 'abs(tested_price - _d(current_price)) > Decimal("0.25")' in review_src
+          assert 'BACKOFFICE_PRICING_REVIEW_V9_PROACTIVE_TESTING' in review_src
           assert 'if not has_oh or not history_gate:' in src
           assert 'freshness_qualified' not in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
@@ -165,32 +177,6 @@ jobs:
           assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
           assert '.qprice b.qempty' in ui
           print('proactive-price-testing=PASS')
-          PY
-
-      - name: Diagnose current Salmon Tested Testing paths
-        run: |
-          python - <<'PY'
-          from backoffice_runtime import pricing_review
-          wanted={'24045000000','24047800000','24056100000','24545000000','24045400000','24545400000'}
-          data=pricing_review(category='FRESH',limit=1000,include_accepted=True,allow_stale_estimate=True)
-          found=[]
-          for r in data.get('rows') or []:
-              if str(r.get('upc') or '') in wanted:
-                  found.append({
-                      'upc':r.get('upc'),
-                      'current':r.get('current_price'),
-                      'tested':r.get('tested_price'),
-                      'testing':r.get('testing_price'),
-                      'target':r.get('target_sweet_spot_price'),
-                      'candidate':r.get('candidate_price'),
-                      'reason':r.get('suggestion_reason_code'),
-                      'primary':r.get('primary_reason_text'),
-                      'doh':r.get('doh'),
-                      'gp_day_opportunity':r.get('gp_per_day_opportunity'),
-                      'review_status':r.get('review_status'),
-                  })
-          print('SALMON_PRICE_PATHS',found)
-          print('FOUND',len(found),'OF',len(wanted))
           PY
 
       - name: Validate Quick Check canonical Tested Testing prices
