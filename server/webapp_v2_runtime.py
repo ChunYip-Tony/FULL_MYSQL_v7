@@ -2950,6 +2950,7 @@ def bulk_ordering_suggestions(
             vel7=m7.get("velocity_per_supported_day")
             demand_uom=str(m7.get("uom") or "").upper()
             fam_key=str(fam.get("main_article_number") or "")
+            promo_item=promo_map.get(fam_key) or promo_map.get(str(fid))
             temp_override=temp_oh_map.get(fam_key) or temp_oh_map.get(str(fid))
             family_oh=_family_effective_oh(cur,rows)
 
@@ -3009,7 +3010,7 @@ def bulk_ordering_suggestions(
                 ordering_oh=max(Decimal("0"),raw_oh)
                 temporary_oh_used=False
             dos=(ordering_oh/_d(vel7)) if vel7 is not None and _d(vel7)>0 else None
-            if not active_28:
+            if not active_28 and not (promotion_involved and promo_item):
                 skipped.append({
                     "family_id":fid,
                     "family_article_number":fam.get("main_article_number"),
@@ -3057,7 +3058,6 @@ def bulk_ordering_suggestions(
                 })
                 continue
 
-            promo_item=promo_map.get(fam_key) or promo_map.get(str(fid))
             promo_history=_family_historical_sale_periods(cur,rows,365) if promo_item else []
             promo_baseline=None
             promo_vel=None
