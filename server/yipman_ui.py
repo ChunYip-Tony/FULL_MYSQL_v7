@@ -653,6 +653,33 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .stockratio{min-width:70px}
 }
 
+
+
+/* V393 Price Suggestions: make UPC identity + action reason impossible to miss. */
+#price .pcard{padding-top:10px}
+#price .ptop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+#price .pidentity{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+#price .pidentity>b{font-size:17px!important;line-height:1.12!important;font-weight:1000;letter-spacing:-.01em}
+#price .pupc{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:6px 10px;border-radius:10px;background:#e91d3c;color:#fff;box-shadow:0 3px 8px rgba(233,29,60,.18);line-height:1}
+#price .pupc span{font-size:10px;font-weight:1000;letter-spacing:.035em}
+#price .pupc strong{font-size:15px;font-weight:1000;letter-spacing:.01em;white-space:nowrap}
+#price .pbadge{margin-top:1px}
+#price .preasoncall{display:grid;grid-template-columns:26px minmax(0,1fr) 18px;align-items:center;gap:7px;margin-top:8px;padding:9px 10px;border:1px solid;border-radius:11px;font-size:11px;line-height:1.28;font-weight:780}
+#price .preasoncall strong{font-size:12px;font-weight:1000}
+#price .preasonmark{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:999px;font-size:16px;font-weight:1000}
+#price .preasonchev{font-size:24px;line-height:1;text-align:right;font-weight:850}
+#price .preasoncall.red{background:#fff0f2;border-color:#f2c3ca;color:#bd1f31}
+#price .preasoncall.red .preasonmark{background:#d91f35;color:#fff}
+#price .preasoncall.amber{background:#fff8e6;border-color:#efd99d;color:#7b5a00}
+#price .preasoncall.amber .preasonmark{background:#c48a00;color:#fff}
+#price .preasoncall.green{background:#edf9f0;border-color:#c3e7ca;color:#216a35}
+#price .preasoncall.green .preasonmark{background:#2d8a49;color:#fff}
+@media(max-width:390px){
+  #price .pupc{padding:6px 9px}
+  #price .pupc strong{font-size:14px}
+  #price .pidentity>b{font-size:16px!important}
+  #price .preasoncall{font-size:10.5px}
+}
 </style>
 </head>
 <body>
@@ -2199,7 +2226,8 @@ async function loadPrices(opts={}){
     const companyText=(companyLow!==null&&companyHigh!==null)?money(companyLow)+'–'+money(companyHigh):'—';
     const detailSignals=(Array.isArray(r.reasons)?r.reasons:[]).map(x=>'• '+esc(friendlySignal(x))).join('<br>');
     return '<article class="pcard tone'+(i%5)+'" data-price="'+i+'">'+
-      '<div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
+      '<div class="ptop"><div class="pidentity"><div class="pupc"><span>UPC#</span><strong>'+esc(r.upc||'—')+'</strong></div><b>'+esc(r.name||r.upc)+'</b></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
+      '<div class="preasoncall '+meta.cls+'"><span class="preasonmark">!</span><div><strong>Reason:</strong> '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</div><span class="preasonchev">›</span></div>'+
       '<div class="pricepath">'+
         '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div>'+
         '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
