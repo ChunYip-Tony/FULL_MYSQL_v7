@@ -2388,7 +2388,14 @@ def _smoothed_weekday_velocity(
     overall_velocity: Any,
     prior_days: int=2,
 ) -> dict[int,Decimal]:
-    """Shrink sparse weekday movement toward the current overall velocity."""
+    """Historical weekday average with sparse-evidence fallback.
+
+    When a weekday has at least two supported historical observations, use its
+    own average usage directly (e.g. Monday 10 LB vs weekend 20 LB). A weekday
+    with only one observation is shrunk toward the overall run-rate; a weekday
+    with no evidence falls back to the overall run-rate. Missing source dates
+    remain missing and are never inserted as zero-demand days.
+    """
     overall=_d(overall_velocity)
     prior=Decimal(max(1,int(prior_days or 2)))
     out={}
@@ -2398,8 +2405,13 @@ def _smoothed_weekday_velocity(
             if x.get("date") is not None and int(x["date"].weekday())==wd
         ]
         qty=sum((_d(x.get("sold_quantity")) for x in matches),Decimal("0"))
-        n=Decimal(len(matches))
-        out[wd]=(qty+overall*prior)/(n+prior) if n+prior>0 else overall
+        n=len(matches)
+        if n>=2:
+            out[wd]=qty/Decimal(n)
+        elif n==1:
+            out[wd]=(qty+overall*prior)/(Decimal("1")+prior)
+        else:
+            out[wd]=overall
     return out
 
 
@@ -2654,16 +2666,26 @@ def _family_regular_baseline(
         wd_qty=sum((_d(x["sold_quantity"]) for x in matches),Decimal("0"))
         wd_n=len(matches)
         raw=(wd_qty/Decimal(wd_n)) if wd_n else None
-        smoothed=(
-            (wd_qty+_d(overall)*prior_days)/(Decimal(wd_n)+prior_days)
-            if overall is not None else None
-        )
-        weekday_velocity[wd]=smoothed
+        if overall is None:
+            forecast_velocity=None
+            forecast_basis="NO_OVERALL_BASELINE"
+        elif wd_n>=2:
+            forecast_velocity=raw
+            forecast_basis="HISTORICAL_WEEKDAY_AVERAGE"
+        elif wd_n==1:
+            forecast_velocity=(wd_qty+_d(overall)*prior_days)/(Decimal("1")+prior_days)
+            forecast_basis="SPARSE_WEEKDAY_SHRUNK_TO_OVERALL"
+        else:
+            forecast_velocity=overall
+            forecast_basis="OVERALL_FALLBACK_NO_WEEKDAY_OBSERVATION"
+        weekday_velocity[wd]=forecast_velocity
         weekday_detail[wd]={
             "supported_day_count":wd_n,
             "sold_quantity":wd_qty,
             "raw_velocity":raw,
-            "smoothed_velocity":smoothed,
+            "smoothed_velocity":forecast_velocity,
+            "forecast_velocity":forecast_velocity,
+            "forecast_basis":forecast_basis,
         }
 
     confidence=(
@@ -2683,7 +2705,7 @@ def _family_regular_baseline(
         "regular_velocity_by_weekday":weekday_velocity,
         "regular_weekday_detail":weekday_detail,
         "weekday_shrinkage_prior_days":prior_days,
-        "forecast_method":"WEEKDAY_SMOOTHED_TO_OVERALL_REGULAR_BASELINE",
+        "forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS_ELSE_SPARSE_SHRINKAGE",
         "confidence":confidence,
         "sale_days_excluded":len(s["rows"])-n,
         "tpr_treated_as_regular":True,
@@ -4134,6 +4156,11 @@ def bulk_ordering_suggestions(
                 "freshness_coverage_capped":freshness_coverage_capped,
                 "freshness_uncovered_usage":freshness_uncovered_usage,
                 "daily_forecast":daily_forecast,
+                "weekday_usage_forecast":{
+                    WEEKDAY_NAMES[wd]:weekday_vel.get(wd,reg_vel)
+                    for wd in range(7)
+                },
+                "weekday_usage_forecast_basis":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS",
                 "suggested_order_qty":suggested,
                 "suggested_order_uom":demand_uom,
                 "readiness":(
@@ -4195,7 +4222,7 @@ def bulk_ordering_suggestions(
             "ordering_demand_authority":"FAMILY_251_MINUS_252_FIRST;UPC_POS_LAST_FALLBACK",
             "pre_delivery_velocity":"RECENT_FAMILY_251_252_RUN_RATE_WITH_WEEKDAY_SHAPE",
             "regular_velocity":"NON_SALE_POS_WHEN_RECONCILED_TO_FAMILY_BASE_UOM_ELSE_FAMILY_MOVEMENT",
-            "weekday_forecast":"SMOOTHED_TO_CURRENT_OVERALL_VELOCITY",
+            "weekday_forecast":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS;SPARSE_WEEKDAY_SHRUNK_TO_OVERALL;MISSING_SOURCE_DATES_NOT_ZERO",
             "missing_source_dates_count_as_zero":False,
             "promotion_definition":"PRICE_TYPE_SALE_ONLY",
             "promotion_window_per_item":True,
