@@ -236,9 +236,14 @@ jobs:
           assert "setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'None')" in ui
           assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
           assert '.qprice b.qempty' in ui
-          assert 'IGNORE 30 MIN' in ui
+          assert 'IGNORE 12 HOURS' in ui
           assert 'priceIgnoredThisVisit.has(id)' in ui
-          assert 'PRICE_IGNORE_MS=30*60*1000' in ui
+          assert 'PRICE_IGNORE_MS=12*60*60*1000' in ui
+          assert 'priceAccept' not in ui
+          desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+          assert 'Ignore 12 hours' in desktop
+          assert 'ignorePrice12h' in desktop
+          assert 'Mark Accepted' not in desktop
           assert 'tested_evidence_price' in ui
           assert '.pricepath' in ui
           assert '.pp b{display:block;font-size:21px' in ui
