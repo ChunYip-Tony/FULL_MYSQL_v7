@@ -478,12 +478,14 @@ const appDate=v=>{
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null;
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
 function renderView(id){
   if(!$('#'+id))id='quick';
+  const enteringPrice=id==='price'&&current!=='price';
+  if(enteringPrice)priceIgnoredThisVisit=new Set();
   current=id;
   pages.forEach(p=>p.classList.toggle('on',p.id===id));
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
@@ -1411,11 +1413,13 @@ function writePriceIgnores(v){
 function priceIgnoreId(r){return String(r?.upc||'').trim()}
 function priceIsIgnored(r){
   const id=priceIgnoreId(r);if(!id)return false;
+  if(priceIgnoredThisVisit.has(id))return true;
   const map=readPriceIgnores(),ts=Number(map[id]||0);
   return ts>0&&(Date.now()-ts)<PRICE_IGNORE_MS;
 }
 function ignorePriceSuggestion(r){
   const id=priceIgnoreId(r);if(!id)return;
+  priceIgnoredThisVisit.add(id);
   const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
   if($('#overlay').classList.contains('on'))closeSheet(true);
   toast('Ignored for 30 minutes');
