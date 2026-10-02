@@ -1,3 +1,14 @@
+v7.0.384 Yipman Ordering Receiving-Pack History:
+- Ordering suggestions with a positive order quantity now show historically used Receiving Articles for that Family.
+- Each historical Receiving Article shows its most recent receipt date, receipt-event count, and Pack Size.
+- Pack Size uses the newest Article Manual authority (G for Fresh/Live/Shrimp/Fish Ball/Frozen Fish; E for Frozen Pack).
+- If current Article Manual has no single Pack Size, an observed receipt Base/Receiving-UOM conversion may be shown as fallback evidence; unresolved pack size remains blank rather than guessed.
+- 0 ORDER and REVIEW rows stay compact and do not show the extra history block.
+- Ordering detail shows the full historical Receiving Article / Pack Size list.
+- Ordering persisted cache key advanced to V19 so old cached payloads without pack history are not reused.
+- Yipman shell cache advanced to v384.
+Version: 7.0.384 Single-Service Edition
+
 v7.0.341 101 GR Required:
 - Corrects Yipman receipt trace semantics: movement 101 is a physical GR and must have a 5014... GR/material-document number.
 - Removes the temporary "101 RECEIPT" fallback label. Missing 101 GR now shows as GR UNRESOLVED and is treated as a data defect.
