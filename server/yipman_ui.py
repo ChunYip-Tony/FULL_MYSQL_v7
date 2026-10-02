@@ -681,7 +681,7 @@ function fitQuickUpcNames(){
  });
 }
 function bindReceiptLinks(){
- $('[data-receipt-family][data-receipt-date]').forEach(x=>{
+ $$('[data-receipt-family][data-receipt-date]').forEach(x=>{
    x.onclick=()=>openReceiptDetail(
      x.dataset.receiptFamily,
      x.dataset.receiptDate,
@@ -690,8 +690,8 @@ function bindReceiptLinks(){
  });
 }
 function bindQuickRows(){
- $('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
- $('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
+ $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+ $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
  bindReceiptLinks();
  requestAnimationFrame(fitQuickUpcNames);
 }
