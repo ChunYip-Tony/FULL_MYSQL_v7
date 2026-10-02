@@ -3892,6 +3892,21 @@ def bulk_ordering_suggestions(
                     "sale_days_excluded":None,
                 }
 
+            # Inventory at the future delivery date should reflect the
+            # CURRENT run-rate, not the slower/faster historical regular-price
+            # baseline used for post-delivery coverage. Shape current demand by
+            # recent Family 251-252 weekdays when available.
+            current_shape_rows=(
+                family_mvt28.get("rows")
+                if family_mvt28.get("status")=="READY"
+                and str(family_mvt28.get("uom") or "").upper()==demand_uom
+                else family_mvt7.get("rows")
+            )
+            current_weekday_vel=_smoothed_weekday_velocity(
+                current_shape_rows or [],
+                vel7 if vel7 is not None else reg_vel,
+            )
+
             promo_baseline=None
             promo_vel=None
             promo_fallback=False
@@ -3944,7 +3959,16 @@ def bulk_ordering_suggestions(
                     and promo_item["promotion_start_date"]<=day<=promo_item["promotion_end_date"]
                 )
                 segment="PROMOTION" if is_promo else "REGULAR"
-                regular_day_vel=_d(weekday_vel.get(day.weekday(),reg_vel))
+                coverage_regular_vel=_d(weekday_vel.get(day.weekday(),reg_vel))
+                current_regular_vel=_d(
+                    current_weekday_vel.get(
+                        day.weekday(),
+                        vel7 if vel7 is not None else reg_vel,
+                    )
+                )
+                regular_day_vel=(
+                    current_regular_vel if day<delivery else coverage_regular_vel
+                )
                 use_vel=_d(promo_vel if is_promo else regular_day_vel)
                 total+=use_vel
                 segments[segment]+=use_vel
@@ -3967,6 +3991,11 @@ def bulk_ordering_suggestions(
                     "price_regime":segment,
                     "forecast_quantity":use_vel,
                     "regular_weekday_velocity":regular_day_vel,
+                    "regular_velocity_basis":(
+                        "CURRENT_RECENT_FAMILY_RUN_RATE"
+                        if day<delivery else
+                        "POST_DELIVERY_NON_PROMO_BASELINE"
+                    ),
                 })
                 day+=timedelta(days=1)
 
@@ -4106,6 +4135,7 @@ def bulk_ordering_suggestions(
             "single_production_engine":True,
             "sales_history":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
             "ordering_demand_authority":"FAMILY_251_MINUS_252_FIRST;UPC_POS_LAST_FALLBACK",
+            "pre_delivery_velocity":"RECENT_FAMILY_251_252_RUN_RATE_WITH_WEEKDAY_SHAPE",
             "regular_velocity":"NON_SALE_POS_WHEN_RECONCILED_TO_FAMILY_BASE_UOM_ELSE_FAMILY_MOVEMENT",
             "weekday_forecast":"SMOOTHED_TO_CURRENT_OVERALL_VELOCITY",
             "missing_source_dates_count_as_zero":False,
