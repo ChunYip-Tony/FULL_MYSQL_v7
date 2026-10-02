@@ -571,12 +571,21 @@ def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: di
 def ordering_review(
     category: str = "ALL",
     delivery_date: date | None = None,
+    next_delivery_date: date | None = None,
     *,
     best_available_delivery_evidence: bool = True,
 ) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "FRESH", "FROZEN"}:
         raise ValueError("CATEGORY_MUST_BE_ALL_FRESH_OR_FROZEN")
+    if next_delivery_date is not None and delivery_date is None:
+        raise ValueError("NEXT_DELIVERY_REQUIRES_DELIVERY_DATE")
+    if (
+        delivery_date is not None
+        and next_delivery_date is not None
+        and next_delivery_date <= delivery_date
+    ):
+        raise ValueError("NEXT_DELIVERY_MUST_BE_AFTER_DELIVERY_DATE")
 
     kinds = [cat] if cat != "ALL" else ["FRESH", "FROZEN"]
     rows: list[dict[str, Any]] = []
@@ -656,6 +665,7 @@ def ordering_review(
                 "contract_version":"BACKOFFICE_ORDERING_REVIEW_V5_STALE_ESTIMATE",
                 "category":cat,
                 "selected_delivery_date":delivery_date,
+                "selected_next_delivery_date":next_delivery_date,
                 "selected_delivery_weekday":(
                     ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][delivery_date.weekday()]
                     if delivery_date else None
@@ -805,6 +815,7 @@ def ordering_review(
                 "contract_version":"BACKOFFICE_ORDERING_REVIEW_V9_YIPMAN_GR_5014_AUTHORITY",
                 "category":cat,
                 "selected_delivery_date":delivery_date,
+                "selected_next_delivery_date":next_delivery_date,
                 "selected_delivery_weekday":selected_weekday,
                 "analysis_status":"HISTORY_READY",
                 "history_mode":True,
@@ -879,6 +890,7 @@ def ordering_review(
             bulk_kwargs: dict[str,Any] = {
                 "ordering_date":forecast_start_date,
                 "expected_delivery_date":delivery_date,
+                "next_delivery_date":next_delivery_date,
                 "include_sufficient_stock":bool(delivery_date),
                 "family_ids":eligible_family_ids,
             }
@@ -887,7 +899,10 @@ def ordering_review(
 
             if delivery_date is not None and not eligible_family_ids:
                 bulk={
-                    "inputs":{"expected_delivery_date":delivery_date},
+                    "inputs":{
+                        "expected_delivery_date":delivery_date,
+                        "next_delivery_date":next_delivery_date,
+                    },
                     "suggestions":[],
                     "skipped":[],
                     "rules":{"delivery_prefilter_short_circuit":True},
@@ -936,6 +951,7 @@ def ordering_review(
                     "ordering_frequency": _frequency_label(pattern),
                     "ordering_frequency_raw": pattern.get("frequency"),
                     "selected_delivery_date": delivery_date,
+                    "selected_next_delivery_date": next_delivery_date,
                     "delivery_day": delivery_day.get("weekday") if delivery_day else None,
                     "delivery_day_observed_count": delivery_day.get("observed_count") if delivery_day else None,
                     "delivery_day_receipt_count": delivery_day.get("receipt_date_count") if delivery_day else pattern.get("receipt_date_count"),
@@ -1045,6 +1061,7 @@ def ordering_review(
                         "ordering_frequency":_frequency_label(pattern),
                         "ordering_frequency_raw":pattern.get("frequency"),
                         "selected_delivery_date":delivery_date,
+                        "selected_next_delivery_date":next_delivery_date,
                         "delivery_day":delivery_day.get("weekday"),
                         "delivery_day_observed_count":delivery_day.get("observed_count"),
                         "delivery_day_receipt_count":delivery_day.get("receipt_date_count"),
@@ -1136,9 +1153,10 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V15_FAMILY_MVT_28D",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V16_TWO_DATE_WINDOW",
         "category": cat,
         "selected_delivery_date": delivery_date,
+        "selected_next_delivery_date": next_delivery_date,
         "selected_delivery_weekday": (
             ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][delivery_date.weekday()]
             if delivery_date else None
@@ -1166,6 +1184,9 @@ def ordering_review(
             "delivery_evidence_lookback_days": 180 if best_available_delivery_evidence else 84,
             "best_available_delivery_evidence": bool(best_available_delivery_evidence),
             "delivery_roster_complete": bool(delivery_date),
+            "coverage_window_selected_by_user": bool(
+                delivery_date is not None and next_delivery_date is not None
+            ),
             "observed_family_is_never_hidden_by_order_math": bool(delivery_date),
             "delivery_day_prefilter_before_heavy_math": True,
             "stale_estimate_allowed": True,
@@ -1190,6 +1211,7 @@ _ORDERING_REVIEW_CACHE_TTL_SECONDS = 120.0
 def _ordering_review_cache_key(
     category: str,
     delivery_date: date,
+    next_delivery_date: date | None = None,
     *,
     best_available_delivery_evidence: bool = False,
 ) -> str:
@@ -1197,7 +1219,8 @@ def _ordering_review_cache_key(
     # Cache schema V8: GR semantics changed to validated 5014-only receipt docs.
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
-    return f"V15_FAMILY_MVT_28D_FALLBACK|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}"
+    next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
+    return f"V16_TWO_DATE_WINDOW|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -1256,6 +1279,7 @@ def _persist_ordering_review(cache_key: str, value: dict[str,Any]) -> None:
 def _ordering_review_refresh_worker(
     category: str,
     delivery_date: date,
+    next_delivery_date: date | None,
     cache_key: str,
     best_available_delivery_evidence: bool = True,
 ) -> None:
@@ -1264,6 +1288,7 @@ def _ordering_review_refresh_worker(
         value=ordering_review(
             category=category,
             delivery_date=delivery_date,
+            next_delivery_date=next_delivery_date,
             best_available_delivery_evidence=best_available_delivery_evidence,
         )
         _persist_ordering_review(cache_key,value)
@@ -1280,6 +1305,7 @@ def _ordering_review_refresh_worker(
 def _request_ordering_review_refresh(
     category: str,
     delivery_date: date,
+    next_delivery_date: date | None,
     cache_key: str,
     best_available_delivery_evidence: bool = True,
 ) -> None:
@@ -1289,7 +1315,7 @@ def _request_ordering_review_refresh(
         _ORDERING_REVIEW_REFRESHING.add(cache_key)
     threading.Thread(
         target=_ordering_review_refresh_worker,
-        args=(category,delivery_date,cache_key,best_available_delivery_evidence),
+        args=(category,delivery_date,next_delivery_date,cache_key,best_available_delivery_evidence),
         name=f"ordering-review-{delivery_date.isoformat()}",
         daemon=True,
     ).start()
@@ -1298,6 +1324,7 @@ def _request_ordering_review_refresh(
 def cached_ordering_review(
     category: str = "ALL",
     delivery_date: date | None = None,
+    next_delivery_date: date | None = None,
     force: bool = False,
     *,
     best_available_delivery_evidence: bool = True,
@@ -1307,6 +1334,7 @@ def cached_ordering_review(
         return ordering_review(
             category=category,
             delivery_date=None,
+            next_delivery_date=None,
             best_available_delivery_evidence=best_available_delivery_evidence,
         )
 
@@ -1316,6 +1344,7 @@ def cached_ordering_review(
     key=_ordering_review_cache_key(
         cat,
         delivery_date,
+        next_delivery_date,
         best_available_delivery_evidence=best_available_delivery_evidence,
     )
 
@@ -1340,9 +1369,10 @@ def cached_ordering_review(
     if cached is None and already_refreshing:
         expected_now=completed_through_date()
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V15_ASYNC_FAMILY_MVT_28D",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
             "category":cat,
             "selected_delivery_date":delivery_date,
+            "selected_next_delivery_date":next_delivery_date,
             "selected_delivery_weekday":[
                 "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
             ][delivery_date.weekday()],
@@ -1378,6 +1408,7 @@ def cached_ordering_review(
         _request_ordering_review_refresh(
             cat,
             delivery_date,
+            next_delivery_date,
             key,
             best_available_delivery_evidence,
         )
@@ -1401,7 +1432,7 @@ def cached_ordering_review(
         has_rows=bool(cached.get("rows"))
         return {
             **cached,
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V15_ASYNC_FAMILY_MVT_28D",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
             "analysis_status":(
                 "READY_STALE_ESTIMATE_REFRESHING"
                 if has_rows else
@@ -1417,9 +1448,10 @@ def cached_ordering_review(
     # in the standard Back Office path.
     if cached is None or not data_current:
         return {
-            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V15_ASYNC_FAMILY_MVT_28D",
+            "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
             "category":cat,
             "selected_delivery_date":delivery_date,
+            "selected_next_delivery_date":next_delivery_date,
             "selected_delivery_weekday":[
                 "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
             ][delivery_date.weekday()],
@@ -1443,7 +1475,7 @@ def cached_ordering_review(
 
     return {
         **cached,
-        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V15_ASYNC_FAMILY_MVT_28D",
+        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V16_ASYNC_TWO_DATE_WINDOW",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
         "refresh_error":err,
