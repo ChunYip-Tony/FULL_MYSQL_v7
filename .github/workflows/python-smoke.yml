@@ -727,6 +727,7 @@ jobs:
           assert 'YIPMAN_ORDERING_CALENDAR_V3_STRONGEST_DAY_PLUS_7' in runtime
           assert 'strongest_weekday' in runtime
           assert 'default_next=default_delivery+timedelta(days=7)' in runtime
+          assert 'not bool(row.get("priority_240_249_mismatch"))' in runtime
           assert "next_delivery_date=" in text
           print('yipman-dom-bindings=PASS')
           PY
