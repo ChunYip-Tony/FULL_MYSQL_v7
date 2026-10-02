@@ -238,7 +238,9 @@ jobs:
           assert 'promotion_start_date") or promotion_start_date' in runtime
           assert 'forecast_promotion_coverage' in runtime
           assert 'forecast_regular_coverage' in runtime
-          assert 'COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY' in runtime
+          assert 'coverage_usage-usable_at_delivery' in active_bulk
+          assert 'pre_delivery_stockout_qty=max' in active_bulk
+          assert 'TEMPORARY_OH_ONLY_FOR_PROMOTION_ORDERING' in active_bulk
 
           promo=Path('promotion_ordering.py').read_text(encoding='utf-8')
           assert 'temporary_oh_persisted":False' in promo
