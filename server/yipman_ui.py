@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v376';
+const CACHE='yipman-v377';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -119,6 +119,10 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .currentbatch{display:grid;gap:8px}.cbtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.cbid b{display:block;font-size:18px;line-height:1.05}.cbid span{display:block;font-size:9px;color:var(--muted);margin-top:3px}.cbstatus{flex:0 0 auto;max-width:58%;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:950;line-height:1.15;text-align:center;white-space:normal}.cbstatus.red{background:var(--redbg);color:var(--red)}.cbstatus.amber{background:var(--amberbg);color:var(--amber)}.cbstatus.green{background:var(--greenbg);color:var(--green)}
 .cbmeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.cbmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbmeta b{display:block;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .batchrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;padding:9px 0;border-top:1px solid var(--line);align-items:start}.batchrow:first-child{border-top:0}.batchrow>div{min-width:0}.batchrow b{display:block;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batchrow span{display:block;min-width:0;font-size:8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.batchdate{font-size:8px!important;color:#84909a!important;white-space:nowrap}.batchstate{display:inline-block!important;width:auto;border-radius:999px;padding:3px 6px;background:#f3f6f8;color:#5f6d78!important;font-size:7px!important;font-weight:900;line-height:1.15}.batchstate.hold{background:var(--redbg);color:var(--red)!important}.batchstate.ready{background:var(--greenbg);color:var(--green)!important}
+.qaresolutioncard{grid-column:1/-1}.qareshead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.qareshead h3{margin-bottom:2px}.qareshead p{margin:0;font-size:8px;line-height:1.3;color:var(--muted);font-weight:750}.qaresbadge{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:#eef3f7;color:#51606c;font-size:8px;font-weight:950}.qaresbadge.bad{background:var(--redbg);color:var(--red)}.qaresbadge.ok{background:var(--greenbg);color:var(--green)}
+.qaresstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.qaresstat{background:#f6f8fa;border-radius:9px;padding:7px}.qaresstat small{display:block;font-size:6px;color:var(--muted);font-weight:950}.qaresstat b{display:block;font-size:13px;margin-top:2px}
+.qagroups{margin-top:7px;border-top:1px solid var(--line)}.qagroup{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.qagroup:last-child{border-bottom:0}.qagroup b{display:block;font-size:10px;line-height:1.18}.qagroup span{display:block;font-size:7px;color:var(--muted);margin-top:2px}.qagroup button{border:0;border-radius:8px;background:#edf3f7;color:#315067;padding:6px 8px;font-size:7px;font-weight:950}.qagroup button.fix{background:#fff1d6;color:#805d00}.qaresactions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.qaresactions button{border:0;border-radius:10px;padding:8px;font-size:8px;font-weight:950}.qaresreview{background:#173047;color:#fff}.qaresrebuild{background:#e9eef2;color:#344653}
+.qalist{display:grid;gap:7px}.qaitem{border:1px solid #e2e8ec;background:#fff;border-radius:12px;padding:9px;text-align:left}.qaitemtop{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.qaitem b{font-size:12px}.qaitem small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.qaflag{border-radius:999px;padding:4px 6px;font-size:7px;font-weight:950;white-space:nowrap}.qaflag.fix{background:#fff1d6;color:#805d00}.qaflag.blocked{background:#eef3f7;color:#5e6c77}.qaitemreason{font-size:8px;color:#52616d;line-height:1.35;margin-top:6px}.qafields{display:grid;gap:8px}.qafield label{display:block;font-size:8px;font-weight:950;color:#52616d;margin-bottom:4px}.qafield input,.qafield select,.qafield textarea{width:100%;border:1px solid #d9e1e6;border-radius:10px;background:#fff;padding:9px;font-size:12px;outline:0}.qafield textarea{min-height:68px;resize:vertical}.qaconfirm{display:flex;gap:7px;align-items:flex-start;margin-top:9px;font-size:9px;line-height:1.35;color:#465865}.qaconfirm input{margin-top:2px}.qainfo{background:#f7f9fb;border:1px solid #e3e9ed;border-radius:10px;padding:8px;font-size:9px;line-height:1.4;color:#52616d;margin-top:7px}.qainfo.warn{background:#fff8e6;border-color:#f0dda0;color:#775a0a}
 @media(max-width:430px){
   #data .topline{align-items:center}
   #data .hint{font-size:9px}
@@ -130,6 +134,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .cbid b{font-size:20px}.cbid span{font-size:10px}.cbstatus{font-size:9px;max-width:64%}
   .cbmeta small{font-size:7px}.cbmeta b{font-size:11px}
   .batchrow{padding:10px 0}.batchrow b{font-size:13px}.batchrow span{font-size:9px}.batchstate{font-size:8px!important}
+  .qaresolutioncard{grid-column:auto}.qareshead p{font-size:9px}.qaresbadge{font-size:9px}.qaresstat small{font-size:7px}.qaresstat b{font-size:16px}.qagroup b{font-size:12px}.qagroup span{font-size:9px}.qagroup button{font-size:9px}.qaresactions button{font-size:10px;padding:10px}.qaitem b{font-size:14px}.qaitem small,.qaitemreason{font-size:10px}.qaflag{font-size:8px}
 }
 .nav{position:absolute;left:10px;right:10px;bottom:calc(9px + env(safe-area-inset-bottom));height:57px;display:grid;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:18px;box-shadow:0 9px 24px rgba(18,38,56,.12);backdrop-filter:blur(10px);z-index:10}.nav button{border:0;background:transparent;color:#73808a;font-size:7px;font-weight:850}.nav i{display:block;font-style:normal;font-size:16px;margin-bottom:2px}.nav button.on{color:var(--blue)}
 .overlay{position:absolute;inset:0;background:rgba(15,25,34,.34);display:none;align-items:flex-end;z-index:30}.overlay.on{display:flex}.sheet{width:100%;max-height:68%;overflow:auto;background:#f7f8fa;border-radius:23px 23px 0 0}.shead{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:12px 13px;display:flex;justify-content:space-between;gap:8px;border-radius:23px 23px 0 0}.shead h3{font-size:17px;margin:0}.shead p{font-size:8px;color:var(--muted);margin:2px 0 0}.close{width:34px;height:34px;border:0;border-radius:11px;background:#eef1f3;font-size:17px}.sbody{padding:9px 11px 13px}.dmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.dm{background:#fff;border-radius:12px;padding:9px}.dm b{font-size:14px;display:block}.dm span{font-size:7px;color:var(--muted)}.detail{background:#fff;border-radius:12px;padding:9px;margin-top:6px;font-size:9px;line-height:1.4;color:#53616d}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.actions button{border:0;border-radius:11px;padding:9px;font-size:8px;font-weight:900}.primary{background:var(--blue);color:#fff}.secondary{background:#e6ebef;color:#2f3e49}
@@ -485,7 +490,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 
     <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">COMPACT · LIVE PROGRESS</div></div><div class="filters"><button class="pill on" data-price-filter="UPC_240">240</button><button class="pill" data-price-filter="UPC_245">245</button><button class="pill" data-price-filter="UPC_247">247</button><button class="pill" data-price-filter="UPC_249">249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
-    <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">BACK OFFICE UNCHANGED</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+    <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
     <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
@@ -523,7 +528,7 @@ const appDate=v=>{
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
@@ -1626,18 +1631,97 @@ $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
  loadPrices();
 });
 
+function qaFixLabel(x){
+ const k=String(x?.fix_kind||'').toUpperCase();
+ if(k==='UOM_OR_IDENTITY'||k==='IDENTITY_AND_UOM')return 'Item / UOM';
+ if(k==='COST_CONVERSION')return 'Cost Conversion';
+ if(k==='ARTICLE_FAMILY_MAPPING')return 'Article → Family';
+ return 'Review Only';
+}
+function qaIssueName(x){
+ const c=x?.current||{};
+ return c.item_name||c.selling_description||c.article_description||x?.entity_key||x?.issue_code||'QA issue';
+}
+function qaIssueKey(x){return x?.issue_id==null?('QC:'+String(x?.entity_key||'')):String(x.issue_id)}
+function findDataQaIssue(key){
+ if(String(key).startsWith('QC:'))return dataQaIssues.find(x=>x.issue_id==null&&('QC:'+String(x.entity_key||''))===String(key));
+ return dataQaIssues.find(x=>String(x.issue_id)===String(key));
+}
+function renderQAResolution(qa,batch){
+ dataQaIssues=Array.isArray(qa?.issues)?qa.issues:[];
+ dataQaBatchId=qa?.batch_id||batch?.batch_id||null;
+ const open=dataQaIssues.length,fixable=dataQaIssues.filter(x=>x.can_fix).length,review=open-fixable;
+ const badge=$('#qaResolutionBadge');badge.textContent=open?open+' OPEN':'READY';badge.className='qaresbadge '+(open?'bad':'ok');
+ if(!open){
+   $('#qaResolution').innerHTML='<div class="qainfo"><b>No open QA issues.</b><br>Current QA review is clear.</div>';
+   return;
+ }
+ const groups=new Map();
+ dataQaIssues.forEach(x=>{const code=String(x.issue_code||'QA_HOLD').toUpperCase();const g=groups.get(code)||{code,count:0,fixable:0};g.count++;if(x.can_fix)g.fixable++;groups.set(code,g)});
+ const rows=[...groups.values()].sort((a,b)=>b.count-a.count||a.code.localeCompare(b.code)).slice(0,7);
+ $('#qaResolution').innerHTML=
+   '<div class="qaresstats"><div class="qaresstat"><small>OPEN</small><b>'+open+'</b></div><div class="qaresstat"><small>FIXABLE</small><b>'+fixable+'</b></div><div class="qaresstat"><small>REVIEW / BLOCKED</small><b>'+review+'</b></div></div>'+
+   '<div class="qagroups">'+rows.map(g=>'<div class="qagroup"><div><b>'+esc(friendlySignal(g.code))+'</b><span>'+g.count+' issue'+(g.count===1?'':'s')+' · '+g.fixable+' user-confirmable</span></div><button class="'+(g.fixable?'fix':'')+'" data-qa-group="'+esc(g.code)+'">'+(g.fixable?'FIX':'DETAIL')+'</button></div>').join('')+'</div>'+
+   '<div class="qaresactions"><button class="qaresreview" id="qaReviewAll">REVIEW ALL</button><button class="qaresrebuild" id="qaRebuild">'+(dataQaBatchId?'REBUILD QA':'REBUILD UNAVAILABLE')+'</button></div>'+
+   '<div class="qainfo warn">Fixes are fail-closed. Only confirmed identity/UOM, cost conversion, and Article→Family authority are editable here. RAW source data is never changed.</div>';
+ $$('[data-qa-group]').forEach(b=>b.onclick=()=>openQAGroup(b.dataset.qaGroup));
+ const all=$('#qaReviewAll');if(all)all.onclick=()=>openQAGroup('ALL');
+ const rebuild=$('#qaRebuild');if(rebuild){rebuild.disabled=!dataQaBatchId;rebuild.onclick=()=>rebuildQAFromDataCenter()}
+}
+function openQAGroup(code){
+ const rows=(code==='ALL'?dataQaIssues:dataQaIssues.filter(x=>String(x.issue_code||'').toUpperCase()===String(code).toUpperCase()));
+ sheet('QA Resolution',code==='ALL'?(rows.length+' open issues'):friendlySignal(code),'<div class="qalist">'+rows.map(x=>{const cur=x.current||{};return '<button class="qaitem" data-qa-issue="'+esc(qaIssueKey(x))+'"><div class="qaitemtop"><div><b>'+esc(qaIssueName(x))+'</b><small>'+esc(x.entity_type||'')+' '+esc(x.entity_key||'')+(cur.current_oh!=null?' · OH '+fmt(cur.current_oh)+' '+esc(cur.current_oh_uom||''):'')+'</small></div><span class="qaflag '+(x.can_fix?'fix':'blocked')+'">'+esc(x.can_fix?'FIX':'REVIEW')+'</span></div><div class="qaitemreason">'+esc(friendlySignal(x.issue_code||x.issue_summary||''))+' · '+esc(qaFixLabel(x))+'</div></button>'}).join('')+'</div>');
+ $$('[data-qa-issue]').forEach(b=>b.onclick=()=>openMobileQAIssue(b.dataset.qaIssue));
+}
+function mobileQaApplyFeedback(msg){toast(msg)}
+async function refreshDataAfterQAFix(){closeSheet(false);await loadData()}
+function openMobileQAIssue(key){
+ const x=findDataQaIssue(key);if(!x)return;
+ const cur=x.current||{},detail=x.detail||{},kind=String(x.fix_kind||'').toUpperCase();
+ const name=qaIssueName(x),entity=String(x.entity_key||'');
+ const summary='<div class="dmetrics"><div class="dm"><b>'+esc(x.severity||'—')+'</b><span>SEVERITY</span></div><div class="dm"><b>'+esc(entity||'—')+'</b><span>'+esc(x.entity_type||'ENTITY')+'</span></div><div class="dm"><b>'+esc(qaFixLabel(x))+'</b><span>FIX TYPE</span></div></div><div class="qainfo"><b>'+esc(friendlySignal(x.issue_code||'QA HOLD'))+'</b><br>'+esc(x.issue_summary||'Review the QA evidence before making a correction.')+'</div>';
+ if(!x.can_fix){
+   sheet('QA Issue',name,summary+'<div class="qainfo warn"><b>Review only.</b><br>This issue is not safely editable from Data Center. Fix the missing source/dependency or underlying lineage, then rebuild QA.</div><div class="detail"><b>Evidence</b><br><pre style="white-space:pre-wrap;margin:6px 0 0">'+esc(JSON.stringify(detail,null,2))+'</pre></div>');
+   return;
+ }
+ if(kind==='ARTICLE_FAMILY_MAPPING'){
+   sheet('Fix Article → Family',name,summary+'<div class="qafields"><div class="qafield"><label>ARTICLE</label><input id="mQaArticle" value="'+esc(entity)+'" readonly></div><div class="qafield"><label>CONFIRMED FAMILY / MAIN ARTICLE</label><input id="mQaFamily" inputmode="numeric" placeholder="Enter Family Article #"></div><div class="qafield"><label>NOTE</label><textarea id="mQaNote" placeholder="How was this mapping confirmed?"></textarea></div></div><label class="qaconfirm"><input id="mQaConfirm" type="checkbox"><span>I confirmed this Article belongs to the Family entered above.</span></label><div class="actions"><button class="secondary" id="mQaCancel">CANCEL</button><button class="primary" id="mQaApplyFamily">APPLY FIX</button></div>');
+   $('#mQaCancel').onclick=()=>closeSheet(true);
+   $('#mQaApplyFamily').onclick=async()=>{if(!$('#mQaConfirm').checked)return mobileQaApplyFeedback('Confirm the mapping first');const fam=($('#mQaFamily').value||'').trim();if(!fam)return mobileQaApplyFeedback('Enter the Family Article');const btn=$('#mQaApplyFamily');btn.disabled=true;btn.textContent='APPLYING…';try{await api('/v1/backoffice/qa-resolve-article-family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({issue_id:x.issue_id,article_number:entity,main_article_number:fam,note:($('#mQaNote').value||'').trim()||null,confirm:'APPLY_ARTICLE_FAMILY_FIX'}),timeoutMs:30000});mobileQaApplyFeedback('Family mapping saved · rebuild QA next');await refreshDataAfterQAFix()}catch(e){mobileQaApplyFeedback(e.message);btn.disabled=false;btn.textContent='APPLY FIX'}};
+   return;
+ }
+ if(kind==='COST_CONVERSION'){
+   const sell=String(cur.selling_uom||detail.selling_uom||'').toUpperCase(),costUom=String(detail.cost_uom||'').toUpperCase();
+   sheet('Fix Cost Conversion',name,summary+'<div class="qafields"><div class="qafield"><label>SELLING QTY</label><input id="mQaSellQty" type="number" min="0.0001" step="0.0001" value="1"></div><div class="qafield"><label>SELLING UOM</label><input id="mQaSellUom" value="'+esc(sell)+'" readonly></div><div class="qafield"><label>COST QTY</label><input id="mQaCostQty" type="number" min="0.0001" step="0.0001" placeholder="Example: 2"></div><div class="qafield"><label>COST UOM</label><input id="mQaCostUom" value="'+esc(costUom)+'" readonly></div><div class="qafield"><label>NOTE</label><textarea id="mQaNote" placeholder="Example: 1 PACK = 2 LB"></textarea></div></div><label class="qaconfirm"><input id="mQaConfirm" type="checkbox"><span>I confirmed this exact cost-to-selling conversion.</span></label><div class="actions"><button class="secondary" id="mQaCancel">CANCEL</button><button class="primary" id="mQaApplyConv">APPLY FIX</button></div>');
+   $('#mQaCancel').onclick=()=>closeSheet(true);
+   const btn=$('#mQaApplyConv');if(!sell||!costUom){btn.disabled=true;mobileQaApplyFeedback('Selling UOM and Cost UOM must both be known');return}
+   btn.onclick=async()=>{if(!$('#mQaConfirm').checked)return mobileQaApplyFeedback('Confirm the conversion first');const sq=Number($('#mQaSellQty').value),cq=Number($('#mQaCostQty').value);if(!(sq>0)||!(cq>0))return mobileQaApplyFeedback('Enter positive quantities');btn.disabled=true;btn.textContent='APPLYING…';try{await api('/v1/backoffice/qa-resolve-cost-conversion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({issue_id:x.issue_id,ean_upc:entity,selling_qty:sq,selling_uom:sell,cost_qty:cq,cost_uom:costUom,note:($('#mQaNote').value||'').trim()||null,confirm:'APPLY_COST_CONVERSION_FIX'}),timeoutMs:30000});mobileQaApplyFeedback('Cost conversion saved');await refreshDataAfterQAFix()}catch(e){mobileQaApplyFeedback(e.message);btn.disabled=false;btn.textContent='APPLY FIX'}};
+   return;
+ }
+ const article=String(cur.article_number||cur.main_article_number||''),sell=String(cur.selling_uom||''),base=String(cur.base_uom||''),factor=cur.base_qty_per_selling_unit??'';
+ sheet('Fix Item / UOM',name,summary+'<div class="qafields"><div class="qafield"><label>SELLING UOM</label><select id="mQaSellingUom"><option value="">Select UOM…</option>'+['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>'<option value="'+u+'" '+(sell.toUpperCase()===u?'selected':'')+'>'+u+'</option>').join('')+'</select></div><div class="qafield"><label>ARTICLE NUMBER</label><input id="mQaArticle" value="'+esc(article)+'" placeholder="Confirmed Article #"></div><div class="qafield"><label>BASE UOM · OPTIONAL</label><select id="mQaBaseUom"><option value="">Not confirmed</option>'+['LB','EA','PACK','PAC','CASE','BAG','BX','TRAY'].map(u=>'<option value="'+u+'" '+(base.toUpperCase()===u?'selected':'')+'>'+u+'</option>').join('')+'</select></div><div class="qafield"><label>BASE QTY / SELLING UNIT · OPTIONAL</label><input id="mQaFactor" type="number" min="0" step="0.0001" value="'+esc(factor)+'" placeholder="Example: 2"></div><div class="qafield"><label>NOTE</label><textarea id="mQaNote" placeholder="What did you confirm?"></textarea></div></div><label class="qaconfirm"><input id="mQaConfirm" type="checkbox"><span>I confirmed the item link and Selling UOM entered above.</span></label><div class="qainfo">This writes only a confirmed identity/UOM authority. Price, cost, sales, receipts and RAW files remain unchanged.</div><div class="actions"><button class="secondary" id="mQaCancel">CANCEL</button><button class="primary" id="mQaApply">APPLY FIX</button></div>');
+ $('#mQaCancel').onclick=()=>closeSheet(true);
+ $('#mQaApply').onclick=async()=>{if(!$('#mQaConfirm').checked)return mobileQaApplyFeedback('Confirm the correction first');const selling=$('#mQaSellingUom').value;if(!selling)return mobileQaApplyFeedback('Select Selling UOM');const baseUom=$('#mQaBaseUom').value||null,fraw=($('#mQaFactor').value||'').trim();if(baseUom&&!fraw)return mobileQaApplyFeedback('Enter Base Qty or clear Base UOM');const btn=$('#mQaApply');btn.disabled=true;btn.textContent='APPLYING…';try{await api('/v1/backoffice/qa-resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({issue_id:x.issue_id,ean_upc:entity,article_number:($('#mQaArticle').value||'').trim()||null,selling_uom:selling,base_uom:baseUom,base_qty_per_selling_unit:fraw===''?null:Number(fraw),note:($('#mQaNote').value||'').trim()||null,confirm:'APPLY_QA_FIX'}),timeoutMs:30000});mobileQaApplyFeedback('QA fix saved');await refreshDataAfterQAFix()}catch(e){mobileQaApplyFeedback(e.message);btn.disabled=false;btn.textContent='APPLY FIX'}};
+}
+async function rebuildQAFromDataCenter(){
+ if(!dataQaBatchId)return toast('No rebuildable QA batch');
+ if(!window.confirm('Rebuild Phase 3 / QA for Batch #'+dataQaBatchId+'?\n\nThis recalculates with the current fixes. It does not erase unresolved blockers.'))return;
+ const btn=$('#qaRebuild');if(btn){btn.disabled=true;btn.textContent='QUEUING…'}
+ try{await api('/v1/web-upload/batches/'+encodeURIComponent(dataQaBatchId)+'/rebuild-phase3',{method:'POST',timeoutMs:30000});toast('QA rebuild queued');setTimeout(()=>loadData(),900)}catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent='REBUILD QA'}}
+}
 async function loadData(){
  try{
-  const [health,active,recent]=await Promise.all([api('/v1/backoffice/data-health?days=14',{timeoutMs:12000}),api('/v1/web-upload/active',{timeoutMs:12000}),api('/v1/web-upload/recent?limit=4',{timeoutMs:12000})]);
+  const [health,active,recent,qa]=await Promise.all([api('/v1/backoffice/data-health?days=14',{timeoutMs:12000}),api('/v1/web-upload/active',{timeoutMs:12000}),api('/v1/web-upload/recent?limit=4',{timeoutMs:12000}),api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000})]);
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
   const b=active.active_batch||active.latest_batch||{};const st=String(b.processing_status||'NONE').toUpperCase();
   $('#pipe').innerHTML='<div class="stage '+(st!=='NONE'?'ok':'')+'"><b>UPLOAD</b><span>'+(st==='NONE'?'—':'DONE')+'</span></div><div class="stage '+(/INGEST|PHASE|QUICK|READY/.test(st)?'ok':'')+'"><b>INGEST</b><span>'+(/INGEST|PHASE|QUICK|READY/.test(st)?'DONE':'—')+'</span></div><div class="stage '+(/HOLD/.test(st)?'bad':/PHASE3|QUICK|READY/.test(st)?'ok':'warn')+'"><b>QA</b><span>'+esc(st.includes('HOLD')?'HOLD':/PHASE3|QUICK|READY/.test(st)?'DONE':'WAIT')+'</span></div><div class="stage '+(/QUICK_CHECK_READY/.test(st)?'ok':'warn')+'"><b>PUBLISH</b><span>'+(/QUICK_CHECK_READY/.test(st)?'READY':'WAIT')+'</span></div>';
   const statusLabel=friendlySignal(st);
   const statusClass=st.includes('HOLD')?'red':(/READY|PUBLISH/.test(st)?'green':'amber');
   $('#currentBatch').innerHTML=b.batch_id?'<div class="currentbatch" data-batch="'+esc(b.session_id||b.batch_key||'')+'"><div class="cbtop"><div class="cbid"><b>Batch #'+esc(b.batch_id)+'</b><span>'+esc(b.batch_label||'Current processing batch')+'</span></div><span class="cbstatus '+statusClass+'">'+esc(statusLabel)+'</span></div><div class="cbmeta"><div><small>RUN</small><b>#'+esc(b.active_pipeline_run_id||b.pipeline_run_id||'—')+'</b></div><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(b.open_issue_total??b.error_count??b.qa_hold_count,0)+'</b></div></div></div>':'<div class="empty">No active batch.</div>';
+  renderQAResolution(qa,b);
   const rb=recent.batches||recent.rows||[];$('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();const cls=xs.includes('HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':'');return '<div class="batchrow"><div><b>Batch #'+esc(x.batch_id||'—')+'</b><span class="batchstate'+cls+'">'+esc(friendlySignal(xs||'—'))+'</span></div><span class="batchdate">'+esc(String(x.completed_at||x.upload_started_at||'').slice(0,10))+'</span></div>'}).join('')||'<div class="empty">No recent batches.</div>';
   $$('[data-batch]').forEach(x=>x.onclick=()=>openBatch(x.dataset.batch,b));
- }catch(e){$('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ }catch(e){$('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>'}
 }
 async function openBatch(session,basic){sheet('Batch #'+esc(basic.batch_id||'—'),basic.processing_status||'','<div class="loading">Loading processing detail…</div>');if(!session){$('#sheetBody').innerHTML='<div class="detail">Session ID unavailable in active summary.</div>';return}try{const d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{timeoutMs:12000}), b=d.batch||{}, p=d.phase3||{}, q=d.qa_summary||{};$('#sheetBody').innerHTML='<div class="dmetrics"><div class="dm"><b>'+esc(b.processing_status||'—')+'</b><span>BATCH STATUS</span></div><div class="dm"><b>'+fmt(p.quick_check_ready_rows,0)+'</b><span>READY ROWS</span></div><div class="dm"><b>'+fmt(p.quick_check_hold_rows,0)+'</b><span>QA HOLD</span></div></div><div class="detail"><b>Phase 3</b><br>'+esc(p.result_status||'—')+'<br><br><b>Open blockers</b><br>'+fmt(p.blocking_issue_count,0)+(q.reason_counts?'<br>'+Object.entries(q.reason_counts).slice(0,8).map(([k,v])=>'• '+esc(k)+': '+fmt(v,0)).join('<br>'):'')+'</div>'}catch(e){$('#sheetBody').innerHTML='<div class="detail">'+esc(e.message)+'</div>'}}
 
