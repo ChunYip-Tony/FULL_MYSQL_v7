@@ -4488,6 +4488,27 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             for q in qrows
             if q.get("family_id") is not None
         })
+
+        # Stock Flow delivery filters use the same canonical observed-delivery
+        # evidence as Ordering: positive physical 101/109 receipts only, across
+        # the latest 180 completed movement-data days. A weekday is "observed"
+        # when at least one qualifying Family receipt date exists in that window.
+        receipt_days_180 = source_data_days(
+            cur,
+            "movement",
+            limit=180,
+            up_to=completed_through_date(),
+        )
+        delivery_event_map = (
+            _family_receipt_events_bulk(
+                cur,
+                family_ids,
+                data_days=receipt_days_180,
+            )
+            if family_ids
+            else {}
+        )
+
         promo_family_rows: dict[int, list[dict[str, Any]]] = {}
         promo_daily: dict[int, dict[date, dict[str, Any]]] = {}
         if family_ids and sales_days_28:
@@ -4554,6 +4575,13 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 sales_days_28,
                 sold_uom,
             )
+            delivery_pattern = _delivery_pattern(
+                delivery_event_map.get(fid, []),
+                lookback_days=180,
+            )
+            observed_delivery_days = list(
+                delivery_pattern.get("observed_delivery_days") or []
+            )
             rows.append({
                 "family_id": fid,
                 "family_article": q.get("main_article_number"),
@@ -4571,6 +4599,16 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 "receipt_to_selling_ratio": ratio,
                 "receipt_over_selling_pct": (ratio - Decimal("1")) * Decimal("100"),
                 "recent_promotion_event": recent_promotion,
+                "observed_delivery_days": observed_delivery_days,
+                "observed_delivery_weekday_numbers": [
+                    int(x.get("weekday_number"))
+                    for x in observed_delivery_days
+                    if x.get("weekday_number") is not None
+                ],
+                "delivery_pattern_frequency": delivery_pattern.get("frequency"),
+                "delivery_pattern_receipt_date_count": delivery_pattern.get("receipt_date_count"),
+                "delivery_pattern_lookback_days": delivery_pattern.get("lookback_days"),
+                "delivery_pattern_basis": delivery_pattern.get("basis"),
             })
         cur.close()
 
@@ -4582,7 +4620,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V4_PROMO_AVG_PRICE",
+        "contract_version": "YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4599,6 +4637,11 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "tpr_is_promotion": False,
             "promotion_quantity": "PROMOTION_WEEK_EXTRA_QTY_VS_NON_SALE_28D_DAILY_BASELINE",
             "average_promotion_selling_price": "SALE_EVENT_SALES_DOLLARS_DIVIDED_BY_SALE_EVENT_QTY_IN_FAMILY_MOVEMENT_UOM",
+            "observed_delivery_days": "POSITIVE_CANONICAL_PHYSICAL_101_109_FAMILY_RECEIPT_DATES_LATEST_180_COMPLETED_MVT_DAYS",
+            "delivery_filter_groups": {
+                "TUE_WED": ["Tuesday", "Wednesday"],
+                "THU_FRI": ["Thursday", "Friday"],
+            },
             "promotion_week": "LATEST_7_COMPLETED_POS_DAYS_ENDING_AT_PROMO_EVENT_END",
             "nonpromotion_baseline": "NON_SALE_COMPLETED_DAYS_OUTSIDE_PROMOTION_WEEK_IN_28D_WINDOW",
         },
