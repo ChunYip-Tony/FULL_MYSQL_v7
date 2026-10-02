@@ -223,9 +223,9 @@ DESKTOP_WORKSTATION_JS = r"""
       var pr=null;try{var p=await getPricing();pr=(p.rows||[]).find(function(x){return String(x.upc||'')===String(upc)})||null}catch(e){}
       var rec=Array.isArray(r.family_receipt_history)?r.family_receipt_history:[];
       var prices=[
-        ['Current',money(r.price),(r.price_type||'—')+' · '+(r.price_source||'—')],
-        ['Tested',money(r.sweet_spot_price),r.sweet_spot_price==null?'Not established':'strongest proved sweet spot'],
-        ['Testing',money(pr&&pr.testing_price),pr&&pr.testing_price!=null?'controlled test':'none active']
+        ['Current',money(r.price),(r.price_type||'—')+' · '+(r.price_source||'—')+(pr&&pr.current_gp_pct_at_current_cost!=null?' · GP '+pct(pr.current_gp_pct_at_current_cost):'')],
+        ['Tested',money(pr&&pr.tested_price!=null?pr.tested_price:r.sweet_spot_price),(pr&&pr.tested_price!=null?'retail sweet spot · GP '+pct(pr.tested_gp_pct_at_current_cost):'Not established')],
+        ['Testing',money(pr&&pr.testing_price),pr&&pr.testing_price!=null?'controlled test · GP '+pct(pr.testing_gp_pct_at_current_cost):'none active']
       ];
       var html='<div class="v366-metrics">'+
         metric('Family 7D MVT',fmt(r.family_group_movement_7d)+' '+(r.family_group_movement_uom||''),fmt(r.family_group_avg_qty_day)+' / day')+
@@ -324,10 +324,10 @@ DESKTOP_WORKSTATION_JS = r"""
       var p=await getPricing(),r=(p.rows||[]).find(function(x){return String(x.upc||'')===String(upc)});if(!r)throw new Error('Price suggestion not found');
       var inv=null;try{var d=await getJson('/v1/backoffice/inventory?category=ALL&limit=20&lightweight=false&q='+encodeURIComponent(upc));inv=(d.rows||[]).find(function(x){return String(x.upc||'')===String(upc)})||(d.rows||[])[0]}catch(e){}
       var tested=r.tested_price!=null?r.tested_price:(inv?inv.sweet_spot_price:null),testing=r.testing_price;
-      var html='<div class="v366-metrics">'+metric('Current',money(r.current_price),(r.current_price_type||'—')+' · '+(r.current_price_source||'—'))+metric('Tested',money(tested),tested==null?'Not established':'proved sweet spot')+metric('Testing',money(testing),testing==null?'None active':'controlled test · min $0.45 from Current')+'</div>'+
+      var html='<div class="v366-metrics">'+metric('Current',money(r.current_price),(r.current_price_type||'—')+' · GP '+pct(r.current_gp_pct_at_current_cost))+metric('Tested',money(tested),tested==null?'Not established':'retail sweet spot · GP '+pct(r.tested_gp_pct_at_current_cost))+metric('Testing',money(testing),testing==null?'None active':'controlled test · GP '+pct(r.testing_gp_pct_at_current_cost))+'</div>'+
       '<div class="v366-section"><h4>Inventory + Sales Evidence</h4>'+kv([
-        ['OH',fmt(r.current_oh)+' '+(r.current_oh_uom||'')],['DOH',fmt(r.doh)],['7D Qty',fmt(r.qty_7d)],['14D Qty',fmt(r.qty_14d)],['28D Qty',fmt(r.qty_28d)],
-        ['7D Velocity',fmt(r.velocity_7d)],['Current GP%',pct(r.current_gp_pct_reference)],['Current GP$/day',money(r.current_gp_per_day_7d)],['Candidate GP$/day',money(r.candidate_expected_gp_per_day)]
+        ['Current Cost',money(r.current_cost)+' / '+(r.selling_uom||r.current_oh_uom||'unit')],['OH',fmt(r.current_oh)+' '+(r.current_oh_uom||'')],['DOH',fmt(r.doh)],['7D Qty',fmt(r.qty_7d)],['14D Qty',fmt(r.qty_14d)],['28D Qty',fmt(r.qty_28d)],
+        ['7D Velocity',fmt(r.velocity_7d)],['Current GP%',pct(r.current_gp_pct_at_current_cost)],['Tested GP%',pct(r.tested_gp_pct_at_current_cost)],['Testing GP%',pct(r.testing_gp_pct_at_current_cost)],['Current GP$/day',money(r.current_gp_per_day_7d)],['Candidate GP$/day',money(r.candidate_expected_gp_per_day)]
       ])+'</div>'+
       '<div class="v366-section"><h4>Company Range + 240 / 249</h4>'+kv([
         ['Company A',money(r.company_price_a)],['Company B',money(r.company_price_b)],['Company C',money(r.company_price_c)],
