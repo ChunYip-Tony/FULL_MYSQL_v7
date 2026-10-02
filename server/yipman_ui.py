@@ -1768,9 +1768,9 @@ function openPrice(r){
  '<div class="actions"><button class="secondary" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
  const ig=$('#priceIgnore12h');if(ig)ig.onclick=()=>ignorePriceSuggestion(r);
 }
-$('[data-price-filter]').forEach(b=>b.onclick=()=>{
+$$('[data-price-filter]').forEach(b=>b.onclick=()=>{
  priceFilter=b.dataset.priceFilter;
- $('[data-price-filter]').forEach(x=>x.classList.toggle('on',x===b));
+ $$('[data-price-filter]').forEach(x=>x.classList.toggle('on',x===b));
  loadPrices();
 });
 $('#priceReasonFilter').onchange=e=>{priceReasonFilter=e.target.value;loadPrices({quiet:true})};
