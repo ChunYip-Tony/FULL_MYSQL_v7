@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v354';
+const CACHE='yipman-v355';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -308,6 +308,60 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qsap.nohead{border-left-width:1px;margin-top:3px}.qsap.nohead .qupc:first-child{border-top:0}
 .qupcname{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important}
 @media(max-width:430px){.bestname{font-size:17px}.bestmetric b{font-size:21px}.quicksearch{left:8px;right:8px}}
+
+
+/* V355 Yipman: bottom navigation dock only. No other page UI changed. */
+.nav{
+  left:10px;
+  right:10px;
+  bottom:calc(9px + env(safe-area-inset-bottom));
+  height:57px;
+  grid-template-columns:repeat(3,1fr);
+  gap:4px;
+  padding:5px;
+  background:rgba(27,43,60,.97);
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:18px;
+  box-shadow:0 10px 24px rgba(18,38,56,.18),0 1px 0 rgba(255,255,255,.10) inset;
+  backdrop-filter:blur(12px);
+}
+.nav button{
+  border:0;
+  background:transparent;
+  color:#c1ccd7;
+  border-radius:13px;
+  font-size:9px;
+  font-weight:850;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  min-width:0;
+  padding:3px 2px;
+}
+.nav i{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-width:37px;
+  height:25px;
+  margin:0 0 1px;
+  border-radius:14px;
+  color:#d4dde6;
+  font-size:20px;
+  line-height:1;
+}
+.nav button.on{
+  background:#f7fbff;
+  color:#0869bd;
+  box-shadow:0 4px 12px rgba(0,0,0,.16);
+}
+.nav button.on i{
+  background:#dceefe;
+  color:#0869bd;
+}
+.nav button:active{transform:scale(.985)}
 
 </style>
 </head>
