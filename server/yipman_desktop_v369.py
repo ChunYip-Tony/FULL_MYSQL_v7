@@ -25,6 +25,8 @@ YIPMAN_DESKTOP_CSS = r"""
   #ydesk .tablewrap{overflow:auto}#ydesk table{width:100%;border-collapse:collapse}#ydesk th{position:sticky;top:0;z-index:2;background:#fbfdff;border-bottom:1px solid #dde7ef;padding:7px 8px;text-align:left;font-size:8px;text-transform:uppercase;letter-spacing:.3px;color:#708095;white-space:nowrap}#ydesk td{border-bottom:1px solid #edf2f6;padding:7px 8px;font-size:10px;white-space:nowrap;vertical-align:middle}#ydesk tr.pick{cursor:pointer}#ydesk tr.pick:hover td{background:#f7fbff}#ydesk tr.selected td{background:#eef6ff}
   #ydesk .split{display:grid;grid-template-columns:minmax(650px,1.35fr) minmax(420px,.65fr);gap:10px;align-items:start}#ydesk .analysis{position:sticky;top:76px;align-self:start;max-height:none;overflow:visible}#ydesk .analysis::-webkit-scrollbar{width:7px}#ydesk .analysis::-webkit-scrollbar-thumb{background:#cad6e1;border-radius:999px}
   #ydesk .qtools{display:flex;align-items:center;gap:7px;margin-bottom:9px;flex-wrap:wrap}#ydesk .qf{border:1px solid var(--line);background:#fff;color:#4f647c;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:850}#ydesk .qf.active{background:var(--blue);border-color:var(--blue);color:#fff}
+  #ydesk .stockflow-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:2px 0 9px;padding:10px 12px;background:#fff;border:1px solid var(--line);border-radius:11px;box-shadow:var(--shadow)}#ydesk .stockflow-head h3{margin:0;font-size:16px}#ydesk .stockflow-head p{margin:3px 0 0;font-size:9px;color:var(--muted)}#ydesk .stockflow-count{font-size:10px;font-weight:900;color:#52677f;white-space:nowrap}
+  #ydesk .sfcard{--sfc:#4a9de2;background:#fff;border:1px solid #dfe7ef;border-left:5px solid var(--sfc);border-radius:11px;overflow:hidden;cursor:pointer;box-shadow:0 2px 7px rgba(20,45,70,.045)}#ydesk .sfcard:hover{box-shadow:0 5px 16px rgba(20,45,70,.10);transform:translateY(-1px)}#ydesk .sfrow{display:grid;grid-template-columns:minmax(220px,1.35fr) minmax(112px,.72fr) minmax(112px,.72fr) minmax(116px,.75fr) minmax(94px,.58fr) 150px;gap:8px;align-items:center;padding:10px 11px}#ydesk .sfid small,#ydesk .sfmetric small,#ydesk .sfdiff small{display:block;font-size:7px;font-weight:900;letter-spacing:.32px;color:#738398;text-transform:uppercase}#ydesk .sfid b{font-size:13px}#ydesk .sfid strong{display:block;font-size:14px;line-height:1.15;margin-top:2px}#ydesk .sftags{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}#ydesk .sftag{display:inline-flex;padding:3px 6px;border-radius:999px;font-size:7px;font-weight:900;background:#eef3f8;color:#566d83}#ydesk .sfmetric b,#ydesk .sfdiff b{display:block;font-size:18px;line-height:1.05;margin-top:2px;white-space:nowrap}#ydesk .sfmetric span,#ydesk .sfdiff span{display:block;font-size:8px;color:#738398;margin-top:3px}#ydesk .sfdiff{border-radius:8px;padding:7px 8px;background:#eef7ff;border:1px solid #d2e8fb}#ydesk .sfdiff.nosale{background:#fff0f2;border-color:#f6ccd2}#ydesk .sfdiff.nosale b{color:#b82f45}#ydesk .sfrecent{font-size:8px;line-height:1.5}#ydesk .sfrecent b{font-size:9px}#ydesk .sfempty{padding:20px;background:#fff;border:1px solid var(--line);border-radius:11px;color:var(--muted);font-size:11px}
   #ydesk .flist{display:flex;flex-direction:column;gap:7px}#ydesk .fam{border:1px solid var(--accent);border-left-width:5px;border-radius:11px;background:linear-gradient(90deg,var(--tint),#fff);overflow:hidden}#ydesk .fhead{display:grid;grid-template-columns:24px minmax(190px,1.22fr) repeat(5,minmax(86px,.7fr)) 130px;gap:7px;align-items:center;padding:8px 9px;cursor:pointer}#ydesk .chev{font-size:17px;color:#4b6178}#ydesk .fname .id{font-size:10px;font-weight:900}#ydesk .fname .desc{font-size:13px;font-weight:900;margin:1px 0}#ydesk .fm{border-left:1px solid rgba(25,60,90,.09);padding-left:7px}#ydesk .fm label{display:block;font-size:7px;text-transform:uppercase;color:#68798d;font-weight:900}#ydesk .fm strong{display:block;font-size:15px;white-space:nowrap}#ydesk .recent{font-size:8px;line-height:1.45}#ydesk .recent b{font-size:9px}
   #ydesk .fbody{display:none;background:rgba(255,255,255,.78);border-top:1px solid rgba(30,60,90,.1);padding:8px 9px}#ydesk .fam.open .fbody{display:block}#ydesk .hier{border-left:2px solid #cbdbe9;padding-left:9px}#ydesk .recv{border:1px solid #dfe7ef;border-radius:8px;background:#fff;margin-bottom:6px}#ydesk .recvhead{display:grid;grid-template-columns:minmax(170px,1.3fr) 1fr 1fr .72fr .8fr;gap:7px;align-items:center;padding:7px 8px;background:#f8fbfe;font-size:9px}#ydesk .sap{display:grid;grid-template-columns:minmax(180px,1.3fr) .7fr .7fr .8fr 1fr;gap:7px;align-items:center;padding:7px 8px;border-top:1px solid #edf2f6;font-size:9px}#ydesk .pair{margin:5px 7px 7px;border:1px dashed #c8d8e7;border-radius:7px;overflow:hidden}#ydesk .pairhead,#ydesk .upcrow{display:grid;grid-template-columns:minmax(190px,1.35fr) repeat(6,.65fr);gap:7px;align-items:center;padding:6px 7px;font-size:9px}#ydesk .pairhead{background:#edf6ff}#ydesk .upcrow{border-top:1px solid #e7eef5;background:#fff;cursor:pointer}#ydesk .upcrow:hover{background:#f7fbff}#ydesk .prefix{display:inline-block;min-width:28px;text-align:center;padding:3px 5px;border-radius:5px;background:#e9f3ff;color:#0766d8;font-weight:900}#ydesk .prefix.service{background:#e9f8ef;color:#157b49}#ydesk .prefix.package{background:#f1edff;color:#6247cb}
   #ydesk .qhero{padding:11px}#ydesk .qtitle{display:flex;justify-content:space-between;gap:9px}#ydesk .qtitle h3{font-size:17px;margin:0}#ydesk .qtitle p{margin:3px 0 0;font-size:9px;color:var(--muted)}#ydesk .qstats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:8px}#ydesk .qtabs{padding:0 11px 9px}#ydesk .qpanel{display:none;padding:0 11px 11px}#ydesk .qpanel.active{display:block}#ydesk .infobox{border:1px solid #e1e8ef;border-radius:8px;padding:8px;background:#fff}#ydesk .infobox h4{font-size:10px;margin:0 0 6px}#ydesk .kv{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;font-size:9px}#ydesk .kv span:nth-child(odd){color:#738398}#ydesk .kv span:nth-child(even){font-weight:900;text-align:right}#ydesk .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}#ydesk .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}#ydesk .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
@@ -95,7 +97,7 @@ YIPMAN_DESKTOP_CSS = r"""
 YIPMAN_DESKTOP_JS = r"""
 (function(){
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
- const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceSort:'urgency',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickFilter:'all',quickSearchSeq:0,quickSearchTimer:null,quickSearchQuery:'',delivery:null,next:null,calendar:null,promoLists:[]};
+ const D={mod:'quick',best:[],families:[],inventory:[],stockFlow:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceSort:'urgency',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickMode:'stock',quickFilter:'all',stockDelivery:'all',stockCategory:'all',stockSort:'difference',quickSearchSeq:0,quickSearchTimer:null,quickSearchQuery:'',delivery:null,next:null,calendar:null,promoLists:[]};
  const ctx=r=>typeof r==='string'?document.querySelector(r):r;
  const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $$=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -162,41 +164,97 @@ YIPMAN_DESKTOP_JS = r"""
   const root=$('#yd-quick');
   if(!root.dataset.init){
     root.dataset.init='1';
-    root.innerHTML='<div class="pagehead"><div><h2>Quick Check</h2><p>Family → Receiving Article → SAP Selling Article → UPC. Desktop keeps receipt, inventory, pricing and trend evidence visible together.</p></div><div class="actions"><button class="btn">Export</button><button class="btn">Columns</button><button class="btn primary">Analysis Workspace</button></div></div><div class="split"><div><div class="qtools"><button class="qf active" data-f="all">Best Sellers</button><button class="qf" data-f="live">Live</button><button class="qf" data-f="fresh">Fresh</button><button class="qf" data-f="frozen">Frozen</button><select class="select" id="ydQSort"><option value="selling">Most selling first</option><option value="receipt_surplus">Receipt − Selling MVT: biggest</option><option value="selling_surplus">Selling MVT − Receipt: biggest</option><option value="flow_gap">Largest absolute 7D difference</option><option value="doh">Highest DOH</option><option value="oh">Lowest OH</option></select></div><div id="ydFList" class="flist"><div class="loading">Loading current families…</div></div></div><aside id="ydQAnalysis" class="analysis"><div class="card"><div class="loading">Select a Family or UPC</div></div></aside></div>';
-    $$('.qf',root).forEach(b=>b.onclick=()=>{$$('.qf',root).forEach(x=>x.classList.remove('active'));b.classList.add('active');D.quickFilter=b.dataset.f;renderFamilies()});
-    $('#ydQSort').onchange=renderFamilies;
+    root.innerHTML='<div class="pagehead"><div><h2>Quick Check</h2><p>Default view uses the same Family-level Stock Flow calculation as Yipman mobile. Search remains a separate Quick Check state.</p></div><div class="actions"><button class="btn">Export</button><button class="btn">Columns</button><button class="btn primary">Analysis Workspace</button></div></div><div class="split"><div><div id="ydQTools" class="qtools"></div><div id="ydFList" class="flist"><div class="loading">Loading Stock Flow…</div></div></div><aside id="ydQAnalysis" class="analysis"><div class="card"><div class="loading">Select a Family to open Item Intelligence</div></div></aside></div>';
   }
   const seq=++D.quickSearchSeq;
   const list=$('#ydFList');
-  if(q)list.innerHTML='<div class="loading">Searching “'+esc(q)+'”…</div>';
+  const query=String(q||'').trim();
+  D.quickSearchQuery=query;
   try{
-    if(q){
-      // Fast serving-table search first so Enter always responds immediately.
-      const fast=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_price_preview=true&q='+encodeURIComponent(q));
+    if(query){
+      D.quickMode='search';
+      renderQuickSearchTools();
+      list.innerHTML='<div class="loading">Searching “'+esc(query)+'”…</div>';
+      const fast=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_price_preview=true&q='+encodeURIComponent(query));
       if(seq!==D.quickSearchSeq)return;
       D.inventory=fast.rows||[];D.families=group(D.inventory);renderFamilies();
       if(D.families[0])selectFamily(D.families[0].id);
-      if(!D.families.length){list.innerHTML='<div class="priceEmpty"><h3>No match for “'+esc(q)+'”</h3><p>Search checks Article #, UPC, Receiving/SAP mapping, family name and item description. Typo-tolerant fallback is enabled.</p></div>';return}
-      // Enrich the visible search with full current OH / receipt evidence without blocking the first response.
-      api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=false&q='+encodeURIComponent(q)).then(full=>{
-        if(seq!==D.quickSearchSeq)return;
+      if(!D.families.length){list.innerHTML='<div class="priceEmpty"><h3>No match for “'+esc(query)+'”</h3><p>Search checks Article #, UPC, Receiving/SAP mapping, family name and item description. Clear search to return to Stock Flow.</p></div>';return}
+      api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=false&q='+encodeURIComponent(query)).then(full=>{
+        if(seq!==D.quickSearchSeq||D.quickMode!=='search')return;
         D.inventory=full.rows||D.inventory;D.families=group(D.inventory);renderFamilies();if(D.families[0])selectFamily(D.families[0].id);
       }).catch(()=>{});
-    }else{
-      const b=await api('/v1/yipman/best-sellers?limit=12');
-      if(seq!==D.quickSearchSeq)return;
-      D.best=b.rows||[];
-      const ids=D.best.map(x=>x.family_article).filter(Boolean).slice(0,12);
-      const sets=await Promise.all(ids.map(id=>api('/v1/backoffice/inventory?category=ALL&limit=50&lightweight=false&q='+encodeURIComponent(id)).catch(()=>({rows:[]}))));
-      if(seq!==D.quickSearchSeq)return;
-      D.inventory=sets.flatMap(x=>x.rows||[]);D.families=group(D.inventory);
-      if(!D.families.length)D.families=(D.best||[]).map(x=>({id:String(x.family_article),name:x.family_name,cat:x.category,rows:[],row:x,rank:num(x.family_group_movement_7d)||0}));
-      renderFamilies();if(D.families[0])selectFamily(D.families[0].id);
+      return;
     }
+    D.quickMode='stock';
+    renderStockFlowTools();
+    list.innerHTML='<div class="loading">Loading Stock Flow Watch…</div>';
+    const d=await api('/v1/yipman/stock-flow?limit=100');
+    if(seq!==D.quickSearchSeq)return;
+    D.stockFlow=d.rows||[];
+    renderDesktopStockFlow();
+    $('#ydQAnalysis').innerHTML='<div class="card"><div class="loading">Select a Stock Flow Family to open Item Intelligence</div></div>';
   }catch(e){
     if(seq!==D.quickSearchSeq)return;
-    list.innerHTML='<div class="error">'+esc(e.message)+'</div>';
+    if(D.quickMode==='stock'&&D.stockFlow.length){
+      renderDesktopStockFlow();
+      const head=$('.stockflow-head','#ydFList');if(head)head.insertAdjacentHTML('afterend','<div class="note red">Stock Flow refresh failed. Showing the last loaded result · '+esc(e.message)+'</div>');
+    }else list.innerHTML='<div class="error">'+esc(e.message)+'</div>';
   }
+ }
+ function renderQuickSearchTools(){
+  const tools=$('#ydQTools');if(!tools)return;
+  tools.innerHTML='<button class="qf active" data-f="all">All</button><button class="qf" data-f="live">Live</button><button class="qf" data-f="fresh">Fresh</button><button class="qf" data-f="frozen">Frozen</button><select class="select" id="ydQSort"><option value="selling">Most selling first</option><option value="receipt_surplus">Receipt − Selling MVT: biggest</option><option value="selling_surplus">Selling MVT − Receipt: biggest</option><option value="flow_gap">Largest absolute 7D difference</option><option value="doh">Highest DOH</option><option value="oh">Lowest OH</option></select><button class="btn" id="ydBackStock">← Stock Flow</button>';
+  $$('.qf',tools).forEach(b=>b.onclick=()=>{$$('.qf',tools).forEach(x=>x.classList.remove('active'));b.classList.add('active');D.quickFilter=b.dataset.f;renderFamilies()});
+  $('#ydQSort').onchange=renderFamilies;
+  $('#ydBackStock').onclick=()=>{const s=$('#ydSearch');if(s)s.value='';D.quickFilter='all';loadQuick('')};
+ }
+ function renderStockFlowTools(){
+  const tools=$('#ydQTools');if(!tools)return;
+  tools.innerHTML='<button class="qf '+(D.stockDelivery==='all'?'active':'')+'" data-sfd="all">All Delivery</button><button class="qf '+(D.stockDelivery==='tuewed'?'active':'')+'" data-sfd="tuewed">Tue & Wed Observed</button><button class="qf '+(D.stockDelivery==='thufri'?'active':'')+'" data-sfd="thufri">Thu & Fri Observed</button><span style="width:6px"></span><button class="qf '+(D.stockCategory==='all'?'active':'')+'" data-sfc="all">All</button><button class="qf '+(D.stockCategory==='live'?'active':'')+'" data-sfc="live">Live</button><button class="qf '+(D.stockCategory==='fresh'?'active':'')+'" data-sfc="fresh">Fresh</button><button class="qf '+(D.stockCategory==='frozen'?'active':'')+'" data-sfc="frozen">Frozen</button><select class="select" id="ydSFSort"><option value="difference">Difference ↓</option><option value="receipt">7D Receipt ↓</option><option value="selling">7D Selling ↓</option><option value="ratio">Over-selling % ↓</option><option value="name">Name A–Z</option></select>';
+  const sel=$('#ydSFSort');if(sel)sel.value=D.stockSort;
+  $$('[data-sfd]',tools).forEach(b=>b.onclick=()=>{D.stockDelivery=b.dataset.sfd;renderStockFlowTools();renderDesktopStockFlow()});
+  $$('[data-sfc]',tools).forEach(b=>b.onclick=()=>{D.stockCategory=b.dataset.sfc;renderStockFlowTools();renderDesktopStockFlow()});
+  if(sel)sel.onchange=e=>{D.stockSort=e.target.value;renderDesktopStockFlow()};
+ }
+ function sfDays(r){const a=Array.isArray(r.observed_delivery_weekday_numbers)?r.observed_delivery_weekday_numbers.map(Number):[];if(a.length)return [...new Set(a)];return [...new Set((Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[]).map(x=>Number(x?.weekday_number)).filter(Number.isInteger))]}
+ function sfMatch(r){
+  const cat=String(r.category||'').toLowerCase();
+  if(D.stockCategory!=='all'&&!cat.includes(D.stockCategory))return false;
+  const days=sfDays(r);
+  if(D.stockDelivery==='tuewed'&&!days.some(x=>x===1||x===2))return false;
+  if(D.stockDelivery==='thufri'&&!days.some(x=>x===3||x===4))return false;
+  return true;
+ }
+ function sfRows(){
+  const a=(D.stockFlow||[]).filter(sfMatch);
+  if(D.stockSort==='receipt')return a.sort((x,y)=>(num(y.family_receipt_7d_qty)||0)-(num(x.family_receipt_7d_qty)||0));
+  if(D.stockSort==='selling')return a.sort((x,y)=>(num(y.family_group_movement_7d)||0)-(num(x.family_group_movement_7d)||0));
+  if(D.stockSort==='ratio')return a.sort((x,y)=>(num(y.receipt_to_selling_ratio)||0)-(num(x.receipt_to_selling_ratio)||0));
+  if(D.stockSort==='name')return a.sort((x,y)=>String(x.family_name||'').localeCompare(String(y.family_name||'')));
+  return a.sort((x,y)=>(num(y.receipt_minus_selling_7d)||0)-(num(x.receipt_minus_selling_7d)||0));
+ }
+ function sfHtml(r,i){
+  const u=r.family_group_movement_uom||r.family_receipt_7d_uom||'',ru=r.family_receipt_7d_uom||u,h=(Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]).slice(0,2),ratio=num(r.receipt_to_selling_ratio),diff=num(r.receipt_minus_selling_7d),promo=!!r.recent_promotion_event,colors=tone(r.category),obs=(Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[]).filter(x=>x&&x.weekday).map(x=>String(x.weekday).slice(0,3).toUpperCase()).slice(0,4);
+  const over=ratio===null?'—':((ratio-1)*100).toFixed(0)+'%';
+  const recent=h.length?h.map(x=>'<div><b>'+esc(appDate(x.date))+'</b> · '+fmt(x.quantity)+' '+esc(x.uom||ru)+'</div>').join(''):'<div>No recent receipt</div>';
+  return '<article class="sfcard" data-sffamily="'+esc(r.family_article||r.family_id||'')+'" style="--sfc:'+colors[0]+'"><div class="sfrow"><div class="sfid"><small>Family Article</small><b>'+esc(r.family_article||'—')+'</b><strong>'+esc(r.family_name||'Unmapped Family')+'</strong><div class="sftags"><span class="sftag">'+esc(String(r.category||'').toUpperCase())+'</span><span class="sftag">'+(obs.length?'OBS '+esc(obs.join(' / ')):'NO DELIVERY DAY')+'</span></div></div><div class="sfmetric"><small>7D Selling MVT</small><b>'+fmt(r.family_group_movement_7d)+' '+esc(u)+'</b><span>Avg/day '+fmt(r.family_group_avg_qty_day)+' '+esc(u)+'</span></div><div class="sfmetric"><small>7D Receipt</small><b>'+fmt(r.family_receipt_7d_qty)+' '+esc(ru)+'</b><span>'+fmt(r.family_receipt_7d_day_count,0)+' receipt day / 7D</span></div><div class="sfdiff '+(promo?'':'nosale')+'"><small>Difference</small><b>'+(diff!==null&&diff>=0?'+':'')+fmt(diff)+' '+esc(u)+'</b><span>'+esc(over)+' over selling · '+(promo?'RECENT SALE':'NO RECENT SALE')+'</span></div><div class="sfmetric"><small>Over Selling</small><b>'+esc(over)+'</b><span>receipt / selling</span></div><div class="sfrecent"><small>RECENT RECEIPTS</small>'+recent+'</div></div></article>';
+ }
+ function renderDesktopStockFlow(){
+  const list=$('#ydFList');if(!list)return;const rows=sfRows();
+  list.innerHTML='<div class="stockflow-head"><div><h3>Stock Flow Watch</h3><p>Same mobile rule: 7D receipts ≥ 150% of 7D selling movement. Family-level physical receipts are de-duplicated.</p></div><div class="stockflow-count">'+rows.length+' ITEM'+(rows.length===1?'':'S')+'</div></div>'+(rows.length?rows.map(sfHtml).join(''):'<div class="sfempty">No Stock Flow items match these filters.</div>');
+  $$('[data-sffamily]',list).forEach(card=>card.onclick=()=>openStockFlowFamily(card.dataset.sffamily));
+ }
+ async function openStockFlowFamily(id){
+  if(!id)return;
+  const panel=$('#ydQAnalysis');panel.innerHTML='<div class="card"><div class="loading">Loading Family '+esc(id)+'…</div></div>';
+  try{
+    const d=await api('/v1/backoffice/inventory?category=ALL&limit=80&lightweight=false&q='+encodeURIComponent(id));
+    if(D.quickMode!=='stock')return;
+    const families=group(d.rows||[]),g=families.find(x=>String(x.id)===String(id))||families[0];
+    if(!g){panel.innerHTML='<div class="card"><div class="loading">Family detail unavailable.</div></div>';return}
+    D.inventory=d.rows||[];D.families=families;renderQAnalysis(g,g.rows[0]||g.row);
+  }catch(e){panel.innerHTML='<div class="card"><div class="note red">'+esc(e.message)+'</div></div>'}
  }
  function familyFlowDiff(g){const r=g.row,m=num(r.family_group_movement_7d??r.family_source_movement_7d),rc=num(r.family_receipt_7d_qty);return {mvt:m,receipt:rc,receiptMinusMvt:(m!==null&&rc!==null)?rc-m:null,mvtMinusReceipt:(m!==null&&rc!==null)?m-rc:null,abs:(m!==null&&rc!==null)?Math.abs(rc-m):null}}
  function renderFamilies(){let a=D.families.slice();if(D.quickFilter!=='all')a=a.filter(g=>String(g.cat).toLowerCase()===D.quickFilter);const s=$('#ydQSort')?.value||'selling';if(s==='receipt_surplus')a.sort((x,y)=>(familyFlowDiff(y).receiptMinusMvt??-1e18)-(familyFlowDiff(x).receiptMinusMvt??-1e18));if(s==='selling_surplus')a.sort((x,y)=>(familyFlowDiff(y).mvtMinusReceipt??-1e18)-(familyFlowDiff(x).mvtMinusReceipt??-1e18));if(s==='flow_gap')a.sort((x,y)=>(familyFlowDiff(y).abs??-1)-(familyFlowDiff(x).abs??-1));if(s==='doh')a.sort((x,y)=>(num(y.row.doh)??-1)-(num(x.row.doh)??-1));if(s==='oh')a.sort((x,y)=>(num(x.row.family_oh)??1e9)-(num(y.row.family_oh)??1e9));$('#ydFList').innerHTML=a.map((g,i)=>famHtml(g,i)).join('')||'<div class="loading">No matching family.</div>';$$('.fam','#ydFList').forEach(c=>{$('.fhead',c).onclick=()=>{const on=c.classList.toggle('open');$('.chev',c).textContent=on?'⌄':'›';selectFamily(c.dataset.family)};$$('.upcrow',c).forEach(r=>r.onclick=e=>{e.stopPropagation();selectUpc(r.dataset.upc)})})}
