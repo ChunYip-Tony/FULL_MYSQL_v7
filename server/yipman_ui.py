@@ -526,6 +526,38 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   #price .pairauthority b{font-size:18px}
 }
 
+
+/* V383 Yipman AI: bottom-menu read-only assistant. Existing v382 module UI remains unchanged. */
+.nav{grid-template-columns:repeat(4,1fr)}
+.nav button[data-go="ai"] i{color:#ffd84d}
+.nav button[data-go="ai"].on i{background:#dceefe;color:#0869bd}
+#ai{overflow:hidden;padding-left:6px;padding-right:6px;padding-bottom:calc(73px + env(safe-area-inset-bottom))}
+#ai.on{display:flex;flex-direction:column;gap:7px}
+#ai .topline{flex:0 0 auto;margin:0 5px 6px;min-height:36px}
+#ai .topline h2{font-size:28px;line-height:1;font-weight:1000;letter-spacing:-.03em}
+#ai .topline .hint{font-size:11px}
+.aipagechat{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 22px rgba(18,38,56,.08);overflow:hidden}
+.aichattop{flex:0 0 auto;padding:14px 14px 11px;border-bottom:1px solid #e7edf2;background:linear-gradient(180deg,#f9fbfc,#fff)}
+.aibrand{display:flex;align-items:center;gap:11px}
+.aimark{width:48px;height:48px;border-radius:15px;background:#1b3448;color:#ffd84d;display:grid;place-items:center;font-size:24px;font-weight:1000;flex:0 0 auto}
+.aicopy{flex:1;min-width:0}.aicopy h3{font-size:21px;line-height:1.05;margin:0;font-weight:1000}.aicopy p{font-size:12px;line-height:1.35;color:var(--muted);margin:4px 0 0}
+.aireadonly{flex:0 0 auto;background:#edf8f2;color:#28734e;border:1px solid #cfe8d9;border-radius:999px;padding:6px 8px;font-size:9px;font-weight:950}
+.aistarters{display:flex;gap:7px;overflow:auto;scrollbar-width:none;margin-top:10px}.aistarters::-webkit-scrollbar{display:none}
+.aistarter{border:1px solid #dbe3e9;background:#f7fafc;border-radius:999px;padding:9px 11px;min-height:38px;font-size:11px;font-weight:900;color:#345065;white-space:nowrap}
+.aichat{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;overflow:auto;padding:13px 13px 7px}
+.aibubble{max-width:94%;padding:12px 13px;border-radius:16px;font-size:13px;line-height:1.46}
+.aibubble.ai{align-self:flex-start;background:#f4f7f9;border:1px solid #e1e7ec;border-top-left-radius:6px}
+.aibubble.user{align-self:flex-end;background:#1b3448;color:#fff;border-top-right-radius:6px}
+.aibubble.notice{background:#fff7df;border-color:#eed48f}.aibubble.notice b{color:#775400}
+.aibubble.urgent{background:#fff1f1;border-color:#efcaca}.aibubble.urgent b{color:#b22828}
+.aibubble.info{background:#eef6ff;border-color:#cfe2f7}.aibubble b{font-size:14px;line-height:1.35}
+.aigrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0}.aistat{background:#fff;border:1px solid #e2e8ed;border-radius:11px;padding:9px}.aistat b{display:block;font-size:16px}.aistat span{font-size:8px;color:var(--muted);font-weight:850}
+.aicomposer{display:flex;gap:8px;padding:11px 13px 13px;border-top:1px solid #e7edf2;background:#fff;flex:0 0 auto}
+.aicomposer input{flex:1;min-width:0;border:1.5px solid #d7e0e7;border-radius:14px;background:#fff;min-height:55px;padding:0 13px;font-size:18px;font-weight:700;outline:0}
+.aicomposer input:focus{border-color:#1769e0;box-shadow:0 0 0 3px rgba(23,105,224,.10)}
+.aicomposer button{width:56px;min-height:55px;border:0;border-radius:14px;background:#1b3448;color:#ffd84d;font-size:22px;font-weight:1000}
+@media(max-width:370px){#ai .topline h2{font-size:26px}.aicopy h3{font-size:19px}.aicopy p{font-size:11px}.aibubble{font-size:12px;padding:11px 12px}.aibubble b{font-size:13px}.aicomposer input{font-size:17px}}
+
 </style>
 </head>
 <body>
@@ -571,9 +603,27 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 
     <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">LIVE REVIEW</div></div><div class="filters"><button class="pill on" data-price-filter="UPC_240">240</button><button class="pill" data-price-filter="UPC_245">245</button><button class="pill" data-price-filter="UPC_247">247</button><button class="pill" data-price-filter="UPC_249">249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div class="price-tools"><label>REASON<select id="priceReasonFilter"><option value="ALL">ALL REASONS</option><option value="PAIR">240≠249</option><option value="VELOCITY">VELOCITY / FRESHNESS</option><option value="GP">GP$ OPPORTUNITY</option><option value="RANGE">COMPANY RANGE</option><option value="SWEET">SWEET SPOT GAP</option></select></label><label>SORT<select id="priceSort"><option value="URGENCY">URGENCY</option><option value="GPDOLLAR">GP$ OPPORTUNITY ↓</option><option value="GAP">PRICE GAP ↓</option><option value="OH">OH ↓</option><option value="VELOCITY">VELOCITY ↑</option><option value="NAME">NAME A–Z</option></select></label></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
-    <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+    
+    <section class="page" id="ai">
+      <div class="topline"><h2>AI Assistant</h2><div class="hint">V1 · READ ONLY</div></div>
+      <div class="aipagechat">
+        <div class="aichattop">
+          <div class="aibrand"><div class="aimark">✦</div><div class="aicopy"><h3>Ask Yipman</h3><p>Important reminders first, then continue the conversation below.</p></div><div class="aireadonly">READ ONLY</div></div>
+          <div class="aistarters">
+            <button class="aistarter" data-ai-question="What needs attention today?">What needs attention today?</button>
+            <button class="aistarter" data-ai-question="Why these order suggestions?">Why these order suggestions?</button>
+            <button class="aistarter" data-ai-question="Explain price opportunities">Explain price opportunities</button>
+            <button class="aistarter" data-ai-question="Explain QA holds">Explain QA holds</button>
+          </div>
+        </div>
+        <div class="aichat" id="aiChat"><div class="aibubble ai">Analyzing current Yipman data…</div></div>
+        <form class="aicomposer" id="aiForm"><input id="aiInput" placeholder="Ask Yipman..." autocomplete="off" aria-label="Ask Yipman"><button type="submit">→</button></form>
+      </div>
+    </section>
 
-    <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button></nav>
+<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+
+    <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="ai"><i>✦</i>AI</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
     <div class="exitoverlay" id="exitOverlay"><div class="exitbox"><h3>Exit Yipman?</h3><p>Your current view will close. No inventory, ordering, or price data will be changed.</p><div class="exitactions"><button class="exitcancel" id="exitCancel">Stay</button><button class="exitconfirm" id="exitConfirm">Exit</button></div></div></div>
     <div class="toast" id="toast"></div>
@@ -613,6 +663,113 @@ let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[],
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='DIFFERENCE', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
+
+let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
+function aiBubble(html,who='ai',tone=''){
+ const box=$('#aiChat');if(!box)return;
+ const d=document.createElement('div');d.className='aibubble '+who+(tone?' '+tone:'');d.innerHTML=html;box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+function aiOrderState(r){
+ const explicit=String(r?.roster_status||'').toUpperCase();
+ if(explicit)return explicit;
+ const q=num(r?.suggested_delivery_qty);return q!==null&&q>0?'ORDER':q===0?'ZERO_ORDER':'REVIEW';
+}
+function aiPriceRow(rows){
+ return (rows||[]).find(r=>r?.priority_240_249_mismatch)
+   ||(rows||[]).find(r=>r?.actionable&&String(r?.suggestion_reason_code||'').toUpperCase()==='GP_DOLLAR_TEST')
+   ||(rows||[]).find(r=>r?.actionable)
+   ||(rows||[])[0]||null;
+}
+function aiAttentionHtml(){
+ const stock=aiBriefData.stock, price=aiBriefData.price, orders=aiBriefData.orders||[];
+ const parts=[];
+ if(orders.length){
+   const names=orders.slice(0,3).map(r=>esc(r.family_name||r.family_article||'Family')).join(', ');
+   parts.push('<div class="aibubble ai urgent"><b>Urgent · Ordering</b><br>'+orders.length+' item'+(orders.length===1?'':'s')+' currently need order'+(names?' — '+names:'')+'.</div>');
+ }
+ if(price){
+   const mismatch=!!price.priority_240_249_mismatch;
+   const title=mismatch?'249 / 240 price mismatch':'Price review';
+   const detail=mismatch
+     ? esc(price.upc||'249')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'.'
+     : esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.testing_price!=null?' · testing '+money(price.testing_price):price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+'.';
+   parts.push('<div class="aibubble ai urgent"><b>Urgent · '+title+'</b><br>'+detail+'</div>');
+ }
+ if(stock){
+   parts.push('<div class="aibubble ai info"><b>Stock Flow watch</b><br>'+esc(stock.family_name||stock.family_article||'Family')+' received '+fmt(stock.family_receipt_7d_qty)+' '+esc(stock.family_receipt_7d_uom||stock.family_group_movement_uom||'')+' vs '+fmt(stock.family_group_movement_7d)+' '+esc(stock.family_group_movement_uom||'')+' sold movement in 7D. Difference '+fmt(stock.receipt_minus_selling_7d)+' '+esc(stock.family_group_movement_uom||stock.family_receipt_7d_uom||'')+'.</div>');
+ }
+ if(!parts.length)parts.push('<div class="aibubble ai"><b>No high-priority action detected from the available V1 sources.</b><br>You can still ask about stock, ordering, pricing, receipts or QA.</div>');
+ return parts.join('');
+}
+async function loadAiBrief(force=false){
+ if(aiBriefLoaded&&!force)return;
+ if(aiBriefLoading)return aiBriefLoading;
+ const box=$('#aiChat');if(box)box.innerHTML='<div class="aibubble ai">Analyzing current Stock Flow, Ordering and Price Review…</div>';
+ aiBriefLoading=(async()=>{
+   const orderPromise=(async()=>{
+     const cal=await api('/v1/yipman/ordering-calendar?lookback_days=180',{timeoutMs:16000});
+     const delivery=String(cal?.default_delivery_date||'');
+     const next=String(cal?.default_next_delivery_date||'');
+     if(!delivery)return null;
+     const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+encodeURIComponent(delivery)+(next?'&next_delivery_date='+encodeURIComponent(next):'');
+     return api(url,{timeoutMs:26000});
+   })();
+   const results=await Promise.allSettled([
+     api('/v1/yipman/stock-flow?limit=20',{timeoutMs:16000}),
+     api('/v1/yipman/pricing-review?category=ALL&limit=200',{timeoutMs:16000}),
+     orderPromise
+   ]);
+   const stockData=results[0].status==='fulfilled'?results[0].value:null;
+   const priceData=results[1].status==='fulfilled'?results[1].value:null;
+   const orderData=results[2].status==='fulfilled'?results[2].value:null;
+   const stockRows=[...(stockData?.rows||[])].sort((a,b)=>(num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0));
+   const priceRows=(priceData?.rows||[]).filter(r=>r?.priority_240_249_mismatch||r?.actionable||String(r?.suggestion_reason_code||''));
+   const orderRows=(orderData?.rows||[]).filter(r=>aiOrderState(r)==='ORDER'&&(num(r?.suggested_delivery_qty)||0)>0).sort((a,b)=>(num(b.suggested_delivery_qty)||0)-(num(a.suggested_delivery_qty)||0));
+   aiBriefData={
+     stock:stockRows[0]||null,
+     price:aiPriceRow(priceRows),
+     orders:orderRows,
+     dataThrough:orderData?.data_health||priceData?.data_health||stockData?.data_health||null
+   };
+   if(box){
+     const h=aiBriefData.dataThrough||{};
+     const through=[h.pos_data_through?'POS '+esc(h.pos_data_through):'',h.movement_data_through?'MVT '+esc(h.movement_data_through):''].filter(Boolean).join(' · ');
+     box.innerHTML='<div class="aibubble ai"><b>Yipman AI reviewed the current available operational data.</b>'+(through?'<br><span style="color:#71808d">Data through: '+through+'</span>':'')+'<br>Here are the items that need attention first.</div>'+aiAttentionHtml()+'<div class="aibubble ai">Ask me to explain any reminder, or ask about stock, orders, pricing, receipts or QA.</div>';
+   }
+   aiBriefLoaded=true;
+ })();
+ try{return await aiBriefLoading}finally{aiBriefLoading=null}
+}
+function aiAnswer(question){
+ const q=String(question||'').toLowerCase(), stock=aiBriefData.stock, price=aiBriefData.price, orders=aiBriefData.orders||[];
+ if(q.includes('order')||q.includes('coverage')){
+   if(!orders.length)return '<b>Ordering</b><br>No positive order suggestion is currently loaded in the V1 brief.';
+   return '<b>Ordering</b><br>'+orders.slice(0,5).map(r=>'• '+esc(r.family_name||r.family_article||'Family')+' — '+fmtNullable(r.suggested_delivery_qty)+' '+esc(r.suggested_delivery_uom||'')+' · Receiving '+esc(r.receiving_article||'—')).join('<br>');
+ }
+ if(q.includes('249')||q.includes('240')||q.includes('price')||q.includes('sweet')){
+   if(!price)return '<b>Price Review</b><br>No actionable price row is currently loaded in the V1 brief.';
+   if(price.priority_240_249_mismatch)return '<b>249 / 240 alignment</b><br>249 '+esc(price.upc||'')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'. The 249 review should remain only while those current prices differ.';
+   return '<b>Price Review</b><br>'+esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+(price.testing_price!=null?' · testing '+money(price.testing_price):'')+'.';
+ }
+ if(q.includes('receipt')||q.includes('stock flow')||q.includes('over receipt')){
+   if(!stock)return '<b>Stock Flow</b><br>No Stock Flow row is currently loaded in the V1 brief.';
+   return '<b>Stock Flow</b><br>'+esc(stock.family_name||stock.family_article||'Family')+' has 7D receipts '+fmt(stock.family_receipt_7d_qty)+' '+esc(stock.family_receipt_7d_uom||'')+' vs selling movement '+fmt(stock.family_group_movement_7d)+' '+esc(stock.family_group_movement_uom||'')+'.';
+ }
+ if(q.includes('qa')||q.includes('hold')||q.includes('uom')||q.includes('unmapped')){
+   const count=Array.isArray(dataQaIssues)?dataQaIssues.length:0;
+   return '<b>QA</b><br>'+(count?fmt(count,0)+' QA issue(s) are loaded in Data Center. ':'Open Data Center for the live QA list. ')+'V1 can explain mapping, UOM/conversion, receipt and OH-rollforward holds but does not write fixes.';
+ }
+ if(q.includes('attention')||q.includes('urgent')||q.includes('today')||q.includes('reminder')){
+   return '<b>Priority summary</b><br>'+(orders.length?orders.length+' positive order suggestion(s). ':'')+(price?'1 top price action. ':'')+(stock?'1 top Stock Flow watch item.':'');
+ }
+ return '<b>Yipman AI V1</b><br>I can answer from the current Stock Flow, Ordering, Price Review and QA context. Try asking “why this order?”, “price opportunities”, “why is receipt high?”, or “what needs attention today?”.';
+}
+function bindAi(){
+ $('[data-ai-question]').forEach(b=>b.onclick=()=>{const q=b.dataset.aiQuestion||b.textContent||'';aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai')});
+ const form=$('#aiForm'),input=$('#aiInput');
+ if(form)form.onsubmit=e=>{e.preventDefault();const q=input.value.trim();if(!q)return;aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai');input.value=''};
+}
+
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
 function currentPagePosition(id=current){
@@ -661,6 +818,7 @@ function renderView(id,{restore=false,reload=true,state=null}={}){
     if(id==='order')initOrdering();
     if(id==='price')loadPrices();
     if(id==='data')loadData();
+    if(id==='ai'){bindAi();loadAiBrief();}
   }else if(id==='data'){
     scheduleDataLivePoll();
   }
