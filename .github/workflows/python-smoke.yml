@@ -239,7 +239,7 @@ jobs:
           assert 'IGNORE 30 MIN' in ui
           assert 'priceIgnoredThisVisit.has(id)' in ui
           assert 'PRICE_IGNORE_MS=30*60*1000' in ui
-          assert 'STRONGEST PROVED' in ui
+          assert 'tested_evidence_price' in ui
           assert '.pricepath' in ui
           assert '.pp b{display:block;font-size:21px' in ui
           assert '.pm b{display:block;font-size:12px' in ui
