@@ -95,7 +95,7 @@ YIPMAN_DESKTOP_CSS = r"""
 YIPMAN_DESKTOP_JS = r"""
 (function(){
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
- const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
+ const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceSort:'urgency',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickFilter:'all',quickSearchSeq:0,quickSearchTimer:null,quickSearchQuery:'',delivery:null,next:null,calendar:null,promoLists:[]};
  const ctx=r=>typeof r==='string'?document.querySelector(r):r;
  const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $$=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -124,7 +124,16 @@ YIPMAN_DESKTOP_JS = r"""
  }
  function root(){
   const r=document.createElement('div');r.id='ydesk';r.innerHTML='<div class="app"><aside class="side"><div class="brand"><h1>Yip<span>man</span></h1><small>FULL MYSQL · DESKTOP WORKSTATION</small></div><nav class="nav"><button class="navbtn active" data-m="quick"><span class="ico">⌕</span><span>Quick Check</span></button><button class="navbtn" data-m="order"><span class="ico">▤</span><span>Ordering</span></button><button class="navbtn" data-m="price"><span class="ico">$</span><span>Price Suggestions</span></button><button class="navbtn" data-m="performance"><span class="ico">▥</span><span>Performance</span></button><div class="sep"></div><button class="navbtn" data-m="pi"><span class="ico">◎</span><span>PI / True Stock</span></button><button class="navbtn" data-m="data"><span class="ico">▦</span><span>Data Center</span></button></nav><div class="sidefoot"><div class="fresh"><h4>DATA FRESHNESS</h4><div id="ydFresh"><div class="loading">Loading…</div></div></div><div class="version">Store #1032 · Seafood<br>v__VERSION__</div></div></aside><section class="shell"><header class="topbar"><div class="gsearch"><span>⌕</span><input id="ydSearch" placeholder="Search Article / UPC / Receiving / SAP / Name..."><span class="kbd">Ctrl K</span></div><span class="live">LIVE DATA</span><div class="topstats"><div class="topstat">Price actions<b id="ydPc">—</b></div><div class="topstat">Order candidates<b id="ydOc">—</b></div><div class="topstat">QA holds<b id="ydQc">—</b></div></div><div class="avatar">TY</div></header><main class="work"><section class="mod active" id="yd-quick"></section><section class="mod" id="yd-order"></section><section class="mod" id="yd-price"></section><section class="mod" id="yd-performance"></section><section class="mod" id="yd-pi"></section><section class="mod" id="yd-data"></section></main></section></div><div class="toast" id="ydToast"></div>';document.body.appendChild(r);
-  $$('.navbtn',r).forEach(b=>b.onclick=()=>openMod(b.dataset.m));$('#ydSearch').addEventListener('input',e=>{if(D.mod!=='quick')openMod('quick');loadQuick(e.target.value.trim())});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#ydSearch').focus()}});
+  $('.navbtn',r).forEach(b=>b.onclick=()=>openMod(b.dataset.m));
+  const search=$('#ydSearch');
+  const runSearch=()=>{
+    const q=search.value.trim();D.quickSearchQuery=q;
+    clearTimeout(D.quickSearchTimer);
+    if(D.mod!=='quick')openMod('quick');else loadQuick(q);
+  };
+  search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runSearch()}});
+  search.addEventListener('input',e=>{clearTimeout(D.quickSearchTimer);const q=e.target.value.trim();D.quickSearchQuery=q;D.quickSearchTimer=setTimeout(()=>{if(q.length===0||q.length>=2){if(D.mod!=='quick')openMod('quick');else loadQuick(q)}},500)});
+  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();search.focus();search.select()}});
  }
  function openMod(m){D.mod=m;$$('.mod','#ydesk').forEach(x=>x.classList.toggle('active',x.id==='yd-'+m));$$('.navbtn','#ydesk').forEach(x=>x.classList.toggle('active',x.dataset.m===m));if(m==='quick')loadQuick($('#ydSearch').value.trim());if(m==='order')loadOrder();if(m==='price')loadPrice();if(m==='performance')loadPerformance();if(m==='pi')loadPI();if(m==='data')loadData();history.replaceState({yipdesktop:true,view:m},'', '#'+m);window.scrollTo({top:0})}
  async function topStatus(){try{
@@ -147,12 +156,44 @@ YIPMAN_DESKTOP_JS = r"""
  function recHist(r){return Array.isArray(r?.family_receipt_history)?r.family_receipt_history:[]} function recDate(x){return x?.date||x?.receipt_date||''} function recQty(x){return x?.quantity??x?.receipt_qty} function recUom(x){return x?.uom||x?.receipt_uom||''}
  function group(rows){const m=new Map();(rows||[]).forEach(r=>{const id=String(r.family_article||r.family_id||'UNRESOLVED'),g=m.get(id)||{id,name:r.family_name||r.name||'Unresolved Family',cat:r.category||'',rows:[],row:r,rank:0};g.rows.push(r);g.rank=Math.max(g.rank,num(r.family_group_movement_7d)??0,num(r.qty_7d)??0);if(!recHist(g.row).length&&recHist(r).length)g.row=r;m.set(id,g)});return [...m.values()].sort((a,b)=>b.rank-a.rank)}
  async function loadQuick(q=''){
-  const root=$('#yd-quick');if(!root.dataset.init){root.dataset.init='1';root.innerHTML='<div class="pagehead"><div><h2>Quick Check</h2><p>Family → Receiving Article → SAP Selling Article → UPC. Desktop keeps receipt, inventory, pricing and trend evidence visible together.</p></div><div class="actions"><button class="btn">Export</button><button class="btn">Columns</button><button class="btn primary">Analysis Workspace</button></div></div><div class="split"><div><div class="qtools"><button class="qf active" data-f="all">Best Sellers</button><button class="qf" data-f="live">Live</button><button class="qf" data-f="fresh">Fresh</button><button class="qf" data-f="frozen">Frozen</button><select class="select" id="ydQSort"><option value="selling">Most selling first</option><option value="doh">Highest DOH</option><option value="oh">Lowest OH</option></select></div><div id="ydFList" class="flist"><div class="loading">Loading current families…</div></div></div><aside id="ydQAnalysis" class="analysis"><div class="card"><div class="loading">Select a Family or UPC</div></div></aside></div>';$$('.qf',root).forEach(b=>b.onclick=()=>{$$('.qf',root).forEach(x=>x.classList.remove('active'));b.classList.add('active');D.quickFilter=b.dataset.f;renderFamilies()});$('#ydQSort').onchange=renderFamilies}
+  const root=$('#yd-quick');
+  if(!root.dataset.init){
+    root.dataset.init='1';
+    root.innerHTML='<div class="pagehead"><div><h2>Quick Check</h2><p>Family → Receiving Article → SAP Selling Article → UPC. Desktop keeps receipt, inventory, pricing and trend evidence visible together.</p></div><div class="actions"><button class="btn">Export</button><button class="btn">Columns</button><button class="btn primary">Analysis Workspace</button></div></div><div class="split"><div><div class="qtools"><button class="qf active" data-f="all">Best Sellers</button><button class="qf" data-f="live">Live</button><button class="qf" data-f="fresh">Fresh</button><button class="qf" data-f="frozen">Frozen</button><select class="select" id="ydQSort"><option value="selling">Most selling first</option><option value="doh">Highest DOH</option><option value="oh">Lowest OH</option></select></div><div id="ydFList" class="flist"><div class="loading">Loading current families…</div></div></div><aside id="ydQAnalysis" class="analysis"><div class="card"><div class="loading">Select a Family or UPC</div></div></aside></div>';
+    $$('.qf',root).forEach(b=>b.onclick=()=>{$$('.qf',root).forEach(x=>x.classList.remove('active'));b.classList.add('active');D.quickFilter=b.dataset.f;renderFamilies()});
+    $('#ydQSort').onchange=renderFamilies;
+  }
+  const seq=++D.quickSearchSeq;
+  const list=$('#ydFList');
+  if(q)list.innerHTML='<div class="loading">Searching “'+esc(q)+'”…</div>';
   try{
-   if(q){const d=await api('/v1/backoffice/inventory?category=ALL&limit=150&lightweight=false&q='+encodeURIComponent(q));D.inventory=d.rows||[];D.families=group(D.inventory)}
-   else{const b=await api('/v1/yipman/best-sellers?limit=12');D.best=b.rows||[];const ids=D.best.map(x=>x.family_article).filter(Boolean).slice(0,12);const sets=await Promise.all(ids.map(id=>api('/v1/backoffice/inventory?category=ALL&limit=50&lightweight=false&q='+encodeURIComponent(id)).catch(()=>({rows:[]}))));D.inventory=sets.flatMap(x=>x.rows||[]);D.families=group(D.inventory);if(!D.families.length)D.families=(D.best||[]).map(x=>({id:String(x.family_article),name:x.family_name,cat:x.category,rows:[],row:x,rank:num(x.family_group_movement_7d)||0}))}
-   renderFamilies();if(D.families[0])selectFamily(D.families[0].id)
-  }catch(e){$('#ydFList').innerHTML='<div class="error">'+esc(e.message)+'</div>'}
+    if(q){
+      // Fast serving-table search first so Enter always responds immediately.
+      const fast=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_price_preview=true&q='+encodeURIComponent(q));
+      if(seq!==D.quickSearchSeq)return;
+      D.inventory=fast.rows||[];D.families=group(D.inventory);renderFamilies();
+      if(D.families[0])selectFamily(D.families[0].id);
+      if(!D.families.length){list.innerHTML='<div class="priceEmpty"><h3>No match for “'+esc(q)+'”</h3><p>Search checks Article #, UPC, Receiving/SAP mapping, family name and item description. Typo-tolerant fallback is enabled.</p></div>';return}
+      // Enrich the visible search with full current OH / receipt evidence without blocking the first response.
+      api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=false&q='+encodeURIComponent(q)).then(full=>{
+        if(seq!==D.quickSearchSeq)return;
+        D.inventory=full.rows||D.inventory;D.families=group(D.inventory);renderFamilies();if(D.families[0])selectFamily(D.families[0].id);
+      }).catch(()=>{});
+    }else{
+      const b=await api('/v1/yipman/best-sellers?limit=12');
+      if(seq!==D.quickSearchSeq)return;
+      D.best=b.rows||[];
+      const ids=D.best.map(x=>x.family_article).filter(Boolean).slice(0,12);
+      const sets=await Promise.all(ids.map(id=>api('/v1/backoffice/inventory?category=ALL&limit=50&lightweight=false&q='+encodeURIComponent(id)).catch(()=>({rows:[]}))));
+      if(seq!==D.quickSearchSeq)return;
+      D.inventory=sets.flatMap(x=>x.rows||[]);D.families=group(D.inventory);
+      if(!D.families.length)D.families=(D.best||[]).map(x=>({id:String(x.family_article),name:x.family_name,cat:x.category,rows:[],row:x,rank:num(x.family_group_movement_7d)||0}));
+      renderFamilies();if(D.families[0])selectFamily(D.families[0].id);
+    }
+  }catch(e){
+    if(seq!==D.quickSearchSeq)return;
+    list.innerHTML='<div class="error">'+esc(e.message)+'</div>';
+  }
  }
  function renderFamilies(){let a=D.families.slice();if(D.quickFilter!=='all')a=a.filter(g=>String(g.cat).toLowerCase()===D.quickFilter);const s=$('#ydQSort')?.value||'selling';if(s==='doh')a.sort((x,y)=>(num(y.row.doh)??-1)-(num(x.row.doh)??-1));if(s==='oh')a.sort((x,y)=>(num(x.row.family_oh)??1e9)-(num(y.row.family_oh)??1e9));$('#ydFList').innerHTML=a.map((g,i)=>famHtml(g,i)).join('')||'<div class="loading">No matching family.</div>';$$('.fam','#ydFList').forEach(c=>{$('.fhead',c).onclick=()=>{const on=c.classList.toggle('open');$('.chev',c).textContent=on?'⌄':'›';selectFamily(c.dataset.family)};$$('.upcrow',c).forEach(r=>r.onclick=e=>{e.stopPropagation();selectUpc(r.dataset.upc)})})}
  function observed(r){const h=recHist(r).slice(0,12),c={};h.forEach(x=>{const d=new Date(recDate(x)+'T12:00:00');if(isNaN(d))return;const w=d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase();c[w]=(c[w]||0)+1});return Object.entries(c).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(' / ')||'—'}
@@ -187,13 +228,15 @@ YIPMAN_DESKTOP_JS = r"""
         '<div class="filterbox"><label>OPERATIONAL GROUP</label><div class="actions"><button class="btn primary" data-pop="all">All actionable</button><button class="btn" data-pop="live">Live</button><button class="btn" data-pop="tue">Observed Tuesday</button><button class="btn" data-pop="fri">Observed Friday / Sat</button></div></div>'+
         '<div class="filterbox"><label>REASON</label><div class="actions"><button class="btn primary" data-pr="all">All</button><button class="btn" data-pr="pair">240 ≠ 249</button><button class="btn" data-pr="velocity">Velocity / Freshness</button><button class="btn" data-pr="sweet">Sweet spot</button><button class="btn" data-pr="range">Outside range</button><button class="btn" data-pr="gp">GP$/day</button></div></div>'+
       '</div>'+
-      '<div class="actions" style="margin:0 0 9px"><input id="ydPSearch" class="input priceSearch" placeholder="Search price suggestions by UPC / name / family"><span class="small" id="ydPStatus">Loading current analysis…</span></div>'+
+      '<div class="actions stickyTools" style="margin:0 0 9px"><input id="ydPSearch" class="input priceSearch" placeholder="Search price suggestions by UPC / name / family"><select id="ydPSort" class="select"><option value="urgency">Sort: Urgency first</option><option value="gp_lift">Sort: GP$/day opportunity</option><option value="doh">Sort: Highest DOH</option><option value="oh">Sort: Highest OH</option><option value="velocity_low">Sort: Lowest 7D velocity</option><option value="gap">Sort: Largest price gap</option><option value="name">Sort: Name A–Z</option></select><span class="small" id="ydPStatus">Loading current analysis…</span></div>'+
       '<div id="ydPriceSummary" class="priceSummary"></div>'+
       '<div class="split"><div id="ydPQueue"><div class="loading">Loading pricing review…</div></div><aside id="ydPAnalysis" class="analysis"><div class="card"><div class="loading">Select a price suggestion.</div></div></aside></div>';
-    $('[data-pfx]',root).forEach(b=>b.onclick=()=>{D.pricePrefix=b.dataset.pfx;$('[data-pfx]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
-    $('[data-pop]',root).forEach(b=>b.onclick=()=>{D.priceOperational=b.dataset.pop;$('[data-pop]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
-    $('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pfx]',root).forEach(b=>b.onclick=()=>{D.pricePrefix=b.dataset.pfx;$$('[data-pfx]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pop]',root).forEach(b=>b.onclick=()=>{D.priceOperational=b.dataset.pop;$$('[data-pop]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $$('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
     $('#ydPSearch').oninput=e=>{D.priceSearch=e.target.value.trim().toLowerCase();renderPriceQueue()};
+    $('#ydPSort').value=D.priceSort||'urgency';
+    $('#ydPSort').onchange=e=>{D.priceSort=e.target.value||'urgency';renderPriceQueue()};
     $('#ydPShowIgnored').onclick=()=>{D.priceShowIgnored=!D.priceShowIgnored;$('#ydPShowIgnored').textContent=D.priceShowIgnored?'Hide ignored':'Show ignored';renderPriceQueue()};
     $('#ydPRefresh').onclick=()=>{D.priceRetry=0;refreshPriceData(true,0)};
   }
@@ -256,8 +299,58 @@ function priceReasonMatch(r){
   if(D.priceReason==='gp')return code==='GP_DOLLAR_TEST';
   return true;
 }
+function priceGpOpportunity(r){
+  const direct=num(r.gp_per_day_opportunity);
+  if(direct!==null)return direct;
+  const a=num(r.candidate_expected_gp_per_day),b=num(r.current_gp_per_day_7d);
+  return a!==null&&b!==null?a-b:0;
+}
+function priceUrgencyScore(r){
+  const code=String(r.suggestion_reason_code||'').toUpperCase();
+  let score=(
+    (r.priority_240_249_mismatch||code==='PAIR_FIX')?1000:
+    (r.company_range_violation||code==='COMPANY_RANGE')?900:
+    code==='VELOCITY_TEST'?800:
+    code==='SWEET_SPOT_GAP'?650:
+    code==='GP_DOLLAR_TEST'?550:300
+  );
+  const cat=String(r.category||'').toUpperCase(),d=num(r.doh),v7=num(r.velocity_7d),v28=num(r.velocity_28d);
+  if(d!==null){
+    if(cat==='LIVE'||cat==='FRESH'){
+      if(d>=10)score+=250;else if(d>=8)score+=180;else if(d>=5)score+=100;
+    }else if(cat==='FROZEN'){
+      if(d>=90)score+=180;else if(d>=60)score+=100;
+    }
+  }
+  if(v28!==null&&v28>0&&v7!==null){
+    const ratio=v7/v28;
+    if(ratio<.5)score+=120;else if(ratio<.8)score+=60;
+  }
+  const gp=priceGpOpportunity(r);if(gp>0)score+=Math.min(120,gp*4);
+  const gap=num(r.price_gap_pct);if(gap!==null)score+=Math.min(80,gap*2);
+  return score;
+}
+function priceUrgencyMeta(r){
+  const s=priceUrgencyScore(r);
+  if(s>=950)return {score:s,label:'CRITICAL',cls:'red'};
+  if(s>=750)return {score:s,label:'HIGH',cls:'amber'};
+  if(s>=550)return {score:s,label:'MEDIUM',cls:'purple'};
+  return {score:s,label:'REVIEW',cls:'blue'};
+}
+function sortPriceRows(a){
+  const mode=D.priceSort||'urgency';
+  const n=(r,k,fallback)=>{const v=num(r[k]);return v===null?fallback:v};
+  if(mode==='urgency')a.sort((x,y)=>priceUrgencyScore(y)-priceUrgencyScore(x)||(n(y,'doh',-1)-n(x,'doh',-1))||(priceGpOpportunity(y)-priceGpOpportunity(x)));
+  else if(mode==='gp_lift')a.sort((x,y)=>priceGpOpportunity(y)-priceGpOpportunity(x)||priceUrgencyScore(y)-priceUrgencyScore(x));
+  else if(mode==='doh')a.sort((x,y)=>n(y,'doh',-1)-n(x,'doh',-1)||priceUrgencyScore(y)-priceUrgencyScore(x));
+  else if(mode==='oh')a.sort((x,y)=>n(y,'current_oh',-1)-n(x,'current_oh',-1)||priceUrgencyScore(y)-priceUrgencyScore(x));
+  else if(mode==='velocity_low')a.sort((x,y)=>n(x,'velocity_7d',1e12)-n(y,'velocity_7d',1e12)||priceUrgencyScore(y)-priceUrgencyScore(x));
+  else if(mode==='gap')a.sort((x,y)=>n(y,'price_gap_pct',-1)-n(x,'price_gap_pct',-1)||priceUrgencyScore(y)-priceUrgencyScore(x));
+  else if(mode==='name')a.sort((x,y)=>String(x.name||'').localeCompare(String(y.name||'')));
+  return a;
+}
 function pfRows(){
-  return D.prices.filter(r=>{
+  const rows=D.prices.filter(r=>{
     const ignored=priceIsIgnored(r.upc);
     if(ignored&&!D.priceShowIgnored)return false;
     if(!priceReasonMatch(r))return false;
@@ -268,7 +361,8 @@ function pfRows(){
     if(D.priceOperational==='tue'&&!days.includes('TUESDAY'))return false;
     if(D.priceOperational==='fri'&&!days.includes('FRIDAY')&&!days.includes('SATURDAY'))return false;
     return true;
-  }).slice(0,80)
+  });
+  return sortPriceRows(rows).slice(0,120);
 }
 function renderPriceSummary(){
   const rows=D.prices||[],count=code=>rows.filter(r=>String(r.suggestion_reason_code||'').toUpperCase()===code).length;
@@ -300,12 +394,12 @@ function renderPriceQueue(refreshing=false){
       '<div class="diaggrid"><div class="kpi"><label>Analysis</label><strong>'+esc(d.analysis_status||'—')+'</strong></div><div class="kpi"><label>Data health</label><strong>'+esc(h.status||'—')+'</strong><small>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</small></div><div class="kpi"><label>Accepted hidden</label><strong>'+accepted+'</strong><small>'+esc(d.refresh_error||'no refresh error')+'</small></div></div>'+
       '<div class="actions" style="margin-top:10px"><button class="btn primary" id="ydPriceEmptyRefresh">Refresh analysis</button><button class="btn" id="ydPriceEmptyAll">Show all actionable</button></div></div>';
     const r=$('#ydPriceEmptyRefresh');if(r)r.onclick=()=>refreshPriceData(true,0);
-    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.pricePrefix='all';D.priceOperational='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$('[data-pfx]').forEach(x=>x.classList.toggle('primary',x.dataset.pfx==='all'));$('[data-pop]').forEach(x=>x.classList.toggle('primary',x.dataset.pop==='all'));$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
+    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.pricePrefix='all';D.priceOperational='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$$('[data-pfx]').forEach(x=>x.classList.toggle('primary',x.dataset.pfx==='all'));$$('[data-pop]').forEach(x=>x.classList.toggle('primary',x.dataset.pop==='all'));$$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
     $('#ydPAnalysis').innerHTML='<div class="card"><div class="loading">Select a price suggestion when the queue is available.</div></div>';
     return;
   }
-  box.innerHTML='<div class="card"><div class="cardhead"><h3>Price Action Queue</h3><span class="badge blue">Showing '+a.length+' of '+D.prices.length+'</span></div><div class="tablewrap"><table class="priceTable"><thead><tr><th>#</th><th>Article / UPC</th><th>Current</th><th>Tested</th><th>Testing</th><th>OH</th><th>DOH</th><th>7D Vel</th><th>28D Vel</th><th>GP$/day</th><th>Reason</th><th>Action</th></tr></thead><tbody>'+
-    a.map((r,i)=>{const m=reasonMeta(r),ignored=priceIsIgnored(r.upc);return '<tr class="pick priceRow '+(ignored?'ignored':'')+'" data-upc="'+esc(r.upc)+'"><td>'+(i+1)+'</td><td class="priceItem"><b>'+esc(r.name||r.upc)+'</b><div class="tiny">'+esc(r.upc)+' · '+esc(r.family_article_number||r.family_name||'')+'</div></td><td><span class="priceMain">'+money(r.current_price)+'</span><div class="tiny">'+esc(r.current_price_type||r.current_price_source||'')+'</div></td><td><span class="priceTested">'+money(r.tested_price)+'</span><div class="tiny">'+pct(r.tested_price_gp_pct)+'</div></td><td><span class="priceTesting">'+money(r.testing_price)+'</span><div class="tiny">'+(num(r.testing_price)===null?'None active':pct(r.testing_price_gp_pct))+'</div></td><td><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></td><td>'+fmt(r.doh)+'</td><td>'+fmt(r.velocity_7d)+'/d</td><td>'+fmt(r.velocity_28d)+'/d</td><td><b>'+money(r.current_gp_per_day_7d)+'</b></td><td><span class="reasonTag '+m[1]+'">'+esc(m[0])+'</span></td><td><button class="btn priceReviewBtn" data-review="'+esc(r.upc)+'">'+(ignored?'Restore':'Review')+'</button></td></tr>'}).join('')+
+  box.innerHTML='<div class="card"><div class="cardhead"><h3>Price Action Queue</h3><span class="badge blue">Showing '+a.length+' of '+D.prices.length+'</span></div><div class="tablewrap"><table class="priceTable"><thead><tr><th>#</th><th>Article / UPC</th><th>Current</th><th>Tested</th><th>Testing</th><th>OH</th><th>DOH</th><th>7D Vel</th><th>28D Vel</th><th>GP$/day</th><th>Urgency</th><th>Reason</th><th>Action</th></tr></thead><tbody>'+
+    a.map((r,i)=>{const m=reasonMeta(r),u=priceUrgencyMeta(r),ignored=priceIsIgnored(r.upc);return '<tr class="pick priceRow '+(ignored?'ignored':'')+'" data-upc="'+esc(r.upc)+'"><td>'+(i+1)+'</td><td class="priceItem"><b>'+esc(r.name||r.upc)+'</b><div class="tiny">'+esc(r.upc)+' · '+esc(r.family_article_number||r.family_name||'')+'</div></td><td><span class="priceMain">'+money(r.current_price)+'</span><div class="tiny">'+esc(r.current_price_type||r.current_price_source||'')+'</div></td><td><span class="priceTested">'+money(r.tested_price)+'</span><div class="tiny">'+pct(r.tested_price_gp_pct)+'</div></td><td><span class="priceTesting">'+money(r.testing_price)+'</span><div class="tiny">'+(num(r.testing_price)===null?'None active':pct(r.testing_price_gp_pct))+'</div></td><td><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></td><td>'+fmt(r.doh)+'</td><td>'+fmt(r.velocity_7d)+'/d</td><td>'+fmt(r.velocity_28d)+'/d</td><td><b>'+money(r.current_gp_per_day_7d)+'</b></td><td><span class="reasonTag '+u.cls+'">'+u.label+'</span><div class="tiny">score '+Math.round(u.score)+'</div></td><td><span class="reasonTag '+m[1]+'">'+esc(m[0])+'</span></td><td><button class="btn priceReviewBtn" data-review="'+esc(r.upc)+'">'+(ignored?'Restore':'Review')+'</button></td></tr>'}).join('')+
     '</tbody></table></div></div>';
   $$('.priceRow',box).forEach(tr=>tr.onclick=e=>{if(e.target.closest('button'))return;$$('.priceRow',box).forEach(x=>x.classList.remove('selected'));tr.classList.add('selected');selectPrice(tr.dataset.upc)});
   $$('.priceReviewBtn',box).forEach(b=>b.onclick=e=>{e.stopPropagation();const upc=b.dataset.review;if(priceIsIgnored(upc)){clearPriceIgnore(upc);renderPriceQueue()}else selectPrice(upc)});
