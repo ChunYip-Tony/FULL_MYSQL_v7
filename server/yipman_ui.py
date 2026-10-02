@@ -671,7 +671,7 @@ function quickGroupedHtml(rows){
  }).join('');
 }
 function fitQuickUpcNames(){
- $('.qupcname').forEach(el=>{
+ $$('.qupcname').forEach(el=>{
    el.style.fontSize='';el.style.letterSpacing='';
    let size=parseFloat(getComputedStyle(el).fontSize)||16;
    const available=el.clientWidth;if(!available)return;
@@ -680,8 +680,8 @@ function fitQuickUpcNames(){
  });
 }
 function bindQuickRows(){
- $('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
- $('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
+ $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+ $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
  requestAnimationFrame(fitQuickUpcNames);
 }
 async function hydrateQuickPrices(rows,requestId){
