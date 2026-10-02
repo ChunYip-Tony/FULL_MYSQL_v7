@@ -14,7 +14,65 @@ except ImportError:
 def backoffice_html(version: str = "") -> str:
     v = str(version or "")
     html = BACKOFFICE_HTML.replace("__VERSION__", v)
-    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + "</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
+    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + "
+/* V399 Desktop Operations polish: denser, clearer, less empty, more workstation-like. */
+@media (min-width:901px){
+  body[data-desktop-view="overview"] .workspace{background:#f4f7fb!important}
+  body[data-desktop-view="overview"] #overview{max-width:1680px;margin:0 auto}
+  body[data-desktop-view="overview"] .overview-v3-hero{
+    margin:0 0 18px!important;padding:22px 24px!important;border:1px solid #dbe5ef!important;border-radius:18px!important;
+    background:linear-gradient(135deg,#102f4b 0%,#17466b 62%,#23628b 100%)!important;color:#fff!important;
+    box-shadow:0 12px 34px rgba(15,47,75,.13)!important
+  }
+  body[data-desktop-view="overview"] .overview-v3-hero h1{font-size:38px!important;line-height:1!important;color:#fff!important;letter-spacing:-.035em!important}
+  body[data-desktop-view="overview"] .overview-v3-hero p{font-size:13px!important;color:#d7e7f4!important;margin-top:7px!important}
+  body[data-desktop-view="overview"] .overview-v3-kicker{color:#9fd2f2!important;font-size:10px!important;letter-spacing:.12em!important}
+  body[data-desktop-view="overview"] .overview-v3-actions button{
+    border:1px solid rgba(255,255,255,.25)!important;background:rgba(255,255,255,.11)!important;color:#fff!important;
+    min-height:42px!important;padding:0 16px!important;border-radius:11px!important;font-size:11px!important;font-weight:900!important
+  }
+  body[data-desktop-view="overview"] .overview-v3-actions button:hover{background:#fff!important;color:#123a59!important}
+  body[data-desktop-view="overview"] .overview-v3-grid{grid-template-columns:minmax(0,1.55fr) minmax(320px,.65fr)!important;gap:14px!important}
+  body[data-desktop-view="overview"] .v3-surface{
+    border:1px solid #dbe4ed!important;border-radius:16px!important;background:#fff!important;
+    box-shadow:0 6px 22px rgba(30,53,75,.055)!important;overflow:hidden!important
+  }
+  body[data-desktop-view="overview"] .v3-surface-head{padding:14px 16px!important;border-bottom:1px solid #edf1f5!important}
+  body[data-desktop-view="overview"] .v3-surface-head span{font-size:8px!important;letter-spacing:.12em!important;color:#7d8da0!important}
+  body[data-desktop-view="overview"] .v3-surface-head h2{font-size:18px!important;margin-top:3px!important;letter-spacing:-.015em!important}
+  body[data-desktop-view="overview"] .v3-priority{grid-column:1;grid-row:1 / span 2}
+  body[data-desktop-view="overview"] .v3-pulse{grid-column:2;grid-row:1}
+  body[data-desktop-view="overview"] .v3-batches{grid-column:2;grid-row:2}
+  body[data-desktop-view="overview"] .v3-snapshot{grid-column:1 / -1;grid-row:3}
+  body[data-desktop-view="overview"] .desktop-queue-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:10px!important;padding:14px!important}
+  body[data-desktop-view="overview"] .desktop-queue-column{border:1px solid #e2e9f0!important;border-radius:13px!important;background:#fbfdff!important;overflow:hidden!important}
+  body[data-desktop-view="overview"] .desktop-queue-title{padding:11px 12px!important;background:#f4f8fc!important;border-bottom:1px solid #e7edf3!important}
+  body[data-desktop-view="overview"] .desktop-queue-title b{font-size:13px!important}
+  body[data-desktop-view="overview"] .desktop-queue-title small{font-size:9px!important}
+  body[data-desktop-view="overview"] .desktop-queue-item{padding:10px 11px!important;min-height:54px!important}
+  body[data-desktop-view="overview"] .desktop-queue-item b{font-size:11px!important}
+  body[data-desktop-view="overview"] .desktop-queue-item span{font-size:8px!important;line-height:1.3!important}
+  body[data-desktop-view="overview"] .desktop-queue-icon{width:30px!important;height:30px!important;border-radius:9px!important;background:#e9f3fb!important;color:#17547d!important}
+  body[data-desktop-view="overview"] .desktop-freshness-board{padding:10px 14px!important}
+  body[data-desktop-view="overview"] .desktop-source-row{padding:8px 0!important}
+  body[data-desktop-view="overview"] .desktop-source-row b{font-size:10px!important}
+  body[data-desktop-view="overview"] .desktop-source-row small{font-size:8px!important}
+  body[data-desktop-view="overview"] .desktop-recent-list{padding:8px 14px!important}
+  body[data-desktop-view="overview"] .desktop-batch-row{padding:9px 0!important}
+  body[data-desktop-view="overview"] .desktop-kpi-row{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:9px!important;padding:13px 14px 15px!important}
+  body[data-desktop-view="overview"] .desktop-kpi-card{
+    min-height:92px!important;padding:12px 13px!important;border-radius:12px!important;border:1px solid #e0e8ef!important;background:#fbfdff!important
+  }
+  body[data-desktop-view="overview"] .desktop-kpi-card small{font-size:8px!important}
+  body[data-desktop-view="overview"] .desktop-kpi-card b{font-size:26px!important;letter-spacing:-.03em!important;margin:4px 0!important}
+  body[data-desktop-view="overview"] .desktop-kpi-card span{font-size:8px!important;line-height:1.25!important}
+  body[data-desktop-view="overview"] #desktopOverviewError{margin:0 0 10px!important}
+  @media(max-width:1320px){
+    body[data-desktop-view="overview"] .desktop-queue-grid{grid-template-columns:1fr!important}
+    body[data-desktop-view="overview"] .desktop-kpi-row{grid-template-columns:repeat(3,1fr)!important}
+  }
+}
+</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
     html = html.replace("</body>", "<script id=\"desktop-workstation-v366-js\">" + DESKTOP_WORKSTATION_JS + "</script><script id=\"desktop-data-center-v368-js\">" + DESKTOP_DATA_CENTER_V368_JS + "</script></body>")
     return html
 
