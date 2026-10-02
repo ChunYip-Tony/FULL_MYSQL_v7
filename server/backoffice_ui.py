@@ -72,7 +72,30 @@ def backoffice_html(version: str = "") -> str:
   }
 }
 '''
-    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + desktop_operations_v399_css + "</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
+    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + desktop_operations_v399_css + "
+/* V401 Desktop Stock Flow mirrors mobile family cards and keeps all evidence visible without horizontal clipping. */
+@media(min-width:760px){
+ body[data-desktop-view="quick"] #inventory .tablewrap{overflow:visible!important;background:transparent!important}
+ body[data-desktop-view="quick"] #inventory .table{border-collapse:separate!important;border-spacing:0 9px!important;min-width:0!important;background:transparent!important}
+ body[data-desktop-view="quick"] #inventory .desktop-sf-head{display:none!important}
+ body[data-desktop-view="quick"] #inventory .desktop-sf-row td{border:0!important;padding:0!important;background:transparent!important;white-space:normal!important}
+ .desktop-sf-card{width:100%;display:block;text-align:left;border:1px solid #dfe6ec;border-left:6px solid #4a9de2;border-radius:14px;background:#fff;padding:0;overflow:hidden;color:#182736;box-shadow:0 4px 14px rgba(26,49,72,.055);cursor:pointer}
+ .desktop-sf-card.tone0{border-left-color:#d8b51b}.desktop-sf-card.tone1{border-left-color:#55b96c}.desktop-sf-card.tone2{border-left-color:#4b9de1}.desktop-sf-card.tone3{border-left-color:#e978a5}.desktop-sf-card.tone4{border-left-color:#9276d7}
+ .desktop-sf-card:hover,.desktop-sf-card.selected{box-shadow:0 0 0 2px rgba(25,111,190,.16),0 8px 24px rgba(26,49,72,.10)}
+ .desktop-sf-top{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:12px 14px 9px;background:linear-gradient(90deg,#f8fbfe,#fff)}
+ .desktop-sf-id small,.desktop-sf-ratio small,.desktop-sf-metrics small,.desktop-sf-receipt small{display:block;font-size:8px;font-weight:950;letter-spacing:.06em;color:#758394}
+ .desktop-sf-id>b{display:block;font-size:17px;line-height:1.05;margin-top:2px}.desktop-sf-id>strong{display:block;font-size:15px;line-height:1.15;margin-top:3px}
+ .desktop-sf-tags{display:flex;gap:5px;flex-wrap:wrap;margin-top:7px}.desktop-sf-tags span{display:inline-flex;padding:4px 7px;border-radius:999px;background:#edf4fa;color:#46657f;font-size:8px;font-weight:900}
+ .desktop-sf-ratio{text-align:right;min-width:110px}.desktop-sf-ratio b{display:block;font-size:25px;line-height:1;margin-top:4px}
+ .desktop-sf-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:0 14px 11px}.desktop-sf-metrics>div{border:1px solid #e7edf2;border-radius:10px;background:#fbfcfd;padding:9px 10px}
+ .desktop-sf-metrics b{display:block;font-size:20px;line-height:1.05;margin-top:3px}.desktop-sf-metrics span{display:block;font-size:8px;color:#718093;margin-top:4px;font-weight:800}
+ .desktop-sf-diff{background:#edf7ff!important;border-color:#cfe6f6!important}.desktop-sf-diff.nosale{background:#fff0f2!important;border-color:#f2c9d0!important}.desktop-sf-diff.nosale b{color:#bd3347}
+ .desktop-sf-sale{margin:0 14px 10px;padding:8px 10px;border-radius:9px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:8px;font-weight:850}.desktop-sf-sale b{font-size:9px}
+ .desktop-sf-sale.promoted{background:#eef8f2;border:1px solid #cde6d5;color:#2d6e4d}.desktop-sf-sale.nosale{background:#fff7f8;border:1px solid #f0dadd;color:#8b5a60}
+ .desktop-sf-receipts{border-top:1px solid #edf1f4;padding:9px 14px 11px}.desktop-sf-receipts-title{display:flex;justify-content:space-between;align-items:center;font-size:8px;color:#6e7b89;margin-bottom:6px}
+ .desktop-sf-receipt-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.desktop-sf-receipt{border:1px solid #e4eaf0;border-radius:9px;padding:7px 9px;background:#fff}.desktop-sf-receipt b{font-size:11px}.desktop-sf-receipt span{font-size:9px;color:#52677b;margin-left:8px}
+}
+</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
     html = html.replace("</body>", "<script id=\"desktop-workstation-v366-js\">" + DESKTOP_WORKSTATION_JS + "</script><script id=\"desktop-data-center-v368-js\">" + DESKTOP_DATA_CENTER_V368_JS + "</script></body>")
     return html
 
@@ -5225,7 +5248,7 @@ function setQuickInventoryMode(stockFlow){
  if(sf)sf.style.display=stockFlow?'flex':'none';
  if(inv)inv.style.display=stockFlow?'none':'flex';
  if(head)head.innerHTML=stockFlow
-   ?'<tr><th>Family</th><th>Category / Delivery</th><th>7D Selling MVT</th><th>7D Receipt</th><th>Difference</th><th>Receipt / Selling</th><th>Recent Receipt #1</th><th>Recent Receipt #2</th></tr>'
+   ?'<tr class="desktop-sf-head"><th>STOCK FLOW WATCH · FAMILY LEVEL</th></tr>'
    :'<tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>7D Velocity</th><th>Current Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr>';
 }
 function stockFlowObservedNums(r){
@@ -5261,25 +5284,44 @@ function renderDesktopStockFlow(){
  const rows=stockFlowRows();
  const cnt=$('#stockFlowCount');if(cnt)cnt.textContent=rows.length+' Stock Flow item'+(rows.length===1?'':'s');
  const head=$('#invError');if(head)head.innerHTML='<div class="calc"><b>Stock Flow Watch</b> · Family level · 7D receipts ≥ 150% of 7D selling movement · default sort is largest Difference.</div>';
- $('#invRows').innerHTML=rows.map(r=>{
+ const saleHtml=r=>{
+   const p=r.recent_promotion_event||null;
+   if(!p)return '<div class="desktop-sf-sale nosale"><b>NO RECENT SALE</b><span>Difference is not explained by a recent promotion event.</span></div>';
+   const start=String(p.start_date||'—'),finish=String(p.end_date||start);
+   const extra=(String(p.promotion_week_extra_qty_status||'').toUpperCase()==='READY'&&p.promotion_week_extra_qty!=null)
+     ?('EXTRA '+(Number(p.promotion_week_extra_qty)>=0?'+':'')+fmt(p.promotion_week_extra_qty)+' '+esc(p.promotion_week_extra_qty_uom||r.family_group_movement_uom||''))
+     :'EXTRA BASELINE UNAVAILABLE';
+   const price=(String(p.avg_promotion_selling_price_status||'').toUpperCase()==='READY'&&p.avg_promotion_selling_price!=null)
+     ?('AVG PROMO '+money(p.avg_promotion_selling_price)+' / '+esc(p.avg_promotion_selling_price_uom||r.family_group_movement_uom||''))
+     :'AVG PROMO PRICE UNAVAILABLE';
+   return '<div class="desktop-sf-sale promoted"><b>RECENT SALE · '+esc(start)+(finish&&finish!==start?' → '+esc(finish):'')+'</b><span>'+extra+'</span><span>'+price+'</span></div>';
+ };
+ const receiptHtml=(x,uom,label)=>{
+   if(!x)return '<div class="desktop-sf-receipt"><small>'+label+'</small><b>—</b><span>No receipt</span></div>';
+   return '<div class="desktop-sf-receipt"><small>'+label+'</small><b>'+esc(x.date||x.receipt_date||'—')+'</b><span>'+fmt(x.quantity??x.receipt_qty)+' '+esc(x.uom||x.receipt_uom||uom||'')+'</span></div>';
+ };
+ $('#invRows').innerHTML=rows.map((r,idx)=>{
    const uom=r.family_group_movement_uom||r.family_receipt_7d_uom||'';
    const ruom=r.family_receipt_7d_uom||uom;
-   const diff=Number(r.receipt_minus_selling_7d);
-   const ratio=Number(r.receipt_to_selling_ratio);
-   const over=Number.isFinite(ratio)?((ratio-1)*100).toFixed(0)+'%':'—';
+   const diffNum=Number(r.receipt_minus_selling_7d),diff=Number.isFinite(diffNum)?diffNum:null;
+   const ratio=Number(r.receipt_to_selling_ratio),over=Number.isFinite(ratio)?((ratio-1)*100).toFixed(0)+'%':'—';
    const hist=(Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]).slice(0,2);
-   const obs=(Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[]).filter(x=>x&&x.weekday).map(x=>String(x.weekday).slice(0,3).toUpperCase()).slice(0,4).join(' / ');
-   const noRecentSale=!r.recent_promotion_event;
-   return '<tr class="stockflow-row" data-stock-family="'+esc(r.family_article||r.family_id||'')+'">'+
-     '<td><button type="button" class="desktop-item-btn stockflow-family-btn" data-family="'+esc(r.family_article||r.family_id||'')+'"><div class="name">'+esc(r.family_article||'—')+' · '+esc(r.family_name||'Unmapped Family')+'</div><div class="meta">Family Article</div></button></td>'+
-     '<td><b>'+esc(String(r.category||'').toUpperCase())+'</b><div class="meta">'+(obs?'Observed '+esc(obs):'No observed delivery day')+'</div></td>'+
-     '<td><b>'+fmt(r.family_group_movement_7d)+' '+esc(uom)+'</b><div class="meta">Avg/day '+fmt(r.family_group_avg_qty_day)+' '+esc(uom)+'</div></td>'+
-     '<td><b>'+fmt(r.family_receipt_7d_qty)+' '+esc(ruom)+'</b><div class="meta">'+fmt(r.family_receipt_7d_day_count,0)+' receipt day / 7D</div></td>'+
-     '<td style="'+(noRecentSale?'background:#fff0f2;':'background:#eef7ff;')+'"><b style="font-size:15px;'+(noRecentSale?'color:#b82f45;':'')+'">'+(Number.isFinite(diff)&&diff>=0?'+':'')+fmt(diff)+' '+esc(uom)+'</b><div class="meta">'+(noRecentSale?'NO RECENT SALE':'RECENT SALE')+'</div></td>'+
-     '<td><b>'+esc(over)+'</b><div class="meta">receipt vs selling</div></td>'+
-     '<td>'+sfRecentCell(hist[0],ruom)+'</td><td>'+sfRecentCell(hist[1],ruom)+'</td></tr>';
+   const obs=(Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[]).filter(x=>x&&x.weekday).sort((a,b)=>Number(a.weekday_number)-Number(b.weekday_number)).map(x=>String(x.weekday).slice(0,3).toUpperCase()).slice(0,4);
+   const tone=idx%5;
+   return '<tr class="desktop-sf-row"><td colspan="8">'+
+     '<button type="button" class="desktop-sf-card stockflow-family-btn tone'+tone+'" data-family="'+esc(r.family_article||r.family_id||'')+'">'+
+       '<div class="desktop-sf-top"><div class="desktop-sf-id"><small>FAMILY ARTICLE</small><b>'+esc(r.family_article||'—')+'</b><strong>'+esc(r.family_name||'Unmapped Family')+'</strong><div class="desktop-sf-tags"><span>'+esc(String(r.category||'').toUpperCase())+'</span><span>'+(obs.length?'OBS '+esc(obs.join(' / ')):'NO DELIVERY DAY')+'</span></div></div><div class="desktop-sf-ratio"><small>OVER SELLING</small><b>'+esc(over)+'</b></div></div>'+
+       '<div class="desktop-sf-metrics">'+
+         '<div><small>7D SELLING MVT</small><b>'+fmt(r.family_group_movement_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(r.family_group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
+         '<div><small>7D RECEIPT</small><b>'+fmt(r.family_receipt_7d_qty)+' '+esc(ruom)+'</b><span>'+fmt(r.family_receipt_7d_day_count,0)+' RECEIPT DAY'+(Number(r.family_receipt_7d_day_count)===1?'':'S')+' / 7D</span></div>'+
+         '<div class="desktop-sf-diff '+(r.recent_promotion_event?'promoted':'nosale')+'"><small>DIFFERENCE</small><b>'+(diff!==null&&diff>=0?'+':'')+fmt(diff)+' '+esc(uom)+'</b><span>'+esc(over)+' OVER SELLING</span></div>'+
+       '</div>'+
+       saleHtml(r)+
+       '<div class="desktop-sf-receipts"><div class="desktop-sf-receipts-title"><b>RECENT RECEIPTS</b><span>LAST 2</span></div><div class="desktop-sf-receipt-grid">'+receiptHtml(hist[0],ruom,'LATEST')+receiptHtml(hist[1],ruom,'PREVIOUS')+'</div></div>'+
+     '</button>'+
+   '</td></tr>';
  }).join('')||'<tr><td colspan="8" class="empty">No Stock Flow items match the selected filters.</td></tr>';
- $$('.stockflow-family-btn').forEach(b=>b.onclick=()=>desktopSubmitSearch(b.dataset.family));
+ $$('.stockflow-family-btn').forEach(b=>b.onclick=()=>{b.classList.add('selected');$$('.stockflow-family-btn').forEach(x=>{if(x!==b)x.classList.remove('selected')});document.dispatchEvent(new CustomEvent('fullmysql:stockflow-family',{detail:{family:b.dataset.family}}))});
 }
 async function loadDesktopStockFlow(requestSeq){
  setQuickInventoryMode(true);
