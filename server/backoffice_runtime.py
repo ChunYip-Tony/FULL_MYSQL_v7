@@ -5626,7 +5626,10 @@ def pricing_review(
     visible_rows=[]
     for row in rows:
         accepted=latest_acceptance_by_upc.get(str(row.get("upc") or ""))
-        accepted_match=_accepted_snapshot_matches(row,accepted)
+        accepted_match=(
+            _accepted_snapshot_matches(row,accepted)
+            and not bool(row.get("priority_240_249_mismatch"))
+        )
         row["accepted"] = accepted_match
         row["accepted_at"] = accepted.get("accepted_at") if accepted_match and accepted else None
         if accepted_match and not include_accepted:
