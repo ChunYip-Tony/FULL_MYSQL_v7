@@ -371,7 +371,7 @@ const appDate=v=>{
   return mo+'/'+d+' '+wd;
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='quick', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
+let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
@@ -384,7 +384,7 @@ function renderView(id){
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
   const p=$('#'+id);if(p)p.scrollTop=0;
   if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
-  if(id==='order'&&!orderDate)loadOrder(0);
+  if(id==='order')initOrdering();
   if(id==='price')loadPrices();
   if(id==='data')loadData();
 }
@@ -805,20 +805,95 @@ async function openUpc(upc){
  }catch(e){sheet('Unable to load',upc,'<div class="detail">'+esc(e.message)+'</div>')}
 }
 
+function dateLocal(v){
+ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+ if(!m)return null;
+ return new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0);
+}
+function isObservedDate(v){
+ const d=dateLocal(v);return !!(d&&orderObservedWeekdays.get(d.getDay()===0?6:d.getDay()-1)?.observed);
+}
+function nextObservedAfter(v){
+ const start=dateLocal(v)||new Date();
+ for(let i=1;i<=21;i++){
+  const d=new Date(start);d.setDate(d.getDate()+i);
+  const wd=d.getDay()===0?6:d.getDay()-1;
+  if(orderObservedWeekdays.get(wd)?.observed)return iso(d);
+ }
+ const fallback=new Date(start);fallback.setDate(fallback.getDate()+7);return iso(fallback);
+}
+function updateOrderWindowUI(){
+ if(!orderDate||!orderNextDate)return;
+ $('#deliveryDateText').textContent=appDate(orderDate);
+ $('#nextDeliveryDateText').textContent=appDate(orderNextDate);
+ $('#deliveryObservedText').textContent=isObservedDate(orderDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#nextObservedText').textContent=isObservedDate(orderNextDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#deliveryDateCard').classList.toggle('pick',orderSelectMode==='DELIVERY');
+ $('#nextDeliveryDateCard').classList.toggle('pick',orderSelectMode==='NEXT');
+ const end=dateLocal(orderNextDate);if(end)end.setDate(end.getDate()-1);
+ $('#orderCoverageText').textContent=appDate(orderDate)+' → '+(end?appDate(iso(end)):'—');
+}
 function buildDays(){
- const bar=$('#dayBar');bar.innerHTML='';
- // 14 dates: prior 7 days through the next 6 days. Today is initially centered.
- for(let offset=-7;offset<=6;offset++){
+ const bar=$('#dayBar');if(!bar)return;bar.innerHTML='';
+ for(let offset=0;offset<=20;offset++){
   const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);
+  const dayIso=iso(d), wd=d.getDay()===0?6:d.getDay()-1, obs=orderObservedWeekdays.get(wd);
   const b=document.createElement('button');
-  b.className='day'+(offset<0?' past':'')+(offset===0?' today':'');
-  b.dataset.offset=offset;
-  b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()+'</span>';
-  b.onclick=()=>loadOrder(offset);
+  b.className='day'+(offset===0?' today':'')+(obs?.observed?' observed':'')+(dayIso===orderDate?' delivery':'')+(dayIso===orderNextDate?' next':'');
+  b.dataset.offset=offset;b.dataset.date=dayIso;
+  b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+(obs?.observed?'OBS · '+Number(obs.family_count||0):d.toLocaleDateString(undefined,{month:'short'}).toUpperCase())+'</span>';
+  b.onclick=()=>{
+   if(orderSelectMode==='DELIVERY'){
+    orderDate=dayIso;
+    if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+    orderSelectMode='NEXT';
+   }else{
+    if(dayIso<=orderDate){toast('Next delivery must be after delivery date');return}
+    orderNextDate=dayIso;orderSelectMode='DELIVERY';
+   }
+   buildDays();updateOrderWindowUI();loadOrder(orderDate);
+  };
   bar.appendChild(b);
  }
- requestAnimationFrame(()=>bar.querySelector('.day.today')?.scrollIntoView({behavior:'auto',block:'nearest',inline:'center'}));
+ requestAnimationFrame(()=>bar.querySelector('.day.delivery')?.scrollIntoView({behavior:'auto',block:'nearest',inline:'center'}));
 }
+async function initOrdering(force=false){
+ if(orderInitPromise&&!force)return orderInitPromise;
+ orderInitPromise=(async()=>{
+  if(!orderCalendarLoaded||force){
+   try{
+    const d=await api('/v1/yipman/ordering-calendar?lookback_days=180',{timeoutMs:18000});
+    orderObservedWeekdays=new Map((d.rows||[]).map(x=>[Number(x.weekday_number),x]));
+    orderCalendarLoaded=true;
+   }catch(e){
+    orderObservedWeekdays=new Map([[1,{observed:true,family_count:1}],[4,{observed:true,family_count:1}]]);
+    $('#orderStatus').textContent='Observed calendar fallback · '+e.message;
+   }
+  }
+  if(!orderDate){
+   const base=new Date();base.setHours(12,0,0,0);
+   for(let i=1;i<=14;i++){
+    const d=new Date(base);d.setDate(d.getDate()+i);
+    const wd=d.getDay()===0?6:d.getDay()-1;
+    if(orderObservedWeekdays.get(wd)?.observed){orderDate=iso(d);break}
+   }
+   if(!orderDate){const d=new Date(base);d.setDate(d.getDate()+1);orderDate=iso(d)}
+  }
+  if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+  buildDays();updateOrderWindowUI();
+  await loadOrder(orderDate);
+ })();
+ try{return await orderInitPromise}finally{orderInitPromise=null}
+}
+$('#deliveryDateCard').onclick=()=>{orderSelectMode='DELIVERY';updateOrderWindowUI()};
+$('#nextDeliveryDateCard').onclick=()=>{orderSelectMode='NEXT';updateOrderWindowUI()};
+$('[data-order-mode]').forEach(b=>b.onclick=()=>{
+ const mode=b.dataset.orderMode;
+ $('[data-order-mode]').forEach(x=>x.classList.toggle('on',x===b));
+ $('#regularOrderPanel').classList.toggle('hide',mode!=='REGULAR');
+ $('#promotionOrderPanel').classList.toggle('hide',mode!=='PROMOTION');
+ if(mode==='REGULAR')initOrdering();
+});
 function receiptTracePairs(r){
  const events=Array.isArray(r?.receipt_events)?r.receipt_events:[];
  const pairs=[], seen=new Set();
@@ -941,18 +1016,23 @@ function renderOrderRoster(rows,data,h,stale){
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
-async function loadOrder(offset){
+async function loadOrder(value){
  const requestId=++orderRequestSeq;
- const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);
- $$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));
- const isPast=offset<0;
+ let d=null;
+ if(typeof value==='string')d=dateLocal(value);
+ else{d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+Number(value||0))}
+ if(!d)return;
+ orderDate=iso(d);
+ buildDays();updateOrderWindowUI();
+ const today0=new Date();today0.setHours(12,0,0,0);
+ const isPast=d<today0;
  $('#orderTools').style.display=isPast?'none':'grid';
  $('#orderCol1').textContent='FAMILY / RECEIVING';
  $('#orderCol2').textContent=isPast?'RECEIPT':'OH';
  $('#orderCol3').textContent=isPast?'UOM':'ORDER';
  $('#orderStatus').textContent=(isPast?'Loading delivery history for ':'Loading ')+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';
  $('#orderRows').innerHTML='<div class="loading">'+(isPast?'Checking actual canonical receipts…':'Checking receiving cadence and coverage…')+'</div>';
- const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate;
+ const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate+(!isPast&&orderNextDate?'&next_delivery_date='+encodeURIComponent(orderNextDate):'');
  try{
   let data=null;
   for(let i=0;i<10;i++){
@@ -1135,14 +1215,13 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await loadOrder(Number($('.day.on')?.dataset.offset||0));else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
+async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
 
 const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
 const initialView=['quick','order','price','data'].includes(initialHash)?initialHash:'quick';
 history.replaceState({yipman:true,root:true,view:'quick'},'', '#quick');
 history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView);
 historyReady=true;
-buildDays();
 renderView(initialView);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();
