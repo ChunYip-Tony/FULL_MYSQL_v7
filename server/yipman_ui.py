@@ -124,6 +124,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .order-coverage{background:#142033;color:#fff;border-radius:13px;padding:8px 10px;margin:0 0 8px}.order-coverage small{display:block;font-size:7px;color:#b8c4d2;font-weight:950}.order-coverage b{display:block;font-size:16px;margin-top:2px}.order-coverage span{display:block;font-size:8px;color:#ccd6e2;margin-top:2px}
 .promo-shell{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:13px}.promo-shell h3{font-size:16px;margin:0}.promo-shell p{font-size:9px;color:var(--muted);line-height:1.4}.promo-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.promo-type{border-radius:999px;padding:6px 8px;font-size:8px;font-weight:950}.promo-type.weekly{background:#f0eaff;color:#6b21a8}.promo-type.weekend{background:#fff4d6;color:#8a5b00}
 
+.promo-controls{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px}.promo-controls select,.promo-date-inputs input{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;padding:9px;font-size:10px;font-weight:850}.promo-import{border:0;border-radius:11px;background:#142033;color:#fff;padding:9px 11px;font-size:9px;font-weight:950}.promo-date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.promo-date-inputs label{font-size:7px;color:var(--muted);font-weight:950}.promo-date-inputs input{display:block;margin-top:3px;padding:7px}
+.promo-status{font-size:9px;color:var(--muted);font-weight:800;margin:7px 2px}.promo-summary{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.promo-card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px;margin-bottom:8px;box-shadow:var(--shadow)}.promo-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.promo-card-head b{font-size:14px}.promo-card-head small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.promo-badge{border-radius:999px;padding:5px 7px;font-size:7px;font-weight:950;white-space:nowrap}.promo-badge.weekly{background:#f0eaff;color:#6b21a8}.promo-badge.weekend{background:#fff4d6;color:#8a5b00}.promo-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}.promo-metric{background:#f7f9fb;border-radius:9px;padding:7px;text-align:center;min-width:0}.promo-metric small{display:block;font-size:6px;color:var(--muted);font-weight:950}.promo-metric b{display:block;font-size:14px;margin-top:2px}.promo-metric.temp{background:#fff5e9;border:1px solid #f7bc7a;cursor:pointer}.promo-order{margin-top:7px;background:#eaf8ef;border:1px solid #b8e3c6;border-radius:11px;padding:8px}.promo-order small{font-size:7px;color:#397450;font-weight:950}.promo-order b{display:block;font-size:22px;color:#17683c}.promo-break{font-size:8px;color:#436052;margin-top:2px}.promo-review{background:#fff8e1;border:1px solid #efdca2;border-radius:11px;padding:8px;font-size:9px;margin-bottom:7px}
+
 .lh{font-size:9px}.orow .name{font-size:14px}.orow .sub{font-size:9px}.cell{font-size:14px}.cell span{font-size:9px}.rtrace-line{font-size:10px}.rtrace-more{font-size:9px}.receipt-meta{font-size:10px}
 .pill{font-size:10px}.ptop b{font-size:15px}.ptop small{font-size:10px}.pbox b{font-size:20px}.pbox span{font-size:9px}.why{font-size:10px}
 .dcard h3{font-size:13px}.stage b{font-size:8px}.stage span{font-size:8px}.batchrow b{font-size:11px}.batchrow span{font-size:9px}
@@ -383,18 +386,33 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
     <section class="page" id="order">
       <div class="topline"><h2>Ordering</h2><div class="hint">DELIVERY WINDOW</div></div>
       <div class="order-tabs"><button class="order-tab on" data-order-mode="REGULAR">Regular Order</button><button class="order-tab" data-order-mode="PROMOTION">Promotion Order</button></div>
-      <div id="regularOrderPanel">
+      <div id="orderDatePicker">
         <div class="order-date-grid">
           <button class="order-date-card delivery pick" id="deliveryDateCard"><small>DELIVERY DATE</small><b id="deliveryDateText">Loading…</b><span id="deliveryObservedText">Observed delivery day</span></button>
           <button class="order-date-card next" id="nextDeliveryDateCard"><small>NEXT DELIVERY</small><b id="nextDeliveryDateText">Loading…</b><span id="nextObservedText">Observed delivery day</span></button>
         </div>
         <div class="daybar" id="dayBar"></div>
-        <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span>Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
+        <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span id="orderCoverageSub">Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
+      </div>
+      <div id="regularOrderPanel">
         <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
         <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
         <div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
       </div>
-      <div id="promotionOrderPanel" class="hide"><div class="promo-shell"><h3>Promotion Order</h3><p>Promotion ordering uses the same two-date coverage window, but each item is forecast by its promotion window and regular-price window. Temporary Observed True Stock override belongs here only.</p><div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div><p><b>Promotion list:</b> not loaded yet. The regular-order engine below is now separate and never asks for temporary True Stock.</p></div></div>
+      <div id="promotionOrderPanel" class="hide">
+        <div class="promo-shell">
+          <h3>Promotion Order</h3>
+          <p>Weekly items use Thursday → following Thursday. Weekend items use Friday → Sunday. The selected delivery window can contain both promotion and regular-price days.</p>
+          <div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div>
+          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT LIST</button></div>
+          <div class="promo-date-inputs"><label>WEEKLY START (THU)<input type="date" id="promoWeeklyStart"></label><label>WEEKEND START (FRI)<input type="date" id="promoWeekendStart"></label></div>
+          <input type="file" id="promoFileInput" accept=".csv,.xls,.xlsx,.xlsm" class="hide">
+          <div class="promo-status" id="promoListStatus">Import CSV / XLS / XLSX, or choose a saved promotion list.</div>
+        </div>
+        <div class="promo-summary" id="promoSummary"></div>
+        <div id="promoOrderStatus" class="promo-status"></div>
+        <div id="promoRows"><div class="empty">Choose or import a promotion list.</div></div>
+      </div>
     </section>
 
     <section class="page" id="price"><div class="topline"><h2>Price Review</h2><div class="hint">BY DELIVERY PATTERN</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
