@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v383';
+const CACHE='yipman-v384';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -480,6 +480,17 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .receivingline{display:flex;align-items:baseline;gap:7px;margin-top:5px;min-width:0}
 #order .receivingline span{font-size:8px;color:#71808d;font-weight:950;letter-spacing:.04em}
 #order .receivingline b{font-size:16px;line-height:1;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order .orderrecvhistory{grid-column:1/-1;margin:0 0 9px;border:1px solid #d7e5ef;background:#f7fbff;border-radius:11px;padding:7px 9px!important}
+#order .orderrecvhistory>small{display:block;font-size:7px;color:#71808d;font-weight:950;letter-spacing:.04em;margin-bottom:4px}
+#order .orderrecvrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #e4edf4}
+#order .orderrecvrow:first-of-type{border-top:0}
+#order .orderrecvarticle{min-width:0}
+#order .orderrecvarticle b{display:block;font-size:15px;line-height:1.05;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order .orderrecvarticle span{display:block;font-size:8px;color:#71808d;font-weight:850;margin-top:2px}
+#order .orderrecvpack{text-align:right;min-width:92px}
+#order .orderrecvpack b{display:block;font-size:13px;line-height:1.05;color:#263743;font-weight:950;white-space:normal}
+#order .orderrecvpack span{display:block;font-size:7px;color:#71808d;font-weight:900;margin-top:2px}
+#order .orderrecvmore{font-size:8px;color:#5d7185;font-weight:900;padding-top:4px;border-top:1px solid #e4edf4}
 #order .orderqty{font-size:18px;color:#0d4f8b}
 #order .rtrace-line{font-size:11px}
 #order .rtrace-more{font-size:10px}
@@ -1651,7 +1662,15 @@ function renderOrderRoster(rows,data,h,stale){
   const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
   const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
   const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
-  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="receivingline"><span>RECEIVING</span><b>'+esc(r.receiving_article||'—')+'</b></div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>';
+  const hist=state==='ORDER'&&num(q)>0&&Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
+  const shownHist=hist.slice(0,3);
+  const histHtml=shownHist.length
+    ? '<div class="orderrecvhistory"><small>HISTORICAL RECEIVING ARTICLES · FAMILY '+esc(r.family_article||'—')+'</small>'
+      +shownHist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b><span>Last received '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK SIZE</span></div></div>').join('')
+      +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap item for full history</div>':'')
+      +'</div>'
+    : '';
+  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="receivingline"><span>RECEIVING</span><b>'+esc(r.receiving_article||'—')+'</b></div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div>'+histHtml+'</div>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -1756,6 +1775,10 @@ function openOrderHistory(r){
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[], state=orderState(r), reason=orderReasonLabel(r.roster_reason);
+ const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
+ const histDetail=hist.length
+   ? '<br><br><b>Historical Receiving Articles / Pack Size</b><br>'+hist.map(h=>'• '+esc(h.article_number||'—')+' · '+esc(h.pack_size||'—')+' · last '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+(h.pack_size_source?' · '+esc(h.pack_size_source):'')).join('<br>')
+   : '';
  const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
@@ -1763,6 +1786,7 @@ function openOrder(r){
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  '<br><br><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
+ histDetail+
  '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmtNullable(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
  '<br><br><b>Demand</b><br>7D '+fmtNullable(d.qty_7d)+' · 28D '+fmtNullable(d.qty_28d)+' · DOS '+fmtNullable(d.dos)+' · Forecast confidence '+esc(d.regular_forecast_confidence||'—')+
  '<br><br><b>Weekday usage forecast</b><br>'+(
