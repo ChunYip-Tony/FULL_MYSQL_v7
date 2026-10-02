@@ -155,7 +155,9 @@ jobs:
 
           src=inspect.getsource(v2.performance_report)
           from backoffice_runtime import (
+              MIN_TEST_PRICE_STEP,
               _freshness_velocity_target,
+              _next_testing_price,
               _tested_testing_prices,
               pricing_review,
           )
@@ -165,10 +167,27 @@ jobs:
               target='11.39',
               observed_candidates=None,
           )
+          assert MIN_TEST_PRICE_STEP==Decimal('0.45')
           assert path['testing_anchor_price']==Decimal('8.99')
-          assert path['testing_price']>Decimal('8.99')
-          assert path['testing_price']<=Decimal('9.44')
+          assert path['testing_price']==Decimal('9.44')
+          assert path['testing_price']-path['testing_anchor_price']>=Decimal('0.45')
           assert path['testing_price']<Decimal('9.71')
+
+          # Do not publish a Testing price too close to Current.
+          assert _next_testing_price(Decimal('8.99'),Decimal('9.29')) is None
+          assert _next_testing_price(Decimal('8.99'),Decimal('8.69')) is None
+
+          # Low-price items still move at least $0.45 in either direction.
+          assert _next_testing_price(Decimal('3.99'),Decimal('5.00'))==Decimal('4.44')
+          assert _next_testing_price(Decimal('3.99'),Decimal('2.99'))==Decimal('3.54')
+
+          # Too-close observed prices are skipped; the next meaningful observed
+          # point is used when it fits the gradual cap.
+          assert _next_testing_price(
+              Decimal('8.99'),
+              Decimal('10.00'),
+              [{'price':Decimal('9.19')},{'price':Decimal('9.44')}],
+          )==Decimal('9.44')
 
           fresh_target=_freshness_velocity_target(
               current='8.99',
@@ -220,6 +239,11 @@ jobs:
           assert "priceFilter='UPC_240'" in ui
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
+          assert 'Testing must move at least $0.45 up or down' in ui
+          desktop=Path('desktop_workstation_v366.py').read_text(encoding='utf-8')
+          assert "['Testing',money(pr&&pr.testing_price)" in desktop
+          assert "testing=r.testing_price" in desktop
+          assert "min $0.45 from Current" in desktop
           print('controlled-price-progress=PASS')
           PY
 
