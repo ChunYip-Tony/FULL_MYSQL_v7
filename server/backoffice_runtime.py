@@ -29,6 +29,7 @@ from webapp_v2_runtime import (
     _delivery_pattern,
     _delivery_day_evidence,
     _family_effective_oh,
+    _family_system_oh,
     _family_receipt_events,
     _family_receipt_events_bulk,
     _ordering_candidate_families,
@@ -4212,6 +4213,7 @@ def inventory_review(
     query: str | None = None,
     lightweight: bool = False,
     include_price_preview: bool = False,
+    include_oh: bool = False,
 ) -> dict[str, Any]:
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
@@ -4365,6 +4367,7 @@ def inventory_review(
         )
 
         family_cache: dict[int, dict[str, Any]] = {}
+        family_system_cache: dict[int, dict[str, Any]] = {}
         # Lightweight search stays fast by default. Yipman can explicitly request
         # one set-based CURRENT-price + SUGGEST preview pass for the returned
         # rows without enabling family OH roll-forward.
@@ -4410,11 +4413,12 @@ def inventory_review(
 
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
 
-            # Live-search list mode intentionally skips the expensive family OH
-            # roll-forward. The list does not display OH; full current OH is
-            # resolved only when the user opens a UPC detail.
-            if lightweight:
+            # Normal lightweight Quick Check search skips OH roll-forward for speed.
+            # PI can explicitly request include_oh=True so System OH and Effective OH
+            # are both resolved from the same Family inventory evidence.
+            if lightweight and not include_oh:
                 family_oh = {}
+                family_system_oh = {}
             else:
                 if fid is not None and fid not in family_cache:
                     cur.execute(
@@ -4422,7 +4426,9 @@ def inventory_review(
                         (fid,),
                     )
                     children = cur.fetchall()
+                    live_system_oh = _family_system_oh(cur, children)
                     live_family_oh = _family_effective_oh(cur, children)
+                    family_system_cache[fid] = live_system_oh
                     if live_family_oh.get("status") == "READY" and live_family_oh.get("quantity") is not None:
                         live_family_oh["as_of_date"] = (
                             live_family_oh.get("movement_through_date")
@@ -4438,6 +4444,7 @@ def inventory_review(
                         else:
                             family_cache[fid] = live_family_oh
                 family_oh = family_cache.get(fid or -1, {})
+                family_system_oh = family_system_cache.get(fid or -1, {})
             pair_sig = _seafood_upc_group_signature(fid, row.get("ean_upc"))
             pair_prefix = _numeric_key(row.get("ean_upc"))[:3]
             pair_key = (
@@ -4577,6 +4584,11 @@ def inventory_review(
                     "family_movement_days_7d": family_movement_day_count,
                     "dos": row.get("dos"),
                     "doh": row.get("doh"),
+                    "family_system_oh": family_system_oh.get("quantity"),
+                    "family_system_oh_uom": family_system_oh.get("uom"),
+                    "family_system_oh_source": family_system_oh.get("source"),
+                    "family_system_oh_status": family_system_oh.get("status"),
+                    "family_system_oh_reason": family_system_oh.get("reason"),
                     "family_oh": family_oh.get("quantity"),
                     "family_oh_uom": family_oh.get("uom"),
                     "family_oh_source": family_oh.get("source"),
@@ -4615,10 +4627,11 @@ def inventory_review(
             "subgroup_avg_qty_day_denominator": "COMPLETED_POS_DATA_DAYS",
             "lightweight": bool(lightweight),
             "include_price_preview": bool(include_price_preview),
+            "include_oh": bool(include_oh),
             "quick_price_preview_rule": "SAME_14D_GP_PER_DAY_ENGINE_AND_QUALIFICATION_AS_PRICE_REVIEW_PLUS_240_249_EQUALITY",
             "family_receipt_7d_rule": "CANONICAL_PHYSICAL_101_109_LATEST_7_COMPLETED_MVT_DAYS;107_COST_STAGE_EXCLUDED",
             "lightweight_skips": (
-                ["FAMILY_EFFECTIVE_OH_ROLLFORWARD"]
+                ([] if include_oh else ["FAMILY_SYSTEM_AND_EFFECTIVE_OH_ROLLFORWARD"])
                 + ([] if include_price_preview else ["LIVE_CURRENT_PRICE_AND_SUGGEST_PREVIEW"])
                 if lightweight
                 else []
