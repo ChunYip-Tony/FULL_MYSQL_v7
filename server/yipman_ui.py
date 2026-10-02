@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v377';
+const CACHE='yipman-v378';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -443,7 +443,62 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .preason{margin-top:6px;border-top:1px solid #edf1f3;padding-top:6px}.preason summary{list-style:none;cursor:pointer;color:#0879b3;font-size:9px;font-weight:950}.preason div{margin-top:5px;color:#64727e;font-size:9px;line-height:1.45;font-weight:750}
 .pcard-actions{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:7px}.pcard-actions button{border-radius:9px;padding:8px 10px;font-size:9px;font-weight:950}
 .pdetail{border:0;background:#173047;color:#fff}.pignore{border:1px solid #d9e1e6;background:#fff;color:#586773}
-@media(max-width:390px){.pp b{font-size:20px}.pm b{font-size:11px}.pcard{padding:10px 11px}}
+@media(max-width:390px){.pp b{font-size:22px}.pm b{font-size:12px}.pcard{padding:11px 12px}}
+
+/* V378: slightly larger Order Suggestions + Price Suggestions reading scale. */
+#order .topline h2,#price .topline h2{font-size:26px}
+#orderStatus{font-size:12px!important;line-height:1.32!important}
+#order .order-tab{font-size:12px;padding:11px 8px}
+#order .order-date-card{padding:9px 10px}
+#order .order-date-card small{font-size:8px}
+#order .order-date-card b{font-size:17px}
+#order .order-date-card span{font-size:8px}
+#order .order-coverage{padding:9px 11px}
+#order .order-coverage small{font-size:8px}
+#order .order-coverage b{font-size:18px}
+#order .order-coverage span{font-size:9px}
+#order .order-summary{font-size:10px}
+#order .order-controls label{font-size:7px}
+#order .order-controls select{font-size:9px;padding:6px 21px 6px 8px}
+#order .lh,#order .orow{grid-template-columns:minmax(0,1fr) 60px 68px;padding-left:12px;padding-right:12px}
+#order .lh{font-size:10px;padding-top:9px;padding-bottom:9px}
+#order .orow>div{padding:11px 0}
+#order .orow .name{font-size:15px;line-height:1.14}
+#order .orow .sub{font-size:10px;line-height:1.28;margin-top:3px}
+#order .cell{font-size:15px}
+#order .cell span{font-size:10px}
+#order .orderstate,#order .order-risk,#order .order-lowconf{font-size:7px;padding:3px 6px}
+#order .rtrace-line{font-size:11px}
+#order .rtrace-more{font-size:10px}
+#order .receipt-meta{font-size:11px}
+
+#price .filters .pill{font-size:12px;padding:9px 12px}
+#priceStatus{font-size:12px!important;line-height:1.32!important}
+#price .pricecards{gap:8px}
+#price .pcard{padding:12px 13px;border-radius:16px}
+#price .ptop b{font-size:17px!important}
+#price .ptop small{font-size:11px!important}
+#price .pbadge{font-size:10px;padding:5px 9px}
+#price .pp{padding:8px 9px}
+#price .pp small{font-size:9px}
+#price .pp b{font-size:23px}
+#price .pp span{font-size:9px}
+#price .pcost{font-size:9px;padding:6px 8px}
+#price .pcost b{font-size:11px}
+#price .pm{padding:6px 7px}
+#price .pm small{font-size:8px}
+#price .pm b{font-size:13px}
+#price .pprogress{padding:7px 8px}
+#price .pprogress-line{font-size:10px}
+#price .pprogress-line b,#price .pprogress-line strong{font-size:11px}
+#price .pchip{font-size:9.5px;padding:4px 7px}
+#price .preason summary{font-size:10px}
+#price .preason div{font-size:10px}
+#price .pcard-actions button{font-size:10px;padding:9px 11px}
+@media(max-width:370px){
+  #order .lh,#order .orow{grid-template-columns:minmax(0,1fr) 56px 64px;padding-left:10px;padding-right:10px}
+  #price .pp b{font-size:22px}
+}
 
 </style>
 </head>
