@@ -3183,30 +3183,34 @@ def _positive_price(value: Any) -> Decimal | None:
     return price if price > 0 else None
 
 
+MIN_TEST_PRICE_STEP = Decimal("0.45")
+
+
 def _next_testing_price(
     anchor: Decimal | None,
     target: Decimal | None,
     observed_candidates: list[dict[str, Any]] | None = None,
 ) -> Decimal | None:
-    """Move one small price-test step from anchor toward target.
+    """Move one meaningful controlled price-test step from Current toward target.
 
-    Prefer the nearest actually observed price point in the correct direction
-    when it is within the 5% step cap. Otherwise move at most 5% of the anchor,
-    rounded to cents. The internal target is never exposed as the action price
-    until the gradual path reaches it.
+    A Testing price must be at least $0.45 away from Current; smaller changes
+    are intentionally suppressed because they are too close to create a useful
+    velocity / GP$/day test. For higher-priced items, the gradual ceiling stays
+    around 5% of Current. An actually observed price is preferred only when its
+    distance is between the $0.45 minimum and that gradual ceiling.
     """
     anchor = _positive_price(anchor)
     target = _positive_price(target)
     if anchor is None or target is None:
         return None
     delta = target - anchor
-    if abs(delta) <= Decimal("0.01"):
+    if abs(delta) < MIN_TEST_PRICE_STEP:
         return None
 
-    cap = (anchor * Decimal("0.05")).quantize(
+    percent_step = (anchor * Decimal("0.05")).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
-    cap = max(Decimal("0.05"), cap)
+    cap = max(MIN_TEST_PRICE_STEP, percent_step)
 
     observed: list[Decimal] = []
     for item in observed_candidates or []:
@@ -3217,7 +3221,10 @@ def _next_testing_price(
     if delta > 0:
         nearby = sorted({
             p for p in observed
-            if anchor < p <= target and p - anchor <= cap
+            if (
+                anchor + MIN_TEST_PRICE_STEP <= p <= target
+                and p - anchor <= cap
+            )
         })
         if nearby:
             return nearby[0]
@@ -3225,7 +3232,10 @@ def _next_testing_price(
     else:
         nearby = sorted({
             p for p in observed
-            if target <= p < anchor and anchor - p <= cap
+            if (
+                target <= p <= anchor - MIN_TEST_PRICE_STEP
+                and anchor - p <= cap
+            )
         }, reverse=True)
         if nearby:
             return nearby[0]
@@ -3234,8 +3244,8 @@ def _next_testing_price(
     result = (anchor + step).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
-    if result == anchor:
-        result = anchor + (Decimal("0.01") if delta > 0 else Decimal("-0.01"))
+    if abs(result - anchor) < MIN_TEST_PRICE_STEP:
+        return None
     if delta > 0:
         return min(result, target)
     return max(result, target)
@@ -3264,7 +3274,7 @@ def _tested_testing_prices(
         "testing_price": testing_price,
         "target_sweet_spot_price": target_price,
         "testing_anchor_price": anchor,
-        "testing_step_rule": "CURRENT_TO_TARGET_NEAREST_OBSERVED_WITHIN_5PCT_ELSE_MAX_5PCT_STEP",
+        "testing_step_rule": "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP",
     }
 
 
@@ -3281,8 +3291,9 @@ def _freshness_velocity_target(
 
     Prefer a historically observed lower price that produced better velocity,
     while staying above current cost and inside the applicable Company range.
-    If history has no qualifying lower point, use one exploratory 5% markdown
-    step subject to those same floors.
+    If history has no qualifying lower point, use one exploratory markdown
+    step of at least $0.45 (or about 5% for higher-priced items), subject to
+    those same floors.
     """
     current_price = _positive_price(current)
     cost = _positive_price(current_cost)
@@ -3325,7 +3336,13 @@ def _freshness_velocity_target(
         )
         return _positive_price(eligible[0].get("price"))
 
-    exploratory = (current_price * Decimal("0.95")).quantize(
+    exploratory_step = max(
+        MIN_TEST_PRICE_STEP,
+        (current_price * Decimal("0.05")).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        ),
+    )
+    exploratory = (current_price - exploratory_step).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
     )
     exploratory = max(exploratory, floor)
@@ -3386,7 +3403,7 @@ def _quick_price_preview_by_upc(
             "tested_price": tested,
             "testing_price": None,
             "target_sweet_spot_price": None,
-            "testing_step_rule": "NEAREST_OBSERVED_PRICE_WITHIN_5PCT_ELSE_MAX_5PCT_STEP",
+            "testing_step_rule": "MIN_0_45_FROM_CURRENT_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP",
         }
         m14 = _batch_sales_metric(daily, days, uid, 14)
         q14 = _d(m14.get("sold_quantity"))
@@ -5235,7 +5252,7 @@ def pricing_review(
         row["testing_price"] = None
         row["testing_target_price"] = None
         row["testing_price_basis"] = None
-        row["testing_step_rule"] = "CURRENT_TO_TARGET_NEAREST_OBSERVED_WITHIN_5PCT_ELSE_MAX_5PCT_STEP"
+        row["testing_step_rule"] = "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP"
 
         base_actionable = bool(
             str(row.get("review_status") or "").upper() == "ACTIONABLE"
@@ -5466,7 +5483,7 @@ def pricing_review(
             "estimate_basis": "LATEST_AVAILABLE_CANONICAL_POS_AND_MVT_INDEPENDENT",
             "estimate_is_clearly_labelled": True,
             "tested_price": "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_FROM_ACTUAL_SALES_GP_DOLLARS_PER_DAY",
-            "testing_price": "CURRENT_PRICE_BASED_CONTROLLED_STEP; PRIORITIZE_FRESHNESS_VELOCITY_WHEN_SLOW; OTHERWISE_STEP_TOWARD_TESTED_OR_GP_DOLLAR_TARGET; MAX_5PCT",
+            "testing_price": "CURRENT_PRICE_BASED_CONTROLLED_STEP; MIN_ABSOLUTE_CHANGE_0_45; PRIORITIZE_FRESHNESS_VELOCITY_WHEN_SLOW; OTHERWISE_STEP_TOWARD_TESTED_OR_GP_DOLLAR_TARGET; HIGHER_PRICE_GRADUAL_CAP_ABOUT_5PCT",
             "price_action_priority": "PAIR_FIX_THEN_COMPANY_RANGE_THEN_FRESHNESS_VELOCITY_TEST_THEN_TESTED_SWEET_SPOT_GAP_THEN_GP_DOLLAR_TEST",
             "source_contract": report.get("price_suggestion_rules"),
         },
