@@ -1,3 +1,14 @@
+v7.0.386 Yipman AI Query + UI Cleanup:
+- AI page is now one compact Ask Yipman header, one conversation area, and one composer; duplicate AI Assistant / Ask Yipman headings, repeated READ ONLY copy, starter chips, and repeated instructional bubbles were removed.
+- The opening AI message is now a single Today’s attention summary combining Ordering, Price Review, and Stock Flow priorities with data-through information when available.
+- AI can now answer date-specific item sales questions such as “tilapia sales 9/25” from completed canonical POS performance data.
+- AI can now answer daily department performance questions such as “yesterday performance”, including sales, historical-cost GP when complete, sold-item count, comparison with the supported-day 7D average, and top sellers.
+- AI can query current item price and current Family OH / last receipt through the existing V2 search and Family endpoints.
+- Requested dates that are not completed canonical POS sales days are reported as unavailable and the latest completed sales date is shown; missing dates are never treated as zero.
+- Ordering / price / Stock Flow / QA explanation behavior remains read-only.
+- Yipman shell cache advanced to v386.
+Version: 7.0.386 Single-Service Edition
+
 v7.0.385 Yipman Ordering Card Ownership Clarity:
 - Future Ordering suggestions now render as separate standalone Family cards instead of visually continuous rows.
 - Each card repeats FAMILY / RECEIVING, OH, and ORDER headers so users can immediately see which values belong to which suggested Family.
