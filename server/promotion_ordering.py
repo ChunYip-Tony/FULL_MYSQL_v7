@@ -15,7 +15,7 @@ from db import db_conn
 from webapp_v2_runtime import bulk_ordering_suggestions
 
 
-PROMO_TYPES={"WEEKLY","WEEKEND"}
+PROMO_TYPES={"WEEKLY","WEEKEND","CUSTOM"}
 
 
 def _d(value: Any) -> Decimal:
@@ -59,7 +59,11 @@ def _validate_window(promo_type: str,start: date,end: date) -> None:
         if start.weekday()!=4 or end.weekday()!=6 or (end-start).days!=2:
             raise ValueError("WEEKEND_PROMOTION_MUST_BE_FRIDAY_TO_SUNDAY")
         return
-    raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_OR_WEEKEND")
+    if p=="CUSTOM":
+        if end<start:
+            raise ValueError("PROMOTION_END_BEFORE_START")
+        return
+    raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_WEEKEND_OR_CUSTOM")
 
 
 def _normalize_item(
@@ -99,6 +103,8 @@ def _normalize_item(
             promo_type="WEEKLY"
         elif start.weekday()==4 and end.weekday()==6 and (end-start).days==2:
             promo_type="WEEKEND"
+        else:
+            promo_type="CUSTOM"
 
     raw_price=(
         out.get("promotion_price")
