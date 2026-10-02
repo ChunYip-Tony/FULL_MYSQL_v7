@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v385';
+const CACHE='yipman-v386';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -353,7 +353,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .besthead h3{font-size:17px;margin:0;font-weight:950}.besthead span{font-size:8px;color:var(--muted);font-weight:900}
 .bestsort{white-space:nowrap;border:1px solid #cbddeb;background:#edf6fd;color:#315b78;border-radius:999px;padding:5px 7px;font-size:8px!important}
 .stockflowsort{flex:0 0 auto;font-size:7px;color:#71808d;font-weight:950}.stockflowsort select{display:block;margin-top:2px;border:1px solid #cbddeb;background:#edf6fd;color:#315b78;border-radius:999px;padding:5px 22px 5px 7px;font-size:8px;font-weight:950;outline:0}
-.stockdiff{align-self:start;text-align:right;background:#fff0f0;border:1px solid #efcccc;border-radius:9px;padding:5px 7px;min-width:88px}.stockdiff small{display:block;font-size:6px;color:#9a6767;font-weight:950}.stockdiff b{display:block;font-size:15px;line-height:1;color:#c12e2e;margin-top:2px}.stockdiff span{display:block;font-size:7px;color:#9a6767;margin-top:2px;font-weight:850}
+.stockdiff{align-self:start;text-align:right;background:#fff0f0;border:1px solid #efcccc;border-radius:9px;padding:5px 7px;min-width:88px}.stockdiff small{display:block;font-size:6px;color:#9a6767;font-weight:950}.stockdiff b{display:block;font-size:15px;line-height:1;color:#c12e2e;margin-top:2px}.stockdiff>span{display:block;font-size:7px;color:#9a6767;margin-top:2px;font-weight:850}.stockdiff.promoted{background:#8df08f;border-color:#42c95e;box-shadow:0 4px 11px rgba(38,169,74,.13);min-width:112px}.stockdiff.promoted small{color:#205b2d}.stockdiff.promoted b{color:#123f1d}.stockdiff.promoted>span{color:#2e6338}.stockpromo{margin-top:5px;padding-top:5px;border-top:1px solid rgba(28,100,45,.24)}.stockpromo strong{display:block;font-size:6.5px;line-height:1.18;color:#164f24;font-weight:1000;white-space:nowrap}.stockpromo span{display:block;font-size:7px;line-height:1.18;color:#245b32;font-weight:950;margin-top:2px;white-space:nowrap}
 .bestfam{--best-border:#ddb916;--best-bg:#fff3b7;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);border-radius:13px;background:linear-gradient(90deg,var(--best-bg),#fff);padding:7px 8px;margin-bottom:6px;box-shadow:0 6px 17px rgba(18,38,56,.06)}
 .bestfam.tone1{--best-border:#58bd70;--best-bg:#e2f6e6}.bestfam.tone2{--best-border:#4a9de2;--best-bg:#e6f2fc}.bestfam.tone3{--best-border:#ef72a5;--best-bg:#fde7ef}.bestfam.tone4{--best-border:#9b7be0;--best-bg:#eee8fb}
 .besttop{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.bestlabel{font-size:7px;font-weight:950;color:#6f6a53}.bestnum{font-size:17px;font-weight:1000;line-height:1}.bestname{font-size:18px;font-weight:1000;line-height:1.03;margin-top:2px}.bestrank{align-self:start;background:rgba(255,255,255,.72);border:1px solid rgba(70,80,90,.10);border-radius:7px;padding:4px 6px;font-size:8px;font-weight:950}
@@ -1277,9 +1277,12 @@ function renderStockFlow(){
 }
 function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
- const count=num(g.family_receipt_7d_day_count),diff=num(g.receipt_minus_selling_7d),ratio=num(g.receipt_to_selling_ratio);
+ const count=num(g.family_receipt_7d_day_count),diff=num(g.receipt_minus_selling_7d),ratio=num(g.receipt_to_selling_ratio),promo=g.recent_promotion_event||null;
  const recent=history.length?history.map(x=>'<button type="button" class="bestreceipt receiptlink" data-receipt-family="'+esc(g.family_id??'')+'" data-receipt-article="" data-receipt-date="'+esc(x.date||'')+'"><span>'+esc(quickReceiptDay(x.date))+'</span><b>'+fmt(x.quantity)+' '+esc(x.uom||receiptUom)+'</b></button>').join(''):'<div class="bestreceipt"><span>No recent receipt</span><b>—</b></div>';
- return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="stockdiff"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(ratio===null?'—':((ratio-1)*100).toFixed(0)+'% over selling')+'</span></div></div>'+
+ const promoRange=promo?(shortDate(promo.start_date)+(String(promo.end_date||'')&&String(promo.end_date)!==String(promo.start_date)?'–'+shortDate(promo.end_date):'')):'';
+ const promoQty=promo&&String(promo.sale_quantity_status||'').toUpperCase()==='READY'&&num(promo.sale_quantity)!==null?'<span>SOLD '+fmt(promo.sale_quantity)+' '+esc(promo.sale_quantity_uom||uom)+'</span>':'';
+ const promoHtml=promo?'<div class="stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoQty+'</div>':'';
+ return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="stockdiff'+(promo?' promoted':'')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(ratio===null?'—':((ratio-1)*100).toFixed(0)+'% over selling')+'</span>'+promoHtml+'</div></div>'+
    '<div class="bestmetrics"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div></div>'+
    '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span>LAST 2</span></div>'+recent+'</div></section>';
@@ -1297,7 +1300,7 @@ async function loadBestSellers(force=false){
     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
     family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count,
     receipt_minus_selling_7d:r.receipt_minus_selling_7d,receipt_to_selling_ratio:r.receipt_to_selling_ratio,
-    receipt_over_selling_pct:r.receipt_over_selling_pct
+    receipt_over_selling_pct:r.receipt_over_selling_pct,recent_promotion_event:r.recent_promotion_event||null
   }));
   renderStockFlow();
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
