@@ -177,6 +177,9 @@ jobs:
           assert 'coverage_usage-usable_at_delivery' in src
           assert 'freshness_limit_days=7 if kind=="FRESH" else None' in src
           assert 'OUTSIDE_FRESHNESS_CAP' in src
+          assert 'CURRENT_RECENT_FAMILY_RUN_RATE' in src
+          assert 'POST_DELIVERY_NON_PROMO_BASELINE' in src
+          assert 'pre_delivery_velocity":"RECENT_FAMILY_251_252_RUN_RATE_WITH_WEEKDAY_SHAPE"' in src
           assert 'pre_delivery_shortage_is_not_backordered_into_future_delivery' in src
 
           bo_src=Path('backoffice_runtime.py').read_text(encoding='utf-8')
