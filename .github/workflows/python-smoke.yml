@@ -162,13 +162,13 @@ jobs:
           p._validate_window('WEEKLY',date(2026,10,1),date(2026,10,8))
           p._validate_window('WEEKEND',date(2026,10,2),date(2026,10,4))
 
-          bulk=inspect.getsource(v2.bulk_ordering_suggestions)
-          assert 'temporary_oh_overrides' in bulk
-          assert 'REQUEST_ONLY_NOT_SAVED' in bulk
-          assert 'promotion_start_date") or promotion_start_date' in bulk
-          assert 'forecast_promotion_coverage' in bulk
-          assert 'forecast_regular_coverage' in bulk
-          assert 'COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY' in bulk
+          runtime=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          assert 'temporary_oh_overrides' in runtime
+          assert 'REQUEST_ONLY_NOT_SAVED' in runtime
+          assert 'promotion_start_date") or promotion_start_date' in runtime
+          assert 'forecast_promotion_coverage' in runtime
+          assert 'forecast_regular_coverage' in runtime
+          assert 'COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY' in runtime
 
           promo=Path('promotion_ordering.py').read_text(encoding='utf-8')
           assert 'temporary_oh_persisted":False' in promo
