@@ -9,10 +9,13 @@ except ImportError:
 
 
 def yipman_html(version: str = "") -> str:
-    html = YIPMAN_HTML.replace("__VERSION__", str(version or ""))
+    v = str(version or "")
+    html = YIPMAN_HTML.replace("__VERSION__", v)
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v369-css\">" + YIPMAN_DESKTOP_CSS + "</style></head>")
-    html = html.replace("</body>", "<script id=\"yipman-desktop-v369-js\">" + YIPMAN_DESKTOP_JS + "</script></body>")
+    desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
+    desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
+    html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
 
@@ -39,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v371';
+const CACHE='yipman-v372';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
