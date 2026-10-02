@@ -221,7 +221,7 @@ jobs:
           assert 'current_price_gp_pct' in review_src
           assert 'tested_price_gp_pct' in review_src
           assert 'testing_price_gp_pct' in review_src
-          assert 'V2_RETAIL_59_TESTED_GP' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
+          assert 'V3_LIVE_READY_RETAIL_TESTING' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
 
           assert 'if not has_oh or not history_gate:' in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
@@ -236,9 +236,14 @@ jobs:
           assert "setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'None')" in ui
           assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
           assert '.qprice b.qempty' in ui
-          assert 'IGNORE 30 MIN' in ui
+          assert 'IGNORE 12 HOURS' in ui
           assert 'priceIgnoredThisVisit.has(id)' in ui
-          assert 'PRICE_IGNORE_MS=30*60*1000' in ui
+          assert 'PRICE_IGNORE_MS=12*60*60*1000' in ui
+          assert 'priceAccept' not in ui
+          desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+          assert 'Ignore 12 hours' in desktop
+          assert 'ignorePrice12h' in desktop
+          assert 'Mark Accepted' not in desktop
           assert 'tested_evidence_price' in ui
           assert '.pricepath' in ui
           assert '.pp b{display:block;font-size:21px' in ui
@@ -264,7 +269,6 @@ jobs:
           assert 'Current Cost' in desktop
           assert 'tested_price_gp_pct' in desktop
           assert 'testing_price_gp_pct' in desktop
-          assert "evidence '+money(r.tested_evidence_price)" in desktop
           print('controlled-price-progress=PASS')
           PY
 

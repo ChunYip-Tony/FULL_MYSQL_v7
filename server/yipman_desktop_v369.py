@@ -201,18 +201,18 @@ YIPMAN_DESKTOP_JS = r"""
 }
 function priceIgnoreMap(){
   try{
-    const raw=JSON.parse(localStorage.getItem('yipman_price_ignore_v372')||'{}'),now=Date.now(),out={};
+    const raw=JSON.parse(localStorage.getItem('yipman_price_ignore_v374')||'{}'),now=Date.now(),out={};
     Object.entries(raw).forEach(([k,v])=>{if(Number(v)>now)out[k]=Number(v)});
-    localStorage.setItem('yipman_price_ignore_v372',JSON.stringify(out));
+    localStorage.setItem('yipman_price_ignore_v374',JSON.stringify(out));
     return out;
   }catch{return {}}
 }
 function priceIsIgnored(upc){return Number(priceIgnoreMap()[String(upc)]||0)>Date.now()}
-function ignorePrice30(upc){
-  const m=priceIgnoreMap();m[String(upc)]=Date.now()+30*60*1000;
-  localStorage.setItem('yipman_price_ignore_v372',JSON.stringify(m));
+function ignorePrice12h(upc){
+  const m=priceIgnoreMap();m[String(upc)]=Date.now()+12*60*60*1000;
+  localStorage.setItem('yipman_price_ignore_v374',JSON.stringify(m));
 }
-function clearPriceIgnore(upc){const m=priceIgnoreMap();delete m[String(upc)];localStorage.setItem('yipman_price_ignore_v372',JSON.stringify(m))}
+function clearPriceIgnore(upc){const m=priceIgnoreMap();delete m[String(upc)];localStorage.setItem('yipman_price_ignore_v374',JSON.stringify(m))}
 async function refreshPriceData(force=false,attempt=0){
   const q=$('#ydPQueue');if(q)q.innerHTML='<div class="loading">'+(attempt?'Refreshing price evidence…':'Loading current Price Suggestions…')+'</div>';
   try{
@@ -325,10 +325,9 @@ async function selectPrice(upc){
       '<div class="sectiontitle">240 / 249 Integrity</div><div class="kv"><span>240 Main</span><span>'+esc(r.related_240_upc||'—')+' · '+money(r.related_240_current_price)+'</span><span>249 Service</span><span>'+esc(r.related_249_upc||'—')+' · '+money(r.related_249_current_price)+'</span><span>Rule</span><span>'+((r.related_249_present&&r.price_240_249_equal===false)?'MISMATCH · must match':'PASS / N/A')+'</span></div>'+
       '<div class="sectiontitle">Why Suggested</div><div class="note '+(r.priority_240_249_mismatch?'red':'blue')+'"><b>'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</b><br>Current '+money(r.current_price)+' → Testing '+money(r.testing_price)+' → Tested '+money(r.tested_price)+'. Current cost '+money(r.current_cost)+' / '+esc(r.selling_uom||'unit')+'.</div>'+
       '<div class="sectiontitle">Price Response History</div><div id="ydPTrendBox" class="loading">Loading 14-day response…</div>'+
-      '<div class="actions" style="margin-top:10px"><button class="btn danger" id="ydIgnore">Ignore 30 min</button><button class="btn primary" id="ydAccept">Mark Accepted</button></div>'+
+      '<div class="actions" style="margin-top:10px"><button class="btn danger" id="ydIgnore">Ignore 12 hours</button></div>'+
     '</div></div>';
-  $('#ydIgnore').onclick=()=>{ignorePrice30(r.upc);renderPriceQueue();toast('Ignored for 30 minutes')};
-  $('#ydAccept').onclick=()=>acceptPrice(r);
+  $('#ydIgnore').onclick=()=>{ignorePrice12h(r.upc);renderPriceQueue();toast('Ignored for 12 hours')};
   try{
     const d=await api('/v1/app/v2/upc/'+encodeURIComponent(r.upc)+'/price?trend_supported_days=14'),a=d.price_vs_sales_trend?.rows||[];
     $('#ydPTrendBox').className='tablewrap';
