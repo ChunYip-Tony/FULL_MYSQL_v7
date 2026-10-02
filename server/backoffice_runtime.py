@@ -3198,7 +3198,7 @@ def _next_testing_price(
     """Move one meaningful controlled test to a normal store price point.
 
     Testing is always >= $0.45 away from Current and always ends in one of the
-    standard merchandising endings: .29/.49/.69/.79/.99. The raw supported
+    standard merchandising endings: .29/.49/.59/.69/.79/.99. The raw supported
     target is first snapped to the nearest allowed store price point. A ~5%
     step remains the gradual preference; when no valid store ending exists
     inside that exact cap, the nearest valid price point toward target is used.
@@ -3300,7 +3300,12 @@ def _tested_testing_prices(
     company_high: Any = None,
 ) -> dict[str, Any]:
     current_price = _positive_price(current)
-    tested_price = _positive_price(tested)
+    raw_tested_price = _positive_price(tested)
+    tested_price = _retail_price_point(
+        raw_tested_price,
+        min_price=_positive_price(company_low),
+        max_price=_positive_price(company_high),
+    ) if raw_tested_price is not None else None
     raw_target_price = _positive_price(target)
     target_price = _retail_price_point(
         raw_target_price,
@@ -3319,10 +3324,11 @@ def _tested_testing_prices(
     )
     return {
         "tested_price": tested_price,
+        "raw_tested_price": raw_tested_price,
         "testing_price": testing_price,
         "target_sweet_spot_price": target_price,
         "raw_target_sweet_spot_price": raw_target_price,
-        "price_point_rounding": "NEAREST_OF_29_49_69_79_99",
+        "price_point_rounding": "NEAREST_OF_29_49_59_69_79_99",
         "testing_anchor_price": anchor,
         "testing_step_rule": "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP",
     }
@@ -3495,16 +3501,17 @@ def _quick_price_preview_by_upc(
             )
             preview.update(path)
             cost = _positive_price(row.get("current_cost_per_selling_unit"))
+            tested_retail = _positive_price(path.get("tested_price"))
             tested_actionable = bool(
-                tested is not None
+                tested_retail is not None
                 and current is not None
-                and abs(tested - _d(current)) > Decimal("0.01")
+                and abs(tested_retail - _d(current)) > Decimal("0.01")
                 and cost is not None
-                and tested > cost
+                and tested_retail > cost
             )
             if tested_actionable:
                 preview.update({
-                    "suggested_price": tested,
+                    "suggested_price": tested_retail,
                     "suggestion_status": "TESTED_PRICE_READY",
                     "suggestion_basis": "HISTORICAL_TESTED_SWEET_SPOT",
                     "suggestion_reason": "TESTED SWEET SPOT",
@@ -5303,17 +5310,27 @@ def pricing_review(
             if raw_target_candidate is not None
             else None
         )
-        tested_price = _positive_price(live.get("sweet_spot_price"))
+        raw_tested_price = _positive_price(live.get("sweet_spot_price"))
+        tested_price = (
+            _retail_price_point(
+                raw_tested_price,
+                min_price=company_low,
+                max_price=company_high,
+            )
+            if raw_tested_price is not None
+            else None
+        )
         observed_candidates = list(row.get("top_observed_candidates") or [])
         current_dec = _positive_price(current_price)
         cost_dec = _positive_price(current_cost)
         current_oh = _d(live.get("current_oh")) if live.get("current_oh") is not None else None
 
         row["tested_price"] = tested_price
-        row["tested_price_basis"] = "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_MAX_GP_PER_DAY"
+        row["raw_tested_price"] = raw_tested_price
+        row["tested_price_basis"] = "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_ROUNDED_TO_RETAIL_POINT"
         row["target_sweet_spot_price"] = target_candidate
         row["raw_target_sweet_spot_price"] = raw_target_candidate
-        row["price_point_rounding"] = "NEAREST_OF_29_49_69_79_99"
+        row["price_point_rounding"] = "NEAREST_OF_29_49_59_69_79_99"
         row["testing_price"] = None
         row["testing_target_price"] = None
         row["testing_price_basis"] = None
@@ -5482,6 +5499,16 @@ def pricing_review(
         row["slow_velocity_trend"] = slow_velocity
         row["company_range_violation"] = outside_company
 
+        def _gp_pct_for_price(price_value: Any) -> Decimal | None:
+            price_dec = _positive_price(price_value)
+            if price_dec is None or cost_dec is None:
+                return None
+            return (price_dec - cost_dec) / price_dec
+
+        row["current_gp_pct_at_current_cost"] = _gp_pct_for_price(current_dec)
+        row["tested_gp_pct_at_current_cost"] = _gp_pct_for_price(tested_price)
+        row["testing_gp_pct_at_current_cost"] = _gp_pct_for_price(testing_price)
+
         row["candidate_price"] = action_price
         row["suggested_price"] = action_price
         row["suggestion_reason_code"] = reason_code
@@ -5569,7 +5596,7 @@ _PRICING_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _pricing_review_cache_key(category: str, limit: int) -> str:
-    return f"V1_NO_GRACE|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
+    return f"V2_RETAIL_59_TESTED_GP|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
 
 
 def _ensure_pricing_review_cache_table(cur) -> None:
