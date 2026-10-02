@@ -390,6 +390,11 @@ jobs:
           assert "quickNav.onclick=()=>resetQuickHome()" in text
           assert "$('#globalForm').classList.add('hide')" in text
           assert "$('#globalForm').classList.remove('hide')" in text
+          assert "padding-top:max(env(safe-area-inset-top,0px),30px)" not in text
+          assert "/v1/yipman/receipt-event?" in text
+          assert "bestreceipt receiptlink" in text
+          assert "qdelivery receiptlink" in text
+          assert "function bindReceiptLinks()" in text
           print('yipman-dom-bindings=PASS')
           PY
 

@@ -3379,6 +3379,118 @@ def best_sellers_review(limit: int = 8) -> dict[str, Any]:
     }
 
 
+
+def yipman_receipt_event_detail(
+    family_id: int,
+    receipt_date: date,
+    article_number: str | None = None,
+) -> dict[str, Any]:
+    """Return canonical physical receipt details for one Family/date event."""
+    fid = int(family_id)
+    article_filter = str(article_number or "").strip() or None
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT family_id,main_article_number,family_description
+               FROM product_family
+               WHERE family_id=%s
+               LIMIT 1""",
+            (fid,),
+        )
+        family = cur.fetchone()
+        if not family:
+            cur.close()
+            raise ValueError("FAMILY_NOT_FOUND")
+
+        events = [
+            x for x in _family_receipt_events(
+                cur,
+                fid,
+                data_day_limit=365,
+            )
+            if x.get("posting_date") == receipt_date
+            and x.get("receipt_quantity") is not None
+            and _d(x.get("receipt_quantity")) > 0
+        ]
+        if article_filter:
+            events = [
+                x for x in events
+                if str(x.get("article_number") or "").strip() == article_filter
+            ]
+        cur.close()
+
+    base_events = [
+        x for x in events
+        if x.get("base_receipt_quantity") is not None
+        and _d(x.get("base_receipt_quantity")) > 0
+        and x.get("base_receipt_uom")
+    ]
+    base_uoms = {
+        str(x.get("base_receipt_uom") or "").strip().upper()
+        for x in base_events
+    }
+    if events and len(base_events) == len(events) and len(base_uoms) == 1:
+        total_qty = sum(
+            (_d(x.get("base_receipt_quantity")) for x in base_events),
+            Decimal("0"),
+        )
+        total_uom = next(iter(base_uoms))
+        total_basis = "BASE_UOM"
+    else:
+        entry_uoms = {
+            str(x.get("receipt_uom") or "").strip().upper()
+            for x in events
+            if x.get("receipt_uom")
+        }
+        if events and len(entry_uoms) == 1 and all(
+            x.get("receipt_quantity") is not None for x in events
+        ):
+            total_qty = sum(
+                (_d(x.get("receipt_quantity")) for x in events),
+                Decimal("0"),
+            )
+            total_uom = next(iter(entry_uoms))
+            total_basis = "ENTRY_UOM"
+        else:
+            total_qty = None
+            total_uom = "MIXED" if events else None
+            total_basis = "MIXED_OR_NO_EVENT"
+
+    purchase_orders = sorted({
+        str(x.get("purchase_order") or "").strip()
+        for x in events
+        if str(x.get("purchase_order") or "").strip()
+    })
+    gr_numbers = sorted({
+        str(x.get("gr_number") or "").strip()
+        for x in events
+        if str(x.get("gr_number") or "").strip()
+    })
+
+    return {
+        "contract_version": "YIPMAN_RECEIPT_EVENT_DETAIL_V1",
+        "family_id": fid,
+        "family_article": family.get("main_article_number"),
+        "family_name": family.get("family_description"),
+        "receipt_date": receipt_date,
+        "article_filter": article_filter,
+        "receipt_qty": total_qty,
+        "receipt_uom": total_uom,
+        "receipt_qty_basis": total_basis,
+        "receipt_event_count": len(events),
+        "purchase_order_count": len(purchase_orders),
+        "gr_number_count": len(gr_numbers),
+        "purchase_orders": purchase_orders,
+        "gr_numbers": gr_numbers,
+        "events": events,
+        "rules": {
+            "physical_receipt": "101_OR_109_WITH_REVERSALS_DEDUPED",
+            "107_role": "COST_STAGE_ONLY_NOT_PHYSICAL_QTY",
+            "canonical_movement_files_only": True,
+        },
+    }
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",

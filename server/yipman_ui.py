@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v352';
+const CACHE='yipman-v353';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -65,7 +65,7 @@ YIPMAN_HTML = r'''<!doctype html>
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overscroll-behavior-y:contain}
 body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:pointer}.hide{display:none!important}
 #app{height:100%;position:relative;overflow:hidden;padding-top:env(safe-area-inset-top,0px)}
-@media (display-mode:standalone),(display-mode:fullscreen){#app{padding-top:max(env(safe-area-inset-top,0px),30px)}}
+@media (display-mode:standalone),(display-mode:fullscreen){#app{padding-top:env(safe-area-inset-top,0px)}}
 .header{padding:9px 13px 10px}.head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{font-size:21px;font-weight:950;letter-spacing:-.04em}.brand span{color:var(--blue)}.ver{display:block;font-size:9px;color:var(--muted);font-weight:700;margin-top:1px}
 .dbbtn{width:40px;height:40px;border:0;border-radius:14px;background:#fff;box-shadow:var(--shadow);font-size:18px}
@@ -303,7 +303,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .bestfam.tone1{--best-border:#58bd70;--best-bg:#e2f6e6}.bestfam.tone2{--best-border:#4a9de2;--best-bg:#e6f2fc}.bestfam.tone3{--best-border:#ef72a5;--best-bg:#fde7ef}.bestfam.tone4{--best-border:#9b7be0;--best-bg:#eee8fb}
 .besttop{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.bestlabel{font-size:7px;font-weight:950;color:#6f6a53}.bestnum{font-size:17px;font-weight:1000;line-height:1}.bestname{font-size:18px;font-weight:1000;line-height:1.03;margin-top:2px}.bestrank{align-self:start;background:rgba(255,255,255,.72);border:1px solid rgba(70,80,90,.10);border-radius:7px;padding:4px 6px;font-size:8px;font-weight:950}
 .bestmetrics{display:grid;grid-template-columns:1.35fr 1fr;gap:4px;margin-top:5px}.bestmetric{background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.13);border-radius:8px;padding:4px 6px}.bestmetric small{display:block;font-size:6px;color:#6e7c87;font-weight:950}.bestmetric b{display:block;font-size:22px;line-height:1;font-weight:1000;margin-top:2px}.bestmetric span{display:block;font-size:7px;color:#7e8a93;font-weight:850;margin-top:2px}
-.bestrecent{margin-top:4px;background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.12);border-radius:8px;padding:4px 6px}.bestrecenthead{display:flex;justify-content:space-between;gap:6px;font-size:7px;color:#6d7a85;font-weight:950}.bestreceipt{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:3px;font-size:9px;font-weight:900}.bestreceipt b{font-size:10px}
+.bestrecent{margin-top:4px;background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.12);border-radius:8px;padding:4px 6px}.bestrecenthead{display:flex;justify-content:space-between;gap:6px;font-size:7px;color:#6d7a85;font-weight:950}.bestreceipt{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:3px;font-size:9px;font-weight:900}.bestreceipt b{font-size:10px}.bestreceipt.receiptlink{width:100%;padding:2px 0;border:0;background:transparent;text-align:left;color:inherit}.receiptlink{cursor:pointer}.receiptlink:active{opacity:.62}.qdelivery.receiptlink{border:0;background:transparent;padding:2px 0 2px 4px;font:inherit;color:inherit}
 .qsap.nohead{border-left-width:1px;margin-top:3px}.qsap.nohead .qupc:first-child{border-top:0}
 .qupcname{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important}
 @media(max-width:430px){.bestname{font-size:17px}.bestmetric b{font-size:21px}.quicksearch{left:8px;right:8px}}
@@ -632,15 +632,15 @@ function hiddenUpcs(rows,id){
  if(!rows.length)return '';
  return '<button class="qhidebtn" data-qhide="'+esc(id)+'" data-noun="UPC">Show '+rows.length+' inactive UPC'+(rows.length===1?'':'s')+' ▾</button><div class="qhidden" id="'+esc(id)+'"><div class="qhiddennote">Hidden by default · UPC 7D POS Qty = 0 / none.</div>'+rows.map(quickUpcHtml).join('')+'</div>';
 }
-function quickDeliveryCell(x,label){
+function quickDeliveryCell(x,label,familyId,articleNumber){
  if(!x)return '<div class="qdelivery"><small>'+label+'</small><b>—</b><span>No receipt</span></div>';
  const uom=String(x.uom||'').trim();
- return '<div class="qdelivery"><small>'+label+'</small><b>'+esc(appDate(x.date))+'</b><span>'+fmt(x.quantity)+' '+esc(uom)+'</span></div>';
+ return '<button type="button" class="qdelivery receiptlink" data-receipt-family="'+esc(familyId??'')+'" data-receipt-article="'+esc(articleNumber||'')+'" data-receipt-date="'+esc(x.date||'')+'"><small>'+label+'</small><b>'+esc(appDate(x.date))+'</b><span>'+fmt(x.quantity)+' '+esc(uom)+'</span></button>';
 }
-function quickReceivingRowHtml(a){
+function quickReceivingRowHtml(a,familyId){
  const history=(Array.isArray(a.receipt_history)?a.receipt_history:[]).slice(0,2);
  return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">R</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(a.article_description||'Receiving Article')+'</div></div></div>'+
-   quickDeliveryCell(history[0],'LATEST DELIVERY')+quickDeliveryCell(history[1],'PREV DELIVERY')+'</div>';
+   quickDeliveryCell(history[0],'LATEST DELIVERY',familyId,a.article_number)+quickDeliveryCell(history[1],'PREV DELIVERY',familyId,a.article_number)+'</div>';
 }
 function quickSellingHtml(a,idx,seq){
  const uom=String(a.movement_uom||''),rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
@@ -666,7 +666,7 @@ function quickGroupedHtml(rows){
        '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
        '<div class="qffocusbox receipt"><div><small>7D RECEIPT</small><span>PHYSICAL · DE-DUPED</span></div><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b></div>'+
      '</div></div>';
-   const receivingHtml=g.receiving.map(quickReceivingRowHtml).join('');
+   const receivingHtml=g.receiving.map(a=>quickReceivingRowHtml(a,g.family_id)).join('');
    const sellingHtml=(g.selling||[]).map((a,i)=>quickSellingHtml(a,idx,i)).join('');
    return '<section class="qfamily tone'+(idx%5)+'">'+familyHead+receivingHtml+sellingHtml+'</section>';
  }).join('');
@@ -683,6 +683,7 @@ function fitQuickUpcNames(){
 function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
  $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
+ bindReceiptLinks();
  requestAnimationFrame(fitQuickUpcNames);
 }
 async function hydrateQuickPrices(rows,requestId){
@@ -724,7 +725,7 @@ function quickReceiptDay(v){
 function bestSellerFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
  const count=num(g.family_receipt_7d_day_count);
- const recent=history.length?history.map(x=>'<div class="bestreceipt"><span>'+esc(quickReceiptDay(x.date))+'</span><b>'+fmt(x.quantity)+' '+esc(x.uom||receiptUom)+'</b></div>').join(''):'<div class="bestreceipt"><span>No recent receipt</span><b>—</b></div>';
+ const recent=history.length?history.map(x=>'<button type="button" class="bestreceipt receiptlink" data-receipt-family="'+esc(g.family_id??'')+'" data-receipt-article="'+esc(g.family_article||'')+'" data-receipt-date="'+esc(x.date||'')+'"><span>'+esc(quickReceiptDay(x.date))+'</span><b>'+fmt(x.quantity)+' '+esc(x.uom||receiptUom)+'</b></button>').join(''):'<div class="bestreceipt"><span>No recent receipt</span><b>—</b></div>';
  return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="bestrank">#'+(idx+1)+'</div></div>'+
    '<div class="bestmetrics"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div></div>'+
@@ -733,7 +734,7 @@ function bestSellerFamilyHtml(g,idx){
 async function loadBestSellers(force=false){
  const box=$('#quickRows');
  if(bestSellerGroups&&!force){
-   box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');return;
+   box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');bindReceiptLinks();return;
  }
  const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading best-selling families…</div>';
  try{
@@ -745,7 +746,7 @@ async function loadBestSellers(force=false){
     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
     family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count
   }));
-  box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');
+  box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');bindReceiptLinks();
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 async function loadQuick(q){
@@ -818,6 +819,37 @@ function receiptMovementLabel(x){
  if(s.startsWith('107_109'))return '109 physical GR · 107 cost stage';
  if(s.startsWith('109_110'))return '109/110 physical GR';
  return s||'—';
+}
+function bindReceiptLinks(){
+ $$('.receiptlink[data-receipt-family][data-receipt-date]').forEach(el=>{
+  el.onclick=e=>{e.stopPropagation();openReceiptDetail(el)};
+ });
+}
+async function openReceiptDetail(el){
+ const fid=String(el.dataset.receiptFamily||'').trim(),day=String(el.dataset.receiptDate||'').trim(),article=String(el.dataset.receiptArticle||'').trim();
+ if(!fid||!day)return;
+ sheet('Receipt Details','Loading '+esc(appDate(day))+'…','<div class="loading">Loading canonical receipt event…</div>');
+ try{
+  const qs=new URLSearchParams({family_id:fid,receipt_date:day});
+  if(article)qs.set('article_number',article);
+  const d=await api('/v1/yipman/receipt-event?'+qs.toString(),{timeoutMs:16000});
+  const events=Array.isArray(d.events)?d.events:[];
+  const trace=events.length?events.map(x=>{
+   const gr=x.gr_number?'GR '+x.gr_number:'GR UNRESOLVED';
+   const po=x.purchase_order?'PO '+x.purchase_order:'PO —';
+   const qty=x.base_receipt_quantity!=null?x.base_receipt_quantity:x.receipt_quantity;
+   const uom=x.base_receipt_uom||x.receipt_uom||'';
+   return '<div class="receipt-event"><div class="receipt-pair">'+esc(po)+' → '+esc(gr)+'</div><div class="receipt-meta">Article '+esc(x.article_number||'—')+' · '+fmt(qty)+' '+esc(uom)+' · '+esc(receiptMovementLabel(x))+(x.vendor_code?' · Vendor '+esc(x.vendor_code):'')+(x.gr_number_source==='RAW_REFERENCE_Q_5014'?' · GR from Reference':x.gr_number_source==='RAW_ROW_5014_SCAN'?' · GR from MVT row':'')+'</div></div>';
+  }).join(''):'<div class="empty">No canonical receipt event found for this date.</div>';
+  sheet(
+   d.family_name||'Receipt Details',
+   'Family '+esc(d.family_article||'—')+' · '+esc(appDate(d.receipt_date||day)),
+   '<div class="dmetrics"><div class="dm"><b>'+fmtNullable(d.receipt_qty)+' '+esc(d.receipt_uom||'')+'</b><span>RECEIVED</span></div><div class="dm"><b>'+fmt(d.receipt_event_count,0)+'</b><span>EVENTS</span></div><div class="dm"><b>'+fmt(d.purchase_order_count,0)+' / '+fmt(d.gr_number_count,0)+'</b><span>PO / GR</span></div></div>'+
+   '<div class="detail"><b>Receipt date</b><br>'+esc(appDate(d.receipt_date||day))+(article?'<br><br><b>Receiving article</b><br>'+esc(article):'')+'<br><br><b>PO → GR receipt trace</b>'+trace+'<br><b>Basis</b><br>Canonical physical receipt event. 101 is a direct receipt; for a 107 + 109 flow, 109 supplies physical received quantity while 107 remains cost evidence only.</div>'
+  );
+ }catch(e){
+  sheet('Receipt Details','Family '+esc(fid)+' · '+esc(appDate(day)),'<div class="empty">'+esc(e.message)+'</div>');
+ }
 }
 function fmtNullable(v,d=1){return v===null||v===undefined||v===''?'—':fmt(v,d)}
 function orderQty(r){
