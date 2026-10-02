@@ -674,6 +674,75 @@ def yipman_ordering_calendar(days: int = 28) -> dict[str, Any]:
     }
 
 
+def yipman_ordering_calendar(lookback_days: int = 180) -> dict[str, Any]:
+    """Summarize observed Seafood receiving weekdays for the Ordering picker."""
+    lookback=max(28,min(int(lookback_days or 180),180))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        mvt_days=source_data_days(
+            cur,
+            "movement",
+            limit=lookback,
+            up_to=completed_through_date(),
+        )
+        families_by_id: dict[int,dict[str,Any]] = {}
+        for kind in ("FRESH","FROZEN"):
+            for fam in _ordering_candidate_families(cur,kind):
+                families_by_id[int(fam["family_id"])]=fam
+        family_ids=sorted(families_by_id)
+        event_map=_family_receipt_events_bulk(
+            cur,
+            family_ids,
+            data_days=mvt_days,
+        ) if family_ids else {}
+        family_counts=Counter()
+        receipt_counts=Counter()
+        for fid in family_ids:
+            pattern=_delivery_pattern(
+                event_map.get(fid) or [],
+                after_date=business_today(),
+                lookback_days=lookback,
+            )
+            for obs in pattern.get("observed_delivery_days") or []:
+                wd=int(obs.get("weekday_number"))
+                count=int(obs.get("receipt_date_count") or 0)
+                if count<=0:
+                    continue
+                family_counts[wd]+=1
+                receipt_counts[wd]+=count
+        cur.close()
+
+    names=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+    rows=[]
+    for wd,name in enumerate(names):
+        rows.append({
+            "weekday":name,
+            "weekday_number":wd,
+            "family_count":int(family_counts.get(wd,0)),
+            "receipt_date_count":int(receipt_counts.get(wd,0)),
+            "observed":bool(family_counts.get(wd,0)),
+        })
+    rows.sort(
+        key=lambda x:(
+            -int(x["family_count"]),
+            -int(x["receipt_date_count"]),
+            int(x["weekday_number"]),
+        )
+    )
+    return {
+        "contract_version":"YIPMAN_ORDERING_CALENDAR_V1",
+        "as_of":business_today(),
+        "movement_data_through":mvt_days[0]["date"] if mvt_days else None,
+        "lookback_days":lookback,
+        "rows":rows,
+        "rules":{
+            "receipt_basis":"CANONICAL_PHYSICAL_101_109",
+            "observed_means_at_least_one_recent_receipt_for_a_family_on_that_weekday":True,
+            "write_enabled":False,
+        },
+    }
+
+
 def _suggestion_reason(row: dict[str, Any], pattern: dict[str, Any], receipt: dict[str, Any]) -> list[dict[str, str]]:
     uom = str(row.get("uom") or "")
     reasons = [
