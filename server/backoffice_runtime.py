@@ -684,7 +684,7 @@ def yipman_ordering_calendar(
     default_next=default_delivery+timedelta(days=7)
 
     return {
-        "contract_version":"YIPMAN_ORDERING_CALENDAR_V2_PREFERRED_DAYS",
+        "contract_version":"YIPMAN_ORDERING_CALENDAR_V3_STRONGEST_DAY_PLUS_7",
         "as_of":today,
         "movement_data_through":mvt_days[0]["date"] if mvt_days else None,
         "lookback_days":lookback,
