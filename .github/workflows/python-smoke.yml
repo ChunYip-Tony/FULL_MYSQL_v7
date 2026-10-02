@@ -270,6 +270,9 @@ jobs:
           assert 'setTimeout(pollDataLive,5000)' in ui
           assert 'HEARTBEAT' in ui
           assert 'CURRENT WORK ITEM' in ui
+          assert "if(!g.receiving.size&&sourceKey&&g.family_receipt_history.length)" in ui
+          assert "familyFallback?'FAMILY RECEIPT SUMMARY'" in ui
+          assert "if(sourceKey&&g.family_receipt_history.length){" not in ui
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
