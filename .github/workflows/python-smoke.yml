@@ -221,6 +221,7 @@ jobs:
           assert 'current_price_gp_pct' in review_src
           assert 'tested_price_gp_pct' in review_src
           assert 'testing_price_gp_pct' in review_src
+          assert 'V2_RETAIL_59_TESTED_GP' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
 
           assert 'if not has_oh or not history_gate:' in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
@@ -253,6 +254,7 @@ jobs:
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
           assert 'Testing must still move at least $0.45 from Current' in ui
           assert '.29 / .49 / .59 / .69 / .79 / .99' in ui
+          assert 'const retailPoint=v=>' in ui
           assert 'Raw proved sweet-spot evidence is preserved' in ui
           assert 'CURRENT COST' in ui
           assert 'gpText(r.current_price,r.current_cost)' in ui
