@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v368';
+const CACHE='yipman-v369';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -392,6 +392,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .pp b{display:block;font-size:21px;line-height:1;margin-top:3px;font-weight:1000;white-space:nowrap}
 .pp span{display:block;font-size:8px;color:#7c8892;font-weight:850;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pp.tested b{color:#7a5a00}.pp.testing b{color:#0878ad}
+.pcost{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;padding:5px 7px;border:1px solid #e5eaed;background:#fbfcfd;border-radius:8px;font-size:8px;font-weight:850;color:#65737e}
+.pcost b{font-size:10px;color:#1f303d;white-space:nowrap}.pcost span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pmetrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;margin-top:6px}
 .pm{min-width:0;border:1px solid #e8edf0;background:#fafbfc;border-radius:8px;padding:5px 6px}
 .pm small{display:block;font-size:7px;font-weight:950;color:#8a959e;line-height:1}
@@ -466,6 +468,11 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
 const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
 const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
+const gpText=(price,cost)=>{
+  const p=num(price),c=num(cost);
+  if(p===null||c===null||p<=0)return 'GP —';
+  return 'GP '+(((p-c)/p)*100).toFixed(1)+'%';
+};
 const iso=d=>d.toISOString().slice(0,10);
 const shortDate=v=>{const m=String(v||'').match(/^\d{4}-(\d{2})-(\d{2})/);return m?m[1]+'-'+m[2]:'—'};
 const appDate=v=>{
@@ -1503,7 +1510,7 @@ async function loadPrices(opts={}){
 
   $('#priceRows').innerHTML=rows.map((r,i)=>{
     const meta=priceReasonMeta(r,stale),prog=priceProgress(r),signals=priceSignals(r);
-    const tested=num(r.tested_price),testing=num(r.testing_price),cur=num(r.current_price);
+    const tested=num(r.tested_price),testing=num(r.testing_price),cur=num(r.current_price),cost=num(r.current_cost);
     const gap=(tested!==null&&cur!==null)?Math.abs(tested-cur):null;
     const gpNow=num(r.current_gp_per_day_7d),gpTarget=num(r.candidate_expected_gp_per_day);
     const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
@@ -1512,10 +1519,11 @@ async function loadPrices(opts={}){
     return '<article class="pcard" data-price="'+i+'">'+
       '<div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
       '<div class="pricepath">'+
-        '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+'</span></div>'+
-        '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>STRONGEST PROVED</span></div>'+
-        '<div class="pp testing"><small>TESTING</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+'</span></div>'+
+        '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div>'+
+        '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
+        '<div class="pp testing"><small>TESTING</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
       '</div>'+
+      '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       '<div class="pmetrics">'+
         '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
@@ -1557,16 +1565,18 @@ function openPrice(r){
  const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
  const company=(companyLow!==null&&companyHigh!==null)?money(companyLow)+' – '+money(companyHigh):'—';
  sheet(r.name||r.upc,r.upc||'Price suggestion',
- '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · BEST PROVED</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TESTING · '+esc(meta.testing)+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TESTING · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
  '<div class="detail"><b>Suggested action</b><br>'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+
- '<br><br><b>Price path</b><br>Current '+money(r.current_price)+' → Testing '+money(r.testing_price)+' · Tested '+money(r.tested_price)+
+ '<br><br><b>Current cost</b><br>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+
+ '<br><br><b>Price path + GP%</b><br>Current '+money(r.current_price)+' ('+esc(gpText(r.current_price,r.current_cost))+') → Testing '+money(r.testing_price)+' ('+esc(gpText(r.testing_price,r.current_cost))+') · Tested '+money(r.tested_price)+' ('+esc(gpText(r.tested_price,r.current_cost))+')'+
+ (r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?'<br>Raw proved sweet-spot evidence '+money(r.tested_evidence_price)+' → retail-aligned Tested '+money(r.tested_price):'')+
  '<br>Action price '+money(r.candidate_price)+(r.testing_target_price?(' · eventual test target '+money(r.testing_target_price)):'')+
  '<br><br><b>Progress now</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · 28D '+fmt(r.velocity_28d)+' /day · DOH '+fmt(r.doh)+
  '<br>GP$/day now '+money(r.current_gp_per_day_7d)+' · supported target evidence '+money(r.candidate_expected_gp_per_day)+
  '<br><br><b>Company A/B/C range</b><br>'+esc(company)+(r.company_range_violation?' · CURRENT OUTSIDE RANGE':'')+
  '<br><br><b>Current price evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
- '<br><br><b>Testing rule</b><br>Start from CURRENT. Testing must move at least $0.45 up or down and use a normal store price ending: .29 / .49 / .69 / .79 / .99. Suggested sweet-spot targets use the same endings. Tested stays the actual proved historical price. Re-check completed-day velocity and GP$/day before the next step.'+
+ '<br><br><b>Pricing rule</b><br>Retail-facing Tested, suggested sweet-spot targets, and Testing prices use the nearest normal store ending: .29 / .49 / .59 / .69 / .79 / .99. Testing must still move at least $0.45 from Current. Raw proved sweet-spot evidence is preserved in Detail when rounding changes the displayed Tested price. Re-check completed-day velocity and GP$/day before the next step.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
  '<div class="actions"><button class="secondary" id="priceIgnore30">IGNORE 30 MIN</button>'+(String(r.review_status||'').toUpperCase()==='ACTIONABLE'&&r.current_price!=null&&r.candidate_price!=null?'<button class="primary" id="priceAccept">ACCEPTED</button>':'')+'</div>');
