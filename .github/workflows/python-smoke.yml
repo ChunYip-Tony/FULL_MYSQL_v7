@@ -188,7 +188,7 @@ jobs:
           assert "pcard tone'+(i%5)" in ui
           assert 'receiving_article_name' in ui
           assert 'h.article_name' in ui
-          assert "const CACHE='yipman-v389'" in ui
+          assert "const CACHE='yipman-v390'" in ui
           print('stock-flow-promo-week-lift-v388=PASS')
           PY
 
