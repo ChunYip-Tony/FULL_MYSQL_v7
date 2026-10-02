@@ -3344,7 +3344,7 @@ def _tested_testing_prices(
         "testing_price": testing_price,
         "target_sweet_spot_price": target_price,
         "raw_target_sweet_spot_price": raw_target_price,
-        "price_point_rounding": "NEAREST_X9_TENTH_PRICE_POINT",
+        "price_point_rounding": "NEAREST_STORE_PRICE_ENDING_29_49_59_69_79_99",
         "testing_anchor_price": anchor,
         "testing_step_rule": "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP",
     }
@@ -5358,7 +5358,7 @@ def pricing_review(
         row["tested_price_basis"] = "RETAIL_ALIGNED_STRONGEST_PROVED_HISTORICAL_SWEET_SPOT"
         row["target_sweet_spot_price"] = target_candidate
         row["raw_target_sweet_spot_price"] = raw_target_candidate
-        row["price_point_rounding"] = "NEAREST_X9_TENTH_PRICE_POINT"
+        row["price_point_rounding"] = "NEAREST_STORE_PRICE_ENDING_29_49_59_69_79_99"
         row["testing_price"] = None
         row["testing_target_price"] = None
         row["testing_price_basis"] = None
@@ -5602,7 +5602,7 @@ def pricing_review(
             "best_available_estimate_allowed": bool(allow_stale_estimate),
             "estimate_basis": "LATEST_AVAILABLE_CANONICAL_POS_AND_MVT_INDEPENDENT",
             "estimate_is_clearly_labelled": True,
-            "tested_price": "RETAIL_ALIGNED_TO_NEAREST_X9_TENTH_PRICE_POINT_FROM_STRONGEST_PROVED_HISTORICAL_SWEET_SPOT;RAW_EVIDENCE_PRESERVED",
+            "tested_price": "RETAIL_ALIGNED_TO_NEAREST_STORE_PRICE_ENDING_29_49_59_69_79_99_FROM_STRONGEST_PROVED_HISTORICAL_SWEET_SPOT;RAW_EVIDENCE_PRESERVED",
             "testing_price": "CURRENT_PRICE_BASED_CONTROLLED_STEP; MIN_ABSOLUTE_CHANGE_0_45; PRIORITIZE_FRESHNESS_VELOCITY_WHEN_SLOW; OTHERWISE_STEP_TOWARD_TESTED_OR_GP_DOLLAR_TARGET; HIGHER_PRICE_GRADUAL_CAP_ABOUT_5PCT",
             "price_action_priority": "PAIR_FIX_THEN_COMPANY_RANGE_THEN_FRESHNESS_VELOCITY_TEST_THEN_TESTED_SWEET_SPOT_GAP_THEN_GP_DOLLAR_TEST",
             "source_contract": report.get("price_suggestion_rules"),
