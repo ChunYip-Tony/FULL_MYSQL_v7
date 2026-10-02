@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v382';
+const CACHE='yipman-v383';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -609,30 +609,67 @@ const appDate=v=>{
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
+const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='DIFFERENCE', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
-function renderView(id){
+function currentPagePosition(id=current){
+  const p=$('#'+id);
+  return {scrollTop:Number(p?.scrollTop||0),scrollLeft:Number(p?.scrollLeft||0)};
+}
+function rememberPagePosition(id=current){
+  const pos=currentPagePosition(id);
+  pagePositions.set(id,pos);
+  return pos;
+}
+function saveCurrentHistoryPosition(){
+  const pos=rememberPagePosition(current);
+  if(!historyReady||!history.state?.yipman)return pos;
+  history.replaceState({...history.state,view:current,scrollTop:pos.scrollTop,scrollLeft:pos.scrollLeft},'',location.href);
+  return pos;
+}
+function positionFromState(id,st){
+  const saved=pagePositions.get(id)||{scrollTop:0,scrollLeft:0};
+  return {
+    scrollTop:Number(st?.scrollTop??saved.scrollTop??0),
+    scrollLeft:Number(st?.scrollLeft??saved.scrollLeft??0),
+  };
+}
+function restorePagePosition(id,st){
+  const p=$('#'+id);if(!p)return;
+  const pos=positionFromState(id,st);
+  requestAnimationFrame(()=>{p.scrollTop=pos.scrollTop;p.scrollLeft=pos.scrollLeft});
+}
+function renderView(id,{restore=false,reload=true,state=null}={}){
   if(!$('#'+id))id='quick';
   const enteringPrice=id==='price'&&current!=='price';
-  if(enteringPrice)priceIgnoredThisVisit=new Set();
+  if(enteringPrice&&!restore)priceIgnoredThisVisit=new Set();
   current=id;
   pages.forEach(p=>p.classList.toggle('on',p.id===id));
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
-  const p=$('#'+id);if(p){p.scrollTop=0;p.scrollLeft=0}
+  const p=$('#'+id);
+  if(p){
+    if(restore)restorePagePosition(id,state);
+    else{p.scrollTop=0;p.scrollLeft=0;pagePositions.set(id,{scrollTop:0,scrollLeft:0})}
+  }
   if(id!=='order'){clearTimeout(orderRetryTimer);orderRetryTimer=null}
   if(id!=='data'){clearTimeout(dataLiveTimer);dataLiveTimer=null}
-  if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
-  if(id==='order')initOrdering();
-  if(id==='price')loadPrices();
-  if(id==='data')loadData();
+  if(reload){
+    if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
+    if(id==='order')initOrdering();
+    if(id==='price')loadPrices();
+    if(id==='data')loadData();
+  }else if(id==='data'){
+    scheduleDataLivePoll();
+  }
 }
 function go(id,{push=true}={}){
   if(id===current&&!$('#overlay').classList.contains('on'))return;
+  saveCurrentHistoryPosition();
   renderView(id);
-  if(push&&historyReady)history.pushState({yipman:true,view:id},'', '#'+id);
+  if(push&&historyReady)history.pushState({yipman:true,view:id,scrollTop:0,scrollLeft:0},'', '#'+id);
 }
 async function resetQuickHome({push=true}={}){
   const wasQuick=current==='quick';
@@ -652,14 +689,23 @@ const quickNav=$('.nav button[data-go="quick"]');
 if(quickNav)quickNav.onclick=()=>resetQuickHome();
 function sheet(title,sub,html){
   const wasOpen=$('#overlay').classList.contains('on');
+  if(!wasOpen)saveCurrentHistoryPosition();
   $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
-  if(historyReady&&!wasOpen){history.pushState({yipman:true,view:current,detail:true},'', '#'+current+'/detail');detailHistory=true}
+  if(historyReady&&!wasOpen){
+    const pos=currentPagePosition(current);
+    history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
+    detailHistory=true;
+  }
 }
 function closeSheet(useHistory=true){
   if(!$('#overlay').classList.contains('on'))return;
   $('#overlay').classList.remove('on');
   const had=detailHistory;detailHistory=false;
-  if(useHistory&&had)history.back();
+  if(useHistory&&had){history.back();return}
+  if(had&&historyReady){
+    const pos=rememberPagePosition(current);
+    history.replaceState({yipman:true,view:current,scrollTop:pos.scrollTop,scrollLeft:pos.scrollLeft},'', '#'+current);
+  }
 }
 $('#closeSheet').onclick=()=>closeSheet(true);
 $('#overlay').onclick=e=>{if(e.target===$('#overlay'))closeSheet(true)};
@@ -668,24 +714,40 @@ function hideExitConfirm(){$('#exitOverlay').classList.remove('on')}
 $('#exitCancel').onclick=hideExitConfirm;
 $('#exitConfirm').onclick=()=>{exitAllowed=true;hideExitConfirm();history.go(-2)};
 window.addEventListener('popstate',e=>{
+  const st=e.state;
   if($('#exitOverlay').classList.contains('on')){
-    history.pushState({yipman:true,view:'quick',guard:true},'', '#quick');
-    hideExitConfirm();renderView('quick');return;
+    const pos=pagePositions.get('quick')||{scrollTop:0,scrollLeft:0};
+    history.pushState({yipman:true,view:'quick',guard:true,...pos},'', '#quick');
+    hideExitConfirm();renderView('quick',{restore:true,reload:false,state:{...pos}});return;
   }
   if($('#overlay').classList.contains('on')){
     $('#overlay').classList.remove('on');detailHistory=false;
-    if(e.state?.yipman&&e.state.view)renderView(e.state.view);
+    if(st?.yipman&&st.view){
+      renderView(st.view,{restore:true,reload:false,state:st});
+    }
     return;
   }
-  const st=e.state;
   if(st?.yipman&&st.root){
-    renderView('quick');
-    history.pushState({yipman:true,view:'quick',guard:true},'', '#quick');
+    const pos=pagePositions.get('quick')||{scrollTop:0,scrollLeft:0};
+    renderView('quick',{restore:true,reload:false,state:{...pos}});
+    history.pushState({yipman:true,view:'quick',guard:true,...pos},'', '#quick');
     showExitConfirm();
     return;
   }
-  if(st?.yipman&&st.view){renderView(st.view);return}
+  if(st?.yipman&&st.view){
+    renderView(st.view,{restore:true,reload:false,state:st});
+    return;
+  }
 });
+pages.forEach(p=>p.addEventListener('scroll',()=>{
+  pagePositions.set(p.id,{scrollTop:Number(p.scrollTop||0),scrollLeft:Number(p.scrollLeft||0)});
+  if(p.id!==current||!historyReady||!history.state?.yipman)return;
+  clearTimeout(historyScrollTimer);
+  historyScrollTimer=setTimeout(()=>{
+    if(p.id!==current||!history.state?.yipman)return;
+    history.replaceState({...history.state,view:current,scrollTop:Number(p.scrollTop||0),scrollLeft:Number(p.scrollLeft||0)},'',location.href);
+  },120);
+},{passive:true}));
 window.addEventListener('beforeunload',e=>{if(window.__YIPMAN_DESKTOP_ACTIVE__||exitAllowed)return;e.preventDefault();e.returnValue=''});
 const today=new Date();
 
@@ -1939,10 +2001,11 @@ async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').
 if(!window.__YIPMAN_DESKTOP_ACTIVE__){
  const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
  const initialView=['quick','order','price','data'].includes(initialHash)?initialHash:'quick';
- history.replaceState({yipman:true,root:true,view:'quick'},'', '#quick');
- history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView);
+ history.replaceState({yipman:true,root:true,view:'quick',scrollTop:0,scrollLeft:0},'', '#quick');
+ history.pushState({yipman:true,view:initialView,guard:true,scrollTop:0,scrollLeft:0},'', '#'+initialView);
  historyReady=true;
  renderView(initialView);
+ pagePositions.set(initialView,{scrollTop:0,scrollLeft:0});
 }
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();
