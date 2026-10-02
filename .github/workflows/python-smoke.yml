@@ -243,6 +243,11 @@ jobs:
           assert 'grid-template-columns:minmax(0,1fr) minmax(0,1fr)' in ui
           assert '#data{overflow-x:hidden}' in ui
           assert 'p.scrollTop=0;p.scrollLeft=0' in ui
+          assert 'saveCurrentHistoryPosition()' in ui
+          assert 'restorePagePosition(id,state)' in ui
+          assert 'renderView(st.view,{restore:true,reload:false,state:st})' in ui
+          assert 'history.replaceState({...history.state,view:current,scrollTop:' in ui
+          assert 'originScrollTop' in ui
           assert '@media(max-width:430px){' in ui
           assert '.datagrid{grid-template-columns:1fr;gap:8px}' in ui
           assert 'class="currentbatch"' in ui
