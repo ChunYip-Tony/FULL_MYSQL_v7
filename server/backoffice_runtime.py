@@ -5390,10 +5390,18 @@ def pricing_review(
         row["testing_price_basis"] = None
         row["testing_step_rule"] = "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP"
 
+        # Re-evaluate actionability from the current serving row instead of
+        # inheriting the upstream Performance queue's review_status.  The
+        # Performance row is only the candidate/evidence seed; the pricing
+        # review overlays live price, cost, OH and readiness immediately above.
+        # Requiring the older review_status here can incorrectly collapse the
+        # entire Price Suggestions queue to zero after a serving refresh.
         base_actionable = bool(
-            str(row.get("review_status") or "").upper() == "ACTIONABLE"
+            str(live.get("quick_check_status") or "").upper() == "READY"
             and current_dec is not None
+            and current_dec > 0
             and cost_dec is not None
+            and cost_dec >= 0
             and current_oh is not None
             and current_oh > 0
         )
@@ -5610,11 +5618,22 @@ def pricing_review(
             continue
         visible_rows.append(row)
 
+    reason_counts={}
+    for row in visible_rows:
+        code=str(row.get("suggestion_reason_code") or "NO_PRICE_ACTION")
+        reason_counts[code]=reason_counts.get(code,0)+1
+    actionable_count=sum(1 for row in visible_rows if row.get("actionable"))
+
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V9_PROACTIVE_TESTING",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V10_LIVE_READINESS",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
-        "summary": report.get("summary"),
+        "summary": {
+            **(report.get("summary") or {}),
+            "pricing_review_actionable_count": actionable_count,
+            "pricing_review_visible_count": len(visible_rows),
+            "pricing_review_reason_counts": reason_counts,
+        },
         "rows": visible_rows,
         "suppressed_accepted_count": suppressed_count,
         "data_health": data_health,
@@ -5645,7 +5664,9 @@ _PRICING_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _pricing_review_cache_key(category: str, limit: int) -> str:
-    return f"V2_RETAIL_59_TESTED_GP|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
+    # V3 invalidates persisted V2 snapshots that may contain an empty queue
+    # produced by the older inherited-review-status gate.
+    return f"V3_LIVE_READY_RETAIL_TESTING|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
 
 
 def _ensure_pricing_review_cache_table(cur) -> None:
