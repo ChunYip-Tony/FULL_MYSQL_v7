@@ -221,7 +221,7 @@ jobs:
           assert 'current_price_gp_pct' in review_src
           assert 'tested_price_gp_pct' in review_src
           assert 'testing_price_gp_pct' in review_src
-          assert 'V2_RETAIL_59_TESTED_GP' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
+          assert 'V3_LIVE_READY_RETAIL_TESTING' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
 
           assert 'if not has_oh or not history_gate:' in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
