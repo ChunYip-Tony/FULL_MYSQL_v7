@@ -3671,6 +3671,15 @@ def yipman_best_sellers(limit:int=8):
         raise HTTPException(500,f'Yipman best sellers failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
+@app.get('/v1/yipman/stock-flow')
+def yipman_stock_flow(limit:int=40):
+    try:
+        result=backoffice_yipman_best_sellers(limit=limit)
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman stock flow failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
 
 
 @app.get('/v1/yipman/receipt-event')
