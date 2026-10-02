@@ -952,7 +952,8 @@ jobs:
           assert 'q14' in perf
           assert 'primary_reason_text' in perf
           assert 'company_range_low' in perf and 'company_range_high' in perf
-          assert 'WEBAPP_V2_PERFORMANCE_V11' in perf
+          assert 'WEBAPP_V2_PERFORMANCE_V12_PROACTIVE_PRICE_TESTING' in perf
+          assert 'DOH_IS_URGENCY_NOT_ELIGIBILITY' in perf
 
           assert "Current Price" in backoffice_ui
           assert "current_price_source" in backoffice_ui
@@ -974,6 +975,9 @@ jobs:
           assert 'doh_for_gate>Decimal("60")' in runtime
           assert 'has_oh=bool(current_oh is not None and current_oh>0)' in runtime
           assert 'history_gate=bool(q14>0)' in runtime
+          assert 'if not has_oh or not history_gate:' in runtime
+          assert 'freshness_qualified' not in runtime
+          assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in runtime
           assert 'company_low<=_d(x.get("price"))<=company_high' in runtime
           assert 'COMPANY_RANGE_CLAMPED_14D_MAX_GP_PER_DAY' in runtime
           assert 'current_price_source' in backoffice
