@@ -113,7 +113,9 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V18_WEEKDAY_USAGE' in cache_src
+          assert 'V19_RECEIVING_PACK' in cache_src
+          assert hasattr(b,'_historical_receiving_article_summary')
+          assert hasattr(b,'_article_manual_family_pack_context')
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
