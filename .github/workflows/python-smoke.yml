@@ -830,7 +830,7 @@ jobs:
           assert "data-order-mode=\"PROMOTION\"" in text
           assert "/v1/yipman/ordering-calendar?lookback_days=180" in text
           assert "orderNextDate=plusDaysIso(orderDate,7)" in text
-          assert "/v1/yipman/stock-flow?limit=40" in text
+          assert "/v1/yipman/stock-flow?limit=100" in text
           assert "Stock Flow Watch" in text
           assert "DIFFERENCE ↓" in text
           assert "/v1/app/v2/performance/range?" in text
