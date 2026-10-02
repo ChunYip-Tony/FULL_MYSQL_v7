@@ -43,6 +43,7 @@ from backoffice_runtime import (
     warm_backoffice_home_summary,
     yipman_best_sellers as backoffice_yipman_best_sellers,
     yipman_receipt_event_detail as backoffice_yipman_receipt_event_detail,
+    yipman_ordering_calendar as backoffice_yipman_ordering_calendar,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -3758,6 +3759,17 @@ def backoffice_pricing_accept(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice price suggestion accept failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/ordering-calendar')
+def yipman_ordering_calendar(lookback_days:int=180):
+    try:
+        result=backoffice_yipman_ordering_calendar(lookback_days=lookback_days)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman ordering calendar failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
