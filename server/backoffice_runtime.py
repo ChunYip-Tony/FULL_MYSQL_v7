@@ -1370,7 +1370,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V17_ORDERING_QUALITY",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V18_WEEKDAY_USAGE",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
@@ -1411,10 +1411,10 @@ def ordering_review(
             "stale_forecast_starts_day_after_latest_mvt": True,
             "delivery_roster_oh_best_available": "IF_ONLY_MOVEMENT_DAILY_COVERAGE_GAP_USE_OH_ANCHOR_PLUS_AVAILABLE_CANONICAL_MVT",
             "uom_and_movement_semantic_errors_still_review":True,
-            "regular_forecast_method":"WEEKDAY_SMOOTHED_NON_PROMO_VELOCITY",
+            "regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS",
             "pre_delivery_shortage_is_not_added_to_future_order":True,
             "fresh_live_coverage_cap_days":7,
-            "cache_schema":"V17_ORDERING_QUALITY",
+            "cache_schema":"V18_WEEKDAY_USAGE",
         },
     }
 
@@ -1441,7 +1441,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V17_ORDERING_QUALITY|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V18_WEEKDAY_USAGE|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
