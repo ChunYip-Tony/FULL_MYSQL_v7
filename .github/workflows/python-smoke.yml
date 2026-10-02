@@ -113,7 +113,7 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V15_FAMILY_MVT_28D_FALLBACK' in cache_src
+          assert 'V16_TWO_DATE_WINDOW' in cache_src
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -401,6 +401,10 @@ jobs:
           assert "<small>SUGGEST</small>" not in text
           assert "TESTED_PRICE" in text
           assert "TESTING_PRICE" in text
+          assert "data-order-mode=\"REGULAR\"" in text
+          assert "data-order-mode=\"PROMOTION\"" in text
+          assert "/v1/yipman/ordering-calendar?lookback_days=180" in text
+          assert "next_delivery_date=" in text
           print('yipman-dom-bindings=PASS')
           PY
 
