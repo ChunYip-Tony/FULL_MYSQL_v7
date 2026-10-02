@@ -145,6 +145,52 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
+      - name: Live audit Regular Ordering 10-06 to 10-13
+        run: |
+          python - <<'PY'
+          from datetime import date
+          from decimal import Decimal
+          from collections import Counter
+          from backoffice_runtime import ordering_review
+
+          d=ordering_review(
+              category='ALL',
+              delivery_date=date(2026,10,6),
+              next_delivery_date=date(2026,10,13),
+              best_available_delivery_evidence=True,
+          )
+          rows=d.get('rows') or []
+          print('AUDIT_STATUS',d.get('analysis_status'),d.get('data_health'))
+          print('AUDIT_SUMMARY',d.get('roster_summary'))
+          print('OBSERVED_COUNT_DIST',dict(sorted(Counter(int(x.get('delivery_day_observed_count') or 0) for x in rows).items())))
+          print('CONFIDENCE_DIST',dict(Counter(str(x.get('delivery_day_confidence') or '') for x in rows)))
+          orders=[x for x in rows if x.get('roster_status')=='ORDER']
+          print('ORDER_LOW_OBS',sum(1 for x in orders if int(x.get('delivery_day_observed_count') or 0)<=1),'OF',len(orders))
+          bad=[]
+          negatives=[]
+          for x in orders:
+              det=x.get('details') or {}
+              total=Decimal(str(det.get('forecast_total_usage') or 0))
+              before=Decimal(str(det.get('forecast_usage_before_delivery') or 0))
+              coverage=total-before
+              projected=Decimal(str(det.get('projected_oh_at_delivery') or 0))
+              suggested=Decimal(str(x.get('suggested_delivery_qty') or 0))
+              expected=max(Decimal('0'),coverage-max(Decimal('0'),projected))
+              if abs(suggested-expected)>Decimal('0.01'):
+                  bad.append((x.get('family_article'),x.get('family_name'),str(suggested),str(expected),str(projected),str(coverage)))
+              if projected<0:
+                  negatives.append((x.get('family_article'),x.get('family_name'),str(suggested),str(projected),str(coverage),x.get('delivery_day_observed_count'),x.get('delivery_day_confidence')))
+          print('FORMULA_MISMATCHES',bad[:30])
+          print('PRE_DELIVERY_STOCKOUTS',negatives[:50])
+          for x in orders[:30]:
+              det=x.get('details') or {}
+              total=Decimal(str(det.get('forecast_total_usage') or 0))
+              before=Decimal(str(det.get('forecast_usage_before_delivery') or 0))
+              coverage=total-before
+              rb=det.get('regular_baseline') or {}
+              print('ORDER_ROW',x.get('family_article'),x.get('family_name'),'OH',x.get('oh'),'ORDER',x.get('suggested_delivery_qty'),'COV',coverage,'PRE',before,'PROJ',det.get('projected_oh_at_delivery'),'REGVEL',rb.get('regular_velocity_per_supported_day'),'REGDAYS',rb.get('regular_supported_day_count'),'OBS',x.get('delivery_day_observed_count'),'CONF',x.get('delivery_day_confidence'))
+          PY
+
       - name: Validate Yipman Ordering loading recovery
         run: |
           python - <<'PY'
