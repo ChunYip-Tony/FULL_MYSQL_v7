@@ -3414,10 +3414,12 @@ def _quick_price_preview_by_upc(
 
 
 def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[str, Any]:
-    """Return CURRENT/SUGGEST/Company pricing for a small Quick Check UPC set.
+    """Return Quick Check prices from the same canonical Price Review snapshot.
 
-    This endpoint is intentionally separate from inventory search so identity /
-    movement results render immediately even if pricing analysis is still busy.
+    Tested Price is the live established sweet spot from quick_check_current.
+    Testing Price and any active price action come only from cached_pricing_review(),
+    which is the same snapshot consumed by the Price Suggestions page. Quick
+    Check never independently invents a second Testing Price.
     """
     requested=[]
     seen=set()
@@ -3431,10 +3433,32 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
             break
     if not requested:
         return {
-            "contract_version":"YIPMAN_QUICK_PRICE_PREVIEW_V1",
+            "contract_version":"YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW",
             "count":0,
             "rows":[],
+            "price_review_analysis_status":"READY",
         }
+
+    # Read exactly the same pricing snapshot used by Yipman's Price Suggestions
+    # page. This may be a stale-while-refresh snapshot; that is intentional:
+    # both screens must show the same Tested / Testing path at the same moment.
+    pricing_snapshot=cached_pricing_review(
+        category="ALL",
+        limit=1000,
+        force=False,
+    )
+    pricing_status=str(pricing_snapshot.get("analysis_status") or "").upper()
+    pricing_cache_status=str(pricing_snapshot.get("cache_status") or "").upper()
+    canonical_rows={
+        str(x.get("upc") or ""):dict(x)
+        for x in (pricing_snapshot.get("rows") or [])
+        if str(x.get("upc") or "").strip()
+    }
+    canonical_ready=bool(
+        canonical_rows
+        or pricing_status.startswith("READY")
+        or pricing_cache_status in {"HIT","STALE_REFRESHING"}
+    )
 
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
@@ -3448,7 +3472,8 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
         )
         rows=cur.fetchall()
 
-        # Include confirmed 240/249 companions only for equality enforcement.
+        # Include confirmed 240/249 companions so the canonical 240 Tested /
+        # Testing path can be mirrored to its service 249 form when appropriate.
         pair_signatures=set()
         for row in rows:
             sig=_seafood_upc_group_signature(row.get("family_id"),row.get("ean_upc"))
@@ -3475,7 +3500,19 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
                     existing.add(ean)
 
         live_prices=_bulk_live_current_prices(cur,rows)
-        previews=_quick_price_preview_by_upc(cur,rows,live_prices)
+
+        # Build confirmed 240 -> 249 price-path inheritance only when the
+        # canonical Price Review has a 240 row. This enforces 240=249 without
+        # generating an independent Testing Price for 249.
+        pair_path_by_sig={}
+        for row in rows:
+            sig=_seafood_upc_group_signature(row.get("family_id"),row.get("ean_upc"))
+            prefix=_numeric_key(row.get("ean_upc"))[:3]
+            upc=str(row.get("ean_upc") or "")
+            canonical=canonical_rows.get(upc)
+            if sig is not None and prefix=="240" and canonical is not None:
+                pair_path_by_sig[sig]=canonical
+
         requested_set=set(requested)
         out=[]
         for row in rows:
@@ -3484,34 +3521,96 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
                 continue
             uid=int(row["upc_id"])
             live=live_prices.get(uid) or {}
-            preview=previews.get(uid) or {}
+            canonical=canonical_rows.get(upc)
+            sig=_seafood_upc_group_signature(row.get("family_id"),upc)
+            prefix=_numeric_key(upc)[:3]
+            inherited_240=False
+            if canonical is None and sig is not None and prefix=="249":
+                canonical=pair_path_by_sig.get(sig)
+                inherited_240=canonical is not None
+
+            tested=_positive_price(row.get("sweet_spot_price"))
+            testing=(
+                _positive_price(canonical.get("testing_price"))
+                if canonical is not None else None
+            )
+            # If Price Review has the UPC, its Tested field is the display
+            # authority. It should equal quick_check_current.sweet_spot_price;
+            # prefer it explicitly so the two screens cannot drift.
+            if canonical is not None and canonical.get("tested_price") is not None:
+                tested=_positive_price(canonical.get("tested_price"))
+
+            reason_code=(
+                str(canonical.get("suggestion_reason_code") or "")
+                if canonical is not None else ""
+            )
+            candidate=(
+                canonical.get("candidate_price")
+                if canonical is not None and not inherited_240
+                else None
+            )
+            if inherited_240:
+                suggestion_status="PAIR_240_PRICE_PATH"
+                suggestion_reason="240=249 PRICE PATH"
+            elif canonical is not None and reason_code:
+                suggestion_status=reason_code
+                suggestion_reason=(
+                    canonical.get("suggestion_reason")
+                    or canonical.get("primary_reason_text")
+                    or reason_code
+                )
+            elif not canonical_ready:
+                suggestion_status="PRICING_REVIEW_WARMING"
+                suggestion_reason="PRICE REVIEW WARMING"
+            else:
+                suggestion_status="NO_ACTIVE_PRICE_SUGGESTION"
+                suggestion_reason="NO ACTIVE PRICE TEST"
+
             out.append({
                 "upc":upc,
                 "current_price":live.get("price"),
                 "current_price_type":live.get("type"),
                 "current_price_source":live.get("source"),
                 "current_price_asof_date":live.get("date"),
-                "suggested_price":preview.get("suggested_price"),
-                "suggestion_status":preview.get("suggestion_status"),
-                "suggestion_basis":preview.get("suggestion_basis"),
-                "suggestion_reason":preview.get("suggestion_reason"),
-                "tested_price":preview.get("tested_price"),
-                "testing_price":preview.get("testing_price"),
-                "target_sweet_spot_price":preview.get("target_sweet_spot_price"),
-                "testing_step_rule":preview.get("testing_step_rule"),
+                "suggested_price":candidate,
+                "suggestion_status":suggestion_status,
+                "suggestion_basis":(
+                    canonical.get("suggestion_basis")
+                    if canonical is not None else None
+                ),
+                "suggestion_reason":suggestion_reason,
+                "tested_price":tested,
+                "testing_price":testing,
+                "target_sweet_spot_price":(
+                    canonical.get("target_sweet_spot_price")
+                    if canonical is not None else None
+                ),
+                "testing_step_rule":(
+                    canonical.get("testing_step_rule")
+                    if canonical is not None else
+                    "CANONICAL_PRICE_REVIEW_ONLY"
+                ),
+                "price_path_source":"BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT",
+                "price_path_inherited_from_240":inherited_240,
                 "company_price_a":row.get("company_price_a"),
                 "company_price_b":row.get("company_price_b"),
                 "company_price_c":row.get("company_price_c"),
             })
         cur.close()
+
     return {
-        "contract_version":"YIPMAN_QUICK_PRICE_PREVIEW_V1",
+        "contract_version":"YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW",
         "count":len(out),
         "rows":out,
+        "price_review_analysis_status":pricing_status or None,
+        "price_review_cache_status":pricing_cache_status or None,
+        "price_review_refreshing":bool(pricing_snapshot.get("refreshing")),
         "rules":{
             "current_price":"LIVE_CANONICAL_PRICE_AUTHORITY",
-            "suggestion":"SAME_14D_GP_PER_DAY_ENGINE_AND_GATES_AS_PRICE_REVIEW",
-            "pair_rule":"CONFIRMED_240_249_EQUALITY_ENFORCED",
+            "tested_price":"SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS",
+            "testing_price":"SAME_CANONICAL_TESTING_PRICE_AS_PRICE_SUGGESTIONS;NO_INDEPENDENT_QUICK_CHECK_RECALCULATION",
+            "price_path_source":"BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT",
+            "pair_rule":"CONFIRMED_240_249_TESTED_TESTING_PATH_INHERITS_FROM_240",
         },
     }
 
