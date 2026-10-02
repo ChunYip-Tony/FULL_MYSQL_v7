@@ -5,12 +5,17 @@ try:
 except ImportError:
     from desktop_workstation_v366 import DESKTOP_WORKSTATION_CSS, DESKTOP_WORKSTATION_JS
 
+try:
+    from .desktop_data_center_v368 import DESKTOP_DATA_CENTER_V368_CSS, DESKTOP_DATA_CENTER_V368_JS
+except ImportError:
+    from desktop_data_center_v368 import DESKTOP_DATA_CENTER_V368_CSS, DESKTOP_DATA_CENTER_V368_JS
+
 
 def backoffice_html(version: str = "") -> str:
     v = str(version or "")
     html = BACKOFFICE_HTML.replace("__VERSION__", v)
-    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + "</style></head>")
-    html = html.replace("</body>", "<script id=\"desktop-workstation-v366-js\">" + DESKTOP_WORKSTATION_JS + "</script></body>")
+    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + "</style><style id=\"desktop-data-center-v368-css\">" + DESKTOP_DATA_CENTER_V368_CSS + "</style></head>")
+    html = html.replace("</body>", "<script id=\"desktop-workstation-v366-js\">" + DESKTOP_WORKSTATION_JS + "</script><script id=\"desktop-data-center-v368-js\">" + DESKTOP_DATA_CENTER_V368_JS + "</script></body>")
     return html
 
 
