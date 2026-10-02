@@ -315,7 +315,7 @@ jobs:
           assert 'class="cbmeta"' in ui
           assert '#order .orderitemcard{background:#fff' in ui
           assert '#order .orderitemmain .name{font-size:18px' in ui
-          assert '#order .receivingline b{font-size:18px' in ui
+          assert '#order .familyline b{font-size:18px' in ui
           assert '#order .orderitemmain .orderqty{font-size:19px' in ui
           assert '#order .orderitemmain .cell{text-align:right;font-size:15px' in ui
           assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
