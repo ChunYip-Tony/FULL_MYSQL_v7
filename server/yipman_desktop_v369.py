@@ -79,6 +79,14 @@ YIPMAN_DESKTOP_CSS = r"""
   #ydesk .priceEmpty{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px;box-shadow:var(--shadow)}#ydesk .priceEmpty h3{margin:0 0 6px;font-size:16px}#ydesk .priceEmpty p{font-size:11.5px;color:#66798f;line-height:1.45}
   #ydesk .diaggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
   #ydesk .priceSearch{min-width:220px}
+  #ydesk #ydOrderMain table{min-width:1180px}
+  #ydesk #ydPerfMain table{min-width:1080px}
+  #ydesk #ydPQueue table{min-width:1160px}
+  #ydesk #ydOrderMain .tablewrap,#ydesk #ydPerfMain .tablewrap,#ydesk #ydPQueue .tablewrap{scrollbar-gutter:stable}
+  @media(max-width:1450px){
+    #ydesk .pfilters{grid-template-columns:1fr 1fr}
+    #ydesk .pfilters .filterbox:last-child{grid-column:1 / -1}
+  }
   @media(max-width:1280px){#ydesk .app{grid-template-columns:72px minmax(0,1fr)}#ydesk .brand h1{font-size:17px}#ydesk .brand small,#ydesk .navbtn span:last-child,#ydesk .fresh,#ydesk .version{display:none}#ydesk .navbtn{justify-content:center}#ydesk .split,#ydesk .perfgrid,#ydesk .pigrid,#ydesk .datagrid{grid-template-columns:1fr}#ydesk .analysis{position:relative;top:auto;max-height:none}#ydesk .fhead{grid-template-columns:24px minmax(180px,1.25fr) repeat(4,minmax(84px,.7fr)) 120px}#ydesk .hide1280{display:none!important}#ydesk .kpis{grid-template-columns:repeat(3,1fr)}}
 }
 """
