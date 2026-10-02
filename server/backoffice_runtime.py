@@ -4242,8 +4242,11 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             movement_days_7,
         ) if qrows else {}
 
-        # Recent promotion context uses the latest 28 completed canonical POS
-        # sales days. SALE is promotion; TPR is explicitly not promotion.
+        # Recent promotion context scans every related UPC mapped to each
+        # qualifying Family across the latest 28 completed canonical POS sales
+        # days. SALE is promotion; TPR is explicitly not promotion. Historical
+        # UPC rows remain eligible because a SALE event inside this 28-day
+        # window is itself recent evidence.
         sales_days_28 = source_data_days(
             cur,
             "sales_by_price_type",
@@ -4263,7 +4266,6 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 f"""SELECT *
                     FROM quick_check_current
                     WHERE family_id IN ({ph})
-                      AND COALESCE(quick_check_status,'') <> 'HISTORICAL_ONLY'
                     ORDER BY family_id,upc_id""",
                 tuple(family_ids),
             )
