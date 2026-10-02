@@ -197,7 +197,7 @@ jobs:
           assert 'freshness_velocity_test' in src
           assert 'positive_gp_day_test' in src
           assert 'DOH_IS_URGENCY_NOT_ELIGIBILITY' in src
-          assert 'POSITIVE_OH_AND_14D_SALES_HISTORY_FOR_ALL_CLASSES' in src
+          assert 'POSITIVE_OH_AND_28D_SALES_HISTORY_FOR_ALL_CLASSES' in src
           assert 'WEBAPP_V2_PERFORMANCE_V13_COMPACT_PRICE_PROGRESS' in src
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
@@ -205,6 +205,8 @@ jobs:
           assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
           assert '.qprice b.qempty' in ui
           assert 'IGNORE 30 MIN' in ui
+          assert 'priceIgnoredThisVisit.has(id)' in ui
+          assert 'PRICE_IGNORE_MS=30*60*1000' in ui
           assert 'STRONGEST PROVED' in ui
           assert '.pricepath' in ui
           print('controlled-price-progress=PASS')
@@ -1005,7 +1007,7 @@ jobs:
           assert 'pclass=="FROZEN"' in runtime
           assert 'doh_for_gate>Decimal("60")' in runtime
           assert 'has_oh=bool(current_oh is not None and current_oh>0)' in runtime
-          assert 'history_gate=bool(q14>0)' in runtime
+          assert 'history_gate=bool(q28>0)' in runtime
           assert 'if not has_oh or not history_gate:' in runtime
           assert 'freshness_qualified' not in runtime
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in runtime
