@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v351';
+const CACHE='yipman-v352';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -736,9 +736,14 @@ async function loadBestSellers(force=false){
  }
  const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading best-selling families…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=500&lightweight=true',{timeoutMs:22000});
+  const d=await api('/v1/yipman/best-sellers?limit=8',{timeoutMs:10000});
   if(requestId!==quickRequestSeq||$('#globalInput').value.trim())return;
-  bestSellerGroups=quickFamilyGroups(d.rows||[]).filter(g=>num(g.group_avg_qty_day)!==null&&Number(g.group_avg_qty_day)>0).sort((a,b)=>Number(b.group_avg_qty_day||0)-Number(a.group_avg_qty_day||0)||Number(b.group_qty_7d||0)-Number(a.group_qty_7d||0)||String(a.family_name||'').localeCompare(String(b.family_name||''))).slice(0,8);
+  bestSellerGroups=(d.rows||[]).map(r=>({
+    family_id:r.family_id,family_article:r.family_article,family_name:r.family_name,category:r.category,
+    group_qty_7d:r.family_group_movement_7d,group_avg_qty_day:r.family_group_avg_qty_day,group_uom:r.family_group_movement_uom||'',
+    family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
+    family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count
+  }));
   box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
