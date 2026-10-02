@@ -4088,6 +4088,120 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
 
 
 
+def _recent_family_sale_event_from_batch(
+    family_rows: list[dict[str, Any]],
+    daily_by_upc: dict[int, dict[date, dict[str, Any]]],
+    sales_days: list[dict[str, Any]],
+    target_uom: str,
+) -> dict[str, Any] | None:
+    """Return the newest SALE event found on any related UPC in the 28-day window.
+
+    TPR is never promotion. The Family is flagged when at least one related UPC
+    has positive SALE quantity. Event quantity is published only when every
+    SALE-active UPC can be converted safely into the Stock Flow Family UOM.
+    """
+    uom = str(target_uom or "").strip().upper()
+    ordered_days = sorted(
+        [x.get("date") for x in sales_days if x.get("date") is not None]
+    )
+    if not ordered_days or not family_rows:
+        return None
+
+    sale_days: dict[date, dict[str, Any]] = {}
+    for day in ordered_days:
+        total = Decimal("0")
+        has_sale = False
+        qty_ready = bool(uom)
+        upcs: set[str] = set()
+        for row in family_rows:
+            if row.get("upc_id") is None:
+                continue
+            obs = (daily_by_upc.get(int(row["upc_id"])) or {}).get(day) or {}
+            sale = (obs.get("price_types") or {}).get("SALE")
+            if not sale:
+                continue
+            qty = _d(sale.get("sold_quantity"))
+            if qty <= 0:
+                continue
+            has_sale = True
+            upcs.add(str(row.get("ean_upc") or row.get("upc_id") or ""))
+            selling_uom = str(row.get("selling_uom") or "").strip().upper()
+            base_uom = str(row.get("base_uom") or "").strip().upper()
+            factor = row.get("base_qty_per_selling_unit")
+            if selling_uom and selling_uom == uom:
+                total += qty
+            elif base_uom and base_uom == uom and factor is not None:
+                factor_d = _d(factor)
+                if factor_d > 0:
+                    total += qty * factor_d
+                else:
+                    qty_ready = False
+            else:
+                qty_ready = False
+        if has_sale:
+            sale_days[day] = {
+                "quantity": total if qty_ready else None,
+                "quantity_ready": qty_ready,
+                "related_upcs": sorted(x for x in upcs if x),
+            }
+
+    if not sale_days:
+        return None
+
+    events: list[dict[str, Any]] = []
+    start: date | None = None
+    end: date | None = None
+    event_qty = Decimal("0")
+    event_qty_ready = True
+    event_sale_days = 0
+    event_upcs: set[str] = set()
+
+    def close_event() -> None:
+        nonlocal start, end, event_qty, event_qty_ready, event_sale_days, event_upcs
+        if start is None or end is None:
+            return
+        events.append({
+            "promotion_type": "SALE",
+            "start_date": start,
+            "end_date": end,
+            "sale_quantity": event_qty if event_qty_ready else None,
+            "sale_quantity_uom": uom if event_qty_ready and uom else None,
+            "sale_quantity_status": (
+                "READY" if event_qty_ready and uom
+                else "UNRESOLVED_MIXED_UOM"
+            ),
+            "sale_observed_day_count": event_sale_days,
+            "related_upcs": sorted(event_upcs),
+            "window_supported_day_count": len(ordered_days),
+            "is_active_on_latest_supported_day": end == ordered_days[-1],
+            "promotion_definition": "PRICE_TYPE_SALE_ONLY",
+            "tpr_is_promotion": False,
+        })
+        start = None
+        end = None
+        event_qty = Decimal("0")
+        event_qty_ready = True
+        event_sale_days = 0
+        event_upcs = set()
+
+    for day in ordered_days:
+        info = sale_days.get(day)
+        if info is None:
+            close_event()
+            continue
+        if start is None:
+            start = day
+        end = day
+        event_sale_days += 1
+        event_upcs.update(info.get("related_upcs") or [])
+        if info.get("quantity_ready") and info.get("quantity") is not None:
+            event_qty += _d(info.get("quantity"))
+        else:
+            event_qty_ready = False
+    close_event()
+    return events[-1] if events else None
+
+
 def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
     """Family Stock Flow watch for the Yipman empty-search home.
 
@@ -4131,6 +4245,44 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             movement_days_7,
         ) if qrows else {}
 
+        # Promotion evidence scans every related UPC mapped to each qualifying
+        # Family across the latest 28 completed canonical POS sales days.
+        # SALE is promotion; TPR is explicitly not promotion. Historical UPC
+        # rows remain eligible because a SALE event inside this 28-day window
+        # is itself recent evidence.
+        sales_days_28 = source_data_days(
+            cur,
+            "sales_by_price_type",
+            limit=28,
+            up_to=completed_through_date(),
+        )
+        family_ids = sorted({
+            int(q["family_id"])
+            for q in qrows
+            if q.get("family_id") is not None
+        })
+        promo_family_rows: dict[int, list[dict[str, Any]]] = {}
+        promo_daily: dict[int, dict[date, dict[str, Any]]] = {}
+        if family_ids and sales_days_28:
+            ph = ",".join(["%s"] * len(family_ids))
+            cur.execute(
+                f"""SELECT *
+                    FROM quick_check_current
+                    WHERE family_id IN ({ph})
+                    ORDER BY family_id,upc_id""",
+                tuple(family_ids),
+            )
+            all_family_rows = [dict(x) for x in cur.fetchall()]
+            for row in all_family_rows:
+                if row.get("family_id") is None:
+                    continue
+                promo_family_rows.setdefault(int(row["family_id"]), []).append(row)
+            promo_daily = _batch_daily_sales_by_price_type(
+                cur,
+                all_family_rows,
+                sales_days_28,
+            )
+
         rows: list[dict[str, Any]] = []
         for q in qrows:
             fid = int(q["family_id"])
@@ -4169,6 +4321,12 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             avg = ctx.get("family_group_avg_qty_day")
             if avg is None and day_count:
                 avg = sold_d / Decimal(day_count)
+            recent_promotion = _recent_family_sale_event_from_batch(
+                promo_family_rows.get(fid, []),
+                promo_daily,
+                sales_days_28,
+                sold_uom,
+            )
             rows.append({
                 "family_id": fid,
                 "family_article": q.get("main_article_number"),
@@ -4185,6 +4343,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 "receipt_minus_selling_7d": difference,
                 "receipt_to_selling_ratio": ratio,
                 "receipt_over_selling_pct": (ratio - Decimal("1")) * Decimal("100"),
+                "recent_promotion_event": recent_promotion,
             })
         cur.close()
 
@@ -4196,7 +4355,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V1",
+        "contract_version": "YIPMAN_STOCK_FLOW_V2_RECENT_PROMOTION_28D",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4207,6 +4366,11 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "default_sort": "RECEIPT_MINUS_SELLING_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
+            "recent_promotion_window": "LATEST_28_COMPLETED_CANONICAL_POS_SALES_DAYS",
+            "promotion_scope": "ANY_RELATED_FAMILY_UPC",
+            "promotion_definition": "PRICE_TYPE_SALE_ONLY",
+            "tpr_is_promotion": False,
+            "promotion_quantity": "MOST_RECENT_SALE_EVENT_POS_QTY_IN_FAMILY_MOVEMENT_UOM_WHEN_SAFE",
         },
     }
 

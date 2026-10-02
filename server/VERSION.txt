@@ -1,3 +1,14 @@
+v7.0.387 Stock Flow Recent Promotion Context:
+- Stock Flow Watch scans every related UPC in each qualifying Family for SALE history across the latest 28 completed canonical POS sales days.
+- TPR is not promotion; only PRICE_TYPE=SALE qualifies.
+- If any related UPC has a recent SALE event, the Difference container background becomes bright green.
+- The green Difference container shows the most recent SALE event date range and its POS sold quantity when all SALE-active UPC quantities can be safely expressed in the Family movement UOM.
+- Mixed or unresolved UOM evidence is never guessed or force-added; valid SALE history can still trigger the green background while quantity remains hidden.
+- Historical related UPC rows remain eligible inside the 28-day window.
+- Preserves Yipman v7.0.386 AI live-query changes and v7.0.385 Ordering card ownership layout.
+- Yipman shell cache advanced to v387.
+Version: 7.0.387 Single-Service Edition
+
 v7.0.386 Yipman AI Query + UI Cleanup:
 - AI page is now one compact Ask Yipman header, one conversation area, and one composer; duplicate AI Assistant / Ask Yipman headings, repeated READ ONLY copy, starter chips, and repeated instructional bubbles were removed.
 - The opening AI message is now a single Today’s attention summary combining Ordering, Price Review, and Stock Flow priorities with data-through information when available.
