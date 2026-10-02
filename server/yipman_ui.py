@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v351';
+const CACHE='yipman-v352';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -287,7 +287,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .header{position:relative;z-index:20;background:rgba(246,247,249,.98);backdrop-filter:blur(12px)}
 .workspace{height:calc(100% - 62px)}
 #quick{padding-bottom:calc(154px + env(safe-area-inset-bottom))}
-.nav{grid-template-columns:repeat(3,1fr)}
+.nav{grid-template-columns:repeat(3,1fr);z-index:30}
+.dbbtn{position:relative;z-index:31;pointer-events:auto}
 .quicksearch{position:absolute;left:10px;right:10px;bottom:calc(74px + env(safe-area-inset-bottom));z-index:12;margin:0;display:grid;grid-template-columns:42px minmax(0,1fr) 64px;align-items:center;min-height:60px;border:2px solid #1769e0;border-radius:18px;padding:5px 7px;background:#fff;box-shadow:0 9px 24px rgba(13,79,139,.20)}
 .quicksearch:focus-within{border-color:#075b9b;box-shadow:0 10px 27px rgba(13,79,139,.25)}
 .quicksearch>span{display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:10px;background:#e8f3ff;color:#0d5f9f;font-size:20px;font-weight:950}
@@ -383,7 +384,7 @@ async function resetQuickHome({push=true}={}){
   $('#quick').scrollTop=0;
   if(push&&historyReady&&!wasQuick)history.pushState({yipman:true,view:'quick'},'', '#quick');
 }
-$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
 const quickNav=$('.nav button[data-go="quick"]');
 if(quickNav)quickNav.onclick=()=>resetQuickHome();
 function sheet(title,sub,html){
@@ -736,9 +737,14 @@ async function loadBestSellers(force=false){
  }
  const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading best-selling families…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=500&lightweight=true',{timeoutMs:22000});
+  const d=await api('/v1/yipman/best-sellers?limit=8',{timeoutMs:10000});
   if(requestId!==quickRequestSeq||$('#globalInput').value.trim())return;
-  bestSellerGroups=quickFamilyGroups(d.rows||[]).filter(g=>num(g.group_avg_qty_day)!==null&&Number(g.group_avg_qty_day)>0).sort((a,b)=>Number(b.group_avg_qty_day||0)-Number(a.group_avg_qty_day||0)||Number(b.group_qty_7d||0)-Number(a.group_qty_7d||0)||String(a.family_name||'').localeCompare(String(b.family_name||''))).slice(0,8);
+  bestSellerGroups=(d.rows||[]).map(r=>({
+    family_id:r.family_id,family_article:r.family_article,family_name:r.family_name,category:r.category,
+    group_qty_7d:r.family_group_movement_7d,group_avg_qty_day:r.family_group_avg_qty_day,group_uom:r.family_group_movement_uom||'',
+    family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
+    family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count
+  }));
   box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
@@ -1072,7 +1078,6 @@ history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView)
 historyReady=true;
 buildDays();
 renderView(initialView);
-if(initialView==='quick'&&!$('#globalInput').value.trim())loadBestSellers();
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();
 </script>

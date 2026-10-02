@@ -41,6 +41,7 @@ from backoffice_runtime import (
     accept_price_suggestion as backoffice_accept_price_suggestion,
     backoffice_home_summary,
     warm_backoffice_home_summary,
+    yipman_best_sellers as backoffice_yipman_best_sellers,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -3634,6 +3635,16 @@ def backoffice_lineage_audit():
         result=backoffice_sales_lineage_audit()
     except Exception as exc:
         raise HTTPException(500,f'Backoffice lineage audit failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+
+@app.get('/v1/yipman/best-sellers')
+def yipman_best_sellers(limit:int=8):
+    try:
+        result=backoffice_yipman_best_sellers(limit=limit)
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman best sellers failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
