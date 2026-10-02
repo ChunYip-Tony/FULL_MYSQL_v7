@@ -4,7 +4,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from difflib import SequenceMatcher
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 import json
 import inspect
 import threading
@@ -2872,6 +2872,100 @@ def _quick_receiving_article_context(
         }
     return out
 
+
+def _positive_price(value: Any) -> Decimal | None:
+    if value is None:
+        return None
+    try:
+        price = _d(value)
+    except Exception:
+        return None
+    return price if price > 0 else None
+
+
+def _next_testing_price(
+    anchor: Decimal | None,
+    target: Decimal | None,
+    observed_candidates: list[dict[str, Any]] | None = None,
+) -> Decimal | None:
+    """Move one small price-test step from anchor toward target.
+
+    Prefer the nearest actually observed price point in the correct direction
+    when it is within the 5% step cap. Otherwise move at most 5% of the anchor,
+    rounded to cents. The internal target is never exposed as the action price
+    until the gradual path reaches it.
+    """
+    anchor = _positive_price(anchor)
+    target = _positive_price(target)
+    if anchor is None or target is None:
+        return None
+    delta = target - anchor
+    if abs(delta) <= Decimal("0.01"):
+        return None
+
+    cap = (anchor * Decimal("0.05")).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    cap = max(Decimal("0.05"), cap)
+
+    observed: list[Decimal] = []
+    for item in observed_candidates or []:
+        value = _positive_price((item or {}).get("price"))
+        if value is not None:
+            observed.append(value)
+
+    if delta > 0:
+        nearby = sorted({
+            p for p in observed
+            if anchor < p <= target and p - anchor <= cap
+        })
+        if nearby:
+            return nearby[0]
+        step = min(delta, cap)
+    else:
+        nearby = sorted({
+            p for p in observed
+            if target <= p < anchor and anchor - p <= cap
+        }, reverse=True)
+        if nearby:
+            return nearby[0]
+        step = max(delta, -cap)
+
+    result = (anchor + step).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+    if result == anchor:
+        result = anchor + (Decimal("0.01") if delta > 0 else Decimal("-0.01"))
+    if delta > 0:
+        return min(result, target)
+    return max(result, target)
+
+
+def _tested_testing_prices(
+    *,
+    current: Any,
+    tested: Any,
+    target: Any,
+    observed_candidates: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    current_price = _positive_price(current)
+    tested_price = _positive_price(tested)
+    target_price = _positive_price(target)
+    anchor = tested_price or current_price
+    testing_price = _next_testing_price(
+        anchor,
+        target_price,
+        observed_candidates=observed_candidates,
+    )
+    return {
+        "tested_price": tested_price,
+        "testing_price": testing_price,
+        "target_sweet_spot_price": target_price,
+        "testing_anchor_price": anchor,
+        "testing_step_rule": "NEAREST_OBSERVED_PRICE_WITHIN_5PCT_ELSE_MAX_5PCT_STEP",
+    }
+
+
 def _quick_price_preview_by_upc(
     cur,
     rows: list[dict[str, Any]],
@@ -2915,23 +3009,22 @@ def _quick_price_preview_by_upc(
             continue
         uid = int(row["upc_id"])
         current = row.get("current_price")
+        tested = _positive_price(row.get("sweet_spot_price"))
         preview = {
             "suggested_price": None,
             "suggestion_status": "UNAVAILABLE",
             "suggestion_basis": None,
+            "suggestion_reason": None,
+            "tested_price": tested,
+            "testing_price": None,
+            "target_sweet_spot_price": None,
+            "testing_step_rule": "NEAREST_OBSERVED_PRICE_WITHIN_5PCT_ELSE_MAX_5PCT_STEP",
         }
         m14 = _batch_sales_metric(daily, days, uid, 14)
         q14 = _d(m14.get("sold_quantity"))
         current_oh = (
             _d(row.get("current_oh"))
             if row.get("current_oh") is not None else None
-        )
-        pclass = str(row.get("product_class") or "").upper()
-        doh = _d(row.get("doh")) if row.get("doh") is not None else None
-        freshness_qualified = (
-            (pclass == "FRESH" and doh is not None and doh > Decimal("7"))
-            or (pclass == "FROZEN" and doh is not None and doh > Decimal("60"))
-            or (pclass not in {"FRESH", "FROZEN"})
         )
         day_obs = (
             (daily.get(uid) or {}).get(anchor, {})
@@ -2941,46 +3034,71 @@ def _quick_price_preview_by_upc(
             str(k).upper()
             for k in (day_obs.get("price_types") or {}).keys()
         }
-        qualified = bool(
+        base_qualified = bool(
             current_oh is not None
             and current_oh > 0
             and q14 > 0
-            and freshness_qualified
             and str(row.get("quick_check_status") or "").upper() == "READY"
             and "SALE" not in report_day_types
         )
-        if qualified:
+        if base_qualified:
             opt = _gp_day_price_suggestion_from_batch(
                 row, uid, daily, days
             )
-            candidate = opt.get("suggested_price")
-            if opt.get("status") == "READY" and candidate is not None:
-                if current is not None and abs(_d(candidate) - _d(current)) <= Decimal("0.25"):
-                    preview.update({
-                        "suggestion_status": "NO_ACTION_WITHIN_0_25",
-                        "suggestion_basis": opt.get("basis"),
-                    })
-                else:
-                    preview.update({
-                        "suggested_price": candidate,
-                        "suggestion_status": "READY",
-                        "suggestion_basis": opt.get("basis"),
-                    })
+            target = (
+                opt.get("suggested_price")
+                if opt.get("status") == "READY"
+                else None
+            )
+            path = _tested_testing_prices(
+                current=current,
+                tested=tested,
+                target=target,
+                observed_candidates=opt.get("top_observed_candidates"),
+            )
+            preview.update(path)
+            cost = _positive_price(row.get("current_cost_per_selling_unit"))
+            tested_actionable = bool(
+                tested is not None
+                and current is not None
+                and abs(tested - _d(current)) > Decimal("0.01")
+                and cost is not None
+                and tested > cost
+            )
+            if tested_actionable:
+                preview.update({
+                    "suggested_price": tested,
+                    "suggestion_status": "TESTED_PRICE_READY",
+                    "suggestion_basis": "HISTORICAL_TESTED_SWEET_SPOT",
+                    "suggestion_reason": "TESTED SWEET SPOT",
+                })
+            elif path.get("testing_price") is not None:
+                preview.update({
+                    "suggested_price": path.get("testing_price"),
+                    "suggestion_status": "TESTING_PRICE_READY",
+                    "suggestion_basis": opt.get("basis"),
+                    "suggestion_reason": "SWEET SPOT TEST",
+                })
             else:
                 preview.update({
-                    "suggestion_status": str(opt.get("reason") or opt.get("status") or "UNAVAILABLE"),
+                    "suggestion_status": str(
+                        opt.get("reason") or opt.get("status") or "NO_NEW_TEST"
+                    ),
                     "suggestion_basis": opt.get("basis"),
+                    "suggestion_reason": "NO NEW TEST",
                 })
         elif "SALE" in report_day_types:
             preview["suggestion_status"] = "ACTIVE_SALE_EXCLUDED"
+            preview["suggestion_reason"] = "ACTIVE SALE"
         elif str(row.get("quick_check_status") or "").upper() != "READY":
             preview["suggestion_status"] = "QA_NOT_READY"
+            preview["suggestion_reason"] = "QA HOLD"
         elif current_oh is None or current_oh <= 0:
             preview["suggestion_status"] = "NO_POSITIVE_OH"
+            preview["suggestion_reason"] = "NO STOCK"
         elif q14 <= 0:
             preview["suggestion_status"] = "NO_14D_SALES"
-        elif not freshness_qualified:
-            preview["suggestion_status"] = "FRESHNESS_GATE_NOT_MET"
+            preview["suggestion_reason"] = "NO 14D SALES"
         previews[uid] = preview
 
     # Canonical 240 is the price authority for its confirmed 249 service form.
@@ -3017,11 +3135,17 @@ def _quick_price_preview_by_upc(
         service_current = service.get("current_price")
         main_candidate = main_preview.get("suggested_price")
 
+        service_preview["tested_price"] = main_preview.get("tested_price")
+        service_preview["testing_price"] = main_preview.get("testing_price")
+        service_preview["target_sweet_spot_price"] = main_preview.get("target_sweet_spot_price")
+        service_preview["testing_step_rule"] = main_preview.get("testing_step_rule")
+
         if main_candidate is not None:
             service_preview.update({
                 "suggested_price": main_candidate,
-                "suggestion_status": "READY",
-                "suggestion_basis": "MANDATORY_240_249_EQUALITY_TO_240_SUGGESTION",
+                "suggestion_status": main_preview.get("suggestion_status") or "TESTING_PRICE_READY",
+                "suggestion_basis": "MANDATORY_240_249_EQUALITY_TO_240_PRICE_PATH",
+                "suggestion_reason": main_preview.get("suggestion_reason") or "240=249",
             })
         elif (
             main_current is not None
@@ -3034,12 +3158,14 @@ def _quick_price_preview_by_upc(
                 "suggested_price": main_current,
                 "suggestion_status": "READY_URGENT_240_249_MISMATCH",
                 "suggestion_basis": "MANDATORY_240_249_EQUALITY_TO_240_CURRENT_PRICE",
+                "suggestion_reason": "240=249 PRICE ALIGNMENT",
             })
         else:
             service_preview.update({
                 "suggested_price": None,
                 "suggestion_status": "NO_INDEPENDENT_249_CHANGE",
                 "suggestion_basis": "MANDATORY_240_249_EQUALITY",
+                "suggestion_reason": "240=249",
             })
 
     return previews
@@ -3126,6 +3252,11 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
                 "suggested_price":preview.get("suggested_price"),
                 "suggestion_status":preview.get("suggestion_status"),
                 "suggestion_basis":preview.get("suggestion_basis"),
+                "suggestion_reason":preview.get("suggestion_reason"),
+                "tested_price":preview.get("tested_price"),
+                "testing_price":preview.get("testing_price"),
+                "target_sweet_spot_price":preview.get("target_sweet_spot_price"),
+                "testing_step_rule":preview.get("testing_step_rule"),
                 "company_price_a":row.get("company_price_a"),
                 "company_price_b":row.get("company_price_b"),
                 "company_price_c":row.get("company_price_c"),
@@ -4515,7 +4646,7 @@ def pricing_review(
                            current_price,current_price_type,
                            current_price_source,current_price_asof_date,
                            current_cost_per_selling_unit,cost_source,cost_date,
-                           current_oh,current_oh_uom,doh,
+                           current_oh,current_oh_uom,doh,sweet_spot_price,
                            gp_pct_current,gp_per_day_7d,quick_check_status,
                            published_at,publish_batch_id
                     FROM quick_check_current
@@ -4624,23 +4755,94 @@ def pricing_review(
         ]
         row["delivery_history_lookback_days"]=(pattern or {}).get("lookback_days")
 
-        candidate = row.get("candidate_price")
-        if candidate is not None and current_cost is not None and _d(candidate) > 0:
-            row["suggested_gp_pct_at_current_cost"] = (
-                (_d(candidate) - _d(current_cost)) / _d(candidate)
-            )
+        target_candidate = _positive_price(row.get("candidate_price"))
+        tested_price = _positive_price(live.get("sweet_spot_price"))
+        path = _tested_testing_prices(
+            current=current_price,
+            tested=tested_price,
+            target=target_candidate,
+            observed_candidates=row.get("top_observed_candidates"),
+        )
+        testing_price = path.get("testing_price")
+        row["tested_price"] = tested_price
+        row["testing_price"] = testing_price
+        row["target_sweet_spot_price"] = target_candidate
+        row["testing_step_rule"] = path.get("testing_step_rule")
 
-        if current_price is not None and candidate is not None and _d(current_price) > 0:
+        current_oh = _d(live.get("current_oh")) if live.get("current_oh") is not None else None
+        base_actionable = bool(
+            str(row.get("review_status") or "").upper() == "ACTIONABLE"
+            and current_price is not None
+            and _d(current_price) > 0
+            and current_cost is not None
+            and _d(current_cost) > 0
+            and current_oh is not None
+            and current_oh > 0
+        )
+
+        pair_fix = bool(row.get("priority_240_249_mismatch"))
+        action_price = None
+        reason_code = None
+        reason_text = None
+
+        if pair_fix and target_candidate is not None and base_actionable:
+            action_price = target_candidate
+            reason_code = "PAIR_FIX"
+            reason_text = "240=249 PRICE ALIGNMENT"
+        elif (
+            base_actionable
+            and tested_price is not None
+            and tested_price > _d(current_cost)
+            and abs(tested_price - _d(current_price)) > Decimal("0.01")
+        ):
+            action_price = tested_price
+            reason_code = "TESTED_PRICE"
+            reason_text = "TESTED SWEET SPOT"
+        elif (
+            base_actionable
+            and testing_price is not None
+            and testing_price > _d(current_cost)
+            and abs(testing_price - _d(current_price)) > Decimal("0.01")
+        ):
+            action_price = testing_price
+            reason_code = "TESTING_PRICE"
+            reason_text = "SWEET SPOT TEST"
+
+        row["candidate_price"] = action_price
+        row["suggested_price"] = action_price
+        row["suggestion_reason_code"] = reason_code
+        row["suggestion_reason"] = reason_text
+        row["actionable"] = action_price is not None
+        row["review_status"] = "ACTIONABLE" if action_price is not None else "NO_PRICE_ACTION"
+
+        if action_price is not None and current_cost is not None and _d(action_price) > 0:
+            row["suggested_gp_pct_at_current_cost"] = (
+                (_d(action_price) - _d(current_cost)) / _d(action_price)
+            )
+        else:
+            row["suggested_gp_pct_at_current_cost"] = None
+
+        if current_price is not None and action_price is not None and _d(current_price) > 0:
             row["price_gap_pct"] = (
-                abs(_d(candidate) - _d(current_price))
+                abs(_d(action_price) - _d(current_price))
                 / _d(current_price)
                 * Decimal("100")
             )
             row["direction"] = (
                 "INCREASE"
-                if _d(candidate) > _d(current_price)
-                else ("DECREASE" if _d(candidate) < _d(current_price) else "KEEP")
+                if _d(action_price) > _d(current_price)
+                else ("DECREASE" if _d(action_price) < _d(current_price) else "KEEP")
             )
+        else:
+            row["price_gap_pct"] = None
+            row["direction"] = "REVIEW"
+
+        if reason_code == "TESTED_PRICE":
+            row["primary_reason_text"] = "Tested sweet spot from observed sales / GP$/day history"
+        elif reason_code == "TESTING_PRICE":
+            row["primary_reason_text"] = "Next gradual sweet spot test toward the supported target"
+        elif reason_code == "PAIR_FIX":
+            row["primary_reason_text"] = "240/249 price equality correction"
 
     suppressed_count=0
     visible_rows=[]
@@ -4672,6 +4874,9 @@ def pricing_review(
             "best_available_estimate_allowed": bool(allow_stale_estimate),
             "estimate_basis": "LATEST_AVAILABLE_CANONICAL_POS_AND_MVT_INDEPENDENT",
             "estimate_is_clearly_labelled": True,
+            "tested_price": "HISTORICAL_SWEET_SPOT_FROM_ACTUAL_SALES_GP_DOLLARS_PER_DAY",
+            "testing_price": "GRADUAL_STEP_TOWARD_INTERNAL_SUPPORTED_TARGET; NEAREST_OBSERVED_PRICE_WITHIN_5PCT ELSE MAX_5PCT STEP",
+            "price_action_priority": "PAIR_FIX_THEN_TESTED_PRICE_THEN_TESTING_PRICE",
             "source_contract": report.get("price_suggestion_rules"),
         },
     }
