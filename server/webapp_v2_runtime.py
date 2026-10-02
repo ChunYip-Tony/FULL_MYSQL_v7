@@ -3699,6 +3699,12 @@ def bulk_ordering_suggestions(
         shared_movement_days_28=source_data_days(
             cur,"movement",limit=28,up_to=completed_through_date(),
         )
+        shared_movement_days_180=(
+            source_data_days(
+                cur,"movement",limit=180,up_to=completed_through_date(),
+            )
+            if kind=="FRESH" else []
+        )
 
         # Normalize family promotion items. Legacy UPC items are resolved to
         # their Family so both old callers and the Promotion List workflow use
@@ -3749,10 +3755,10 @@ def bulk_ordering_suggestions(
             item["promotion_start_date"]=item_start
             item["promotion_end_date"]=item_end
             inferred=_promotion_type(item_start,item_end)
-            supplied=str(item.get("promotion_type") or inferred).strip().upper()
-            if supplied not in {"WEEKLY","WEEKEND"}:
-                raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_OR_WEEKEND")
-            if inferred!=supplied:
+            supplied=str(item.get("promotion_type") or inferred or "CUSTOM").strip().upper()
+            if supplied not in {"WEEKLY","WEEKEND","CUSTOM"}:
+                raise ValueError("PROMOTION_TYPE_MUST_BE_WEEKLY_WEEKEND_OR_CUSTOM")
+            if supplied in {"WEEKLY","WEEKEND"} and inferred!=supplied:
                 raise ValueError("PROMOTION_DATES_DO_NOT_MATCH_TYPE")
             item["promotion_type"]=supplied
             if item.get("promotion_price") is None or _d(item.get("promotion_price"))<=0:
@@ -4010,8 +4016,40 @@ def bulk_ordering_suggestions(
                     promo_vel=reg_vel
                     promo_fallback=True
 
-            requested_coverage_days=max(0,(next_delivery-delivery).days)
             freshness_limit_days=7 if kind=="FRESH" else None
+            freshness_latest_receipt_date=None
+            freshness_current_doh=None
+            freshness_discard_date=None
+            freshness_reference_status="NOT_APPLICABLE"
+            if kind=="FRESH":
+                freshness_reference_status="NO_RECEIPT_EVIDENCE"
+                freshness_events=_family_receipt_events(
+                    cur,
+                    fid,
+                    data_days=shared_movement_days_180,
+                )
+                freshness_dates=[
+                    x.get("posting_date")
+                    for x in freshness_events
+                    if x.get("posting_date") is not None
+                    and x.get("receipt_quantity") is not None
+                    and _d(x.get("receipt_quantity"))>0
+                ]
+                if freshness_dates:
+                    freshness_latest_receipt_date=max(freshness_dates)
+                    freshness_current_doh=max(
+                        1,
+                        (order_day-freshness_latest_receipt_date).days+1,
+                    )
+                    # Receipt day is DOH 1. Stock crosses the Fresh/Live
+                    # DOH<=7 threshold at the start of receipt_date + 7 days.
+                    freshness_discard_date=(
+                        freshness_latest_receipt_date
+                        + timedelta(days=freshness_limit_days)
+                    )
+                    freshness_reference_status="READY"
+
+            requested_coverage_days=max(0,(next_delivery-delivery).days)
             effective_coverage_end=(
                 min(next_delivery,delivery+timedelta(days=freshness_limit_days))
                 if freshness_limit_days is not None else next_delivery
@@ -4079,10 +4117,91 @@ def bulk_ordering_suggestions(
                 })
                 day+=timedelta(days=1)
 
-            projected_at_delivery=ordering_oh-before_delivery
-            usable_at_delivery=max(Decimal("0"),projected_at_delivery)
-            pre_delivery_stockout_qty=max(Decimal("0"),-projected_at_delivery)
-            suggested=max(Decimal("0"),coverage_usage-usable_at_delivery)
+            baseline_projected_at_delivery=ordering_oh-before_delivery
+            baseline_usable_at_delivery=max(
+                Decimal("0"),baseline_projected_at_delivery
+            )
+            projected_at_delivery=baseline_projected_at_delivery
+            usable_at_delivery=baseline_usable_at_delivery
+            pre_delivery_stockout_qty=max(
+                Decimal("0"),-baseline_projected_at_delivery
+            )
+            freshness_existing_oh_credit=min(
+                baseline_usable_at_delivery,coverage_usage
+            )
+            freshness_projected_discard_before_delivery=Decimal("0")
+            freshness_projected_discard_during_coverage=Decimal("0")
+
+            # Fresh/Live current OH is not credited beyond its own freshness
+            # life.  If the current lot crosses DOH 7 before/during the selected
+            # delivery window, any remaining current OH is projected as discard
+            # and the order quantity replaces only the demand that stale OH can
+            # no longer cover.  The incoming delivery still has its own 7-day
+            # coverage cap above.
+            if kind=="FRESH" and freshness_discard_date is not None:
+                current_stock=ordering_oh
+                pre_shortage=Decimal("0")
+                for forecast in daily_forecast:
+                    forecast_day=forecast["date"]
+                    if forecast_day>=delivery:
+                        break
+                    if (
+                        forecast_day>=freshness_discard_date
+                        and current_stock>0
+                    ):
+                        freshness_projected_discard_before_delivery+=current_stock
+                        current_stock=Decimal("0")
+                    demand=_d(forecast.get("forecast_quantity") or 0)
+                    used=min(current_stock,demand)
+                    current_stock-=used
+                    pre_shortage+=max(Decimal("0"),demand-used)
+
+                usable_at_delivery=current_stock
+                pre_delivery_stockout_qty=pre_shortage
+                projected_at_delivery=(
+                    -pre_shortage if pre_shortage>0 else current_stock
+                )
+                freshness_existing_oh_credit=Decimal("0")
+                for forecast in daily_forecast:
+                    forecast_day=forecast["date"]
+                    if forecast_day<delivery:
+                        continue
+                    if forecast_day>=effective_coverage_end:
+                        break
+                    if (
+                        forecast_day>=freshness_discard_date
+                        and current_stock>0
+                    ):
+                        freshness_projected_discard_during_coverage+=current_stock
+                        current_stock=Decimal("0")
+                    demand=_d(forecast.get("forecast_quantity") or 0)
+                    used=min(current_stock,demand)
+                    current_stock-=used
+                    freshness_existing_oh_credit+=used
+
+            freshness_projected_discard_qty=(
+                freshness_projected_discard_before_delivery
+                + freshness_projected_discard_during_coverage
+            )
+            suggested_without_freshness=max(
+                Decimal("0"),
+                coverage_usage-baseline_usable_at_delivery,
+            )
+            suggested=max(
+                Decimal("0"),
+                coverage_usage-freshness_existing_oh_credit,
+            )
+            freshness_order_qty_lift=max(
+                Decimal("0"),suggested-suggested_without_freshness
+            )
+            freshness_adjustment_applied=bool(
+                kind=="FRESH"
+                and freshness_reference_status=="READY"
+                and (
+                    freshness_projected_discard_qty>0
+                    or freshness_order_qty_lift>0
+                )
+            )
 
             suggestions.append({
                 "family_id":fid,
@@ -4149,6 +4268,18 @@ def bulk_ordering_suggestions(
                 "forecast_promotion_coverage":segments["PROMOTION_COVERAGE"],
                 "projected_oh_at_delivery":projected_at_delivery,
                 "usable_oh_at_delivery":usable_at_delivery,
+                "freshness_threshold_days":freshness_limit_days,
+                "freshness_reference_status":freshness_reference_status,
+                "freshness_latest_receipt_date":freshness_latest_receipt_date,
+                "freshness_current_doh":freshness_current_doh,
+                "freshness_discard_date":freshness_discard_date,
+                "freshness_existing_oh_credit":freshness_existing_oh_credit,
+                "freshness_projected_discard_qty":freshness_projected_discard_qty,
+                "freshness_projected_discard_before_delivery":freshness_projected_discard_before_delivery,
+                "freshness_projected_discard_during_coverage":freshness_projected_discard_during_coverage,
+                "suggested_order_qty_without_freshness":suggested_without_freshness,
+                "freshness_order_qty_lift":freshness_order_qty_lift,
+                "freshness_adjustment_applied":freshness_adjustment_applied,
                 "pre_delivery_stockout_risk":pre_delivery_stockout_qty>0,
                 "pre_delivery_stockout_qty":pre_delivery_stockout_qty,
                 "requested_coverage_days":requested_coverage_days,
@@ -4173,6 +4304,7 @@ def bulk_ordering_suggestions(
         suggestions.sort(
             key=lambda x:(
                 0 if x.get("pre_delivery_stockout_risk") else 1,
+                0 if x.get("freshness_adjustment_applied") else 1,
                 float(x.get("dos") or 999999),
                 -float(x.get("suggested_order_qty") or 0),
                 str(x.get("family_article_name") or ""),
@@ -4181,7 +4313,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V6_UNIFIED",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V7_FRESHNESS_AWARE_OH",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -4226,11 +4358,14 @@ def bulk_ordering_suggestions(
             "missing_source_dates_count_as_zero":False,
             "promotion_definition":"PRICE_TYPE_SALE_ONLY",
             "promotion_window_per_item":True,
-            "promotion_types":["WEEKLY_THURSDAY_TO_THURSDAY","WEEKEND_FRIDAY_TO_SUNDAY"],
+            "promotion_types":["WEEKLY_THURSDAY_TO_THURSDAY","WEEKEND_FRIDAY_TO_SUNDAY","CUSTOM_MANUAL_DATE_WINDOW"],
             "tpr_is_promotion":False,
             "coverage_target":"DELIVERY_DATE_THROUGH_DAY_BEFORE_SELECTED_NEXT_DELIVERY",
             "pre_delivery_shortage_is_not_backordered_into_future_delivery":True,
             "fresh_live_coverage_cap_days":7,
+            "fresh_live_existing_oh_rule":"CURRENT_OH_CREDIT_STOPS_AT_LATEST_VALID_RECEIPT_PLUS_7_DAYS;REMAINING_OH_IS_PROJECTED_DISCARD",
+            "fresh_live_discard_affects_regular_and_promotion_ordering":True,
+            "freshness_without_receipt_evidence":"NO_DISCARD_QUANTITY_IS_FABRICATED;REFERENCE_STATUS_IS_EXPOSED",
             "temporary_oh_override_is_request_only":True,
             "temporary_oh_override_writes_database":False,
             "delivery_roster_oh_rule":"WHEN_ONLY_MVT_DAILY_COVERAGE_IS_MISSING_USE_OH_ANCHOR_PLUS_AVAILABLE_CANONICAL_MVT_AND_FORECAST_FORWARD",
