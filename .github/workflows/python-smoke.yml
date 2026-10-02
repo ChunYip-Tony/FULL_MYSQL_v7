@@ -395,6 +395,12 @@ jobs:
           assert "bestreceipt receiptlink" in text
           assert "qdelivery receiptlink" in text
           assert "function bindReceiptLinks()" in text
+          assert "if(v===null||v===undefined||v==='')return null" in text
+          assert "data-q-tested" in text
+          assert "data-q-testing" in text
+          assert "<small>SUGGEST</small>" not in text
+          assert "TESTED SWEET SPOT" in text
+          assert "SWEET SPOT TEST" in text
           print('yipman-dom-bindings=PASS')
           PY
 
