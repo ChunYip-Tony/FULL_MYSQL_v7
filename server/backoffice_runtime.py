@@ -539,8 +539,7 @@ def _article_manual_family_pack_context(
                  ('fresh fish','live fish','shrimp','fish ball','frozen fish','frozen pack')
              AND r.source_row_number>COALESCE(sh.header_row_number,0)
              AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A')))=%s
-           ORDER BY COALESCE(f.upload_timestamp,f.report_generated_at) DESC,
-                    f.file_id DESC,r.raw_id DESC""",
+           ORDER BY f.file_id DESC,r.raw_id DESC""",
         (main,),
     )
     rows=cur.fetchall()
