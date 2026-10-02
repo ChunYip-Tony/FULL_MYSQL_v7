@@ -3762,23 +3762,35 @@ def backoffice_pricing_accept(
 
 
 @app.get('/v1/yipman/ordering-review')
-def yipman_ordering(category:str='ALL', delivery_date:str|None=None):
+def yipman_ordering(
+    category:str='ALL',
+    delivery_date:str|None=None,
+    next_delivery_date:str|None=None,
+):
     try:
         parsed_delivery=None
+        parsed_next_delivery=None
         if delivery_date:
             try:
                 parsed_delivery=date.fromisoformat(str(delivery_date))
             except ValueError:
                 raise ValueError('DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
+        if next_delivery_date:
+            try:
+                parsed_next_delivery=date.fromisoformat(str(next_delivery_date))
+            except ValueError:
+                raise ValueError('NEXT_DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
         result=(
             backoffice_cached_ordering_review(
                 category=category,
                 delivery_date=parsed_delivery,
+                next_delivery_date=parsed_next_delivery,
                 best_available_delivery_evidence=True,
             )
             if parsed_delivery is not None
             else backoffice_ordering_review(
                 category=category,
+                next_delivery_date=parsed_next_delivery,
                 best_available_delivery_evidence=True,
             )
         )
