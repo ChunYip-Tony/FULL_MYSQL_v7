@@ -3143,6 +3143,101 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
     }
 
 
+
+def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
+    """Fast Family-only default payload for Yipman Quick Check.
+
+    Select the highest-velocity families from the published serving table first,
+    then build receipt context only for that small family set. This avoids the
+    expensive all-UPC Quick Check lineage expansion used by normal search.
+    """
+    lim = max(1, min(int(limit or 8), 20))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        movement_days_7 = source_data_days(
+            cur,
+            "movement",
+            limit=7,
+            up_to=completed_through_date(),
+        )
+        day_count = len(movement_days_7)
+
+        cur.execute(
+            """SELECT q.*
+               FROM quick_check_current q
+               JOIN (
+                   SELECT family_id,
+                          MIN(upc_id) AS sample_upc_id,
+                          MAX(COALESCE(family_movement_7d,0)) AS family_movement_7d
+                   FROM quick_check_current
+                   WHERE family_id IS NOT NULL
+                     AND COALESCE(family_movement_7d,0) > 0
+                   GROUP BY family_id
+                   ORDER BY MAX(COALESCE(family_movement_7d,0)) DESC
+                   LIMIT %s
+               ) topf ON topf.sample_upc_id=q.upc_id
+               ORDER BY topf.family_movement_7d DESC""",
+            (lim,),
+        )
+        qrows = cur.fetchall()
+        family_ctx = _quick_receiving_article_context(
+            cur,
+            qrows,
+            movement_days_7,
+        ) if qrows else {}
+
+        rows: list[dict[str, Any]] = []
+        for q in qrows:
+            fid = int(q["family_id"])
+            ctx = family_ctx.get(fid, {})
+            qty = ctx.get("family_group_movement_7d")
+            if qty is None:
+                qty = q.get("family_movement_7d")
+            avg = ctx.get("family_group_avg_qty_day")
+            if avg is None and qty is not None and day_count:
+                avg = _d(qty) / Decimal(day_count)
+            uom = (
+                ctx.get("family_group_movement_uom")
+                or q.get("family_movement_uom")
+                or ""
+            )
+            rows.append({
+                "family_id": fid,
+                "family_article": q.get("main_article_number"),
+                "family_name": q.get("family_description"),
+                "category": q.get("product_class"),
+                "family_group_movement_7d": qty,
+                "family_group_avg_qty_day": avg,
+                "family_group_movement_uom": uom,
+                "family_receipt_history": ctx.get("family_receipt_history", []),
+                "family_receipt_7d_qty": ctx.get("family_receipt_7d_qty"),
+                "family_receipt_7d_uom": ctx.get("family_receipt_7d_uom") or uom,
+                "family_receipt_7d_day_count": ctx.get("family_receipt_7d_day_count"),
+                "family_receipt_7d_status": ctx.get("family_receipt_7d_status"),
+            })
+        cur.close()
+
+    rows.sort(
+        key=lambda r: (
+            -float(r.get("family_group_avg_qty_day") or 0),
+            -float(r.get("family_group_movement_7d") or 0),
+            str(r.get("family_name") or ""),
+        )
+    )
+    return {
+        "contract_version": "YIPMAN_BEST_SELLERS_V1",
+        "count": len(rows),
+        "movement_day_count_7d": day_count,
+        "rows": rows[:lim],
+        "rules": {
+            "scope": "FAMILY_ARTICLE_ONLY",
+            "sort": "FAMILY_7D_AVG_QTY_DAY_DESC",
+            "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
+            "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
+        },
+    }
+
+
 def inventory_review(
     limit: int = 200,
     category: str = "ALL",
