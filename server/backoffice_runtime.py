@@ -3517,16 +3517,17 @@ def _quick_price_preview_by_upc(
             )
             preview.update(path)
             cost = _positive_price(row.get("current_cost_per_selling_unit"))
+            tested_retail = _positive_price(path.get("tested_price"))
             tested_actionable = bool(
-                tested is not None
+                tested_retail is not None
                 and current is not None
-                and abs(tested - _d(current)) > Decimal("0.01")
+                and abs(tested_retail - _d(current)) > Decimal("0.01")
                 and cost is not None
-                and tested > cost
+                and tested_retail > cost
             )
             if tested_actionable:
                 preview.update({
-                    "suggested_price": tested,
+                    "suggested_price": tested_retail,
                     "suggestion_status": "TESTED_PRICE_READY",
                     "suggestion_basis": "HISTORICAL_TESTED_SWEET_SPOT",
                     "suggestion_reason": "TESTED SWEET SPOT",
@@ -5644,7 +5645,7 @@ _PRICING_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _pricing_review_cache_key(category: str, limit: int) -> str:
-    return f"V1_NO_GRACE|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
+    return f"V2_RETAIL_59_TESTED_GP|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
 
 
 def _ensure_pricing_review_cache_table(cur) -> None:
