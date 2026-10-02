@@ -39,6 +39,46 @@ YIPMAN_DESKTOP_CSS = r"""
   #ydesk .legend{display:flex;gap:11px;flex-wrap:wrap;font-size:8px;color:#52667e;padding:8px 0}#ydesk .legend span{display:flex;align-items:center;gap:4px}#ydesk .sw{width:10px;height:10px;border-radius:3px;display:inline-block}#ydesk .sw.g{background:#dff5e8;border:1px solid #9ed7b5}#ydesk .sw.r{background:#ffe5e9;border:1px solid #f2a7b2}#ydesk .sw.b{background:#e6f2ff;border:1px solid #9ac6fb}#ydesk .sw.a{background:#fff1cf;border:1px solid #e8c66d}#ydesk .sw.x{background:#edf1f5;border:1px solid #cfd8e1}
   #ydesk .healthstrip{display:grid;grid-template-columns:repeat(14,minmax(62px,1fr));gap:4px;overflow:auto}#ydesk .hday{border:1px solid #dfe7ef;border-radius:8px;padding:6px 5px;min-width:62px;background:#fff;cursor:pointer}#ydesk .hday.complete{background:#eef9f2;border-color:#b9dfc8}#ydesk .hday.missing{background:#fff0f2;border-color:#efbdc5}#ydesk .hday.current{background:#edf6ff;border-color:#b8d7fb}#ydesk .hday.partial{background:#fff8e8;border-color:#edd39a}#ydesk .hday .wd{font-size:7px;color:#718197;text-transform:uppercase}#ydesk .hday .dt{font-size:9px;font-weight:900}#ydesk .srcdots{display:flex;gap:2px;margin-top:4px}#ydesk .sd{font-size:6px;border-radius:4px;padding:2px 3px;background:#edf1f5;color:#68788b;font-weight:900}#ydesk .sd.ok{background:#dff5e8;color:#17784a}#ydesk .sd.miss{background:#ffe3e8;color:#b42e44}#ydesk .sd.nd{background:#e6f2ff;color:#0b67d5}
   #ydesk .loading{padding:24px;text-align:center;color:var(--muted);font-size:11px}#ydesk .error{padding:10px;border-radius:8px;background:#fff0f2;color:#9d3d4a;font-size:10px}#ydesk .toast{position:fixed;right:18px;bottom:18px;background:#17324f;color:#fff;border-radius:9px;padding:9px 12px;font-size:10px;box-shadow:var(--shadow);opacity:0;transform:translateY(8px);transition:.2s;z-index:90;pointer-events:none}#ydesk .toast.show{opacity:1;transform:translateY(0)}
+  /* v7.0.372 desktop scale + denser workstation polish */
+  #ydesk .app{grid-template-columns:244px minmax(0,1fr)}
+  #ydesk .side{padding:18px 14px}
+  #ydesk .brand{padding:3px 9px 16px}#ydesk .brand h1{font-size:29px}#ydesk .brand small{font-size:11.5px;line-height:1.35}
+  #ydesk .navbtn{font-size:14.5px!important;padding:12px 13px!important;border-radius:11px}#ydesk .navbtn .ico{width:23px;font-size:18px}
+  #ydesk .fresh{padding:11px}#ydesk .fresh h4{font-size:12px}#ydesk .frow{font-size:11px;margin:6px 0}#ydesk .version{font-size:10px;line-height:1.4}
+  #ydesk .topbar{height:68px;padding:0 20px;gap:14px}#ydesk .gsearch{height:44px;width:min(760px,50vw);padding:0 14px}#ydesk .gsearch input{font-size:14px}#ydesk .kbd{font-size:10px}
+  #ydesk .live{font-size:10px;padding:5px 8px}#ydesk .topstat{font-size:9.5px;min-width:82px;padding:7px 10px}#ydesk .topstat b{font-size:17px}#ydesk .avatar{width:38px;height:38px;font-size:11px}
+  #ydesk .work{padding:20px 22px 34px}#ydesk .pagehead{margin-bottom:14px}#ydesk .pagehead h2{font-size:34px}#ydesk .pagehead p{font-size:12.5px;margin-top:6px}
+  #ydesk .btn{font-size:11.5px;padding:8px 12px;border-radius:9px}#ydesk .input,#ydesk .select{height:38px;font-size:12.5px;padding:0 10px}
+  #ydesk .cardhead{padding:12px 14px}#ydesk .cardhead h3{font-size:14px}#ydesk .cardbody{padding:13px 14px}
+  #ydesk .badge{font-size:10px;padding:5px 8px}#ydesk .small{font-size:11.5px}#ydesk .tiny{font-size:10.5px}
+  #ydesk .kpis{gap:9px}#ydesk .kpi{padding:9px 10px}#ydesk .kpi label{font-size:9.5px}#ydesk .kpi strong{font-size:20.5px}#ydesk .kpi small{font-size:10.5px}
+  #ydesk .tab{font-size:11.5px;padding:7px 10px}
+  #ydesk th{font-size:9.5px;padding:9px 10px}#ydesk td{font-size:11.5px;padding:9px 10px}
+  #ydesk .split{grid-template-columns:minmax(720px,1.28fr) minmax(470px,.72fr);gap:12px}#ydesk .analysis{top:82px;max-height:calc(100vh - 98px)}
+  #ydesk .qtools{gap:8px;margin-bottom:10px}#ydesk .qf{font-size:11.5px;padding:8px 11px}
+  #ydesk .flist{gap:8px}#ydesk .fhead{grid-template-columns:26px minmax(210px,1.25fr) repeat(5,minmax(96px,.72fr)) 145px;gap:8px;padding:10px 11px}
+  #ydesk .chev{font-size:19px}#ydesk .fname .id{font-size:11.5px}#ydesk .fname .desc{font-size:15.5px}#ydesk .fm label{font-size:8.5px}#ydesk .fm strong{font-size:17px}#ydesk .recent{font-size:9.5px}#ydesk .recent b{font-size:10.5px}
+  #ydesk .fbody{padding:10px 11px}#ydesk .recvhead,#ydesk .sap,#ydesk .pairhead,#ydesk .upcrow{font-size:10.5px;padding:8px 9px}
+  #ydesk .qhero{padding:13px}#ydesk .qtitle h3{font-size:19px}#ydesk .qtitle p{font-size:10.5px}#ydesk .qstats{gap:7px;margin-top:10px}
+  #ydesk .infobox{padding:10px}#ydesk .infobox h4{font-size:11.5px}#ydesk .kv{font-size:10.5px;gap:6px 11px}#ydesk .sectiontitle{font-size:10.5px;margin:12px 0 7px}#ydesk .note{font-size:10.5px;padding:9px 10px}
+  #ydesk .event{font-size:10.5px;padding:8px 9px;grid-template-columns:88px 1fr 78px 108px 108px}
+  #ydesk .datebox{padding:10px}#ydesk .datebox label{font-size:9px}#ydesk .datebox strong{font-size:17px}#ydesk .day{font-size:9px;padding:6px 3px}#ydesk .day b{font-size:11px}
+  #ydesk input.final{width:70px;height:32px;font-size:12px}
+  #ydesk .filterbox{padding:10px}#ydesk .filterbox label{font-size:9px}
+  #ydesk .perfgrid,#ydesk .pigrid,#ydesk .datagrid{grid-template-columns:minmax(720px,1.35fr) minmax(430px,.65fr);gap:12px}
+  #ydesk .insight{font-size:10.5px;padding:9px 10px}
+  #ydesk .pirow{font-size:10.5px;padding:10px 11px;grid-template-columns:minmax(210px,1.2fr) repeat(5,.6fr) 120px}
+  #ydesk .trueinput{height:36px;font-size:12px}
+  #ydesk .upload h3{font-size:14.5px}#ydesk .upload p{font-size:10.5px}
+  #ydesk .legend{font-size:9.5px}#ydesk .hday .wd{font-size:8px}#ydesk .hday .dt{font-size:10.5px}
+  #ydesk .priceSummary{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:9px}
+  #ydesk .priceTable{min-width:1120px}#ydesk .priceTable td{vertical-align:middle}#ydesk .priceItem b{font-size:12.5px}#ydesk .priceItem .tiny{margin-top:2px}
+  #ydesk .priceMain{font-weight:900;font-size:13.5px}#ydesk .priceTested{color:#087b94;font-weight:900;font-size:13.5px}#ydesk .priceTesting{color:#6a4bd8;font-weight:900;font-size:13.5px}
+  #ydesk .reasonTag{display:inline-flex;align-items:center;border-radius:999px;padding:5px 7px;font-size:9.5px;font-weight:900;background:#eef3f8;color:#53677e}
+  #ydesk .reasonTag.red{background:#ffe9ed;color:#b82f45}#ydesk .reasonTag.amber{background:#fff4d8;color:#956000}#ydesk .reasonTag.purple{background:#f1edff;color:#6145cb}#ydesk .reasonTag.blue{background:#e8f3ff;color:#0868dc}
+  #ydesk .priceEmpty{background:#fff;border:1px solid var(--line);border-radius:12px;padding:22px;box-shadow:var(--shadow)}#ydesk .priceEmpty h3{margin:0 0 6px;font-size:16px}#ydesk .priceEmpty p{font-size:11.5px;color:#66798f;line-height:1.45}
+  #ydesk .diaggrid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:10px}
+  #ydesk .priceSearch{min-width:220px}
   @media(max-width:1280px){#ydesk .app{grid-template-columns:72px minmax(0,1fr)}#ydesk .brand h1{font-size:17px}#ydesk .brand small,#ydesk .navbtn span:last-child,#ydesk .fresh,#ydesk .version{display:none}#ydesk .navbtn{justify-content:center}#ydesk .split,#ydesk .perfgrid,#ydesk .pigrid,#ydesk .datagrid{grid-template-columns:1fr}#ydesk .analysis{position:relative;top:auto;max-height:none}#ydesk .fhead{grid-template-columns:24px minmax(180px,1.25fr) repeat(4,minmax(84px,.7fr)) 120px}#ydesk .hide1280{display:none!important}#ydesk .kpis{grid-template-columns:repeat(3,1fr)}}
 }
 """
