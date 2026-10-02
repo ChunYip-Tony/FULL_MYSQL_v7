@@ -5382,8 +5382,10 @@ def pricing_review(
         testing_target = None
         testing_price = None
 
-        if pair_fix and target_candidate is not None and base_actionable:
-            action_price = target_candidate
+        if pair_fix and raw_target_candidate is not None and base_actionable:
+            # 240/249 equality is a price-integrity rule, not a sweet-spot test.
+            # Copy the exact 240 authority price; do not merchandise-round it.
+            action_price = raw_target_candidate
             reason_code = "PAIR_FIX"
             reason_text = "240=249 PRICE ALIGNMENT"
         elif outside_company and base_actionable:
