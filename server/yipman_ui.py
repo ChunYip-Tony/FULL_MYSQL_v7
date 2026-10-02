@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v390';
+const CACHE='yipman-v391';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -450,7 +450,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .pchips{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}.pchip{border:1px solid #e3e8ec;background:#fafbfc;color:#5f6d78;border-radius:7px;padding:4px 6px;font-size:8.5px;font-weight:950}
 .preason{margin-top:6px;border-top:1px solid #edf1f3;padding-top:6px}.preason summary{list-style:none;cursor:pointer;color:#0879b3;font-size:9px;font-weight:950}.preason div{margin-top:5px;color:#64727e;font-size:9px;line-height:1.45;font-weight:750}
 .pcard-actions{display:grid;grid-template-columns:1fr auto;gap:6px;margin-top:7px}.pcard-actions button{border-radius:9px;padding:8px 10px;font-size:9px;font-weight:950}
-.pdetail{border:0;background:#173047;color:#fff}.pignore{border:1px solid #d9e1e6;background:#fff;color:#586773}
+.pdetail{border:1px solid #d9e1e6;background:#fff;color:#263744}.pignore{border:1px solid #efb7bc;background:#fde8ea;color:#a12632}
 @media(max-width:390px){.pp b{font-size:22px}.pm b{font-size:12px}.pcard{padding:11px 12px}}
 
 /* V378: slightly larger Order Suggestions + Price Suggestions reading scale. */
