@@ -213,9 +213,13 @@ jobs:
           assert '.pm b{display:block;font-size:12px' in ui
           assert '.pcard-actions button{border-radius:9px;padding:8px 10px;font-size:9px' in ui
           assert '#price .filters .pill{font-size:11px;padding:8px 11px}' in ui
-          assert 'data-price-filter="CORE_UPC">240 / 245 / 247 / 249' in ui
-          assert "priceFilter='CORE_UPC'" in ui
-          assert "['240','245','247','249'].some(prefix=>digits.startsWith(prefix))" in ui
+          assert 'data-price-filter="UPC_240">240' in ui
+          assert 'data-price-filter="UPC_245">245' in ui
+          assert 'data-price-filter="UPC_247">247' in ui
+          assert 'data-price-filter="UPC_249">249' in ui
+          assert "priceFilter='UPC_240'" in ui
+          assert "priceFilter.startsWith('UPC_')" in ui
+          assert "upcPrefix(r)===priceFilter.slice(4)" in ui
           print('controlled-price-progress=PASS')
           PY
 
@@ -418,6 +422,10 @@ jobs:
           assert 'physical_receipt_stage_rows' in inspect.getsource(webapp_v2_runtime._family_receipt_events)
           assert 'physical_receipt_stage_rows' in inspect.getsource(webapp_v2_runtime._family_receipt_events_bulk)
           assert 'physical_receipt_stage_rows' in inspect.getsource(backoffice_runtime._receipt_stage_rows)
+          quick_receipt_src=inspect.getsource(backoffice_runtime._quick_receiving_article_context)
+          assert 'family_receipt_history_by_family' in quick_receipt_src
+          assert 'MVT_PHYSICAL_101_109_FAMILY_DAILY_AGGREGATE' in quick_receipt_src
+          assert '"family_receipt_history": family_receipt_history' in quick_receipt_src
 
           # Current cost cannot select a 109 observation as receipt valuation.
           assert "co.movement_type IN ('101','107')" in inspect.getsource(phase3._latest_cost)
