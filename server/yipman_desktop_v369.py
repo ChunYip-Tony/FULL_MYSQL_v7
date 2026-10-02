@@ -104,7 +104,23 @@ YIPMAN_DESKTOP_JS = r"""
   $$('.navbtn',r).forEach(b=>b.onclick=()=>openMod(b.dataset.m));$('#ydSearch').addEventListener('input',e=>{if(D.mod!=='quick')openMod('quick');loadQuick(e.target.value.trim())});document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();$('#ydSearch').focus()}});
  }
  function openMod(m){D.mod=m;$$('.mod','#ydesk').forEach(x=>x.classList.toggle('active',x.id==='yd-'+m));$$('.navbtn','#ydesk').forEach(x=>x.classList.toggle('active',x.dataset.m===m));if(m==='quick')loadQuick($('#ydSearch').value.trim());if(m==='order')loadOrder();if(m==='price')loadPrice();if(m==='performance')loadPerformance();if(m==='pi')loadPI();if(m==='data')loadData();history.replaceState({yipdesktop:true,view:m},'', '#'+m);window.scrollTo({top:0})}
- async function topStatus(){try{const [h,dh,q]=await Promise.all([api('/v1/backoffice/home-summary'),api('/v1/backoffice/data-health?days=14'),api('/v1/backoffice/qa-review?limit=300')]);const latest=dh.latest||{};$('#ydFresh').innerHTML=[['POS',latest.POS],['MVT',latest.MVT],['Price',latest.PRICE],['OH',latest.OH],['L/F/F',latest.LIVE_FRESH||latest.FROZEN]].map(x=>'<div class="frow"><span>'+x[0]+'</span><b>'+(x[1]?.date||'—')+' <i class="fdot '+(x[1]?.date?'':'warn')+'"></i></b></div>').join('');$('#ydPc').textContent=h?.pricing?.qualified_count??'—';$('#ydOc').textContent=h?.ordering?.attention_count??h?.ordering?.family_count??'—';D.qa=q.issues||[];$('#ydQc').textContent=D.qa.length}catch{}}
+ async function topStatus(){try{
+   const [h,dh,q,p]=await Promise.all([
+     api('/v1/backoffice/home-summary'),
+     api('/v1/backoffice/data-health?days=14'),
+     api('/v1/backoffice/qa-review?limit=300'),
+     api('/v1/yipman/pricing-review?category=ALL&limit=1000').catch(()=>null)
+   ]);
+   const latest=dh.latest||{};
+   $('#ydFresh').innerHTML=[['POS',latest.POS],['MVT',latest.MVT],['Price',latest.PRICE],['OH',latest.OH],['L/F/F',latest.LIVE_FRESH||latest.FROZEN]].map(x=>'<div class="frow"><span>'+x[0]+'</span><b>'+(x[1]?.date||'—')+' <i class="fdot '+(x[1]?.date?'':'warn')+'"></i></b></div>').join('');
+   const pRows=(p?.rows||[]).filter(x=>x.priority_240_249_mismatch||x.actionable||String(x.suggestion_reason_code||''));
+   $('#ydPc').textContent=p? pRows.length : (h?.pricing?.qualified_count??'—');
+   $('#ydOc').textContent=h?.ordering?.attention_count??h?.ordering?.family_count??'—';
+   D.qa=q.issues||[];$('#ydQc').textContent=D.qa.length;
+   if(p&&pRows.length===0&&(p.refreshing||String(p.cache_status||'').includes('STALE')||String(p.cache_status||'')==='WARMING')){
+     setTimeout(()=>{if(document.getElementById('ydesk'))topStatus()},3500);
+   }
+ }catch{}}
  function recHist(r){return Array.isArray(r?.family_receipt_history)?r.family_receipt_history:[]} function recDate(x){return x?.date||x?.receipt_date||''} function recQty(x){return x?.quantity??x?.receipt_qty} function recUom(x){return x?.uom||x?.receipt_uom||''}
  function group(rows){const m=new Map();(rows||[]).forEach(r=>{const id=String(r.family_article||r.family_id||'UNRESOLVED'),g=m.get(id)||{id,name:r.family_name||r.name||'Unresolved Family',cat:r.category||'',rows:[],row:r,rank:0};g.rows.push(r);g.rank=Math.max(g.rank,num(r.family_group_movement_7d)??0,num(r.qty_7d)??0);if(!recHist(g.row).length&&recHist(r).length)g.row=r;m.set(id,g)});return [...m.values()].sort((a,b)=>b.rank-a.rank)}
  async function loadQuick(q=''){
