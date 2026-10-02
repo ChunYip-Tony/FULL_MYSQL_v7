@@ -46,11 +46,11 @@ YIPMAN_DESKTOP_CSS = r"""
 YIPMAN_DESKTOP_JS = r"""
 (function(){
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
- const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),priceFilter:'240',quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
+ const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),priceFilter:'all',priceReason:'all',priceSearch:'',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
  const ctx=r=>typeof r==='string'?document.querySelector(r):r;
  const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $$=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
+ const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
  const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
  const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
  const pct=v=>{let n=num(v);if(n===null)return'—';if(Math.abs(n)<=1.5)n*=100;return n.toFixed(1)+'%'};
