@@ -710,10 +710,11 @@ function quickFamilyGroups(rows){
 function quickUpcHtml(r){
  const role=quickRole(r),uom=r.qty_uom||r.selling_uom||'',active=hasActivity(r.qty_7d);
  const pm=v=>num(v)===null?'—':money(v);
+ const testedText=v=>num(v)===null?'— / Not established':money(v);
  const comp=(label,attr,val,cls='')=>num(val)===null?'':'<div class="qprice comp '+cls+'"><small>'+label+'</small><b '+attr+'>'+pm(val)+'</b></div>';
  const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
    '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
-   '<div class="qprice tested"><small>TESTED</small><b data-q-tested>'+pm(r.sweet_spot_price)+'</b></div>'+
+   '<div class="qprice tested"><small>TESTED</small><b data-q-tested>'+testedText(r.sweet_spot_price)+'</b></div>'+
    '<div class="qprice testing"><small>TESTING</small><b data-q-testing>…</b></div>'+
    comp('COMP A','data-q-comp-a',r.company_price_a)+
    comp('COMP B','data-q-comp-b',r.company_price_b)+
@@ -783,7 +784,7 @@ function bindQuickRows(){
  bindReceiptLinks();
  requestAnimationFrame(fitQuickUpcNames);
 }
-async function hydrateQuickPrices(rows,requestId){
+async function hydrateQuickPrices(rows,requestId,attempt=0){
  const upcs=[...new Set((rows||[])
    .filter(r=>hasActivity(r.qty_7d)&&String(r.upc||'').trim())
    .map(r=>String(r.upc).trim()))].slice(0,60);
@@ -796,9 +797,11 @@ async function hydrateQuickPrices(rows,requestId){
     const row=byUpc.get(String(card.dataset.upc||''));
     if(!row)return;
     const set=(sel,val)=>{const n=card.querySelector(sel);if(n)n.textContent=num(val)===null?'—':money(val)};
+    const setPath=(sel,val,empty)=>{const n=card.querySelector(sel);if(n)n.textContent=num(val)===null?empty:money(val)};
     set('[data-q-current]',row.current_price);
-    set('[data-q-tested]',row.tested_price);
-    set('[data-q-testing]',row.testing_price);
+    setPath('[data-q-tested]',row.tested_price,'— / Not established');
+    const pricingWarming=['REFRESHING','WARMING'].includes(String(d.price_review_analysis_status||'').toUpperCase())||String(d.price_review_cache_status||'').toUpperCase()==='WARMING';
+    setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'— / None active');
     set('[data-q-comp-a]',row.company_price_a);
     set('[data-q-comp-b]',row.company_price_b);
     set('[data-q-comp-c]',row.company_price_c);
@@ -811,6 +814,12 @@ async function hydrateQuickPrices(rows,requestId){
         ' | '+String(row.suggestion_reason||row.suggestion_status||'—');
     }
   });
+  const pricingWarming=['REFRESHING','WARMING'].includes(String(d.price_review_analysis_status||'').toUpperCase())||String(d.price_review_cache_status||'').toUpperCase()==='WARMING';
+  if(pricingWarming&&attempt<8){
+    setTimeout(()=>{
+      if(requestId===quickRequestSeq)hydrateQuickPrices(rows,requestId,attempt+1);
+    },2500);
+  }
  }catch(e){
   // Pricing is supplemental. Never blank otherwise valid Quick Check results.
   if(requestId!==quickRequestSeq)return;
