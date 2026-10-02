@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v350';
+const CACHE='yipman-v351';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -316,7 +316,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
     <div class="head"><div><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
   </header>
   <main class="workspace">
-    <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading best sellers…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
+    <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading best sellers…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
 
     <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">14-DAY DELIVERY VIEW</div></div><div class="daybar" id="dayBar"></div><div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
 
@@ -370,7 +370,22 @@ function go(id,{push=true}={}){
   renderView(id);
   if(push&&historyReady)history.pushState({yipman:true,view:id},'', '#'+id);
 }
-$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+async function resetQuickHome({push=true}={}){
+  const wasQuick=current==='quick';
+  clearTimeout(quickSearchTimer);
+  quickRequestSeq++;
+  lastQuickQuery='';
+  $('#globalInput').value='';
+  $('#quickClear').classList.remove('on');
+  $('#globalForm').classList.remove('hide');
+  renderView('quick');
+  if(bestSellerGroups)await loadBestSellers();
+  $('#quick').scrollTop=0;
+  if(push&&historyReady&&!wasQuick)history.pushState({yipman:true,view:'quick'},'', '#quick');
+}
+$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+const quickNav=$('.nav button[data-go="quick"]');
+if(quickNav)quickNav.onclick=()=>resetQuickHome();
 function sheet(title,sub,html){
   const wasOpen=$('#overlay').classList.contains('on');
   $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
@@ -741,7 +756,7 @@ async function loadQuick(q){
   hydrateQuickPrices(rows,requestId);
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
-$('#globalForm').onsubmit=e=>{e.preventDefault();const q=$('#globalInput').value.trim();if(!q)return;go('quick');clearTimeout(quickSearchTimer);loadQuick(q);$('#globalInput').blur()};
+$('#globalForm').onsubmit=e=>{e.preventDefault();const q=$('#globalInput').value.trim();if(!q)return;clearTimeout(quickSearchTimer);loadQuick(q);$('#globalInput').blur();$('#globalForm').classList.add('hide')};
 $('#globalInput').addEventListener('input',()=>{if(current!=='quick')return;clearTimeout(quickSearchTimer);const q=$('#globalInput').value.trim();$('#quickClear').classList.toggle('on',!!q);if(!q){loadQuick('');return}quickSearchTimer=setTimeout(()=>loadQuick(q),260)});
 $('#quickClear').onclick=()=>{$('#globalInput').value='';$('#quickClear').classList.remove('on');clearTimeout(quickSearchTimer);loadQuick('');$('#globalInput').focus()};
 window.addEventListener('resize',()=>requestAnimationFrame(fitQuickUpcNames));
