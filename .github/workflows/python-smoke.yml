@@ -608,8 +608,10 @@ jobs:
           assert "data-q-tested" in text
           assert "data-q-testing" in text
           assert "<small>SUGGEST</small>" not in text
-          assert "TESTED_PRICE" in text
-          assert "TESTING_PRICE" in text
+          assert "SWEET_SPOT_GAP" in text
+          assert "VELOCITY_TEST" in text
+          assert "GP_DOLLAR_TEST" in text
+          assert "COMPANY_RANGE" in text
           assert "data-order-mode=\"REGULAR\"" in text
           assert "data-order-mode=\"PROMOTION\"" in text
           assert "/v1/yipman/ordering-calendar?lookback_days=180" in text
