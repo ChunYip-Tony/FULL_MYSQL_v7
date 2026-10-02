@@ -262,6 +262,14 @@ jobs:
           assert '#price .ptop b{font-size:17px!important}' in ui
           assert '#price .pp b{font-size:23px}' in ui
           assert '#price .pm b{font-size:13px}' in ui
+          assert 'POSSIBLY STUCK' in ui
+          assert 'active_heartbeat_fresh' in ui
+          assert 'active_progress_pct' in ui
+          assert 'active_progress_rows_per_second' in ui
+          assert 'LIVE · 5s' in ui
+          assert 'setTimeout(pollDataLive,5000)' in ui
+          assert 'HEARTBEAT' in ui
+          assert 'CURRENT WORK ITEM' in ui
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
