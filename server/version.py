@@ -1,1 +1,1 @@
-VERSION='7.0.369-single-service'
+VERSION='7.0.370-single-service'
