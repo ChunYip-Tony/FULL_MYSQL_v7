@@ -3144,6 +3144,134 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
 
 
 
+def yipman_receipt_detail(
+    family_id: int,
+    receipt_date: date,
+    article_number: str | None = None,
+) -> dict[str, Any]:
+    """Return one canonical physical receipt event/day for Yipman drill-down."""
+    fid=int(family_id)
+    article_filter=str(article_number or "").strip()
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        cur.execute(
+            """SELECT family_id,main_article_number,family_description
+               FROM product_family
+               WHERE family_id=%s
+               LIMIT 1""",
+            (fid,),
+        )
+        family=cur.fetchone()
+        if not family:
+            cur.close()
+            raise ValueError("FAMILY_NOT_FOUND")
+
+        days=source_data_days(
+            cur,
+            "movement",
+            limit=180,
+            up_to=completed_through_date(),
+        )
+        event_map=_family_receipt_events_bulk(
+            cur,
+            [fid],
+            data_days=days,
+        )
+        events=[
+            x for x in (event_map.get(fid) or [])
+            if x.get("posting_date")==receipt_date
+            and x.get("receipt_quantity") is not None
+            and _d(x.get("receipt_quantity"))>0
+            and (
+                not article_filter
+                or str(x.get("article_number") or "").strip()==article_filter
+            )
+        ]
+
+        receiving_articles=sorted({
+            str(x.get("article_number") or "").strip()
+            for x in events
+            if str(x.get("article_number") or "").strip()
+        })
+
+        base_events=[
+            x for x in events
+            if x.get("base_receipt_quantity") is not None
+            and _d(x.get("base_receipt_quantity"))>0
+            and x.get("base_receipt_uom")
+        ]
+        base_uoms={
+            str(x.get("base_receipt_uom") or "").upper()
+            for x in base_events
+        }
+        if events and len(base_events)==len(events) and len(base_uoms)==1:
+            receipt_qty=sum(
+                (_d(x.get("base_receipt_quantity")) for x in base_events),
+                Decimal("0"),
+            )
+            receipt_uom=next(iter(base_uoms))
+            receipt_qty_basis="BASE_UOM"
+        else:
+            entry_uoms={
+                str(x.get("receipt_uom") or "").upper()
+                for x in events if x.get("receipt_uom")
+            }
+            if events and len(entry_uoms)==1 and all(
+                x.get("receipt_quantity") is not None for x in events
+            ):
+                receipt_qty=sum(
+                    (_d(x.get("receipt_quantity")) for x in events),
+                    Decimal("0"),
+                )
+                receipt_uom=next(iter(entry_uoms))
+                receipt_qty_basis="ENTRY_UOM"
+            else:
+                receipt_qty=None
+                receipt_uom="MIXED" if events else None
+                receipt_qty_basis="MIXED_UOM" if events else None
+
+        result={
+            "contract_version":"YIPMAN_RECEIPT_DETAIL_V1",
+            "family_id":fid,
+            "family_name":family.get("family_description"),
+            "family_article":family.get("main_article_number"),
+            "selected_delivery_date":receipt_date,
+            "delivery_day":receipt_date.strftime("%A"),
+            "receiving_article":(
+                receiving_articles[0]
+                if len(receiving_articles)==1
+                else (" + ".join(receiving_articles) if receiving_articles else article_filter or None)
+            ),
+            "receiving_articles":receiving_articles,
+            "article_filter":article_filter or None,
+            "receipt_qty":receipt_qty,
+            "receipt_uom":receipt_uom,
+            "receipt_qty_basis":receipt_qty_basis,
+            "receipt_event_count":len(events),
+            "receipt_events":[
+                {
+                    "article_number":x.get("article_number"),
+                    "quantity":(
+                        x.get("base_receipt_quantity")
+                        if x.get("base_receipt_quantity") is not None
+                        else x.get("receipt_quantity")
+                    ),
+                    "uom":x.get("base_receipt_uom") or x.get("receipt_uom"),
+                    "purchase_order":x.get("purchase_order"),
+                    "gr_number":x.get("gr_number"),
+                    "gr_number_source":x.get("gr_number_source"),
+                    "article_document":x.get("article_document"),
+                    "vendor_code":x.get("vendor_code"),
+                    "receipt_stage_basis":x.get("receipt_stage_basis"),
+                    "source_rows":x.get("source_rows"),
+                }
+                for x in events
+            ],
+        }
+        cur.close()
+    return result
+
+
 def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
     """Fast Family-only default payload for Yipman Quick Check.
 
