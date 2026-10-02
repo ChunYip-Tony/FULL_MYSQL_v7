@@ -225,7 +225,7 @@ DESKTOP_WORKSTATION_JS = r"""
       var prices=[
         ['Current',money(r.price),(r.price_type||'—')+' · '+(r.price_source||'—')],
         ['Tested',money(r.sweet_spot_price),r.sweet_spot_price==null?'Not established':'strongest proved sweet spot'],
-        ['Testing',money(pr&&(pr.candidate_price!=null?pr.candidate_price:pr.suggested_price)),pr?'active review':'none active']
+        ['Testing',money(pr&&pr.testing_price),pr&&pr.testing_price!=null?'controlled test':'none active']
       ];
       var html='<div class="v366-metrics">'+
         metric('Family 7D MVT',fmt(r.family_group_movement_7d)+' '+(r.family_group_movement_uom||''),fmt(r.family_group_avg_qty_day)+' / day')+
@@ -323,8 +323,8 @@ DESKTOP_WORKSTATION_JS = r"""
     try{
       var p=await getPricing(),r=(p.rows||[]).find(function(x){return String(x.upc||'')===String(upc)});if(!r)throw new Error('Price suggestion not found');
       var inv=null;try{var d=await getJson('/v1/backoffice/inventory?category=ALL&limit=20&lightweight=false&q='+encodeURIComponent(upc));inv=(d.rows||[]).find(function(x){return String(x.upc||'')===String(upc)})||(d.rows||[])[0]}catch(e){}
-      var tested=inv?inv.sweet_spot_price:null,testing=r.candidate_price!=null?r.candidate_price:r.suggested_price;
-      var html='<div class="v366-metrics">'+metric('Current',money(r.current_price),(r.current_price_type||'—')+' · '+(r.current_price_source||'—'))+metric('Tested',money(tested),tested==null?'Not established':'proved sweet spot')+metric('Testing',money(testing),r.selection_basis||r.suggestion_basis||'candidate')+'</div>'+
+      var tested=r.tested_price!=null?r.tested_price:(inv?inv.sweet_spot_price:null),testing=r.testing_price;
+      var html='<div class="v366-metrics">'+metric('Current',money(r.current_price),(r.current_price_type||'—')+' · '+(r.current_price_source||'—'))+metric('Tested',money(tested),tested==null?'Not established':'proved sweet spot')+metric('Testing',money(testing),testing==null?'None active':'controlled test · min $0.45 from Current')+'</div>'+
       '<div class="v366-section"><h4>Inventory + Sales Evidence</h4>'+kv([
         ['OH',fmt(r.current_oh)+' '+(r.current_oh_uom||'')],['DOH',fmt(r.doh)],['7D Qty',fmt(r.qty_7d)],['14D Qty',fmt(r.qty_14d)],['28D Qty',fmt(r.qty_28d)],
         ['7D Velocity',fmt(r.velocity_7d)],['Current GP%',pct(r.current_gp_pct_reference)],['Current GP$/day',money(r.current_gp_per_day_7d)],['Candidate GP$/day',money(r.candidate_expected_gp_per_day)]
