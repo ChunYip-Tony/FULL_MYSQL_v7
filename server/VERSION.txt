@@ -1,3 +1,14 @@
+v7.0.389 Yipman Stock Flow Promo Price Highlight:
+- Recent promotion Stock Flow cards now show weighted AVG PROMO PRICE for the most recent SALE event.
+- AVG PROMO PRICE = SALE-event sales dollars divided by SALE-event quantity converted into the Family movement UOM.
+- If event quantity cannot be safely converted to the Family UOM, no average promo price is fabricated.
+- Difference quantity, promotion-week EXTRA quantity, and AVG PROMO PRICE now use the same yellow highlight treatment inside promoted Stock Flow cards.
+- Existing promotion-week EXTRA quantity logic remains unchanged.
+- TPR remains non-promotion.
+- Stock Flow contract advanced to YIPMAN_STOCK_FLOW_V4_PROMO_AVG_PRICE.
+- Yipman shell cache advanced to v389.
+Version: 7.0.389 Single-Service Edition
+
 v7.0.388 Yipman Card Separation + Promotion Week Lift:
 - Quick Search border increased 20% from 2.0px to 2.4px.
 - Ordering suggestion cards and Price Review cards now cycle through the same five pastel article tones used by Stock Flow, improving visual separation between unrelated items.
