@@ -5920,15 +5920,10 @@ def performance_report(
             # - usable positive OH is required; no stock => no price action
             # - recent 14 completed-day sales history is required so candidate
             #   pricing is grounded in observed sales/price performance
-            # - Fresh requires DOH > 7
-            # - Frozen requires DOH > 60
-            # - Live/other stocked UPCs have no additional DOH gate
-            freshness_qualified=(
-                (pclass=="FRESH" and doh_for_gate is not None and doh_for_gate>Decimal("7"))
-                or (pclass=="FROZEN" and doh_for_gate is not None and doh_for_gate>Decimal("60"))
-                or (pclass not in {"FRESH","FROZEN"})
-            )
-            if not has_oh or not history_gate or not freshness_qualified:
+            # - DOH is an URGENCY / FRESHNESS signal, not the admission gate.
+            #   We must be able to find GP$/day and velocity opportunities before
+            #   Fresh/Live inventory actually exceeds the 7-day freshness limit.
+            if not has_oh or not history_gate:
                 continue
 
             # Price is re-resolved at serving time so a newer accepted Price
@@ -6029,6 +6024,17 @@ def performance_report(
             elif clearance_reason=="FROZEN_DOH_GT_60":
                 reasons.append("FROZEN_DOH_GT_60_MARKDOWN")
                 score+=Decimal("60")
+            elif (
+                pclass in {"FRESH","LIVE"}
+                and doh_for_gate is not None
+                and Decimal("5")<=doh_for_gate<=Decimal("7")
+            ):
+                reasons.append("FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7")
+                score+=Decimal("42")
+                if has_company:
+                    reasons.append("COMPANY_RANGE_CONSTRAINED_14D_OPTIMIZATION")
+                else:
+                    reasons.append("14D_MAX_GP_PER_DAY")
             elif has_company:
                 reasons.append("COMPANY_RANGE_CONSTRAINED_14D_OPTIMIZATION")
                 score+=Decimal("30")
@@ -6111,6 +6117,15 @@ def performance_report(
 
             if clearance_reason=="FRESH_DOH_GT_7":
                 primary_reason=f"Fresh DOH {float(_d(doh_value)):.1f} > 7; clearance priority"
+            elif (
+                pclass in {"FRESH","LIVE"}
+                and doh_for_gate is not None
+                and Decimal("5")<=doh_for_gate<=Decimal("7")
+            ):
+                primary_reason=(
+                    f"{pclass.title()} DOH {float(doh_for_gate):.1f}; proactive sell-through / "
+                    "GP$/day price review before freshness risk exceeds 7 days"
+                )
             elif clearance_reason=="FROZEN_DOH_GT_60":
                 primary_reason=f"Frozen DOH {float(_d(doh_value)):.1f} > 60; markdown priority"
             elif has_company:
@@ -6370,7 +6385,7 @@ def performance_report(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_V11",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_V12_PROACTIVE_PRICE_TESTING",
         "category":cat,
         "report_date":anchor,
         "report_date_weekday":WEEKDAY_NAMES[anchor.weekday()],
@@ -6398,7 +6413,7 @@ def performance_report(
             "company_reference_rule":"RANGE_IS_MIN_TO_MAX_OF_AVAILABLE_POSITIVE_A_B_C; QUALIFIED_UPCS_MAY_BE_REVIEWED_REGARDLESS_OF_CURRENT_IN_RANGE",
             "company_candidate_rule":"CANDIDATE_MUST_STAY_WITHIN_COMPANY_RANGE; ALL_QUALIFIED_UPCS_MAXIMIZE_14D_GP_DOLLARS_PER_DAY; FALLBACK_CLAMP_14D_OR_SWEET_SPOT_TO_RANGE",
             "no_company_reference_rule":"MAX_14D_OBSERVED_GP_DOLLARS_PER_DAY",
-            "freshness_rule":"FRESH_REQUIRES_DOH_GT_7; FROZEN_REQUIRES_DOH_GT_60; LIVE_OR_OTHER_HAS_NO_EXTRA_DOH_GATE; GP_DOLLARS_PER_DAY_REMAINS_OPTIMIZATION_OBJECTIVE",
+            "freshness_rule":"DOH_IS_URGENCY_NOT_ELIGIBILITY; FRESH_LIVE_DOH_5_TO_7_PROACTIVE_SELL_THROUGH_WATCH; FRESH_GT_7_CLEARANCE_PRIORITY; FROZEN_GT_60_MARKDOWN_PRIORITY; GP_DOLLARS_PER_DAY_REMAINS_OPTIMIZATION_OBJECTIVE",
             "clearance_candidate_rule":"DOH_RAISES_URGENCY_ONLY; CANDIDATE_STILL_MAXIMIZES_SUPPORTED_14D_GP_DOLLARS_PER_DAY",
             "candidate_demand_basis":"ACTUAL_HISTORICAL_SALES_RESPONSE_AT_OBSERVED_PRICE",
             "cost_basis":"CURRENT_AUTHORITATIVE_COST",
@@ -6406,7 +6421,7 @@ def performance_report(
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
             "price_change_tolerance":"SUPPRESS_WHEN_ABS_CURRENT_MINUS_SUGGESTED_LE_0.25",
-            "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY; FRESH_DOH_GT_7; FROZEN_DOH_GT_60; LIVE_OR_OTHER_NO_EXTRA_DOH_GATE",
+            "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY_FOR_ALL_CLASSES; DOH_CHANGES_URGENCY_NOT_ELIGIBILITY",
             "price_240_249_rule":"WHEN_CONFIRMED_240_AND_249_FORMS_EXIST_IN_THE_SAME_FAMILY_PRODUCT_GROUP_THEIR_CURRENT_PRICES_MUST_MATCH; MISMATCH_IS_HIGHEST_PRIORITY",
             "price_249_reminder_rule":"ANY_240_PRICING_SUGGESTION_WITH_A_RELATED_249_MUST_REMIND_THE_USER_TO_CHANGE_249_TO_THE_SAME_ACCEPTED_PRICE",
             "urgency_primary_sort":"240_249_MISMATCH_FIRST_THEN_ACTIONABLE_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
