@@ -145,38 +145,69 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
-      - name: Validate proactive price testing before Fresh DOH 7
+      - name: Validate controlled pricing path, freshness tests, and compact progress UI
         run: |
           python - <<'PY'
           import inspect
+          from decimal import Decimal
           from pathlib import Path
           import webapp_v2_runtime as v2
 
           src=inspect.getsource(v2.performance_report)
-          from backoffice_runtime import _tested_testing_prices, pricing_review
+          from backoffice_runtime import (
+              _freshness_velocity_target,
+              _tested_testing_prices,
+              pricing_review,
+          )
           path=_tested_testing_prices(
               current='8.99',
-              tested='8.97',
+              tested='9.71',
               target='11.39',
               observed_candidates=None,
           )
-          assert path['testing_price'] is not None
-          assert path['testing_price'] > path['tested_price']
+          assert path['testing_anchor_price']==Decimal('8.99')
+          assert path['testing_price']>Decimal('8.99')
+          assert path['testing_price']<=Decimal('9.44')
+          assert path['testing_price']<Decimal('9.71')
+
+          fresh_target=_freshness_velocity_target(
+              current='8.99',
+              current_cost='6.00',
+              current_velocity='0.50',
+              company_low='7.00',
+              company_high='10.00',
+              observed_candidates=[{
+                  'price':Decimal('8.49'),
+                  'observed_velocity_per_day':Decimal('1.10'),
+                  'gp_per_observed_day_at_current_cost':Decimal('2.20'),
+              }],
+          )
+          assert fresh_target==Decimal('8.49')
+
           review_src=inspect.getsource(pricing_review)
-          assert 'abs(tested_price - _d(current_price)) > Decimal("0.25")' in review_src
-          assert 'BACKOFFICE_PRICING_REVIEW_V9_PROACTIVE_TESTING' in review_src
+          assert 'reason_code = "VELOCITY_TEST"' in review_src
+          assert 'reason_code = "SWEET_SPOT_GAP"' in review_src
+          assert 'reason_code = "GP_DOLLAR_TEST"' in review_src
+          assert 'reason_code = "COMPANY_RANGE"' in review_src
+          assert 'STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_MAX_GP_PER_DAY' in review_src
+
           assert 'if not has_oh or not history_gate:' in src
-          assert 'freshness_qualified' not in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
+          assert 'outside_company_range' in src
+          assert 'freshness_velocity_test' in src
+          assert 'positive_gp_day_test' in src
           assert 'DOH_IS_URGENCY_NOT_ELIGIBILITY' in src
           assert 'POSITIVE_OH_AND_14D_SALES_HISTORY_FOR_ALL_CLASSES' in src
-          assert 'WEBAPP_V2_PERFORMANCE_V12_PROACTIVE_PRICE_TESTING' in src
+          assert 'WEBAPP_V2_PERFORMANCE_V13_COMPACT_PRICE_PROGRESS' in src
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert "setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'None')" in ui
           assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
           assert '.qprice b.qempty' in ui
-          print('proactive-price-testing=PASS')
+          assert 'IGNORE 30 MIN' in ui
+          assert 'STRONGEST PROVED' in ui
+          assert '.pricepath' in ui
+          print('controlled-price-progress=PASS')
           PY
 
       - name: Validate Quick Check canonical Tested Testing prices
@@ -952,7 +983,7 @@ jobs:
           assert 'q14' in perf
           assert 'primary_reason_text' in perf
           assert 'company_range_low' in perf and 'company_range_high' in perf
-          assert 'WEBAPP_V2_PERFORMANCE_V12_PROACTIVE_PRICE_TESTING' in perf
+          assert 'WEBAPP_V2_PERFORMANCE_V13_COMPACT_PRICE_PROGRESS' in perf
           assert 'DOH_IS_URGENCY_NOT_ELIGIBILITY' in perf
 
           assert "Current Price" in backoffice_ui
