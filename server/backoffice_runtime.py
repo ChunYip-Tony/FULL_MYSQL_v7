@@ -536,11 +536,12 @@ def yipman_ordering_calendar(
     lookback_days: int = 180,
     days: int = 28,
 ) -> dict[str, Any]:
-    """Return observed delivery weekdays plus preferred future defaults.
+    """Return observed delivery weekdays plus a strongest-day future default.
 
     Every weekday with canonical physical receipt evidence remains highlighted.
-    Defaults use the strongest observed weekdays so one-off receipt history does
-    not become the automatic Delivery / Next Delivery pair.
+    The default Delivery date is the next future occurrence of the weekday with
+    the most observed Family deliveries; ties use receipt-date frequency, then
+    weekday number. Default Next Delivery is exactly seven days later.
     """
     lookback=max(28,min(int(lookback_days or 180),180))
     horizon=max(14,min(int(days or 28),42))
@@ -659,26 +660,26 @@ def yipman_ordering_calendar(
         })
 
     future=[x for x in dates if x["date"]>today]
-    preferred_dates=[x for x in future if x["preferred"]]
     observed_dates=[x for x in future if x["observed"]]
+    strongest_weekday=(
+        int(ranked[0]["weekday_number"])
+        if ranked else None
+    )
+    strongest_dates=[
+        x for x in future
+        if strongest_weekday is not None
+        and int(x["weekday_number"])==strongest_weekday
+    ]
     default_delivery=(
-        preferred_dates[0]["date"]
-        if preferred_dates else (
+        strongest_dates[0]["date"]
+        if strongest_dates else (
             observed_dates[0]["date"] if observed_dates else today+timedelta(days=1)
         )
     )
-    default_next=next(
-        (x["date"] for x in preferred_dates if x["date"]>default_delivery),
-        None,
-    )
-    if default_next is None:
-        default_next=next(
-            (x["date"] for x in observed_dates if x["date"]>default_delivery),
-            default_delivery+timedelta(days=7),
-        )
+    default_next=default_delivery+timedelta(days=7)
 
     return {
-        "contract_version":"YIPMAN_ORDERING_CALENDAR_V2_PREFERRED_DAYS",
+        "contract_version":"YIPMAN_ORDERING_CALENDAR_V3_STRONGEST_DAY_PLUS_7",
         "as_of":today,
         "movement_data_through":mvt_days[0]["date"] if mvt_days else None,
         "lookback_days":lookback,
@@ -691,7 +692,9 @@ def yipman_ordering_calendar(
         "rules":{
             "receipt_basis":"CANONICAL_PHYSICAL_101_109",
             "all_observed_days_remain_visible":True,
-            "preferred_defaults":"TOP_WEEKDAY_PLUS_SECOND_IF_AT_LEAST_10_PERCENT_OF_TOP_AND_AT_LEAST_2_FAMILIES",
+            "preferred_defaults":"HIGHLIGHT_ONLY_TOP_WEEKDAY_PLUS_SECOND_IF_AT_LEAST_10_PERCENT_OF_TOP_AND_AT_LEAST_2_FAMILIES",
+            "default_delivery":"NEXT_FUTURE_OCCURRENCE_OF_TOP_FAMILY_COUNT_WEEKDAY_THEN_RECEIPT_DATE_COUNT",
+            "default_next_delivery":"EXACTLY_7_DAYS_AFTER_DEFAULT_DELIVERY",
             "one_off_observed_days_are_not_removed":True,
             "write_enabled":False,
         },
