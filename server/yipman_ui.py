@@ -1664,14 +1664,14 @@ function renderQAResolution(qa,batch){
    '<div class="qagroups">'+rows.map(g=>'<div class="qagroup"><div><b>'+esc(friendlySignal(g.code))+'</b><span>'+g.count+' issue'+(g.count===1?'':'s')+' · '+g.fixable+' user-confirmable</span></div><button class="'+(g.fixable?'fix':'')+'" data-qa-group="'+esc(g.code)+'">'+(g.fixable?'FIX':'DETAIL')+'</button></div>').join('')+'</div>'+
    '<div class="qaresactions"><button class="qaresreview" id="qaReviewAll">REVIEW ALL</button><button class="qaresrebuild" id="qaRebuild">'+(dataQaBatchId?'REBUILD QA':'REBUILD UNAVAILABLE')+'</button></div>'+
    '<div class="qainfo warn">Fixes are fail-closed. Only confirmed identity/UOM, cost conversion, and Article→Family authority are editable here. RAW source data is never changed.</div>';
- $('[data-qa-group]').forEach(b=>b.onclick=()=>openQAGroup(b.dataset.qaGroup));
+ $$('[data-qa-group]').forEach(b=>b.onclick=()=>openQAGroup(b.dataset.qaGroup));
  const all=$('#qaReviewAll');if(all)all.onclick=()=>openQAGroup('ALL');
  const rebuild=$('#qaRebuild');if(rebuild){rebuild.disabled=!dataQaBatchId;rebuild.onclick=()=>rebuildQAFromDataCenter()}
 }
 function openQAGroup(code){
  const rows=(code==='ALL'?dataQaIssues:dataQaIssues.filter(x=>String(x.issue_code||'').toUpperCase()===String(code).toUpperCase()));
  sheet('QA Resolution',code==='ALL'?(rows.length+' open issues'):friendlySignal(code),'<div class="qalist">'+rows.map(x=>{const cur=x.current||{};return '<button class="qaitem" data-qa-issue="'+esc(qaIssueKey(x))+'"><div class="qaitemtop"><div><b>'+esc(qaIssueName(x))+'</b><small>'+esc(x.entity_type||'')+' '+esc(x.entity_key||'')+(cur.current_oh!=null?' · OH '+fmt(cur.current_oh)+' '+esc(cur.current_oh_uom||''):'')+'</small></div><span class="qaflag '+(x.can_fix?'fix':'blocked')+'">'+esc(x.can_fix?'FIX':'REVIEW')+'</span></div><div class="qaitemreason">'+esc(friendlySignal(x.issue_code||x.issue_summary||''))+' · '+esc(qaFixLabel(x))+'</div></button>'}).join('')+'</div>');
- $('[data-qa-issue]').forEach(b=>b.onclick=()=>openMobileQAIssue(b.dataset.qaIssue));
+ $$('[data-qa-issue]').forEach(b=>b.onclick=()=>openMobileQAIssue(b.dataset.qaIssue));
 }
 function mobileQaApplyFeedback(msg){toast(msg)}
 async function refreshDataAfterQAFix(){closeSheet(false);await loadData()}
@@ -1720,7 +1720,7 @@ async function loadData(){
   $('#currentBatch').innerHTML=b.batch_id?'<div class="currentbatch" data-batch="'+esc(b.session_id||b.batch_key||'')+'"><div class="cbtop"><div class="cbid"><b>Batch #'+esc(b.batch_id)+'</b><span>'+esc(b.batch_label||'Current processing batch')+'</span></div><span class="cbstatus '+statusClass+'">'+esc(statusLabel)+'</span></div><div class="cbmeta"><div><small>RUN</small><b>#'+esc(b.active_pipeline_run_id||b.pipeline_run_id||'—')+'</b></div><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(b.open_issue_total??b.error_count??b.qa_hold_count,0)+'</b></div></div></div>':'<div class="empty">No active batch.</div>';
   renderQAResolution(qa,b);
   const rb=recent.batches||recent.rows||[];$('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();const cls=xs.includes('HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':'');return '<div class="batchrow"><div><b>Batch #'+esc(x.batch_id||'—')+'</b><span class="batchstate'+cls+'">'+esc(friendlySignal(xs||'—'))+'</span></div><span class="batchdate">'+esc(String(x.completed_at||x.upload_started_at||'').slice(0,10))+'</span></div>'}).join('')||'<div class="empty">No recent batches.</div>';
-  $('[data-batch]').forEach(x=>x.onclick=()=>openBatch(x.dataset.batch,b));
+  $$('[data-batch]').forEach(x=>x.onclick=()=>openBatch(x.dataset.batch,b));
  }catch(e){$('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>'}
 }
 async function openBatch(session,basic){sheet('Batch #'+esc(basic.batch_id||'—'),basic.processing_status||'','<div class="loading">Loading processing detail…</div>');if(!session){$('#sheetBody').innerHTML='<div class="detail">Session ID unavailable in active summary.</div>';return}try{const d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{timeoutMs:12000}), b=d.batch||{}, p=d.phase3||{}, q=d.qa_summary||{};$('#sheetBody').innerHTML='<div class="dmetrics"><div class="dm"><b>'+esc(b.processing_status||'—')+'</b><span>BATCH STATUS</span></div><div class="dm"><b>'+fmt(p.quick_check_ready_rows,0)+'</b><span>READY ROWS</span></div><div class="dm"><b>'+fmt(p.quick_check_hold_rows,0)+'</b><span>QA HOLD</span></div></div><div class="detail"><b>Phase 3</b><br>'+esc(p.result_status||'—')+'<br><br><b>Open blockers</b><br>'+fmt(p.blocking_issue_count,0)+(q.reason_counts?'<br>'+Object.entries(q.reason_counts).slice(0,8).map(([k,v])=>'• '+esc(k)+': '+fmt(v,0)).join('<br>'):'')+'</div>'}catch(e){$('#sheetBody').innerHTML='<div class="detail">'+esc(e.message)+'</div>'}}
