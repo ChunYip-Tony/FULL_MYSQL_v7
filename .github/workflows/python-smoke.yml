@@ -328,9 +328,19 @@ jobs:
           assert 'setTimeout(pollDataLive,5000)' in ui
           assert 'HEARTBEAT' in ui
           assert 'CURRENT WORK ITEM' in ui
+          # Receipt display invariant: a Family/Main Article with its own
+          # canonical physical receipt must remain visible beside linked Receiving
+          # Articles. Family aggregate history is fallback-only, never a duplicate.
+          assert "if(sourceKey&&g.source_receipt_history.length&&!g.receiving.has(sourceKey))" in ui
+          assert "receipt_7d_qty:g.source_receipt_7d_qty" in ui
           assert "if(!g.receiving.size&&sourceKey&&g.family_receipt_history.length)" in ui
           assert "familyFallback?'FAMILY RECEIPT SUMMARY'" in ui
-          assert "if(sourceKey&&g.family_receipt_history.length){" not in ui
+          assert "7D RECEIPT · " in ui
+          bo=Path('backoffice_runtime.py').read_text(encoding='utf-8')
+          assert '"family_source_receipt_history": source_receipt_history' in bo
+          assert '"family_source_receipt_7d_qty": source_receipt_7d.get("quantity")' in bo
+          assert '"receipt_7d_qty": (receipt_7d_by_article.get(art) or {}).get("quantity")' in bo
+          assert 'receipt_7d_by_article: dict[str, dict[str, Any]] = {}' in bo
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
