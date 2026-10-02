@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v381';
+const CACHE='yipman-v382';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -352,6 +352,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .besthead{display:flex;align-items:flex-end;justify-content:space-between;gap:8px;margin:0 1px 7px}
 .besthead h3{font-size:17px;margin:0;font-weight:950}.besthead span{font-size:8px;color:var(--muted);font-weight:900}
 .bestsort{white-space:nowrap;border:1px solid #cbddeb;background:#edf6fd;color:#315b78;border-radius:999px;padding:5px 7px;font-size:8px!important}
+.stockflowsort{flex:0 0 auto;font-size:7px;color:#71808d;font-weight:950}.stockflowsort select{display:block;margin-top:2px;border:1px solid #cbddeb;background:#edf6fd;color:#315b78;border-radius:999px;padding:5px 22px 5px 7px;font-size:8px;font-weight:950;outline:0}
+.stockdiff{align-self:start;text-align:right;background:#fff0f0;border:1px solid #efcccc;border-radius:9px;padding:5px 7px;min-width:88px}.stockdiff small{display:block;font-size:6px;color:#9a6767;font-weight:950}.stockdiff b{display:block;font-size:15px;line-height:1;color:#c12e2e;margin-top:2px}.stockdiff span{display:block;font-size:7px;color:#9a6767;margin-top:2px;font-weight:850}
 .bestfam{--best-border:#ddb916;--best-bg:#fff3b7;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);border-radius:13px;background:linear-gradient(90deg,var(--best-bg),#fff);padding:7px 8px;margin-bottom:6px;box-shadow:0 6px 17px rgba(18,38,56,.06)}
 .bestfam.tone1{--best-border:#58bd70;--best-bg:#e2f6e6}.bestfam.tone2{--best-border:#4a9de2;--best-bg:#e6f2fc}.bestfam.tone3{--best-border:#ef72a5;--best-bg:#fde7ef}.bestfam.tone4{--best-border:#9b7be0;--best-bg:#eee8fb}
 .besttop{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}.bestlabel{font-size:7px;font-weight:950;color:#6f6a53}.bestnum{font-size:17px;font-weight:1000;line-height:1}.bestname{font-size:18px;font-weight:1000;line-height:1.03;margin-top:2px}.bestrank{align-self:start;background:rgba(255,255,255,.72);border:1px solid rgba(70,80,90,.10);border-radius:7px;padding:4px 6px;font-size:8px;font-weight:950}
@@ -474,14 +476,29 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .cell{font-size:15px}
 #order .cell span{font-size:10px}
 #order .orderstate,#order .order-risk,#order .order-lowconf{font-size:7px;padding:3px 6px}
+#order .orow .name{font-size:18px;line-height:1.08}
+#order .receivingline{display:flex;align-items:baseline;gap:7px;margin-top:5px;min-width:0}
+#order .receivingline span{font-size:8px;color:#71808d;font-weight:950;letter-spacing:.04em}
+#order .receivingline b{font-size:16px;line-height:1;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order .orderqty{font-size:18px;color:#0d4f8b}
 #order .rtrace-line{font-size:11px}
 #order .rtrace-more{font-size:10px}
 #order .receipt-meta{font-size:11px}
 
+#price{overflow-x:hidden}
+#price .filters{max-width:100%}
 #price .filters .pill{font-size:12px;padding:9px 12px}
+#price .price-tools{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:0 0 7px;min-width:0}
+#price .price-tools label{display:block;min-width:0;font-size:8px;color:#71808d;font-weight:950}
+#price .price-tools select{display:block;width:100%;min-width:0;margin-top:3px;border:1px solid #d7e0e6;border-radius:10px;background:#fff;padding:8px 28px 8px 9px;font-size:10px;font-weight:900;outline:0}
 #priceStatus{font-size:12px!important;line-height:1.32!important}
-#price .pricecards{gap:8px}
-#price .pcard{padding:12px 13px;border-radius:16px}
+#price .pricecards{gap:8px;width:100%;min-width:0;max-width:100%;overflow:hidden}
+#price .pcard{padding:12px 13px;border-radius:16px;width:100%;min-width:0;max-width:100%;overflow:hidden}
+#price .ptop,#price .pricepath,#price .pmetrics,#price .pprogress,#price .pcost{min-width:0;max-width:100%}
+#price .pprogress-line span{min-width:0;overflow-wrap:anywhere}
+#price .preason div{overflow-wrap:anywhere}
+#price .pairauthority{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:7px;margin-top:7px;padding:8px;border:1px solid #f0c7c7;border-radius:10px;background:#fff5f5;min-width:0}
+#price .pairauthority>div{min-width:0}#price .pairauthority small{display:block;font-size:8px;color:#8b5d5d;font-weight:950}#price .pairauthority b{display:block;font-size:20px;line-height:1.05;margin-top:2px}#price .pairauthority span{display:block;font-size:8px;color:#7c6d6d;margin-top:2px;white-space:normal;overflow-wrap:anywhere}#price .pairarrow{font-size:18px;font-weight:1000;color:#c84747}
 #price .ptop b{font-size:17px!important}
 #price .ptop small{font-size:11px!important}
 #price .pbadge{font-size:10px;padding:5px 9px}
@@ -502,8 +519,11 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #price .preason div{font-size:10px}
 #price .pcard-actions button{font-size:10px;padding:9px 11px}
 @media(max-width:370px){
-  #order .lh,#order .orow{grid-template-columns:minmax(0,1fr) 56px 64px;padding-left:10px;padding-right:10px}
-  #price .pp b{font-size:22px}
+  #order .lh,#order .orow{grid-template-columns:minmax(0,1fr) 54px 66px;padding-left:10px;padding-right:10px}
+  #order .orow .name{font-size:17px}
+  #order .receivingline b{font-size:15px}
+  #price .pp b{font-size:21px}
+  #price .pairauthority b{font-size:18px}
 }
 
 </style>
@@ -515,7 +535,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
     <div class="head"><div><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
   </header>
   <main class="workspace">
-    <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading best sellers…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
+    <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading stock flow…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
 
     <section class="page" id="order">
       <div class="topline"><h2>Ordering</h2><div class="hint">DELIVERY WINDOW</div></div>
@@ -549,7 +569,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
       </div>
     </section>
 
-    <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">COMPACT · LIVE PROGRESS</div></div><div class="filters"><button class="pill on" data-price-filter="UPC_240">240</button><button class="pill" data-price-filter="UPC_245">245</button><button class="pill" data-price-filter="UPC_247">247</button><button class="pill" data-price-filter="UPC_249">249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
+    <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">LIVE REVIEW</div></div><div class="filters"><button class="pill on" data-price-filter="UPC_240">240</button><button class="pill" data-price-filter="UPC_245">245</button><button class="pill" data-price-filter="UPC_247">247</button><button class="pill" data-price-filter="UPC_249">249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div class="price-tools"><label>REASON<select id="priceReasonFilter"><option value="ALL">ALL REASONS</option><option value="PAIR">240≠249</option><option value="VELOCITY">VELOCITY / FRESHNESS</option><option value="GP">GP$ OPPORTUNITY</option><option value="RANGE">COMPANY RANGE</option><option value="SWEET">SWEET SPOT GAP</option></select></label><label>SORT<select id="priceSort"><option value="URGENCY">URGENCY</option><option value="GPDOLLAR">GP$ OPPORTUNITY ↓</option><option value="GAP">PRICE GAP ↓</option><option value="OH">OH ↓</option><option value="VELOCITY">VELOCITY ↑</option><option value="NAME">NAME A–Z</option></select></label></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
     <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
@@ -588,9 +608,9 @@ const appDate=v=>{
   return mo+'/'+d+' '+wd;
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='quick', priceFilter='UPC_240', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
+let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null;
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='DIFFERENCE', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
@@ -986,33 +1006,48 @@ function quickReceiptDay(v){
  const dt=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0);
  return dt.toLocaleDateString(undefined,{weekday:'short'})+' '+Number(m[2])+'/'+Number(m[3]);
 }
-function bestSellerFamilyHtml(g,idx){
+function stockFlowSortedRows(){
+ const rows=[...(bestSellerGroups||[])];
+ if(stockFlowSort==='RECEIPT')return rows.sort((a,b)=>(num(b.family_receipt_7d_qty)||0)-(num(a.family_receipt_7d_qty)||0));
+ if(stockFlowSort==='SELLING')return rows.sort((a,b)=>(num(b.group_qty_7d)||0)-(num(a.group_qty_7d)||0));
+ if(stockFlowSort==='RATIO')return rows.sort((a,b)=>(num(b.receipt_to_selling_ratio)||0)-(num(a.receipt_to_selling_ratio)||0));
+ if(stockFlowSort==='NAME')return rows.sort((a,b)=>String(a.family_name||'').localeCompare(String(b.family_name||'')));
+ return rows.sort((a,b)=>(num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0));
+}
+function renderStockFlow(){
+ const box=$('#quickRows'),rows=stockFlowSortedRows();
+ box.innerHTML='<div class="besthead"><div><h3>Stock Flow Watch</h3><span>7D receipts ≥ 150% of 7D selling movement</span></div><label class="stockflowsort">SORT<select id="stockFlowSort"><option value="DIFFERENCE">DIFFERENCE ↓</option><option value="RECEIPT">RECEIPT ↓</option><option value="SELLING">SELLING ↓</option><option value="RATIO">RATIO ↓</option><option value="NAME">NAME A–Z</option></select></label></div>'+rows.map(stockFlowFamilyHtml).join('');
+ const sel=$('#stockFlowSort');if(sel){sel.value=stockFlowSort;sel.onchange=e=>{stockFlowSort=e.target.value;renderStockFlow()}}
+ bindReceiptLinks();
+}
+function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
- const count=num(g.family_receipt_7d_day_count);
+ const count=num(g.family_receipt_7d_day_count),diff=num(g.receipt_minus_selling_7d),ratio=num(g.receipt_to_selling_ratio);
  const recent=history.length?history.map(x=>'<button type="button" class="bestreceipt receiptlink" data-receipt-family="'+esc(g.family_id??'')+'" data-receipt-article="" data-receipt-date="'+esc(x.date||'')+'"><span>'+esc(quickReceiptDay(x.date))+'</span><b>'+fmt(x.quantity)+' '+esc(x.uom||receiptUom)+'</b></button>').join(''):'<div class="bestreceipt"><span>No recent receipt</span><b>—</b></div>';
- return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="bestrank">#'+(idx+1)+'</div></div>'+
+ return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div></div><div class="stockdiff"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(ratio===null?'—':((ratio-1)*100).toFixed(0)+'% over selling')+'</span></div></div>'+
    '<div class="bestmetrics"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div></div>'+
    '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span>LAST 2</span></div>'+recent+'</div></section>';
 }
 async function loadBestSellers(force=false){
  const box=$('#quickRows');
- if(bestSellerGroups&&!force){
-   box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');bindReceiptLinks();return;
- }
- const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading best-selling families…</div>';
+ if(bestSellerGroups&&!force){renderStockFlow();return}
+ const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading stock flow watch…</div>';
  try{
-  const d=await api('/v1/yipman/best-sellers?limit=8',{timeoutMs:10000});
+  const d=await api('/v1/yipman/stock-flow?limit=40',{timeoutMs:16000});
   if(requestId!==quickRequestSeq||$('#globalInput').value.trim())return;
   bestSellerGroups=(d.rows||[]).map(r=>({
     family_id:r.family_id,family_article:r.family_article,family_name:r.family_name,category:r.category,
     group_qty_7d:r.family_group_movement_7d,group_avg_qty_day:r.family_group_avg_qty_day,group_uom:r.family_group_movement_uom||'',
     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
-    family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count
+    family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count,
+    receipt_minus_selling_7d:r.receipt_minus_selling_7d,receipt_to_selling_ratio:r.receipt_to_selling_ratio,
+    receipt_over_selling_pct:r.receipt_over_selling_pct
   }));
-  box.innerHTML='<div class="besthead"><div><h3>Best Sellers</h3><span>Family Articles only · 7D velocity</span></div><span class="bestsort">VELOCITY ↓</span></div>'+bestSellerGroups.map(bestSellerFamilyHtml).join('');bindReceiptLinks();
+  renderStockFlow();
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
+
 async function loadQuick(q){
  const query=String(q||'').trim(), box=$('#quickRows');
  if(!query){lastQuickQuery='';await loadBestSellers();return}
@@ -1052,6 +1087,10 @@ function orderWeekdayInfo(v){
 }
 function isObservedDate(v){return !!orderWeekdayInfo(v)?.observed}
 function isPreferredDate(v){return !!orderWeekdayInfo(v)?.preferred}
+function plusDaysIso(v,days){
+ const d=dateLocal(v);if(!d)return null;
+ d.setDate(d.getDate()+Number(days||0));return iso(d);
+}
 function nextObservedAfter(v){
  const start=dateLocal(v)||new Date();
  for(const preferredOnly of [true,false]){
@@ -1106,7 +1145,7 @@ function buildDays(){
     orderDate=dayIso;
     // A new Delivery date gets a fresh default Next Delivery. The user can
     // still override Next Delivery immediately afterward.
-    orderNextDate=nextObservedAfter(orderDate);
+    orderNextDate=plusDaysIso(orderDate,7);
     orderSelectMode='NEXT';
    }else{
     if(dayIso<=orderDate){toast('Next delivery must be after delivery date');return}
@@ -1145,7 +1184,7 @@ async function initOrdering(force=false){
    }
    if(!orderDate){const d=new Date(base);d.setDate(d.getDate()+1);orderDate=iso(d)}
   }
-  if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+  if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=plusDaysIso(orderDate,7);
   setPromotionDefaultDates();
   buildDays();updateOrderWindowUI();
   if(orderMode==='PROMOTION')await loadPromotionLists();
@@ -1392,7 +1431,7 @@ function renderOrderRoster(rows,data,h,stale){
   const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
   const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
   const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
-  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
+  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="receivingline"><span>RECEIVING</span><b>'+esc(r.receiving_article||'—')+'</b></div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -1506,6 +1545,12 @@ function openOrder(r){
  '<br><br><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
  '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmtNullable(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
  '<br><br><b>Demand</b><br>7D '+fmtNullable(d.qty_7d)+' · 28D '+fmtNullable(d.qty_28d)+' · DOS '+fmtNullable(d.dos)+' · Forecast confidence '+esc(d.regular_forecast_confidence||'—')+
+ '<br><br><b>Weekday usage forecast</b><br>'+(
+   d.weekday_usage_forecast
+    ? Object.entries(d.weekday_usage_forecast).map(([day,qty])=>esc(day.slice(0,3))+' '+fmtNullable(qty)+' '+esc(r.oh_uom||'')).join(' · ')
+    : '—'
+ )+
+ '<br><span style="color:#71808d">Historical weekday average is used when at least 2 observations exist; sparse weekdays blend toward the overall run-rate.</span>'+
  '<br><br><b>Coverage need</b><br>'+fmtNullable(d.forecast_coverage_usage)+' '+esc(r.oh_uom||'')+' from Delivery through the eligible coverage end'+
  '<br><br><b>Projected at delivery</b><br>'+fmtNullable(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+' · usable '+fmtNullable(d.usable_oh_at_delivery)+' '+esc(r.oh_uom||'')+
  (d.pre_delivery_stockout_risk?'<br><br><b>⚠ Pre-delivery stockout risk</b><br>'+fmtNullable(d.pre_delivery_stockout_qty)+' '+esc(r.oh_uom||'')+' projected short before the selected delivery. This shortage is NOT added to the later order.':'')+
@@ -1607,6 +1652,13 @@ async function loadPrices(opts={}){
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
   const upcPrefix=r=>String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3);
   const patternFiltered=meaningful.filter(r=>{
+    if(priceFilter==='UPC_249'){
+      return upcPrefix(r)==='249'
+        && r.related_240_current_price!=null
+        && num(r.current_price)!==null
+        && num(r.related_240_current_price)!==num(r.current_price)
+        && (r.price_240_249_equal===false||r.priority_240_249_mismatch||String(r.suggestion_reason_code||'')==='PAIR_FIX');
+    }
     if(priceFilter.startsWith('UPC_'))return upcPrefix(r)===priceFilter.slice(4);
     if(priceFilter==='LIVE')return String(r.category||'').toUpperCase()==='LIVE';
     const days=observed(r);
@@ -1614,10 +1666,31 @@ async function loadPrices(opts={}){
     if(priceFilter==='FRI_SAT')return days.includes('FRIDAY')||days.includes('SATURDAY');
     return true;
   });
-  const ignoredCount=patternFiltered.filter(priceIsIgnored).length;
-  const rows=patternFiltered.filter(r=>!priceIsIgnored(r)).slice(0,24);
+  const reasonFiltered=patternFiltered.filter(r=>{
+    const code=String(r.suggestion_reason_code||'').toUpperCase();
+    if(priceReasonFilter==='PAIR')return !!r.priority_240_249_mismatch||code==='PAIR_FIX';
+    if(priceReasonFilter==='VELOCITY')return code==='VELOCITY_TEST'||!!r.slow_velocity_trend;
+    if(priceReasonFilter==='GP')return code==='GP_DOLLAR_TEST'||num(r.gp_per_day_opportunity)!==null;
+    if(priceReasonFilter==='RANGE')return code==='COMPANY_RANGE'||!!r.company_range_violation;
+    if(priceReasonFilter==='SWEET')return code==='SWEET_SPOT_GAP';
+    return true;
+  });
+  const sorted=[...reasonFiltered].sort((a,b)=>{
+    if(priceSort==='GPDOLLAR')return (num(b.gp_per_day_opportunity)||0)-(num(a.gp_per_day_opportunity)||0)||String(a.name||'').localeCompare(String(b.name||''));
+    if(priceSort==='GAP'){
+      const gap=x=>{const c=num(x.current_price),t=num(x.tested_price);return c===null||t===null?0:Math.abs(c-t)};
+      return gap(b)-gap(a)||String(a.name||'').localeCompare(String(b.name||''));
+    }
+    if(priceSort==='OH')return (num(b.current_oh)||0)-(num(a.current_oh)||0)||String(a.name||'').localeCompare(String(b.name||''));
+    if(priceSort==='VELOCITY')return (num(a.velocity_7d)??999999)-(num(b.velocity_7d)??999999)||String(a.name||'').localeCompare(String(b.name||''));
+    if(priceSort==='NAME')return String(a.name||'').localeCompare(String(b.name||''));
+    const urgency=x=>(x.priority_240_249_mismatch?1000000:0)+(num(x.urgency_score)||0);
+    return urgency(b)-urgency(a)||String(a.name||'').localeCompare(String(b.name||''));
+  });
+  const ignoredCount=sorted.filter(priceIsIgnored).length;
+  const rows=sorted.filter(r=>!priceIsIgnored(r)).slice(0,40);
   const filterLabel=priceFilter.startsWith('UPC_')?(priceFilter.slice(4)+' UPC'):priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
-  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+ignoredCount+' ignored <12h';
+  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+esc(priceReasonFilter==='ALL'?'all reasons':friendlySignal(priceReasonFilter))+' · '+esc(friendlySignal(priceSort))+' sort · '+rows.length+' shown · '+ignoredCount+' ignored <12h';
 
   $('#priceRows').innerHTML=rows.map((r,i)=>{
     const meta=priceReasonMeta(r,stale),prog=priceProgress(r),signals=priceSignals(r);
@@ -1634,6 +1707,7 @@ async function loadPrices(opts={}){
         '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
         '<div class="pp testing"><small>TESTING</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
       '</div>'+
+      (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       '<div class="pmetrics">'+
         '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
@@ -1679,6 +1753,7 @@ function openPrice(r){
  '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TESTING · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
  '<div class="detail"><b>Suggested action</b><br>'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+
+ (String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').startsWith('249')&&r.related_240_current_price!=null?'<br><br><b>240 → 249 price rule</b><br>240 '+esc(r.related_240_upc||'—')+' current '+money(r.related_240_current_price)+' → 249 '+esc(r.upc||'—')+' current '+money(r.current_price)+' · required 249 price '+money(r.related_240_current_price):'')+
  '<br><br><b>Current cost</b><br>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+
  '<br><br><b>Price path + GP%</b><br>Current '+money(r.current_price)+' ('+esc(gpText(r.current_price,r.current_cost))+') → Testing '+money(r.testing_price)+' ('+esc(gpText(r.testing_price,r.current_cost))+') · Tested '+money(r.tested_price)+' ('+esc(gpText(r.tested_price,r.current_cost))+')'+
  (r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?'<br>Raw proved sweet-spot evidence '+money(r.tested_evidence_price)+' → retail-aligned Tested '+money(r.tested_price):'')+
@@ -1698,6 +1773,8 @@ $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
  $$('[data-price-filter]').forEach(x=>x.classList.toggle('on',x===b));
  loadPrices();
 });
+$('#priceReasonFilter').onchange=e=>{priceReasonFilter=e.target.value;loadPrices({quiet:true})};
+$('#priceSort').onchange=e=>{priceSort=e.target.value;loadPrices({quiet:true})};
 
 function qaFixLabel(x){
  const k=String(x?.fix_kind||'').toUpperCase();

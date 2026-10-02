@@ -659,26 +659,32 @@ def yipman_ordering_calendar(
         })
 
     future=[x for x in dates if x["date"]>today]
-    preferred_dates=[x for x in future if x["preferred"]]
     observed_dates=[x for x in future if x["observed"]]
+
+    # Default to the next occurrence of the weekday with the strongest
+    # canonical delivery history. This is intentionally NOT "the earliest
+    # observed day" when a weaker one happens to occur first.
+    strongest_weekday=(
+        int(ranked[0]["weekday_number"])
+        if ranked else None
+    )
+    strongest_dates=[
+        x for x in future
+        if strongest_weekday is not None
+        and int(x["weekday_number"])==strongest_weekday
+    ]
     default_delivery=(
-        preferred_dates[0]["date"]
-        if preferred_dates else (
+        strongest_dates[0]["date"]
+        if strongest_dates else (
             observed_dates[0]["date"] if observed_dates else today+timedelta(days=1)
         )
     )
-    default_next=next(
-        (x["date"] for x in preferred_dates if x["date"]>default_delivery),
-        None,
-    )
-    if default_next is None:
-        default_next=next(
-            (x["date"] for x in observed_dates if x["date"]>default_delivery),
-            default_delivery+timedelta(days=7),
-        )
+    # Regular Ordering assumes the next cycle is one week after the chosen
+    # delivery unless the user explicitly overrides it in the UI.
+    default_next=default_delivery+timedelta(days=7)
 
     return {
-        "contract_version":"YIPMAN_ORDERING_CALENDAR_V2_PREFERRED_DAYS",
+        "contract_version":"YIPMAN_ORDERING_CALENDAR_V3_STRONGEST_DAY_PLUS_7",
         "as_of":today,
         "movement_data_through":mvt_days[0]["date"] if mvt_days else None,
         "lookback_days":lookback,
@@ -691,7 +697,8 @@ def yipman_ordering_calendar(
         "rules":{
             "receipt_basis":"CANONICAL_PHYSICAL_101_109",
             "all_observed_days_remain_visible":True,
-            "preferred_defaults":"TOP_WEEKDAY_PLUS_SECOND_IF_AT_LEAST_10_PERCENT_OF_TOP_AND_AT_LEAST_2_FAMILIES",
+            "preferred_defaults":"NEXT_OCCURRENCE_OF_STRONGEST_OBSERVED_WEEKDAY_BY_FAMILY_COUNT_THEN_RECEIPT_DATE_COUNT",
+            "next_delivery_default":"CHOSEN_DELIVERY_PLUS_7_CALENDAR_DAYS",
             "one_off_observed_days_are_not_removed":True,
             "write_enabled":False,
         },
@@ -1196,6 +1203,8 @@ def ordering_review(
                         "effective_coverage_end_date":s.get("effective_coverage_end_date"),
                         "regular_forecast_confidence":s.get("regular_forecast_confidence"),
                         "daily_forecast":s.get("daily_forecast"),
+                        "weekday_usage_forecast":s.get("weekday_usage_forecast"),
+                        "weekday_usage_forecast_basis":s.get("weekday_usage_forecast_basis"),
                         "regular_baseline":s.get("regular_baseline"),
                         "receiving_articles_on_last_receipt": receipt.get("receiving_articles"),
                         "delivery_pattern": pattern,
@@ -1361,7 +1370,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V17_ORDERING_QUALITY",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V18_WEEKDAY_USAGE",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
@@ -1402,10 +1411,10 @@ def ordering_review(
             "stale_forecast_starts_day_after_latest_mvt": True,
             "delivery_roster_oh_best_available": "IF_ONLY_MOVEMENT_DAILY_COVERAGE_GAP_USE_OH_ANCHOR_PLUS_AVAILABLE_CANONICAL_MVT",
             "uom_and_movement_semantic_errors_still_review":True,
-            "regular_forecast_method":"WEEKDAY_SMOOTHED_NON_PROMO_VELOCITY",
+            "regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS",
             "pre_delivery_shortage_is_not_added_to_future_order":True,
             "fresh_live_coverage_cap_days":7,
-            "cache_schema":"V17_ORDERING_QUALITY",
+            "cache_schema":"V18_WEEKDAY_USAGE",
         },
     }
 
@@ -1432,7 +1441,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V17_ORDERING_QUALITY|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V18_WEEKDAY_USAGE|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -3860,14 +3869,15 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
 
 
 
-def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
-    """Fast Family-only default payload for Yipman Quick Check.
+def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
+    """Family Stock Flow watch for the Yipman empty-search home.
 
-    Select the highest-velocity families from the published serving table first,
-    then build receipt context only for that small family set. This avoids the
-    expensive all-UPC Quick Check lineage expansion used by normal search.
+    Surface Families where canonical 7D physical receipts exceed 7D Family
+    selling movement by at least 50% (receipt >= 1.50 * selling). This replaces
+    the former Best Sellers list so the manager sees possible over-receiving /
+    stock-build signals first. Only same-UOM READY receipt totals are compared.
     """
-    lim = max(1, min(int(limit or 8), 20))
+    lim = max(1, min(int(limit or 40), 100))
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         movement_days_7 = source_data_days(
@@ -3878,6 +3888,8 @@ def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
         )
         day_count = len(movement_days_7)
 
+        # One representative row per active Family. Receipt context is then
+        # calculated from all linked Receiving Articles for those Families.
         cur.execute(
             """SELECT q.*
                FROM quick_check_current q
@@ -3888,12 +3900,10 @@ def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
                    FROM quick_check_current
                    WHERE family_id IS NOT NULL
                      AND COALESCE(family_movement_7d,0) > 0
+                     AND COALESCE(quick_check_status,'') <> 'HISTORICAL_ONLY'
                    GROUP BY family_id
-                   ORDER BY MAX(COALESCE(family_movement_7d,0)) DESC
-                   LIMIT %s
-               ) topf ON topf.sample_upc_id=q.upc_id
-               ORDER BY topf.family_movement_7d DESC""",
-            (lim,),
+               ) fam ON fam.sample_upc_id=q.upc_id
+               ORDER BY fam.family_movement_7d DESC, q.family_id""",
         )
         qrows = cur.fetchall()
         family_ctx = _quick_receiving_article_context(
@@ -3906,48 +3916,76 @@ def yipman_best_sellers(limit: int = 8) -> dict[str, Any]:
         for q in qrows:
             fid = int(q["family_id"])
             ctx = family_ctx.get(fid, {})
-            qty = ctx.get("family_group_movement_7d")
-            if qty is None:
-                qty = q.get("family_movement_7d")
-            avg = ctx.get("family_group_avg_qty_day")
-            if avg is None and qty is not None and day_count:
-                avg = _d(qty) / Decimal(day_count)
-            uom = (
+            sold = ctx.get("family_group_movement_7d")
+            if sold is None:
+                sold = q.get("family_movement_7d")
+            sold_d = _d(sold) if sold is not None else Decimal("0")
+            if sold_d <= 0:
+                continue
+
+            sold_uom = str(
                 ctx.get("family_group_movement_uom")
                 or q.get("family_movement_uom")
                 or ""
-            )
+            ).strip().upper()
+            receipt = ctx.get("family_receipt_7d_qty")
+            receipt_uom = str(
+                ctx.get("family_receipt_7d_uom") or sold_uom
+            ).strip().upper()
+            receipt_status = str(ctx.get("family_receipt_7d_status") or "")
+            if (
+                receipt is None
+                or not sold_uom
+                or receipt_uom != sold_uom
+                or not receipt_status.startswith("READY")
+            ):
+                continue
+
+            receipt_d = _d(receipt)
+            difference = receipt_d - sold_d
+            ratio = receipt_d / sold_d if sold_d > 0 else None
+            if ratio is None or ratio < Decimal("1.50"):
+                continue
+
+            avg = ctx.get("family_group_avg_qty_day")
+            if avg is None and day_count:
+                avg = sold_d / Decimal(day_count)
             rows.append({
                 "family_id": fid,
                 "family_article": q.get("main_article_number"),
                 "family_name": q.get("family_description"),
                 "category": q.get("product_class"),
-                "family_group_movement_7d": qty,
+                "family_group_movement_7d": sold_d,
                 "family_group_avg_qty_day": avg,
-                "family_group_movement_uom": uom,
+                "family_group_movement_uom": sold_uom,
                 "family_receipt_history": ctx.get("family_receipt_history", []),
-                "family_receipt_7d_qty": ctx.get("family_receipt_7d_qty"),
-                "family_receipt_7d_uom": ctx.get("family_receipt_7d_uom") or uom,
+                "family_receipt_7d_qty": receipt_d,
+                "family_receipt_7d_uom": receipt_uom,
                 "family_receipt_7d_day_count": ctx.get("family_receipt_7d_day_count"),
-                "family_receipt_7d_status": ctx.get("family_receipt_7d_status"),
+                "family_receipt_7d_status": receipt_status,
+                "receipt_minus_selling_7d": difference,
+                "receipt_to_selling_ratio": ratio,
+                "receipt_over_selling_pct": (ratio - Decimal("1")) * Decimal("100"),
             })
         cur.close()
 
     rows.sort(
         key=lambda r: (
-            -float(r.get("family_group_avg_qty_day") or 0),
-            -float(r.get("family_group_movement_7d") or 0),
+            -float(r.get("receipt_minus_selling_7d") or 0),
+            -float(r.get("receipt_to_selling_ratio") or 0),
             str(r.get("family_name") or ""),
         )
     )
     return {
-        "contract_version": "YIPMAN_BEST_SELLERS_V1",
+        "contract_version": "YIPMAN_STOCK_FLOW_V1",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
         "rules": {
             "scope": "FAMILY_ARTICLE_ONLY",
-            "sort": "FAMILY_7D_AVG_QTY_DAY_DESC",
+            "qualification": "7D_RECEIPT_AT_LEAST_150_PERCENT_OF_7D_SELLING_MVT",
+            "comparison_uom": "SAME_FAMILY_MOVEMENT_UOM_ONLY",
+            "default_sort": "RECEIPT_MINUS_SELLING_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
         },

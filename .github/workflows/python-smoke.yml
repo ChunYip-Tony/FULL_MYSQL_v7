@@ -113,7 +113,7 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V17_ORDERING_QUALITY' in cache_src
+          assert 'V18_WEEKDAY_USAGE' in cache_src
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -257,7 +257,9 @@ jobs:
           assert 'APPLY_ARTICLE_FAMILY_FIX' in ui
           assert 'RAW source data is never changed' in ui
           assert 'class="cbmeta"' in ui
-          assert '#order .orow .name{font-size:15px' in ui
+          assert '#order .orow .name{font-size:18px' in ui
+          assert '#order .receivingline b{font-size:16px' in ui
+          assert '#order .orderqty{font-size:18px' in ui
           assert '#order .cell{font-size:15px' in ui
           assert '#price .ptop b{font-size:17px!important}' in ui
           assert '#price .pp b{font-size:23px}' in ui
@@ -289,6 +291,12 @@ jobs:
           assert 'data-price-filter="UPC_245">245' in ui
           assert 'data-price-filter="UPC_247">247' in ui
           assert 'data-price-filter="UPC_249">249' in ui
+          assert 'id="priceReasonFilter"' in ui
+          assert 'id="priceSort"' in ui
+          assert "priceFilter==='UPC_249'" in ui
+          assert 'related_240_current_price' in ui
+          assert '240 MAIN PRICE · AUTHORITY' in ui
+          assert '#price{overflow-x:hidden}' in ui
           assert "priceFilter='UPC_240'" in ui
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
@@ -355,7 +363,9 @@ jobs:
           baseline=v2._family_regular_baseline(None,[],prepared_series=series)
           assert baseline['regular_supported_day_count']==4
           assert baseline['sale_days_excluded']==1
-          assert baseline['forecast_method']=='WEEKDAY_SMOOTHED_TO_OVERALL_REGULAR_BASELINE'
+          assert baseline['forecast_method']=='HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS_ELSE_SPARSE_SHRINKAGE'
+          assert baseline['regular_weekday_detail'][0]['forecast_basis']=='HISTORICAL_WEEKDAY_AVERAGE'
+          assert baseline['regular_weekday_detail'][1]['forecast_basis']=='HISTORICAL_WEEKDAY_AVERAGE'
           assert baseline['regular_velocity_by_weekday'][0] != baseline['regular_velocity_by_weekday'][1]
 
           src=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
@@ -370,13 +380,13 @@ jobs:
 
           bo_src=Path('backoffice_runtime.py').read_text(encoding='utf-8')
           assert bo_src.count('def yipman_ordering_calendar(')==1
-          assert 'V17_ORDERING_QUALITY' in bo_src
+          assert 'V18_WEEKDAY_USAGE' in bo_src
           assert 'pre_delivery_stockout_risk' in bo_src
-          assert 'regular_forecast_method":"WEEKDAY_SMOOTHED_NON_PROMO_VELOCITY"' in bo_src
+          assert 'regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS"' in bo_src
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'Preferred observed delivery day' in ui
-          assert 'orderNextDate=nextObservedAfter(orderDate)' in ui
+          assert 'orderNextDate=plusDaysIso(orderDate,7)' in ui
           assert 'STOCKOUT BEFORE DELIVERY' in ui
           assert 'Coverage need' in ui
           print('yipman-ordering-suggestion-quality=PASS')
@@ -510,6 +520,12 @@ jobs:
           assert 'family_receipt_history_by_family' in quick_receipt_src
           assert 'MVT_PHYSICAL_101_109_FAMILY_DAILY_AGGREGATE' in quick_receipt_src
           assert '"family_receipt_history": family_receipt_history' in quick_receipt_src
+          stock_src=inspect.getsource(backoffice_runtime.yipman_best_sellers)
+          assert 'ratio < Decimal("1.50")' in stock_src
+          assert '"receipt_minus_selling_7d": difference' in stock_src
+          cal_src=inspect.getsource(backoffice_runtime.yipman_ordering_calendar)
+          assert 'default_next=default_delivery+timedelta(days=7)' in cal_src
+          assert 'strongest_weekday' in cal_src
 
           # Current cost cannot select a 109 observation as receipt valuation.
           assert "co.movement_type IN ('101','107')" in inspect.getsource(phase3._latest_cost)
@@ -521,6 +537,12 @@ jobs:
           assert "('101','102','109','110')" in canonical_rows_src
           assert "('101','109')" in relation_src
           assert "PHYSICAL_RECEIPT_101_107_NET_REVERSALS" not in reconcile_src
+          weekday_src=inspect.getsource(webapp_v2_runtime._smoothed_weekday_velocity)
+          assert 'if n>=2' in weekday_src
+          assert 'qty/Decimal(n)' in weekday_src
+          order_src=inspect.getsource(webapp_v2_runtime.bulk_ordering_suggestions)
+          assert '"weekday_usage_forecast"' in order_src
+          assert 'HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS' in order_src
           print('canonical-physical-receipt-semantics=PASS')
           PY
 
@@ -714,6 +736,11 @@ jobs:
           assert "data-order-mode=\"REGULAR\"" in text
           assert "data-order-mode=\"PROMOTION\"" in text
           assert "/v1/yipman/ordering-calendar?lookback_days=180" in text
+          assert "orderNextDate=plusDaysIso(orderDate,7)" in text
+          assert "/v1/yipman/stock-flow?limit=40" in text
+          assert "Stock Flow Watch" in text
+          assert "DIFFERENCE ↓" in text
+          assert "receipt_minus_selling_7d" in text
           assert "next_delivery_date=" in text
           print('yipman-dom-bindings=PASS')
           PY
