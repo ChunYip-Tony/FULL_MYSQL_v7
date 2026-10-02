@@ -5401,7 +5401,7 @@ def pricing_review(
             and current_dec is not None
             and current_dec > 0
             and cost_dec is not None
-            and cost_dec >= 0
+            and cost_dec > 0
             and current_oh is not None
             and current_oh > 0
         )
