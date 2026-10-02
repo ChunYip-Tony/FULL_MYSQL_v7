@@ -385,7 +385,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'Preferred observed delivery day' in ui
-          assert 'orderNextDate=nextObservedAfter(orderDate)' in ui
+          assert 'orderNextDate=plusDaysIso(orderDate,7)' in ui
           assert 'STOCKOUT BEFORE DELIVERY' in ui
           assert 'Coverage need' in ui
           print('yipman-ordering-suggestion-quality=PASS')
