@@ -2818,6 +2818,7 @@ def bulk_ordering_suggestions(
     *,
     ordering_date: date|None=None,
     expected_delivery_date: date|None=None,
+    next_delivery_date: date|None=None,
     include_sufficient_stock: bool=False,
     family_ids: set[int]|list[int]|tuple[int,...]|None=None,
     promotion_involved: bool=False,
@@ -2834,7 +2835,9 @@ def bulk_ordering_suggestions(
     delivery=expected_delivery_date or _strict_next_weekday(order_day,default_weekday)
     if delivery < order_day:
         raise ValueError("EXPECTED_DELIVERY_BEFORE_ORDER_DATE")
-    next_next=delivery+timedelta(days=7)
+    next_next=next_delivery_date or (delivery+timedelta(days=7))
+    if next_next <= delivery:
+        raise ValueError("NEXT_DELIVERY_MUST_BE_AFTER_DELIVERY_DATE")
 
     promo_map={}
     for item in promotion_items or []:
@@ -3051,7 +3054,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V1",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V2_TWO_DATE_WINDOW",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
@@ -3061,7 +3064,12 @@ def bulk_ordering_suggestions(
                 "USER_INPUT" if expected_delivery_date is not None
                 else ("FOLLOWING_FRIDAY" if kind=="FRESH" else "FOLLOWING_TUESDAY")
             ),
+            "next_delivery_date":next_next,
             "next_next_delivery_date":next_next,
+            "next_delivery_date_source":(
+                "USER_INPUT" if next_delivery_date is not None
+                else "LEGACY_PLUS_7_DAYS"
+            ),
             "promotion_involved":bool(promotion_involved),
             "promotion_start_date":promotion_start_date,
             "promotion_end_date":promotion_end_date,
@@ -3086,7 +3094,8 @@ def bulk_ordering_suggestions(
             "missing_source_dates_count_as_zero":False,
             "promotion_definition":"PRICE_TYPE_SALE_ONLY",
             "tpr_is_promotion":False,
-            "coverage_target":"THROUGH_DAY_BEFORE_NEXT_NEXT_DELIVERY",
+            "coverage_target":"THROUGH_DAY_BEFORE_SELECTED_NEXT_DELIVERY",
+            "coverage_window_user_selectable":True,
             "saved":False,
             "submitted":False,
         },

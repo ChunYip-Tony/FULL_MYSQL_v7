@@ -118,6 +118,12 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qrecvrole{font-size:8px}.qrecvnum{font-size:17px}.qrecvname{font-size:12px}.qrecvkpi small{font-size:8px}.qrecvkpi b{font-size:14px}
 .qrole{font-size:8px}.qupccode{font-size:10px}.qupcname{font-size:14px}.qupcmetrics b{font-size:14px}.qupcmetrics span,.qready{font-size:9px}.qhidebtn{font-size:10px}.qhiddennote{font-size:9px}
 .day b{font-size:10px}.day strong{font-size:21px}.day span{font-size:9px}.day.past{opacity:.72}.day.today{outline:2px solid rgba(13,79,139,.28);outline-offset:1px}
+.order-tabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:8px}.order-tab{border:1px solid var(--line);background:#fff;border-radius:13px;padding:10px 7px;font-size:11px;font-weight:950}.order-tab.on{background:#142033;color:#fff;border-color:#142033}
+.order-date-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:7px}.order-date-card{border:2px solid #d8e0e6;background:#fff;border-radius:14px;padding:8px 9px;text-align:left}.order-date-card small{display:block;font-size:7px;color:var(--muted);font-weight:950}.order-date-card b{display:block;font-size:15px;margin-top:2px}.order-date-card span{display:block;font-size:7px;color:var(--green);font-weight:900;margin-top:2px}.order-date-card.delivery{border-color:#3b82f6;background:#eff6ff}.order-date-card.next{border-color:#8b5cf6;background:#f5f3ff}.order-date-card.pick{box-shadow:0 0 0 2px rgba(17,24,39,.12)}
+.day.observed{background:#eaf8ef;border:1px solid #a8dfbd}.day.observed span{color:#23784d}.day.delivery{background:#2563eb;color:#fff;outline:2px solid #2563eb}.day.delivery b,.day.delivery span{color:#dbeafe}.day.next{background:#7c3aed;color:#fff;outline:2px solid #7c3aed}.day.next b,.day.next span{color:#ede9fe}
+.order-coverage{background:#142033;color:#fff;border-radius:13px;padding:8px 10px;margin:0 0 8px}.order-coverage small{display:block;font-size:7px;color:#b8c4d2;font-weight:950}.order-coverage b{display:block;font-size:16px;margin-top:2px}.order-coverage span{display:block;font-size:8px;color:#ccd6e2;margin-top:2px}
+.promo-shell{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:13px}.promo-shell h3{font-size:16px;margin:0}.promo-shell p{font-size:9px;color:var(--muted);line-height:1.4}.promo-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.promo-type{border-radius:999px;padding:6px 8px;font-size:8px;font-weight:950}.promo-type.weekly{background:#f0eaff;color:#6b21a8}.promo-type.weekend{background:#fff4d6;color:#8a5b00}
+
 .lh{font-size:9px}.orow .name{font-size:14px}.orow .sub{font-size:9px}.cell{font-size:14px}.cell span{font-size:9px}.rtrace-line{font-size:10px}.rtrace-more{font-size:9px}.receipt-meta{font-size:10px}
 .pill{font-size:10px}.ptop b{font-size:15px}.ptop small{font-size:10px}.pbox b{font-size:20px}.pbox span{font-size:9px}.why{font-size:10px}
 .dcard h3{font-size:13px}.stage b{font-size:8px}.stage span{font-size:8px}.batchrow b{font-size:11px}.batchrow span{font-size:9px}
@@ -374,7 +380,22 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   <main class="workspace">
     <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading best sellers…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
 
-    <section class="page" id="order"><div class="topline"><h2>Ordering</h2><div class="hint">14-DAY DELIVERY VIEW</div></div><div class="daybar" id="dayBar"></div><div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div><div id="orderStatus" class="hint" style="margin:0 2px 7px"></div><div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Choose a delivery day.</div></div></div></section>
+    <section class="page" id="order">
+      <div class="topline"><h2>Ordering</h2><div class="hint">DELIVERY WINDOW</div></div>
+      <div class="order-tabs"><button class="order-tab on" data-order-mode="REGULAR">Regular Order</button><button class="order-tab" data-order-mode="PROMOTION">Promotion Order</button></div>
+      <div id="regularOrderPanel">
+        <div class="order-date-grid">
+          <button class="order-date-card delivery pick" id="deliveryDateCard"><small>DELIVERY DATE</small><b id="deliveryDateText">Loading…</b><span id="deliveryObservedText">Observed delivery day</span></button>
+          <button class="order-date-card next" id="nextDeliveryDateCard"><small>NEXT DELIVERY</small><b id="nextDeliveryDateText">Loading…</b><span id="nextObservedText">Observed delivery day</span></button>
+        </div>
+        <div class="daybar" id="dayBar"></div>
+        <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span>Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
+        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
+        <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
+        <div class="list"><div class="lh"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
+      </div>
+      <div id="promotionOrderPanel" class="hide"><div class="promo-shell"><h3>Promotion Order</h3><p>Promotion ordering uses the same two-date coverage window, but each item is forecast by its promotion window and regular-price window. Temporary Observed True Stock override belongs here only.</p><div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div><p><b>Promotion list:</b> not loaded yet. The regular-order engine below is now separate and never asks for temporary True Stock.</p></div></div>
+    </section>
 
     <section class="page" id="price"><div class="topline"><h2>Price Review</h2><div class="hint">BY DELIVERY PATTERN</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
@@ -404,7 +425,7 @@ const appDate=v=>{
   return mo+'/'+d+' '+wd;
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='quick', priceFilter='LIVE', orderDate=null, pullStart=null, pull=0;
+let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
@@ -417,7 +438,7 @@ function renderView(id){
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
   const p=$('#'+id);if(p)p.scrollTop=0;
   if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
-  if(id==='order'&&!orderDate)loadOrder(0);
+  if(id==='order')initOrdering();
   if(id==='price')loadPrices();
   if(id==='data')loadData();
 }
@@ -838,20 +859,95 @@ async function openUpc(upc){
  }catch(e){sheet('Unable to load',upc,'<div class="detail">'+esc(e.message)+'</div>')}
 }
 
+function dateLocal(v){
+ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+ if(!m)return null;
+ return new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0);
+}
+function isObservedDate(v){
+ const d=dateLocal(v);return !!(d&&orderObservedWeekdays.get(d.getDay()===0?6:d.getDay()-1)?.observed);
+}
+function nextObservedAfter(v){
+ const start=dateLocal(v)||new Date();
+ for(let i=1;i<=21;i++){
+  const d=new Date(start);d.setDate(d.getDate()+i);
+  const wd=d.getDay()===0?6:d.getDay()-1;
+  if(orderObservedWeekdays.get(wd)?.observed)return iso(d);
+ }
+ const fallback=new Date(start);fallback.setDate(fallback.getDate()+7);return iso(fallback);
+}
+function updateOrderWindowUI(){
+ if(!orderDate||!orderNextDate)return;
+ $('#deliveryDateText').textContent=appDate(orderDate);
+ $('#nextDeliveryDateText').textContent=appDate(orderNextDate);
+ $('#deliveryObservedText').textContent=isObservedDate(orderDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#nextObservedText').textContent=isObservedDate(orderNextDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#deliveryDateCard').classList.toggle('pick',orderSelectMode==='DELIVERY');
+ $('#nextDeliveryDateCard').classList.toggle('pick',orderSelectMode==='NEXT');
+ const end=dateLocal(orderNextDate);if(end)end.setDate(end.getDate()-1);
+ $('#orderCoverageText').textContent=appDate(orderDate)+' → '+(end?appDate(iso(end)):'—');
+}
 function buildDays(){
- const bar=$('#dayBar');bar.innerHTML='';
- // 14 dates: prior 7 days through the next 6 days. Today is initially centered.
- for(let offset=-7;offset<=6;offset++){
+ const bar=$('#dayBar');if(!bar)return;bar.innerHTML='';
+ for(let offset=0;offset<=20;offset++){
   const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);
+  const dayIso=iso(d), wd=d.getDay()===0?6:d.getDay()-1, obs=orderObservedWeekdays.get(wd);
   const b=document.createElement('button');
-  b.className='day'+(offset<0?' past':'')+(offset===0?' today':'');
-  b.dataset.offset=offset;
-  b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+d.toLocaleDateString(undefined,{month:'short'}).toUpperCase()+'</span>';
-  b.onclick=()=>loadOrder(offset);
+  b.className='day'+(offset===0?' today':'')+(obs?.observed?' observed':'')+(dayIso===orderDate?' delivery':'')+(dayIso===orderNextDate?' next':'');
+  b.dataset.offset=offset;b.dataset.date=dayIso;
+  b.innerHTML='<b>'+d.toLocaleDateString(undefined,{weekday:'short'}).toUpperCase()+'</b><strong>'+d.getDate()+'</strong><span>'+(obs?.observed?'OBS · '+Number(obs.family_count||0):d.toLocaleDateString(undefined,{month:'short'}).toUpperCase())+'</span>';
+  b.onclick=()=>{
+   if(orderSelectMode==='DELIVERY'){
+    orderDate=dayIso;
+    if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+    orderSelectMode='NEXT';
+   }else{
+    if(dayIso<=orderDate){toast('Next delivery must be after delivery date');return}
+    orderNextDate=dayIso;orderSelectMode='DELIVERY';
+   }
+   buildDays();updateOrderWindowUI();loadOrder(orderDate);
+  };
   bar.appendChild(b);
  }
- requestAnimationFrame(()=>bar.querySelector('.day.today')?.scrollIntoView({behavior:'auto',block:'nearest',inline:'center'}));
+ requestAnimationFrame(()=>bar.querySelector('.day.delivery')?.scrollIntoView({behavior:'auto',block:'nearest',inline:'center'}));
 }
+async function initOrdering(force=false){
+ if(orderInitPromise&&!force)return orderInitPromise;
+ orderInitPromise=(async()=>{
+  if(!orderCalendarLoaded||force){
+   try{
+    const d=await api('/v1/yipman/ordering-calendar?lookback_days=180',{timeoutMs:18000});
+    orderObservedWeekdays=new Map((d.rows||[]).map(x=>[Number(x.weekday_number),x]));
+    orderCalendarLoaded=true;
+   }catch(e){
+    orderObservedWeekdays=new Map([[1,{observed:true,family_count:1}],[4,{observed:true,family_count:1}]]);
+    $('#orderStatus').textContent='Observed calendar fallback · '+e.message;
+   }
+  }
+  if(!orderDate){
+   const base=new Date();base.setHours(12,0,0,0);
+   for(let i=1;i<=14;i++){
+    const d=new Date(base);d.setDate(d.getDate()+i);
+    const wd=d.getDay()===0?6:d.getDay()-1;
+    if(orderObservedWeekdays.get(wd)?.observed){orderDate=iso(d);break}
+   }
+   if(!orderDate){const d=new Date(base);d.setDate(d.getDate()+1);orderDate=iso(d)}
+  }
+  if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+  buildDays();updateOrderWindowUI();
+  await loadOrder(orderDate);
+ })();
+ try{return await orderInitPromise}finally{orderInitPromise=null}
+}
+$('#deliveryDateCard').onclick=()=>{orderSelectMode='DELIVERY';updateOrderWindowUI()};
+$('#nextDeliveryDateCard').onclick=()=>{orderSelectMode='NEXT';updateOrderWindowUI()};
+$$('[data-order-mode]').forEach(b=>b.onclick=()=>{
+ const mode=b.dataset.orderMode;
+ $$('[data-order-mode]').forEach(x=>x.classList.toggle('on',x===b));
+ $('#regularOrderPanel').classList.toggle('hide',mode!=='REGULAR');
+ $('#promotionOrderPanel').classList.toggle('hide',mode!=='PROMOTION');
+ if(mode==='REGULAR')initOrdering();
+});
 function receiptTracePairs(r){
  const events=Array.isArray(r?.receipt_events)?r.receipt_events:[];
  const pairs=[], seen=new Set();
@@ -974,18 +1070,23 @@ function renderOrderRoster(rows,data,h,stale){
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
-async function loadOrder(offset){
+async function loadOrder(value){
  const requestId=++orderRequestSeq;
- const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+offset);orderDate=iso(d);
- $$('.day').forEach(x=>x.classList.toggle('on',Number(x.dataset.offset)===offset));
- const isPast=offset<0;
+ let d=null;
+ if(typeof value==='string')d=dateLocal(value);
+ else{d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+Number(value||0))}
+ if(!d)return;
+ orderDate=iso(d);
+ buildDays();updateOrderWindowUI();
+ const today0=new Date();today0.setHours(12,0,0,0);
+ const isPast=d<today0;
  $('#orderTools').style.display=isPast?'none':'grid';
  $('#orderCol1').textContent='FAMILY / RECEIVING';
  $('#orderCol2').textContent=isPast?'RECEIPT':'OH';
  $('#orderCol3').textContent=isPast?'UOM':'ORDER';
  $('#orderStatus').textContent=(isPast?'Loading delivery history for ':'Loading ')+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';
  $('#orderRows').innerHTML='<div class="loading">'+(isPast?'Checking actual canonical receipts…':'Checking receiving cadence and coverage…')+'</div>';
- const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate;
+ const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate+(!isPast&&orderNextDate?'&next_delivery_date='+encodeURIComponent(orderNextDate):'');
  try{
   let data=null;
   for(let i=0;i<10;i++){
@@ -1168,14 +1269,13 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await loadOrder(Number($('.day.on')?.dataset.offset||0));else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
+async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
 
 const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
 const initialView=['quick','order','price','data'].includes(initialHash)?initialHash:'quick';
 history.replaceState({yipman:true,root:true,view:'quick'},'', '#quick');
 history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView);
 historyReady=true;
-buildDays();
 renderView(initialView);
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();

@@ -43,6 +43,7 @@ from backoffice_runtime import (
     warm_backoffice_home_summary,
     yipman_best_sellers as backoffice_yipman_best_sellers,
     yipman_receipt_event_detail as backoffice_yipman_receipt_event_detail,
+    yipman_ordering_calendar as backoffice_yipman_ordering_calendar,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -3761,24 +3762,47 @@ def backoffice_pricing_accept(
     return json.loads(json.dumps(result,default=j))
 
 
+@app.get('/v1/yipman/ordering-calendar')
+def yipman_ordering_calendar(lookback_days:int=180):
+    try:
+        result=backoffice_yipman_ordering_calendar(lookback_days=lookback_days)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman ordering calendar failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
 @app.get('/v1/yipman/ordering-review')
-def yipman_ordering(category:str='ALL', delivery_date:str|None=None):
+def yipman_ordering(
+    category:str='ALL',
+    delivery_date:str|None=None,
+    next_delivery_date:str|None=None,
+):
     try:
         parsed_delivery=None
+        parsed_next_delivery=None
         if delivery_date:
             try:
                 parsed_delivery=date.fromisoformat(str(delivery_date))
             except ValueError:
                 raise ValueError('DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
+        if next_delivery_date:
+            try:
+                parsed_next_delivery=date.fromisoformat(str(next_delivery_date))
+            except ValueError:
+                raise ValueError('NEXT_DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
         result=(
             backoffice_cached_ordering_review(
                 category=category,
                 delivery_date=parsed_delivery,
+                next_delivery_date=parsed_next_delivery,
                 best_available_delivery_evidence=True,
             )
             if parsed_delivery is not None
             else backoffice_ordering_review(
                 category=category,
+                next_delivery_date=parsed_next_delivery,
                 best_available_delivery_evidence=True,
             )
         )
