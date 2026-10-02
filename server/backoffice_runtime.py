@@ -2930,6 +2930,53 @@ def _quick_receiving_article_context(
         for x in movement_days_7
         if x.get("date") is not None
     }
+
+    # Keep a per-Article 7D receipt subtotal from the exact same canonical
+    # physical 101/109 event pool used by the Family total. This makes every
+    # Receiving Article row auditable against Family 7D Receipt even when an
+    # Article has more than two receipt events inside the seven completed days.
+    receipt_7d_by_article: dict[str, dict[str, Any]] = {}
+    for art, entries in per_article.items():
+        entries_7 = [
+            e for e in entries
+            if e.get("date") in receipt_dates_7
+        ]
+        uoms_7 = {
+            str(e.get("uom") or "").strip().upper()
+            for e in entries_7
+            if str(e.get("uom") or "").strip()
+        }
+        if entries_7 and len(uoms_7) == 1 and all(
+            e.get("quantity") is not None for e in entries_7
+        ):
+            receipt_7d_by_article[art] = {
+                "quantity": sum(
+                    (_d(e.get("quantity")) for e in entries_7),
+                    Decimal("0"),
+                ),
+                "uom": next(iter(uoms_7)),
+                "status": "READY",
+                "receipt_day_count": len({
+                    e.get("date") for e in entries_7 if e.get("date") is not None
+                }),
+            }
+        elif entries_7:
+            receipt_7d_by_article[art] = {
+                "quantity": None,
+                "uom": None,
+                "status": "HOLD_MIXED_OR_MISSING_RECEIPT_UOM",
+                "receipt_day_count": len({
+                    e.get("date") for e in entries_7 if e.get("date") is not None
+                }),
+            }
+        else:
+            receipt_7d_by_article[art] = {
+                "quantity": Decimal("0"),
+                "uom": None,
+                "status": "READY_ZERO_RECEIPTS",
+                "receipt_day_count": 0,
+            }
+
     receipt_7d_by_family: dict[int, dict[str, Any]] = {}
     family_receipt_history_by_family: dict[int, list[dict[str, Any]]] = {}
     for fid in fids:
@@ -3161,11 +3208,14 @@ def _quick_receiving_article_context(
     out: dict[int, dict[str, Any]] = {}
     for fid, row in family_rows.items():
         source_article = source_by_family.get(fid)
+        source_article_key = str(source_article or "").strip()
+        source_receipt_history = receipt_history_by_article.get(source_article_key, [])
+        source_receipt_7d = receipt_7d_by_article.get(source_article_key, {})
         family_receipt_history = family_receipt_history_by_family.get(fid, [])
         family_receipt = (
             family_receipt_history[0]
             if family_receipt_history
-            else receipt_by_article.get(str(source_article or ""), {})
+            else receipt_by_article.get(source_article_key, {})
         )
 
         articles: list[dict[str, Any]] = []
@@ -3210,6 +3260,10 @@ def _quick_receiving_article_context(
                     "receipt_uom": receipt.get("uom"),
                     "receipt_source": receipt.get("source"),
                     "receipt_history": receipt_history_by_article.get(art, []),
+                    "receipt_7d_qty": (receipt_7d_by_article.get(art) or {}).get("quantity"),
+                    "receipt_7d_uom": (receipt_7d_by_article.get(art) or {}).get("uom"),
+                    "receipt_7d_status": (receipt_7d_by_article.get(art) or {}).get("status"),
+                    "receipt_7d_day_count": (receipt_7d_by_article.get(art) or {}).get("receipt_day_count"),
                 }
             )
             explicit_upc_keys = sorted(set(manual_upcs_by_article.get((fid, art), [])))
@@ -3414,6 +3468,15 @@ def _quick_receiving_article_context(
             "family_receipt_uom": family_receipt.get("uom"),
             "family_receipt_source": family_receipt.get("source"),
             "family_receipt_history": family_receipt_history,
+            # Source/Main Article can itself be a real Receiving Article. Keep
+            # its actual Article-level history separate from the Family daily
+            # aggregate so the UI never has to hide or duplicate that receipt.
+            "family_source_receipt_verified": bool(source_receipt_history),
+            "family_source_receipt_history": source_receipt_history,
+            "family_source_receipt_7d_qty": source_receipt_7d.get("quantity"),
+            "family_source_receipt_7d_uom": source_receipt_7d.get("uom"),
+            "family_source_receipt_7d_status": source_receipt_7d.get("status"),
+            "family_source_receipt_7d_day_count": source_receipt_7d.get("receipt_day_count"),
             "family_receipt_7d_qty": (receipt_7d_by_family.get(fid) or {}).get("quantity"),
             "family_receipt_7d_uom": (receipt_7d_by_family.get(fid) or {}).get("uom"),
             "family_receipt_7d_status": (receipt_7d_by_family.get(fid) or {}).get("status"),
