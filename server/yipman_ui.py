@@ -1447,7 +1447,7 @@ function priceSignals(r){
   if(code==='GP_DOLLAR_TEST')out.push('GP$/DAY OPPORTUNITY');
   return out.slice(0,4);
 }
-function friendlySignal(v){return String(v||'').replaceAll('_',' ').replace(/s+/g,' ').trim()}
+function friendlySignal(v){return String(v||'').replaceAll('_',' ').replace(/\s+/g,' ').trim()}
 
 function schedulePriceRetry(requestId,delayMs=3000){
  clearTimeout(priceRetryTimer);
