@@ -3184,6 +3184,14 @@ def _positive_price(value: Any) -> Decimal | None:
     return price if price > 0 else None
 
 
+def _gp_pct_for_price(price: Any, cost: Any) -> Decimal | None:
+    p = _positive_price(price)
+    c = _positive_price(cost)
+    if p is None or c is None:
+        return None
+    return (p - c) / p
+
+
 MIN_TEST_PRICE_STEP = Decimal("0.45")
 
 
@@ -3300,12 +3308,25 @@ def _tested_testing_prices(
     company_high: Any = None,
 ) -> dict[str, Any]:
     current_price = _positive_price(current)
-    tested_price = _positive_price(tested)
+    tested_evidence_price = _positive_price(tested)
+    low = _positive_price(company_low)
+    high = _positive_price(company_high)
+    tested_price = (
+        _retail_price_point(
+            tested_evidence_price,
+            min_price=low,
+            max_price=high,
+        )
+        if tested_evidence_price is not None
+        else None
+    )
+    if tested_price is None:
+        tested_price = tested_evidence_price
     raw_target_price = _positive_price(target)
     target_price = _retail_price_point(
         raw_target_price,
-        min_price=_positive_price(company_low),
-        max_price=_positive_price(company_high),
+        min_price=low,
+        max_price=high,
     ) if raw_target_price is not None else None
     # Testing always starts from the live CURRENT price. Tested is the
     # strongest proved reference, never the starting point for a new action.
@@ -3314,15 +3335,16 @@ def _tested_testing_prices(
         anchor,
         target_price,
         observed_candidates=observed_candidates,
-        min_price=_positive_price(company_low),
-        max_price=_positive_price(company_high),
+        min_price=low,
+        max_price=high,
     )
     return {
         "tested_price": tested_price,
+        "tested_evidence_price": tested_evidence_price,
         "testing_price": testing_price,
         "target_sweet_spot_price": target_price,
         "raw_target_sweet_spot_price": raw_target_price,
-        "price_point_rounding": "NEAREST_OF_29_49_69_79_99",
+        "price_point_rounding": "NEAREST_X9_TENTH_PRICE_POINT",
         "testing_anchor_price": anchor,
         "testing_step_rule": "CURRENT_TO_TARGET_MIN_0_45_STEP_NEAREST_OBSERVED_WITHIN_GRADUAL_CAP",
     }
@@ -5303,17 +5325,40 @@ def pricing_review(
             if raw_target_candidate is not None
             else None
         )
-        tested_price = _positive_price(live.get("sweet_spot_price"))
+        tested_evidence_price = _positive_price(live.get("sweet_spot_price"))
         observed_candidates = list(row.get("top_observed_candidates") or [])
         current_dec = _positive_price(current_price)
         cost_dec = _positive_price(current_cost)
+        tested_floor = (
+            max(
+                x for x in (
+                    (cost_dec + Decimal("0.01")) if cost_dec is not None else None,
+                    company_low,
+                )
+                if x is not None
+            )
+            if cost_dec is not None or company_low is not None
+            else None
+        )
+        tested_price = (
+            _retail_price_point(
+                tested_evidence_price,
+                min_price=tested_floor,
+                max_price=company_high,
+            )
+            if tested_evidence_price is not None
+            else None
+        )
+        if tested_price is None:
+            tested_price = tested_evidence_price
         current_oh = _d(live.get("current_oh")) if live.get("current_oh") is not None else None
 
         row["tested_price"] = tested_price
-        row["tested_price_basis"] = "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_MAX_GP_PER_DAY"
+        row["tested_evidence_price"] = tested_evidence_price
+        row["tested_price_basis"] = "RETAIL_ALIGNED_STRONGEST_PROVED_HISTORICAL_SWEET_SPOT"
         row["target_sweet_spot_price"] = target_candidate
         row["raw_target_sweet_spot_price"] = raw_target_candidate
-        row["price_point_rounding"] = "NEAREST_OF_29_49_69_79_99"
+        row["price_point_rounding"] = "NEAREST_X9_TENTH_PRICE_POINT"
         row["testing_price"] = None
         row["testing_target_price"] = None
         row["testing_price_basis"] = None
@@ -5482,6 +5527,11 @@ def pricing_review(
         row["slow_velocity_trend"] = slow_velocity
         row["company_range_violation"] = outside_company
 
+        row["current_price_gp_pct"] = _gp_pct_for_price(current_dec, cost_dec)
+        row["tested_price_gp_pct"] = _gp_pct_for_price(tested_price, cost_dec)
+        row["testing_price_gp_pct"] = _gp_pct_for_price(testing_price, cost_dec)
+        row["target_sweet_spot_gp_pct"] = _gp_pct_for_price(target_candidate, cost_dec)
+
         row["candidate_price"] = action_price
         row["suggested_price"] = action_price
         row["suggestion_reason_code"] = reason_code
@@ -5552,7 +5602,7 @@ def pricing_review(
             "best_available_estimate_allowed": bool(allow_stale_estimate),
             "estimate_basis": "LATEST_AVAILABLE_CANONICAL_POS_AND_MVT_INDEPENDENT",
             "estimate_is_clearly_labelled": True,
-            "tested_price": "STRONGEST_PROVED_HISTORICAL_SWEET_SPOT_FROM_ACTUAL_SALES_GP_DOLLARS_PER_DAY",
+            "tested_price": "RETAIL_ALIGNED_TO_NEAREST_X9_TENTH_PRICE_POINT_FROM_STRONGEST_PROVED_HISTORICAL_SWEET_SPOT;RAW_EVIDENCE_PRESERVED",
             "testing_price": "CURRENT_PRICE_BASED_CONTROLLED_STEP; MIN_ABSOLUTE_CHANGE_0_45; PRIORITIZE_FRESHNESS_VELOCITY_WHEN_SLOW; OTHERWISE_STEP_TOWARD_TESTED_OR_GP_DOLLAR_TARGET; HIGHER_PRICE_GRADUAL_CAP_ABOUT_5PCT",
             "price_action_priority": "PAIR_FIX_THEN_COMPANY_RANGE_THEN_FRESHNESS_VELOCITY_TEST_THEN_TESTED_SWEET_SPOT_GAP_THEN_GP_DOLLAR_TEST",
             "source_contract": report.get("price_suggestion_rules"),
