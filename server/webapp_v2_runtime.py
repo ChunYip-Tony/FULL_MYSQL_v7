@@ -6136,11 +6136,23 @@ def performance_report(
 
             # No price-change suggestion is needed when the live current
             # price is already within +/- $0.25 of the supported candidate.
-            if (
+            tested_sweet = (
+                _d(row.get("sweet_spot_price"))
+                if row.get("sweet_spot_price") is not None
+                and _d(row.get("sweet_spot_price")) > 0
+                else None
+            )
+            target_close = bool(
                 current is not None
                 and suggested is not None
                 and abs(_d(suggested)-_d(current)) <= Decimal("0.25")
-            ):
+            )
+            tested_close = bool(
+                tested_sweet is None
+                or current is None
+                or abs(tested_sweet-_d(current)) <= Decimal("0.25")
+            )
+            if target_close and tested_close:
                 summary["price_tolerance_suppressed"]+=1
                 continue
 
@@ -6217,6 +6229,8 @@ def performance_report(
                 "suggestion_basis":basis,
                 "selection_basis":price_opt.get("selection_basis"),
                 "historical_window_supported_days":price_opt.get("historical_window_supported_days"),
+                "tested_price":price_opt.get("sweet_spot_price"),
+                "top_observed_candidates":price_opt.get("top_observed_candidates") or [],
                 "company_price_a":price_opt.get("company_prices",{}).get("A"),
                 "company_price_b":price_opt.get("company_prices",{}).get("B"),
                 "company_price_c":price_opt.get("company_prices",{}).get("C"),
