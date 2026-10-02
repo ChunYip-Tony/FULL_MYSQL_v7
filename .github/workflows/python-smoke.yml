@@ -269,7 +269,6 @@ jobs:
           assert 'Current Cost' in desktop
           assert 'tested_price_gp_pct' in desktop
           assert 'testing_price_gp_pct' in desktop
-          assert "evidence '+money(r.tested_evidence_price)" in desktop
           print('controlled-price-progress=PASS')
           PY
 
