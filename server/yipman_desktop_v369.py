@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 YIPMAN_DESKTOP_CSS = r"""
-@media (min-width:900px){
+@media (min-width:760px){
   html.yipman-desktop,html.yipman-desktop body{height:auto!important;min-height:100%;background:#f3f7fb!important;overflow:auto!important}
   html.yipman-desktop #app{display:none!important}
   #ydesk{--nav:#153351;--nav2:#0f2842;--blue:#0b72f4;--ink:#10233d;--muted:#6b7d92;--line:#dbe5ef;--bg:#f3f7fb;--card:#fff;--green:#21a867;--amber:#dda00e;--red:#d94159;--purple:#7658e8;--shadow:0 7px 24px rgba(22,49,79,.07);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}
