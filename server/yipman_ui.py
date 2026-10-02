@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v362';
+const CACHE='yipman-v363';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -448,7 +448,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
       </div>
     </section>
 
-    <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">COMPACT · LIVE PROGRESS</div></div><div class="filters"><button class="pill on" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
+    <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">COMPACT · LIVE PROGRESS</div></div><div class="filters"><button class="pill on" data-price-filter="CORE_UPC">240 / 245 / 247 / 249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
 
     <section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">BACK OFFICE UNCHANGED</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
@@ -476,7 +476,7 @@ const appDate=v=>{
   return mo+'/'+d+' '+wd;
 };
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
+let current='quick', priceFilter='CORE_UPC', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
@@ -1486,7 +1486,12 @@ async function loadPrices(opts={}){
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||String(d.cache_status||'').toUpperCase()==='STALE_REFRESHING';
   const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||r.actionable||String(r.suggestion_reason_code||''));
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
+  const coreUpc=r=>{
+    const digits=String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'');
+    return ['240','245','247','249'].some(prefix=>digits.startsWith(prefix));
+  };
   const patternFiltered=meaningful.filter(r=>{
+    if(priceFilter==='CORE_UPC')return coreUpc(r);
     if(priceFilter==='LIVE')return String(r.category||'').toUpperCase()==='LIVE';
     const days=observed(r);
     if(priceFilter==='TUE')return days.includes('TUESDAY');
@@ -1495,7 +1500,7 @@ async function loadPrices(opts={}){
   });
   const ignoredCount=patternFiltered.filter(priceIsIgnored).length;
   const rows=patternFiltered.filter(r=>!priceIsIgnored(r)).slice(0,24);
-  const filterLabel=priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
+  const filterLabel=priceFilter==='CORE_UPC'?'240 / 245 / 247 / 249':priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
   $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+ignoredCount+' ignored <30m · '+Number(d.suppressed_accepted_count||0)+' accepted hidden';
 
   $('#priceRows').innerHTML=rows.map((r,i)=>{
