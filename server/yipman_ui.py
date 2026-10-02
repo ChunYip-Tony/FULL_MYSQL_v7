@@ -14,39 +14,7 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "
-/* V392 Quick Check Stock Flow: compact flow-first card layout. */
-.stockratio{align-self:start;background:rgba(255,255,255,.78);border:1px solid rgba(70,80,90,.12);border-radius:8px;padding:4px 6px;text-align:right;min-width:76px}
-.stockratio small{display:block;font-size:6px;color:#74808a;font-weight:950;letter-spacing:.02em}
-.stockratio b{display:block;font-size:13px;line-height:1.05;font-weight:1000;margin-top:1px}
-.stockflowgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(90px,.82fr);gap:4px;margin-top:5px}
-.stockflowgrid .bestmetric{min-width:0;padding:5px 6px}
-.stockflowgrid .bestmetric b{font-size:17px;white-space:nowrap}
-.stockflowgrid .bestmetric span{font-size:6.5px}
-.stockflowgrid .stockdiff{align-self:stretch;min-width:0;text-align:left;padding:5px 6px;border-radius:8px;background:#ffe9e9;border-color:#e7b0b0;box-shadow:none}
-.stockflowgrid .stockdiff small{font-size:6px;color:#945a5a}
-.stockflowgrid .stockdiff>b{display:block!important;background:transparent!important;padding:0!important;margin-top:2px!important;font-size:16px;line-height:1;color:#a72b2b;white-space:nowrap}
-.stockflowgrid .stockdiff>span{font-size:6.5px;color:#8d5e5e;margin-top:2px}
-.stockflowgrid .stockdiff.promoted{background:#dff6df;border-color:#7bcf8d;box-shadow:none;min-width:0}
-.stockflowgrid .stockdiff.promoted small,.stockflowgrid .stockdiff.promoted>span{color:#356a42}
-.stockflowgrid .stockdiff.promoted>b{color:#123f1d}
-.stockflowgrid .stockdiff.nosale{background:#ffe9e9;border-color:#e7b0b0}
-.stockwatch{display:inline-block!important;width:max-content;border-radius:999px;background:#fff06a;padding:2px 5px!important;font-size:6px!important;font-weight:1000!important;color:#463f00!important}
-.stocksale.stockpromo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 7px;align-items:center;margin-top:4px;padding:5px 6px;border:1px solid rgba(64,170,74,.25);border-radius:8px;background:rgba(111,229,119,.18)}
-.stocksale.stockpromo strong{grid-column:1/-1;font-size:6.5px}
-.stocksale.stockpromo .promolift{margin:0;font-size:8px;padding:2px 6px}
-.stocksale.stockpromo .promobasis{margin:1px 0 0;font-size:6px}
-.stocksale.stockpromo .promoprice{margin:0;padding:3px 6px;min-width:92px}
-.stocksale.stockpromo .promoprice small{font-size:5.8px!important}
-.stocksale.stockpromo .promoprice b{font-size:8px!important}
-@media(max-width:365px){
-  .stockflowgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 86px}
-  .stockflowgrid .bestmetric b{font-size:15px}
-  .stockflowgrid .stockdiff>b{font-size:14px}
-  .stockratio{min-width:70px}
-}
-
-</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -652,6 +620,38 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .stockpromo .promoprice{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:4px;background:#fff34a;border-radius:999px;padding:3px 7px;color:#102917;white-space:nowrap}
 .stockpromo .promoprice small{display:block;font-size:6.5px!important;color:#1c3a22!important;font-weight:1000!important;margin:0!important}
 .stockpromo .promoprice b{display:block;font-size:9px!important;line-height:1.05!important;color:#102917!important;font-weight:1000!important;margin:0!important}
+
+
+/* V392 Quick Check Stock Flow: compact flow-first card layout. */
+.stockratio{align-self:start;background:rgba(255,255,255,.78);border:1px solid rgba(70,80,90,.12);border-radius:8px;padding:4px 6px;text-align:right;min-width:76px}
+.stockratio small{display:block;font-size:6px;color:#74808a;font-weight:950;letter-spacing:.02em}
+.stockratio b{display:block;font-size:13px;line-height:1.05;font-weight:1000;margin-top:1px}
+.stockflowgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(90px,.82fr);gap:4px;margin-top:5px}
+.stockflowgrid .bestmetric{min-width:0;padding:5px 6px}
+.stockflowgrid .bestmetric b{font-size:17px;white-space:nowrap}
+.stockflowgrid .bestmetric span{font-size:6.5px}
+.stockflowgrid .stockdiff{align-self:stretch;min-width:0;text-align:left;padding:5px 6px;border-radius:8px;background:#ffe9e9;border-color:#e7b0b0;box-shadow:none}
+.stockflowgrid .stockdiff small{font-size:6px;color:#945a5a}
+.stockflowgrid .stockdiff>b{display:block!important;background:transparent!important;padding:0!important;margin-top:2px!important;font-size:16px;line-height:1;color:#a72b2b;white-space:nowrap}
+.stockflowgrid .stockdiff>span{font-size:6.5px;color:#8d5e5e;margin-top:2px}
+.stockflowgrid .stockdiff.promoted{background:#dff6df;border-color:#7bcf8d;box-shadow:none;min-width:0}
+.stockflowgrid .stockdiff.promoted small,.stockflowgrid .stockdiff.promoted>span{color:#356a42}
+.stockflowgrid .stockdiff.promoted>b{color:#123f1d}
+.stockflowgrid .stockdiff.nosale{background:#ffe9e9;border-color:#e7b0b0}
+.stockwatch{display:inline-block!important;width:max-content;border-radius:999px;background:#fff06a;padding:2px 5px!important;font-size:6px!important;font-weight:1000!important;color:#463f00!important}
+.stocksale.stockpromo{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 7px;align-items:center;margin-top:4px;padding:5px 6px;border:1px solid rgba(64,170,74,.25);border-radius:8px;background:rgba(111,229,119,.18)}
+.stocksale.stockpromo strong{grid-column:1/-1;font-size:6.5px}
+.stocksale.stockpromo .promolift{margin:0;font-size:8px;padding:2px 6px}
+.stocksale.stockpromo .promobasis{margin:1px 0 0;font-size:6px}
+.stocksale.stockpromo .promoprice{margin:0;padding:3px 6px;min-width:92px}
+.stocksale.stockpromo .promoprice small{font-size:5.8px!important}
+.stocksale.stockpromo .promoprice b{font-size:8px!important}
+@media(max-width:365px){
+  .stockflowgrid{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 86px}
+  .stockflowgrid .bestmetric b{font-size:15px}
+  .stockflowgrid .stockdiff>b{font-size:14px}
+  .stockratio{min-width:70px}
+}
 
 </style>
 </head>
