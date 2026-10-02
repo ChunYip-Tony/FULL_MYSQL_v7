@@ -31,8 +31,13 @@ WEEKDAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","
 # Store-facing price points used for generated / suggested retail prices.
 # Tested sweet spots remain the actual observed historical price evidence and
 # are intentionally NOT rewritten to a different price point.
-RETAIL_PRICE_ENDINGS = tuple(
-    Decimal(f"0.{n:02d}") for n in range(9, 100, 10)
+RETAIL_PRICE_ENDINGS = (
+    Decimal("0.29"),
+    Decimal("0.49"),
+    Decimal("0.59"),
+    Decimal("0.69"),
+    Decimal("0.79"),
+    Decimal("0.99"),
 )
 
 
@@ -44,9 +49,9 @@ def _retail_price_point(
 ) -> Decimal | None:
     """Return the nearest normal store retail price point.
 
-    Generated retail-facing target/testing prices use x9 endings at 10-cent
-    intervals (.09/.19/.29/.39/.49/.59/.69/.79/.89/.99). Optional bounds
-    preserve hard cost / Company-price guardrails. If no standard ending
+    Generated retail-facing target/testing prices use the store's common
+    endings .29/.49/.59/.69/.79/.99. Optional bounds preserve hard cost /
+    Company-price guardrails. If no standard ending
     exists inside the bounds, return None so the caller can preserve the hard
     business constraint rather than fabricate an out-of-range price.
     """
