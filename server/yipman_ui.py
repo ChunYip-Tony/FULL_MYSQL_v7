@@ -765,7 +765,7 @@ function aiAnswer(question){
  return '<b>Yipman AI V1</b><br>I can answer from the current Stock Flow, Ordering, Price Review and QA context. Try asking “why this order?”, “price opportunities”, “why is receipt high?”, or “what needs attention today?”.';
 }
 function bindAi(){
- $('[data-ai-question]').forEach(b=>b.onclick=()=>{const q=b.dataset.aiQuestion||b.textContent||'';aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai')});
+ $$('[data-ai-question]').forEach(b=>b.onclick=()=>{const q=b.dataset.aiQuestion||b.textContent||'';aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai')});
  const form=$('#aiForm'),input=$('#aiInput');
  if(form)form.onsubmit=e=>{e.preventDefault();const q=input.value.trim();if(!q)return;aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai');input.value=''};
 }
