@@ -2241,10 +2241,9 @@ def _ordering_family_movement_metrics(
 ) -> dict[str,Any]:
     """Read Family 251-252 demand directly from canonical movement history.
 
-    Uses exact canonical (file_id, posting_date) pairs. This preserves the
-    Family base UOM even when the latest 7 completed MVT days contain zero
-    movement, allowing a 28-day Family movement fallback instead of forcing
-    Ordering back to incompatible UPC selling UOMs.
+    Returns both the total and zero-filled canonical daily rows. The daily rows
+    allow Ordering to learn weekday shape without treating missing source dates
+    as zero.
     """
     days=list(data_days or [])
     if not days:
@@ -2254,6 +2253,7 @@ def _ordering_family_movement_metrics(
             "uom":None,
             "velocity_per_supported_day":None,
             "supported_day_count":0,
+            "rows":[],
             "basis":"NO_CANONICAL_MVT_DAYS",
         }
 
@@ -2264,51 +2264,85 @@ def _ordering_family_movement_metrics(
         args.extend([int(d["file_id"]),d["date"]])
 
     cur.execute(
-        f"""SELECT base_uom_code,SUM(net_sold_quantity) AS q
+        f"""SELECT posting_date,base_uom_code,SUM(net_sold_quantity) AS q
             FROM family_movement_observation
             WHERE family_id=%s
               AND ({' OR '.join(clauses)})
-            GROUP BY base_uom_code""",
+            GROUP BY posting_date,base_uom_code""",
         tuple(args),
     )
-    rows=[
+    raw=[
         x for x in cur.fetchall()
         if x.get("q") is not None
         and str(x.get("base_uom_code") or "").strip()
     ]
-    if not rows:
+    if not raw:
         return {
             "status":"UNAVAILABLE",
             "quantity":Decimal("0"),
             "uom":None,
             "velocity_per_supported_day":None,
             "supported_day_count":len(days),
+            "rows":[{"date":d["date"],"sold_quantity":Decimal("0")} for d in days],
             "basis":"NO_251_252_ROWS_IN_WINDOW",
         }
-    if len(rows)!=1:
+
+    uoms={
+        str(x.get("base_uom_code") or "").strip().upper()
+        for x in raw
+    }
+    if len(uoms)!=1:
         return {
             "status":"BLOCKED_FAMILY_MOVEMENT_INCONSISTENT",
             "quantity":None,
             "uom":None,
             "velocity_per_supported_day":None,
             "supported_day_count":len(days),
+            "rows":[],
             "basis":"MULTIPLE_FAMILY_MOVEMENT_UOMS",
-            "observed_uoms":sorted({
-                str(x.get("base_uom_code") or "").strip().upper()
-                for x in rows
-            }),
+            "observed_uoms":sorted(uoms),
         }
 
-    qty=_d(rows[0].get("q"))
-    uom=str(rows[0].get("base_uom_code") or "").strip().upper()
+    uom=next(iter(uoms))
+    by_date={d["date"]:Decimal("0") for d in days}
+    for x in raw:
+        dt=x.get("posting_date")
+        if dt in by_date:
+            by_date[dt]+=_d(x.get("q"))
+    rows=[
+        {"date":d["date"],"sold_quantity":by_date[d["date"]]}
+        for d in sorted(days,key=lambda x:x["date"])
+    ]
+    qty=sum((_d(x["sold_quantity"]) for x in rows),Decimal("0"))
     return {
         "status":"READY",
         "quantity":qty,
         "uom":uom,
         "velocity_per_supported_day":qty/Decimal(len(days)),
         "supported_day_count":len(days),
+        "rows":rows,
         "basis":"FAMILY_251_MINUS_252_CANONICAL_COMPLETED_MVT_DAYS",
     }
+
+
+def _smoothed_weekday_velocity(
+    daily_rows: list[dict[str,Any]],
+    overall_velocity: Any,
+    prior_days: int=2,
+) -> dict[int,Decimal]:
+    """Shrink sparse weekday movement toward the current overall velocity."""
+    overall=_d(overall_velocity)
+    prior=Decimal(max(1,int(prior_days or 2)))
+    out={}
+    for wd in range(7):
+        matches=[
+            x for x in (daily_rows or [])
+            if x.get("date") is not None and int(x["date"].weekday())==wd
+        ]
+        qty=sum((_d(x.get("sold_quantity")) for x in matches),Decimal("0"))
+        n=Decimal(len(matches))
+        out[wd]=(qty+overall*prior)/(n+prior) if n+prior>0 else overall
+    return out
 
 
 def _ordering_family_movement_7d(
