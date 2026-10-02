@@ -2,9 +2,18 @@ from __future__ import annotations
 
 import json
 
+try:
+    from .yipman_desktop_v369 import YIPMAN_DESKTOP_CSS, YIPMAN_DESKTOP_JS
+except ImportError:
+    from yipman_desktop_v369 import YIPMAN_DESKTOP_CSS, YIPMAN_DESKTOP_JS
+
 
 def yipman_html(version: str = "") -> str:
-    return YIPMAN_HTML.replace("__VERSION__", str(version or ""))
+    html = YIPMAN_HTML.replace("__VERSION__", str(version or ""))
+    desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v369-css\">" + YIPMAN_DESKTOP_CSS + "</style></head>")
+    html = html.replace("</body>", "<script id=\"yipman-desktop-v369-js\">" + YIPMAN_DESKTOP_JS + "</script></body>")
+    return html
 
 
 def yipman_manifest() -> str:
@@ -30,7 +39,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v368';
+const CACHE='yipman-v369';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -554,7 +563,7 @@ window.addEventListener('popstate',e=>{
   }
   if(st?.yipman&&st.view){renderView(st.view);return}
 });
-window.addEventListener('beforeunload',e=>{if(exitAllowed)return;e.preventDefault();e.returnValue=''});
+window.addEventListener('beforeunload',e=>{if(window.__YIPMAN_DESKTOP_ACTIVE__||exitAllowed)return;e.preventDefault();e.returnValue=''});
 const today=new Date();
 
 async function loadHome(){
@@ -1605,12 +1614,14 @@ app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touche
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
 async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
 
-const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
-const initialView=['quick','order','price','data'].includes(initialHash)?initialHash:'quick';
-history.replaceState({yipman:true,root:true,view:'quick'},'', '#quick');
-history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView);
-historyReady=true;
-renderView(initialView);
+if(!window.__YIPMAN_DESKTOP_ACTIVE__){
+ const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
+ const initialView=['quick','order','price','data'].includes(initialHash)?initialHash:'quick';
+ history.replaceState({yipman:true,root:true,view:'quick'},'', '#quick');
+ history.pushState({yipman:true,view:initialView,guard:true},'', '#'+initialView);
+ historyReady=true;
+ renderView(initialView);
+}
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
 })();
 </script>
