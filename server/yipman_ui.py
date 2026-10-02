@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v381';
+const CACHE='yipman-v382';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -505,6 +505,26 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   #order .lh,#order .orow{grid-template-columns:minmax(0,1fr) 56px 64px;padding-left:10px;padding-right:10px}
   #price .pp b{font-size:22px}
 }
+
+
+/* V382: 249 authority view, stronger Receiving Article hierarchy, hard mobile containment. */
+#price{overflow-x:hidden}
+#price .pricecards,#price .pcard,#price .ptop,#price .pricepath,#price .pp,#price .pcost,#price .pmetrics,#price .pm,#price .pprogress{min-width:0;max-width:100%;box-sizing:border-box}
+#price .pcard{width:100%;overflow:hidden}
+#price .ptop>div:first-child{min-width:0;overflow:hidden}
+#price .ptop b{overflow-wrap:anywhere}
+#price .pprogress-line span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#price .pprogress-line strong{flex:0 0 auto}
+#price .pairauthority{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:7px;padding:8px 9px;border:1px solid #f0d7a0;background:#fff8e6;border-radius:10px;min-width:0}
+#price .pairauthority small{display:block;font-size:8px;font-weight:950;color:#86620b}
+#price .pairauthority b{display:block;font-size:18px;line-height:1;margin-top:2px;color:#6f5000}
+#price .pairauthority span{font-size:9px;font-weight:900;color:#735a1f;text-align:right;white-space:normal}
+#order .orow .name{font-size:17px;line-height:1.14}
+#order .recvline{display:flex;align-items:baseline;gap:6px;min-width:0;margin-top:5px}
+#order .recvline small{flex:0 0 auto;font-size:8px;font-weight:950;color:#788690;letter-spacing:.02em}
+#order .recvline b{min-width:0;font-size:16px;line-height:1;color:#0b6fa4;font-weight:1000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#order .orow .sub{font-size:9px;line-height:1.28;margin-top:4px}
+#order .cell{font-size:16px}
 
 </style>
 </head>
@@ -1052,6 +1072,11 @@ function orderWeekdayInfo(v){
 }
 function isObservedDate(v){return !!orderWeekdayInfo(v)?.observed}
 function isPreferredDate(v){return !!orderWeekdayInfo(v)?.preferred}
+function plusDaysIso(v,days){
+ const d=dateLocal(v);if(!d)return null;
+ d.setDate(d.getDate()+Number(days||0));
+ return iso(d);
+}
 function nextObservedAfter(v){
  const start=dateLocal(v)||new Date();
  for(const preferredOnly of [true,false]){
@@ -1069,7 +1094,7 @@ function updateOrderWindowUI(){
  $('#deliveryDateText').textContent=appDate(orderDate);
  $('#nextDeliveryDateText').textContent=appDate(orderNextDate);
  $('#deliveryObservedText').textContent=isPreferredDate(orderDate)?'★ Preferred observed delivery day':isObservedDate(orderDate)?'★ Observed delivery day':'Manual delivery date';
- $('#nextObservedText').textContent=isPreferredDate(orderNextDate)?'★ Preferred observed delivery day':isObservedDate(orderNextDate)?'★ Observed delivery day':'Manual delivery date';
+ $('#nextObservedText').textContent=orderNextDate===plusDaysIso(orderDate,7)?'Default · 7 days after delivery':isPreferredDate(orderNextDate)?'★ Preferred observed delivery day':isObservedDate(orderNextDate)?'★ Observed delivery day':'Manual delivery date';
  $('#deliveryDateCard').classList.toggle('pick',orderSelectMode==='DELIVERY');
  $('#nextDeliveryDateCard').classList.toggle('pick',orderSelectMode==='NEXT');
  const end=dateLocal(orderNextDate);if(end)end.setDate(end.getDate()-1);
@@ -1106,7 +1131,7 @@ function buildDays(){
     orderDate=dayIso;
     // A new Delivery date gets a fresh default Next Delivery. The user can
     // still override Next Delivery immediately afterward.
-    orderNextDate=nextObservedAfter(orderDate);
+    orderNextDate=plusDaysIso(orderDate,7);
     orderSelectMode='NEXT';
    }else{
     if(dayIso<=orderDate){toast('Next delivery must be after delivery date');return}
@@ -1145,7 +1170,7 @@ async function initOrdering(force=false){
    }
    if(!orderDate){const d=new Date(base);d.setDate(d.getDate()+1);orderDate=iso(d)}
   }
-  if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=nextObservedAfter(orderDate);
+  if(!orderNextDate||orderNextDate<=orderDate)orderNextDate=plusDaysIso(orderDate,7);
   setPromotionDefaultDates();
   buildDays();updateOrderWindowUI();
   if(orderMode==='PROMOTION')await loadPromotionLists();
@@ -1392,7 +1417,7 @@ function renderOrderRoster(rows,data,h,stale){
   const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
   const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
   const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
-  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
+  return '<div class="orow'+cls+'" data-order="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="recvline"><small>RECEIVING</small><b>'+esc(r.receiving_article||'—')+'</b></div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell">'+orderText+'<span>'+orderSub+'</span></div></div>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -1607,6 +1632,7 @@ async function loadPrices(opts={}){
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
   const upcPrefix=r=>String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3);
   const patternFiltered=meaningful.filter(r=>{
+    if(priceFilter==='UPC_249')return upcPrefix(r)==='249'&&r.priority_240_249_mismatch===true&&r.price_240_249_equal===false;
     if(priceFilter.startsWith('UPC_'))return upcPrefix(r)===priceFilter.slice(4);
     if(priceFilter==='LIVE')return String(r.category||'').toUpperCase()==='LIVE';
     const days=observed(r);
@@ -1616,7 +1642,7 @@ async function loadPrices(opts={}){
   });
   const ignoredCount=patternFiltered.filter(priceIsIgnored).length;
   const rows=patternFiltered.filter(r=>!priceIsIgnored(r)).slice(0,24);
-  const filterLabel=priceFilter.startsWith('UPC_')?(priceFilter.slice(4)+' UPC'):priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
+  const filterLabel=priceFilter==='UPC_249'?'249 mismatches · must follow 240':priceFilter.startsWith('UPC_')?(priceFilter.slice(4)+' UPC'):priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
   $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+rows.length+' actionable · '+ignoredCount+' ignored <12h';
 
   $('#priceRows').innerHTML=rows.map((r,i)=>{
@@ -1627,13 +1653,16 @@ async function loadPrices(opts={}){
     const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
     const companyText=(companyLow!==null&&companyHigh!==null)?money(companyLow)+'–'+money(companyHigh):'—';
     const detailSignals=(Array.isArray(r.reasons)?r.reasons:[]).map(x=>'• '+esc(friendlySignal(x))).join('<br>');
+    const pair249=upcPrefix(r)==='249'&&r.priority_240_249_mismatch===true&&r.price_240_249_equal===false;
+    const pair240Price=num(r.related_240_current_price);
+    const pairAuthority=pair249?'<div class="pairauthority"><div><small>240 MAIN · PRICE AUTHORITY</small><b>'+money(pair240Price)+'</b></div><span>249 CURRENT '+money(r.current_price)+' → FOLLOW 240</span></div>':'';
     return '<article class="pcard" data-price="'+i+'">'+
       '<div class="ptop"><div><b>'+esc(r.name||r.upc)+'</b><small>'+esc(r.upc)+' · '+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
       '<div class="pricepath">'+
         '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div>'+
         '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
         '<div class="pp testing"><small>TESTING</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
-      '</div>'+
+      '</div>'+pairAuthority+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       '<div class="pmetrics">'+
         '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
