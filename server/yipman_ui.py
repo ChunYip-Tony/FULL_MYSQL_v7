@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v385';
+const CACHE='yipman-v386';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -562,36 +562,33 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 }
 
 
-/* V383 Yipman AI: bottom-menu read-only assistant. Existing v382 module UI remains unchanged. */
+/* V386 Yipman AI: compact read-only assistant with live sales/performance lookup. */
 .nav{grid-template-columns:repeat(4,1fr)}
 .nav button[data-go="ai"] i{color:#ffd84d}
 .nav button[data-go="ai"].on i{background:#dceefe;color:#0869bd}
-#ai{overflow:hidden;padding-left:6px;padding-right:6px;padding-bottom:calc(73px + env(safe-area-inset-bottom))}
-#ai.on{display:flex;flex-direction:column;gap:7px}
-#ai .topline{flex:0 0 auto;margin:0 5px 6px;min-height:36px}
-#ai .topline h2{font-size:28px;line-height:1;font-weight:1000;letter-spacing:-.03em}
-#ai .topline .hint{font-size:11px}
-.aipagechat{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 22px rgba(18,38,56,.08);overflow:hidden}
-.aichattop{flex:0 0 auto;padding:14px 14px 11px;border-bottom:1px solid #e7edf2;background:linear-gradient(180deg,#f9fbfc,#fff)}
-.aibrand{display:flex;align-items:center;gap:11px}
-.aimark{width:48px;height:48px;border-radius:15px;background:#1b3448;color:#ffd84d;display:grid;place-items:center;font-size:24px;font-weight:1000;flex:0 0 auto}
-.aicopy{flex:1;min-width:0}.aicopy h3{font-size:21px;line-height:1.05;margin:0;font-weight:1000}.aicopy p{font-size:12px;line-height:1.35;color:var(--muted);margin:4px 0 0}
+#ai{overflow:hidden;padding:0 6px calc(73px + env(safe-area-inset-bottom))}
+#ai.on{display:flex;flex-direction:column;gap:8px}
+.aihead{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:3px 8px 7px}
+.aiheadleft{display:flex;align-items:center;gap:9px;min-width:0}
+.aimark{width:40px;height:40px;border-radius:13px;background:#1b3448;color:#ffd84d;display:grid;place-items:center;font-size:21px;font-weight:1000;flex:0 0 auto}
+.aiheadcopy{min-width:0}.aiheadcopy h2{font-size:25px;line-height:1;margin:0;font-weight:1000;letter-spacing:-.03em}.aiheadcopy p{font-size:10px;line-height:1.2;color:var(--muted);font-weight:800;margin:4px 0 0}
 .aireadonly{flex:0 0 auto;background:#edf8f2;color:#28734e;border:1px solid #cfe8d9;border-radius:999px;padding:6px 8px;font-size:9px;font-weight:950}
-.aistarters{display:flex;gap:7px;overflow:auto;scrollbar-width:none;margin-top:10px}.aistarters::-webkit-scrollbar{display:none}
-.aistarter{border:1px solid #dbe3e9;background:#f7fafc;border-radius:999px;padding:9px 11px;min-height:38px;font-size:11px;font-weight:900;color:#345065;white-space:nowrap}
-.aichat{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;overflow:auto;padding:13px 13px 7px}
+.aipagechat{flex:1;min-height:0;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 8px 22px rgba(18,38,56,.08);overflow:hidden}
+.aichat{display:flex;flex-direction:column;gap:9px;flex:1;min-height:0;overflow:auto;padding:13px}
 .aibubble{max-width:94%;padding:12px 13px;border-radius:16px;font-size:13px;line-height:1.46}
 .aibubble.ai{align-self:flex-start;background:#f4f7f9;border:1px solid #e1e7ec;border-top-left-radius:6px}
+.aibubble.ai.brief{max-width:100%;background:#eef6ff;border-color:#cfe2f7;border-top-left-radius:16px}
+.aibubble.ai.thinking{color:#667581}
 .aibubble.user{align-self:flex-end;background:#1b3448;color:#fff;border-top-right-radius:6px}
 .aibubble.notice{background:#fff7df;border-color:#eed48f}.aibubble.notice b{color:#775400}
 .aibubble.urgent{background:#fff1f1;border-color:#efcaca}.aibubble.urgent b{color:#b22828}
 .aibubble.info{background:#eef6ff;border-color:#cfe2f7}.aibubble b{font-size:14px;line-height:1.35}
-.aigrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:9px 0}.aistat{background:#fff;border:1px solid #e2e8ed;border-radius:11px;padding:9px}.aistat b{display:block;font-size:16px}.aistat span{font-size:8px;color:var(--muted);font-weight:850}
-.aicomposer{display:flex;gap:8px;padding:11px 13px 13px;border-top:1px solid #e7edf2;background:#fff;flex:0 0 auto}
-.aicomposer input{flex:1;min-width:0;border:1.5px solid #d7e0e7;border-radius:14px;background:#fff;min-height:55px;padding:0 13px;font-size:18px;font-weight:700;outline:0}
+.aimeta{margin-top:7px;padding-top:7px;border-top:1px solid rgba(70,105,130,.16);font-size:10px;color:#71808d;font-weight:750}
+.aicomposer{display:flex;gap:8px;padding:10px 12px 12px;border-top:1px solid #e7edf2;background:#fff;flex:0 0 auto}
+.aicomposer input{flex:1;min-width:0;border:1.5px solid #d7e0e7;border-radius:14px;background:#fff;min-height:52px;padding:0 13px;font-size:16px;font-weight:700;outline:0}
 .aicomposer input:focus{border-color:#1769e0;box-shadow:0 0 0 3px rgba(23,105,224,.10)}
-.aicomposer button{width:56px;min-height:55px;border:0;border-radius:14px;background:#1b3448;color:#ffd84d;font-size:22px;font-weight:1000}
-@media(max-width:370px){#ai .topline h2{font-size:26px}.aicopy h3{font-size:19px}.aicopy p{font-size:11px}.aibubble{font-size:12px;padding:11px 12px}.aibubble b{font-size:13px}.aicomposer input{font-size:17px}}
+.aicomposer button{width:54px;min-height:52px;border:0;border-radius:14px;background:#1b3448;color:#ffd84d;font-size:22px;font-weight:1000}
+@media(max-width:370px){.aiheadcopy h2{font-size:23px}.aiheadcopy p{font-size:9px}.aibubble{font-size:12px;padding:11px 12px}.aibubble b{font-size:13px}.aicomposer input{font-size:15px}}
 
 </style>
 </head>
@@ -640,19 +637,13 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 
     
     <section class="page" id="ai">
-      <div class="topline"><h2>AI Assistant</h2><div class="hint">V1 · READ ONLY</div></div>
+      <div class="aihead">
+        <div class="aiheadleft"><div class="aimark">✦</div><div class="aiheadcopy"><h2>Ask Yipman</h2><p>FULL MYSQL · live operational answers</p></div></div>
+        <div class="aireadonly">READ ONLY</div>
+      </div>
       <div class="aipagechat">
-        <div class="aichattop">
-          <div class="aibrand"><div class="aimark">✦</div><div class="aicopy"><h3>Ask Yipman</h3><p>Important reminders first, then continue the conversation below.</p></div><div class="aireadonly">READ ONLY</div></div>
-          <div class="aistarters">
-            <button class="aistarter" data-ai-question="What needs attention today?">What needs attention today?</button>
-            <button class="aistarter" data-ai-question="Why these order suggestions?">Why these order suggestions?</button>
-            <button class="aistarter" data-ai-question="Explain price opportunities">Explain price opportunities</button>
-            <button class="aistarter" data-ai-question="Explain QA holds">Explain QA holds</button>
-          </div>
-        </div>
-        <div class="aichat" id="aiChat"><div class="aibubble ai">Analyzing current Yipman data…</div></div>
-        <form class="aicomposer" id="aiForm"><input id="aiInput" placeholder="Ask Yipman..." autocomplete="off" aria-label="Ask Yipman"><button type="submit">→</button></form>
+        <div class="aichat" id="aiChat"><div class="aibubble ai">Checking current data…</div></div>
+        <form class="aicomposer" id="aiForm"><input id="aiInput" placeholder="Ask sales, stock, orders, price, receipts or QA..." autocomplete="off" aria-label="Ask Yipman"><button type="submit">→</button></form>
       </div>
     </section>
 
@@ -701,8 +692,8 @@ let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null,
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
 function aiBubble(html,who='ai',tone=''){
- const box=$('#aiChat');if(!box)return;
- const d=document.createElement('div');d.className='aibubble '+who+(tone?' '+tone:'');d.innerHTML=html;box.appendChild(d);box.scrollTop=box.scrollHeight;
+ const box=$('#aiChat');if(!box)return null;
+ const d=document.createElement('div');d.className='aibubble '+who+(tone?' '+tone:'');d.innerHTML=html;box.appendChild(d);box.scrollTop=box.scrollHeight;return d;
 }
 function aiOrderState(r){
  const explicit=String(r?.roster_status||'').toUpperCase();
@@ -716,38 +707,33 @@ function aiPriceRow(rows){
    ||(rows||[])[0]||null;
 }
 function aiAttentionHtml(){
- const stock=aiBriefData.stock, price=aiBriefData.price, orders=aiBriefData.orders||[];
- const parts=[];
+ const stock=aiBriefData.stock,price=aiBriefData.price,orders=aiBriefData.orders||[],lines=[];
  if(orders.length){
-   const names=orders.slice(0,3).map(r=>esc(r.family_name||r.family_article||'Family')).join(', ');
-   parts.push('<div class="aibubble ai urgent"><b>Urgent · Ordering</b><br>'+orders.length+' item'+(orders.length===1?'':'s')+' currently need order'+(names?' — '+names:'')+'.</div>');
+   const first=orders[0],q=num(first?.suggested_delivery_qty);
+   lines.push('• <b>Ordering:</b> '+orders.length+' item'+(orders.length===1?'':'s')+' need order'+(first?'; first '+esc(first.family_name||first.family_article||'Family')+(q!==null?' '+fmt(q)+' '+esc(first.suggested_delivery_uom||''):''):'')+'.');
  }
  if(price){
-   const mismatch=!!price.priority_240_249_mismatch;
-   const title=mismatch?'249 / 240 price mismatch':'Price review';
-   const detail=mismatch
-     ? esc(price.upc||'249')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'.'
-     : esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.testing_price!=null?' · testing '+money(price.testing_price):price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+'.';
-   parts.push('<div class="aibubble ai urgent"><b>Urgent · '+title+'</b><br>'+detail+'</div>');
+   if(price.priority_240_249_mismatch)lines.push('• <b>Price:</b> 249 '+esc(price.upc||'')+' is '+money(price.current_price)+'; paired 240 is '+money(price.related_240_current_price)+'.');
+   else lines.push('• <b>Price:</b> '+esc(price.name||price.upc||'Item')+' is the highest current review item.');
  }
  if(stock){
-   parts.push('<div class="aibubble ai info"><b>Stock Flow watch</b><br>'+esc(stock.family_name||stock.family_article||'Family')+' received '+fmt(stock.family_receipt_7d_qty)+' '+esc(stock.family_receipt_7d_uom||stock.family_group_movement_uom||'')+' vs '+fmt(stock.family_group_movement_7d)+' '+esc(stock.family_group_movement_uom||'')+' sold movement in 7D. Difference '+fmt(stock.receipt_minus_selling_7d)+' '+esc(stock.family_group_movement_uom||stock.family_receipt_7d_uom||'')+'.</div>');
+   lines.push('• <b>Stock Flow:</b> '+esc(stock.family_name||stock.family_article||'Family')+' received '+fmt(stock.family_receipt_7d_qty)+' '+esc(stock.family_receipt_7d_uom||stock.family_group_movement_uom||'')+' vs '+fmt(stock.family_group_movement_7d)+' '+esc(stock.family_group_movement_uom||'')+' sold movement in 7D.');
  }
- if(!parts.length)parts.push('<div class="aibubble ai"><b>No high-priority action detected from the available V1 sources.</b><br>You can still ask about stock, ordering, pricing, receipts or QA.</div>');
- return parts.join('');
+ if(!lines.length)lines.push('No high-priority action is showing from the current Ordering, Price Review, and Stock Flow data.');
+ const h=aiBriefData.dataThrough||{};
+ const through=[h.pos_data_through?'POS '+esc(h.pos_data_through):'',h.movement_data_through?'MVT '+esc(h.movement_data_through):''].filter(Boolean).join(' · ');
+ return '<b>Today’s attention</b><br>'+lines.join('<br>')+(through?'<div class="aimeta">Data through: '+through+'</div>':'');
 }
 async function loadAiBrief(force=false){
  if(aiBriefLoaded&&!force)return;
  if(aiBriefLoading)return aiBriefLoading;
- const box=$('#aiChat');if(box)box.innerHTML='<div class="aibubble ai">Analyzing current Stock Flow, Ordering and Price Review…</div>';
+ const box=$('#aiChat');if(box)box.innerHTML='<div class="aibubble ai thinking">Checking current data…</div>';
  aiBriefLoading=(async()=>{
    const orderPromise=(async()=>{
      const cal=await api('/v1/yipman/ordering-calendar?lookback_days=180',{timeoutMs:16000});
-     const delivery=String(cal?.default_delivery_date||'');
-     const next=String(cal?.default_next_delivery_date||'');
+     const delivery=String(cal?.default_delivery_date||''),next=String(cal?.default_next_delivery_date||'');
      if(!delivery)return null;
-     const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+encodeURIComponent(delivery)+(next?'&next_delivery_date='+encodeURIComponent(next):'');
-     return api(url,{timeoutMs:26000});
+     return api('/v1/yipman/ordering-review?category=ALL&delivery_date='+encodeURIComponent(delivery)+(next?'&next_delivery_date='+encodeURIComponent(next):''),{timeoutMs:26000});
    })();
    const results=await Promise.allSettled([
      api('/v1/yipman/stock-flow?limit=20',{timeoutMs:16000}),
@@ -760,49 +746,172 @@ async function loadAiBrief(force=false){
    const stockRows=[...(stockData?.rows||[])].sort((a,b)=>(num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0));
    const priceRows=(priceData?.rows||[]).filter(r=>r?.priority_240_249_mismatch||r?.actionable||String(r?.suggestion_reason_code||''));
    const orderRows=(orderData?.rows||[]).filter(r=>aiOrderState(r)==='ORDER'&&(num(r?.suggested_delivery_qty)||0)>0).sort((a,b)=>(num(b.suggested_delivery_qty)||0)-(num(a.suggested_delivery_qty)||0));
-   aiBriefData={
-     stock:stockRows[0]||null,
-     price:aiPriceRow(priceRows),
-     orders:orderRows,
-     dataThrough:orderData?.data_health||priceData?.data_health||stockData?.data_health||null
-   };
-   if(box){
-     const h=aiBriefData.dataThrough||{};
-     const through=[h.pos_data_through?'POS '+esc(h.pos_data_through):'',h.movement_data_through?'MVT '+esc(h.movement_data_through):''].filter(Boolean).join(' · ');
-     box.innerHTML='<div class="aibubble ai"><b>Yipman AI reviewed the current available operational data.</b>'+(through?'<br><span style="color:#71808d">Data through: '+through+'</span>':'')+'<br>Here are the items that need attention first.</div>'+aiAttentionHtml()+'<div class="aibubble ai">Ask me to explain any reminder, or ask about stock, orders, pricing, receipts or QA.</div>';
-   }
+   aiBriefData={stock:stockRows[0]||null,price:aiPriceRow(priceRows),orders:orderRows,dataThrough:orderData?.data_health||priceData?.data_health||stockData?.data_health||null};
+   if(box)box.innerHTML='<div class="aibubble ai brief">'+aiAttentionHtml()+'</div>';
    aiBriefLoaded=true;
  })();
  try{return await aiBriefLoading}finally{aiBriefLoading=null}
 }
-function aiAnswer(question){
- const q=String(question||'').toLowerCase(), stock=aiBriefData.stock, price=aiBriefData.price, orders=aiBriefData.orders||[];
+function aiYmd(y,m,d){
+ const dt=new Date(Number(y),Number(m)-1,Number(d),12,0,0,0);
+ if(dt.getFullYear()!==Number(y)||dt.getMonth()!==Number(m)-1||dt.getDate()!==Number(d))return null;
+ return dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+}
+function aiPrettyDate(ymd){
+ const m=String(ymd||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return String(ymd||'');
+ const dt=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]),12,0,0,0);
+ return dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+}
+function aiDateFromQuestion(question){
+ const q=String(question||'').toLowerCase(),now=new Date();now.setHours(12,0,0,0);
+ if(/\byesterday\b/.test(q)){const d=new Date(now);d.setDate(d.getDate()-1);return iso(d)}
+ if(/\btoday\b/.test(q))return iso(now);
+ let m=q.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
+ if(m)return aiYmd(m[1],m[2],m[3]);
+ m=q.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+ if(m){
+   let y=m[3]?Number(m[3]):now.getFullYear();if(y<100)y+=2000;
+   let out=aiYmd(y,m[1],m[2]);
+   if(!m[3]&&out){const d=new Date(out+'T12:00:00');const far=new Date(now);far.setDate(far.getDate()+31);if(d>far)out=aiYmd(y-1,m[1],m[2])}
+   return out;
+ }
+ return null;
+}
+function aiNorm(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function aiExtractItemQuery(question){
+ return String(question||'')
+  .replace(/\b20\d{2}-\d{1,2}-\d{1,2}\b/g,' ')
+  .replace(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g,' ')
+  .replace(/\b(?:what(?:'s| is)?|whats|how(?:'s| is)?|hows|show|tell|me|the|sales?|sale|revenue|performance|amount|dollars?|for|of|on|at|in|yesterday|today|last|day|did|do|we|sell|sold|selling|gp|gross|profit|price|cost|stock|inventory|oh|hand|current|now|please)\b/gi,' ')
+  .replace(/[?.,!]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function aiQtyText(items){
+ const totals=new Map();
+ (items||[]).forEach(x=>{const u=String(x.qty_uom||x.selling_uom||'UNIT').toUpperCase();totals.set(u,(totals.get(u)||0)+(num(x.sold_quantity)||0))});
+ return [...totals.entries()].map(([u,q])=>fmt(q)+' '+esc(u)).join(' + ')||'—';
+}
+function aiPercent(v){const n=num(v);return n===null?'—':(n*100).toFixed(1)+'%'}
+async function aiLatestPerformanceDate(){
+ const d=await api('/v1/app/v2/performance/latest-date',{timeoutMs:12000});
+ return String(d?.latest_completed_supported_sales_date||'');
+}
+async function aiPerformanceRange(date){
+ return api('/v1/app/v2/performance/range?start_date='+encodeURIComponent(date)+'&end_date='+encodeURIComponent(date)+'&limit=2000',{timeoutMs:30000});
+}
+async function aiFindSalesMatches(items,term){
+ const tokens=aiNorm(term).split(' ').filter(Boolean);
+ const direct=(items||[]).filter(x=>{
+   const hay=aiNorm([x.name,x.family_name,x.upc,x.family_article_number].filter(Boolean).join(' '));
+   return tokens.length&&tokens.every(t=>hay.includes(t));
+ });
+ if(direct.length)return direct;
+ try{
+   const sr=await api('/v1/app/v2/search?q='+encodeURIComponent(term)+'&limit=30',{timeoutMs:16000});
+   const upcs=new Set(),families=new Set();
+   (sr?.results||[]).forEach(x=>{
+     if(String(x.result_type||'').toUpperCase()==='UPC'&&x.number)upcs.add(String(x.number).replace(/^0+/,''));
+     if(x.family_article_number)families.add(String(x.family_article_number));
+     if(String(x.result_type||'').toUpperCase()==='FAMILY'&&x.number)families.add(String(x.number));
+   });
+   return (items||[]).filter(x=>upcs.has(String(x.upc||'').replace(/^0+/,''))||families.has(String(x.family_article_number||'')));
+ }catch{return []}
+}
+async function aiAnswerPerformance(question,date,itemTerm=''){
+ let range;
+ try{range=await aiPerformanceRange(date)}
+ catch(e){
+   const latest=await aiLatestPerformanceDate().catch(()=>null);
+   if(latest)return '<b>No completed sales day for '+esc(aiPrettyDate(date))+'.</b><br>Latest completed canonical POS sales date is '+esc(aiPrettyDate(latest))+'. Missing dates are not treated as zero.';
+   throw e;
+ }
+ const items=range?.items||[],summary=range?.summary||{};
+ if(itemTerm){
+   const matches=await aiFindSalesMatches(items,itemTerm);
+   if(!matches.length)return '<b>'+esc(itemTerm)+' · '+esc(aiPrettyDate(date))+'</b><br>No POS sales were found for that item on this completed sales date.';
+   const sales=matches.reduce((s,x)=>s+(num(x.sales_amount)||0),0);
+   const gpComplete=matches.every(x=>x.gp_dollars!==null&&x.gp_dollars!==undefined);
+   const gp=gpComplete?matches.reduce((s,x)=>s+(num(x.gp_dollars)||0),0):null;
+   const top=[...matches].sort((a,b)=>(num(b.sales_amount)||0)-(num(a.sales_amount)||0)).slice(0,4);
+   return '<b>'+esc(itemTerm)+' · '+esc(aiPrettyDate(date))+'</b><br><b>Sales '+money(sales)+'</b> · Qty '+aiQtyText(matches)+(gp!==null?' · GP$ '+money(gp):'')+
+     '<div class="aimeta">'+top.map(x=>esc(x.name||x.upc||'Item')+' · '+money(x.sales_amount)+' · '+fmt(x.sold_quantity)+' '+esc(x.qty_uom||x.selling_uom||'')).join('<br>')+'</div>';
+ }
+ const sales=num(summary.sales_dollars),gp=num(summary.gp_dollars),gpComplete=summary.gp_dollars_complete===true;
+ let report=null;
+ try{report=await api('/v1/app/v2/performance?category=ALL&limit=100&report_date='+encodeURIComponent(date),{timeoutMs:30000})}catch{}
+ const analysis=report?.analysis||[];
+ const vs7=analysis.find(x=>x.type==='REPORT_DATE_SALES_VS_7D_AVG');
+ const top=(report?.report_date_top_sellers||items||[]).slice(0,3);
+ return '<b>'+esc(aiPrettyDate(date))+' performance</b><br><b>Sales '+money(sales)+'</b>'+(gpComplete&&gp!==null?' · GP$ '+money(gp)+(sales>0?' · GP '+aiPercent(gp/sales):''):' · GP$ incomplete')+
+   '<br>'+fmt(summary.sold_item_count,0)+' selling item'+(Number(summary.sold_item_count||0)===1?'':'s')+
+   (vs7&&num(vs7.value_pct)!==null?'<br>Sales vs 7-day supported-day average: '+(num(vs7.value_pct)>=0?'+':'')+aiPercent(vs7.value_pct):'')+
+   (top.length?'<div class="aimeta"><b>Top sellers</b><br>'+top.map(x=>esc(x.name||x.upc||'Item')+' · '+money(x.sales_amount)+' · '+fmt(x.sold_quantity)+' '+esc(x.qty_uom||x.selling_uom||'')).join('<br>')+'</div>':'');
+}
+async function aiSearch(term){
+ return api('/v1/app/v2/search?q='+encodeURIComponent(term)+'&limit=20',{timeoutMs:16000});
+}
+async function aiAnswerItemPrice(term){
+ const d=await aiSearch(term),rows=(d?.results||[]).filter(x=>String(x.result_type||'').toUpperCase()==='UPC'&&x.current_price!==null&&x.current_price!==undefined).slice(0,5);
+ if(!rows.length)return '<b>'+esc(term)+'</b><br>No current UPC price was found.';
+ return '<b>Current price · '+esc(term)+'</b><br>'+rows.map(x=>esc(x.name||x.number||'UPC')+' · <b>'+money(x.current_price)+'</b> '+esc(x.current_price_type||'')+(x.current_price_asof_date?' · '+esc(x.current_price_asof_date):'')).join('<br>');
+}
+async function aiAnswerItemStock(term){
+ const d=await aiSearch(term),rows=d?.results||[];
+ const fam=rows.find(x=>String(x.result_type||'').toUpperCase()==='FAMILY')||rows.find(x=>x.family_article_number)||rows[0];
+ const key=fam?.number||fam?.family_article_number;
+ if(!key)return '<b>'+esc(term)+'</b><br>No mapped Family was found for stock lookup.';
+ try{
+   const f=await api('/v1/app/v2/family/'+encodeURIComponent(key),{timeoutMs:18000}),oh=f?.current_effective_oh||{},lr=f?.last_receipt||{};
+   return '<b>'+esc(f?.family_article_name||term)+'</b><br>OH <b>'+fmt(oh.quantity)+' '+esc(oh.uom||'')+'</b> · '+esc(oh.source||oh.status||'')+
+     (lr.date?'<br>Last receipt '+esc(appDate(lr.date))+' · '+fmt(lr.quantity)+' '+esc(lr.uom||''):'');
+ }catch(e){return '<b>'+esc(term)+'</b><br>Family stock lookup is unavailable: '+esc(e.message)}
+}
+async function aiAnswer(question){
+ const q=String(question||'').toLowerCase(),stock=aiBriefData.stock,price=aiBriefData.price,orders=aiBriefData.orders||[];
+ const date=aiDateFromQuestion(question),itemTerm=aiExtractItemQuery(question);
+ const asksPerformance=/\b(performance|sales?|revenue|sold|selling|gp|gross profit|top seller)\b/.test(q);
+ if(date&&asksPerformance)return aiAnswerPerformance(question,date,itemTerm);
+ if(!date&&asksPerformance&&itemTerm){
+   const latest=await aiLatestPerformanceDate();
+   if(latest)return aiAnswerPerformance(question,latest,itemTerm);
+ }
+ if((q.includes('price')||q.includes('cost'))&&itemTerm)return aiAnswerItemPrice(itemTerm);
+ if((q.includes('stock')||q.includes('inventory')||/\boh\b/.test(q)||q.includes('on hand'))&&itemTerm)return aiAnswerItemStock(itemTerm);
  if(q.includes('order')||q.includes('coverage')){
-   if(!orders.length)return '<b>Ordering</b><br>No positive order suggestion is currently loaded in the V1 brief.';
+   if(!orders.length)return '<b>Ordering</b><br>No positive order suggestion is currently loaded in the brief.';
    return '<b>Ordering</b><br>'+orders.slice(0,5).map(r=>'• '+esc(r.family_name||r.family_article||'Family')+' — '+fmtNullable(r.suggested_delivery_qty)+' '+esc(r.suggested_delivery_uom||'')+' · Receiving '+esc(r.receiving_article||'—')).join('<br>');
  }
  if(q.includes('249')||q.includes('240')||q.includes('price')||q.includes('sweet')){
-   if(!price)return '<b>Price Review</b><br>No actionable price row is currently loaded in the V1 brief.';
-   if(price.priority_240_249_mismatch)return '<b>249 / 240 alignment</b><br>249 '+esc(price.upc||'')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'. The 249 review should remain only while those current prices differ.';
+   if(!price)return '<b>Price Review</b><br>No actionable price row is currently loaded.';
+   if(price.priority_240_249_mismatch)return '<b>249 / 240 alignment</b><br>249 '+esc(price.upc||'')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'. The 249 review remains only while those current prices differ.';
    return '<b>Price Review</b><br>'+esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+(price.testing_price!=null?' · testing '+money(price.testing_price):'')+'.';
  }
  if(q.includes('receipt')||q.includes('stock flow')||q.includes('over receipt')){
-   if(!stock)return '<b>Stock Flow</b><br>No Stock Flow row is currently loaded in the V1 brief.';
+   if(!stock)return '<b>Stock Flow</b><br>No Stock Flow row is currently loaded.';
    return '<b>Stock Flow</b><br>'+esc(stock.family_name||stock.family_article||'Family')+' has 7D receipts '+fmt(stock.family_receipt_7d_qty)+' '+esc(stock.family_receipt_7d_uom||'')+' vs selling movement '+fmt(stock.family_group_movement_7d)+' '+esc(stock.family_group_movement_uom||'')+'.';
  }
  if(q.includes('qa')||q.includes('hold')||q.includes('uom')||q.includes('unmapped')){
    const count=Array.isArray(dataQaIssues)?dataQaIssues.length:0;
-   return '<b>QA</b><br>'+(count?fmt(count,0)+' QA issue(s) are loaded in Data Center. ':'Open Data Center for the live QA list. ')+'V1 can explain mapping, UOM/conversion, receipt and OH-rollforward holds but does not write fixes.';
+   return '<b>QA</b><br>'+(count?fmt(count,0)+' QA issue(s) are loaded in Data Center. ':'Open Data Center for the live QA list. ')+'This assistant is read-only.';
  }
- if(q.includes('attention')||q.includes('urgent')||q.includes('today')||q.includes('reminder')){
-   return '<b>Priority summary</b><br>'+(orders.length?orders.length+' positive order suggestion(s). ':'')+(price?'1 top price action. ':'')+(stock?'1 top Stock Flow watch item.':'');
+ if(q.includes('attention')||q.includes('urgent')||q.includes('reminder'))return aiAttentionHtml();
+ return '<b>Ask Yipman</b><br>I can query sales by item/date, daily performance, current stock, current price, Ordering, Stock Flow and QA. Example: “tilapia sales 9/25” or “yesterday performance”.';
+}
+async function aiSubmitQuestion(q){
+ aiBubble(esc(q),'user');
+ const pending=aiBubble('Checking FULL MYSQL…','ai','thinking');
+ try{
+   const answer=await aiAnswer(q);
+   if(pending?.parentNode)pending.remove();
+   aiBubble(answer,'ai');
+ }catch(e){
+   if(pending?.parentNode)pending.remove();
+   aiBubble('<b>Could not answer that query.</b><br>'+esc(e.message),'ai','notice');
  }
- return '<b>Yipman AI V1</b><br>I can answer from the current Stock Flow, Ordering, Price Review and QA context. Try asking “why this order?”, “price opportunities”, “why is receipt high?”, or “what needs attention today?”.';
 }
 function bindAi(){
- $$('[data-ai-question]').forEach(b=>b.onclick=()=>{const q=b.dataset.aiQuestion||b.textContent||'';aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai')});
- const form=$('#aiForm'),input=$('#aiInput');
- if(form)form.onsubmit=e=>{e.preventDefault();const q=input.value.trim();if(!q)return;aiBubble(esc(q),'user');aiBubble(aiAnswer(q),'ai');input.value=''};
+ const form=$('#aiForm'),input=$('#aiInput');if(!form||!input||form.dataset.bound==='1')return;
+ form.dataset.bound='1';
+ form.onsubmit=e=>{e.preventDefault();const q=input.value.trim();if(!q)return;input.value='';aiSubmitQuestion(q)};
 }
 
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
