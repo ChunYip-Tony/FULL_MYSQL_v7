@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v396';
+const CACHE='yipman-v399';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -167,7 +167,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .order-risk{display:inline-block;margin-left:5px;border-radius:999px;padding:2px 5px;font-size:6px;font-weight:950;background:#ffe7e7;color:#a12424}.order-lowconf{display:inline-block;margin-left:4px;border-radius:999px;padding:2px 5px;font-size:6px;font-weight:950;background:#fff4d8;color:#855d00}.order-coverage{background:#142033;color:#fff;border-radius:13px;padding:8px 10px;margin:0 0 8px}.order-coverage small{display:block;font-size:7px;color:#b8c4d2;font-weight:950}.order-coverage b{display:block;font-size:16px;margin-top:2px}.order-coverage span{display:block;font-size:8px;color:#ccd6e2;margin-top:2px}
 .promo-shell{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:13px}.promo-shell h3{font-size:16px;margin:0}.promo-shell p{font-size:9px;color:var(--muted);line-height:1.4}.promo-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.promo-type{border-radius:999px;padding:6px 8px;font-size:8px;font-weight:950}.promo-type.weekly{background:#f0eaff;color:#6b21a8}.promo-type.weekend{background:#fff4d6;color:#8a5b00}
 
-.promo-controls{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:9px}.promo-controls select,.promo-date-inputs input{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;padding:9px;font-size:10px;font-weight:850}.promo-import{border:0;border-radius:11px;background:#142033;color:#fff;padding:9px 11px;font-size:9px;font-weight:950}.promo-date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.promo-date-inputs label{font-size:7px;color:var(--muted);font-weight:950}.promo-date-inputs input{display:block;margin-top:3px;padding:7px}
+.promo-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;margin-top:9px}.promo-controls select,.promo-date-inputs input{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;padding:9px;font-size:10px;font-weight:850}.promo-import,.promo-manual{border:0;border-radius:11px;background:#142033;color:#fff;padding:9px 11px;font-size:9px;font-weight:950}.promo-manual{background:#f0b82b;color:#332400}.promo-date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.promo-date-inputs label{font-size:7px;color:var(--muted);font-weight:950}.promo-date-inputs input{display:block;margin-top:3px;padding:7px}.manual-promo-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.manual-promo-fields label{font-size:8px;color:var(--muted);font-weight:950}.manual-promo-fields input,.manual-promo-fields textarea{display:block;width:100%;margin-top:3px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px;font-size:11px;font-weight:850}.manual-promo-fields .wide{grid-column:1/-1}.manual-promo-fields textarea{min-height:112px;resize:vertical;line-height:1.45}.promo-freshness{margin-top:7px;border:1px solid #efc48a;background:#fff3df;border-radius:10px;padding:7px 8px;font-size:8px;line-height:1.35;color:#7a4b0a;font-weight:850}
 .promo-status{font-size:9px;color:var(--muted);font-weight:800;margin:7px 2px}.promo-summary{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.promo-card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px;margin-bottom:8px;box-shadow:var(--shadow)}.promo-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.promo-card-head b{font-size:14px}.promo-card-head small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.promo-badge{border-radius:999px;padding:5px 7px;font-size:7px;font-weight:950;white-space:nowrap}.promo-badge.weekly{background:#f0eaff;color:#6b21a8}.promo-badge.weekend{background:#fff4d6;color:#8a5b00}.promo-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:8px}.promo-metric{background:#f7f9fb;border-radius:9px;padding:7px;text-align:center;min-width:0}.promo-metric[data-promo-oh]{cursor:pointer;border:1px dashed #aebbc6}.promo-metric small{display:block;font-size:6px;color:var(--muted);font-weight:950}.promo-metric b{display:block;font-size:14px;margin-top:2px}.promo-metric.temp{background:#fff5e9;border:1px solid #f7bc7a;cursor:pointer}.promo-order{margin-top:7px;background:#eaf8ef;border:1px solid #b8e3c6;border-radius:11px;padding:8px}.promo-order small{font-size:7px;color:#397450;font-weight:950}.promo-order b{display:block;font-size:22px;color:#17683c}.promo-break{font-size:8px;color:#436052;margin-top:2px}.promo-review{background:#fff8e1;border:1px solid #efdca2;border-radius:11px;padding:8px;font-size:9px;margin-bottom:7px}
 
 .lh{font-size:9px}.orow .name{font-size:14px}.orow .sub{font-size:9px}.cell{font-size:14px}.cell span{font-size:9px}.rtrace-line{font-size:10px}.rtrace-more{font-size:9px}.receipt-meta{font-size:10px}
@@ -513,7 +513,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .orderrecvpack b{display:block;font-size:15px;line-height:1.05;color:#172c3c;font-weight:1000;white-space:normal}
 #order .orderrecvpack span{display:block;font-size:7px;color:#71808d;font-weight:950;margin-top:3px;letter-spacing:.04em}
 #order .orderrecvmore{font-size:8px;color:#5d7185;font-weight:900;padding:7px 10px;border-top:1px solid #dbe7f0;background:#f8fbfe}
-#order .orderstate,#order .order-risk,#order .order-lowconf{vertical-align:middle}
+#order .orderstate,#order .order-risk,#order .order-lowconf,#order .order-freshness{vertical-align:middle}
+#order .order-freshness{display:inline-block;margin-left:4px;border-radius:999px;padding:3px 6px;font-size:7px;font-weight:950;background:#fff0d8;color:#8a5100}
 #order .orderitemcard:active{transform:scale(.996)}
 
 #order .rtrace-line{font-size:11px}
@@ -733,10 +734,10 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
           <h3>Promotion Order</h3>
           <p>Weekly items use Thursday → following Thursday. Weekend items use Friday → Sunday. The selected delivery window can contain both promotion and regular-price days.</p>
           <div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div>
-          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT LIST</button></div>
+          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT</button><button class="promo-manual" id="promoManualBtn">MANUAL</button></div>
           <div class="promo-date-inputs"><label>WEEKLY START (THU)<input type="date" id="promoWeeklyStart"></label><label>WEEKEND START (FRI)<input type="date" id="promoWeekendStart"></label></div>
           <input type="file" id="promoFileInput" accept=".csv,.xls,.xlsx,.xlsm" class="hide">
-          <div class="promo-status" id="promoListStatus">Import CSV / XLS / XLSX, or choose a saved promotion list.</div>
+          <div class="promo-status" id="promoListStatus">Choose a saved list, import a file, or enter one / multiple UPC promotions manually.</div>
         </div>
         <div class="promo-summary" id="promoSummary"></div>
         <div id="promoOrderStatus" class="promo-status"></div>
@@ -1839,6 +1840,89 @@ $('#promoFileInput').onchange=async e=>{
  }finally{e.target.value=''}
 };
 
+function openManualPromotion(){
+ const startDefault=orderDate||iso(new Date());
+ const endDefault=plusDaysIso(startDefault,6);
+ const deliveryDefault=orderDate||startDefault;
+ const nextDefault=orderNextDate||plusDaysIso(deliveryDefault,7);
+ sheet(
+  'Manual Promotion',
+  'One or multiple UPCs · manual promotion and delivery window',
+  '<div class="detail"><b>Manual promotion setup</b><br><span style="color:#71808d">One line per UPC. Format: UPC, SALE price. Example: 24081600000, 8.99</span>'+
+  '<div class="manual-promo-fields">'+
+   '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
+   '<label class="wide">UPCs + SALE PRICE<textarea id="manualPromoItems" placeholder="24081600000, 8.99&#10;24981600000, 8.99"></textarea></label>'+
+   '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
+   '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
+   '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
+   '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
+  '</div>'+
+  '<div class="estimatebar" style="margin-top:10px">Delivery → Next Delivery is the ordering coverage window. Promo Start → End marks the SALE-demand days inside that window. Fresh/Live OH that crosses the freshness threshold is not credited as usable future stock.</div>'+
+  '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">SAVE & RECALCULATE</button></div></div>'
+ );
+ $('#manualPromoCancel').onclick=()=>closeSheet(true);
+ $('#manualPromoSave').onclick=async()=>{
+  const raw=$('#manualPromoItems').value.trim();
+  const start=$('#manualPromoStart').value;
+  const end=$('#manualPromoEnd').value;
+  const delivery=$('#manualPromoDelivery').value;
+  const next=$('#manualPromoNext').value;
+  if(!raw){toast('Enter at least one UPC and SALE price');return}
+  if(!start||!end||!delivery||!next){toast('Complete all promotion and delivery dates');return}
+  if(end<start){toast('Promotion end must be after start');return}
+  if(next<=delivery){toast('Next delivery must be after delivery date');return}
+  const parsed=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
+   const parts=line.split(/[,\t]+/).map(x=>x.trim()).filter(Boolean);
+   const code=parts[0]||'';
+   const price=Number(String(parts[1]||'').replace(/[$,]/g,''));
+   return {code,price};
+  });
+  if(parsed.some(x=>!x.code||!Number.isFinite(x.price)||x.price<=0)){
+   toast('Use one line per UPC: UPC, SALE price');return
+  }
+  const name=$('#manualPromoName').value.trim()||('Manual Promotion '+start);
+  $('#manualPromoSave').disabled=true;
+  $('#manualPromoSave').textContent='SAVING…';
+  try{
+   const created=await api('/v1/yipman/promotion-lists',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+     list_name:name,
+     source_filename:'MANUAL_ENTRY',
+     items:parsed.map(x=>({
+      upc:x.code,
+      promotion_type:'CUSTOM',
+      promotion_start_date:start,
+      promotion_end_date:end,
+      promotion_price:x.price
+     }))
+    }),
+    timeoutMs:30000
+   });
+   promoListId=Number(created.list_id);
+   promoTempOH.clear();
+   orderDate=delivery;
+   orderNextDate=next;
+   closeSheet(true);
+   buildDays();updateOrderWindowUI();
+   await loadPromotionLists();
+   $('#promoListSelect').value=String(promoListId);
+   if(Number(created.ready_count||0)>0)await loadPromotionOrder();
+   else{
+    $('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';
+    $('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>';
+   }
+   toast('Manual promotion saved');
+  }catch(err){
+   toast('Manual promotion failed · '+err.message);
+   const save=$('#manualPromoSave');
+   if(save){save.disabled=false;save.textContent='SAVE & RECALCULATE'}
+  }
+ };
+}
+$('#promoManualBtn').onclick=openManualPromotion;
+
 function renderPromotionRows(data){
  promoLastRows=Array.isArray(data?.rows)?data.rows:[];
  const reviewItems=(promoListDetail?.items||[]).filter(x=>x.mapping_status!=='READY');
@@ -1848,8 +1932,11 @@ function renderPromotionRows(data){
   const temp=!!r.temporary_oh_override_used;
   const oh=r.current_oh_for_calculation;
   const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage, totalNeed=r.forecast_coverage_usage;
+  const freshnessHtml=r.freshness_adjustment_applied
+   ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · latest receipt '+esc(appDate(r.freshness_latest_receipt_date))+' · DOH '+fmtNullable(r.freshness_current_doh)+' · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
+   : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live order coverage stops at 7 days; later demand needs another delivery.</div>':'');
   return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
-   '<div class="promo-metrics"><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>'+(temp?'TEMP TRUE STOCK':'CURRENT OH ✎')+'</small><b>'+fmtNullable(oh)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+
+   '<div class="promo-metrics"><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>'+(temp?'TEMP TRUE STOCK':'CURRENT OH ✎')+'</small><b>'+fmtNullable(oh)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · TEMP OH only for this calculation':'')+'</div></div></div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
  $$('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
@@ -1867,7 +1954,8 @@ async function loadPromotionOrder(){
    temporary_oh_overrides:[...promoTempOH.values()]
   };
   const data=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeoutMs:45000});
-  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' calculated · coverage through '+appDate(data.coverage_end_date)+' · temporary OH values are NOT saved';
+  const freshnessCount=(data.rows||[]).filter(x=>x.freshness_adjustment_applied).length;
+  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' calculated · coverage through '+appDate(data.coverage_end_date)+(freshnessCount?' · '+freshnessCount+' freshness adjusted':'')+' · temporary OH values are NOT saved';
   renderPromotionRows(data);
  }catch(e){
   $('#promoOrderStatus').textContent='Promotion calculation unavailable · '+e.message;
@@ -2023,6 +2111,7 @@ function renderOrderRoster(rows,data,h,stale){
   const orderSub=state==='REVIEW'?reason:esc(r.suggested_delivery_uom||'');
   const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
   const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
+  const freshness=r.freshness_adjustment_applied?'<span class="order-freshness">FRESHNESS +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'</span>':'';
   const hist=state==='ORDER'&&num(q)>0&&Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
   const shownHist=hist.slice(0,3);
   const histHtml=shownHist.length
@@ -2031,7 +2120,7 @@ function renderOrderRoster(rows,data,h,stale){
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -2163,6 +2252,7 @@ function openOrder(r){
  '<br><br><b>Projected at delivery</b><br>'+fmtNullable(d.projected_oh_at_delivery)+' '+esc(r.oh_uom||'')+' · usable '+fmtNullable(d.usable_oh_at_delivery)+' '+esc(r.oh_uom||'')+
  (d.pre_delivery_stockout_risk?'<br><br><b>⚠ Pre-delivery stockout risk</b><br>'+fmtNullable(d.pre_delivery_stockout_qty)+' '+esc(r.oh_uom||'')+' projected short before the selected delivery. This shortage is NOT added to the later order.':'')+
  (d.freshness_coverage_capped?'<br><br><b>⚠ Freshness guard</b><br>Fresh/Live coverage is capped at 7 days. Later demand requires an earlier or split delivery.':'')+
+ (d.freshness_adjustment_applied?'<br><br><b>⚠ Current OH freshness adjustment</b><br>Latest valid receipt '+esc(appDate(d.freshness_latest_receipt_date))+' · current DOH '+fmtNullable(d.freshness_current_doh)+' · discard threshold '+fmtNullable(d.freshness_threshold_days)+' days.<br>Projected discard '+fmtNullable(d.freshness_projected_discard_qty)+' '+esc(r.oh_uom||'')+' · existing OH credited '+fmtNullable(d.freshness_existing_oh_credit)+' '+esc(r.oh_uom||'')+' · order increased '+fmtNullable(d.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'.':'')+
  '<br><br><b>Delivery evidence</b><br>'+fmt(r.delivery_day_observed_count,0)+' / '+fmt(r.delivery_day_receipt_count,0)+' receipt dates · '+fmt(r.delivery_day_confidence_pct,0)+'% confidence'+
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
 }
