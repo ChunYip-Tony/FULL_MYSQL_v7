@@ -192,7 +192,11 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER SELLING' in ui
-          assert "const CACHE='yipman-v392'" in ui
+          assert "const CACHE='yipman-v393'" in ui
+          assert "$('.fam','#ydFList').forEach" in desktop
+          assert "$('.upcrow',c).forEach" in desktop
+          assert "$('.fam','#ydFList').forEach" not in desktop
+          assert "$('.upcrow',c).forEach" not in desktop
           print('stock-flow-promo-week-lift-v388=PASS')
           PY
 
