@@ -30,7 +30,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v356';
+const CACHE='yipman-v357';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -445,8 +445,8 @@ const appDate=v=>{
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='LIVE', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false;
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, priceRequestSeq=0, priceRetryTimer=null;
-let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[];
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null;
+let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 function toast(t){const n=$('#toast');n.textContent=t;n.classList.add('on');setTimeout(()=>n.classList.remove('on'),1600)}
 async function api(url,opt={}){const c=new AbortController();let timedOut=false;const tm=setTimeout(()=>{timedOut=true;c.abort()},opt.timeoutMs||18000);try{const r=await fetch(url,{...opt,signal:c.signal,headers:{'Accept':'application/json',...(opt.headers||{})},cache:'no-store'});const text=await r.text();let data={};try{data=text?JSON.parse(text):{}}catch{}if(!r.ok)throw new Error(data?.detail?.reason||data?.detail||text||('HTTP '+r.status));return data}catch(e){if(timedOut||e?.name==='AbortError')throw new Error('Request timed out while the server was calculating. Retrying is safe.');throw e}finally{clearTimeout(tm)}}
 function renderView(id){
@@ -455,6 +455,7 @@ function renderView(id){
   pages.forEach(p=>p.classList.toggle('on',p.id===id));
   nav.forEach(b=>b.classList.toggle('on',b.dataset.go===id));
   const p=$('#'+id);if(p)p.scrollTop=0;
+  if(id!=='order'){clearTimeout(orderRetryTimer);orderRetryTimer=null}
   if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
   if(id==='order')initOrdering();
   if(id==='price')loadPrices();
@@ -1220,12 +1221,16 @@ function renderOrderRoster(rows,data,h,stale){
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 async function loadOrder(value){
+ clearTimeout(orderRetryTimer);orderRetryTimer=null;
  const requestId=++orderRequestSeq;
  let d=null;
  if(typeof value==='string')d=dateLocal(value);
  else{d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()+Number(value||0))}
  if(!d)return;
  orderDate=iso(d);
+ const requestedDate=orderDate, requestedNext=orderNextDate;
+ const windowKey=requestedDate+'|'+String(requestedNext||'');
+ if(orderRetryWindowKey!==windowKey){orderRetryWindowKey=windowKey;orderRetryCount=0}
  buildDays();updateOrderWindowUI();
  const today0=new Date();today0.setHours(12,0,0,0);
  const isPast=d<today0;
@@ -1233,9 +1238,12 @@ async function loadOrder(value){
  $('#orderCol1').textContent='FAMILY / RECEIVING';
  $('#orderCol2').textContent=isPast?'RECEIPT':'OH';
  $('#orderCol3').textContent=isPast?'UOM':'ORDER';
+ if(!isPast&&lastOrderWindowKey!==windowKey){
+   $('#orderSummary').textContent='CALCULATING · '+appDate(requestedDate)+' → '+appDate(requestedNext);
+ }
  $('#orderStatus').textContent=(isPast?'Loading delivery history for ':'Loading ')+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';
- $('#orderRows').innerHTML='<div class="loading">'+(isPast?'Checking actual canonical receipts…':'Checking receiving cadence and coverage…')+'</div>';
- const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+orderDate+(!isPast&&orderNextDate?'&next_delivery_date='+encodeURIComponent(orderNextDate):'');
+ $('#orderRows').innerHTML='<div class="loading">'+(isPast?'Checking actual canonical receipts…':'Checking receipt history, OH and sales…')+'</div>';
+ const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+requestedDate+(!isPast&&requestedNext?'&next_delivery_date='+encodeURIComponent(requestedNext):'');
  try{
   let data=null;
   for(let i=0;i<10;i++){
@@ -1248,11 +1256,21 @@ async function loadOrder(value){
   }
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
   if(['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(String(data?.cache_status||'').toUpperCase())){
-    $('#orderStatus').textContent='Still calculating best-available delivery view…';
-    $('#orderRows').innerHTML='<div class="empty">Yipman is analyzing receipt history, OH and sales. Pull down to refresh in a few seconds.</div>';
+    orderRetryCount++;
+    const delay=Math.min(8000,2500+Math.max(0,orderRetryCount-1)*500);
+    const err=data?.refresh_error;
+    $('#orderStatus').textContent=(err?'Retrying after calculation error · ':'Still calculating · ')+'auto-refreshing '+appDate(requestedDate)+' → '+appDate(requestedNext);
+    $('#orderRows').innerHTML='<div class="loading">Yipman is calculating receipt history, OH and predicted usage. This page will update automatically'+(err?'<br><br>'+esc(err):'')+'.</div>';
+    orderRetryTimer=setTimeout(()=>{
+      if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext){
+        loadOrder(requestedDate);
+      }
+    },delay);
     return;
   }
   if(finalStatus==='REFRESH_FAILED'){
+    clearTimeout(orderRetryTimer);orderRetryTimer=null;
+    $('#orderSummary').textContent='CALCULATION FAILED';
     $('#orderStatus').textContent='Ordering calculation failed';
     $('#orderRows').innerHTML='<div class="empty">'+esc(data?.refresh_error||'Pull down to retry.')+'</div>';
     return;
@@ -1277,6 +1295,9 @@ async function loadOrder(value){
   $('#orderCol2').textContent='OH';
   $('#orderCol3').textContent='ORDER';
   const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||finalStatus.startsWith('READY_STALE_ESTIMATE');
+  lastOrderWindowKey=windowKey;
+  orderRetryCount=0;
+  clearTimeout(orderRetryTimer);orderRetryTimer=null;
   renderOrderRoster(rows,data,h,stale);
  }catch(e){
   if(requestId!==orderRequestSeq)return;

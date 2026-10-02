@@ -145,6 +145,21 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
+      - name: Validate Yipman Ordering loading recovery
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert "orderRetryTimer=null" in ui
+          assert "orderRetryCount=0" in ui
+          assert "This page will update automatically" in ui
+          assert "CALCULATING · " in ui
+          assert "loadOrder(requestedDate)" in ui
+          assert "lastOrderWindowKey=windowKey" in ui
+          assert "CALCULATION FAILED" in ui
+          print('yipman-order-loading-recovery=PASS')
+          PY
+
       - name: Validate Yipman Promotion Ordering contract
         run: |
           python - <<'PY'
