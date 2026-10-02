@@ -341,6 +341,10 @@ jobs:
           assert '"family_source_receipt_7d_qty": source_receipt_7d.get("quantity")' in bo
           assert '"receipt_7d_qty": (receipt_7d_by_article.get(art) or {}).get("quantity")' in bo
           assert 'receipt_7d_by_article: dict[str, dict[str, Any]] = {}' in bo
+          assert '"family_source_receipt_history": family_ctx.get("family_source_receipt_history", [])' in bo
+          assert '"receipt_history": family_ctx.get("family_source_receipt_history", [])' in bo
+          assert '"receiving_receipt_7d_qty": assigned_receiving_row.get("receipt_7d_qty")' in bo
+          assert '"receipt_history": family_ctx.get("family_receipt_history", [])' not in bo
           assert 'friendlySignal(st)' in ui
           assert 'priceAccept' not in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
