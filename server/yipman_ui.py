@@ -204,7 +204,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qreceivingrow{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr);gap:6px;align-items:center;padding:6px 9px;background:var(--grp-recv);border-bottom:1px solid color-mix(in srgb,var(--grp-border) 28%,#fff)}
 .qrecvidentity{min-width:0;display:grid;grid-template-columns:23px minmax(0,1fr);gap:7px;align-items:center}
 .qricon{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#f47b35;color:#fff;font-size:10px;font-weight:950}
-.qrnum{font-size:13px;font-weight:950;line-height:1.05}.qrname{font-size:9px;font-weight:800;color:#334554;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+.qrnum{font-size:13px;font-weight:950;line-height:1.05}.qrname{font-size:9px;font-weight:800;color:#334554;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}.qr7d{display:block;font-size:7px;font-weight:950;color:#17683c;margin-top:2px;white-space:nowrap}
 .qdelivery{min-width:0;text-align:right}.qdelivery small{display:block;font-size:6px;color:#667784;font-weight:900;letter-spacing:.03em}.qdelivery b{display:block;font-size:11px;line-height:1.1}.qdelivery span{font-size:8px;color:#435868;font-weight:800}
 .qsap{margin:6px 7px;border:1px solid #d9e2e9;border-left:4px solid var(--grp-border);border-radius:12px;overflow:hidden;background:#fff}
 .qsaphead{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;padding:6px 8px;background:#f3f7fa;border-bottom:1px solid #dfe6eb}
@@ -1173,6 +1173,10 @@ function quickFamilyGroups(rows){
    movement_status:a?.movement_status||'',
    receipt_verified:!!a?.receipt_verified,
    receipt_history:Array.isArray(a?.receipt_history)?a.receipt_history:[],
+   receipt_7d_qty:a?.receipt_7d_qty??null,
+   receipt_7d_uom:a?.receipt_7d_uom||'',
+   receipt_7d_status:a?.receipt_7d_status||'',
+   receipt_7d_day_count:a?.receipt_7d_day_count??null,
    has_active_pos_upc:!!a?.has_active_pos_upc
  });
  for(const r of (rows||[])){
@@ -1188,6 +1192,12 @@ function quickFamilyGroups(rows){
      source_movement_7d:r.family_source_movement_7d,
      source_avg_qty_day:r.family_source_avg_qty_day,
      source_movement_uom:r.family_source_movement_uom||'',
+     source_receipt_verified:!!r.family_source_receipt_verified,
+     source_receipt_history:Array.isArray(r.family_source_receipt_history)?r.family_source_receipt_history:[],
+     source_receipt_7d_qty:r.family_source_receipt_7d_qty??null,
+     source_receipt_7d_uom:r.family_source_receipt_7d_uom||'',
+     source_receipt_7d_status:r.family_source_receipt_7d_status||'',
+     source_receipt_7d_day_count:r.family_source_receipt_7d_day_count??null,
      family_receipt_verified:!!r.family_receipt_verified,
      family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],
      family_receipt_7d_qty:r.family_receipt_7d_qty??null,
@@ -1223,15 +1233,44 @@ function quickFamilyGroups(rows){
          article_number:a.article_number,
          article_description:a.article_description||'',
          receipt_history:a.receipt_history||[],
+         receipt_7d_qty:a.receipt_7d_qty??null,
+         receipt_7d_uom:a.receipt_7d_uom||'',
+         receipt_7d_status:a.receipt_7d_status||'',
+         receipt_7d_day_count:a.receipt_7d_day_count??null,
          source_family:false
        });
      }
    }
+
+   // The Family/Main Article may itself receive physical 101/109 stock. That
+   // is a real Receiving Article row, not the Family aggregate. Keep it visible
+   // even when linked Receiving Articles also exist so the displayed Article
+   // subtotals can reconcile to Family 7D Receipt.
+   if(sourceKey&&g.source_receipt_history.length&&!g.receiving.has(sourceKey)){
+     g.receiving.set(sourceKey,{
+       article_number:sourceKey,
+       article_description:g.family_name||'',
+       receipt_history:g.source_receipt_history,
+       receipt_7d_qty:g.source_receipt_7d_qty,
+       receipt_7d_uom:g.source_receipt_7d_uom||'',
+       receipt_7d_status:g.source_receipt_7d_status||'',
+       receipt_7d_day_count:g.source_receipt_7d_day_count??null,
+       source_family:false,
+       source_article_receipt:true
+     });
+   }
+
+   // Aggregate Family history remains a last-resort display fallback only when
+   // no actual Article-level physical receipt row exists.
    if(!g.receiving.size&&sourceKey&&g.family_receipt_history.length){
      g.receiving.set(sourceKey,{
        article_number:sourceKey,
        article_description:g.family_name||'',
        receipt_history:g.family_receipt_history,
+       receipt_7d_qty:g.family_receipt_7d_qty,
+       receipt_7d_uom:g.family_receipt_7d_uom||'',
+       receipt_7d_status:g.family_receipt_7d_status||'',
+       receipt_7d_day_count:g.family_receipt_7d_day_count??null,
        source_family:true,
        aggregate_fallback:true
      });
@@ -1306,7 +1345,9 @@ function quickDeliveryCell(x,label,familyId,articleNumber){
 }
 function quickReceivingRowHtml(a,familyId){
  const history=(Array.isArray(a.receipt_history)?a.receipt_history:[]).slice(0,2),familyFallback=!!a.source_family;
- return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">'+(familyFallback?'Σ':'R')+'</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(familyFallback?'FAMILY RECEIPT SUMMARY':(a.article_description||'Receiving Article'))+'</div></div></div>'+
+ const q7=num(a.receipt_7d_qty),u7=a.receipt_7d_uom||history[0]?.uom||'';
+ const subtotal=q7===null?'':('<span class="qr7d">'+(familyFallback?'7D FAMILY TOTAL · ':'7D RECEIPT · ')+fmt(q7)+' '+esc(u7)+'</span>');
+ return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">'+(familyFallback?'Σ':'R')+'</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(familyFallback?'FAMILY RECEIPT SUMMARY':(a.article_description||'Receiving Article'))+'</div>'+subtotal+'</div></div>'+
    quickDeliveryCell(history[0],'LATEST DELIVERY',familyId,familyFallback?'':a.article_number)+quickDeliveryCell(history[1],'PREV DELIVERY',familyId,familyFallback?'':a.article_number)+'</div>';
 }
 function quickSellingHtml(a,idx,seq){
