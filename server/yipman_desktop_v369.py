@@ -32,7 +32,7 @@ YIPMAN_DESKTOP_CSS = r"""
   #ydesk .timeline{display:flex;flex-direction:column;gap:5px}#ydesk .event{display:grid;grid-template-columns:82px 1fr 70px 100px 100px;gap:6px;align-items:center;border:1px solid #e1e8ef;border-radius:7px;padding:6px 7px;font-size:9px;background:#fff}
   #ydesk .chart{height:190px;border:1px solid #e1e8ef;border-radius:9px;background:linear-gradient(#fff,#fbfdff);display:flex;align-items:end;gap:5px;padding:14px 12px 22px}#ydesk .bar{flex:1;min-width:5px;max-width:34px;background:#72b3f4;border-radius:4px 4px 0 0;position:relative}#ydesk .bar span{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:7px;color:#718197}
   #ydesk .ordtop{display:grid;grid-template-columns:1fr 1fr 1.35fr;gap:7px}#ydesk .datebox{border:1px solid #dfe7ef;border-radius:9px;padding:8px;background:#fff}#ydesk .datebox label{font-size:8px;text-transform:uppercase;color:#708197;font-weight:900}#ydesk .datebox strong{font-size:15px;display:block}#ydesk .calendar{display:grid;grid-template-columns:repeat(14,1fr);gap:3px;margin-top:7px}#ydesk .day{border:1px solid #dfe7ef;border-radius:7px;background:#fff;text-align:center;padding:5px 2px;font-size:8px}#ydesk .day b{display:block;font-size:10px}#ydesk .day.obs{background:#edf9f2;border-color:#bce3cb}#ydesk .day.sel{background:#e9f3ff;border-color:#91c2ff;color:#0867d9}#ydesk .day.next{background:#f1edff;border-color:#b9abf5;color:#6045c9}#ydesk input.final{width:62px;height:28px;border:1px solid #b9d6f8;border-radius:6px;padding:0 5px;font-weight:900;color:#075fd0}
-  #ydesk .pfilters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}#ydesk .filterbox{border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px}#ydesk .filterbox label{display:block;font-size:8px;text-transform:uppercase;color:#708197;font-weight:900;margin-bottom:5px}#ydesk .pqueue{display:flex;flex-direction:column;gap:7px}#ydesk .pcard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--pc);border-radius:10px;padding:8px 9px;cursor:pointer}#ydesk .pcard.selected{box-shadow:0 0 0 2px rgba(11,114,244,.16)}#ydesk .ptop{display:grid;grid-template-columns:minmax(210px,1.35fr) repeat(3,.55fr) minmax(145px,.8fr) 80px;gap:8px;align-items:center}#ydesk .pname b{font-size:12px}#ydesk .pname div{font-size:9px;color:#728196;margin-top:2px}#ydesk .pm label{display:block;font-size:7px;text-transform:uppercase;color:#718197;font-weight:900}#ydesk .pm strong{font-size:15px}
+  #ydesk .pfilters{display:grid;grid-template-columns:.8fr 1.15fr 1.35fr;gap:8px;margin-bottom:9px}#ydesk .filterbox{border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px}#ydesk .filterbox label{display:block;font-size:8px;text-transform:uppercase;color:#708197;font-weight:900;margin-bottom:5px}#ydesk .pqueue{display:flex;flex-direction:column;gap:7px}#ydesk .pcard{background:#fff;border:1px solid var(--line);border-left:5px solid var(--pc);border-radius:10px;padding:8px 9px;cursor:pointer}#ydesk .pcard.selected{box-shadow:0 0 0 2px rgba(11,114,244,.16)}#ydesk .ptop{display:grid;grid-template-columns:minmax(210px,1.35fr) repeat(3,.55fr) minmax(145px,.8fr) 80px;gap:8px;align-items:center}#ydesk .pname b{font-size:12px}#ydesk .pname div{font-size:9px;color:#728196;margin-top:2px}#ydesk .pm label{display:block;font-size:7px;text-transform:uppercase;color:#718197;font-weight:900}#ydesk .pm strong{font-size:15px}
   #ydesk .perfgrid,#ydesk .pigrid,#ydesk .datagrid{display:grid;grid-template-columns:minmax(660px,1.4fr) minmax(390px,.6fr);gap:10px}#ydesk .insight{border-left:3px solid var(--blue);padding:7px 8px;background:#f5f9ff;border-radius:0 7px 7px 0;font-size:9px;line-height:1.4;margin:6px 0}
   #ydesk .pirow{display:grid;grid-template-columns:minmax(190px,1.15fr) repeat(5,.58fr) 112px;gap:7px;align-items:center;padding:8px 9px;border-bottom:1px solid #edf2f6;font-size:9px;cursor:pointer}#ydesk .pirow:hover{background:#f8fbfe}#ydesk .pirow.selected{background:#eef6ff}#ydesk .trueinput{width:100%;height:32px;border:1px solid #d5e0ea;border-radius:7px;padding:0 7px}
   #ydesk .upload{border:1.5px dashed #b9cada;border-radius:9px;padding:15px;text-align:center;background:#fbfdff}#ydesk .upload h3{font-size:13px;margin:4px 0}#ydesk .upload p{font-size:9px;color:#6d7d90;margin:4px 0 8px}#ydesk .pipeline{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}#ydesk .stage{text-align:center;border-radius:7px;padding:7px 3px;font-size:8px;font-weight:900;background:#edf2f6;color:#617287}#ydesk .stage.done{background:#e9f8ef;color:#167d49}#ydesk .stage.hold{background:#fff2d8;color:#946100}
@@ -86,7 +86,7 @@ YIPMAN_DESKTOP_CSS = r"""
 YIPMAN_DESKTOP_JS = r"""
 (function(){
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
- const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),priceFilter:'all',priceReason:'all',priceSearch:'',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
+ const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
  const ctx=r=>typeof r==='string'?document.querySelector(r):r;
  const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $$=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -160,14 +160,16 @@ YIPMAN_DESKTOP_JS = r"""
     root.dataset.init='1';
     root.innerHTML='<div class="pagehead"><div><h2>Price Suggestions</h2><p>Current price integrity + freshness velocity + GP$/day + strongest proved Tested price + controlled Testing price.</p></div><div class="actions"><span class="badge red" id="ydPActions">— actionable</span><button class="btn" id="ydPShowIgnored">Show ignored</button><button class="btn" id="ydPRefresh">Refresh analysis</button><button class="btn">Export</button></div></div>'+
       '<div class="pfilters">'+
-        '<div class="filterbox"><label>UPC / OPERATIONAL GROUP</label><div class="actions"><button class="btn primary" data-pf="all">All actionable</button>'+['240','245','247','249'].map(x=>'<button class="btn" data-pf="'+x+'">'+x+'</button>').join('')+'<button class="btn" data-pf="live">Live</button><button class="btn" data-pf="tue">Observed Tuesday</button><button class="btn" data-pf="fri">Observed Friday / Sat</button></div></div>'+
+        '<div class="filterbox"><label>UPC / RULE</label><div class="actions"><button class="btn primary" data-pfx="all">All UPC</button>'+['240','245','247','249'].map(x=>'<button class="btn" data-pfx="'+x+'">'+x+'</button>').join('')+'</div></div>'+
+        '<div class="filterbox"><label>OPERATIONAL GROUP</label><div class="actions"><button class="btn primary" data-pop="all">All actionable</button><button class="btn" data-pop="live">Live</button><button class="btn" data-pop="tue">Observed Tuesday</button><button class="btn" data-pop="fri">Observed Friday / Sat</button></div></div>'+
         '<div class="filterbox"><label>REASON</label><div class="actions"><button class="btn primary" data-pr="all">All</button><button class="btn" data-pr="pair">240 ≠ 249</button><button class="btn" data-pr="velocity">Velocity / Freshness</button><button class="btn" data-pr="sweet">Sweet spot</button><button class="btn" data-pr="range">Outside range</button><button class="btn" data-pr="gp">GP$/day</button></div></div>'+
       '</div>'+
       '<div class="actions" style="margin:0 0 9px"><input id="ydPSearch" class="input priceSearch" placeholder="Search price suggestions by UPC / name / family"><span class="small" id="ydPStatus">Loading current analysis…</span></div>'+
       '<div id="ydPriceSummary" class="priceSummary"></div>'+
       '<div class="split"><div id="ydPQueue"><div class="loading">Loading pricing review…</div></div><aside id="ydPAnalysis" class="analysis"><div class="card"><div class="loading">Select a price suggestion.</div></div></aside></div>';
-    $$('[data-pf]',root).forEach(b=>b.onclick=()=>{D.priceFilter=b.dataset.pf;$$('[data-pf]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
-    $$('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $('[data-pfx]',root).forEach(b=>b.onclick=()=>{D.pricePrefix=b.dataset.pfx;$('[data-pfx]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $('[data-pop]',root).forEach(b=>b.onclick=()=>{D.priceOperational=b.dataset.pop;$('[data-pop]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
+    $('[data-pr]',root).forEach(b=>b.onclick=()=>{D.priceReason=b.dataset.pr;$('[data-pr]',root).forEach(x=>x.classList.remove('primary'));b.classList.add('primary');renderPriceQueue()});
     $('#ydPSearch').oninput=e=>{D.priceSearch=e.target.value.trim().toLowerCase();renderPriceQueue()};
     $('#ydPShowIgnored').onclick=()=>{D.priceShowIgnored=!D.priceShowIgnored;$('#ydPShowIgnored').textContent=D.priceShowIgnored?'Hide ignored':'Show ignored';renderPriceQueue()};
     $('#ydPRefresh').onclick=()=>{D.priceRetry=0;refreshPriceData(true,0)};
@@ -237,11 +239,11 @@ function pfRows(){
     if(ignored&&!D.priceShowIgnored)return false;
     if(!priceReasonMatch(r))return false;
     if(D.priceSearch&&!([r.upc,r.name,r.family_article_number,r.family_name].join(' ').toLowerCase().includes(D.priceSearch)))return false;
-    if(['240','245','247','249'].includes(D.priceFilter)&&prefix(r)!==D.priceFilter)return false;
-    if(D.priceFilter==='live'&&String(r.category||'').toUpperCase()!=='LIVE')return false;
+    if(['240','245','247','249'].includes(D.pricePrefix)&&prefix(r)!==D.pricePrefix)return false;
+    if(D.priceOperational==='live'&&String(r.category||'').toUpperCase()!=='LIVE')return false;
     const days=(r.observed_delivery_weekdays||[]).map(x=>String(x).toUpperCase());
-    if(D.priceFilter==='tue'&&!days.includes('TUESDAY'))return false;
-    if(D.priceFilter==='fri'&&!days.includes('FRIDAY')&&!days.includes('SATURDAY'))return false;
+    if(D.priceOperational==='tue'&&!days.includes('TUESDAY'))return false;
+    if(D.priceOperational==='fri'&&!days.includes('FRIDAY')&&!days.includes('SATURDAY'))return false;
     return true;
   }).slice(0,80)
 }
@@ -275,7 +277,7 @@ function renderPriceQueue(refreshing=false){
       '<div class="diaggrid"><div class="kpi"><label>Analysis</label><strong>'+esc(d.analysis_status||'—')+'</strong></div><div class="kpi"><label>Data health</label><strong>'+esc(h.status||'—')+'</strong><small>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</small></div><div class="kpi"><label>Accepted hidden</label><strong>'+accepted+'</strong><small>'+esc(d.refresh_error||'no refresh error')+'</small></div></div>'+
       '<div class="actions" style="margin-top:10px"><button class="btn primary" id="ydPriceEmptyRefresh">Refresh analysis</button><button class="btn" id="ydPriceEmptyAll">Show all actionable</button></div></div>';
     const r=$('#ydPriceEmptyRefresh');if(r)r.onclick=()=>refreshPriceData(true,0);
-    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.priceFilter='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$$('[data-pf]').forEach(x=>x.classList.toggle('primary',x.dataset.pf==='all'));$$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
+    const all=$('#ydPriceEmptyAll');if(all)all.onclick=()=>{D.pricePrefix='all';D.priceOperational='all';D.priceReason='all';D.priceSearch='';$('#ydPSearch').value='';$('[data-pfx]').forEach(x=>x.classList.toggle('primary',x.dataset.pfx==='all'));$('[data-pop]').forEach(x=>x.classList.toggle('primary',x.dataset.pop==='all'));$('[data-pr]').forEach(x=>x.classList.toggle('primary',x.dataset.pr==='all'));renderPriceQueue()};
     $('#ydPAnalysis').innerHTML='<div class="card"><div class="loading">Select a price suggestion when the queue is available.</div></div>';
     return;
   }
