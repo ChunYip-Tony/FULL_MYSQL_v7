@@ -29,11 +29,12 @@ from receipt_semantics import physical_receipt_stage_rows
 WEEKDAY_NAMES = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
 
 # Store-facing price points used for generated / suggested retail prices.
-# Tested sweet spots remain the actual observed historical price evidence and
-# are intentionally NOT rewritten to a different price point.
+# The common Seafood shelf-price ladder includes .59 in addition to the
+# established .29/.49/.69/.79/.99 points.
 RETAIL_PRICE_ENDINGS = (
     Decimal("0.29"),
     Decimal("0.49"),
+    Decimal("0.59"),
     Decimal("0.69"),
     Decimal("0.79"),
     Decimal("0.99"),
@@ -48,8 +49,9 @@ def _retail_price_point(
 ) -> Decimal | None:
     """Return the nearest normal store retail price point.
 
-    Generated target/testing prices use endings .29/.49/.69/.79/.99. Optional
-    bounds preserve hard cost / Company-price guardrails. If no standard ending
+    Generated retail-facing target/testing prices use the store endings
+    .29/.49/.59/.69/.79/.99. Optional bounds preserve hard cost /
+    Company-price guardrails. If no standard ending
     exists inside the bounds, return None so the caller can preserve the hard
     business constraint rather than fabricate an out-of-range price.
     """
@@ -4816,7 +4818,7 @@ def _gp_day_price_suggestion(
         "status":"READY",
         "suggested_price":suggested,
         "raw_supported_price":raw_supported_price,
-        "price_point_rounding":"NEAREST_OF_29_49_69_79_99",
+        "price_point_rounding":"NEAREST_OF_29_49_59_69_79_99",
         "basis":basis,
         "company_c_floor":company_c,
         "company_c_applied":company_c is not None,
@@ -5237,7 +5239,7 @@ def _gp_day_price_suggestion_from_batch(
         "status":"READY",
         "suggested_price":suggested,
         "raw_supported_price":raw_supported_price,
-        "price_point_rounding":"NEAREST_OF_29_49_69_79_99",
+        "price_point_rounding":"NEAREST_OF_29_49_59_69_79_99",
         "price_point_rounding_status":rounding_status,
         "basis":basis,
         "selection_basis":selection,
