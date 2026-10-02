@@ -1772,7 +1772,7 @@ async function rebuildQAFromDataCenter(){
  try{await api('/v1/web-upload/batches/'+encodeURIComponent(dataQaBatchId)+'/rebuild-phase3',{method:'POST',timeoutMs:30000});toast('QA rebuild queued');setTimeout(()=>loadData(),900)}catch(e){toast(e.message);if(btn){btn.disabled=false;btn.textContent='REBUILD QA'}}
 }
 function fmtElapsedSeconds(v){
- const n=Number(v);if(!Number.isFinite(n)||n<0)return '—';
+ const n=num(v);if(n===null||n<0)return '—';
  const sec=Math.round(n);if(sec<60)return sec+'s';
  const m=Math.floor(sec/60),s=sec%60;if(m<60)return m+'m '+s+'s';
  const h=Math.floor(m/60),mm=m%60;return h+'h '+mm+'m';
@@ -1780,7 +1780,7 @@ function fmtElapsedSeconds(v){
 function batchLiveState(b){
  const run=String(b?.active_run_status||'').toUpperCase();
  const fresh=b?.active_heartbeat_fresh===true;
- const age=Number(b?.active_heartbeat_age_seconds);
+ const age=num(b?.active_heartbeat_age_seconds);
  const batch=String(b?.processing_status||'').toUpperCase();
  if(run==='STARTED'&&fresh)return {key:'running',label:'RUNNING',sub:'heartbeat '+(Number.isFinite(age)?fmtElapsedSeconds(age)+' ago':'live')};
  if(run==='STARTED'&&!fresh)return {key:'stuck',label:'POSSIBLY STUCK',sub:Number.isFinite(age)?('no heartbeat for '+fmtElapsedSeconds(age)):'live heartbeat missing'};
@@ -1798,12 +1798,12 @@ function renderCurrentBatchPanel(b){
  if(!b?.batch_id){$('#currentBatch').innerHTML='<div class="empty">No active or recent batch.</div>';return}
  const st=String(b.processing_status||'NONE').toUpperCase(),statusLabel=friendlySignal(st);
  const statusClass=st.includes('HOLD')?'red':(/READY|PUBLISH/.test(st)?'green':'amber');
- const live=batchLiveState(b),pctNum=Number(b.active_progress_pct),hasPct=Number.isFinite(pctNum),pct=hasPct?Math.max(0,Math.min(100,pctNum)):0;
- const cur=Number(b.active_progress_current),tot=Number(b.active_progress_total),hasCounts=Number.isFinite(cur)&&Number.isFinite(tot)&&tot>0;
+ const live=batchLiveState(b),pctNum=num(b.active_progress_pct),hasPct=pctNum!==null,pct=hasPct?Math.max(0,Math.min(100,pctNum)):0;
+ const cur=num(b.active_progress_current),tot=num(b.active_progress_total),hasCounts=cur!==null&&tot!==null&&tot>0;
  const stage=b.active_phase3_stage||b.active_last_phase3_stage||b.active_stage_name||'—';
  const elapsed=fmtElapsedSeconds(b.active_progress_elapsed_seconds);
  const eta=fmtElapsedSeconds(b.active_progress_eta_seconds);
- const rate=Number(b.active_progress_rows_per_second);
+ const rate=num(b.active_progress_rows_per_second);
  const hbAge=fmtElapsedSeconds(b.active_heartbeat_age_seconds);
  const runId=b.active_pipeline_run_id||b.pipeline_run_id||'—';
  const issueTotal=b.active_issue_total??b.open_issue_total??b.error_count??b.qa_hold_count??0;
@@ -1817,7 +1817,7 @@ function renderCurrentBatchPanel(b){
   '<div class="cblive"><div class="cblive-main"><i class="cblive-dot '+esc(live.key)+'"></i><div><b>'+esc(live.label)+'</b><span>'+esc(live.sub)+'</span></div></div><span class="cblivecheck">LIVE · 5s</span></div>'+
   '<div class="cbprogress"><div class="cbprogress-top"><b>'+esc(friendlySignal(stage))+'</b><span>'+esc(progressLabel)+'</span></div><div class="cbbar"><i style="width:'+(hasPct?pct:(hasCounts?Math.max(3,Math.min(100,(cur/tot)*100)):0)).toFixed(1)+'%"></i></div><div class="cbprogress-sub"><span>'+progressDetail+'</span><span>'+((ready!=null||hold!=null)?('Ready '+fmt(ready,0)+' · Hold '+fmt(hold,0)):(hist!=null?('Historical '+fmt(hist,0)):'Run #'+esc(runId)))+'</span></div></div>'+
   '<div class="cbrunmeta"><div><small>RUN</small><b>#'+esc(runId)+'</b></div><div><small>HEARTBEAT</small><b>'+esc(hbAge)+'</b></div><div><small>ELAPSED</small><b>'+esc(elapsed)+'</b></div><div><small>ETA</small><b>'+esc(eta)+'</b></div></div>'+
-  '<div class="cbmeta"><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(issueTotal,0)+'</b></div><div><small>RATE</small><b>'+(Number.isFinite(rate)?fmt(rate,1)+'/s':'—')+'</b></div></div>'+
+  '<div class="cbmeta"><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(issueTotal,0)+'</b></div><div><small>RATE</small><b>'+(rate!==null?fmt(rate,1)+'/s':'—')+'</b></div></div>'+
   (item?'<div class="cbcurrentitem"><small>CURRENT WORK ITEM</small><b>'+esc(item)+'</b></div>':'')+alert+'</div>';
  const el=$('#currentBatch [data-batch]');if(el)el.onclick=()=>openBatch(el.dataset.batch,b);
 }
