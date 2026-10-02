@@ -384,7 +384,7 @@ async function resetQuickHome({push=true}={}){
   $('#quick').scrollTop=0;
   if(push&&historyReady&&!wasQuick)history.pushState({yipman:true,view:'quick'},'', '#quick');
 }
-$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
 const quickNav=$('.nav button[data-go="quick"]');
 if(quickNav)quickNav.onclick=()=>resetQuickHome();
 function sheet(title,sub,html){
