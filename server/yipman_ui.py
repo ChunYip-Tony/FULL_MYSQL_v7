@@ -10,7 +10,7 @@ except ImportError:
 
 def yipman_html(version: str = "") -> str:
     html = YIPMAN_HTML.replace("__VERSION__", str(version or ""))
-    desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:900px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
+    desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v369-css\">" + YIPMAN_DESKTOP_CSS + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v369-js\">" + YIPMAN_DESKTOP_JS + "</script></body>")
     return html
