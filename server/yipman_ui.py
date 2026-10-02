@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v395';
+const CACHE='yipman-v396';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -477,9 +477,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .cell span{font-size:10px}
 #order .orderstate,#order .order-risk,#order .order-lowconf{font-size:7px;padding:3px 6px}
 #order .orow .name{font-size:18px;line-height:1.08}
-#order .receivingline{display:flex;align-items:baseline;gap:7px;margin-top:5px;min-width:0}
-#order .receivingline span{font-size:8px;color:#71808d;font-weight:950;letter-spacing:.04em}
-#order .receivingline b{font-size:16px;line-height:1;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order .familyline{display:flex;align-items:baseline;gap:7px;margin-top:5px;min-width:0}
+#order .familyline span{font-size:8px;color:#71808d;font-weight:950;letter-spacing:.04em}
+#order .familyline b{font-size:16px;line-height:1;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #order #orderList.futurecards{background:transparent;border-radius:0;box-shadow:none;overflow:visible}
 #order #orderList.futurecards #orderRows{display:grid;gap:12px}
 #order #orderList.futurecards #orderListHead{display:none}
@@ -496,9 +496,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .orderitemmain .cell{text-align:right;font-size:15px;font-weight:950}
 #order .orderitemmain .cell span{display:block;font-size:10px;color:#71808d}
 #order .orderitemmain .orderqty{font-size:19px;color:#0d4f8b}
-#order .receivingline{display:flex;align-items:baseline;gap:7px;margin-top:6px;min-width:0}
-#order .receivingline span{font-size:8px;color:#71808d;font-weight:950;letter-spacing:.04em}
-#order .receivingline b{font-size:18px;line-height:1;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#order .familyline{display:flex;align-items:baseline;gap:7px;margin-top:6px;min-width:0}
+#order .familyline span{font-size:8px;color:#71808d;font-weight:950;letter-spacing:.04em}
+#order .familyline b{font-size:18px;line-height:1;color:#0d4f8b;font-weight:1000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #order .orderrecvhistory{margin:0 12px 12px;border:1px solid #bed8ee;background:#f4f9fe;border-radius:13px;padding:0!important;overflow:hidden}
 #order .orderrecvhistoryhead{display:flex;align-items:center;gap:7px;padding:8px 10px;background:#eaf4fc;border-bottom:1px solid #d7e7f3;color:#2e6797}
 #order .orderrecvhistoryicon{width:23px;height:23px;border-radius:7px;border:1px solid #8dbbe0;display:grid;place-items:center;font-size:12px;font-weight:1000;background:#f9fcff;color:#1268ad;flex:0 0 auto}
@@ -556,7 +556,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 @media(max-width:370px){
   #order .lh,#order .orow{grid-template-columns:minmax(0,1fr) 54px 66px;padding-left:10px;padding-right:10px}
   #order .orow .name{font-size:17px}
-  #order .receivingline b{font-size:15px}
+  #order .familyline b{font-size:15px}
   #price .pp b{font-size:21px}
   #price .pairauthority b{font-size:18px}
 }
@@ -609,8 +609,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .orderitemhead{background:rgba(255,255,255,.62);border-bottom-color:rgba(80,95,110,.14)}
 #order .orderrecvhistory{border-color:color-mix(in srgb,var(--article-accent) 45%,#d8e5ef);background:rgba(255,255,255,.58)}
 #order .orderrecvhistoryhead{background:rgba(255,255,255,.56);border-bottom-color:rgba(80,95,110,.12)}
-#order .receivingline{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:7px;row-gap:2px;align-items:baseline}
-#order .receivingline .receivingname{grid-column:2;font-size:10px;color:#465d70;font-weight:900;line-height:1.18;white-space:normal;overflow:visible}
+#order .familyline{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:7px;row-gap:2px;align-items:baseline}
+#order .familyline .receivingname{grid-column:2;font-size:10px;color:#465d70;font-weight:900;line-height:1.18;white-space:normal;overflow:visible}
 #order .orderrecvarticle .receivingname{display:block;font-size:9px;line-height:1.16;color:#344b5e;font-weight:950;margin-top:2px;white-space:normal}
 #price .pcard{border-width:1.5px}
 #price .pcard .pp,#price .pcard .pcost,#price .pcard .pm{background-color:rgba(255,255,255,.68)}
@@ -2031,7 +2031,7 @@ function renderOrderRoster(rows,data,h,stale){
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY / RECEIVING</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="receivingline"><span>RECEIVING</span><b>'+esc(r.receiving_article||'—')+'</b>'+(r.receiving_article_name?'<span class="receivingname">'+esc(r.receiving_article_name)+'</span>':'')+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
 }
@@ -2150,7 +2150,6 @@ function openOrder(r){
  '<div class="dmetrics"><div class="dm"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>CURRENT OH</span></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
- '<br><br><b>Receiving article</b><br>'+esc(r.receiving_article||'—')+
  histDetail+
  '<br><br><b>Last receipt</b><br>'+esc(appDate(r.last_receipt_date))+' · '+fmtNullable(r.last_receipt_qty_base)+' '+esc(r.last_receipt_base_uom||'')+
  '<br><br><b>Demand</b><br>7D '+fmtNullable(d.qty_7d)+' · 28D '+fmtNullable(d.qty_28d)+' · DOS '+fmtNullable(d.dos)+' · Forecast confidence '+esc(d.regular_forecast_confidence||'—')+
