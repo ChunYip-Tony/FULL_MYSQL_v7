@@ -399,8 +399,8 @@ jobs:
           assert "data-q-tested" in text
           assert "data-q-testing" in text
           assert "<small>SUGGEST</small>" not in text
-          assert "TESTED SWEET SPOT" in text
-          assert "SWEET SPOT TEST" in text
+          assert "TESTED_PRICE" in text
+          assert "TESTING_PRICE" in text
           print('yipman-dom-bindings=PASS')
           PY
 
