@@ -374,6 +374,25 @@ jobs:
           print('backoffice-dom-bindings=PASS')
           PY
 
+      - name: Validate Yipman DOM collection bindings
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          text = Path('yipman_ui.py').read_text(encoding='utf-8')
+          bad = re.findall(
+              r"(?<!\$)\$\([^)]*\)\.(?:forEach|map|filter|find|some|every|reduce)\b",
+              text,
+          )
+          assert not bad, f"Yipman single-element $() used as collection: {bad}"
+          assert "$('[data-go]').forEach" in text
+          assert "quickNav.onclick=()=>resetQuickHome()" in text
+          assert "$('#globalForm').classList.add('hide')" in text
+          assert "$('#globalForm').classList.remove('hide')" in text
+          print('yipman-dom-bindings=PASS')
+          PY
+
       - name: Validate live mobile batch progress contract
         run: |
           python - <<'PY'
