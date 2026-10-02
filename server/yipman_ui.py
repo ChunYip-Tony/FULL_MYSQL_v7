@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v380';
+const CACHE='yipman-v381';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -797,14 +797,11 @@ function quickFamilyGroups(rows){
  for(const g of out){
    const sourceKey=String(g.source_article||g.family_article||'').trim();
 
-   if(sourceKey&&g.family_receipt_history.length){
-     g.receiving.set(sourceKey,{
-       article_number:sourceKey,
-       article_description:g.family_name||'',
-       receipt_history:g.family_receipt_history,
-       source_family:true
-     });
-   }
+   // Receiving rows must represent actual Receiving Article receipt history.
+   // Family-level receipt history is an aggregate of those article events and
+   // must never be rendered beside them as another receipt row, or the user
+   // sees the same physical delivery twice. Keep the Family aggregate only as
+   // a fallback when no article-level receipt history is available.
    for(const a of g.article_catalog.values()){
      if(a.receipt_verified||a.receipt_history.length){
        g.receiving.set(a.article_number,{
@@ -814,6 +811,15 @@ function quickFamilyGroups(rows){
          source_family:false
        });
      }
+   }
+   if(!g.receiving.size&&sourceKey&&g.family_receipt_history.length){
+     g.receiving.set(sourceKey,{
+       article_number:sourceKey,
+       article_description:g.family_name||'',
+       receipt_history:g.family_receipt_history,
+       source_family:true,
+       aggregate_fallback:true
+     });
    }
 
    for(const r of g.rows){
@@ -884,9 +890,9 @@ function quickDeliveryCell(x,label,familyId,articleNumber){
  return '<button type="button" class="qdelivery receiptlink" data-receipt-family="'+esc(familyId??'')+'" data-receipt-article="'+esc(articleNumber||'')+'" data-receipt-date="'+esc(x.date||'')+'"><small>'+label+'</small><b>'+esc(appDate(x.date))+'</b><span>'+fmt(x.quantity)+' '+esc(uom)+'</span></button>';
 }
 function quickReceivingRowHtml(a,familyId){
- const history=(Array.isArray(a.receipt_history)?a.receipt_history:[]).slice(0,2);
- return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">R</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(a.article_description||'Receiving Article')+'</div></div></div>'+
-   quickDeliveryCell(history[0],'LATEST DELIVERY',familyId,a.article_number)+quickDeliveryCell(history[1],'PREV DELIVERY',familyId,a.article_number)+'</div>';
+ const history=(Array.isArray(a.receipt_history)?a.receipt_history:[]).slice(0,2),familyFallback=!!a.source_family;
+ return '<div class="qreceivingrow"><div class="qrecvidentity"><span class="qricon">'+(familyFallback?'Σ':'R')+'</span><div><div class="qrnum">'+esc(a.article_number||'—')+'</div><div class="qrname">'+esc(familyFallback?'FAMILY RECEIPT SUMMARY':(a.article_description||'Receiving Article'))+'</div></div></div>'+
+   quickDeliveryCell(history[0],'LATEST DELIVERY',familyId,familyFallback?'':a.article_number)+quickDeliveryCell(history[1],'PREV DELIVERY',familyId,familyFallback?'':a.article_number)+'</div>';
 }
 function quickSellingHtml(a,idx,seq){
  const uom=String(a.movement_uom||''),rows=Array.isArray(a.rows)?a.rows:[],active=rows.filter(r=>hasActivity(r.qty_7d)),inactiveRows=rows.filter(r=>!hasActivity(r.qty_7d));
