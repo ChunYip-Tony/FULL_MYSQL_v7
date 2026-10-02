@@ -136,23 +136,26 @@ YIPMAN_DESKTOP_JS = r"""
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();search.focus();search.select()}});
  }
  function openMod(m){D.mod=m;$$('.mod','#ydesk').forEach(x=>x.classList.toggle('active',x.id==='yd-'+m));$$('.navbtn','#ydesk').forEach(x=>x.classList.toggle('active',x.dataset.m===m));if(m==='quick')loadQuick($('#ydSearch').value.trim());if(m==='order')loadOrder();if(m==='price')loadPrice();if(m==='performance')loadPerformance();if(m==='pi')loadPI();if(m==='data')loadData();history.replaceState({yipdesktop:true,view:m},'', '#'+m);window.scrollTo({top:0})}
- async function topStatus(){try{
-   const [h,dh,q,p]=await Promise.all([
-     api('/v1/backoffice/home-summary'),
-     api('/v1/backoffice/data-health?days=14'),
-     api('/v1/backoffice/qa-review?limit=300'),
-     api('/v1/yipman/pricing-review?category=ALL&limit=1000').catch(()=>null)
-   ]);
-   const latest=dh.latest||{};
-   $('#ydFresh').innerHTML=[['POS',latest.POS],['MVT',latest.MVT],['Price',latest.PRICE],['OH',latest.OH],['L/F/F',latest.LIVE_FRESH||latest.FROZEN]].map(x=>'<div class="frow"><span>'+x[0]+'</span><b>'+(x[1]?.date||'—')+' <i class="fdot '+(x[1]?.date?'':'warn')+'"></i></b></div>').join('');
-   const pRows=(p?.rows||[]).filter(x=>x.priority_240_249_mismatch||x.actionable||String(x.suggestion_reason_code||''));
-   $('#ydPc').textContent=p? pRows.length : (h?.pricing?.qualified_count??'—');
-   $('#ydOc').textContent=h?.ordering?.attention_count??h?.ordering?.family_count??'—';
-   D.qa=q.issues||[];$('#ydQc').textContent=D.qa.length;
-   if(p&&pRows.length===0&&(p.refreshing||String(p.cache_status||'').includes('STALE')||String(p.cache_status||'')==='WARMING')){
-     setTimeout(()=>{if(document.getElementById('ydesk'))topStatus()},3500);
-   }
- }catch{}}
+ function topStatus(){
+   api('/v1/backoffice/data-health?days=14').then(dh=>{
+     const latest=dh.latest||{};
+     const box=$('#ydFresh');if(box)box.innerHTML=[['POS',latest.POS],['MVT',latest.MVT],['Price',latest.PRICE],['OH',latest.OH],['L/F/F',latest.LIVE_FRESH||latest.FROZEN]].map(x=>'<div class="frow"><span>'+x[0]+'</span><b>'+(x[1]?.date||'—')+' <i class="fdot '+(x[1]?.date?'':'warn')+'"></i></b></div>').join('');
+   }).catch(()=>{const box=$('#ydFresh');if(box)box.innerHTML='<div class="tiny">Freshness unavailable · page functions remain active.</div>'});
+   api('/v1/backoffice/home-summary').then(h=>{
+     const el=$('#ydOc');if(el)el.textContent=h?.ordering?.attention_count??h?.ordering?.family_count??'—';
+     const pc=$('#ydPc');if(pc&&pc.textContent==='—')pc.textContent=h?.pricing?.qualified_count??'—';
+   }).catch(()=>{});
+   api('/v1/backoffice/qa-review?limit=300').then(q=>{
+     D.qa=q.issues||[];const el=$('#ydQc');if(el)el.textContent=D.qa.length;
+   }).catch(()=>{});
+   api('/v1/yipman/pricing-review?category=ALL&limit=1000').then(p=>{
+     const pRows=(p?.rows||[]).filter(x=>x.priority_240_249_mismatch||x.actionable||String(x.suggestion_reason_code||''));
+     const el=$('#ydPc');if(el)el.textContent=pRows.length;
+     if(pRows.length===0&&(p.refreshing||String(p.cache_status||'').includes('STALE')||String(p.cache_status||'')==='WARMING')){
+       setTimeout(()=>{if(document.getElementById('ydesk'))topStatus()},3500);
+     }
+   }).catch(()=>{});
+ }
  function recHist(r){return Array.isArray(r?.family_receipt_history)?r.family_receipt_history:[]} function recDate(x){return x?.date||x?.receipt_date||''} function recQty(x){return x?.quantity??x?.receipt_qty} function recUom(x){return x?.uom||x?.receipt_uom||''}
  function group(rows){const m=new Map();(rows||[]).forEach(r=>{const id=String(r.family_article||r.family_id||'UNRESOLVED'),g=m.get(id)||{id,name:r.family_name||r.name||'Unresolved Family',cat:r.category||'',rows:[],row:r,rank:0};g.rows.push(r);g.rank=Math.max(g.rank,num(r.family_group_movement_7d)??0,num(r.qty_7d)??0);if(!recHist(g.row).length&&recHist(r).length)g.row=r;m.set(id,g)});return [...m.values()].sort((a,b)=>b.rank-a.rank)}
  async function loadQuick(q=''){
@@ -486,7 +489,20 @@ async function loadPerformance(){const root=$('#yd-performance');if(!root.datase
  async function loadDataInner(){const box=$('#ydDataMain');box.innerHTML='<div class="loading">Loading current data operations…</div>';try{const [dh,active,recent,qa]=await Promise.all([api('/v1/backoffice/data-health?days=14'),api('/v1/web-upload/active'),api('/v1/web-upload/recent?limit=8'),api('/v1/backoffice/qa-review?limit=300')]);D.health=dh;D.qa=qa.issues||[];$('#ydQc').textContent=D.qa.length;const b=active.active_batch||active.latest_batch||{},st=String(b.processing_status||'NONE').toUpperCase(),latest=dh.latest||{},rows=dh.rows||[],complete=rows.filter(x=>String(x.overall_status).toUpperCase()==='COMPLETE').length,missing=rows.filter(x=>String(x.overall_status).toUpperCase()==='MISSING').length,judged=complete+missing,pc=judged?Math.round(complete/judged*100):100;box.innerHTML='<div class="datagrid"><div><div class="card"><div class="cardhead"><h3>1. Upload New Files</h3><span class="badge blue">REAL UPLOADER</span></div><div class="cardbody"><div class="upload"><div style="font-size:24px">⇧</div><h3>Select source files</h3><p>XLSX / XLS / XLSM / CSV / TXT / TSV. Files selected together create one immutable batch.</p><input id="ydFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><div style="margin-top:8px"><input id="ydNote" class="input" placeholder="Optional batch note" style="width:100%"></div><button id="ydUpload" class="btn primary" style="margin-top:8px">Upload & Start Processing</button><div id="ydUploadResult" class="small" style="margin-top:8px">No upload in this session.</div></div></div></div><div class="card" style="margin-top:9px"><div class="cardhead"><h3>3. 14-Day Completeness & Source Coverage</h3><span class="badge '+(missing?'amber':'green')+'">'+pc+'%</span></div><div class="cardbody"><div class="row3"><div class="kpi"><label>Required-day completeness</label><strong>'+pc+'%</strong><small>'+complete+' complete / '+judged+' judged</small></div><div class="kpi"><label>Missing required days</label><strong>'+missing+'</strong><small>POS and/or MVT missing</small></div><div class="kpi"><label>Latest POS / MVT</label><strong>'+esc(latest.POS?.date||'—')+' / '+esc(latest.MVT?.date||'—')+'</strong></div></div><div class="note blue" style="margin-top:8px"><b>How completeness works:</b> A completed business day is Complete only when canonical POS + canonical MVT are both present. Price, OH, Live/Fresh and Frozen are snapshot sources and are not required every day.</div><div class="legend"><span><i class="sw g"></i><b>Green</b> Complete</span><span><i class="sw r"></i><b>Red</b> Missing POS/MVT</span><span><i class="sw b"></i><b>Blue</b> Current/Open day</span><span><i class="sw a"></i><b>Amber</b> Partial/other</span><span><i class="sw x"></i><b>Gray / —</b> No snapshot update; not automatically an error</span></div><div class="healthstrip">'+rows.slice(0,14).map(hDay).join('')+'</div></div></div><div class="card" style="margin-top:9px"><div class="cardhead"><h3>4. Recent Batches</h3></div><div class="tablewrap"><table><thead><tr><th>Batch</th><th>Time</th><th>Status</th><th>Ready</th><th>Hold</th></tr></thead><tbody>'+((recent.batches||recent.rows||[]).map(x=>'<tr><td>#'+esc(x.batch_id||'—')+'</td><td>'+esc(String(x.completed_at||x.upload_started_at||'').slice(0,16))+'</td><td>'+esc(x.processing_status||x.phase3_status||'—')+'</td><td>'+fmt(x.quick_check_ready_rows,0)+'</td><td>'+fmt(x.quick_check_hold_rows,0)+'</td></tr>').join('')||'<tr><td colspan="5">No recent batches.</td></tr>')+'</tbody></table></div></div></div><aside class="analysis"><div class="card"><div class="cardhead"><h3>2. Current Processing</h3><span class="badge '+(st.includes('HOLD')?'amber':'blue')+'">'+esc(st)+'</span></div><div class="cardbody"><div class="row3"><div class="kpi"><label>Batch</label><strong>'+(b.batch_id?'#'+esc(b.batch_id):'None')+'</strong></div><div class="kpi"><label>Run</label><strong>#'+esc(b.active_pipeline_run_id||'—')+'</strong></div><div class="kpi"><label>Open Issues</label><strong>'+fmt(b.open_issue_total??b.error_count,0)+'</strong></div></div><div class="pipeline" style="margin-top:8px"><div class="stage '+(st!=='NONE'?'done':'')+'">REGISTERED</div><div class="stage '+(/INGEST|PHASE|QUICK|READY/.test(st)?'done':'')+'">INGESTED</div><div class="stage '+(/PHASE|QUICK|READY/.test(st)?'done':'')+'">PHASE 2C</div><div class="stage '+(st.includes('HOLD')?'hold':/PHASE3|QUICK|READY/.test(st)?'done':'')+'">PHASE 3 QA</div><div class="stage '+(/QUICK_CHECK_READY/.test(st)?'done':'')+'">PUBLISH</div></div><div class="sectiontitle">Top QA Holds</div><div class="tablewrap"><table><thead><tr><th>Issue</th><th>Entity</th><th>Severity</th></tr></thead><tbody>'+D.qa.slice(0,12).map(x=>'<tr><td>'+esc(x.issue_code||x.issue_summary||'—')+'</td><td>'+esc(x.entity_key||'—')+'</td><td>'+esc(x.severity||'—')+'</td></tr>').join('')+'</tbody></table></div></div></div></aside></div>';$('#ydUpload').onclick=uploadFiles}catch(e){box.innerHTML='<div class="error">'+esc(e.message)+'</div>'}}
  function hDay(r){const s=r.sources||{},v=String(r.overall_status||'').toUpperCase(),cl=v==='COMPLETE'?'complete':v==='MISSING'?'missing':v.includes('CURRENT')?'current':'partial',sc=x=>String(x?.status||'').toUpperCase()==='OK'?'ok':String(x?.status||'').toUpperCase()==='MISSING'?'miss':String(x?.status||'').toUpperCase()==='NOT_DUE'?'nd':'';return '<div class="hday '+cl+'" title="'+esc((r.date||'')+' · '+v)+'"><div class="wd">'+esc(r.weekday||'')+'</div><div class="dt">'+esc(String(r.date||'').slice(5))+'</div><div class="srcdots"><span class="sd '+sc(s.POS)+'">POS</span><span class="sd '+sc(s.MVT)+'">MVT</span></div><div class="tiny" style="margin-top:4px">Snapshots '+['PRICE','OH','LIVE_FRESH','FROZEN'].filter(k=>String(s[k]?.status||'').toUpperCase()==='OK').length+'/4</div></div>'}
  async function uploadFiles(){const files=[...$('#ydFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#ydUpload'),out=$('#ydUploadResult');btn.disabled=true;try{const label=$('#ydNote').value.trim()||('Yipman desktop upload '+new Date().toLocaleString()),created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})}),session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID not returned');for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);out.textContent='Uploading '+(i+1)+'/'+files.length+': '+files[i].name;await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd})}out.textContent='Committing batch and starting processing…';const commit=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});out.innerHTML='<b>Upload verified · Batch #'+esc(commit.batch_id||created.batch_id||'—')+'</b><br>'+files.length+' file(s) committed';$('#ydFiles').value='';$('#ydNote').value='';toast('Upload verified');setTimeout(loadDataInner,600)}catch(e){out.innerHTML='<div class="error">'+esc(e.message)+'</div>';toast('Upload not committed')}finally{btn.disabled=false}}
- async function init(){root();enableDesktopWheelScroll();await topStatus();const h=String(location.hash||'').replace(/^#/,'');const m=['quick','order','price','performance','pi','data'].includes(h)?h:'quick';openMod(m)}
+ async function init(){
+   try{
+     root();
+     enableDesktopWheelScroll();
+     const h=String(location.hash||'').replace(/^#/,'');
+     const m=['quick','order','price','performance','pi','data'].includes(h)?h:'quick';
+     openMod(m);
+     topStatus();
+   }catch(e){
+     const q=document.querySelector('#yd-quick');
+     if(q)q.innerHTML='<div class="error">Desktop initialization error: '+esc(e?.message||e)+'</div>';
+     console.error('Yipman desktop init failed',e);
+   }
+ }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 """
