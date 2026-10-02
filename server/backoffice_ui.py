@@ -5289,8 +5289,8 @@ $('#invOHFilter').onchange=e=>{state.invOH=e.target.value;renderInventory()};
 $('#invSalesFilter').onchange=e=>{state.invSales=e.target.value;renderInventory()};
 $('#invSort').onchange=e=>{state.invSort=e.target.value;renderInventory()};
 $('#stockFlowSort').onchange=e=>{state.stockFlowSort=e.target.value;renderDesktopStockFlow()};
-$('.sffilter').forEach(b=>b.onclick=()=>{state.stockFlowCategory=b.dataset.sfcat;$('.sffilter').forEach(x=>x.classList.toggle('on',x===b));renderDesktopStockFlow()});
-$('.sfdelivery').forEach(b=>b.onclick=()=>{const v=b.dataset.sfdelivery;state.stockFlowDelivery=state.stockFlowDelivery===v?'ALL':v;$('.sfdelivery').forEach(x=>x.classList.toggle('on',x.dataset.sfdelivery===state.stockFlowDelivery));renderDesktopStockFlow()});
+$$('.sffilter').forEach(b=>b.onclick=()=>{state.stockFlowCategory=b.dataset.sfcat;$$('.sffilter').forEach(x=>x.classList.toggle('on',x===b));renderDesktopStockFlow()});
+$$('.sfdelivery').forEach(b=>b.onclick=()=>{const v=b.dataset.sfdelivery;state.stockFlowDelivery=state.stockFlowDelivery===v?'ALL':v;$$('.sfdelivery').forEach(x=>x.classList.toggle('on',x.dataset.sfdelivery===state.stockFlowDelivery));renderDesktopStockFlow()});
 $('#clearInventorySearch').onclick=()=>{state.inventorySearch='';$('#searchInput').value='';const qi=$('#desktopQuickSearch');if(qi)qi.value='';loadInventory()};
 
 
