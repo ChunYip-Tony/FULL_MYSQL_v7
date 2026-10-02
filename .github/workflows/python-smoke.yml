@@ -145,6 +145,49 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
+      - name: Validate Yipman Promotion Ordering contract
+        run: |
+          python - <<'PY'
+          from datetime import date
+          import inspect
+          import promotion_ordering as p
+          import webapp_v2_runtime as v2
+          from pathlib import Path
+
+          # Store rule: Weekly = Thu through following Thu inclusive (8 days);
+          # Weekend = Fri through Sun inclusive (3 days).
+          assert v2._promotion_type(date(2026,10,1),date(2026,10,8)) == 'WEEKLY'
+          assert v2._promotion_type(date(2026,10,2),date(2026,10,4)) == 'WEEKEND'
+          assert v2._promotion_type(date(2026,10,1),date(2026,10,9)) == 'OTHER'
+          p._validate_window('WEEKLY',date(2026,10,1),date(2026,10,8))
+          p._validate_window('WEEKEND',date(2026,10,2),date(2026,10,4))
+
+          bulk=inspect.getsource(v2.bulk_ordering_suggestions)
+          assert 'temporary_oh_overrides' in bulk
+          assert 'REQUEST_ONLY_NOT_SAVED' in bulk
+          assert 'promotion_start_date") or promotion_start_date' in bulk
+          assert 'forecast_promotion_coverage' in bulk
+          assert 'forecast_regular_coverage' in bulk
+          assert 'COVERAGE_DEMAND_MINUS_NONNEGATIVE_PROJECTED_OH_AT_DELIVERY' in bulk
+
+          promo=Path('promotion_ordering.py').read_text(encoding='utf-8')
+          assert 'temporary_oh_persisted":False' in promo
+          assert 'yipman_promotion_list' in promo
+          assert 'PROMOTION_IMPORT_SUPPORTS_CSV_XLS_XLSX' in promo
+
+          api=Path('api.py').read_text(encoding='utf-8')
+          assert "/v1/yipman/promotion-lists/import" in api
+          assert "/v1/yipman/promotion-ordering/calculate" in api
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert 'WEEKLY · THU → THU' in ui
+          assert 'WEEKEND · FRI → SUN' in ui
+          assert 'TEMP TRUE STOCK' in ui
+          assert 'temporary OH values are NOT saved' in ui
+          assert "data-order-mode=\"PROMOTION\"" in ui
+          print('yipman-promotion-ordering=PASS')
+          PY
+
       - name: Validate canonical physical receipt semantics
         run: |
           python - <<'PY'
