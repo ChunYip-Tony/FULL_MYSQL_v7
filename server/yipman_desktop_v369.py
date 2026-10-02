@@ -48,7 +48,7 @@ YIPMAN_DESKTOP_JS = r"""
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
  const D={mod:'quick',best:[],families:[],inventory:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),priceFilter:'240',quickFilter:'all',delivery:null,next:null,calendar:null,promoLists:[]};
  const ctx=r=>typeof r==='string'?document.querySelector(r):r;
- const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
+ const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $$=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
  const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
