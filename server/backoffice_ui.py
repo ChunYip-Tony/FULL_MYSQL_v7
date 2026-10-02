@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+try:
+    from .desktop_workstation_v366 import DESKTOP_WORKSTATION_CSS, DESKTOP_WORKSTATION_JS
+except ImportError:
+    from desktop_workstation_v366 import DESKTOP_WORKSTATION_CSS, DESKTOP_WORKSTATION_JS
+
 
 def backoffice_html(version: str = "") -> str:
     v = str(version or "")
-    return BACKOFFICE_HTML.replace("__VERSION__", v)
+    html = BACKOFFICE_HTML.replace("__VERSION__", v)
+    html = html.replace("</head>", "<style id=\"desktop-workstation-v366-css\">" + DESKTOP_WORKSTATION_CSS + "</style></head>")
+    html = html.replace("</body>", "<script id=\"desktop-workstation-v366-js\">" + DESKTOP_WORKSTATION_JS + "</script></body>")
+    return html
 
 
 BACKOFFICE_HTML = r'''<!doctype html>
