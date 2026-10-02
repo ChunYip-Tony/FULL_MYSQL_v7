@@ -5921,15 +5921,16 @@ def performance_report(
                     and doh_for_gate>Decimal("60")
                 )
             )
-            history_gate=bool(q14>0)
+            history_gate=bool(q28>0)
 
             # Pricing Review qualification:
             # - usable positive OH is required; no stock => no price action
-            # - recent 14 completed-day sales history is required so candidate
-            #   pricing is grounded in observed sales/price performance
+            # - use up to 28 completed sales days for admission so genuinely
+            #   slow items (including 7D/14D zero sellers with older recent
+            #   evidence) can receive a controlled freshness/velocity test.
+            #   The candidate optimizer still prefers its tighter 14-day
+            #   observed-price evidence and falls back to the proved sweet spot.
             # - DOH is an URGENCY / FRESHNESS signal, not the admission gate.
-            #   We must be able to find GP$/day and velocity opportunities before
-            #   Fresh/Live inventory actually exceeds the 7-day freshness limit.
             if not has_oh or not history_gate:
                 continue
 
@@ -6464,7 +6465,7 @@ def performance_report(
             "report_date_active_sale_excluded":True,
             "qa_hold_excluded":True,
             "price_change_tolerance":"SUPPRESS_ORDINARY_NOISE_WITHIN_0_25_ONLY; NEVER_SUPPRESS_240_249_MISMATCH_COMPANY_RANGE_VIOLATION_FRESHNESS_VELOCITY_TEST_OR_POSITIVE_GP_DAY_TEST",
-            "review_queue":"POSITIVE_OH_AND_14D_SALES_HISTORY_FOR_ALL_CLASSES; INCLUDE_SLOW_FRESHNESS_ITEMS_GP_DAY_OPPORTUNITIES_CURRENT_GT_0_25_FROM_TESTED_AND_COMPANY_RANGE_VIOLATIONS",
+            "review_queue":"POSITIVE_OH_AND_28D_SALES_HISTORY_FOR_ALL_CLASSES; INCLUDE_7D_14D_ZERO_SLOW_ITEMS_WHEN_28D_EVIDENCE_EXISTS; INCLUDE_FRESHNESS_ITEMS_GP_DAY_OPPORTUNITIES_CURRENT_GT_0_25_FROM_TESTED_AND_COMPANY_RANGE_VIOLATIONS",
             "price_240_249_rule":"WHEN_CONFIRMED_240_AND_249_FORMS_EXIST_IN_THE_SAME_FAMILY_PRODUCT_GROUP_THEIR_CURRENT_PRICES_MUST_MATCH; MISMATCH_IS_HIGHEST_PRIORITY",
             "price_249_reminder_rule":"ANY_240_PRICING_SUGGESTION_WITH_A_RELATED_249_MUST_REMIND_THE_USER_TO_CHANGE_249_TO_THE_SAME_ACCEPTED_PRICE",
             "urgency_primary_sort":"240_249_MISMATCH_FIRST_THEN_ACTIONABLE_THEN_FRESH_CLEARANCE_THEN_FROZEN_MARKDOWN_THEN_GP_DAY_OPPORTUNITY",
