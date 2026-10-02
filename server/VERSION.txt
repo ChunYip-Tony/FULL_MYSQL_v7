@@ -1,3 +1,14 @@
+v7.0.399 Manual Promotion + Freshness-Aware Ordering:
+- Promotion Ordering now supports manual entry in the current Yipman mobile UI in addition to saved/imported promotion lists.
+- Manual entry accepts one or multiple UPCs with SALE price, promotion start/end, Delivery Date, and Next Delivery Date; arbitrary manual promotion windows are stored as CUSTOM.
+- Regular and Promotion ordering use the same freshness-aware inventory logic.
+- Fresh/Live current OH is credited only until the latest valid receipt crosses the DOH 7 freshness threshold. Remaining OH is projected as discard rather than being treated as usable future stock.
+- Ordering exposes current DOH, projected discard, usable existing-OH credit, and the incremental order quantity caused by the freshness adjustment.
+- The incoming Fresh/Live delivery remains capped to a 7-day coverage window; demand beyond that window requires an earlier/split delivery.
+- When no valid receipt-age evidence exists, no discard quantity is fabricated; the freshness reference status remains visible.
+- Yipman service-worker shell cache advanced to v399.
+Version: 7.0.399 Single-Service Edition
+
 v7.0.395 Yipman Stock Flow Observed-Delivery Filters:
 - Added Delivery Filter controls: ALL, TUE & WED, and THU & FRI.
 - Added Category Filter controls: ALL, LIVE, FRESH, and FROZEN.
