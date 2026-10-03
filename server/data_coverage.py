@@ -546,11 +546,29 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                     name for name in ('POS','MVT')
                     if sources[name]['status']=='MISSING'
                 ]
+                not_due_required = [
+                    name for name in ('POS','MVT')
+                    if sources[name]['status']=='NOT_DUE'
+                ]
                 any_required = pos_required or mvt_required
-                overall = (
-                    'MISSING' if missing_required
-                    else ('COMPLETE' if any_required else ('CURRENT_DAY' if d == today else 'PENDING'))
-                )
+
+                # Exactly one row is CURRENT_DAY: the store-local business date.
+                # A prior date inside the daily grace window is PENDING, never
+                # CURRENT_DAY. Once its grace cutoff passes, absent POS/MVT
+                # becomes MISSING automatically on the next request.
+                if d == today:
+                    overall = 'CURRENT_DAY'
+                    status_detail = 'STORE_LOCAL_CURRENT_DAY'
+                elif missing_required:
+                    overall = 'MISSING'
+                    status_detail = 'REQUIRED_SOURCE_MISSING'
+                elif any_required:
+                    overall = 'COMPLETE'
+                    status_detail = 'REQUIRED_SOURCES_COMPLETE'
+                else:
+                    overall = 'PENDING'
+                    status_detail = 'DAILY_GRACE_NOT_DUE_YET'
+
                 rows.append({
                     'date':d,
                     'weekday':d.strftime('%a'),
@@ -558,7 +576,9 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                     'pos_required_due':pos_required,
                     'mvt_required_due':mvt_required,
                     'overall_status':overall,
+                    'status_detail':status_detail,
                     'missing_required':missing_required,
+                    'not_due_required':not_due_required,
                     'sources':sources,
                 })
 
@@ -582,6 +602,23 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                 'file':mvt_by_date[max(mvt_by_date)].get('original_filename') if mvt_by_date else None,
             }
 
+            missing_required_days = [
+                {
+                    'date':r['date'],
+                    'missing_required':list(r.get('missing_required') or []),
+                }
+                for r in rows
+                if r.get('overall_status') == 'MISSING'
+            ]
+            pending_daily_days = [
+                {
+                    'date':r['date'],
+                    'not_due_required':list(r.get('not_due_required') or []),
+                }
+                for r in rows
+                if r.get('overall_status') == 'PENDING'
+            ]
+
             return {
                 'contract_version':'DATA_HEALTH_14_DAY_V1',
                 'window_days':span,
@@ -591,6 +628,8 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                 'mvt_required_through':mvt_due_through,
                 'rows':rows,
                 'latest':latest,
+                'missing_required_days':missing_required_days,
+                'pending_daily_days':pending_daily_days,
                 'rules':{
                     'sort':'MOST_RECENT_FIRST',
                     'daily_required':['POS','MVT'],
@@ -598,6 +637,9 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                     'snapshot_sources':['PRICE','OH','LIVE_FRESH','FROZEN'],
                     'current_day_required_status':'NOT_DUE',
                     'yesterday_before_cutoff_status':'PENDING',
+                    'current_day_semantics':'ONLY_STORE_LOCAL_TODAY',
+                    'missing_semantics':'ONLY_REQUIRED_POS_OR_MVT_ABSENT_AFTER_GRACE',
+                    'snapshot_none_semantics':'NO_NEW_SNAPSHOT_THAT_DATE_NOT_DAILY_MISSING',
                 },
             }
         finally:
