@@ -10,7 +10,7 @@ from business_clock import (
     movement_expected_through_date,
     pos_expected_through_date,
 )
-from movement_coverage_rules import movement_daily_close_filename_evidence
+from movement_coverage_rules import movement_daily_close_filename_evidence, movement_closed_range_filename_evidence
 
 DAILY_REQUIRED_SOURCES = {
     'POS_SALES': 'sales_by_price_type',
@@ -86,6 +86,18 @@ def _movement_snapshot_completeness(row: dict[str, Any], business_date: date) ->
         original_filename=row.get('original_filename'),
         filename_date_candidate=_as_date(row.get('filename_date_candidate')),
         filename_time_candidate=row.get('filename_time_candidate'),
+        coverage_start_date=_as_date(row.get('coverage_start_date')),
+        coverage_end_date=_as_date(row.get('coverage_end_date')),
+        business_date=business_date,
+    )
+    if ok:
+        return reason
+
+    # Exact date-only range exports (for example
+    # sf-mvt-093026-100126.xls) are also closed source evidence when the
+    # filename range exactly matches the parsed posting-date coverage.
+    ok, reason = movement_closed_range_filename_evidence(
+        original_filename=row.get('original_filename'),
         coverage_start_date=_as_date(row.get('coverage_start_date')),
         coverage_end_date=_as_date(row.get('coverage_end_date')),
         business_date=business_date,
