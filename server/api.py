@@ -827,6 +827,70 @@ def web_upload_status(session_id:str,request:Request,response:Response):
         raise HTTPException(500,f'Batch status failed: {exc}')
 
 
+def _web_upload_active_run_telemetry(active:dict|None) -> dict|None:
+    """Project lightweight live pipeline telemetry from pipeline_run.detail_json.
+
+    This avoids the heavier find_active_batch()/QA joins while still giving the
+    browser enough data to distinguish healthy Phase 3 work from a stale run.
+    """
+    if not active:
+        return active
+    raw=active.pop('active_detail_json',None)
+    detail={}
+    try:
+        parsed=json.loads(raw or '{}')
+        if isinstance(parsed,dict):
+            detail=parsed
+    except Exception:
+        detail={}
+
+    active['active_worker']=detail.get('worker')
+    active['active_phase3_stage']=detail.get('phase3_stage')
+    active['active_last_phase3_stage']=detail.get('last_phase3_stage') or detail.get('phase3_stage')
+    active['active_heartbeat_at']=detail.get('heartbeat_at')
+    active['active_heartbeat_epoch']=detail.get('heartbeat_epoch')
+
+    age_seconds=None
+    epoch=detail.get('heartbeat_epoch')
+    if epoch is not None:
+        try:
+            age_seconds=max(0,int(time.time()-float(epoch)))
+        except Exception:
+            age_seconds=None
+    if age_seconds is None and str(active.get('active_run_status') or '').upper()=='STARTED':
+        started=active.get('active_run_started_at')
+        if started is not None:
+            try:
+                age_seconds=max(0,int((datetime.utcnow()-started).total_seconds()))
+            except Exception:
+                age_seconds=None
+
+    active['active_heartbeat_age_seconds']=age_seconds
+    active['active_heartbeat_fresh']=bool(age_seconds is not None and age_seconds<=45)
+    active['active_run_stale']=bool(
+        str(active.get('active_run_status') or '').upper()=='STARTED'
+        and age_seconds is not None
+        and age_seconds>60
+    )
+
+    for key in (
+        'progress_kind','progress_unit','progress_current','progress_total',
+        'progress_pct','progress_ready','progress_hold','progress_historical',
+        'progress_issue_counts','progress_elapsed_seconds',
+        'progress_rows_per_second','progress_eta_seconds',
+        'progress_current_upc','progress_current_name',
+    ):
+        active['active_'+key]=detail.get(key)
+
+    issue_counts=detail.get('progress_issue_counts')
+    if isinstance(issue_counts,dict):
+        try:
+            active['active_issue_total']=sum(int(v or 0) for v in issue_counts.values())
+        except Exception:
+            active['active_issue_total']=0
+    return active
+
+
 @app.get('/v1/web-upload/active')
 def web_upload_active(request:Request,response:Response):
     """Fast upload-status probe for the browser.
@@ -872,7 +936,8 @@ def web_upload_active(request:Request,response:Response):
                               stage_name AS active_stage_name,
                               processing_status AS active_run_status,
                               code_version AS active_code_version,
-                              started_at AS active_run_started_at
+                              started_at AS active_run_started_at,
+                              detail_json AS active_detail_json
                        FROM pipeline_run
                        WHERE batch_id=%s
                          AND pipeline_name=%s
@@ -894,7 +959,8 @@ def web_upload_active(request:Request,response:Response):
                               pr.stage_name AS active_stage_name,
                               pr.processing_status AS active_run_status,
                               pr.code_version AS active_code_version,
-                              pr.started_at AS active_run_started_at
+                              pr.started_at AS active_run_started_at,
+                              pr.detail_json AS active_detail_json
                        FROM pipeline_run pr
                        JOIN ingest_batch ib ON ib.batch_id=pr.batch_id
                        WHERE pr.pipeline_name=%s
@@ -931,6 +997,7 @@ def web_upload_active(request:Request,response:Response):
 
     if active:
         active.pop('notes',None)
+        active=_web_upload_active_run_telemetry(active)
 
     return json.loads(json.dumps({
         'active_batch':active,
