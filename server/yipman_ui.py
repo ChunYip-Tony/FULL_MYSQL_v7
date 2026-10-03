@@ -2227,13 +2227,13 @@ function renderPromotionRows(data){
  $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
   const p=r.promotion_list_item||{}, type=String(p.promotion_type||'').toUpperCase();
   const temp=!!r.temporary_oh_override_used;
-  const oh=r.current_oh_for_calculation;
+  const effectiveOh=r.current_oh_system;
   const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage, totalNeed=r.forecast_coverage_usage;
   const freshnessHtml=r.freshness_adjustment_applied
    ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · latest receipt '+esc(appDate(r.freshness_latest_receipt_date))+' · DOH '+fmtNullable(r.freshness_current_doh)+' · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
    : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live order coverage stops at 7 days; later demand needs another delivery.</div>':'');
   return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
-   '<div class="promo-metrics"><div class="promo-metric '+(temp?'temp':'')+'"><small>'+(temp?'TEMP ORDER OH ACTIVE':'CURRENT EFFECTIVE OH')+'</small>'+ohEditHtml(r.family_article_number,r.family_article_name,oh,r.uom,temp?'TEMP_ORDER_OVERRIDE':r.current_oh_source)+'</div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
+   '<div class="promo-metrics"><div class="promo-metric"><small>CURRENT EFFECTIVE OH</small>'+ohEditHtml(r.family_article_number,r.family_article_name,effectiveOh,r.uom,r.oh_source)+'</div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · TEMP OH only for this calculation':'')+' <button type="button" class="promo-temp-action" data-promo-temp-oh="'+i+'">TEMP ORDER OH</button></div></div></div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
  $('[data-promo-temp-oh]').forEach(x=>x.onclick=e=>{e.stopPropagation();openPromoTempOH(promoLastRows[Number(x.dataset.promoTempOh)])});
@@ -2264,9 +2264,9 @@ function openPromoTempOH(r){
  const fid=Number(r.family_id), existing=promoTempOH.get(fid);
  const value=existing?.quantity??r.current_oh_system??r.current_oh_for_calculation??0;
  sheet(
-  r.family_article_name||'Temporary True Stock',
+  r.family_article_name||'Temporary Order OH',
   'Promotion Ordering only · nothing is written to FULL MYSQL',
-  '<div class="detail"><b>System OH</b><br>'+fmtNullable(r.current_oh_system)+' '+esc(r.uom||'')+'<br><br><b>Observed True Stock</b><br><input id="promoOHInput" type="number" min="0" step="0.1" inputmode="decimal" value="'+esc(value)+'" style="width:100%;font-size:24px;font-weight:900;padding:10px;border:2px solid #d6dde3;border-radius:12px"><br><br><div class="estimatebar">Temporary reference only. Save & Recalculate does not create True Stock, PI, dumping, OH history, or any database inventory change.</div><div class="actions"><button id="promoOHReset">RESET TO SYSTEM OH</button><button class="primary" id="promoOHSave">SAVE & RECALCULATE</button></div></div>'
+  '<div class="detail"><b>Current Effective OH</b><br>'+fmtNullable(r.current_oh_system)+' '+esc(r.uom||'')+'<br><br><b>Temporary Order OH</b><br><input id="promoOHInput" type="number" min="0" step="0.1" inputmode="decimal" value="'+esc(value)+'" style="width:100%;font-size:24px;font-weight:900;padding:10px;border:2px solid #d6dde3;border-radius:12px"><br><br><div class="estimatebar">Temporary ordering override only. Use the CURRENT EFFECTIVE OH value on the item card to enter a real physical True Stock count. This temporary value does not create True Stock, PI, dumping, OH history, or any database inventory change.</div><div class="actions"><button id="promoOHReset">RESET TO SYSTEM OH</button><button class="primary" id="promoOHSave">SAVE & RECALCULATE</button></div></div>'
  );
  $('#promoOHSave').onclick=()=>{
   const qty=Number($('#promoOHInput').value);
@@ -2723,7 +2723,7 @@ async function loadPrices(opts={}){
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       '<div class="pmetrics">'+
-        '<div class="pm"><small>EFFECTIVE OH</small>'+ohEditHtml(r.family_article_number,r.family_name||r.name,r.current_oh,r.current_oh_uom,r.current_oh_source)+'</div>'+
+        '<div class="pm"><small>EFFECTIVE OH</small>'+ohEditHtml(r.family_article_number||r.family_article,r.family_name||r.name,r.current_oh,r.current_oh_uom,r.current_oh_source)+'</div>'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
         '<div class="pm"><small>'+(gap!==null?'TESTED GAP':'DOH')+'</small><b>'+(gap!==null?money(gap):fmt(r.doh))+'</b></div>'+
@@ -2885,7 +2885,7 @@ function renderCurrentTpr(){
        '<div><small>PROJECTED</small><b>'+esc(future.main)+'</b><span>'+esc(future.sub)+'</span></div>'+
      '</div>'+
      '<div class="pmetrics">'+
-       '<div class="pm"><small>EFFECTIVE OH</small>'+ohEditHtml(r.family_article_number,r.family_name||r.name,r.current_oh,r.current_oh_uom,r.current_oh_source)+'</div>'+
+       '<div class="pm"><small>EFFECTIVE OH</small>'+ohEditHtml(r.family_article_number||r.family_article,r.family_name||r.name,r.current_oh,r.current_oh_uom,r.current_oh_source)+'</div>'+
        '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.selling_uom||'')+'</b></div>'+
        '<div class="pm"><small>3D VEL LIFT</small><b class="tprlift '+lift.cls+'">'+esc(lift.text)+'</b></div>'+
        '<div class="pm"><small>GP$/D LIFT</small><b class="tprlift '+gpLift.cls+'">'+esc(gpLift.text)+'</b></div>'+
@@ -3028,7 +3028,7 @@ async function openClearanceSetup(item,existing=null){
    sheet('Clearance Plan',esc(it.selling_description||item.name||upc)+' · UPC '+esc(upc),
      '<div class="clearance-form">'+
        '<div class="tpr-rule"><b>CLEARANCE:</b> for expiring stock. The plan is separate from TPR. Company SALE remains locked and cannot be overridden.</div>'+
-       '<div class="dmetrics"><div class="dm"><b>'+fmt(effectiveQty)+' '+esc(eff.uom||unit)+'</b><span>EFFECTIVE OH</span></div><div class="dm"><b>'+fmt(sys.quantity)+' '+esc(sys.uom||unit)+'</b><span>SYSTEM OH</span></div><div class="dm"><b>'+money(it.current_price)+'</b><span>CURRENT</span></div></div>'+
+       '<div class="dmetrics"><div class="dm">'+ohEditHtml(it.main_article_number||it.family_article_number||item.family_article_number,it.family_description||it.selling_description||item.name,effectiveQty,eff.uom||unit,eff.source)+'<span>EFFECTIVE OH</span></div><div class="dm"><b>'+fmt(sys.quantity)+' '+esc(sys.uom||unit)+'</b><span>SYSTEM OH</span></div><div class="dm"><b>'+money(it.current_price)+'</b><span>CURRENT</span></div></div>'+
        '<div class="row2"><label>EXPIRY DATE<input id="clearanceExpiry" type="date" value="'+esc(expiry)+'"></label><label>EXPIRING QTY<input id="clearanceQty" type="number" min="0" step="0.1" inputmode="decimal" value="'+esc(expQty)+'"></label></div>'+
        '<label>UOM<input id="clearanceUom" value="'+esc(unit)+'" readonly></label>'+
        '<label>TRUE STOCK <span style="font-weight:700;color:#87939c">optional — enter only when physically counted</span><input id="clearanceTrueStock" type="number" min="0" step="0.1" inputmode="decimal" placeholder="Current effective OH '+esc(fmt(effectiveQty))+' '+esc(eff.uom||unit)+'"></label>'+
