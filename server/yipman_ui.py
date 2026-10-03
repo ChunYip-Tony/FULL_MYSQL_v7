@@ -2157,7 +2157,7 @@ function renderPromotionRows(data){
    '<div class="promo-metrics"><div class="promo-metric"><small>TRUE STOCK OH · TAP TO EDIT</small><div><input class="promo-true-stock-input" data-promo-true-stock="'+i+'" inputmode="decimal" value="'+esc(oh==null?'':oh)+'"> <b>'+esc(r.uom||'')+'</b></div></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+' · True Stock edits save system-wide</div></div></div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
- $$('[data-promo-true-stock]').forEach(input=>{
+ $$$('[data-promo-true-stock]').forEach(input=>{
   input.onclick=e=>e.stopPropagation();
   input.onfocus=e=>{e.stopPropagation();input.dataset.original=input.value;input.select();input.value=''};
   input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur()}};
@@ -2357,8 +2357,8 @@ function renderOrderRoster(rows,data,h,stale){
     : '';
   return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell orderohcell"><small class="ordercelllabel">TRUE STOCK OH</small><input class="orderohinput" data-order-oh="'+i+'" inputmode="decimal" value="'+esc(r.oh==null?'':r.oh)+'"><span>'+esc(r.oh_uom||'')+'</span><span class="orderohhint">TAP TO EDIT</span></div><div class="cell orderqty"><small class="ordercelllabel">SUGGEST ORDER</small>'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
- $('[data-order-oh]').forEach(input=>{
+ $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+ $$('[data-order-oh]').forEach(input=>{
   input.onclick=e=>e.stopPropagation();
   input.onfocus=e=>{e.stopPropagation();input.dataset.original=input.value;input.select();input.value=''};
   input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur()}};
