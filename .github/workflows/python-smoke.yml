@@ -922,6 +922,7 @@ jobs:
           from pathlib import Path
 
           text = Path('backoffice_ui.py').read_text(encoding='utf-8')
+          api_text = Path('api.py').read_text(encoding='utf-8')
           bad = re.findall(
               r"(?<!\$)\$\([^)]*\)\.(?:forEach|map|filter|find|some|every|reduce)\b",
               text,
@@ -932,6 +933,13 @@ jobs:
           assert "READY · '+fmt(hold,0)+' HOLD" in text
           assert "Rebuild After QA Fixes" in text
           assert "does not clear unresolved blockers by itself" in text
+          assert "Current Processing File" in text
+          assert "CURRENT PROCESSING FILE" in text
+          assert "active_file_name" in text
+          assert "def _web_upload_set_active_file" in api_text
+          assert "active_upload_file" in api_text
+          assert "active['active_file_name']" in api_text
+          assert "active['active_files']=active_files" in api_text
           print('backoffice-dom-bindings=PASS')
           PY
 

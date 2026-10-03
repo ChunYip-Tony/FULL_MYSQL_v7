@@ -732,6 +732,37 @@ def web_upload_create_batch(body:BatchCreate,request:Request):
             cur.close()
 
 
+def _web_upload_set_active_file(session_id:str, filename:str|None) -> None:
+    """Persist the exact file currently being parsed/ingested for lightweight polling."""
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute("SELECT batch_id,notes FROM ingest_batch WHERE batch_key=%s LIMIT 1",(session_id,))
+            row=cur.fetchone()
+            if not row:
+                return
+            notes={}
+            try:
+                parsed=json.loads(row.get('notes') or '{}')
+                if isinstance(parsed,dict):
+                    notes=parsed
+            except Exception:
+                notes={}
+            if filename:
+                notes['active_upload_file']=filename
+                notes['active_upload_started_at']=datetime.now().isoformat(timespec='seconds')
+            else:
+                notes.pop('active_upload_file',None)
+                notes.pop('active_upload_started_at',None)
+            cur.execute(
+                "UPDATE ingest_batch SET notes=%s WHERE batch_id=%s",
+                (json.dumps(notes,ensure_ascii=False,default=str),int(row['batch_id'])),
+            )
+            conn.commit()
+        finally:
+            cur.close()
+
+
 @app.post('/v1/web-upload/batches/{session_id}/files')
 async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(...)):
     _browser_upload_guard(request)
@@ -751,10 +782,24 @@ async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(..
     if len(data)>s.upload_limit_mb*1024*1024:
         raise HTTPException(413,f'File exceeds {s.upload_limit_mb} MB limit')
     try:
-        return add_file(session_id,WEB_UPLOAD_DEVICE,filename,data)
+        _web_upload_set_active_file(session_id,filename)
+        result=add_file(session_id,WEB_UPLOAD_DEVICE,filename,data)
+        try:
+            _web_upload_set_active_file(session_id,None)
+        except Exception:
+            pass
+        return result
     except KeyError as exc:
+        try:
+            _web_upload_set_active_file(session_id,None)
+        except Exception:
+            pass
         raise HTTPException(404,str(exc))
     except PermissionError as exc:
+        try:
+            _web_upload_set_active_file(session_id,None)
+        except Exception:
+            pass
         raise HTTPException(403,str(exc))
     except Exception as exc:
         # Persist the exact upload failure on the open batch so polling cannot
@@ -771,6 +816,8 @@ async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(..
                         if isinstance(parsed,dict): notes=parsed
                     except Exception:
                         notes={}
+                    notes.pop('active_upload_file',None)
+                    notes.pop('active_upload_started_at',None)
                     notes.update({
                         'last_upload_error':str(exc),
                         'last_upload_error_file':filename,
@@ -1006,6 +1053,65 @@ def web_upload_active(request:Request,response:Response):
                 row.pop('notes',None)
                 latest=row
                 break
+
+            # Keep this endpoint lightweight, but include enough file identity
+            # for the Current Processing Batch card to show exactly which file
+            # is being handled. During raw upload, active_upload_file is set
+            # before parsing starts; otherwise fall back to a PARSING row or the
+            # latest file already received in the active batch.
+            if active:
+                active_notes={}
+                try:
+                    parsed=json.loads(active.get('notes') or '{}')
+                    if isinstance(parsed,dict):
+                        active_notes=parsed
+                except Exception:
+                    active_notes={}
+                cur.execute(
+                    """SELECT file_id,original_filename,source_type,processing_status,
+                              source_row_count,coverage_start_date,coverage_end_date
+                       FROM ingest_file
+                       WHERE batch_id=%s
+                       ORDER BY file_id
+                       LIMIT 20""",
+                    (int(active['batch_id']),),
+                )
+                active_files=cur.fetchall()
+                active['active_files']=active_files
+
+                explicit_name=str(active_notes.get('active_upload_file') or '').strip()
+                parsing_file=next(
+                    (
+                        x for x in active_files
+                        if str(x.get('processing_status') or '').upper()=='PARSING'
+                    ),
+                    None,
+                )
+                latest_file=active_files[-1] if active_files else None
+                selected=None
+                if explicit_name:
+                    selected=next(
+                        (
+                            x for x in active_files
+                            if str(x.get('original_filename') or '')==explicit_name
+                        ),
+                        None,
+                    )
+                if selected is None:
+                    selected=parsing_file or latest_file
+
+                active['active_file_name']=(
+                    explicit_name
+                    or ((selected or {}).get('original_filename') if selected else None)
+                )
+                active['active_file_is_current']=bool(explicit_name or parsing_file)
+                active['active_file_status']=(
+                    'PARSING'
+                    if explicit_name and selected is None
+                    else ((selected or {}).get('processing_status') if selected else None)
+                )
+                active['active_source_type']=(selected or {}).get('source_type') if selected else None
+                active['active_file_rows']=(selected or {}).get('source_row_count') if selected else None
         finally:
             cur.close()
 
