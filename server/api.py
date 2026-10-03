@@ -1,5 +1,5 @@
 from __future__ import annotations
-import base64, hashlib, hmac, json, os, threading, time
+import base64, hashlib, hmac, json, os, threading, time, uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from decimal import Decimal
@@ -565,12 +565,111 @@ def active(authorization: Annotated[str|None,Header()]=None):
 
 @app.post('/v1/web-upload/batches')
 def web_upload_create_batch(body:BatchCreate,request:Request):
+    """Create one browser-upload batch without the heavyweight active-batch enrichment path.
+
+    This endpoint intentionally performs only the minimal blocker checks needed
+    for safe batch creation, then inserts the API_UPLOADING batch + RAW_INGEST
+    run in the same transaction. Dashboard/status enrichment stays on the read
+    endpoints and cannot delay "Creating batch...".
+    """
     _browser_upload_guard(request)
     label=(str(body.label or '').strip() or f'Web raw upload {datetime.now().isoformat(timespec="minutes")}')
-    r=begin_batch(WEB_UPLOAD_DEVICE,label)
-    if not r.get('created'):
-        raise HTTPException(409,detail={'message':'Another ingest batch is active','active':r.get('active')})
-    return r
+    batch_key=str(uuid.uuid4())
+    notes=json.dumps(
+        {'v7':True,'device_id':WEB_UPLOAD_DEVICE,'state':'UPLOADING'},
+        ensure_ascii=False,
+    )
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        lock_acquired=False
+        try:
+            # Serialize only create-batch requests. This avoids duplicate open
+            # uploads without locking the wider ingest/status tables.
+            cur.execute("SELECT GET_LOCK(%s,5) AS locked",('fullmysql_web_upload_create',))
+            lock_row=cur.fetchone() or {}
+            lock_acquired=bool(lock_row.get('locked'))
+            if not lock_acquired:
+                raise HTTPException(503,detail={'message':'Upload creation is busy; retry in a few seconds'})
+
+            # Fast blocker #1: ingest_batch states that must prevent a new raw upload.
+            cur.execute(
+                """SELECT batch_id,batch_key,batch_label,processing_status,
+                          upload_started_at,completed_at
+                   FROM ingest_batch
+                   WHERE processing_status IN (
+                     'API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED',
+                     'RELEASED','PHASE2C_READY'
+                   )
+                   ORDER BY batch_id DESC
+                   LIMIT 1"""
+            )
+            active=cur.fetchone()
+
+            # Fast blocker #2: a queued/running post-raw or Phase 3 job.
+            if not active:
+                cur.execute(
+                    """SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
+                              ib.upload_started_at,ib.completed_at,
+                              pr.pipeline_run_id AS active_pipeline_run_id,
+                              pr.stage_name AS active_stage_name,
+                              pr.processing_status AS active_run_status
+                       FROM pipeline_run pr
+                       JOIN ingest_batch ib ON ib.batch_id=pr.batch_id
+                       WHERE pr.pipeline_name=%s
+                         AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                         AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                       ORDER BY pr.pipeline_run_id DESC
+                       LIMIT 1""",
+                    (API_PIPELINE,),
+                )
+                active=cur.fetchone()
+
+            if active:
+                conn.rollback()
+                raise HTTPException(
+                    409,
+                    detail={'message':'Another ingest batch is active','active':json.loads(json.dumps(active,default=j))},
+                )
+
+            cur.execute(
+                """INSERT INTO ingest_batch
+                   (batch_key,batch_label,processing_status,file_count,source_row_count,error_count,notes)
+                   VALUES (%s,%s,'API_UPLOADING',0,0,0,%s)""",
+                (batch_key,label,notes),
+            )
+            batch_id=int(cur.lastrowid)
+            cur.execute(
+                """INSERT INTO pipeline_run
+                   (batch_id,pipeline_name,stage_name,run_number,processing_status,code_version,detail_json)
+                   VALUES (%s,%s,'RAW_INGEST',1,'STARTED',%s,%s)""",
+                (
+                    batch_id,
+                    API_PIPELINE,
+                    VERSION,
+                    json.dumps({'device_id':WEB_UPLOAD_DEVICE,'transport':'HTTPS'},ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+            return {
+                'created':True,
+                'batch_id':batch_id,
+                'session_id':batch_key,
+                'device_id':WEB_UPLOAD_DEVICE,
+            }
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(500,detail=f'Create upload batch failed: {exc}')
+        finally:
+            if lock_acquired:
+                try:
+                    cur.execute("SELECT RELEASE_LOCK(%s)",('fullmysql_web_upload_create',))
+                except Exception:
+                    pass
+            cur.close()
 
 
 @app.post('/v1/web-upload/batches/{session_id}/files')
