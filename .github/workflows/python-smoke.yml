@@ -410,7 +410,7 @@ jobs:
           assert '#order .familyline b{font-size:18px' in ui
           assert '#order .orderitemmain .orderqty{font-size:19px' in ui
           assert '#order .orderitemmain .cell{text-align:right;font-size:15px' in ui
-          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in ui
           assert '#order .orderrecvhistory{margin:0 12px 12px' in ui
           assert "$('#orderList').classList.remove('futurecards')" in ui
           assert '#price .ptop b{font-size:17px!important}' in ui
