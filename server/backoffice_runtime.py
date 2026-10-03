@@ -8271,6 +8271,7 @@ def invalidate_true_stock_dependent_caches() -> dict[str,Any]:
                 "backoffice_ordering_review_cache",
                 "backoffice_pricing_review_cache",
                 "backoffice_home_summary_cache",
+                "yipman_current_tpr_review_cache",
             ):
                 try:
                     cur.execute(f"DELETE FROM {table}")
