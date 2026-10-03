@@ -469,7 +469,7 @@ jobs:
           assert "priceFilter='UPC_240'" in ui
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
-          assert 'Testing must still move at least $0.45 from Current' in ui
+          assert 'TPR Suggestion Price must still move at least $0.45 from Current' in ui
           assert '.29 / .49 / .59 / .69 / .79 / .99' in ui
           assert 'const retailPoint=v=>' in ui
           assert 'Raw proved sweet-spot evidence is preserved' in ui
