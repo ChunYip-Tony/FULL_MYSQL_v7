@@ -4429,9 +4429,18 @@ function mobileRenderList(){
   }else if(mobileState.module==='pi'){
     html=rows.map(r=>mobileRow(String(r.family_article||r.upc||''),r.family_article||r.upc,r.family_name||r.name,fmt(r.family_oh)+' '+(r.family_oh_uom||'')+' OH · '+fmt(r.qty_7d)+' 7D · DOS '+fmt(r.dos),'OH',r.chinese_name||'')).join('');
   }else if(mobileState.module==='batches'){
-    html=rows.map(b=>mobileRow((b._mobileActive?'active:':'batch:')+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Completed batch'),(b.file_count??'—')+' file(s) · '+(b.quick_check_ready_rows??'—')+' ready · '+(b.quick_check_hold_rows??'—')+' hold',b._mobileActive?(b.active_run_status||b.processing_status||b.status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
+    html=rows.map(b=>{
+      const activeName=b._mobileActive&&b.active_file_name?b.active_file_name:(b.batch_label||(b._mobileActive?'Active processing':'Completed batch'));
+      const meta=(b._mobileActive&&b.active_file_name?'Processing file · ':'')+(b.file_count??'—')+' file(s) · '+(b.quick_check_ready_rows??'—')+' ready · '+(b.quick_check_hold_rows??'—')+' hold';
+      return mobileRow((b._mobileActive?'active:':'batch:')+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),activeName,meta,b._mobileActive?(b.active_run_status||b.processing_status||b.status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'');
+    }).join('');
   }else if(mobileState.module==='uploads'){
-    html=rows.map(b=>b._mobileNewUpload?mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD',''):mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),b.batch_label||(b._mobileActive?'Active processing':'Upload history'),(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—'),b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'')).join('');
+    html=rows.map(b=>{
+      if(b._mobileNewUpload)return mobileRow('new-upload','＋ New Upload','Create source batch','Choose one or more source files; file type is detected automatically','UPLOAD','');
+      const activeName=b._mobileActive&&b.active_file_name?b.active_file_name:(b.batch_label||(b._mobileActive?'Active processing':'Upload history'));
+      const meta=(b._mobileActive&&b.active_file_name?'Processing file · ':'')+(b.file_count??'—')+' file(s) · '+(b.upload_started_at||b.completed_at||'—');
+      return mobileRow('uploadbatch:'+String(b.batch_id||b.id||''),'Batch #'+(b.batch_id||b.id||'—'),activeName,meta,b._mobileActive?(b.processing_status||'CURRENT'):(b.phase3_status||b.processing_status||'DONE'),'');
+    }).join('');
   }else if(mobileState.module==='freshness'){
     html=rows.map(r=>mobileDataHealthRow(r)).join('');
   }
@@ -4886,15 +4895,19 @@ function mobileActiveBatchDetail(){
   const issueState=mobileBatchIssueState(b);
   const liveIssueTotal=issueState.total;
   const prev=state.recent.find(x=>String(x.batch_id)!==String(b.batch_id||b.id));
-  const firstFile=(b.active_files||[])[0]||{};
+  const activeFiles=Array.isArray(b.active_files)?b.active_files:[];
+  const matchedFile=activeFiles.find(x=>String(x.original_filename||'')===String(b.active_file_name||''));
+  const firstFile=matchedFile||activeFiles[activeFiles.length-1]||{};
   const fileName=b.active_file_name||firstFile.original_filename||b.batch_label||'Current source batch';
   const sourceType=uploadSourceLabel(b.active_source_type||firstFile.source_type||'');
   const rows=b.active_file_rows??firstFile.source_row_count??b.source_row_count??'—';
+  const fileLabel=b.active_file_is_current?'Current Processing File':'Latest Batch File';
 
   let html='<div class="m-detailcard m-batch-detail-card">'+
     '<div class="m-batch-head"><div class="m-batch-head-main">'+
       '<div class="m-label">Current Batch</div>'+
       '<div class="m-batch-id">Batch #'+esc(b.batch_id||b.id||'—')+'</div>'+
+      '<div class="m-label" style="margin-top:8px">'+esc(fileLabel)+'</div>'+
       '<div class="m-batch-file">'+esc(fileName)+'</div>'+
       '<div class="m-batch-meta"><span>'+esc(sourceType||'Source')+'</span><span>'+fmt(rows,0)+' rows</span><span>Run #'+esc(b.active_pipeline_run_id||'—')+'</span><span>'+esc(b.active_code_version||'')+'</span></div>'+
     '</div>'+pill(displayStatus)+'</div>'+
@@ -5232,7 +5245,7 @@ async function loadDesktopOverview(){
     (Number(invAtt.negative_stock_blocked_owner_count||0)?desktopQueueItem('⊘','Blocked stock owners','Need upstream identity / UOM resolution',fmt(invAtt.negative_stock_blocked_owner_count||0),'warn'):'')+
     (Number(dumping.pending||0)?desktopQueueItem('↘','Pending dumping','True Stock below System OH',fmt(dumping.pending||0),'orange'):'');
   const pipelineRows=
-    (latestBatch?desktopQueueItem('↻','Current processing','Batch #'+String(latestBatch.batch_id||'—')+' · '+String(latestBatch.processing_status||latestBatch.status||'ACTIVE'),'LIVE','purple'):'')+
+    (latestBatch?desktopQueueItem('↻','Current processing','Batch #'+String(latestBatch.batch_id||'—')+(latestBatch.active_file_name?' · '+String(latestBatch.active_file_name):'')+' · '+String(latestBatch.processing_status||latestBatch.status||'ACTIVE'),'LIVE','purple'):'')+
     (batchHoldCount?desktopQueueItem('!','Recent batch holds','Recent batches still carrying hold status',fmt(batchHoldCount,0),'bad'):'')+
     desktopQueueItem('▦','Completed data days','Canonical POS + MVT coverage',dh?fmt(completedDays,0)+'/14':'—','good');
 
@@ -6211,7 +6224,7 @@ async function loadDatabaseOverview(){
 
   const ps=$('#dbProcessingSummary');
   if(ps)ps.textContent=state.active
-    ? `Batch #${state.active.batch_id||'—'} · ${state.active.active_run_status||state.active.processing_status||'processing'}`
+    ? `Batch #${state.active.batch_id||'—'}${state.active.active_file_name?' · '+state.active.active_file_name:''} · ${state.active.active_run_status||state.active.processing_status||'processing'}`
     : latest
       ? `Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`
       : 'No active batch';
@@ -6499,7 +6512,16 @@ function activeCard(a){
     const emptyUpload=String(status).toUpperCase()==='API_UPLOADING'&&Number(a.file_count||0)===0&&a.batch_key
       ? '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button type="button" class="btn soft empty-upload-abort-btn" data-session="'+esc(a.batch_key)+'" data-batch="'+esc(id)+'">Clear Empty Upload</button></div>'
       : '';
+    const files=Array.isArray(a.active_files)?a.active_files:[];
+    const matched=files.find(x=>String(x.original_filename||'')===String(a.active_file_name||''));
+    const file=matched||files[files.length-1]||{};
+    const fileName=a.active_file_name||file.original_filename||'';
+    const fileLabel=a.active_file_is_current?'CURRENT PROCESSING FILE':'LATEST BATCH FILE';
+    const fileLine=fileName
+      ? '<div class="desktop-batch-file" style="margin-top:9px"><div><small>'+esc(fileLabel)+'</small><b>'+esc(fileName)+'</b><span>'+esc(uploadSourceLabel(a.active_source_type||file.source_type||'')||'Source')+(file.processing_status?' · '+esc(file.processing_status):'')+'</span></div></div>'
+      : '';
     return '<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #'+esc(id)+'</div><div class="meta">'+esc(a.batch_label||'Completed batch')+'</div></div>'+pill(status)+'</div>'+
+      fileLine+
       '<div class="batchmeta"><div><small>Files</small><b>'+fmt(a.file_count,0)+'</b></div><div><small>Run</small><b>'+esc(runId)+'</b></div><div><small>Blockers</small><b>'+fmt(blockers,0)+'</b></div></div>'+
       '<div class="meta" style="margin-top:7px"><b>'+fmt(ready,0)+' READY · '+fmt(hold,0)+' HOLD</b>'+completed+'</div>'+emptyUpload+'</div>';
   }
@@ -6508,8 +6530,10 @@ function activeCard(a){
   const status=stale?'POSSIBLY STUCK':(runStatus||a.processing_status||a.status||'PROCESSING');
   const p=phase3ProgressState(a);
   const files=Array.isArray(a.active_files)?a.active_files:[];
-  const first=files[0]||{};
+  const matchedFile=files.find(x=>String(x.original_filename||'')===String(a.active_file_name||''));
+  const first=matchedFile||files[files.length-1]||{};
   const fileName=a.active_file_name||first.original_filename||'—';
+  const fileLabel=a.active_file_is_current?'CURRENT PROCESSING FILE':'LATEST BATCH FILE';
   const source=uploadSourceLabel(a.active_source_type||first.source_type||'');
   const sourceRows=a.active_file_rows??first.source_row_count??a.source_row_count??'—';
   const coverageStart=first.coverage_start_date||'';
@@ -6542,7 +6566,7 @@ function activeCard(a){
       '<div><small>Open issues</small><b>'+fmt(errors,0)+'</b><span>current</span></div>'+
     '</div>'+
     progress+
-    '<div class="desktop-batch-file"><div><small>SOURCE FILE</small><b>'+esc(fileName)+'</b><span>'+esc(source||'Source')+' · '+esc(coverage)+' · '+esc(first.processing_status||'')+'</span></div></div>'+
+    '<div class="desktop-batch-file"><div><small>'+esc(fileLabel)+'</small><b>'+esc(fileName)+'</b><span>'+esc(source||'Source')+' · '+esc(coverage)+' · '+esc(first.processing_status||a.active_file_status||'')+'</span></div></div>'+
     '<div class="desktop-batch-runtime"><span><small>Started</small><b>'+esc(started)+'</b></span><span><small>Heartbeat</small><b>'+esc(heartbeat)+'</b></span><span><small>Worker</small><b>'+esc(worker)+'</b></span></div>'+
     (stale?'<div class="error" style="margin-top:10px"><b>Phase 3 may be stalled.</b> No fresh worker heartbeat is being reported. The worker recovery fence will replace a stale run rather than starting a duplicate copy.</div>':'')+
     '<div class="desktop-batch-issues-block"><div class="desktop-batch-issues-head"><b>Top current issues</b><span>'+fmt(errors,0)+' open</span></div>'+desktopBatchIssuesHtml(a,4)+'</div>'+
@@ -6551,7 +6575,9 @@ function activeCard(a){
 }
 function desktopBatchMonitorBody(b){
   const p=phase3ProgressState(b);
-  const first=(b.active_files||[])[0]||{};
+  const files=Array.isArray(b.active_files)?b.active_files:[];
+  const matched=files.find(x=>String(x.original_filename||'')===String(b.active_file_name||''));
+  const first=matched||files[files.length-1]||{};
   const fileName=b.active_file_name||first.original_filename||b.batch_label||'Current source batch';
   const source=uploadSourceLabel(b.active_source_type||first.source_type||'');
   const rows=b.active_file_rows??first.source_row_count??b.source_row_count??'—';
@@ -6684,7 +6710,7 @@ async function loadBatches(){
   }
   const ps=$('#dbProcessingSummary');
   if(ps)ps.textContent=state.active
-    ? `Batch #${state.active.batch_id||'—'} is processing`
+    ? `Batch #${state.active.batch_id||'—'} is processing${state.active.active_file_name?' · '+state.active.active_file_name:''}`
     : latest
       ? `Latest #${latest.batch_id} · ${latest.phase3_status||latest.processing_status||'complete'}`
       : state.batchLoadWarning||'No active batch';
@@ -6707,7 +6733,7 @@ async function refreshDesktopActiveBatch(){
     });
     const ps=$('#dbProcessingSummary');
     if(ps)ps.textContent=state.active
-      ? 'Batch #'+String(state.active.batch_id||'—')+' · '+String(state.active.active_run_status||state.active.processing_status||'processing')
+      ? 'Batch #'+String(state.active.batch_id||'—')+(state.active.active_file_name?' · '+String(state.active.active_file_name):'')+' · '+String(state.active.active_run_status||state.active.processing_status||'processing')
       : 'No active batch';
   }catch(_){}
   finally{desktopActiveBatchPollBusy=false}
