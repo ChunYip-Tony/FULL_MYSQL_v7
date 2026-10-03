@@ -1,12 +1,25 @@
-v7.0.440 Larger Mobile + Header Freshness:
-- Yipman mobile sizing is increased modestly while preserving the compact layout and avoiding additional card whitespace.
-- The top header beside Yipman now shows six live freshness indicators: POS, MVT, Frozen Report, Fresh Report, OH, and ChatGPT Analysis Sheet.
-- POS/MVT freshness compares the latest canonical data date with the current required-through date; current is green, one day behind is amber, and older/missing is red.
-- Frozen/Fresh/OH report freshness shows the latest valid ingested source date and calendar age from business today.
-- ChatGPT Analysis Sheet is green PASS only when the current serving Quick Check batch has a completed ChatGPT Sheet publish with PASS readback; queued/started is amber BUILDING and missing/failed is red.
-- Pull-to-refresh refreshes the header freshness together with the current page.
-- Yipman service-worker shell cache advances to v440.
-Version: 7.0.440 Single-Service Edition
+v7.0.441 Four-Mode Price Review + TPR Lifecycle + Clearance:
+- Integrates the v7.0.440 larger mobile/header freshness build with the new price architecture.
+- Price Review has four operational lanes: REG, TPR Suggest, TPR Progress, and Clearance.
+- REG is the standard everyday price and is replaced only when a stronger proved GP$/day sweet spot or mandatory integrity correction is available.
+- TPR Suggest is temporary only: controlled sweet-spot testing or freshness/velocity improvement; active TPR and company SALE items are excluded.
+- TPR Progress preserves continuous TPR evidence across Price List uploads, tracks price steps, compares before/current/projected behavior, and recommends continue, modify, make regular, cancel, or review data.
+- Clearance is separate from TPR: user enters expiration date and expiring quantity, may enter True Stock, and receives a staged sell-out plan.
+- Clearance True Stock uses the existing Quick Check True Stock workflow, becomes Effective OH, and can create/update Pending Dumping when below System OH.
+- SALE price and period remain company controlled and are never overridden by store-controlled REG/TPR/Clearance suggestions.
+- Stock Flow v437/v438 behavior is preserved: over-selling % default sort, Friday delivery warning, latest receipt cost, collapsed receipt history, and NodeList selector hotfix.
+- Header freshness v440 is preserved and pull-to-refresh updates source freshness together with the active page.
+- Yipman service-worker shell cache advances to v441.
+Version: 7.0.441 Single-Service Edition
+
+v7.0.439 Price Architecture Integration:
+- Integrates the v7.0.438 Stock Flow selector hotfix and v7.0.437 neutral compact Stock Flow behavior with the new four-mode Price Review.
+- Price Review operational lanes are REG, TPR Suggest, TPR Progress, and Clearance.
+- REG is the everyday GP$/day sweet-spot price; TPR is temporary; Clearance is expiration-specific; SALE remains company-controlled.
+- Clearance supports expiry date, expiring quantity, optional True Stock, staged sell-out pricing, and the existing Pending Dumping workflow.
+- Current TPR preserves continuous lifecycle evidence across unchanged Price List uploads and monitors before/current/projected behavior.
+- Yipman service-worker shell cache advances to v439.
+Version: 7.0.439 Single-Service Edition
 
 v7.0.438 Stock Flow Selector Hotfix:
 - Fixes Quick Check Stock Flow render crash: $(...).forEach is not a function.
@@ -24,6 +37,30 @@ v7.0.437 Stock Flow Neutral Compact + Receipt Cost:
 - Stock Flow backend default ordering is receipt-over-selling percentage descending and contract advances to YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST.
 - Yipman service-worker shell cache advances to v437.
 Version: 7.0.437 Single-Service Edition
+
+v7.0.436 Four-Mode Price Review + Clearance:
+- Price Review is split into four operational tabs: REG, TPR Suggest, TPR Progress, and Clearance.
+- REG is the everyday standard price and is suggested for replacement only when a stronger proved GP$/day sweet spot or mandatory price-integrity correction is available.
+- TPR Suggest contains temporary controlled tests only: sweet-spot discovery or freshness/velocity improvement. Current TPR and company SALE rows are excluded.
+- TPR Progress keeps the continuous TPR lifecycle monitor introduced in v7.0.435 and recommends continue, modify, make regular, or cancel.
+- SALE price and period are company controlled and excluded from store-controlled REG/TPR suggestions.
+- Clearance is a separate user-observed expiration workflow. Users search a UPC, enter expiry date and expiring quantity, and receive a staged sell-out plan.
+- Clearance supports real True Stock entry through the same Quick Check True Stock workflow; saved counts become Effective OH and can create/update Pending Dumping when below System OH.
+- Clearance monitors required daily sell-through vs current 7D velocity, effective OH / True Stock, days to expiry, and staged retail price steps. Automatic clearance suggestions do not cross current cost; unresolved final-day risk goes to manager disposition review.
+- Pricing review cache advanced to V4 so old mixed REG/TPR rows cannot populate the new tabs.
+- Yipman service-worker shell cache advanced to v436.
+Version: 7.0.436 Single-Service Edition
+
+v7.0.435 TPR Lifecycle + Purpose Monitor:
+- Current TPR lifecycle no longer resets when a new Price List is uploaded. It uses Price List source-since date, continuous TPR Price List history, and contiguous POS TPR evidence.
+- TPR price changes remain within the same lifecycle; the app separately tracks the current TPR price-step start.
+- Every active TPR is classified as one of two purposes: SWEET_SPOT_TEST (find a price that can become the new regular price) or FRESHNESS_SELL_THROUGH (temporary markdown to clear aging inventory).
+- Users can explicitly set either TPR purpose from Current TPR detail; the choice persists for the active TPR lifecycle.
+- Sweet-spot monitoring compares clean pre-TPR baseline vs current 3D response and can recommend CONTINUE, RAISE TPR, MAKE REGULAR, or CANCEL TPR.
+- Freshness monitoring projects days to clear OH, days remaining to the freshness threshold, required sell-through velocity, and projected OH at the freshness limit; it can recommend CONTINUE, LOWER TPR, or CANCEL / disposition review.
+- Current TPR cards now show purpose, continuous TPR start, previous/current/projected behavior, and any suggested TPR or new regular price.
+- Yipman service-worker shell cache advanced to v435.
+Version: 7.0.435 Single-Service Edition
 
 v7.0.434 Current TPR Timeout Repair:
 - Current TPR review now uses a persistent asynchronous stale-while-refresh cache instead of recalculating the entire TPR dataset inside the mobile HTTP request.

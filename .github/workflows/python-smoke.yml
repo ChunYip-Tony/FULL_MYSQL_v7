@@ -168,10 +168,12 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v440'" in ui
+          assert "const CACHE='yipman-v441'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
+          assert 'id="headFreshness"' in ui
+          assert '/v1/yipman/header-freshness' in ui
           assert 'LATEST DATA · REBUILDING' in desktop
           assert "cache==='SOURCE_CHANGED_REFRESHING'" in desktop
           print('source-aware-freshness-cache-v431=PASS')
@@ -188,26 +190,40 @@ jobs:
 
           src=inspect.getsource(bo.current_tpr_review)
           cached_src=inspect.getsource(bo.cached_current_tpr_review)
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V1' in src
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V2_ASYNC_CACHE' in cached_src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE' in src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE' in cached_src
           assert 'NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH' in cached_src
           assert 'AUTHORITATIVE_LIVE_CURRENT_PRICE_TYPE_EQUALS_TPR' in src
+          assert 'CONTINUOUS_PRICE_LIST_TPR' in src and 'CONTIGUOUS_POS_TPR' in src
+          assert 'SWEET_SPOT_TEST' in src and 'FRESHNESS_SELL_THROUGH' in src
           assert 'tpr_qty_3d' in src and 'velocity_lift_pct' in src
           assert 'recommendation_code' in src and 'CONTINUE_TPR' in src
-          assert 'RAISE_TPR_PRICE' in src and 'LOWER_TPR_PRICE' in src and 'END_TPR' in src
+          assert 'MAKE_REGULAR' in src and 'RAISE_TPR_PRICE' in src and 'LOWER_TPR_PRICE' in src and 'CANCEL_TPR' in src
+          assert 'projected_days_to_clear_oh' in src and 'required_velocity_to_clear' in src
           assert 'readiness != "READY"' in src
 
           api_src=Path('api.py').read_text(encoding='utf-8')
           assert "@app.get('/v1/yipman/current-tpr-review')" in api_src
+          assert "@app.post('/v1/yipman/current-tpr-review/{upc}/purpose')" in api_src
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
-          assert 'data-price-tab="TPR"' in ui
+          assert 'data-price-tab="REG"' in ui
+          assert 'data-price-tab="TPR_SUGGEST"' in ui
+          assert 'data-price-tab="TPR_PROGRESS"' in ui
+          assert 'data-price-tab="CLEARANCE"' in ui
           assert '/v1/yipman/current-tpr-review?category=ALL&limit=1000' in ui
           assert 'Building Current TPR review in the background' in ui
           assert 'tprRetryTimer=setTimeout' in ui
           assert 'TPR SUGGESTION PRICE' in ui
+          assert 'FIND NEW REGULAR SWEET SPOT' in ui
+          assert 'FRESHNESS SELL-THROUGH' in ui
+          assert 'BEFORE TPR' in ui and 'PROJECTED 7D' in ui
+          assert '/purpose' in ui
+          assert 'reg_suggestion_actionable' in inspect.getsource(bo.pricing_review)
+          assert 'tpr_suggestion_actionable' in inspect.getsource(bo.pricing_review)
+          assert 'SALE_PRICE_AND_PERIOD_ARE_COMPANY_CONTROLLED' in inspect.getsource(bo.pricing_review)
           assert "$('[data-tpr-row]')" in ui
-          assert "$('[data-price-tab]')" in ui
+          assert "document.querySelectorAll('[data-price-tab]')" in ui
 
           desk=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
           assert 'TPR Suggestion Price' in desk
@@ -219,6 +235,43 @@ jobs:
           assert 'LATEST_3_COMPLETED_CANONICAL_POS_DATA_DAYS' in bsrc
           assert 'Missing calendar dates are ignored rather than zero-filled' in bsrc
           print('current-tpr-review-v433=PASS')
+          PY
+
+      - name: Validate four-mode pricing and Clearance True Stock contract
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import api
+          import clearance
+          import backoffice_runtime as bo
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          api_src=Path('api.py').read_text(encoding='utf-8')
+          clear_src=Path('clearance.py').read_text(encoding='utf-8')
+          pricing=inspect.getsource(bo.pricing_review)
+
+          assert 'data-price-tab="REG"' in ui
+          assert 'data-price-tab="TPR_SUGGEST"' in ui
+          assert 'data-price-tab="TPR_PROGRESS"' in ui
+          assert 'data-price-tab="CLEARANCE"' in ui
+          assert 'priceView=\'REG\'' in ui
+          assert "['REG','TPR_SUGGEST','TPR_PROGRESS','CLEARANCE']" in ui
+          assert 'reg_suggestion_actionable' in pricing
+          assert 'tpr_suggestion_actionable' in pricing
+          assert 'sale_price_locked' in pricing
+          assert 'V4_REG_TPR_SPLIT' in inspect.getsource(bo._pricing_review_cache_key)
+
+          assert "@app.get('/v1/yipman/clearance')" in api_src
+          assert "@app.post('/v1/yipman/clearance')" in api_src
+          assert "/v1/app/quick-check/'+encodeURIComponent(r.upc)+'/true-stock" in ui
+          assert 'CLEARANCE PLAN TRUE STOCK' in api_src
+          assert 'EFFECTIVE_OH_USES_TRUE_STOCK_WHEN_ACTIVE' in clear_src
+          assert 'SALE_IS_COMPANY_CONTROLLED; DO_NOT_OVERRIDE_PRICE_OR_PERIOD' in clear_src
+          assert 'AUTOMATIC_CLEARANCE_SUGGESTIONS_DO_NOT_CROSS_CURRENT_COST' in clear_src
+          assert 'required_daily_velocity' in clear_src
+          assert 'clearance_target_quantity' in clear_src
+          print('four-mode-price-clearance-v436=PASS')
           PY
 
       - name: Validate Stock Flow 28-day related-UPC promotion context
@@ -233,7 +286,7 @@ jobs:
           assert 'limit=28' in src
           assert '"sales_by_price_type"' in src
           assert 'WHERE family_id IN ({ph})' in src
-          assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch(' in src
+          assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
           assert 'YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST' in src
@@ -251,6 +304,16 @@ jobs:
           assert 'recent_promotion_event:r.recent_promotion_event||null' in ui
           assert "RECENT SALE · " in ui
           assert 'promotion_week_extra_qty' in ui
+          assert "stockFlowSort='RATIO'" in ui
+          assert 'OVER-SELLING % ↓' in ui
+          assert 'USUALLY FRIDAY DELIVERY' in ui
+          assert 'LATEST COST' in ui
+          assert 'stockreceiptmore' in ui
+          assert '"friday_delivery_warning": friday_delivery_warning' in src
+          assert '"latest_receipt_cost"' in src
+          assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
+          assert "$$('[data-stock-category]').forEach" in ui
+          assert "$$('[data-stock-receipts]').forEach" in ui
           assert 'AVG PROMO PRICE' in ui
           assert '.stockdiff.promoted>b{display:inline-block;background:#fff34a' in ui
           assert '.stockpromo .promolift{display:inline-block' in ui
@@ -266,16 +329,8 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "stockFlowSort='RATIO'" in ui
-          assert 'OVER-SELLING % ↓' in ui
-          assert 'USUALLY FRIDAY DELIVERY' in ui
-          assert 'LATEST COST' in ui
-          assert 'stockreceiptmore' in ui
-          assert '"friday_delivery_warning": friday_delivery_warning' in src
-          assert '"latest_receipt_cost"' in src
-          assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
-          assert "const CACHE='yipman-v440'" in ui
-          print('stock-flow-v437=PASS')
+          assert "const CACHE='yipman-v441'" in ui
+          print('stock-flow-observed-delivery-v395=PASS')
           PY
 
       - name: Validate controlled pricing path, freshness tests, and compact progress UI
@@ -354,7 +409,7 @@ jobs:
           assert 'current_price_gp_pct' in review_src
           assert 'tested_price_gp_pct' in review_src
           assert 'testing_price_gp_pct' in review_src
-          assert 'V3_LIVE_READY_RETAIL_TESTING' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
+          assert 'V4_REG_TPR_SPLIT' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
 
           assert 'if not has_oh or not history_gate:' in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
@@ -459,14 +514,14 @@ jobs:
           assert "priceFilter='UPC_240'" in ui
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
-          assert 'TPR Suggestion Price must still move at least $0.45 from Current' in ui
+          assert 'Controlled TPR tests move at least $0.45 from Current' in ui
           assert '.29 / .49 / .59 / .69 / .79 / .99' in ui
           assert 'const retailPoint=v=>' in ui
-          assert 'Raw proved sweet-spot evidence is preserved' in ui
+          assert 'Raw proved sweet-spot evidence' in ui
           assert 'CURRENT COST' in ui
           assert 'gpText(r.current_price,r.current_cost)' in ui
           assert 'gpText(r.tested_price,r.current_cost)' in ui
-          assert 'gpText(r.testing_price,r.current_cost)' in ui
+          assert 'gpText(suggestion,r.current_cost)' in ui
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
           assert 'Current Cost' in desktop
           assert 'tested_price_gp_pct' in desktop
@@ -485,6 +540,7 @@ jobs:
           assert 'cached_pricing_review(' in src
           assert 'BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT' in src
           assert 'tested_price":"SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'testing_price":"BACKWARD_COMPATIBILITY_ALIAS_FOR_TPR_SUGGESTION_PRICE' in src
           assert 'tpr_suggestion_price":"SAME_CANONICAL_CONTROLLED_PRICE_OR_FRESHNESS_TEST_STEP_AS_PRICE_SUGGESTIONS;NO_INDEPENDENT_QUICK_CHECK_RECALCULATION' in src
           assert '_quick_price_preview_by_upc(' not in src
           assert 'YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW' in src
@@ -696,7 +752,7 @@ jobs:
           assert 'MVT_PHYSICAL_101_109_FAMILY_DAILY_AGGREGATE' in quick_receipt_src
           assert '"family_receipt_history": family_receipt_history' in quick_receipt_src
           stock_src=inspect.getsource(backoffice_runtime.yipman_best_sellers)
-          assert 'ratio is None or ratio < Decimal("1.50")' in stock_src
+          assert 'ratio < Decimal("1.50")' in stock_src
           assert '"receipt_minus_selling_7d": receipt_qty - sold_d' in stock_src
           cal_src=inspect.getsource(backoffice_runtime.yipman_ordering_calendar)
           assert 'default_next=default_delivery+timedelta(days=7)' in cal_src
@@ -920,7 +976,7 @@ jobs:
           assert "function renderHeaderFreshness" in text
           assert "function loadHeaderFreshness" in text
           assert "loadHeaderFreshness();" in text
-          assert "$('#headFreshness .hfitem').forEach" in text
+          assert "$$('#headFreshness .hfitem').forEach" in text
           assert "html:not(.yipman-desktop) .brand{font-size:29px}" in text
           api_src=Path('api.py').read_text(encoding='utf-8')
           assert "@app.get('/v1/yipman/header-freshness')" in api_src

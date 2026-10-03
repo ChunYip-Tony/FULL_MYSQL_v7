@@ -230,6 +230,8 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
                     "type": chosen.get("price_type") or "UNKNOWN",
                     "source": "POS_CALCULATED",
                     "date": chosen.get("period_end_date"),
+                    "source_since_date": None,
+                    "price_list_file_id": None,
                 }
 
     out: dict[int, dict[str, Any] | None] = {}
@@ -251,6 +253,8 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
                 "type": config.get("price_type"),
                 "source": "PRICE_LIST",
                 "date": price_date,
+                "source_since_date": config.get("source_since_date"),
+                "price_list_file_id": config.get("file_id"),
             }
         elif pos is not None:
             out[uid] = pos
@@ -4728,10 +4732,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                         str(row.get("family_group_movement_uom") or ""),
                     )
 
-        # Latest receipt cost follows the existing Family-detail receipt-cost
-        # authority: MOVEMENT_RECEIPT_VALUATION on the latest physical receipt
-        # date. This keeps Stock Flow cost aligned with 101/107 valuation
-        # evidence while physical quantity/date remain 101/109 semantics.
+        # Latest receipt cost follows Family-detail receipt-cost authority:
+        # MOVEMENT_RECEIPT_VALUATION on the latest physical receipt date.
         for row in rows:
             history = row.get("family_receipt_history") or []
             row["latest_receipt_date"] = (
@@ -6491,6 +6493,95 @@ def pricing_review(
         row["slow_velocity_trend"] = slow_velocity
         row["company_range_violation"] = outside_company
 
+        current_type_upper = str(row.get("current_price_type") or "").strip().upper()
+        sale_locked = current_type_upper == "SALE"
+        active_tpr = current_type_upper == "TPR"
+        reg_like = current_type_upper in {"REG", "REGULAR", "IN STORE", "INSTORE", "STOR"}
+        proven_sweet_spot = bool(
+            reg_like
+            and reason_code != "VELOCITY_TEST"
+            and tested_price is not None
+            and current_dec is not None
+            and cost_dec is not None
+            and tested_price > cost_dec
+            and abs(tested_price - current_dec) > Decimal("0.25")
+            and tested_evidence_price is not None
+        )
+        row["sale_price_locked"] = sale_locked
+        row["price_control_scope"] = "COMPANY_CONTROLLED" if sale_locked else "STORE_CONTROLLED"
+        row["reg_suggestion_price"] = (
+            raw_target_candidate
+            if reason_code == "PAIR_FIX" and raw_target_candidate is not None
+            else (
+                action_price
+                if reason_code == "COMPANY_RANGE" and action_price is not None
+                else (tested_price if proven_sweet_spot else None)
+            )
+        )
+        row["reg_suggestion_actionable"] = bool(
+            not sale_locked
+            and not active_tpr
+            and (
+                (reason_code in {"PAIR_FIX", "COMPANY_RANGE"} and action_price is not None)
+                or proven_sweet_spot
+            )
+        )
+        row["reg_suggestion_reason"] = (
+            "240/249 price equality correction"
+            if reason_code == "PAIR_FIX"
+            else (
+                "Current regular/store price is outside the applicable Company A/B/C range"
+                if reason_code == "COMPANY_RANGE"
+                else (
+                    "A stronger proved sweet spot is available; replace the current regular/store price"
+                    if proven_sweet_spot
+                    else None
+                )
+            )
+        )
+        row["tpr_suggestion_actionable"] = bool(
+            not sale_locked
+            and not active_tpr
+            and testing_price is not None
+            and reason_code in {"VELOCITY_TEST", "SWEET_SPOT_GAP", "GP_DOLLAR_TEST"}
+            and not proven_sweet_spot
+        )
+        row["tpr_suggestion_purpose"] = (
+            "FRESHNESS_SELL_THROUGH"
+            if reason_code == "VELOCITY_TEST"
+            else (
+                "SWEET_SPOT_TEST"
+                if reason_code in {"SWEET_SPOT_GAP", "GP_DOLLAR_TEST"}
+                else None
+            )
+        )
+        row["tpr_suggestion_reason"] = (
+            "Temporarily reduce price to improve velocity before the freshness threshold"
+            if reason_code == "VELOCITY_TEST"
+            else (
+                "Run a controlled TPR test to search for a stronger everyday GP$/day sweet spot"
+                if reason_code in {"SWEET_SPOT_GAP", "GP_DOLLAR_TEST"}
+                else None
+            )
+        )
+        row["price_tab_policy"] = (
+            "SALE_LOCKED"
+            if sale_locked
+            else (
+                "CURRENT_TPR_PROGRESS"
+                if active_tpr
+                else (
+                    "REG_REPLACEMENT"
+                    if row["reg_suggestion_actionable"]
+                    else (
+                        "TPR_SUGGESTION"
+                        if row["tpr_suggestion_actionable"]
+                        else "NO_ACTION"
+                    )
+                )
+            )
+        )
+
         row["current_price_gp_pct"] = _gp_pct_for_price(current_dec, cost_dec)
         row["tested_price_gp_pct"] = _gp_pct_for_price(tested_price, cost_dec)
         row["testing_price_gp_pct"] = _gp_pct_for_price(testing_price, cost_dec)
@@ -6555,7 +6646,7 @@ def pricing_review(
     actionable_count=sum(1 for row in visible_rows if row.get("actionable"))
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V10_LIVE_READINESS",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V11_REG_TPR_SPLIT",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": {
@@ -6563,6 +6654,9 @@ def pricing_review(
             "pricing_review_actionable_count": actionable_count,
             "pricing_review_visible_count": len(visible_rows),
             "pricing_review_reason_counts": reason_counts,
+            "reg_suggestion_count": sum(1 for row in visible_rows if row.get("reg_suggestion_actionable")),
+            "tpr_suggestion_count": sum(1 for row in visible_rows if row.get("tpr_suggestion_actionable")),
+            "sale_locked_count": sum(1 for row in visible_rows if row.get("sale_price_locked")),
         },
         "rows": visible_rows,
         "suppressed_accepted_count": suppressed_count,
@@ -6579,28 +6673,405 @@ def pricing_review(
             "estimate_is_clearly_labelled": True,
             "tested_price": "RETAIL_ALIGNED_TO_NEAREST_STORE_ENDING_FROM_STRONGEST_PROVED_HISTORICAL_SWEET_SPOT;RAW_EVIDENCE_PRESERVED",
             "testing_price": "CURRENT_PRICE_BASED_CONTROLLED_STEP; MIN_ABSOLUTE_CHANGE_0_45; PRIORITIZE_FRESHNESS_VELOCITY_WHEN_SLOW; OTHERWISE_STEP_TOWARD_TESTED_OR_GP_DOLLAR_TARGET; HIGHER_PRICE_GRADUAL_CAP_ABOUT_5PCT",
-            "price_action_priority": "PAIR_FIX_THEN_COMPANY_RANGE_THEN_FRESHNESS_VELOCITY_TEST_THEN_TESTED_SWEET_SPOT_GAP_THEN_GP_DOLLAR_TEST",
+            "price_tabs": "REG_REPLACEMENT_FROM_PROVED_SWEET_SPOT; TPR_SUGGESTIONS_FOR_CONTROLLED_SWEET_SPOT_OR_FRESHNESS_TESTS; CURRENT_TPR_PROGRESS; CLEARANCE_USER_ENTERED_EXPIRY_PLAN",
+            "sale_policy": "SALE_PRICE_AND_PERIOD_ARE_COMPANY_CONTROLLED_AND_EXCLUDED_FROM_STORE_PRICE_SUGGESTIONS",
+            "reg_policy": "REG_IS_STANDARD_EVERYDAY_PRICE_AND_SHOULD_BE_THE_KNOWN_GP_DOLLAR_PER_DAY_SWEET_SPOT",
+            "tpr_policy": "TPR_IS_TEMPORARY_FOR_SWEET_SPOT_TESTING_OR_FRESHNESS_SELL_THROUGH",
+            "clearance_policy": "CLEARANCE_IS_FOR_USER_IDENTIFIED_EXPIRING_QUANTITY_AND_IS_MANAGED_BY_THE_CLEARANCE_PLAN",
+            "price_action_priority": "PAIR_FIX_THEN_COMPANY_RANGE_THEN_REG_PROVED_SWEET_SPOT_THEN_TPR_FRESHNESS_OR_SWEET_SPOT_TEST",
             "source_contract": report.get("price_suggestion_rules"),
         },
     }
 
 
 
+
+def _ensure_tpr_purpose_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS yipman_tpr_purpose (
+             ean_upc VARCHAR(32) NOT NULL PRIMARY KEY,
+             tpr_start_date DATE NOT NULL,
+             purpose VARCHAR(40) NOT NULL,
+             set_by VARCHAR(128) NULL,
+             note VARCHAR(500) NULL,
+             updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+               ON UPDATE CURRENT_TIMESTAMP(6),
+             KEY idx_yipman_tpr_purpose_start (tpr_start_date)
+           )"""
+    )
+
+
+def _bulk_tpr_price_list_lifecycle(
+    cur,
+    rows: list[dict[str, Any]],
+    live_prices: dict[int, dict[str, Any] | None],
+) -> dict[int, dict[str, Any]]:
+    """Resolve the continuous active TPR lifecycle from Price List history.
+
+    A new Price List upload must not reset TPR age. Consecutive Price List
+    observations remain one TPR lifecycle until a non-TPR observation appears.
+    Price changes inside TPR create a new price step but stay in the same TPR.
+    """
+    targets = {
+        int(r["upc_id"]): str(r.get("ean_upc") or "").strip()
+        for r in rows
+        if r.get("upc_id") is not None
+    }
+    if not targets:
+        return {}
+
+    cur.execute(
+        """SELECT file_id,upload_timestamp,report_generated_at
+           FROM ingest_file
+           WHERE source_type='price_list'
+             AND processing_status='INGESTED'
+             AND error_count=0
+             AND duplicate_of_file_id IS NULL
+           ORDER BY COALESCE(upload_timestamp,report_generated_at) DESC,file_id DESC
+           LIMIT 120"""
+    )
+    price_files = [dict(x) for x in cur.fetchall()]
+    if not price_files:
+        return {}
+
+    file_meta = {int(x["file_id"]): x for x in price_files}
+    file_ids = list(file_meta)
+    ph = ",".join(["%s"] * len(file_ids))
+    cur.execute(
+        f"""SELECT p.file_id,p.upc_id,p.ean_upc,p.configured_price,p.price_type,
+                   p.source_since_date,p.snapshot_at,f.upload_timestamp
+            FROM price_list_observation p
+            JOIN ingest_file f ON f.file_id=p.file_id
+            WHERE p.file_id IN ({ph})
+              AND p.configured_price>0
+              AND (p.source_since_date IS NULL OR p.source_since_date<=%s)
+            ORDER BY p.file_id DESC,p.source_row_number""",
+        (*file_ids, business_today()),
+    )
+    raw = [dict(x) for x in cur.fetchall()]
+
+    exact: dict[str, int] = {}
+    numeric: dict[str, int] = {}
+    for uid, ean in targets.items():
+        if ean:
+            exact[ean] = uid
+            key = _numeric_key(ean)
+            if key and key not in numeric:
+                numeric[key] = uid
+
+    grouped: dict[tuple[int, int], list[dict[str, Any]]] = {}
+    for obs in raw:
+        uid = None
+        if obs.get("upc_id") is not None:
+            try:
+                candidate = int(obs["upc_id"])
+            except Exception:
+                candidate = None
+            if candidate in targets:
+                uid = candidate
+        if uid is None:
+            ean = str(obs.get("ean_upc") or "").strip()
+            uid = exact.get(ean)
+            if uid is None:
+                uid = numeric.get(_numeric_key(ean))
+        if uid is None:
+            continue
+        grouped.setdefault((uid, int(obs["file_id"])), []).append(obs)
+
+    snapshots: dict[int, list[dict[str, Any]]] = {}
+    for (uid, file_id), candidates in grouped.items():
+        candidates.sort(
+            key=lambda x: PRICE_TYPE_PRIORITY.get(
+                str(x.get("price_type") or "").upper(), 0
+            ),
+            reverse=True,
+        )
+        chosen = dict(candidates[0])
+        fm = file_meta.get(file_id) or {}
+        uploaded = chosen.get("upload_timestamp") or fm.get("upload_timestamp")
+        file_day = (
+            _price_list_upload_business_date(uploaded)
+            if uploaded is not None else None
+        )
+        if file_day is None and chosen.get("snapshot_at") is not None:
+            try:
+                file_day = chosen["snapshot_at"].date()
+            except Exception:
+                file_day = None
+        chosen["file_business_date"] = file_day
+        snapshots.setdefault(uid, []).append(chosen)
+
+    out: dict[int, dict[str, Any]] = {}
+    for uid, states in snapshots.items():
+        states.sort(
+            key=lambda x: (
+                x.get("file_business_date") or date.min,
+                int(x.get("file_id") or 0),
+            ),
+            reverse=True,
+        )
+        live = live_prices.get(uid) or {}
+        if str(live.get("type") or "").upper() != "TPR":
+            continue
+
+        current_price = _positive_price(live.get("price"))
+        lifecycle_dates: list[date] = []
+        current_step_dates: list[date] = []
+        history: list[dict[str, Any]] = []
+        in_current_step = True
+        started = False
+
+        for state in states:
+            ptype = str(state.get("price_type") or "").upper()
+            if not started:
+                if ptype != "TPR":
+                    break
+                started = True
+            elif ptype != "TPR":
+                break
+
+            p = _positive_price(state.get("configured_price"))
+            fd = state.get("file_business_date")
+            sd = state.get("source_since_date")
+            if isinstance(fd, date):
+                lifecycle_dates.append(fd)
+            if isinstance(sd, date):
+                lifecycle_dates.append(sd)
+
+            same_current = bool(
+                current_price is not None
+                and p is not None
+                and abs(p - current_price) <= Decimal("0.011")
+            )
+            if in_current_step and same_current:
+                if isinstance(fd, date):
+                    current_step_dates.append(fd)
+                if isinstance(sd, date):
+                    current_step_dates.append(sd)
+            else:
+                in_current_step = False
+
+            history.append({
+                "file_id": state.get("file_id"),
+                "date": fd,
+                "source_since_date": sd,
+                "price": p,
+                "price_type": ptype,
+            })
+
+        if not started:
+            continue
+
+        # Compress identical adjacent configured TPR price snapshots so the app
+        # shows actual price steps rather than every upload.
+        compressed: list[dict[str, Any]] = []
+        for event in reversed(history):
+            if (
+                compressed
+                and compressed[-1].get("price") is not None
+                and event.get("price") is not None
+                and abs(_d(compressed[-1]["price"]) - _d(event["price"])) <= Decimal("0.011")
+            ):
+                compressed[-1]["end_date"] = event.get("date")
+                compressed[-1]["last_file_id"] = event.get("file_id")
+            else:
+                compressed.append({
+                    "start_date": event.get("source_since_date") or event.get("date"),
+                    "end_date": event.get("date"),
+                    "price": event.get("price"),
+                    "price_type": "TPR",
+                    "first_file_id": event.get("file_id"),
+                    "last_file_id": event.get("file_id"),
+                })
+
+        out[uid] = {
+            "tpr_start_date": min(lifecycle_dates) if lifecycle_dates else None,
+            "current_price_step_start_date": (
+                min(current_step_dates) if current_step_dates else None
+            ),
+            "configured_tpr_price_steps": compressed[-8:],
+        }
+    return out
+
+
+def _tpr_pos_run_start(
+    by_day: dict[date, dict[str, Any]],
+    data_days: list[dict[str, Any]],
+) -> date | None:
+    """Find the current contiguous TPR selling run from POS evidence.
+
+    Zero-sale supported days do not break continuity. A later non-TPR sold day
+    does break it, preventing an old TPR campaign from being reused.
+    """
+    ordered = sorted(data_days, key=lambda x: x["date"], reverse=True)
+    latest_sold_type_is_tpr = False
+    latest_sold_found = False
+    for entry in ordered:
+        obs = by_day.get(entry["date"], {})
+        total = _d(obs.get("sold_quantity"))
+        if total == 0:
+            continue
+        latest_sold_found = True
+        tpr = (obs.get("price_types") or {}).get("TPR") or {}
+        tpr_qty = _d(tpr.get("sold_quantity"))
+        latest_sold_type_is_tpr = tpr_qty > 0
+        break
+    if not latest_sold_found or not latest_sold_type_is_tpr:
+        return None
+
+    start = None
+    seen_tpr = False
+    for entry in ordered:
+        day = entry["date"]
+        obs = by_day.get(day, {})
+        total = _d(obs.get("sold_quantity"))
+        tpr = (obs.get("price_types") or {}).get("TPR") or {}
+        tpr_qty = _d(tpr.get("sold_quantity"))
+        non_tpr_qty = total - tpr_qty
+        if tpr_qty > 0:
+            seen_tpr = True
+            start = day
+            continue
+        if total == 0:
+            continue
+        if seen_tpr and non_tpr_qty > 0:
+            break
+    return start
+
+
+def _tpr_price_behavior_segments(
+    by_day: dict[date, dict[str, Any]],
+    data_days: list[dict[str, Any]],
+    *,
+    tpr_start_date: date | None,
+    current_cost: Decimal | None,
+) -> list[dict[str, Any]]:
+    """Summarize prior/current TPR price steps using observed POS response."""
+    segments: list[dict[str, Any]] = []
+    for entry in sorted(data_days, key=lambda x: x["date"]):
+        day = entry["date"]
+        if tpr_start_date is not None and day < tpr_start_date:
+            continue
+        obs = by_day.get(day, {})
+        tpr = (obs.get("price_types") or {}).get("TPR") or {}
+        qty = _d(tpr.get("sold_quantity"))
+        sales = _d(tpr.get("sales_amount"))
+        if qty <= 0:
+            continue
+        price = (sales / qty).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        if segments and abs(_d(segments[-1]["price"]) - price) <= Decimal("0.011"):
+            seg = segments[-1]
+            seg["end_date"] = day
+            seg["qty"] += qty
+            seg["sales"] += sales
+            seg["selling_days"] += 1
+        else:
+            segments.append({
+                "start_date": day,
+                "end_date": day,
+                "price": price,
+                "qty": qty,
+                "sales": sales,
+                "selling_days": 1,
+            })
+    for seg in segments:
+        n = Decimal(max(1, int(seg["selling_days"])))
+        seg["velocity_per_selling_day"] = seg["qty"] / n
+        seg["gp_per_selling_day_current_cost"] = (
+            (seg["sales"] - seg["qty"] * current_cost) / n
+            if current_cost is not None else None
+        )
+    return segments[-6:]
+
+
+def _auto_tpr_purpose(
+    product_class: str,
+    doh: Decimal | None,
+    dos: Decimal | None,
+    current_oh: Decimal | None,
+) -> tuple[str, str]:
+    pclass = str(product_class or "").upper()
+    has_stock = current_oh is None or current_oh > 0
+    if pclass in {"FRESH", "LIVE"} and has_stock and (
+        (doh is not None and doh >= Decimal("5"))
+        or (dos is not None and dos >= Decimal("7"))
+    ):
+        return "FRESHNESS_SELL_THROUGH", "AUTO_FRESHNESS_RISK"
+    if pclass == "FROZEN" and has_stock and doh is not None and doh >= Decimal("60"):
+        return "FRESHNESS_SELL_THROUGH", "AUTO_FROZEN_AGE_RISK"
+    return "SWEET_SPOT_TEST", "AUTO_SWEET_SPOT"
+
+
+def set_current_tpr_purpose(
+    *,
+    ean_upc: str,
+    tpr_start_date: date,
+    purpose: str,
+    actor: str | None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    upc = str(ean_upc or "").strip()
+    if not upc:
+        raise ValueError("UPC_REQUIRED")
+    p = str(purpose or "").strip().upper()
+    if p not in {"SWEET_SPOT_TEST", "FRESHNESS_SELL_THROUGH"}:
+        raise ValueError("TPR_PURPOSE_MUST_BE_SWEET_SPOT_TEST_OR_FRESHNESS_SELL_THROUGH")
+    if tpr_start_date is None:
+        raise ValueError("TPR_START_DATE_REQUIRED")
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        _ensure_tpr_purpose_table(cur)
+        cur.execute(
+            """INSERT INTO yipman_tpr_purpose
+                 (ean_upc,tpr_start_date,purpose,set_by,note)
+               VALUES (%s,%s,%s,%s,%s)
+               ON DUPLICATE KEY UPDATE
+                 tpr_start_date=VALUES(tpr_start_date),
+                 purpose=VALUES(purpose),
+                 set_by=VALUES(set_by),
+                 note=VALUES(note),
+                 updated_at=CURRENT_TIMESTAMP(6)""",
+            (upc, tpr_start_date, p, actor, (str(note)[:500] if note else None)),
+        )
+        conn.commit()
+        cur.close()
+
+    # Purpose is part of the recommendation contract. Drop persisted/in-memory
+    # Current TPR snapshots so the next read cannot serve the old purpose.
+    try:
+        with _TPR_REVIEW_CACHE_LOCK:
+            _TPR_REVIEW_CACHE_VALUES.clear()
+            _TPR_REVIEW_CACHE_AT.clear()
+        with db_conn() as conn:
+            cur = conn.cursor(dictionary=True)
+            _ensure_tpr_review_cache_table(cur)
+            cur.execute("DELETE FROM yipman_current_tpr_review_cache")
+            conn.commit()
+            cur.close()
+    except Exception:
+        pass
+    return {
+        "status": "SAVED",
+        "upc": upc,
+        "tpr_start_date": tpr_start_date,
+        "purpose": p,
+        "set_by": actor,
+    }
+
+
 def current_tpr_review(
     category: str = "ALL",
     limit: int = 1000,
 ) -> dict[str, Any]:
-    """Review every UPC whose authoritative current price type is TPR.
+    """Monitor every active TPR as a lifecycle, not a single Price List upload.
 
-    Current TPR membership comes from the live current-price resolver, not from
-    historical POS price types. Performance uses the latest completed canonical
-    POS data days and compares post-TPR response with recent non-TPR baseline
-    days when enough evidence exists.
+    Every TPR has one of two operational purposes:
+      * SWEET_SPOT_TEST: learn whether the TPR price should become the new REG;
+      * FRESHNESS_SELL_THROUGH: reduce price only to clear aging inventory.
 
-    Recommendation logic is deliberately conservative:
-      * hard safety issues (price <= cost, 240/249 mismatch, no stock) can act now;
-      * otherwise at least two post-TPR supported days plus baseline evidence are
-        required before calling a TPR successful or recommending an adjustment.
+    The monitor compares pre-TPR behavior, current response, prior TPR price
+    steps and forward inventory/GP projections, then recommends continue,
+    change TPR price, make the TPR price regular, or cancel the TPR.
     """
     cat = str(category or "ALL").strip().upper()
     if cat not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
@@ -6614,9 +7085,11 @@ def current_tpr_review(
             Decimal("0.1"), rounding=ROUND_HALF_UP
         )
 
-    def _price_asof_day(value: Any) -> date | None:
+    def _as_date(value: Any) -> date | None:
         if value in (None, ""):
             return None
+        if isinstance(value, date):
+            return value
         try:
             return date.fromisoformat(str(value)[:10])
         except Exception:
@@ -6627,7 +7100,7 @@ def current_tpr_review(
         data_days = source_data_days(
             cur,
             "sales_by_price_type",
-            limit=28,
+            limit=90,
             up_to=completed_through_date(),
         )
         data_days = sorted(data_days, key=lambda x: x["date"])
@@ -6636,8 +7109,6 @@ def current_tpr_review(
         all_rows = [dict(x) for x in cur.fetchall()]
         live_prices = _bulk_live_current_prices(cur, all_rows)
 
-        # Overlay authoritative live price/type on every serving row before
-        # deciding which UPCs are CURRENT TPR.
         for row in all_rows:
             uid = int(row["upc_id"]) if row.get("upc_id") is not None else None
             live = live_prices.get(uid) if uid is not None else None
@@ -6646,11 +7117,15 @@ def current_tpr_review(
                 row["current_price_type"] = live.get("type")
                 row["current_price_source"] = live.get("source")
                 row["current_price_asof_date"] = live.get("date")
+                row["current_price_source_since_date"] = live.get("source_since_date")
+                row["current_price_list_file_id"] = live.get("price_list_file_id")
             else:
                 row["current_price"] = None
                 row["current_price_type"] = None
                 row["current_price_source"] = "STALE_OR_MISSING_FRESH_PRICE"
                 row["current_price_asof_date"] = None
+                row["current_price_source_since_date"] = None
+                row["current_price_list_file_id"] = None
 
         pair_groups: dict[tuple[int, str], dict[str, dict[str, Any]]] = {}
         for row in all_rows:
@@ -6669,7 +7144,23 @@ def current_tpr_review(
                 or str(row.get("product_class") or "").upper() == cat
             )
         ]
+        price_lifecycle = _bulk_tpr_price_list_lifecycle(
+            cur, tpr_rows, live_prices
+        )
         daily = _batch_daily_sales_by_price_type(cur, tpr_rows, data_days)
+
+        _ensure_tpr_purpose_table(cur)
+        conn.commit()
+        cur.execute(
+            """SELECT ean_upc,tpr_start_date,purpose,set_by,note,updated_at
+               FROM yipman_tpr_purpose"""
+        )
+        purpose_rows = [dict(x) for x in cur.fetchall()]
+        purpose_by_upc = {
+            str(x.get("ean_upc") or "").strip(): x
+            for x in purpose_rows
+            if x.get("ean_upc")
+        }
         cur.close()
 
     out: list[dict[str, Any]] = []
@@ -6679,16 +7170,8 @@ def current_tpr_review(
         uid = int(row["upc_id"])
         upc = str(row.get("ean_upc") or "")
         pclass = str(row.get("product_class") or "").upper()
-        current_price = (
-            _d(row.get("current_price"))
-            if row.get("current_price") is not None
-            else None
-        )
-        current_cost = (
-            _d(row.get("current_cost_per_selling_unit"))
-            if row.get("current_cost_per_selling_unit") is not None
-            else None
-        )
+        current_price = _positive_price(row.get("current_price"))
+        current_cost = _positive_price(row.get("current_cost_per_selling_unit"))
         current_oh = (
             _d(row.get("current_oh"))
             if row.get("current_oh") is not None
@@ -6696,17 +7179,37 @@ def current_tpr_review(
         )
         doh = _d(row.get("doh")) if row.get("doh") is not None else None
         dos = _d(row.get("dos")) if row.get("dos") is not None else None
-        asof_day = _price_asof_day(row.get("current_price_asof_date"))
+        by_day = daily.get(uid, {})
 
-        # Only completed canonical POS days on/after the current TPR evidence
-        # date count as post-TPR performance. If the TPR starts after the latest
-        # POS day, the item correctly stays OBSERVE / awaiting evidence.
+        pl_life = price_lifecycle.get(uid) or {}
+        source_since = _as_date(row.get("current_price_source_since_date"))
+        pl_start = _as_date(pl_life.get("tpr_start_date"))
+        pos_start = _tpr_pos_run_start(by_day, data_days)
+        fallback_start = _as_date(row.get("current_price_asof_date"))
+        start_candidates = [
+            x for x in (source_since, pl_start, pos_start)
+            if x is not None and x <= business_today()
+        ]
+        tpr_start_day = min(start_candidates) if start_candidates else fallback_start
+        if tpr_start_day is None and data_days:
+            tpr_start_day = data_days[-1]["date"]
+
+        start_basis_parts = []
+        if source_since is not None:
+            start_basis_parts.append("PRICE_LIST_SOURCE_SINCE")
+        if pl_start is not None:
+            start_basis_parts.append("CONTINUOUS_PRICE_LIST_TPR")
+        if pos_start is not None:
+            start_basis_parts.append("CONTIGUOUS_POS_TPR")
+        tpr_start_basis = "+".join(start_basis_parts) or "CURRENT_PRICE_ASOF_FALLBACK"
+
+        # Latest three completed canonical data days since the continuous TPR
+        # began. New Price List uploads do not change this boundary.
         post_pool = [
             x for x in data_days
-            if asof_day is None or x["date"] >= asof_day
+            if tpr_start_day is None or x["date"] >= tpr_start_day
         ]
         post_days = post_pool[-3:]
-        by_day = daily.get(uid, {})
 
         tpr_qty_3d = Decimal("0")
         tpr_sales_3d = Decimal("0")
@@ -6738,18 +7241,20 @@ def current_tpr_review(
             item_qty_3d / Decimal(post_n) if post_n else None
         )
 
-        # Baseline = up to seven prior supported days without TPR sales. This
-        # prevents an older TPR period from being treated as "regular" baseline.
-        cutoff = post_days[0]["date"] if post_days else asof_day
+        # Previous behavior is strictly BEFORE the continuous current TPR.
+        # SALE and earlier TPR selling days are excluded from the normal
+        # baseline so a promotion is never mislabeled as regular behavior.
         baseline_candidates = [
             x for x in data_days
-            if cutoff is None or x["date"] < cutoff
+            if tpr_start_day is None or x["date"] < tpr_start_day
         ]
-        baseline_days = []
+        baseline_days: list[dict[str, Any]] = []
         for day_entry in reversed(baseline_candidates):
             obs = by_day.get(day_entry["date"], {})
-            tpr_obs = (obs.get("price_types") or {}).get("TPR") or {}
-            if _d(tpr_obs.get("sold_quantity")) != 0:
+            types = obs.get("price_types") or {}
+            promo_qty = _d((types.get("TPR") or {}).get("sold_quantity"))
+            promo_qty += _d((types.get("SALE") or {}).get("sold_quantity"))
+            if promo_qty != 0:
                 continue
             baseline_days.append(day_entry)
             if len(baseline_days) >= 7:
@@ -6766,6 +7271,9 @@ def current_tpr_review(
         baseline_n = len(baseline_days)
         baseline_velocity = (
             baseline_qty / Decimal(baseline_n) if baseline_n else None
+        )
+        baseline_avg_price = (
+            baseline_sales / baseline_qty if baseline_qty > 0 else None
         )
 
         current_gp_pct = (
@@ -6793,6 +7301,87 @@ def current_tpr_review(
         velocity_lift_pct = _pct_lift(tpr_velocity_3d, baseline_velocity)
         gp_day_lift_pct = _pct_lift(tpr_gp_per_day_3d, baseline_gp_per_day)
 
+        # TPR price-step behavior lets the user see whether a prior adjustment
+        # helped before another change is recommended.
+        behavior_steps = _tpr_price_behavior_segments(
+            by_day,
+            data_days,
+            tpr_start_date=tpr_start_day,
+            current_cost=current_cost,
+        )
+        previous_step = behavior_steps[-2] if len(behavior_steps) >= 2 else None
+        current_step = behavior_steps[-1] if behavior_steps else None
+
+        auto_purpose, auto_purpose_source = _auto_tpr_purpose(
+            pclass, doh, dos, current_oh
+        )
+        saved_purpose = purpose_by_upc.get(upc)
+        saved_start = _as_date(saved_purpose.get("tpr_start_date")) if saved_purpose else None
+        # Preserve a user choice if the lifecycle was later corrected backwards.
+        # Do not carry an old choice into a genuinely newer TPR lifecycle.
+        saved_applies = bool(
+            saved_purpose
+            and saved_start is not None
+            and tpr_start_day is not None
+            and saved_start >= tpr_start_day
+        )
+        if saved_applies:
+            tpr_purpose = str(saved_purpose.get("purpose") or "").upper()
+            purpose_source = "USER_SET"
+        else:
+            tpr_purpose = auto_purpose
+            purpose_source = auto_purpose_source
+
+        freshness_threshold = (
+            Decimal("7")
+            if pclass in {"FRESH", "LIVE"}
+            else (Decimal("60") if pclass == "FROZEN" else None)
+        )
+        freshness_days_remaining = (
+            max(Decimal("0"), freshness_threshold - doh)
+            if freshness_threshold is not None and doh is not None
+            else None
+        )
+        required_velocity_to_clear = (
+            current_oh / freshness_days_remaining
+            if current_oh is not None
+            and current_oh > 0
+            and freshness_days_remaining is not None
+            and freshness_days_remaining > 0
+            else None
+        )
+        projected_days_to_clear = (
+            current_oh / tpr_velocity_3d
+            if current_oh is not None
+            and current_oh > 0
+            and tpr_velocity_3d is not None
+            and tpr_velocity_3d > 0
+            else None
+        )
+        projected_oh_at_freshness_limit = (
+            max(
+                Decimal("0"),
+                current_oh - (
+                    (tpr_velocity_3d or Decimal("0")) * freshness_days_remaining
+                ),
+            )
+            if current_oh is not None
+            and freshness_days_remaining is not None
+            else None
+        )
+        projected_qty_7d = (
+            tpr_velocity_3d * Decimal("7")
+            if tpr_velocity_3d is not None else None
+        )
+        projected_gp_7d = (
+            tpr_gp_per_day_3d * Decimal("7")
+            if tpr_gp_per_day_3d is not None else None
+        )
+        baseline_projected_gp_7d = (
+            baseline_gp_per_day * Decimal("7")
+            if baseline_gp_per_day is not None else None
+        )
+
         prefix = _numeric_key(upc)[:3]
         related_240 = None
         if prefix == "249":
@@ -6805,18 +7394,71 @@ def current_tpr_review(
             and _d(related_240.get("current_price")) != current_price
         )
 
+        company_values = [
+            _positive_price(row.get(k))
+            for k in ("company_price_a", "company_price_b", "company_price_c")
+        ]
+        company_values = [x for x in company_values if x is not None]
+        company_low = min(company_values) if company_values else None
+        company_high = max(company_values) if company_values else None
+        price_floor = (
+            max(
+                current_cost + Decimal("0.01"),
+                company_low if company_low is not None else current_cost + Decimal("0.01"),
+            )
+            if current_cost is not None else company_low
+        )
+
+        def _freshness_tpr_candidate() -> Decimal | None:
+            raw = _freshness_velocity_target(
+                current=current_price,
+                current_cost=current_cost,
+                current_velocity=tpr_velocity_3d,
+                observed_candidates=None,
+                company_low=company_low,
+                company_high=company_high,
+            )
+            if raw is None or current_price is None:
+                return None
+            candidate = _next_testing_price(
+                current_price,
+                raw,
+                min_price=price_floor,
+                max_price=company_high,
+            )
+            if candidate is not None:
+                return candidate
+            # If the exploratory raw target snaps too close to Current, move to
+            # the next meaningful store price point rather than publishing an
+            # odd-cent TPR.
+            fallback_target = current_price - max(
+                Decimal("0.70"),
+                current_price * Decimal("0.08"),
+            )
+            if price_floor is not None:
+                fallback_target = max(fallback_target, price_floor)
+            return _next_testing_price(
+                current_price,
+                fallback_target,
+                min_price=price_floor,
+                max_price=company_high,
+            )
+
         recommendation_code = "OBSERVE"
         recommendation_label = "OBSERVE"
-        recommendation_reason = "Wait for enough post-TPR completed-day POS evidence."
+        recommendation_reason = "Wait for enough completed-day TPR evidence."
         recommendation_final = False
         recommendation_priority = 50
+        suggested_tpr_price = None
+        suggested_regular_price = None
+        monitoring_phase = "LEARNING"
         readiness = str(row.get("quick_check_status") or "").upper()
 
         if readiness != "READY":
             recommendation_code = "REVIEW_DATA"
             recommendation_label = "REVIEW DATA"
             recommendation_reason = (
-                "This current TPR UPC is not READY for operational pricing review"
+                "This TPR UPC is not READY for operational pricing review"
                 + (
                     f": {row.get('blocking_reason')}"
                     if row.get("blocking_reason")
@@ -6824,115 +7466,249 @@ def current_tpr_review(
                 )
             )
             recommendation_priority = 95
+            monitoring_phase = "DATA_BLOCKED"
         elif pair_mismatch:
             recommendation_code = "MATCH_240"
             recommendation_label = "MATCH 240 NOW"
             recommendation_reason = (
-                "249 current TPR price must equal the paired 240 current price."
+                "249 TPR price must equal the paired 240 current price."
             )
             recommendation_final = True
             recommendation_priority = 100
+            monitoring_phase = "ACTION"
+            suggested_tpr_price = _positive_price(
+                related_240.get("current_price") if related_240 else None
+            )
         elif (
             current_price is None
-            or current_price <= 0
             or current_cost is None
             or current_cost <= 0
         ):
             recommendation_code = "REVIEW_DATA"
             recommendation_label = "REVIEW DATA"
             recommendation_reason = (
-                "Current price or authoritative selling-unit cost is unresolved."
+                "Current TPR price or authoritative selling-unit cost is unresolved."
             )
             recommendation_priority = 95
+            monitoring_phase = "DATA_BLOCKED"
         elif current_price <= current_cost:
-            recommendation_code = "URGENT_REVIEW"
-            recommendation_label = "URGENT REVIEW"
+            recommendation_code = "RAISE_TPR_PRICE"
+            recommendation_label = "RAISE TPR"
             recommendation_reason = (
-                "Current TPR price is at or below current cost."
+                "Current TPR is at or below cost; raise the TPR price immediately."
             )
             recommendation_final = True
             recommendation_priority = 100
+            monitoring_phase = "ACTION"
+            target = max(
+                current_cost * Decimal("1.08"),
+                baseline_avg_price or current_price * Decimal("1.10"),
+            )
+            suggested_tpr_price = _next_testing_price(
+                current_price,
+                target,
+                min_price=price_floor,
+                max_price=company_high,
+            )
         elif current_oh is not None and current_oh <= 0:
-            recommendation_code = "END_TPR"
-            recommendation_label = "END TPR / NO STOCK"
+            recommendation_code = "CANCEL_TPR"
+            recommendation_label = "CANCEL TPR"
             recommendation_reason = (
-                "No positive effective stock remains; keep the item off active TPR review."
+                "No positive effective stock remains; the TPR no longer has an item to sell through or test."
             )
             recommendation_final = True
             recommendation_priority = 90
-        elif post_n < 2 or tpr_selling_days_3d < 1:
-            recommendation_code = "OBSERVE"
-            recommendation_label = "OBSERVE"
-            recommendation_reason = (
-                "Current TPR does not yet have enough completed-day TPR sales evidence."
+            monitoring_phase = "COMPLETE"
+        elif tpr_purpose == "FRESHNESS_SELL_THROUGH":
+            monitoring_phase = "SELL_THROUGH"
+            overdue = (
+                freshness_threshold is not None
+                and doh is not None
+                and doh > freshness_threshold
             )
-            recommendation_priority = 60
-        elif baseline_n < 3 or baseline_velocity is None or baseline_velocity <= 0:
-            recommendation_code = "OBSERVE"
-            recommendation_label = "OBSERVE"
-            recommendation_reason = (
-                "TPR is selling, but fewer than three usable non-TPR baseline days are available."
+            extreme_age = (
+                freshness_threshold is not None
+                and doh is not None
+                and doh > freshness_threshold + Decimal("3")
             )
-            recommendation_priority = 55
-        else:
-            fresh_risk = bool(
-                pclass in {"FRESH", "LIVE"}
-                and (
-                    (doh is not None and doh >= Decimal("7"))
-                    or (dos is not None and dos >= Decimal("7"))
-                )
-            )
-            v_lift = velocity_lift_pct if velocity_lift_pct is not None else Decimal("0")
-            g_lift = gp_day_lift_pct
 
-            if v_lift >= Decimal("15") and (
-                g_lift is None or g_lift >= Decimal("-10")
+            if extreme_age:
+                recommendation_code = "CANCEL_TPR"
+                recommendation_label = "CANCEL / DISPOSITION"
+                recommendation_reason = (
+                    "Freshness threshold is more than three days past; stop treating this as a normal TPR and review disposition."
+                )
+                recommendation_final = True
+                recommendation_priority = 100
+                monitoring_phase = "FRESHNESS_LIMIT"
+            elif overdue:
+                recommendation_code = "LOWER_TPR_PRICE"
+                recommendation_label = "LOWER TPR"
+                recommendation_reason = (
+                    "Freshness threshold has been reached and stock remains. Use a stronger last-chance sell-through price."
+                )
+                recommendation_final = True
+                recommendation_priority = 95
+                monitoring_phase = "LAST_CHANCE"
+                suggested_tpr_price = _freshness_tpr_candidate()
+            elif post_n < 1:
+                recommendation_code = "OBSERVE"
+                recommendation_label = "OBSERVE"
+                recommendation_reason = (
+                    "Freshness sell-through TPR has no completed POS day yet; monitor the first completed-day response."
+                )
+                recommendation_priority = 65
+            elif tpr_qty_3d <= 0:
+                recommendation_code = "LOWER_TPR_PRICE"
+                recommendation_label = "LOWER TPR"
+                recommendation_reason = (
+                    "Freshness sell-through TPR has completed-day evidence but no TPR sales; lower the price while freshness time remains."
+                )
+                recommendation_final = True
+                recommendation_priority = 90
+                suggested_tpr_price = _freshness_tpr_candidate()
+            elif (
+                projected_days_to_clear is not None
+                and freshness_days_remaining is not None
+                and freshness_days_remaining > 0
+                and projected_days_to_clear <= freshness_days_remaining
             ):
                 recommendation_code = "CONTINUE_TPR"
                 recommendation_label = "CONTINUE"
                 recommendation_reason = (
-                    "TPR is producing meaningful velocity lift without a material GP$/day decline."
+                    "Current TPR velocity is on pace to clear effective OH before the freshness threshold."
                 )
                 recommendation_final = True
-                recommendation_priority = 20
-            elif v_lift >= Decimal("10") and g_lift is not None and g_lift < Decimal("-10"):
-                recommendation_code = "RAISE_TPR_PRICE"
-                recommendation_label = "RAISE TPR PRICE"
+                recommendation_priority = 25
+                monitoring_phase = "ON_PACE"
+            elif (
+                required_velocity_to_clear is not None
+                and tpr_velocity_3d is not None
+                and tpr_velocity_3d < required_velocity_to_clear
+            ):
+                recommendation_code = "LOWER_TPR_PRICE"
+                recommendation_label = "LOWER TPR"
                 recommendation_reason = (
-                    "Velocity improved, but GP$/day fell materially; the TPR may be deeper than needed."
+                    "Current TPR velocity is below the sell-through rate required to clear OH before the freshness threshold."
                 )
                 recommendation_final = True
-                recommendation_priority = 75
-            elif v_lift <= Decimal("0"):
-                if fresh_risk:
-                    recommendation_code = "LOWER_TPR_PRICE"
-                    recommendation_label = "LOWER TPR PRICE"
-                    recommendation_reason = (
-                        "TPR is not lifting velocity enough and freshness / coverage risk remains high."
-                    )
-                else:
-                    recommendation_code = "END_TPR"
-                    recommendation_label = "END TPR"
-                    recommendation_reason = (
-                        "TPR is not improving velocity versus recent non-TPR baseline."
-                    )
-                recommendation_final = True
-                recommendation_priority = 80
-            elif g_lift is not None and g_lift < Decimal("-15"):
-                recommendation_code = "RAISE_TPR_PRICE"
-                recommendation_label = "RAISE TPR PRICE"
-                recommendation_reason = (
-                    "The current TPR is producing some velocity response but sacrificing too much GP$/day."
-                )
-                recommendation_final = True
-                recommendation_priority = 70
+                recommendation_priority = 85
+                monitoring_phase = "BEHIND_PACE"
+                suggested_tpr_price = _freshness_tpr_candidate()
             else:
+                recommendation_code = "CONTINUE_TPR"
+                recommendation_label = "CONTINUE"
+                recommendation_reason = (
+                    "Continue the freshness sell-through TPR and reassess after the next completed POS day."
+                )
+                recommendation_priority = 35
+        else:
+            # SWEET_SPOT_TEST: objective is to learn a sustainable new REG price,
+            # not merely create short-term unit lift.
+            if post_n < 2 or tpr_selling_days_3d < 1:
                 recommendation_code = "OBSERVE"
                 recommendation_label = "OBSERVE"
                 recommendation_reason = (
-                    "TPR response is mixed; keep the current price until another completed POS day is available."
+                    "Sweet-spot TPR needs at least two completed data days with TPR response before changing course."
                 )
-                recommendation_priority = 50
+                recommendation_priority = 60
+            elif baseline_n < 3 or baseline_velocity is None or baseline_velocity <= 0:
+                recommendation_code = "OBSERVE"
+                recommendation_label = "OBSERVE"
+                recommendation_reason = (
+                    "Sweet-spot TPR is active, but fewer than three clean pre-TPR baseline days are available."
+                )
+                recommendation_priority = 55
+            else:
+                v_lift = (
+                    velocity_lift_pct
+                    if velocity_lift_pct is not None else Decimal("0")
+                )
+                g_lift = gp_day_lift_pct
+
+                if (
+                    post_n >= 3
+                    and tpr_selling_days_3d >= 2
+                    and g_lift is not None
+                    and g_lift >= Decimal("5")
+                    and v_lift >= Decimal("-5")
+                ):
+                    recommendation_code = "MAKE_REGULAR"
+                    recommendation_label = "MAKE REGULAR"
+                    recommendation_reason = (
+                        "The current TPR price is producing a stronger GP$/day result without materially weakening velocity; promote it as the new regular-price sweet spot."
+                    )
+                    recommendation_final = True
+                    recommendation_priority = 30
+                    monitoring_phase = "PROVEN_SWEET_SPOT"
+                    suggested_regular_price = current_price
+                elif v_lift >= Decimal("15") and (
+                    g_lift is None or g_lift >= Decimal("-10")
+                ):
+                    recommendation_code = "CONTINUE_TPR"
+                    recommendation_label = "CONTINUE"
+                    recommendation_reason = (
+                        "Velocity response is strong and GP$/day is acceptable; continue the TPR test to confirm a durable sweet spot."
+                    )
+                    recommendation_priority = 25
+                    monitoring_phase = "PROMISING"
+                elif v_lift >= Decimal("10") and g_lift is not None and g_lift < Decimal("-10"):
+                    recommendation_code = "RAISE_TPR_PRICE"
+                    recommendation_label = "RAISE TPR"
+                    recommendation_reason = (
+                        "The TPR is buying velocity at too much GP$/day cost; test a higher TPR price."
+                    )
+                    recommendation_final = True
+                    recommendation_priority = 80
+                    monitoring_phase = "ACTION"
+                    target = max(
+                        baseline_avg_price or Decimal("0"),
+                        current_price * Decimal("1.10"),
+                    )
+                    suggested_tpr_price = _next_testing_price(
+                        current_price,
+                        target,
+                        min_price=price_floor,
+                        max_price=company_high,
+                    )
+                elif v_lift <= Decimal("0") and (
+                    g_lift is None or g_lift <= Decimal("0")
+                ):
+                    recommendation_code = "CANCEL_TPR"
+                    recommendation_label = "CANCEL TPR"
+                    recommendation_reason = (
+                        "The sweet-spot TPR is not improving velocity or GP$/day versus the clean pre-TPR baseline."
+                    )
+                    recommendation_final = True
+                    recommendation_priority = 85
+                    monitoring_phase = "FAILED_TEST"
+                elif g_lift is not None and g_lift < Decimal("-15"):
+                    recommendation_code = "RAISE_TPR_PRICE"
+                    recommendation_label = "RAISE TPR"
+                    recommendation_reason = (
+                        "The TPR has some demand response but GP$/day is materially weaker; test a higher TPR price."
+                    )
+                    recommendation_final = True
+                    recommendation_priority = 75
+                    monitoring_phase = "ACTION"
+                    target = max(
+                        baseline_avg_price or Decimal("0"),
+                        current_price * Decimal("1.10"),
+                    )
+                    suggested_tpr_price = _next_testing_price(
+                        current_price,
+                        target,
+                        min_price=price_floor,
+                        max_price=company_high,
+                    )
+                else:
+                    recommendation_code = "CONTINUE_TPR"
+                    recommendation_label = "CONTINUE"
+                    recommendation_reason = (
+                        "Response is mixed but not failed; keep the TPR test active and use the next completed POS day to decide."
+                    )
+                    recommendation_priority = 40
+                    monitoring_phase = "LEARNING"
 
         out.append({
             "upc": upc,
@@ -6941,10 +7717,31 @@ def current_tpr_review(
             "name": row.get("selling_description"),
             "category": pclass or "OTHER",
             "selling_uom": row.get("selling_uom"),
+            "tpr_purpose": tpr_purpose,
+            "tpr_purpose_label": (
+                "FIND NEW REGULAR SWEET SPOT"
+                if tpr_purpose == "SWEET_SPOT_TEST"
+                else "FRESHNESS SELL-THROUGH"
+            ),
+            "tpr_purpose_source": purpose_source,
+            "tpr_purpose_set_by": (
+                saved_purpose.get("set_by") if saved_applies and saved_purpose else None
+            ),
+            "tpr_start_date": tpr_start_day,
+            "tpr_start_basis": tpr_start_basis,
+            "current_tpr_price_step_start_date": (
+                _as_date(pl_life.get("current_price_step_start_date"))
+                or (current_step.get("start_date") if current_step else None)
+            ),
+            "configured_tpr_price_steps": pl_life.get("configured_tpr_price_steps") or [],
+            "observed_tpr_price_steps": behavior_steps,
+            "previous_tpr_step": previous_step,
+            "current_tpr_step": current_step,
             "current_tpr_price": current_price,
             "current_price_type": "TPR",
             "current_price_source": row.get("current_price_source"),
             "current_price_asof_date": row.get("current_price_asof_date"),
+            "current_price_source_since_date": row.get("current_price_source_since_date"),
             "current_cost": current_cost,
             "current_cost_source": row.get("cost_source"),
             "cost_date": row.get("cost_date"),
@@ -6956,6 +7753,38 @@ def current_tpr_review(
             "qty_7d": row.get("pos_qty_7d"),
             "velocity_7d": row.get("upc_velocity_7d"),
             "gp_per_day_7d": row.get("gp_per_day_7d"),
+            "previous_behavior": {
+                "window_start": min((x["date"] for x in baseline_days), default=None),
+                "window_end": max((x["date"] for x in baseline_days), default=None),
+                "supported_days": baseline_n,
+                "qty": baseline_qty,
+                "sales": baseline_sales,
+                "avg_price": baseline_avg_price,
+                "velocity": baseline_velocity,
+                "gp_per_day_current_cost": baseline_gp_per_day,
+            },
+            "current_behavior": {
+                "window_start": min((x["date"] for x in post_days), default=None),
+                "window_end": max((x["date"] for x in post_days), default=None),
+                "supported_days": post_n,
+                "tpr_selling_days": tpr_selling_days_3d,
+                "qty": tpr_qty_3d,
+                "sales": tpr_sales_3d,
+                "velocity": tpr_velocity_3d,
+                "gp_per_day": tpr_gp_per_day_3d,
+                "velocity_lift_pct": velocity_lift_pct,
+                "gp_day_lift_pct": gp_day_lift_pct,
+            },
+            "future_behavior": {
+                "projected_qty_7d": projected_qty_7d,
+                "projected_gp_7d": projected_gp_7d,
+                "baseline_projected_gp_7d": baseline_projected_gp_7d,
+                "projected_days_to_clear_oh": projected_days_to_clear,
+                "freshness_threshold_doh": freshness_threshold,
+                "freshness_days_remaining": freshness_days_remaining,
+                "required_velocity_to_clear": required_velocity_to_clear,
+                "projected_oh_at_freshness_limit": projected_oh_at_freshness_limit,
+            },
             "post_tpr_window_start": min(
                 (x["date"] for x in post_days), default=None
             ),
@@ -6983,12 +7812,23 @@ def current_tpr_review(
             ),
             "baseline_qty": baseline_qty,
             "baseline_sales": baseline_sales,
+            "baseline_avg_price": baseline_avg_price,
             "baseline_velocity": baseline_velocity,
             "velocity_lift_pct": velocity_lift_pct,
             "tpr_gp_dollars_3d": tpr_gp_dollars_3d,
             "tpr_gp_per_day_3d": tpr_gp_per_day_3d,
             "baseline_gp_per_day_current_cost": baseline_gp_per_day,
             "gp_day_lift_pct": gp_day_lift_pct,
+            "freshness_threshold_doh": freshness_threshold,
+            "freshness_days_remaining": freshness_days_remaining,
+            "required_velocity_to_clear": required_velocity_to_clear,
+            "projected_days_to_clear_oh": projected_days_to_clear,
+            "projected_oh_at_freshness_limit": projected_oh_at_freshness_limit,
+            "projected_qty_7d": projected_qty_7d,
+            "projected_gp_7d": projected_gp_7d,
+            "suggested_tpr_price": suggested_tpr_price,
+            "suggested_regular_price": suggested_regular_price,
+            "monitoring_phase": monitoring_phase,
             "related_240_upc": (
                 related_240.get("ean_upc") if related_240 else None
             ),
@@ -7015,8 +7855,9 @@ def current_tpr_review(
     )
     out = out[:lim]
     counts = Counter(str(r.get("recommendation_code") or "OBSERVE") for r in out)
+    purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
-        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V1",
+        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
         "summary": {
@@ -7025,19 +7866,25 @@ def current_tpr_review(
             "upc_240_count": sum(
                 1 for r in out if _numeric_key(r.get("upc"))[:3] == "240"
             ),
+            "sweet_spot_test_count": purposes.get("SWEET_SPOT_TEST", 0),
+            "freshness_sell_through_count": purposes.get("FRESHNESS_SELL_THROUGH", 0),
             "recommendation_counts": dict(counts),
         },
         "rows": out,
         "rules": {
             "current_tpr_membership": "AUTHORITATIVE_LIVE_CURRENT_PRICE_TYPE_EQUALS_TPR",
-            "post_tpr_window": "UP_TO_3_LATEST_COMPLETED_CANONICAL_POS_DAYS_ON_OR_AFTER_CURRENT_TPR_ASOF",
-            "baseline": "UP_TO_7_PRIOR_COMPLETED_CANONICAL_NON_TPR_POS_DAYS",
-            "final_decision_minimum": "2_POST_TPR_SUPPORTED_DAYS_AND_3_BASELINE_DAYS_UNLESS_HARD_SAFETY_RULE",
+            "tpr_lifecycle_start": "PRICE_LIST_SOURCE_SINCE_PLUS_CONTINUOUS_TPR_PRICE_LIST_AND_CONTIGUOUS_POS_TPR;NEW_UPLOAD_DOES_NOT_RESET",
+            "tpr_purposes": "SWEET_SPOT_TEST_OR_FRESHNESS_SELL_THROUGH",
+            "sweet_spot_objective": "FIND_SUSTAINABLE_TPR_PRICE_THAT_CAN_BECOME_NEW_REGULAR_PRICE",
+            "freshness_objective": "CLEAR_EFFECTIVE_OH_BEFORE_FRESHNESS_THRESHOLD_WITH_CONTROLLED_TPR_MARKDOWN",
+            "post_tpr_window": "LATEST_3_COMPLETED_CANONICAL_POS_DAYS_SINCE_CONTINUOUS_TPR_START",
+            "baseline": "UP_TO_7_CLEAN_PRE_TPR_NON_SALE_NON_TPR_COMPLETED_POS_DAYS",
+            "monitoring": "PREVIOUS_BASELINE_PLUS_CURRENT_TPR_PRICE_STEPS_PLUS_FORWARD_7D_AND_FRESHNESS_CLEARANCE_PROJECTION",
+            "actions": "CONTINUE_TPR_OR_CHANGE_TPR_PRICE_OR_MAKE_REGULAR_OR_CANCEL_TPR",
             "gp_comparison_basis": "CURRENT_COST_NORMALIZED_FOR_BOTH_TPR_AND_BASELINE",
             "hard_safety_priority": "240_249_MISMATCH_THEN_PRICE_AT_OR_BELOW_COST_THEN_NO_STOCK",
         },
     }
-
 
 
 _TPR_REVIEW_CACHE_LOCK=threading.Lock()
@@ -7049,7 +7896,7 @@ _TPR_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V2_CURRENT_TPR_ASYNC|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V3_CURRENT_TPR_LIFECYCLE|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
@@ -7168,7 +8015,7 @@ def cached_current_tpr_review(
         if not already_refreshing:
             _request_tpr_review_refresh(cat,lim,key)
         return {
-            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V2_ASYNC_CACHE",
+            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
             "category":cat,
             "analysis_status":"REFRESHING",
             "cache_status":"WARMING",
@@ -7178,7 +8025,7 @@ def cached_current_tpr_review(
             "rows":[],
             "rules":{
                 "serving":"NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH",
-                "calculation":"CURRENT_TPR_REVIEW_V1",
+                "calculation":"CURRENT_TPR_REVIEW_V3_LIFECYCLE",
             },
         }
 
@@ -7191,7 +8038,7 @@ def cached_current_tpr_review(
 
     return {
         **cached,
-        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V2_ASYNC_CACHE",
+        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
         "analysis_status":"READY_STALE_REFRESHING" if stale else "READY",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
@@ -7210,7 +8057,7 @@ _PRICING_REVIEW_CACHE_TTL_SECONDS=120.0
 def _pricing_review_cache_key(category: str, limit: int) -> str:
     # V3 invalidates persisted V2 snapshots that may contain an empty queue
     # produced by the older inherited-review-status gate.
-    return f"V3_LIVE_READY_RETAIL_TESTING|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
+    return f"V4_REG_TPR_SPLIT|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
 
 
 def _ensure_pricing_review_cache_table(cur) -> None:
