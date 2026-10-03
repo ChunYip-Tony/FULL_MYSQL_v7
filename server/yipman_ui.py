@@ -724,23 +724,31 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 }
 
 /* V435 Ordering: readable family cards + searchable manual promotion. */
-#order .orderitemhead,#order .orderitemmain{grid-template-columns:minmax(0,1fr) 78px 86px}
-#order .orderitemmain .name{font-size:22px;line-height:1.08;font-weight:1000;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-#order .familyline b{font-size:19px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-#order .orderitemmain .orderqty{font-size:24px}
-#order .orderohcell{display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-start}
-#order .orderohinput{width:72px;border:1.5px dashed #72a8cf;border-radius:10px;background:rgba(255,255,255,.72);color:#16202a;text-align:right;font-size:20px;line-height:1;font-weight:1000;padding:7px 6px;outline:0}
+#order #orderList.futurecards .orderitemhead{display:none}
+#order #orderList.futurecards .orderitemmain{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:8px 10px 9px}
+#order #orderList.futurecards .orderitemmain>div{padding:0}
+#order #orderList.futurecards .orderitemmain>div:first-child{grid-column:1/-1;min-width:0;padding:0 1px 3px}
+#order .orderitemmain .name{font-size:24px;line-height:1.08;font-weight:1000;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+#order .familyline{margin-top:0}
+#order .familyline b{font-size:20px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+#order .orderitemmain .sub{font-size:11px;line-height:1.28}
+#order #orderList.futurecards .orderitemmain .cell{min-height:68px;border:1px solid rgba(108,135,157,.22);border-radius:12px;background:rgba(255,255,255,.72);padding:7px 8px;text-align:center;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px}
+#order #orderList.futurecards .orderitemmain .cell .ordercelllabel{display:block;flex-basis:100%;font-size:8px;color:#6c7d8c;font-weight:1000;letter-spacing:.04em}
+#order .orderitemmain .orderqty{font-size:26px;color:#0d4f8b}
+#order .orderitemmain .orderqty>span{flex-basis:100%;font-size:10px}
+#order .orderohcell{display:flex;flex-direction:column;align-items:center;justify-content:center}
+#order .orderohinput{width:82px;border:1.5px dashed #72a8cf;border-radius:10px;background:rgba(255,255,255,.8);color:#16202a;text-align:center;font-size:22px;line-height:1;font-weight:1000;padding:7px 6px;outline:0}
 #order .orderohinput:focus{border-style:solid;border-color:#0d6fbd;background:#fff;box-shadow:0 0 0 3px rgba(13,111,189,.12)}
 #order .orderohhint{display:block;font-size:8px!important;color:#0d6fbd!important;margin-top:4px!important;font-weight:950}
 #order .orderrecvhistory{margin:0 12px 10px}
 #order .orderrecvhistoryhead b{font-size:11px}
 #order .orderrecvhistoryhead span{font-size:9px}
 #order .orderrecvrow{grid-template-columns:minmax(0,1fr) 80px;gap:8px;padding:9px 10px}
-#order .orderrecvarticle b{font-size:22px;line-height:1.02;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-#order .orderrecvarticle .receivingname{font-size:13px;line-height:1.16;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;margin-top:4px}
-#order .orderrecvarticle .recvpackline{display:block;font-size:10px;color:#53687a;font-weight:900;margin-top:4px}
+#order .orderrecvarticle b{font-size:26px;line-height:1.02;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+#order .orderrecvarticle .receivingname{font-size:15px;line-height:1.16;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;margin-top:4px}
+#order .orderrecvarticle .recvpackline{display:block;font-size:11px;color:#53687a;font-weight:900;margin-top:5px}
 #order .orderrecvdays{text-align:center;border-left:1px solid rgba(80,95,110,.15);padding-left:8px}
-#order .orderrecvdays b{display:block;font-size:23px;line-height:1;color:#9a620a;font-weight:1000}
+#order .orderrecvdays b{display:block;font-size:25px;line-height:1;color:#9a620a;font-weight:1000}
 #order .orderrecvdays span{display:block;font-size:7px;color:#7a6540;font-weight:950;margin-top:3px;letter-spacing:.03em}
 .manual-promo-search{display:grid;gap:8px}
 .manual-promo-searchbar{display:flex;gap:7px;align-items:center}
@@ -765,6 +773,11 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .promo-card-head b{font-size:20px;line-height:1.08;white-space:normal;overflow-wrap:anywhere}
 #order .promo-true-stock-input{width:82px;border:1.5px dashed #72a8cf;border-radius:9px;background:#fff;text-align:center;font-size:20px;font-weight:1000;padding:6px 5px;outline:0}
 #order .promo-true-stock-input:focus{border-style:solid;border-color:#0d6fbd;box-shadow:0 0 0 3px rgba(13,111,189,.12)}
+#order .orderitemcard.tone0{background:linear-gradient(100deg,#fff8d8,#fff 62%)}
+#order .orderitemcard.tone1{background:linear-gradient(100deg,#edf9f0,#fff 62%)}
+#order .orderitemcard.tone2{background:linear-gradient(100deg,#edf5ff,#fff 62%)}
+#order .orderitemcard.tone3{background:linear-gradient(100deg,#fff0f4,#fff 62%)}
+#order .orderitemcard.tone4{background:linear-gradient(100deg,#f5efff,#fff 62%)}
 #order .promo-card.tone0{background:linear-gradient(100deg,#fff4c4,#fff 64%);border-left:5px solid #d8b21f}
 #order .promo-card.tone1{background:linear-gradient(100deg,#e8f7ec,#fff 64%);border-left:5px solid #4ca76a}
 #order .promo-card.tone2{background:linear-gradient(100deg,#e7f1ff,#fff 64%);border-left:5px solid #4c83d1}
@@ -2342,7 +2355,7 @@ function renderOrderRoster(rows,data,h,stale){
       +hist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span class="recvpackline">Pack size · '+esc(h.pack_size||'—')+'</span></div><div class="orderrecvdays"><b>'+fmt(h.observed_day_count??h.receipt_event_count,0)+'</b><span>OBSERVED<br>DAYS</span></div></div>').join('')
       +'<div class="orderrecvmore">Tap Family card to view full delivery history.</div></div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell orderohcell"><input class="orderohinput" data-order-oh="'+i+'" inputmode="decimal" value="'+esc(r.oh==null?'':r.oh)+'"><span>'+esc(r.oh_uom||'')+'</span><span class="orderohhint">TAP TO EDIT TRUE STOCK</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell orderohcell"><small class="ordercelllabel">TRUE STOCK OH</small><input class="orderohinput" data-order-oh="'+i+'" inputmode="decimal" value="'+esc(r.oh==null?'':r.oh)+'"><span>'+esc(r.oh_uom||'')+'</span><span class="orderohhint">TAP TO EDIT</span></div><div class="cell orderqty"><small class="ordercelllabel">SUGGEST ORDER</small>'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
  $('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
  $('[data-order-oh]').forEach(input=>{
