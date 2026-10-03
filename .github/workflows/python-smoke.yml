@@ -977,7 +977,7 @@ jobs:
           assert 'data-true-stock-family' in ui
           assert 'CURRENT EFFECTIVE OH' in ui
           assert 'data-promo-temp-oh' in ui
-          assert "$('[data-promo-temp-oh]').forEach" in ui
+          assert "$$('[data-promo-temp-oh]').forEach" in ui
           assert "const CACHE='yipman-v446'" in ui
           print('family-cost-universal-true-stock-v446=PASS')
           PY
