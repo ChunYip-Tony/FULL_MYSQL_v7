@@ -251,8 +251,10 @@ jobs:
           assert 'WHERE family_id IN ({ph})' in src
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
-          assert 'ANY_RELATED_FAMILY_UPC' in src
-          assert 'YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS' in src
+          assert 'all_family_rows = [dict(x) for x in cur.fetchall()]' in src
+          assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
+          assert 'YIPMAN_STOCK_FLOW_V6_FAST_SERVING_PATH' in src
+          assert '"promotion_scope": "QUALIFIED_FAMILIES_ONLY"' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
