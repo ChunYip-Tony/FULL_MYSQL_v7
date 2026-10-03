@@ -47,6 +47,7 @@ from backoffice_runtime import (
     yipman_best_sellers as backoffice_yipman_best_sellers,
     yipman_receipt_event_detail as backoffice_yipman_receipt_event_detail,
     yipman_ordering_calendar as backoffice_yipman_ordering_calendar,
+    invalidate_true_stock_dependent_caches as backoffice_invalidate_true_stock_dependent_caches,
 )
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -4247,7 +4248,7 @@ def backoffice_inventory(
 
 
 @app.get('/v1/backoffice/ordering-review')
-def backoffice_ordering(category:str='ALL', delivery_date:str|None=None):
+def backoffice_ordering(category:str='ALL', delivery_date:str|None=None, force:bool=False):
     try:
         parsed_delivery=None
         if delivery_date:
@@ -4256,15 +4257,23 @@ def backoffice_ordering(category:str='ALL', delivery_date:str|None=None):
             except ValueError:
                 raise ValueError('DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
         result=(
-            backoffice_cached_ordering_review(
+            backoffice_ordering_review(
                 category=category,
                 delivery_date=parsed_delivery,
                 best_available_delivery_evidence=True,
             )
-            if parsed_delivery is not None
-            else backoffice_ordering_review(
-                category=category,
-                best_available_delivery_evidence=True,
+            if parsed_delivery is not None and force
+            else (
+                backoffice_cached_ordering_review(
+                    category=category,
+                    delivery_date=parsed_delivery,
+                    best_available_delivery_evidence=True,
+                )
+                if parsed_delivery is not None
+                else backoffice_ordering_review(
+                    category=category,
+                    best_available_delivery_evidence=True,
+                )
             )
         )
     except ValueError as exc:
@@ -4693,6 +4702,7 @@ def app_v2_pi_submit_true_stock(
             device,
             body.note,
         )
+        cache_invalidation=backoffice_invalidate_true_stock_dependent_caches()
         detail=v2_pi_item(family_key)
     except KeyError:
         raise HTTPException(
@@ -4736,6 +4746,9 @@ def app_v2_pi_submit_true_stock(
         'shortage_quantity':max(Decimal('0'),-signed),
         'overage_quantity':max(Decimal('0'),signed),
         'pi':detail,
+        'cache_invalidation':cache_invalidation,
+        'effective_oh':(detail.get('effective_oh') if isinstance(detail,dict) else None),
+        'recalculation_contract':'TRUE_STOCK_IS_IMMEDIATE_EFFECTIVE_OH_AUTHORITY',
     },default=j))
 
 @app.get('/v1/app/v2/performance/dates')
