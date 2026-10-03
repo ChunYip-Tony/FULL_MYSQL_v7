@@ -327,13 +327,13 @@ jobs:
           assert '.quicksearch{border-width:2.4px}' in ui
           assert "orderitemcard tone'+(i%5)" in ui
           assert "pcard tone'+(i%5)" in ui
-          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in ui
           assert 'h.article_name' in ui
           assert '.stockflowgrid{display:grid;grid-template-columns:' in ui
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v441'" in ui
+          assert "const CACHE='yipman-v442'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
@@ -459,7 +459,7 @@ jobs:
           assert '#order .familyline b{font-size:18px' in ui
           assert '#order .orderitemmain .orderqty{font-size:19px' in ui
           assert '#order .orderitemmain .cell{text-align:right;font-size:15px' in ui
-          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in ui
           assert '#order .orderrecvhistory{margin:0 12px 12px' in ui
           assert "$('#orderList').classList.remove('futurecards')" in ui
           assert '#price .ptop b{font-size:17px!important}' in ui
