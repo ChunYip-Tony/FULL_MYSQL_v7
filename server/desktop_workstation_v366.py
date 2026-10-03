@@ -429,13 +429,17 @@ DESKTOP_WORKSTATION_JS = r"""
     qa('[id]',body).forEach(function(x){x.removeAttribute('id')});
     setSide(view,title,sub,'<div class="v366-copy-drawer">'+body.innerHTML+'</div><div class="v366-note" style="margin-top:8px">This persistent desktop copy remains visible after the full interactive drawer is closed.</div>');
   }
+  document.addEventListener('fullmysql:stockflow-family',function(e){
+    var family=e&&e.detail?e.detail.family:null;
+    if(family)setTimeout(function(){stockFlowFamilyAnalysis(family)},0);
+  });
   function observe(){
     var drawer=q('.drawer');if(drawer)new MutationObserver(function(){if(drawer.classList.contains('on'))setTimeout(copyDrawerToWorkspace,30)}).observe(drawer,{attributes:true,attributeFilter:['class']});
     var sell=q('#sellRows');if(sell)new MutationObserver(function(){setTimeout(performanceSummary,60)}).observe(sell,{childList:true,subtree:true});
     var db=q('#database');if(db)new MutationObserver(function(){if(q('#database.view.on'))setTimeout(dataAnalysis,120)}).observe(db,{childList:true,subtree:true});
   }
   document.addEventListener('click',function(e){
-    var sf=e.target.closest('.stockflow-family-btn');if(sf){e.preventDefault();setTimeout(function(){stockFlowFamilyAnalysis(sf.dataset.family)},0);return}
+    var sf=e.target.closest('.stockflow-family-btn');if(sf){e.preventDefault();e.stopPropagation();setTimeout(function(){stockFlowFamilyAnalysis(sf.dataset.family)},0);return}
     var qd=e.target.closest('.quickdetailbtn');if(qd){setTimeout(function(){quickAnalysis(qd.dataset.upc)},0);return}
     var od=e.target.closest('.orderdetail');if(od){setTimeout(function(){orderAnalysis(od.dataset.family)},0);return}
     var pd=e.target.closest('.pricedetail');if(pd){setTimeout(function(){priceAnalysis(pd.dataset.upc)},0);return}
