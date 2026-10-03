@@ -4503,11 +4503,47 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             movement_days_7,
         ) if qrows else {}
 
-        # Promotion evidence scans every related UPC mapped to each qualifying
-        # Family across the latest 28 completed canonical POS sales days.
-        # SALE is promotion; TPR is explicitly not promotion. Historical UPC
-        # rows remain eligible because a SALE event inside this 28-day window
-        # is itself recent evidence.
+        # Pre-qualify Families BEFORE the expensive 28D promotion and 180D
+        # delivery-evidence scans. Previously those scans ran for every active
+        # selling Family even though Stock Flow ultimately returns only Families
+        # whose 7D receipts are >= 150% of 7D selling movement. Keeping the
+        # exact same qualification here dramatically reduces the evidence scope
+        # without changing Stock Flow semantics.
+        qualifying_qrows = []
+        for q in qrows:
+            fid = int(q["family_id"])
+            ctx = family_ctx.get(fid, {})
+            sold = ctx.get("family_group_movement_7d")
+            if sold is None:
+                sold = q.get("family_movement_7d")
+            sold_d = _d(sold) if sold is not None else Decimal("0")
+            if sold_d <= 0:
+                continue
+            sold_uom = str(
+                ctx.get("family_group_movement_uom")
+                or q.get("family_movement_uom")
+                or ""
+            ).strip().upper()
+            receipt = ctx.get("family_receipt_7d_qty")
+            receipt_uom = str(
+                ctx.get("family_receipt_7d_uom") or sold_uom
+            ).strip().upper()
+            receipt_status = str(ctx.get("family_receipt_7d_status") or "")
+            if (
+                receipt is None
+                or not sold_uom
+                or receipt_uom != sold_uom
+                or not receipt_status.startswith("READY")
+            ):
+                continue
+            receipt_d = _d(receipt)
+            ratio = receipt_d / sold_d if sold_d > 0 else None
+            if ratio is None or ratio < Decimal("1.50"):
+                continue
+            qualifying_qrows.append(q)
+
+        # Promotion evidence now scans only Families that actually qualify for
+        # Stock Flow. SALE is promotion; TPR is explicitly not promotion.
         sales_days_28 = source_data_days(
             cur,
             "sales_by_price_type",
@@ -4516,7 +4552,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
         family_ids = sorted({
             int(q["family_id"])
-            for q in qrows
+            for q in qualifying_qrows
             if q.get("family_id") is not None
         })
 
@@ -4563,7 +4599,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             )
 
         rows: list[dict[str, Any]] = []
-        for q in qrows:
+        for q in qualifying_qrows:
             fid = int(q["family_id"])
             ctx = family_ctx.get(fid, {})
             sold = ctx.get("family_group_movement_7d")
