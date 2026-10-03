@@ -9,6 +9,8 @@ v7.0.435 Ordering Readability + Searchable Manual Promotion:
 - Selecting another item from the same Family replaces the prior selection so Family inventory cannot be counted twice in one manual promotion list.
 - Ordering cache advanced to V20 for Delivery Article observed-day data.
 - Yipman service-worker shell cache advanced to v435.
+- Desktop Inventory / True Stock now includes an uncleared True Stock Adjustment Worklist with recorded date/time, Family, System OH, True Stock, difference/dumping status, submitter, and active/superseded inventory status.
+- “Clear List After Dumping” is deliberately non-destructive: it only acknowledges/hides worklist rows. It does not delete True Stock, change override_status, change Effective OH, or alter the dumping queue.
 Version: 7.0.435 Single-Service Edition
 
 v7.0.434 Current TPR Timeout Repair:
