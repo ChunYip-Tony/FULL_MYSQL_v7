@@ -329,7 +329,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v441'" in ui
+          assert "const CACHE='yipman-v444'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
