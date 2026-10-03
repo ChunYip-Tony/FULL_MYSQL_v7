@@ -759,7 +759,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
       </div>
     </section>
 
-<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Current Batch</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
     <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="ai"><i>✦</i>AI</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
@@ -2568,16 +2568,33 @@ function batchLiveState(b){
  if(run==='STARTED'&&!fresh)return {key:'stuck',label:'POSSIBLY STUCK',sub:age!==null?('no heartbeat for '+fmtElapsedSeconds(age)):'live heartbeat missing'};
  if(run==='QUEUED')return {key:'queued',label:'QUEUED',sub:'waiting for worker'};
  if(run==='PAUSE_REQUESTED')return {key:'queued',label:'PAUSING',sub:'pause requested'};
- if(batch.includes('HOLD'))return {key:'idle',label:'NOT RUNNING',sub:'QA hold · action required'};
- if(/READY|PUBLISH|COMPLETED/.test(batch))return {key:'running',label:'COMPLETE / READY',sub:'no active worker required'};
+ if(/^QUICK_CHECK_READY/.test(batch)||batch==='COMPLETED')return {key:'running',label:'COMPLETE / READY',sub:'published · no active worker required'};
+ if(batch==='PHASE3_QA_HOLD'||batch==='QA_HOLD')return {key:'idle',label:'NOT RUNNING',sub:'batch-level QA hold · action required'};
+ if(/READY|PUBLISH/.test(batch))return {key:'running',label:'COMPLETE / READY',sub:'no active worker required'};
  return {key:'idle',label:'NOT RUNNING',sub:friendlySignal(batch||'no active run')};
 }
-function renderLivePipeline(b){
- const st=String(b?.processing_status||'NONE').toUpperCase(),run=String(b?.active_run_status||'').toUpperCase();
- $('#pipe').innerHTML='<div class="stage '+(st!=='NONE'?'ok':'')+'"><b>UPLOAD</b><span>'+(st==='NONE'?'—':'DONE')+'</span></div><div class="stage '+(/INGEST|PHASE|QUICK|READY|RELEASE/.test(st)?'ok':'')+'"><b>INGEST</b><span>'+(/INGEST|PHASE|QUICK|READY|RELEASE/.test(st)?'DONE':'—')+'</span></div><div class="stage '+(/HOLD/.test(st)?'bad':/PHASE3|QUICK|READY/.test(st)?'ok':run==='STARTED'?'warn':'')+'"><b>QA</b><span>'+esc(st.includes('HOLD')?'HOLD':/PHASE3|QUICK|READY/.test(st)?'DONE':run==='STARTED'?'RUN':'WAIT')+'</span></div><div class="stage '+(/QUICK_CHECK_READY/.test(st)?'ok':run==='STARTED'?'warn':'')+'"><b>PUBLISH</b><span>'+(/QUICK_CHECK_READY/.test(st)?'READY':run==='STARTED'?'WORK':'WAIT')+'</span></div>';
+function renderLivePipeline(activeBatch,latestPublished){
+ const b=activeBatch||latestPublished||{};
+ const st=String(b?.processing_status||'NONE').toUpperCase(),run=String(activeBatch?.active_run_status||'').toUpperCase();
+ const published=/^QUICK_CHECK_READY/.test(st);
+ const blockingHold=st==='PHASE3_QA_HOLD'||st==='QA_HOLD';
+ const itemHolds=num(b?.quick_check_hold_rows)??num(b?.qa_summary?.phase3?.quick_check_hold_rows)??0;
+ const uploaded=st!=='NONE';
+ const ingested=/INGEST|PHASE|QUICK|READY|RELEASE/.test(st);
+ const qaDone=published||(/PHASE3|QUICK|READY/.test(st)&&!blockingHold);
+ let qaClass='',qaText='WAIT';
+ if(blockingHold){qaClass='bad';qaText='BLOCKED'}
+ else if(published&&itemHolds>0){qaClass='warn';qaText='DONE · '+fmt(itemHolds,0)+' ITEM HOLD'}
+ else if(qaDone){qaClass='ok';qaText='DONE'}
+ else if(run==='STARTED'){qaClass='warn';qaText='RUN'}
+ $('#pipe').innerHTML=
+   '<div class="stage '+(uploaded?'ok':'')+'"><b>UPLOAD</b><span>'+(uploaded?'DONE':'—')+'</span></div>'+
+   '<div class="stage '+(ingested?'ok':'')+'"><b>INGEST</b><span>'+(ingested?'DONE':'—')+'</span></div>'+
+   '<div class="stage '+qaClass+'"><b>QA</b><span>'+esc(qaText)+'</span></div>'+
+   '<div class="stage '+(published?'ok':run==='STARTED'?'warn':'')+'"><b>PUBLISH</b><span>'+(published?'READY':run==='STARTED'?'WORK':'WAIT')+'</span></div>';
 }
 function renderCurrentBatchPanel(b){
- if(!b?.batch_id){$('#currentBatch').innerHTML='<div class="empty">No active or recent batch.</div>';return}
+ if(!b?.batch_id){$('#currentBatch').innerHTML='<div class="empty"><b>No batch currently processing.</b><br>Latest completed and published batches are shown separately below.</div>';return}
  const st=String(b.processing_status||'NONE').toUpperCase(),statusLabel=friendlySignal(st);
  const statusClass=st.includes('HOLD')?'red':(/READY|PUBLISH/.test(st)?'green':'amber');
  const live=batchLiveState(b),pctNum=num(b.active_progress_pct),hasPct=pctNum!==null,pct=hasPct?Math.max(0,Math.min(100,pctNum)):0;
@@ -2601,6 +2618,23 @@ function renderCurrentBatchPanel(b){
   (item?'<div class="cbcurrentitem"><small>CURRENT WORK ITEM</small><b>'+esc(item)+'</b></div>':'')+alert+'</div>';
  const el=$('#currentBatch [data-batch]');if(el)el.onclick=()=>openBatch(el.dataset.batch,b);
 }
+function renderPublishedSnapshot(dash,health,latestBatch){
+ const box=$('#publishedSnapshot');if(!box)return;
+ const quick=dash?.quick_check||{};
+ const latest=health?.latest||{};
+ const batchId=quick.latest_publish_batch_id||latestBatch?.batch_id||null;
+ if(!batchId){
+  box.innerHTML='<div class="empty">Published Quick Check snapshot unavailable.</div>';
+  return;
+ }
+ const ready=num(quick.ready_rows),hold=num(quick.qa_hold_rows);
+ const publishedAt=quick.latest_published_at||latestBatch?.completed_at||'';
+ box.innerHTML='<div class="currentbatch">'+
+  '<div class="cbtop"><div class="cbid"><b>Published Batch #'+esc(batchId)+'</b><span>'+(publishedAt?'Published '+esc(String(publishedAt).replace('T',' ').slice(0,19)):'Current Quick Check serving snapshot')+'</span></div><span class="cbstatus green">SERVING NOW</span></div>'+
+  '<div class="cbmeta"><div><small>POS THROUGH</small><b>'+esc(latest.POS?.date||'—')+'</b></div><div><small>MVT THROUGH</small><b>'+esc(latest.MVT?.date||'—')+'</b></div><div><small>PRICE</small><b>'+esc(latest.PRICE?.date||'—')+'</b></div></div>'+
+  '<div class="cbmeta"><div><small>OH</small><b>'+esc(latest.OH?.date||'—')+'</b></div><div><small>QC READY</small><b>'+fmt(ready,0)+'</b></div><div><small>ITEM HOLDS</small><b>'+fmt(hold,0)+'</b></div></div>'+
+  '</div>';
+}
 function scheduleDataLivePoll(){
  clearTimeout(dataLiveTimer);dataLiveTimer=null;
  if(current==='data')dataLiveTimer=setTimeout(pollDataLive,5000);
@@ -2609,23 +2643,44 @@ async function pollDataLive(){
  if(current!=='data')return;
  try{
   const active=await api('/v1/web-upload/active',{timeoutMs:9000});
-  const b=active.active_batch||active.latest_batch||{};
-  renderLivePipeline(b);renderCurrentBatchPanel(b);
+  const currentBatch=active.active_batch||null;
+  const latestBatch=active.latest_batch||null;
+  renderLivePipeline(currentBatch,latestBatch);
+  renderCurrentBatchPanel(currentBatch);
  }catch(e){
   const live=$('#currentBatch .cblivecheck');if(live)live.textContent='LIVE CHECK FAILED';
  }finally{scheduleDataLivePoll()}
 }
 async function loadData(){
  try{
-  const [health,active,recent,qa]=await Promise.all([api('/v1/backoffice/data-health?days=14',{timeoutMs:12000}),api('/v1/web-upload/active',{timeoutMs:12000}),api('/v1/web-upload/recent?limit=4',{timeoutMs:12000}),api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000})]);
+  const [health,active,recent,qa,dash]=await Promise.all([
+   api('/v1/backoffice/data-health?days=14',{timeoutMs:12000}),
+   api('/v1/web-upload/active',{timeoutMs:12000}),
+   api('/v1/web-upload/recent?limit=4',{timeoutMs:12000}),
+   api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000}),
+   api('/v1/app/dashboard',{timeoutMs:12000})
+  ]);
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
-  const b=active.active_batch||active.latest_batch||{};
-  renderLivePipeline(b);
-  renderCurrentBatchPanel(b);
-  renderQAResolution(qa,b);
-  const rb=recent.batches||recent.rows||[];$('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();const cls=xs.includes('HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':'');return '<div class="batchrow"><div><b>Batch #'+esc(x.batch_id||'—')+'</b><span class="batchstate'+cls+'">'+esc(friendlySignal(xs||'—'))+'</span></div><span class="batchdate">'+esc(String(x.completed_at||x.upload_started_at||'').slice(0,10))+'</span></div>'}).join('')||'<div class="empty">No recent batches.</div>';
+  const rb=recent.batches||recent.rows||[];
+  const currentBatch=active.active_batch||null;
+  const publishId=dash?.quick_check?.latest_publish_batch_id;
+  const latestPublished=(publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null)||active.latest_batch||rb[0]||null;
+  renderLivePipeline(currentBatch,latestPublished);
+  renderCurrentBatchPanel(currentBatch);
+  renderPublishedSnapshot(dash,health,latestPublished);
+  renderQAResolution(qa,latestPublished||currentBatch);
+  $('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{
+    const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();
+    const cls=/^QUICK_CHECK_READY/.test(xs)?' ready':((xs==='PHASE3_QA_HOLD'||xs==='QA_HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':''));
+    return '<div class="batchrow"><div><b>Batch #'+esc(x.batch_id||'—')+'</b><span class="batchstate'+cls+'">'+esc(friendlySignal(xs||'—'))+'</span></div><span class="batchdate">'+esc(String(x.completed_at||x.upload_started_at||'').slice(0,10))+'</span></div>'
+  }).join('')||'<div class="empty">No recent batches.</div>';
   scheduleDataLivePoll();
- }catch(e){$('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';$('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>';scheduleDataLivePoll()}
+ }catch(e){
+  $('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+  $('#publishedSnapshot').innerHTML='<div class="empty">Published snapshot unavailable.</div>';
+  $('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>';
+  scheduleDataLivePoll()
+ }
 }
 async function openBatch(session,basic){sheet('Batch #'+esc(basic.batch_id||'—'),basic.processing_status||'','<div class="loading">Loading processing detail…</div>');if(!session){$('#sheetBody').innerHTML='<div class="detail">Session ID unavailable in active summary.</div>';return}try{const d=await api('/v1/web-upload/batches/'+encodeURIComponent(session),{timeoutMs:12000}), b=d.batch||{}, p=d.phase3||{}, q=d.qa_summary||{},live=batchLiveState(basic);$('#sheetBody').innerHTML='<div class="dmetrics"><div class="dm"><b>'+esc(live.label)+'</b><span>LIVE STATE</span></div><div class="dm"><b>'+fmt(p.quick_check_ready_rows,0)+'</b><span>READY ROWS</span></div><div class="dm"><b>'+fmt(p.quick_check_hold_rows,0)+'</b><span>QA HOLD</span></div></div><div class="detail"><b>Worker / heartbeat</b><br>'+esc(live.sub)+' · worker '+esc(basic.active_worker||'—')+'<br><br><b>Current stage</b><br>'+esc(friendlySignal(basic.active_phase3_stage||basic.active_last_phase3_stage||basic.active_stage_name||p.result_status||'—'))+'<br><br><b>Progress</b><br>'+esc(basic.active_progress_pct!=null?(fmt(basic.active_progress_pct,1)+'%'):'—')+' · '+fmt(basic.active_progress_current,0)+' / '+fmt(basic.active_progress_total,0)+' '+esc(basic.active_progress_unit||'')+'<br>Elapsed '+esc(fmtElapsedSeconds(basic.active_progress_elapsed_seconds))+' · ETA '+esc(fmtElapsedSeconds(basic.active_progress_eta_seconds))+' · Rate '+(basic.active_progress_rows_per_second!=null?fmt(basic.active_progress_rows_per_second,1)+'/s':'—')+'<br><br><b>Phase 3</b><br>'+esc(p.result_status||'—')+'<br><br><b>Open blockers</b><br>'+fmt(p.blocking_issue_count,0)+(q.reason_counts?'<br>'+Object.entries(q.reason_counts).slice(0,8).map(([k,v])=>'• '+esc(k)+': '+fmt(v,0)).join('<br>'):'')+'</div>'}catch(e){$('#sheetBody').innerHTML='<div class="detail">'+esc(e.message)+'</div>'}}
 
