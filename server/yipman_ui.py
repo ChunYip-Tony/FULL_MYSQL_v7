@@ -2330,7 +2330,7 @@ function openManualPromotion(){
       (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
       ' · tap to load True Stock + Delivery Articles</span></button>';
    }).join('');
-   $('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
+   $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
   }catch(e){
    if(token!==latestSearchToken)return;
    searchResults.innerHTML='';
