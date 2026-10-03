@@ -385,6 +385,162 @@ def ensure_true_stock_tables(cur) -> None:
                AFTER cancelled_by"""
         )
 
+    # v7.0.435: desktop Inventory worklist acknowledgement is separate from
+    # True Stock authority. Clearing this worklist must never delete/supersede
+    # the physical-count baseline used by Effective OH.
+    if not _column_exists(cur, "manual_true_stock", "adjustment_list_cleared_at"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN adjustment_list_cleared_at DATETIME(6) NULL
+               AFTER cancel_reason"""
+        )
+    if not _column_exists(cur, "manual_true_stock", "adjustment_list_cleared_by"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN adjustment_list_cleared_by VARCHAR(128) NULL
+               AFTER adjustment_list_cleared_at"""
+        )
+    if not _column_exists(cur, "manual_true_stock", "adjustment_list_clear_note"):
+        cur.execute(
+            """ALTER TABLE manual_true_stock
+               ADD COLUMN adjustment_list_clear_note VARCHAR(255) NULL
+               AFTER adjustment_list_cleared_by"""
+        )
+
+
+def true_stock_adjustment_log(
+    limit: int = 300,
+    *,
+    include_cleared: bool = False,
+) -> dict[str, Any]:
+    """Return physical True Stock count events for the desktop Inventory worklist.
+
+    The worklist acknowledgement fields are display/workflow metadata only.
+    override_status remains the inventory authority and is not changed here.
+    """
+    lim=max(1,min(int(limit or 300),1000))
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        ensure_true_stock_tables(cur)
+        conn.commit()
+        where="" if include_cleared else "WHERE mts.adjustment_list_cleared_at IS NULL"
+        cur.execute(
+            f"""SELECT mts.true_stock_id,
+                       mts.family_id,
+                       mts.main_article_number,
+                       pf.family_description AS family_name,
+                       mts.scope_type,
+                       mts.article_number,
+                       mts.ean_upc,
+                       mts.true_stock_quantity,
+                       mts.uom_code,
+                       mts.system_oh_quantity,
+                       mts.system_oh_uom_code,
+                       mts.discrepancy_quantity,
+                       mts.override_status,
+                       mts.anchor_on_hand_file_id,
+                       mts.anchor_movement_date,
+                       mts.anchor_movement_file_id,
+                       mts.count_note,
+                       mts.submitted_by,
+                       mts.submitted_at,
+                       mts.superseded_at,
+                       mts.superseded_by_oh_file_id,
+                       mts.adjustment_list_cleared_at,
+                       mts.adjustment_list_cleared_by,
+                       mts.adjustment_list_clear_note,
+                       (
+                         SELECT dq.queue_status
+                         FROM dumping_discrepancy_queue dq
+                         WHERE dq.source_true_stock_id=mts.true_stock_id
+                         ORDER BY dq.discrepancy_id DESC
+                         LIMIT 1
+                       ) AS dumping_status
+                FROM manual_true_stock mts
+                LEFT JOIN product_family pf ON pf.family_id=mts.family_id
+                {where}
+                ORDER BY mts.true_stock_id DESC
+                LIMIT %s""",
+            (lim,),
+        )
+        rows=cur.fetchall()
+        cur.execute(
+            """SELECT COUNT(*) AS n
+               FROM manual_true_stock
+               WHERE adjustment_list_cleared_at IS NULL"""
+        )
+        pending=int((cur.fetchone() or {}).get("n") or 0)
+        cur.execute(
+            """SELECT MAX(adjustment_list_cleared_at) AS cleared_at,
+                      MAX(adjustment_list_cleared_by) AS cleared_by
+               FROM manual_true_stock
+               WHERE adjustment_list_cleared_at IS NOT NULL"""
+        )
+        last_clear=cur.fetchone() or {}
+        cur.close()
+    return {
+        "contract_version":"TRUE_STOCK_ADJUSTMENT_LOG_V1",
+        "count":len(rows),
+        "uncleared_count":pending,
+        "include_cleared":bool(include_cleared),
+        "last_clear_at":last_clear.get("cleared_at"),
+        "last_clear_by":last_clear.get("cleared_by"),
+        "rows":rows,
+        "rules":{
+            "clear_action":"ACKNOWLEDGE_WORKLIST_ONLY",
+            "clear_deletes_true_stock":False,
+            "clear_changes_override_status":False,
+            "clear_changes_effective_oh":False,
+            "true_stock_rollforward":"ACTIVE_TRUE_STOCK_PLUS_VALID_MOVEMENTS_AFTER_ANCHOR",
+        },
+    }
+
+
+def clear_true_stock_adjustment_log(
+    actor: str,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Acknowledge the desktop adjustment worklist without touching True Stock."""
+    who=str(actor or "UNKNOWN").strip()[:128] or "UNKNOWN"
+    clear_note=str(note or "DUMPING_WORKLIST_CLEARED").strip()[:255] or None
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            ensure_true_stock_tables(cur)
+            conn.commit()
+            conn.start_transaction()
+            cur.execute(
+                """UPDATE manual_true_stock
+                   SET adjustment_list_cleared_at=CURRENT_TIMESTAMP(6),
+                       adjustment_list_cleared_by=%s,
+                       adjustment_list_clear_note=%s
+                   WHERE adjustment_list_cleared_at IS NULL""",
+                (who,clear_note),
+            )
+            cleared=int(cur.rowcount or 0)
+            cur.execute(
+                """SELECT MAX(true_stock_id) AS last_true_stock_id
+                   FROM manual_true_stock
+                   WHERE adjustment_list_cleared_at IS NOT NULL"""
+            )
+            last_id=(cur.fetchone() or {}).get("last_true_stock_id")
+            conn.commit()
+            return {
+                "status":"CLEARED",
+                "cleared_count":cleared,
+                "last_true_stock_id":last_id,
+                "actor":who,
+                "note":clear_note,
+                "true_stock_baselines_unchanged":True,
+                "effective_oh_unchanged":True,
+                "dumping_queue_unchanged":True,
+            }
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
+
 
 def _latest_on_hand_file_id(cur) -> int | None:
     cur.execute(
