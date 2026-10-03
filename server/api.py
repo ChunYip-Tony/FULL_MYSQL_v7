@@ -36,6 +36,7 @@ from backoffice_runtime import (
     cached_ordering_review as backoffice_cached_ordering_review,
     pricing_review as backoffice_pricing_review,
     cached_pricing_review as backoffice_cached_pricing_review,
+    current_tpr_review as backoffice_current_tpr_review,
     quick_price_preview as backoffice_quick_price_preview,
     sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
@@ -4251,6 +4252,20 @@ def yipman_pricing(category:str='ALL',limit:int=1000,force:bool=False):
     except Exception as exc:
         raise HTTPException(500,f'Yipman pricing review failed: {exc}')
     return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/current-tpr-review')
+def yipman_current_tpr_review(category:str='ALL',limit:int=1000):
+    try:
+        result=backoffice_current_tpr_review(
+            category=category,
+            limit=limit,
+        )
+        return json.loads(json.dumps(result,default=j))
+    except ValueError as exc:
+        raise HTTPException(400,str(exc))
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman current TPR review failed: {exc}')
 
 
 @app.post('/v1/yipman/pricing-review/{upc}/accept')
