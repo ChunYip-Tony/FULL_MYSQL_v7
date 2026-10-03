@@ -1010,9 +1010,10 @@ jobs:
           assert 'HISTORICAL DELIVERY ARTICLE(S)' in text
           assert 'observed_day_count??h.receipt_event_count' in text
           assert "data-order-oh" in text
-          assert "$('[data-order-oh]').forEach" in text
-          assert "$('[data-promo-true-stock]').forEach" in text
+          assert "$$('[data-order-oh]').forEach" in text
+          assert "$$('[data-promo-true-stock]').forEach" in text
           assert "manualPromoSearchResults" in text
+          assert "$$('[data-manual-promo-result]').forEach" in text
           assert "/v1/app/v2/search?q=" in text
           assert "MANUAL_SEARCH_ENTRY" in text
           assert "True Stock edits save system-wide" in text
