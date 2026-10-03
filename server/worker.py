@@ -501,9 +501,15 @@ def _supersede_incompatible_queued(cur) -> int:
 
 def _queue_orphaned_phase2c_ready(cur) -> int:
     # A deployment can terminate the worker after Phase 2C committed but before
-    # Phase 3 started. If no active outer job and no prior Phase3 rerun exists,
-    # enqueue at most one recovery run per deployed code version. Old-version
-    # interrupted/failed reruns must not permanently strand a Phase2C-ready batch.
+    # Phase 3 publishes a result. Any PHASE2C_READY batch with no Phase 3 result
+    # and no currently active pipeline work must converge automatically.
+    #
+    # The previous rule refused to queue when ANY prior PHASE3_RERUN existed for
+    # the current code version. That could strand a batch forever after a
+    # terminal/aborted recovery attempt. Allow a new recovery unless there have
+    # already been 3 terminal current-version recovery attempts, which prevents
+    # an infinite failure loop while still making ordinary upload completion
+    # automatic.
     cur.execute(
         """SELECT ib.batch_id
            FROM ingest_batch ib
@@ -518,14 +524,15 @@ def _queue_orphaned_phase2c_ready(cur) -> int:
                    AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
                    AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
              )
-             AND NOT EXISTS (
-                 SELECT 1
+             AND (
+                 SELECT COUNT(*)
                  FROM pipeline_run prior
                  WHERE prior.batch_id=ib.batch_id
                    AND prior.pipeline_name=%s
                    AND prior.stage_name='PHASE3_RERUN'
                    AND prior.code_version=%s
-             )
+                   AND prior.processing_status IN ('FAILED','FAILED_QA','QA_HOLD','ABORTED','PAUSED','COMPLETED')
+             ) < 3
            ORDER BY ib.batch_id""",
         (API_PIPELINE,API_PIPELINE,API_VERSION),
     )
