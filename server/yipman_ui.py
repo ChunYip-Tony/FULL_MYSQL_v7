@@ -2603,9 +2603,9 @@ function renderCurrentTpr(){
      '<div class="pcard-actions"><button class="pdetail" data-tpr-detail="'+i+'">DETAIL</button><button class="pdetail" data-tpr-action="'+i+'">'+esc(meta.label)+'</button></div>'+
    '</article>';
  }).join('')||'<div class="empty">No current TPR item matches this filter.</div>';
- $('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
- $('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
- $('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
+ $$('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
+ $$('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
+ $$('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
 }
 function openCurrentTpr(r){
  const meta=tprRecommendationMeta(r),lift=tprLiftText(r.velocity_lift_pct),gpLift=tprLiftText(r.gp_day_lift_pct);
@@ -2638,15 +2638,15 @@ async function loadCurrentTpr(opts={}){
 }
 function switchPriceTab(tab){
  priceView=String(tab||'SUGGESTIONS').toUpperCase()==='TPR'?'TPR':'SUGGESTIONS';
- $('[data-price-tab]').forEach(b=>b.classList.toggle('on',b.dataset.priceTab===priceView));
+ $$('[data-price-tab]').forEach(b=>b.classList.toggle('on',b.dataset.priceTab===priceView));
  $('#priceSuggestionPane').classList.toggle('hide',priceView!=='SUGGESTIONS');
  $('#currentTprPane').classList.toggle('hide',priceView!=='TPR');
  if(priceView==='TPR')loadCurrentTpr();else loadPrices();
 }
-$('[data-price-tab]').forEach(b=>b.onclick=()=>switchPriceTab(b.dataset.priceTab));
-$('[data-tpr-filter]').forEach(b=>b.onclick=()=>{
+$$('[data-price-tab]').forEach(b=>b.onclick=()=>switchPriceTab(b.dataset.priceTab));
+$$('[data-tpr-filter]').forEach(b=>b.onclick=()=>{
  tprFilter=b.dataset.tprFilter;
- $('[data-tpr-filter]').forEach(x=>x.classList.toggle('on',x===b));
+ $$('[data-tpr-filter]').forEach(x=>x.classList.toggle('on',x===b));
  renderCurrentTpr();
 });
 $('#tprSort').onchange=e=>{tprSort=e.target.value;renderCurrentTpr()};
