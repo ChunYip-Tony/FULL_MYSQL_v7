@@ -3331,16 +3331,11 @@ function restoreRoute({replaceMissing=false}={}){
 }
 
 // Start the app before the rest of the optional control bindings execute.
-// Use var here deliberately: if a later top-level binding throws, this guard
-// is still initialized (no TDZ), so the scheduled bootstrap can run.
-var fullmysqlBootStarted=false;
-setTimeout(()=>{
-  Promise.resolve().then(()=>boot()).catch(e=>{
-    const box=document.getElementById('desktopOverviewError')||document.getElementById('invError');
-    if(box)box.innerHTML='<div class="error"><b>Desktop startup error</b><br>'+String(e?.message||e)+'</div>';
-    try{console.error('FULLMYSQL desktop bootstrap failed',e)}catch(_){}
-  });
-},0);
+// This protects desktop loading from a later non-critical binding exception.
+setTimeout(()=>{try{boot()}catch(e){
+  const box=document.getElementById('desktopOverviewError')||document.getElementById('invError');
+  if(box)box.innerHTML='<div class="error"><b>Desktop startup error</b><br>'+String(e?.message||e)+'</div>';
+}},0);
 $$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
 $$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
 $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
@@ -6649,6 +6644,7 @@ function desktopSubmitSearch(value){
 $('#searchForm').onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#searchInput').value)};
 const dg=$('#desktopGlobalSearchForm');if(dg)dg.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopGlobalSearch').value)};
 const dq=$('#desktopQuickSearchForm');if(dq)dq.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopQuickSearch').value)};
+let fullmysqlBootStarted=false;
 async function boot(){
   if(fullmysqlBootStarted)return;
   fullmysqlBootStarted=true;
