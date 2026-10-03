@@ -10,6 +10,58 @@ _DAILY_MVT_STEM = re.compile(
     re.IGNORECASE,
 )
 
+_RANGE_MVT_STEM = re.compile(
+    r"^(?:sf[-_ ]*)?mvt[-_ ]*(\d{6}|\d{8})[-_ ]+(\d{6}|\d{8})(?:[-_ ]*full)?$",
+    re.IGNORECASE,
+)
+
+
+def _filename_token_date(token: str) -> date | None:
+    text = str(token or "").strip()
+    try:
+        if len(text) == 8 and text.startswith("20"):
+            return date(int(text[:4]), int(text[4:6]), int(text[6:8]))
+        if len(text) == 6:
+            return date(2000 + int(text[4:6]), int(text[:2]), int(text[2:4]))
+    except ValueError:
+        return None
+    return None
+
+
+def movement_closed_range_filename_evidence(
+    *,
+    original_filename: str | None,
+    coverage_start_date: date | None,
+    coverage_end_date: date | None,
+    business_date: date,
+) -> tuple[bool, str | None]:
+    """Recognize an exact date-only closed MVT range export.
+
+    Example:
+      sf-mvt-093026-100126.xls -> closed range 2026-09-30 through 2026-10-01
+
+    The filename range must exactly match the parsed posting-date coverage.
+    No extra timestamp token is allowed, so intraday/provisional exports do not
+    qualify through this rule.
+    """
+    filename = str(original_filename or "").strip()
+    if not filename or coverage_start_date is None or coverage_end_date is None:
+        return False, None
+    stem = filename.rsplit(".", 1)[0]
+    m = _RANGE_MVT_STEM.fullmatch(stem)
+    if not m:
+        return False, None
+    d1 = _filename_token_date(m.group(1))
+    d2 = _filename_token_date(m.group(2))
+    if d1 is None or d2 is None:
+        return False, None
+    start, end = (d1, d2) if d1 <= d2 else (d2, d1)
+    if coverage_start_date != start or coverage_end_date != end:
+        return False, None
+    if business_date < start or business_date > end:
+        return False, None
+    return True, "COMPLETE_DATE_ONLY_MVT_RANGE_FILENAME_CONTRACT"
+
 
 def movement_daily_close_filename_evidence(
     *,
