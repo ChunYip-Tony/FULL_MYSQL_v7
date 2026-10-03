@@ -6951,6 +6951,166 @@ def current_tpr_review(
     }
 
 
+
+_TPR_REVIEW_CACHE_LOCK=threading.Lock()
+_TPR_REVIEW_CACHE_VALUES: dict[str,dict[str,Any]]={}
+_TPR_REVIEW_CACHE_AT: dict[str,float]={}
+_TPR_REVIEW_REFRESHING: set[str]=set()
+_TPR_REVIEW_LAST_ERROR: dict[str,str]={}
+_TPR_REVIEW_CACHE_TTL_SECONDS=120.0
+
+
+def _tpr_review_cache_key(category: str, limit: int) -> str:
+    return f"V2_CURRENT_TPR_ASYNC|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+
+
+def _ensure_tpr_review_cache_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS yipman_current_tpr_review_cache (
+             cache_key VARCHAR(96) NOT NULL PRIMARY KEY,
+             payload_json LONGTEXT NOT NULL,
+             generated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+             ON UPDATE CURRENT_TIMESTAMP(6)
+           )"""
+    )
+
+
+def _load_persisted_tpr_review(cache_key: str) -> dict[str,Any] | None:
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            _ensure_tpr_review_cache_table(cur)
+            conn.commit()
+            cur.execute(
+                """SELECT payload_json,generated_at
+                   FROM yipman_current_tpr_review_cache
+                   WHERE cache_key=%s
+                   LIMIT 1""",
+                (cache_key,),
+            )
+            row=cur.fetchone()
+            cur.close()
+        if not row:
+            return None
+        payload=json.loads(row.get("payload_json") or "{}")
+        if not isinstance(payload,dict):
+            return None
+        payload["persisted_generated_at"]=row.get("generated_at")
+        return payload
+    except Exception:
+        return None
+
+
+def _persist_tpr_review(cache_key: str, value: dict[str,Any]) -> None:
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_tpr_review_cache_table(cur)
+        cur.execute(
+            """INSERT INTO yipman_current_tpr_review_cache(cache_key,payload_json)
+               VALUES (%s,%s)
+               ON DUPLICATE KEY UPDATE
+                 payload_json=VALUES(payload_json),
+                 generated_at=CURRENT_TIMESTAMP(6)""",
+            (cache_key,json.dumps(value,default=str)),
+        )
+        conn.commit()
+        cur.close()
+
+
+def _tpr_review_refresh_worker(category: str, limit: int, cache_key: str) -> None:
+    try:
+        _TPR_REVIEW_LAST_ERROR.pop(cache_key,None)
+        value=current_tpr_review(category=category,limit=limit)
+        _persist_tpr_review(cache_key,value)
+        with _TPR_REVIEW_CACHE_LOCK:
+            _TPR_REVIEW_CACHE_VALUES[cache_key]=value
+            _TPR_REVIEW_CACHE_AT[cache_key]=time.monotonic()
+    except Exception as exc:
+        _TPR_REVIEW_LAST_ERROR[cache_key]=f"{type(exc).__name__}: {exc}"[:1000]
+    finally:
+        with _TPR_REVIEW_CACHE_LOCK:
+            _TPR_REVIEW_REFRESHING.discard(cache_key)
+
+
+def _request_tpr_review_refresh(category: str, limit: int, cache_key: str) -> None:
+    with _TPR_REVIEW_CACHE_LOCK:
+        if cache_key in _TPR_REVIEW_REFRESHING:
+            return
+        _TPR_REVIEW_REFRESHING.add(cache_key)
+    threading.Thread(
+        target=_tpr_review_refresh_worker,
+        args=(category,limit,cache_key),
+        name=f"current-tpr-review-{str(category or 'ALL').lower()}",
+        daemon=True,
+    ).start()
+
+
+def cached_current_tpr_review(
+    category: str="ALL",
+    limit: int=1000,
+    force: bool=False,
+) -> dict[str,Any]:
+    """Serve Current TPR without blocking the request on the heavy calculation.
+
+    The latest completed result is persisted and returned immediately while a
+    background refresh runs. This mirrors Pricing Review's stale-while-refresh
+    pattern so mobile requests are not tied to the calculation duration.
+    """
+    cat=str(category or "ALL").strip().upper()
+    if cat not in {"ALL","LIVE","FRESH","FROZEN"}:
+        raise ValueError("CATEGORY_MUST_BE_ALL_LIVE_FRESH_OR_FROZEN")
+    lim=max(1,min(int(limit or 1000),2000))
+    key=_tpr_review_cache_key(cat,lim)
+
+    with _TPR_REVIEW_CACHE_LOCK:
+        cached=_TPR_REVIEW_CACHE_VALUES.get(key)
+        cached_at=_TPR_REVIEW_CACHE_AT.get(key)
+        already_refreshing=key in _TPR_REVIEW_REFRESHING
+
+    if cached is None and not already_refreshing:
+        persisted=_load_persisted_tpr_review(key)
+        if persisted is not None:
+            with _TPR_REVIEW_CACHE_LOCK:
+                _TPR_REVIEW_CACHE_VALUES[key]=persisted
+                _TPR_REVIEW_CACHE_AT[key]=0.0
+            cached=persisted
+            cached_at=0.0
+
+    if cached is None:
+        if not already_refreshing:
+            _request_tpr_review_refresh(cat,lim,key)
+        return {
+            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V2_ASYNC_CACHE",
+            "category":cat,
+            "analysis_status":"REFRESHING",
+            "cache_status":"WARMING",
+            "refreshing":True,
+            "refresh_error":_TPR_REVIEW_LAST_ERROR.get(key),
+            "summary":{},
+            "rows":[],
+            "rules":{
+                "serving":"NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH",
+                "calculation":"CURRENT_TPR_REVIEW_V1",
+            },
+        }
+
+    age=(time.monotonic()-cached_at) if cached_at is not None else None
+    stale=age is None or age>=_TPR_REVIEW_CACHE_TTL_SECONDS
+    if force or stale:
+        _request_tpr_review_refresh(cat,lim,key)
+    with _TPR_REVIEW_CACHE_LOCK:
+        refreshing=key in _TPR_REVIEW_REFRESHING
+
+    return {
+        **cached,
+        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V2_ASYNC_CACHE",
+        "analysis_status":"READY_STALE_REFRESHING" if stale else "READY",
+        "cache_status":"STALE_REFRESHING" if stale else "HIT",
+        "refreshing":refreshing,
+        "refresh_error":_TPR_REVIEW_LAST_ERROR.get(key),
+    }
+
+
 _PRICING_REVIEW_CACHE_LOCK=threading.Lock()
 _PRICING_REVIEW_CACHE_VALUES: dict[str,dict[str,Any]]={}
 _PRICING_REVIEW_CACHE_AT: dict[str,float]={}

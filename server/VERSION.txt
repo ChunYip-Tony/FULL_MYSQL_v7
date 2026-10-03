@@ -1,3 +1,12 @@
+v7.0.434 Current TPR Timeout Repair:
+- Current TPR review now uses a persistent asynchronous stale-while-refresh cache instead of recalculating the entire TPR dataset inside the mobile HTTP request.
+- The Current TPR cache is warmed automatically when the single-service server starts.
+- First-time cache warmup returns immediately with a building state; Yipman polls quietly and updates the page automatically when the calculation is ready.
+- Cached TPR results remain visible while the next refresh runs, avoiding blank/timeout screens.
+- Mobile Current TPR request timeout reduced to 10 seconds because the serving endpoint is now non-blocking.
+- Yipman service-worker shell cache advanced to v434.
+Version: 7.0.434 Single-Service Edition
+
 v7.0.431 Source-Aware Freshness Cache Repair:
 - Price Suggestions no longer treats cache age alone as freshness. Cached pricing is invalidated immediately when canonical POS or MVT data-through advances.
 - Ordering cache now compares its analysis basis against live canonical POS/MVT dates, so same-day uploads trigger an immediate rebuild even when the completed-through reference date is unchanged.

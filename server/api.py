@@ -37,6 +37,7 @@ from backoffice_runtime import (
     pricing_review as backoffice_pricing_review,
     cached_pricing_review as backoffice_cached_pricing_review,
     current_tpr_review as backoffice_current_tpr_review,
+    cached_current_tpr_review as backoffice_cached_current_tpr_review,
     quick_price_preview as backoffice_quick_price_preview,
     sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
@@ -73,6 +74,11 @@ def _warm_mobile_home_summary_cache():
     threading.Thread(
         target=lambda: backoffice_cached_pricing_review(category="ALL",limit=1000),
         name="pricing-review-warmup",
+        daemon=True,
+    ).start()
+    threading.Thread(
+        target=lambda: backoffice_cached_current_tpr_review(category="ALL",limit=1000),
+        name="current-tpr-review-warmup",
         daemon=True,
     ).start()
 
@@ -4255,11 +4261,12 @@ def yipman_pricing(category:str='ALL',limit:int=1000,force:bool=False):
 
 
 @app.get('/v1/yipman/current-tpr-review')
-def yipman_current_tpr_review(category:str='ALL',limit:int=1000):
+def yipman_current_tpr_review(category:str='ALL',limit:int=1000,force:bool=False):
     try:
-        result=backoffice_current_tpr_review(
+        result=backoffice_cached_current_tpr_review(
             category=category,
             limit=limit,
+            force=force,
         )
         return json.loads(json.dumps(result,default=j))
     except ValueError as exc:

@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v433'" in ui
+          assert "const CACHE='yipman-v434'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -187,7 +187,10 @@ jobs:
           import chatgpt_sheet_bridge as bridge
 
           src=inspect.getsource(bo.current_tpr_review)
+          cached_src=inspect.getsource(bo.cached_current_tpr_review)
           assert 'YIPMAN_CURRENT_TPR_REVIEW_V1' in src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V2_ASYNC_CACHE' in cached_src
+          assert 'NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH' in cached_src
           assert 'AUTHORITATIVE_LIVE_CURRENT_PRICE_TYPE_EQUALS_TPR' in src
           assert 'tpr_qty_3d' in src and 'velocity_lift_pct' in src
           assert 'recommendation_code' in src and 'CONTINUE_TPR' in src
@@ -200,6 +203,8 @@ jobs:
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'data-price-tab="TPR"' in ui
           assert '/v1/yipman/current-tpr-review?category=ALL&limit=1000' in ui
+          assert 'Building Current TPR review in the background' in ui
+          assert 'tprRetryTimer=setTimeout' in ui
           assert 'TPR SUGGESTION PRICE' in ui
           assert "$('[data-tpr-row]')" in ui
           assert "$('[data-price-tab]')" in ui
