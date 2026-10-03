@@ -65,26 +65,37 @@ DESKTOP_DATA_CENTER_V368_JS = r"""
   }
   function sc(x){var s=String((x&&x.status)||'NONE').toUpperCase();return s==='OK'?'ok':s==='MISSING'?'miss':s==='NOT_DUE'?'nd':''}
   function dc(s){s=String(s||'').toUpperCase();return s==='COMPLETE'?'complete':s==='MISSING'?'missing':(s.indexOf('CURRENT')>=0||s.indexOf('OPEN')>=0)?'current':'partial'}
-  async function loadBoard(){
-    if(!enhance())return;
+  var boardSeq=0;
+  function renderBoard(d){
+    if(!enhance()||!d)return;
     var strip=q('#v368CompletenessStrip'),sum=q('#v368HealthSummary');if(!strip||!sum)return;
+    var rows=d.rows||[],latest=d.latest||{};
+    var complete=rows.filter(function(r){return String(r.overall_status||'').toUpperCase()==='COMPLETE'}).length;
+    var missing=rows.filter(function(r){return String(r.overall_status||'').toUpperCase()==='MISSING'}).length;
+    var judged=complete+missing,pc=judged?Math.round(complete/judged*100):100;
+    sum.innerHTML='<div class="v368-health-kpi"><small>Required-day completeness</small><b>'+pc+'%</b><span>'+complete+' complete / '+judged+' judged</span></div>'+
+      '<div class="v368-health-kpi"><small>Missing required days</small><b>'+missing+'</b><span>POS and/or MVT missing</span></div>'+
+      '<div class="v368-health-kpi"><small>Latest POS</small><b>'+esc((latest.POS&&latest.POS.date)||'—')+'</b><span>'+esc((latest.POS&&latest.POS.file)||'No source')+'</span></div>'+
+      '<div class="v368-health-kpi"><small>Latest MVT</small><b>'+esc((latest.MVT&&latest.MVT.date)||'—')+'</b><span>'+esc((latest.MVT&&latest.MVT.file)||'No source')+'</span></div>';
+    strip.innerHTML=rows.slice(0,14).map(function(r){var s=r.sources||{},snap=['PRICE','OH','LIVE_FRESH','FROZEN'].filter(function(k){return String((s[k]&&s[k].status)||'').toUpperCase()==='OK'}).length;return '<div class="v368-dayhealth '+dc(r.overall_status)+'" data-date="'+esc(r.date||'')+'" title="'+esc((r.date||'')+' · '+(r.overall_status||''))+'"><div class="weekday">'+esc(r.weekday||'')+'</div><div class="date">'+esc(String(r.date||'').slice(5))+'</div><div class="v368-source-dots"><span class="v368-dot '+sc(s.POS)+'">POS</span><span class="v368-dot '+sc(s.MVT)+'">MVT</span></div><div class="snap">Snapshots '+snap+'/4</div></div>'}).join('');
+    qa('.v368-dayhealth').forEach(function(x){x.onclick=function(){var day=x.dataset.date,b=q('.data-health-detail[data-date="'+CSS.escape(day)+'"]');if(b)b.click();else{var tr=q('.data-health-row[data-date="'+CSS.escape(day)+'"]');if(tr)tr.click()}}});
+  }
+  async function loadBoard(data){
+    if(!enhance())return;
+    var seq=++boardSeq,strip=q('#v368CompletenessStrip');
     try{
-      var d=await getJson('/v1/backoffice/data-health?days=14'),rows=d.rows||[],latest=d.latest||{};
-      var complete=rows.filter(function(r){return String(r.overall_status||'').toUpperCase()==='COMPLETE'}).length;
-      var missing=rows.filter(function(r){return String(r.overall_status||'').toUpperCase()==='MISSING'}).length;
-      var judged=complete+missing,pc=judged?Math.round(complete/judged*100):100;
-      sum.innerHTML='<div class="v368-health-kpi"><small>Required-day completeness</small><b>'+pc+'%</b><span>'+complete+' complete / '+judged+' judged</span></div>'+
-        '<div class="v368-health-kpi"><small>Missing required days</small><b>'+missing+'</b><span>POS and/or MVT missing</span></div>'+
-        '<div class="v368-health-kpi"><small>Latest POS</small><b>'+esc((latest.POS&&latest.POS.date)||'—')+'</b><span>'+esc((latest.POS&&latest.POS.file)||'No source')+'</span></div>'+
-        '<div class="v368-health-kpi"><small>Latest MVT</small><b>'+esc((latest.MVT&&latest.MVT.date)||'—')+'</b><span>'+esc((latest.MVT&&latest.MVT.file)||'No source')+'</span></div>';
-      strip.innerHTML=rows.slice(0,14).map(function(r){var s=r.sources||{},snap=['PRICE','OH','LIVE_FRESH','FROZEN'].filter(function(k){return String((s[k]&&s[k].status)||'').toUpperCase()==='OK'}).length;return '<div class="v368-dayhealth '+dc(r.overall_status)+'" data-date="'+esc(r.date||'')+'" title="'+esc((r.date||'')+' · '+(r.overall_status||''))+'"><div class="weekday">'+esc(r.weekday||'')+'</div><div class="date">'+esc(String(r.date||'').slice(5))+'</div><div class="v368-source-dots"><span class="v368-dot '+sc(s.POS)+'">POS</span><span class="v368-dot '+sc(s.MVT)+'">MVT</span></div><div class="snap">Snapshots '+snap+'/4</div></div>'}).join('');
-      qa('.v368-dayhealth').forEach(function(x){x.onclick=function(){var d=x.dataset.date,b=q('.data-health-detail[data-date="'+CSS.escape(d)+'"]');if(b)b.click();else{var tr=q('.data-health-row[data-date="'+CSS.escape(d)+'"]');if(tr)tr.click()}}});
-    }catch(e){strip.innerHTML='<div class="error">Unable to load 14-Day Completeness: '+esc(e.message||e)+'</div>'}
+      var d=data||await getJson('/v1/backoffice/data-health?days=14');
+      if(seq!==boardSeq)return;
+      renderBoard(d);
+    }catch(e){if(seq===boardSeq&&strip)strip.innerHTML='<div class="error">Unable to load 14-Day Completeness: '+esc(e.message||e)+'</div>'}
   }
   function init(){
     var tries=0,t=setInterval(function(){tries++;if(enhance()||tries>20){clearInterval(t);loadBoard()}},60);
+    document.addEventListener('fullmysql:data-health-updated',function(e){
+      if(e&&e.detail)loadBoard(e.detail);
+    });
     document.addEventListener('click',function(e){
-      if(e.target.closest('.dbtab[data-dbtab="dbdata"]')||e.target.closest('#refreshData')||e.target.closest('#dbRefreshAll'))setTimeout(loadBoard,120);
+      if(e.target.closest('.dbtab[data-dbtab="dbdata"]')||e.target.closest('#refreshData')||e.target.closest('#dbRefreshAll'))setTimeout(function(){loadBoard()},120);
     },true);
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
