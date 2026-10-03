@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v441';
+const CACHE='yipman-v443';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -77,7 +77,8 @@ YIPMAN_HTML = r'''<!doctype html>
 html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;overscroll-behavior-y:contain}
 body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:pointer}.hide{display:none!important}
 #app{height:100%;position:relative;overflow:hidden;padding-top:env(safe-area-inset-top,0px)}
-@media (display-mode:standalone),(display-mode:fullscreen){#app{padding-top:env(safe-area-inset-top,0px)}}
+/* Android standalone PWAs can report env(safe-area-inset-top)=0 while the system status bar still overlays the viewport. Keep browser mode unchanged, but reserve a compact 24px fallback in standalone/fullscreen so the Yipman header and freshness panel never sit under the status bar. */
+@media (display-mode:standalone),(display-mode:fullscreen){#app{padding-top:max(env(safe-area-inset-top,0px),24px)}}
 .header{padding:9px 13px 10px}.head{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .brand{font-size:21px;font-weight:950;letter-spacing:-.04em}.brand span{color:var(--blue)}.ver{display:block;font-size:9px;color:var(--muted);font-weight:700;margin-top:1px}
 .dbbtn{width:40px;height:40px;border:0;border-radius:14px;background:#fff;box-shadow:var(--shadow);font-size:18px}
