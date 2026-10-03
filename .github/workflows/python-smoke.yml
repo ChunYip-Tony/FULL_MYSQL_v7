@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v444'" in ui
+          assert "const CACHE='yipman-v447'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -264,7 +264,7 @@ jobs:
 
           assert "@app.get('/v1/yipman/clearance')" in api_src
           assert "@app.post('/v1/yipman/clearance')" in api_src
-          assert "/v1/app/quick-check/'+encodeURIComponent(r.upc)+'/true-stock" in ui
+          assert "/v1/app/v2/pi/'+encodeURIComponent(family)+'/true-stock" in ui
           assert 'CLEARANCE PLAN TRUE STOCK' in api_src
           assert 'EFFECTIVE_OH_USES_TRUE_STOCK_WHEN_ACTIVE' in clear_src
           assert 'SALE_IS_COMPANY_CONTROLLED; DO_NOT_OVERRIDE_PRICE_OR_PERIOD' in clear_src
@@ -289,7 +289,7 @@ jobs:
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
-          assert 'YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST' in src
+          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -680,8 +680,9 @@ jobs:
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'WEEKLY · THU → THU' in ui
           assert 'WEEKEND · FRI → SUN' in ui
-          assert 'TEMP TRUE STOCK' in ui
-          assert 'temporary OH values are NOT saved' in ui
+          assert 'Family Effective OH / True Stock used' in ui
+          assert "effectiveOhButton(r.family_article_number" in ui
+          assert 'temporary_oh_overrides:[]' in ui
           assert "data-order-mode=\"PROMOTION\"" in ui
           assert 'id="promoManualBtn"' in ui
           assert 'Manual Promotion' in ui
@@ -962,6 +963,10 @@ jobs:
           invalidate=inspect.getsource(bo.invalidate_true_stock_dependent_caches)
           submit=inspect.getsource(api.app_v2_pi_submit_true_stock)
           ordering_ep=inspect.getsource(api.backoffice_ordering)
+          stock=inspect.getsource(bo.yipman_best_sellers)
+          tpr=inspect.getsource(bo.current_tpr_review)
+          ordering=inspect.getsource(bo.ordering_review)
+          effective_map=inspect.getsource(bo._family_effective_oh_map)
 
           assert '"family_cost": family_cost.get("cost")' in inventory
           assert 'MOVEMENT_RECEIPT_VALUATION' in family_cost
@@ -977,6 +982,13 @@ jobs:
           assert "'effective_oh':" in submit
           assert 'force:bool=False' in ordering_ep
           assert 'if parsed_delivery is not None and force' in ordering_ep
+          assert 'FAMILY_TRUE_STOCK' in effective_map
+          assert '"family_oh"' in stock and '"family_oh_source"' in stock
+          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in stock
+          assert 'tpr_family_oh_by_id' in tpr
+          assert '"current_oh_source": current_oh_source' in tpr
+          assert '"oh_source": s.get("oh_source")' in ordering
+          assert '"yipman_current_tpr_review_cache"' in invalidate
           print('family-cost-global-true-stock=PASS')
           PY
 
@@ -1040,7 +1052,42 @@ jobs:
           assert "data-ai-question=" not in text
           assert "receipt_minus_selling_7d" in text
           assert "next_delivery_date=" in text
+          assert 'function effectiveOhButton(' in text
+          assert 'function openFamilyTrueStock(' in text
+          assert 'data-true-stock-family' in text
+          assert 'SAVE TRUE STOCK & RECALCULATE' in text
+          assert 'include_oh=true' in text
+          assert 'FAMILY COST' in text
+          assert "loadOrder(orderDate,{force:true})" in text
+          assert "loadCurrentTpr({quiet:true,force:true})" in text
+          assert "loadPrices({quiet:true,force:true})" in text
+          assert 'temporary_oh_overrides:[]' in text
+          assert "const CACHE='yipman-v447'" in text
           print('yipman-dom-bindings=PASS')
+          PY
+
+      - name: Validate Yipman desktop Effective OH True Stock controls
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          ui=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+          api_src=Path('api.py').read_text(encoding='utf-8')
+
+          assert 'function trueStockButton(' in ui
+          assert 'function openTrueStock(' in ui
+          assert 'data-ydtrue-family' in ui
+          assert 'Save True Stock & Recalculate' in ui
+          assert "/v1/app/v2/pi/'+encodeURIComponent(family)+'/true-stock" in ui
+          assert 'include_price_preview=true&include_oh=true' in ui
+          assert "regularOrders(true)" in ui
+          assert "(force?'&force=true':'')" in ui
+          assert 'Effective OH / True Stock' in ui
+          assert 'temporary_oh_overrides:[]' in ui
+          assert 'trueStockButton(r.family_article,r.family_name,r.oh,r.oh_uom' in ui
+          assert 'trueStockButton(r.family_article_number||r.family_article' in ui
+          assert 'trueStockButton(r.family_article,r.family_name,r.family_oh' in ui
+          assert "force:bool=False" in api_src
+          print('yipman-desktop-effective-oh-true-stock=PASS')
           PY
 
       - name: Validate live mobile batch progress contract
