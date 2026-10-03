@@ -4626,6 +4626,32 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             observed_delivery_days = list(
                 delivery_pattern.get("observed_delivery_days") or []
             )
+            friday_observation = next(
+                (
+                    x for x in observed_delivery_days
+                    if int(x.get("weekday_number")) == 4
+                ),
+                None,
+            )
+            friday_count = int(
+                (friday_observation or {}).get("receipt_date_count") or 0
+            )
+            friday_share = _d(
+                (friday_observation or {}).get("receipt_date_share")
+            )
+            other_max_count = max(
+                (
+                    int(x.get("receipt_date_count") or 0)
+                    for x in observed_delivery_days
+                    if int(x.get("weekday_number")) != 4
+                ),
+                default=0,
+            )
+            friday_delivery_warning = bool(
+                friday_count >= 2
+                and friday_count > other_max_count
+                and friday_share >= Decimal("0.50")
+            )
 
             rows.append({
                 "family_id": fid,
@@ -4660,6 +4686,9 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 "delivery_pattern_receipt_date_count": delivery_pattern.get("receipt_date_count"),
                 "delivery_pattern_lookback_days": delivery_pattern.get("lookback_days"),
                 "delivery_pattern_basis": delivery_pattern.get("basis"),
+                "friday_delivery_warning": friday_delivery_warning,
+                "friday_delivery_share": friday_share if friday_observation else None,
+                "friday_delivery_receipt_date_count": friday_count,
             })
             qualifying_ids.append(fid)
 
@@ -4699,17 +4728,74 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                         str(row.get("family_group_movement_uom") or ""),
                     )
 
+        # Latest receipt cost follows the existing Family-detail receipt-cost
+        # authority: MOVEMENT_RECEIPT_VALUATION on the latest physical receipt
+        # date. This keeps Stock Flow cost aligned with 101/107 valuation
+        # evidence while physical quantity/date remain 101/109 semantics.
+        for row in rows:
+            history = row.get("family_receipt_history") or []
+            row["latest_receipt_date"] = (
+                history[0].get("date") if history else None
+            )
+            row["latest_receipt_cost"] = None
+            row["latest_receipt_cost_uom"] = None
+            row["latest_receipt_cost_source"] = None
+
+        cost_targets = {
+            int(row["family_id"]): row.get("latest_receipt_date")
+            for row in rows
+            if row.get("family_id") is not None
+            and row.get("latest_receipt_date") is not None
+        }
+        if cost_targets:
+            cost_family_ids = sorted(cost_targets)
+            cost_dates = sorted(set(cost_targets.values()))
+            fam_ph = ",".join(["%s"] * len(cost_family_ids))
+            date_ph = ",".join(["%s"] * len(cost_dates))
+            cur.execute(
+                f"""SELECT co.family_id,co.business_date,
+                           COALESCE(co.cost_per_base_uom,co.cost_amount) AS receipt_cost,
+                           COALESCE(bu.uom_code,cu.uom_code) AS cost_uom,
+                           co.movement_type,co.source_type,co.file_id,
+                           co.source_row_number,co.cost_observation_id
+                    FROM article_cost_observation co
+                    LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
+                    LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+                    WHERE co.family_id IN ({fam_ph})
+                      AND co.business_date IN ({date_ph})
+                      AND co.source_type='MOVEMENT_RECEIPT_VALUATION'
+                      AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+                      AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
+                    ORDER BY co.family_id,co.business_date DESC,
+                             co.cost_observation_id DESC""",
+                (*cost_family_ids,*cost_dates),
+            )
+            latest_cost_by_family: dict[int, dict[str, Any]] = {}
+            for cost_row in cur.fetchall():
+                fid = int(cost_row["family_id"])
+                if cost_targets.get(fid) != cost_row.get("business_date"):
+                    continue
+                if fid not in latest_cost_by_family:
+                    latest_cost_by_family[fid] = dict(cost_row)
+            for row in rows:
+                cost_row = latest_cost_by_family.get(int(row["family_id"]))
+                if not cost_row:
+                    continue
+                row["latest_receipt_cost"] = cost_row.get("receipt_cost")
+                row["latest_receipt_cost_uom"] = cost_row.get("cost_uom")
+                row["latest_receipt_cost_source"] = cost_row.get("source_type")
+
         cur.close()
 
     rows.sort(
         key=lambda r: (
+            -float(r.get("receipt_over_selling_pct") or 0),
             -float(r.get("receipt_minus_selling_7d") or 0),
-            -float(r.get("receipt_to_selling_ratio") or 0),
             str(r.get("family_name") or ""),
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V6_FAST_SERVING_PATH",
+        "contract_version": "YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4717,8 +4803,10 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "scope": "FAMILY_ARTICLE_ONLY",
             "qualification": "7D_RECEIPT_AT_LEAST_150_PERCENT_OF_7D_SELLING_MVT",
             "comparison_uom": "SAME_FAMILY_MOVEMENT_UOM_ONLY",
-            "default_sort": "RECEIPT_MINUS_SELLING_DESC",
+            "default_sort": "RECEIPT_OVER_SELLING_PCT_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
+            "latest_receipt_cost": "MOVEMENT_RECEIPT_VALUATION_ON_LATEST_PHYSICAL_RECEIPT_DATE",
+            "friday_warning": "FRIDAY_DOMINANT_AT_LEAST_2_DATES_AND_AT_LEAST_50_PERCENT_SHARE",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
             "movement_source": "PUBLISHED_QUICK_CHECK_CURRENT_FAMILY_7D",
             "receipt_source": "CANONICAL_PHYSICAL_101_109_EVENTS",

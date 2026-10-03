@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v434'" in ui
+          assert "const CACHE='yipman-v437'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -233,10 +233,10 @@ jobs:
           assert 'limit=28' in src
           assert '"sales_by_price_type"' in src
           assert 'WHERE family_id IN ({ph})' in src
-          assert '"recent_promotion_event": recent_promotion' in src
+          assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch(' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
-          assert 'ANY_RELATED_FAMILY_UPC' in src
-          assert 'YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS' in src
+          assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
+          assert 'YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -265,9 +265,17 @@ jobs:
           assert '.stockflowgrid{display:grid;grid-template-columns:' in ui
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
-          assert 'OVER SELLING' in ui
-          assert "const CACHE='yipman-v433'" in ui
-          print('stock-flow-observed-delivery-v395=PASS')
+          assert 'OVER-SELLING' in ui
+          assert "stockFlowSort='RATIO'" in ui
+          assert 'OVER-SELLING % ↓' in ui
+          assert 'USUALLY FRIDAY DELIVERY' in ui
+          assert 'LATEST COST' in ui
+          assert 'stockreceiptmore' in ui
+          assert '"friday_delivery_warning": friday_delivery_warning' in src
+          assert '"latest_receipt_cost"' in src
+          assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
+          assert "const CACHE='yipman-v437'" in ui
+          print('stock-flow-v437=PASS')
           PY
 
       - name: Validate controlled pricing path, freshness tests, and compact progress UI
@@ -451,7 +459,7 @@ jobs:
           assert "priceFilter='UPC_240'" in ui
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
-          assert 'Testing must still move at least $0.45 from Current' in ui
+          assert 'TPR Suggestion Price must still move at least $0.45 from Current' in ui
           assert '.29 / .49 / .59 / .69 / .79 / .99' in ui
           assert 'const retailPoint=v=>' in ui
           assert 'Raw proved sweet-spot evidence is preserved' in ui
