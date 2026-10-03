@@ -3328,7 +3328,7 @@ function show(view,{syncHash=true,scroll=true,dbTab=null}={}){
 function showDbTab(tab,{syncHash=true}={}){
   $$('#database .subview').forEach(x=>x.classList.toggle('on',x.id===tab));
   $$('.dbtab').forEach(x=>x.classList.toggle('on',x.dataset.dbtab===tab));
-  if(tab==='dboverview'){loadDatabaseOverview();loadBatches();}
+  if(tab==='dboverview'){loadDatabaseOverview().finally(()=>loadBatches().catch(()=>{}));}
   if(tab==='dbqa')loadQA();
   if(tab==='dbdata')loadData();
   if(syncHash)syncRouteHash('database',tab);
