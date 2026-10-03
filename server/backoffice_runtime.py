@@ -4231,6 +4231,7 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
                 "tested_price":tested,
                 "tested_evidence_price":tested_evidence,
                 "testing_price":testing,
+                "tpr_suggestion_price":testing,
                 "target_sweet_spot_price":(
                     canonical.get("target_sweet_spot_price")
                     if canonical is not None else None
@@ -4258,7 +4259,8 @@ def quick_price_preview(upcs: list[str] | tuple[str, ...] | set[str]) -> dict[st
         "rules":{
             "current_price":"LIVE_CANONICAL_PRICE_AUTHORITY",
             "tested_price":"SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS",
-            "testing_price":"SAME_CANONICAL_TESTING_PRICE_AS_PRICE_SUGGESTIONS;NO_INDEPENDENT_QUICK_CHECK_RECALCULATION",
+            "testing_price":"BACKWARD_COMPATIBILITY_ALIAS_FOR_TPR_SUGGESTION_PRICE",
+            "tpr_suggestion_price":"SAME_CANONICAL_CONTROLLED_PRICE_OR_FRESHNESS_TEST_STEP_AS_PRICE_SUGGESTIONS;NO_INDEPENDENT_QUICK_CHECK_RECALCULATION",
             "price_path_source":"BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT",
             "pair_rule":"CONFIRMED_240_249_TESTED_TESTING_PATH_INHERITS_FROM_240",
         },
@@ -6720,8 +6722,21 @@ def current_tpr_review(
         recommendation_reason = "Wait for enough post-TPR completed-day POS evidence."
         recommendation_final = False
         recommendation_priority = 50
+        readiness = str(row.get("quick_check_status") or "").upper()
 
-        if pair_mismatch:
+        if readiness != "READY":
+            recommendation_code = "REVIEW_DATA"
+            recommendation_label = "REVIEW DATA"
+            recommendation_reason = (
+                "This current TPR UPC is not READY for operational pricing review"
+                + (
+                    f": {row.get('blocking_reason')}"
+                    if row.get("blocking_reason")
+                    else "."
+                )
+            )
+            recommendation_priority = 95
+        elif pair_mismatch:
             recommendation_code = "MATCH_240"
             recommendation_label = "MATCH 240 NOW"
             recommendation_reason = (
@@ -6899,6 +6914,7 @@ def current_tpr_review(
             "recommendation_final": recommendation_final,
             "recommendation_priority": recommendation_priority,
             "readiness": row.get("quick_check_status"),
+            "blocking_reason": row.get("blocking_reason"),
             "publish_batch_id": row.get("publish_batch_id"),
         })
 
