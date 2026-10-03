@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v438'" in ui
+          assert "const CACHE='yipman-v440'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -274,7 +274,7 @@ jobs:
           assert '"friday_delivery_warning": friday_delivery_warning' in src
           assert '"latest_receipt_cost"' in src
           assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
-          assert "const CACHE='yipman-v438'" in ui
+          assert "const CACHE='yipman-v440'" in ui
           print('stock-flow-v437=PASS')
           PY
 
@@ -914,7 +914,18 @@ jobs:
           assert "orderNextDate=plusDaysIso(orderDate,7)" in text
           assert "/v1/yipman/stock-flow?limit=100" in text
           assert "$$('[data-stock-category]').forEach" in text
-          assert "$$('[data-stock-receipts]').forEach" in text
+          assert "$('[data-stock-receipts]').forEach" in text
+          assert 'id="headFreshness"' in text
+          assert "/v1/yipman/header-freshness" in text
+          assert "function renderHeaderFreshness" in text
+          assert "function loadHeaderFreshness" in text
+          assert "loadHeaderFreshness();" in text
+          assert "html:not(.yipman-desktop) .brand{font-size:29px}" in text
+          api_src=Path('api.py').read_text(encoding='utf-8')
+          assert "@app.get('/v1/yipman/header-freshness')" in api_src
+          assert "'FRZ':_snapshot('FROZEN')" in api_src
+          assert "'FRESH':_snapshot('LIVE_FRESH')" in api_src
+          assert "'CHATGPT':sheet" in api_src
           assert "Stock Flow Watch" in text
           assert "DIFFERENCE ↓" in text
           assert "/v1/app/v2/performance/range?" in text
