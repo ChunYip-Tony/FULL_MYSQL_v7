@@ -5148,7 +5148,13 @@ function openDrawer(title,sub,body,foot=''){
     if(st[MOBILE_HISTORY_KEY]&&!st.drawer)history.pushState({...st,drawer:true},'',location.href);
   }
 }
-function closeDrawer(){$('#drawerBack').classList.remove('on');$('#drawer').classList.remove('on');document.body.classList.remove('desktop-inspector-open')}
+let desktopBatchMonitorPollSeq=0;
+function closeDrawer(){
+  desktopBatchMonitorPollSeq+=1;
+  const drawer=$('#drawer');
+  if(drawer)delete drawer.dataset.liveBatchId;
+  $('#drawerBack').classList.remove('on');drawer.classList.remove('on');document.body.classList.remove('desktop-inspector-open')
+}
 function closeDrawerUser(){
   const st=history.state||{};
   if(isMobileBackoffice()&&st[MOBILE_HISTORY_KEY]&&st.drawer)history.back();
@@ -6543,17 +6549,13 @@ function activeCard(a){
     '<button type="button" class="btn soft active-batch-monitor-btn" data-batch="'+esc(id)+'">Open Live Monitor</button>'+
   '</div>';
 }
-function openDesktopActiveBatchMonitor(){
-  const b=state.active;if(!b){toast('No active batch');return}
-  const runStatus=String(b.active_run_status||'').toUpperCase();
-  const displayStatus=b.active_run_stale===true?'POSSIBLY STUCK':(runStatus||b.processing_status||b.status||'PROCESSING');
+function desktopBatchMonitorBody(b){
   const p=phase3ProgressState(b);
   const first=(b.active_files||[])[0]||{};
   const fileName=b.active_file_name||first.original_filename||b.batch_label||'Current source batch';
   const source=uploadSourceLabel(b.active_source_type||first.source_type||'');
   const rows=b.active_file_rows??first.source_row_count??b.source_row_count??'—';
-  const body=
-    '<div class="desktop-detail-section"><h3>Pipeline</h3>'+desktopBatchPhaseStrip(b)+phase3MonitorHtml(b)+'</div>'+
+  return '<div class="desktop-detail-section"><h3>Pipeline</h3>'+desktopBatchPhaseStrip(b)+phase3MonitorHtml(b)+'</div>'+
     '<div class="desktop-detail-section"><h3>Source</h3><div class="detailgrid">'+
       '<div class="detail"><small>File</small><b>'+esc(fileName)+'</b><span class="meta">'+esc(source)+'</span></div>'+
       '<div class="detail"><small>Rows</small><b>'+fmt(rows,0)+'</b><span class="meta">'+esc(first.coverage_start_date||'—')+(first.coverage_end_date&&first.coverage_end_date!==first.coverage_start_date?' → '+esc(first.coverage_end_date):'')+'</span></div>'+
@@ -6561,7 +6563,50 @@ function openDesktopActiveBatchMonitor(){
       '<div class="detail"><small>Worker</small><b>'+esc(b.active_worker||'—')+'</b><span class="meta">Heartbeat '+esc(b.active_heartbeat_age_seconds===null||b.active_heartbeat_age_seconds===undefined?'pending':Math.round(Number(b.active_heartbeat_age_seconds||0))+'s ago')+'</span></div>'+
     '</div></div>'+
     '<div class="desktop-detail-section"><h3>Current Issues</h3>'+desktopBatchIssuesHtml(b,12)+'</div>';
-  openDrawer('Batch #'+esc(b.batch_id||b.id||'—'),displayStatus+' · '+desktopBatchStageLabel(b.active_phase3_stage||b.active_last_phase3_stage||''),body,'');
+}
+async function pollDesktopActiveBatchMonitor(batchId,seq){
+  if(seq!==desktopBatchMonitorPollSeq)return;
+  const drawer=$('#drawer');
+  if(!drawer?.classList.contains('on')||String(drawer.dataset.liveBatchId||'')!==String(batchId))return;
+  try{
+    const d=await api('/v1/web-upload/active',{timeoutMs:8000});
+    const b=d.active_batch||null;
+    const same=b&&String(b.batch_id||b.id||'')===String(batchId);
+    if(!same){
+      delete drawer.dataset.liveBatchId;
+      $('#drawerSub').textContent='COMPLETED · no active worker';
+      $('#drawerBody').innerHTML='<div class="calc"><b>Batch #'+esc(batchId)+' is no longer active.</b><br>The run finished or moved to its final QA / Quick Check state. Current processing and batch history are refreshing now.</div>';
+      try{await loadBatches()}catch(_){}
+      document.dispatchEvent(new CustomEvent('fullmysql:active-batch-finished',{detail:{batch_id:String(batchId)}}));
+      return;
+    }
+    state.active=b;
+    const runStatus=String(b.active_run_status||'').toUpperCase();
+    const displayStatus=b.active_run_stale===true?'POSSIBLY STUCK':(runStatus||b.processing_status||b.status||'PROCESSING');
+    $('#drawerSub').textContent=displayStatus+' · '+desktopBatchStageLabel(b.active_phase3_stage||b.active_last_phase3_stage||'');
+    $('#drawerBody').innerHTML=desktopBatchMonitorBody(b);
+  }catch(e){
+    const body=$('#drawerBody');
+    if(body)body.insertAdjacentHTML('beforeend','<div class="meta" style="margin-top:8px">Live refresh failed · retrying…</div>');
+  }
+  if(seq===desktopBatchMonitorPollSeq)setTimeout(()=>pollDesktopActiveBatchMonitor(batchId,seq),3000);
+}
+function openDesktopActiveBatchMonitor(){
+  const b=state.active;if(!b){toast('No active batch');return}
+  const runStatus=String(b.active_run_status||'').toUpperCase();
+  const displayStatus=b.active_run_stale===true?'POSSIBLY STUCK':(runStatus||b.processing_status||b.status||'PROCESSING');
+  const batchId=String(b.batch_id||b.id||'');
+  openDrawer(
+    'Batch #'+esc(batchId||'—'),
+    displayStatus+' · '+desktopBatchStageLabel(b.active_phase3_stage||b.active_last_phase3_stage||''),
+    desktopBatchMonitorBody(b),
+    ''
+  );
+  const drawer=$('#drawer');
+  drawer.dataset.liveBatchId=batchId;
+  desktopBatchMonitorPollSeq+=1;
+  const seq=desktopBatchMonitorPollSeq;
+  setTimeout(()=>pollDesktopActiveBatchMonitor(batchId,seq),1200);
 }
 async function clearEmptyUpload(session,batchId,btn){
   if(!session)return;
