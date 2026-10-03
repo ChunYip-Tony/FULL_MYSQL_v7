@@ -933,6 +933,12 @@ jobs:
           assert "READY · '+fmt(hold,0)+' HOLD" in text
           assert "Rebuild After QA Fixes" in text
           assert "does not clear unresolved blockers by itself" in text
+          assert "FAMILY COST" in text
+          assert "Tap to enter True Stock" in text
+          assert "Save True Stock & Recalculate" in text
+          assert "include_oh=true" in text
+          assert "loadOrders(true)" in text
+          assert "priceohbtn" in text
           assert "Current Processing File" in text
           assert "CURRENT PROCESSING FILE" in text
           assert "active_file_name" in text
@@ -941,6 +947,37 @@ jobs:
           assert "active['active_file_name']" in api_text
           assert "active['active_files']=active_files" in api_text
           print('backoffice-dom-bindings=PASS')
+          PY
+
+      - name: Validate Family cost and immediate True Stock contract
+        run: |
+          python - <<'PY'
+          import inspect
+          import backoffice_runtime as bo
+          import api
+
+          inventory=inspect.getsource(bo.inventory_review)
+          family_cost=inspect.getsource(bo._family_current_cost)
+          pricing=inspect.getsource(bo.pricing_review)
+          invalidate=inspect.getsource(bo.invalidate_true_stock_dependent_caches)
+          submit=inspect.getsource(api.app_v2_pi_submit_true_stock)
+          ordering_ep=inspect.getsource(api.backoffice_ordering)
+
+          assert '"family_cost": family_cost.get("cost")' in inventory
+          assert 'MOVEMENT_RECEIPT_VALUATION' in family_cost
+          assert 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST' in family_cost
+          assert 'FROZEN_INVENTORY_OFFICIAL_COST' in family_cost
+          assert 'ON_HAND_EXPLICIT_COST_FALLBACK' in family_cost
+          assert 'family_effective_oh_by_id' in pricing
+          assert 'current_oh_is_true_stock' in pricing
+          assert 'current_oh = _d(row.get("current_oh"))' in pricing
+          assert '_ORDERING_REVIEW_CACHE_VALUES.clear()' in invalidate
+          assert '_PRICING_REVIEW_CACHE_VALUES.clear()' in invalidate
+          assert 'backoffice_invalidate_true_stock_dependent_caches()' in submit
+          assert "'effective_oh':" in submit
+          assert 'force:bool=False' in ordering_ep
+          assert 'if parsed_delivery is not None and force' in ordering_ep
+          print('family-cost-global-true-stock=PASS')
           PY
 
       - name: Validate Yipman DOM collection bindings
