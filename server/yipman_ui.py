@@ -2307,29 +2307,30 @@ function openManualPromotion(){
    const d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=12',{timeoutMs:12000});
    if(token!==latestSearchToken)return;
    const raw=Array.isArray(d.results)?d.results:[];
-   const base=raw.slice(0,10);
-   const enriched=await Promise.all(base.map(async item=>{
-    const familyKey=familyKeyFor(item);
-    let family=null;
-    if(familyKey){try{family=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:9000})}catch(e){}}
-    return {item,familyKey,family};
+   // Keep typing responsive: search returns the lightweight item list first.
+   // Family OH / Delivery Article detail is hydrated only after the user taps
+   // a result, avoiding up to 10 extra Family requests on every keystroke.
+   const enriched=raw.slice(0,10).map(item=>({
+    item,
+    familyKey:familyKeyFor(item),
+    family:null,
    }));
    if(token!==latestSearchToken)return;
    searchStatus.textContent=enriched.length?enriched.length+' result(s) · choose the correct item':'No matching item.';
    searchResults.innerHTML=enriched.map((x,i)=>{
-    const item=x.item||{}, fam=x.family||{};
-    const familyName=fam.family_article_name||item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
+    const item=x.item||{};
+    const familyName=item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
     const itemName=item.name||familyName||'Item';
-    const q7=item.pos_qty_7d??item.qty_7d??fam?.family_sales_7d?.sold_quantity;
-    const q7u=item.selling_uom||item.qty_uom||fam?.family_sales_7d?.uom||'';
+    const q7=item.pos_qty_7d??item.qty_7d;
+    const q7u=item.selling_uom||item.qty_uom||item.qty_28d_uom||'';
     return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
      '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
      '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
       ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
       (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
-      ' · True Stock '+esc(effectiveOHText(fam))+'</span></button>';
+      ' · tap to load True Stock + Delivery Articles</span></button>';
    }).join('');
-   $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
+   $('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
   }catch(e){
    if(token!==latestSearchToken)return;
    searchResults.innerHTML='';
