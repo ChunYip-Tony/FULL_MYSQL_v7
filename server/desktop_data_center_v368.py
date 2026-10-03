@@ -38,7 +38,7 @@ DESKTOP_DATA_CENTER_V368_JS = r"""
   function q(s,r){return (r||document).querySelector(s)}
   function qa(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
   function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
-  async function getJson(url){var r=await fetch(url,{cache:'no-store'}),d;try{d=await r.json()}catch(e){d={detail:await r.text()}}if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'HTTP '+r.status);return d}
+  async function getJson(url){var r=await fetch(url,{cache:'no-store'}),raw=await r.text(),d={};if(raw){try{d=JSON.parse(raw)}catch(e){d={detail:raw}}}if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'HTTP '+r.status);return d}
   function enhance(){
     var main=q('#database .v366-ws-main')||q('#database');if(!main)return false;
     if(!q('#v368UploadDock')){
