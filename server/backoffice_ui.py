@@ -5286,7 +5286,7 @@ function renderDesktopStockFlow(){
      '<td><b>'+esc(over)+'</b><div class="meta">receipt vs selling</div></td>'+
      '<td>'+sfRecentCell(hist[0],ruom)+'</td><td>'+sfRecentCell(hist[1],ruom)+'</td></tr>';
  }).join('')||'<tr><td colspan="8" class="empty">No Stock Flow items match the selected filters.</td></tr>';
- $$('.stockflow-family-btn').forEach(b=>b.onclick=()=>desktopSubmitSearch(b.dataset.family));
+ $('.stockflow-family-btn').forEach(b=>{b.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('fullmysql:stockflow-family',{detail:{family:b.dataset.family}}))}});
 }
 async function loadDesktopStockFlow(requestSeq){
  setQuickInventoryMode(true);
