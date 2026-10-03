@@ -765,6 +765,11 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #order .promo-card-head b{font-size:20px;line-height:1.08;white-space:normal;overflow-wrap:anywhere}
 #order .promo-true-stock-input{width:82px;border:1.5px dashed #72a8cf;border-radius:9px;background:#fff;text-align:center;font-size:20px;font-weight:1000;padding:6px 5px;outline:0}
 #order .promo-true-stock-input:focus{border-style:solid;border-color:#0d6fbd;box-shadow:0 0 0 3px rgba(13,111,189,.12)}
+#order .promo-card.tone0{background:linear-gradient(100deg,#fff4c4,#fff 64%);border-left:5px solid #d8b21f}
+#order .promo-card.tone1{background:linear-gradient(100deg,#e8f7ec,#fff 64%);border-left:5px solid #4ca76a}
+#order .promo-card.tone2{background:linear-gradient(100deg,#e7f1ff,#fff 64%);border-left:5px solid #4c83d1}
+#order .promo-card.tone3{background:linear-gradient(100deg,#ffe9ef,#fff 64%);border-left:5px solid #cf6f88}
+#order .promo-card.tone4{background:linear-gradient(100deg,#f2e9ff,#fff 64%);border-left:5px solid #8f70cf}
 @media(max-width:370px){
  #order .orderitemhead,#order .orderitemmain{grid-template-columns:minmax(0,1fr) 70px 78px}
  #order .orderitemmain .name{font-size:20px}
@@ -795,7 +800,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
         <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span id="orderCoverageSub">Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
       </div>
       <div id="regularOrderPanel">
-        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
+        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="QTY">ORDER QTY ↓</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
         <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
         <div class="list" id="orderList"><div class="lh" id="orderListHead"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
       </div>
@@ -898,7 +903,7 @@ let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='DIFFERENCE', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
-let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
+let orderSort='QTY', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='SUGGESTIONS', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null;
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
@@ -2130,7 +2135,7 @@ function renderPromotionRows(data){
  const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b><br>'+reviewItems.slice(0,5).map(x=>esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)).join('<br>')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
  $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
   const p=r.promotion_list_item||{}, type=String(p.promotion_type||'').toUpperCase();
-  const oh=r.current_oh_for_calculation;
+  const oh=r.current_oh_system;
   const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage, totalNeed=r.forecast_coverage_usage;
   const freshnessHtml=r.freshness_adjustment_applied
    ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · latest receipt '+esc(appDate(r.freshness_latest_receipt_date))+' · DOH '+fmtNullable(r.freshness_current_doh)+' · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
@@ -2146,7 +2151,9 @@ function renderPromotionRows(data){
   input.onchange=async e=>{
    e.stopPropagation();
    const r=promoLastRows[Number(input.dataset.promoTrueStock)];
-   const qty=Number(input.value);
+   const raw=String(input.value||'').trim();
+   if(!raw){input.value=input.dataset.original||'';return}
+   const qty=Number(raw);
    if(!r||!Number.isFinite(qty)||qty<0){input.value=input.dataset.original||'';toast('Enter a valid True Stock quantity');return}
    input.disabled=true;
    try{
@@ -2345,7 +2352,9 @@ function renderOrderRoster(rows,data,h,stale){
   input.onchange=async e=>{
    e.stopPropagation();
    const row=renderedOrderRows[Number(input.dataset.orderOh)];
-   const qty=Number(input.value);
+   const raw=String(input.value||'').trim();
+   if(!raw){input.value=input.dataset.original||'';return}
+   const qty=Number(raw);
    if(!row||!Number.isFinite(qty)||qty<0){input.value=input.dataset.original||'';toast('Enter a valid True Stock quantity');return}
    if(!row.family_article||!row.oh_uom){input.value=input.dataset.original||'';toast('Family or OH UOM unavailable');return}
    input.disabled=true;
