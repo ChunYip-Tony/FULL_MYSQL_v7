@@ -14,55 +14,7 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "
-/* V437 Stock Flow: approved neutral compact mobile treatment. */
-#quick .stockflowfilters{display:flex;align-items:center;gap:6px;margin:0 0 4px;padding:5px 6px;border:1px solid #d5dde6;border-radius:11px;background:#fff;overflow-x:auto;scrollbar-width:none}
-#quick .stockflowfilters::-webkit-scrollbar{display:none}
-#quick .stockfiltergroup{display:flex;align-items:center;flex:0 0 auto;min-width:0}
-#quick .stockfiltergroup>small{display:none}
-#quick .stockfiltergroup.category{border-left:1px solid #d8dfe6;border-top:0;padding:0 0 0 6px}
-#quick .stockfilterbuttons{gap:4px;padding:0;overflow:visible}
-#quick .stockfilterbtn{padding:4px 7px;font-size:7.5px;background:#eef2f6;border-color:#d8dfe6;color:#405367;box-shadow:none}
-#quick .stockfilterbtn.deliverytw:not(.on),#quick .stockfilterbtn.deliverytf:not(.on),#quick .stockfilterbtn.live:not(.on),#quick .stockfilterbtn.fresh:not(.on),#quick .stockfilterbtn.frozen:not(.on){background:#eef2f6;border-color:#d8dfe6;color:#405367}
-#quick .stockfilterbtn.on{background:#234d77;border-color:#234d77;color:#fff;box-shadow:none}
-#quick .stockflowresultbar{margin:0 1px 4px}
-#quick .stockflowsort select{background:#eef2f6;border-color:#d5dde6;color:#314a61;padding-top:4px;padding-bottom:4px}
-#quick .bestfam,#quick .bestfam.tone1,#quick .bestfam.tone2,#quick .bestfam.tone3,#quick .bestfam.tone4{--best-border:#d0d8e1;--best-bg:#fff;border:1px solid #d0d8e1;border-left:1px solid #d0d8e1;background:#fff;padding:6px 7px;margin-bottom:5px;box-shadow:0 3px 10px rgba(18,38,56,.045)}
-#quick .besttop{gap:5px}
-#quick .bestname{font-size:17px}
-#quick .stocktags{gap:3px;margin-top:3px}
-#quick .stocktag,#quick .stocktag.category,#quick .stocktag.category.live,#quick .stocktag.category.fresh,#quick .stocktag.category.frozen,#quick .stocktag.delivery,#quick .stocktag.delivery.none{padding:2px 6px;font-size:6.5px;background:#eef2f6;border-color:#d8dfe6;color:#405367}
-#quick .stockfridaywarn{display:inline-flex;align-items:center;border:1px solid #e0b4b6;border-radius:999px;background:#fff3f3;color:#b32228;padding:2px 6px;font-size:6.5px;line-height:1;font-weight:1000;white-space:nowrap}
-#quick .stockratio{min-width:70px;padding:4px 5px;background:#f7f9fb;border-color:#d9e0e7}
-#quick .stockratio b{font-size:12px;color:#b3262d}
-#quick .stockflowgrid{gap:3px;margin-top:4px}
-#quick .stockflowgrid .bestmetric{padding:4px 5px;background:#f8fafb;border-color:#e0e5e9}
-#quick .stockflowgrid .bestmetric b{font-size:16px;color:#22374d}
-#quick .stockflowgrid .stockdiff,#quick .stockflowgrid .stockdiff.nosale,#quick .stockflowgrid .stockdiff.promoted{padding:4px 5px;background:#fff7f7;border-color:#e6c5c7}
-#quick .stockflowgrid .stockdiff small,#quick .stockflowgrid .stockdiff>span,#quick .stockflowgrid .stockdiff.promoted small,#quick .stockflowgrid .stockdiff.promoted>span{color:#8b5d60}
-#quick .stockflowgrid .stockdiff>b,#quick .stockflowgrid .stockdiff.promoted>b{color:#b3262d}
-#quick .stockwatch{background:#eef2f6!important;color:#4a5b6b!important}
-#quick .stocksale.stockpromo{margin-top:4px;padding:4px 6px;background:#f3f6f8;border-color:#d6dee7;color:#31485d}
-#quick .stocksale.stockpromo strong,#quick .stockpromo .promobasis{color:#405568}
-#quick .stockpromo .promolift,#quick .stockpromo .promoprice,#quick .stockdiff.promoted>b{background:#e9edf2}
-#quick .stockpromo .promoprice,#quick .stockpromo .promoprice small,#quick .stockpromo .promoprice b{color:#31485d!important}
-#quick .bestrecent{margin-top:4px;padding:4px 6px;background:#fff;border-color:#d8e0e7}
-#quick .bestrecenthead{align-items:center}
-#quick .stockreceiptmeta{display:flex;align-items:center;gap:4px}
-#quick .stocklatestcost{display:inline-flex;align-items:center;gap:3px;padding:2px 5px;border:1px solid #d6dde5;border-radius:999px;background:#eef2f6;color:#4a5a69;font-size:6.5px;font-weight:1000;white-space:nowrap}
-#quick .stocklatestcost b{font-size:7.5px;color:#1d2e3f}
-#quick .stockreceipttoggle{border:0;border-radius:999px;background:#edf3f8;color:#285c88;padding:2px 5px;font-size:6.5px;font-weight:1000}
-#quick .stockreceiptmore{display:none}
-#quick .bestrecent.open .stockreceiptmore{display:grid}
-#quick .bestreceipt{margin-top:2px;padding:2px 0;font-size:8.5px}
-#quick .bestreceipt b{font-size:9.5px}
-@media(max-width:365px){
- #quick .stockfilterbtn{padding:4px 6px;font-size:7px}
- #quick .stockflowgrid .bestmetric b{font-size:14px}
- #quick .stockratio{min-width:66px}
-}
-
-</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -770,6 +722,53 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
  .stockfiltergroup.category{border-left:0;border-top:1px solid #d4e3ee;padding-left:0;padding-top:6px}
  .stockfilterbtn{padding:6px 8px;font-size:8px}
 }
+/* V437 Stock Flow: approved neutral compact mobile treatment. */
+#quick .stockflowfilters{display:flex;align-items:center;gap:6px;margin:0 0 4px;padding:5px 6px;border:1px solid #d5dde6;border-radius:11px;background:#fff;overflow-x:auto;scrollbar-width:none}
+#quick .stockflowfilters::-webkit-scrollbar{display:none}
+#quick .stockfiltergroup{display:flex;align-items:center;flex:0 0 auto;min-width:0}
+#quick .stockfiltergroup>small{display:none}
+#quick .stockfiltergroup.category{border-left:1px solid #d8dfe6;border-top:0;padding:0 0 0 6px}
+#quick .stockfilterbuttons{gap:4px;padding:0;overflow:visible}
+#quick .stockfilterbtn{padding:4px 7px;font-size:7.5px;background:#eef2f6;border-color:#d8dfe6;color:#405367;box-shadow:none}
+#quick .stockfilterbtn.deliverytw:not(.on),#quick .stockfilterbtn.deliverytf:not(.on),#quick .stockfilterbtn.live:not(.on),#quick .stockfilterbtn.fresh:not(.on),#quick .stockfilterbtn.frozen:not(.on){background:#eef2f6;border-color:#d8dfe6;color:#405367}
+#quick .stockfilterbtn.on{background:#234d77;border-color:#234d77;color:#fff;box-shadow:none}
+#quick .stockflowresultbar{margin:0 1px 4px}
+#quick .stockflowsort select{background:#eef2f6;border-color:#d5dde6;color:#314a61;padding-top:4px;padding-bottom:4px}
+#quick .bestfam,#quick .bestfam.tone1,#quick .bestfam.tone2,#quick .bestfam.tone3,#quick .bestfam.tone4{--best-border:#d0d8e1;--best-bg:#fff;border:1px solid #d0d8e1;border-left:1px solid #d0d8e1;background:#fff;padding:6px 7px;margin-bottom:5px;box-shadow:0 3px 10px rgba(18,38,56,.045)}
+#quick .besttop{gap:5px}
+#quick .bestname{font-size:17px}
+#quick .stocktags{gap:3px;margin-top:3px}
+#quick .stocktag,#quick .stocktag.category,#quick .stocktag.category.live,#quick .stocktag.category.fresh,#quick .stocktag.category.frozen,#quick .stocktag.delivery,#quick .stocktag.delivery.none{padding:2px 6px;font-size:6.5px;background:#eef2f6;border-color:#d8dfe6;color:#405367}
+#quick .stockfridaywarn{display:inline-flex;align-items:center;border:1px solid #e0b4b6;border-radius:999px;background:#fff3f3;color:#b32228;padding:2px 6px;font-size:6.5px;line-height:1;font-weight:1000;white-space:nowrap}
+#quick .stockratio{min-width:70px;padding:4px 5px;background:#f7f9fb;border-color:#d9e0e7}
+#quick .stockratio b{font-size:12px;color:#b3262d}
+#quick .stockflowgrid{gap:3px;margin-top:4px}
+#quick .stockflowgrid .bestmetric{padding:4px 5px;background:#f8fafb;border-color:#e0e5e9}
+#quick .stockflowgrid .bestmetric b{font-size:16px;color:#22374d}
+#quick .stockflowgrid .stockdiff,#quick .stockflowgrid .stockdiff.nosale,#quick .stockflowgrid .stockdiff.promoted{padding:4px 5px;background:#fff7f7;border-color:#e6c5c7}
+#quick .stockflowgrid .stockdiff small,#quick .stockflowgrid .stockdiff>span,#quick .stockflowgrid .stockdiff.promoted small,#quick .stockflowgrid .stockdiff.promoted>span{color:#8b5d60}
+#quick .stockflowgrid .stockdiff>b,#quick .stockflowgrid .stockdiff.promoted>b{color:#b3262d}
+#quick .stockwatch{background:#eef2f6!important;color:#4a5b6b!important}
+#quick .stocksale.stockpromo{margin-top:4px;padding:4px 6px;background:#f3f6f8;border-color:#d6dee7;color:#31485d}
+#quick .stocksale.stockpromo strong,#quick .stockpromo .promobasis{color:#405568}
+#quick .stockpromo .promolift,#quick .stockpromo .promoprice,#quick .stockdiff.promoted>b{background:#e9edf2}
+#quick .stockpromo .promoprice,#quick .stockpromo .promoprice small,#quick .stockpromo .promoprice b{color:#31485d!important}
+#quick .bestrecent{margin-top:4px;padding:4px 6px;background:#fff;border-color:#d8e0e7}
+#quick .bestrecenthead{align-items:center}
+#quick .stockreceiptmeta{display:flex;align-items:center;gap:4px}
+#quick .stocklatestcost{display:inline-flex;align-items:center;gap:3px;padding:2px 5px;border:1px solid #d6dde5;border-radius:999px;background:#eef2f6;color:#4a5a69;font-size:6.5px;font-weight:1000;white-space:nowrap}
+#quick .stocklatestcost b{font-size:7.5px;color:#1d2e3f}
+#quick .stockreceipttoggle{border:0;border-radius:999px;background:#edf3f8;color:#285c88;padding:2px 5px;font-size:6.5px;font-weight:1000}
+#quick .stockreceiptmore{display:none}
+#quick .bestrecent.open .stockreceiptmore{display:grid}
+#quick .bestreceipt{margin-top:2px;padding:2px 0;font-size:8.5px}
+#quick .bestreceipt b{font-size:9.5px}
+@media(max-width:365px){
+ #quick .stockfilterbtn{padding:4px 6px;font-size:7px}
+ #quick .stockflowgrid .bestmetric b{font-size:14px}
+ #quick .stockratio{min-width:66px}
+}
+
 </style>
 </head>
 <body>
