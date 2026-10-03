@@ -1929,8 +1929,16 @@ def cached_ordering_review(
         }
 
     expected=str(completed_through_date())
-    cached_expected=str(((cached or {}).get("data_health") or {}).get("expected_through") or "")
-    data_current=bool(cached and cached_expected==expected)
+    cached_health=dict((cached or {}).get("data_health") or {})
+    cached_expected=str(cached_health.get("expected_through") or "")
+    live_health=_pricing_review_data_health(allow_stale_estimate=True)
+    source_changed=bool(cached) and (
+        str(cached_health.get("pos_data_through") or "")
+        != str(live_health.get("pos_data_through") or "")
+        or str(cached_health.get("movement_data_through") or "")
+        != str(live_health.get("movement_data_through") or "")
+    )
+    data_current=bool(cached and cached_expected==expected and not source_changed)
     age=(time.monotonic()-cached_at) if cached is not None and cached_at is not None else None
     stale=(
         cached is None
@@ -1961,7 +1969,11 @@ def cached_ordering_review(
             "decision_mode":"STALE_ESTIMATE",
             "expected_through":expected,
             "cache_expected_through":cached_expected or None,
-            "warning":"Best-available cached ordering estimate is shown while current delivery analysis refreshes.",
+            "warning":(
+                "Newer canonical POS/MVT data is published; prior ordering results are shown only while the current analysis rebuilds."
+                if source_changed else
+                "Best-available cached ordering estimate is shown while current delivery analysis refreshes."
+            ),
         })
         has_rows=bool(cached.get("rows"))
         return {
@@ -1972,10 +1984,15 @@ def cached_ordering_review(
                 if has_rows else
                 "READY_STALE_ESTIMATE_NO_ELIGIBLE_ITEMS_REFRESHING"
             ),
-            "cache_status":"STALE_ESTIMATE_REFRESHING",
+            "cache_status":(
+                "SOURCE_CHANGED_REFRESHING"
+                if source_changed else "STALE_ESTIMATE_REFRESHING"
+            ),
             "refreshing":refreshing,
             "refresh_error":err,
             "data_health":stale_health,
+            "current_source_health":live_health,
+            "source_changed_since_analysis":source_changed,
         }
 
     # Never present a prior completed-data-day snapshot as current Ordering
@@ -2005,14 +2022,18 @@ def cached_ordering_review(
                 "missing_required_sources":[],
                 "rule":"ORDERING_ASYNC_CACHE_REQUIRES_CURRENT_COMPLETED_DATA",
             },
+            "current_source_health":live_health,
+            "source_changed_since_analysis":source_changed,
         }
 
     return {
         **cached,
-        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V17_ASYNC_ORDERING_QUALITY",
+        "contract_version":"BACKOFFICE_ORDERING_REVIEW_V18_SOURCE_AWARE_CACHE",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
         "refresh_error":err,
+        "current_source_health":live_health,
+        "source_changed_since_analysis":source_changed,
     }
 
 
@@ -5814,17 +5835,37 @@ def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
                 _HOME_SUMMARY_CACHE_AT = 0.0
             cached = persisted
 
+    # Cache age alone is not enough: a same-business-day upload can advance
+    # canonical POS/MVT while completed_through_date() remains unchanged.
+    # Compare the cached analysis basis to live canonical source coverage so
+    # Home refreshes immediately after a newly published upload.
+    live_health = _pricing_review_data_health(allow_stale_estimate=True)
+    cached_health = (((cached or {}).get("ordering") or {}).get("data_health") or {})
+    source_changed = bool(cached) and (
+        str(cached_health.get("pos_data_through") or "")
+        != str(live_health.get("pos_data_through") or "")
+        or str(cached_health.get("movement_data_through") or "")
+        != str(live_health.get("movement_data_through") or "")
+    )
+
     age = time.monotonic() - _HOME_SUMMARY_CACHE_AT if cached is not None else None
-    stale = cached is None or age is None or age >= _HOME_SUMMARY_CACHE_TTL_SECONDS
+    stale = (
+        cached is None
+        or source_changed
+        or age is None
+        or age >= _HOME_SUMMARY_CACHE_TTL_SECONDS
+    )
     if force or stale:
         _request_home_summary_refresh()
 
     if cached is None:
         return {
-            "contract_version": "BACKOFFICE_HOME_SUMMARY_V3_BEST_AVAILABLE",
+            "contract_version": "BACKOFFICE_HOME_SUMMARY_V4_SOURCE_AWARE_CACHE",
             "cache_status": "WARMING",
             "refreshing": True,
             "refresh_error": _HOME_SUMMARY_LAST_ERROR,
+            "current_source_health": live_health,
+            "source_changed_since_analysis": False,
             "pricing": {},
             "performance": {},
             "ordering": {},
@@ -5832,9 +5873,15 @@ def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
 
     return {
         **cached,
-        "cache_status": "STALE_REFRESHING" if stale else "HIT",
+        "contract_version": "BACKOFFICE_HOME_SUMMARY_V4_SOURCE_AWARE_CACHE",
+        "cache_status": (
+            "SOURCE_CHANGED_REFRESHING"
+            if source_changed else ("STALE_REFRESHING" if stale else "HIT")
+        ),
         "refreshing": bool(_HOME_SUMMARY_REFRESHING),
         "refresh_error": _HOME_SUMMARY_LAST_ERROR,
+        "current_source_health": live_health,
+        "source_changed_since_analysis": source_changed,
     }
 
 
@@ -6583,8 +6630,20 @@ def cached_pricing_review(
             },
         }
 
+    live_health=_pricing_review_data_health(allow_stale_estimate=True)
+    cached_health=dict((cached.get("data_health") or {}))
+    source_changed=(
+        str(cached_health.get("pos_data_through") or "")
+        != str(live_health.get("pos_data_through") or "")
+        or str(cached_health.get("movement_data_through") or "")
+        != str(live_health.get("movement_data_through") or "")
+    )
     age=(time.monotonic()-cached_at) if cached_at is not None else None
-    stale=age is None or age>=_PRICING_REVIEW_CACHE_TTL_SECONDS
+    stale=(
+        source_changed
+        or age is None
+        or age>=_PRICING_REVIEW_CACHE_TTL_SECONDS
+    )
     if force or stale:
         _request_pricing_review_refresh(cat,lim,key)
     with _PRICING_REVIEW_CACHE_LOCK:
@@ -6592,11 +6651,19 @@ def cached_pricing_review(
 
     return {
         **cached,
-        "contract_version":"BACKOFFICE_PRICING_REVIEW_V9_ASYNC_CACHE",
-        "analysis_status":"READY_STALE_REFRESHING" if stale else "READY",
-        "cache_status":"STALE_REFRESHING" if stale else "HIT",
+        "contract_version":"BACKOFFICE_PRICING_REVIEW_V10_SOURCE_AWARE_CACHE",
+        "analysis_status":(
+            "READY_SOURCE_CHANGED_REFRESHING"
+            if source_changed else ("READY_STALE_REFRESHING" if stale else "READY")
+        ),
+        "cache_status":(
+            "SOURCE_CHANGED_REFRESHING"
+            if source_changed else ("STALE_REFRESHING" if stale else "HIT")
+        ),
         "refreshing":refreshing,
         "refresh_error":_PRICING_REVIEW_LAST_ERROR.get(key),
+        "current_source_health":live_health,
+        "source_changed_since_analysis":source_changed,
     }
 
 
