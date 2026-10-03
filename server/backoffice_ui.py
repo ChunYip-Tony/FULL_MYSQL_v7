@@ -5505,7 +5505,58 @@ function openDesktopQuickDetail(upc){
   if(btn)btn.onclick=()=>openOH({family:r.family_article,uom:r.family_oh_uom||'',oh:r.family_oh??'',name:r.family_name||r.name||''});
 }
 
-function openOH(d){if(!d.family){toast('Family Article unavailable');return}const current=d.oh||'';openDrawer('OH / True Stock Adjustment',`${d.name} · Family ${d.family}`,`<div class="detailgrid"><div class="detail"><small>Family Article</small><b>${esc(d.family)}</b></div><div class="detail"><small>System / Effective OH</small><b>${fmt(current)} ${esc(d.uom)}</b></div></div><div class="formfield"><label>True Stock</label><input id="trueStockInput" type="number" min="0" step="0.01" value="${esc(current)}"></div><div class="formfield"><label>UOM</label><input id="trueStockUom" value="${esc(d.uom)}" readonly></div><div class="formfield"><label>Note</label><textarea id="trueStockNote" placeholder="Physical count / OH adjustment"></textarea></div><div id="ohPreview" class="calc">Difference: 0</div>`,`<button id="saveOH" class="btn primary">Save OH Adjustment</button>`);const inp=$('#trueStockInput');inp.oninput=()=>{const n=Number(inp.value||0),o=Number(current||0),diff=n-o;$('#ohPreview').textContent=`Difference: ${diff>=0?'+':''}${diff.toFixed(2)}${diff<0?' · shortage / pending dumping '+Math.abs(diff).toFixed(2):''}`};$('#saveOH').onclick=async()=>{try{$('#saveOH').disabled=true;await api(`/v1/app/v2/pi/${encodeURIComponent(d.family)}/true-stock`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:Number(inp.value),uom:d.uom,note:$('#trueStockNote').value||null})});toast('OH / True Stock saved');closeDrawer();await loadInventory()}catch(e){toast(e.message)}finally{const x=$('#saveOH');if(x)x.disabled=false}}}
+function applyEffectiveOhToLoadedState(family,eff){
+  if(!eff||eff.quantity===null||eff.quantity===undefined)return;
+  const qty=eff.quantity,uom=eff.uom||'',source=eff.source||'FAMILY_TRUE_STOCK';
+  state.inventory.forEach(r=>{if(String(r.family_article||'')===String(family)){r.family_oh=qty;r.family_oh_uom=uom;r.family_oh_source=source;r.family_oh_status='READY'}});
+  state.orders.forEach(r=>{if(String(r.family_article||'')===String(family)){r.oh=qty;r.oh_uom=uom;r.oh_source=source}});
+  state.prices.forEach(r=>{if(String(r.family_article||r.family_article_number||'')===String(family)){r.current_oh=qty;r.current_oh_uom=uom;r.current_oh_source=source;r.current_oh_is_true_stock=true}});
+}
+async function refreshTrueStockDependentViews(){
+  state.quickPriceLoadedAt=0;state.quickPriceByUpc={};
+  const jobs=[];
+  if(mobileState.module==='quick'||mobileState.module==='inventory'||mobileState.module==='pi'||$('#inventory')?.classList.contains('on'))jobs.push(loadInventory());
+  if(mobileState.module==='ordering'||$('#ordering')?.classList.contains('on'))jobs.push(loadOrders(true));
+  if(mobileState.module==='price'||$('#pricing')?.classList.contains('on'))jobs.push(loadPrices());
+  await Promise.allSettled(jobs);
+  if(isMobileBackoffice()&&mobileState.module)mobileRenderList();
+}
+function openOH(d){
+  if(!d.family){toast('Family Article unavailable');return}
+  const current=(d.oh===null||d.oh===undefined)?'':d.oh;
+  const uom=String(d.uom||'').trim();
+  if(!uom){toast('Family OH UOM unavailable');return}
+  openDrawer(
+    'OH / True Stock Adjustment',
+    `${d.name||''} · Family ${d.family}`,
+    `<div class="detailgrid"><div class="detail"><small>Family Article</small><b>${esc(d.family)}</b></div><div class="detail"><small>Current Effective OH</small><b>${fmt(current)} ${esc(uom)}</b><span>Physical True Stock becomes the immediate OH authority.</span></div></div><div class="formfield"><label>True Stock</label><input id="trueStockInput" type="number" min="0" step="0.01" value="${esc(current)}"></div><div class="formfield"><label>UOM</label><input id="trueStockUom" value="${esc(uom)}" readonly></div><div class="formfield"><label>Note</label><textarea id="trueStockNote" placeholder="Physical count / OH adjustment"></textarea></div><div id="ohPreview" class="calc">Enter the physical count. Ordering, Price Review, Quick Check and other OH-dependent views will recalculate from it.</div>`,
+    `<button id="saveOH" class="btn primary">Save True Stock & Recalculate</button>`
+  );
+  const inp=$('#trueStockInput');
+  inp.oninput=()=>{
+    const n=Number(inp.value),o=Number(current||0);
+    if(!Number.isFinite(n)){ $('#ohPreview').textContent='Enter a valid True Stock quantity.';return }
+    const diff=n-o;
+    $('#ohPreview').textContent=`Difference: ${diff>=0?'+':''}${diff.toFixed(2)} ${uom}${diff<0?' · shortage / pending dumping '+Math.abs(diff).toFixed(2)+' '+uom:''}`;
+  };
+  $('#saveOH').onclick=async()=>{
+    try{
+      const n=Number(inp.value);
+      if(!Number.isFinite(n)||n<0)throw new Error('Enter a valid True Stock quantity');
+      $('#saveOH').disabled=true;$('#saveOH').textContent='Saving & recalculating…';
+      const result=await api(`/v1/app/v2/pi/${encodeURIComponent(d.family)}/true-stock`,{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({true_stock:n,uom,note:$('#trueStockNote').value||null})
+      });
+      const eff=result.effective_oh||result.pi?.effective_oh||{quantity:n,uom,source:'FAMILY_TRUE_STOCK'};
+      applyEffectiveOhToLoadedState(d.family,eff);
+      toast('True Stock saved · recalculating all OH-dependent views',4200);
+      closeDrawer();
+      await refreshTrueStockDependentViews();
+    }catch(e){toast(e.message||String(e),4800)}
+    finally{const x=$('#saveOH');if(x){x.disabled=false;x.textContent='Save True Stock & Recalculate'}}
+  };
+}
 
 async function ensurePerformanceDates(){
   if(state.salesSupportedDates.length){syncPerformanceDateControls();return}
