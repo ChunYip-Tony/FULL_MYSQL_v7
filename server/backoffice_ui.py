@@ -6249,8 +6249,21 @@ function activePhase3RunForBatch(batchId){
   if(!['QUEUED','STARTED','PAUSE_REQUESTED'].includes(status))return null;
   return a;
 }
+let phase3ResumePendingBatchId=null;
 function resumeActionHtml(b,compact=false){
   if(!b||!batchResumeEligible(b))return '';
+  const bid=String(b.batch_id||b.id||'');
+  const active=activePhase3RunForBatch(bid);
+  const pending=bid&&String(phase3ResumePendingBatchId||'')===bid;
+  if(active||pending){
+    const label=active
+      ? ('⏳ Phase 3 '+esc(active.active_run_status||'ACTIVE')+' · Run #'+esc(active.active_pipeline_run_id||'—'))
+      : '⏳ Requesting Phase 3…';
+    const detail=active
+      ? '<b>Current:</b> Phase 3 '+esc(active.active_run_status||'ACTIVE')+' ✅ &nbsp; <b>Next:</b> QA → Quick Check'
+      : '<b>Current:</b> Sending Phase 3 retry request…';
+    return `<div style="${compact?'margin-top:8px':'margin-top:10px'}"><div class="calc" style="margin:0 0 8px">${detail}</div><div style="display:flex;justify-content:flex-end"><button class="btn primary" disabled>${label}</button></div></div>`;
+  }
   return `<div style="${compact?'margin-top:8px':'margin-top:10px'}"><div class="calc" style="margin:0 0 8px"><b>Past:</b> Phase 2C complete ✅ &nbsp; <b>Current:</b> Waiting for Phase 3 ⚠️ &nbsp; <b>Next:</b> Phase 3 rebuild → QA → Quick Check</div><div style="display:flex;justify-content:flex-end"><button class="btn primary batch-resume-btn" data-batch="${esc(b.batch_id||b.id)}">▶ Retry Phase 3</button></div></div>`;
 }
 function rebuildActionHtml(b,compact=false){
@@ -6279,17 +6292,46 @@ async function resumePhase3(id){
   const b=(state.active&&String(state.active.batch_id||state.active.id)===String(id))?state.active:null;
   if(!b){toast('Current batch detail is not loaded yet');return}
   if(!batchResumeEligible(b)){toast('This batch is not waiting at Phase 2C');return}
-  if(!window.confirm(`Retry Phase 3 for Batch #${b.batch_id||b.id}?\n\nRAW files will not be re-uploaded. This resumes the existing batch directly from Phase 3.`))return;
-  const buttons=[...document.querySelectorAll(`.batch-resume-btn[data-batch="${CSS.escape(String(b.batch_id||b.id))}"]`)];
-  buttons.forEach(x=>{x.disabled=true;x.textContent='Queuing Phase 3…'});
+  const bid=String(b.batch_id||b.id);
+  phase3ResumePendingBatchId=bid;
+  const buttons=[...document.querySelectorAll(`.batch-resume-btn[data-batch="${CSS.escape(bid)}"]`)];
+  buttons.forEach(x=>{x.disabled=true;x.textContent='Requesting Phase 3…'});
+  toast('Sending Phase 3 retry for Batch #'+bid+'…',4200);
+  const renderPending=()=>{
+    const roots=[$('#activeBatch'),$('#dbOverviewActive')].filter(Boolean);
+    roots.forEach(root=>{
+      root.innerHTML=activeCard(state.active)+resumeActionHtml(state.active,true);
+      wireRecoveryButtons(root);
+      wireActiveBatchButtons(root);
+    });
+  };
+  renderPending();
   try{
-    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(b.batch_id||b.id)}/resume-phase3`,{method:'POST'});
-    toast(d.already_active?'Phase 3 job is already active':'Phase 3 retry queued');
-    await loadBatches();
-    if(isMobileBackoffice()&&mobileState.module==='batches')mobileRenderList();
+    const d=await api(`/v1/web-upload/batches/${encodeURIComponent(bid)}/resume-phase3`,{method:'POST',timeoutMs:15000});
+    if(state.active&&String(state.active.batch_id||state.active.id)===bid){
+      state.active={
+        ...state.active,
+        active_pipeline_run_id:d.pipeline_run_id||state.active.active_pipeline_run_id,
+        active_stage_name:d.stage_name||'PHASE3_RERUN',
+        active_run_status:d.status||(d.queued?'QUEUED':'STARTED'),
+        active_code_version:d.code_version||state.active.active_code_version
+      };
+    }
+    phase3ResumePendingBatchId=null;
+    renderPending();
+    toast(d.already_active
+      ? 'Phase 3 is already active · Run #'+String(d.pipeline_run_id||'—')
+      : 'Phase 3 queued · Run #'+String(d.pipeline_run_id||'—'),4200);
+    setTimeout(()=>refreshDesktopActiveBatch(),700);
+    if(isMobileBackoffice()&&mobileState.module==='batches'){
+      try{await loadBatches()}catch(_){}
+      mobileActiveBatchDetail();
+    }
   }catch(e){
-    toast(e.message);
+    phase3ResumePendingBatchId=null;
+    toast('Phase 3 retry failed · '+String(e.message||e),5200);
     buttons.forEach(x=>{x.disabled=false;x.textContent='▶ Retry Phase 3'});
+    renderPending();
   }
 }
 async function loadBatchQaSummary(batchId){
