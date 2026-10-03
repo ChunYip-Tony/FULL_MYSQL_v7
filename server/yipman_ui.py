@@ -1473,7 +1473,8 @@ async function refreshAfterFamilyTrueStock(){
    return;
  }
  if(current==='order'){
-   await loadOrder(orderDate,{force:true});
+   if(orderMode==='PROMOTION')await loadPromotionOrder();
+   else await loadOrder(orderDate,{force:true});
    return;
  }
  if(current==='price'){
