@@ -3139,6 +3139,9 @@ BACKOFFICE_HTML = r'''<!doctype html>
         <span id="dbOverallStatus" class="pill blue">CHECKING</span>
       </div>
       <div id="dbOverviewError"></div>
+      <div id="dbPublishedStatus" class="calc" style="margin:0 11px 10px">
+        <b>Published data:</b> checking current Quick Check snapshot…
+      </div>
 
       <div class="sectiontitle" style="padding:2px 11px">1. Upload New Files</div>
       <div class="uploadgrid" style="grid-template-columns:1fr">
@@ -3737,11 +3740,18 @@ async function mobileRefreshHome(){
 
   const latest=state.recent?.[0]||null;
   const qaCount=Array.isArray(state.qaIssues)?state.qaIssues.length:0;
-  if(state.active||latest||q){
-    const batch=state.active
-      ? 'BATCH #'+(state.active.batch_id||state.active.id||'—')+' PROCESSING'
-      : (latest?'BATCH #'+(latest.batch_id||'—'):'NO RECENT BATCH');
-    setCard('mDataModuleMeta',batch+' · '+qaCount+' QA',qaCount?'warn':'good');
+  const pubBatch=dash?.quick_check?.latest_publish_batch_id;
+  const latestDh=dh?.latest||{};
+  if(state.active){
+    setCard('mDataModuleMeta','BATCH #'+(state.active.batch_id||state.active.id||'—')+' PROCESSING · '+qaCount+' QA',qaCount?'warn':'neutral');
+  }else if(pubBatch){
+    setCard(
+      'mDataModuleMeta',
+      'PUBLISHED #'+pubBatch+' · POS '+shortDate(latestDh.POS?.date||'—')+' · MVT '+shortDate(latestDh.MVT?.date||'—'),
+      qaCount?'warn':'good'
+    );
+  }else if(latest||q){
+    setCard('mDataModuleMeta',(latest?'BATCH #'+(latest.batch_id||'—'):'NO RECENT BATCH')+' · '+qaCount+' QA',qaCount?'warn':'good');
   }else setCard('mDataModuleMeta','BATCH / QA STATUS UNAVAILABLE','neutral');
 
   const updated=mNode('mHomeUpdated');
@@ -6095,21 +6105,43 @@ $('#qaRefresh').onclick=loadQA;
 
 async function loadDatabaseOverview(){
   const err=$('#dbOverviewError');if(err)err.innerHTML='';
-  const [hRes,aRes,rRes,qRes]=await Promise.allSettled([
+  const [hRes,aRes,rRes,qRes,dashRes,dhRes]=await Promise.allSettled([
     api('/healthz',{timeoutMs:12000}),
     api('/v1/web-upload/active',{timeoutMs:12000}),
     api('/v1/web-upload/recent?limit=8',{timeoutMs:15000}),
-    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000})
+    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000}),
+    api('/v1/app/dashboard',{timeoutMs:12000}),
+    api('/v1/backoffice/data-health?days=14',{timeoutMs:15000})
   ]);
 
   const h=hRes.status==='fulfilled'?hRes.value:null;
   const a=aRes.status==='fulfilled'?aRes.value:null;
   const r=rRes.status==='fulfilled'?rRes.value:null;
   const q=qRes.status==='fulfilled'?qRes.value:null;
+  const dash=dashRes.status==='fulfilled'?dashRes.value:null;
+  const dh=dhRes.status==='fulfilled'?dhRes.value:null;
 
   if(a)state.active=a.active_batch||null;
   if(r)state.recent=r.batches||[];
   if(q){state.qaIssues=q.issues||[];state.qaHistory=q.resolution_history||[]}
+  if(dh){
+    state.dataHealth=dh;
+    document.dispatchEvent(new CustomEvent('fullmysql:data-health-updated',{detail:dh}));
+  }
+
+  const pubBox=$('#dbPublishedStatus');
+  if(pubBox){
+    const quick=dash?.quick_check||{};
+    const pubBatch=quick.latest_publish_batch_id;
+    const pubAt=quick.latest_published_at;
+    const latest=dh?.latest||{};
+    const pos=latest.POS?.date||'—',mvt=latest.MVT?.date||'—',price=latest.PRICE?.date||'—',oh=latest.OH?.date||'—';
+    if(pubBatch){
+      pubBox.innerHTML='<b>Published data:</b> Batch #'+esc(pubBatch)+' · POS through <b>'+esc(pos)+'</b> · MVT through <b>'+esc(mvt)+'</b> · Price '+esc(price)+' · OH '+esc(oh)+(pubAt?' · Published '+esc(pubAt):'');
+    }else{
+      pubBox.innerHTML='<b>Published data:</b> current Quick Check publish status unavailable.';
+    }
+  }
 
   const activeId=String(state.active?.batch_id||state.active?.id||'');
   const latest=(state.recent||[]).find(b=>!activeId||String(b.batch_id||b.id)!==activeId)||null;
@@ -6152,7 +6184,7 @@ async function loadDatabaseOverview(){
   $('#dbUploadSummary').textContent=state.active?'Wait for current batch to finish':'Ready for a new source batch';
 
   const highQa=q?state.qaIssues.some(x=>['HIGH','CRITICAL'].includes(String(x.severity||'').toUpperCase())):false;
-  const failures=[hRes,aRes,rRes,qRes].filter(x=>x.status==='rejected').length;
+  const failures=[hRes,aRes,rRes,qRes,dashRes,dhRes].filter(x=>x.status==='rejected').length;
   const status=$('#dbOverallStatus');
   if(failures){
     status.textContent='PARTIAL';
@@ -6581,6 +6613,7 @@ async function loadData(){
   try{
     const d=await api('/v1/backoffice/data-health?days=14');
     state.dataHealth=d;
+    document.dispatchEvent(new CustomEvent('fullmysql:data-health-updated',{detail:d}));
     const latest=d.latest||{};
     const sourceKeys=['POS','MVT','PRICE','OH','LIVE_FRESH','FROZEN'];
     const labels={POS:'POS',MVT:'MVT',PRICE:'Price',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
