@@ -595,7 +595,8 @@ def web_upload_create_batch(body:BatchCreate,request:Request):
             # Fast blocker #1: ingest_batch states that must prevent a new raw upload.
             cur.execute(
                 """SELECT batch_id,batch_key,batch_label,processing_status,
-                          upload_started_at,completed_at
+                          upload_started_at,completed_at,file_count,source_row_count,
+                          notes
                    FROM ingest_batch
                    WHERE processing_status IN (
                      'API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED',
@@ -605,6 +606,46 @@ def web_upload_create_batch(body:BatchCreate,request:Request):
                    LIMIT 1"""
             )
             active=cur.fetchone()
+
+            # Reuse an existing empty browser-upload session instead of rejecting
+            # the user's next upload attempt. This is specifically for the case
+            # where create-batch succeeded but file upload never began.
+            if active and str(active.get('processing_status') or '').upper()=='API_UPLOADING' and int(active.get('file_count') or 0)==0 and int(active.get('source_row_count') or 0)==0:
+                owner=None
+                try:
+                    parsed=json.loads(active.get('notes') or '{}')
+                    if isinstance(parsed,dict):
+                        owner=str(parsed.get('device_id') or '').strip() or None
+                except Exception:
+                    owner=None
+                if owner in {None,WEB_UPLOAD_DEVICE}:
+                    reuse_notes=json.dumps(
+                        {
+                            'v7':True,
+                            'device_id':WEB_UPLOAD_DEVICE,
+                            'state':'UPLOADING',
+                            'reused_empty_session':True,
+                            'reused_at':datetime.now().isoformat(timespec='seconds'),
+                        },
+                        ensure_ascii=False,
+                    )
+                    cur.execute(
+                        """UPDATE ingest_batch
+                           SET batch_label=%s,notes=%s
+                           WHERE batch_id=%s
+                             AND processing_status='API_UPLOADING'
+                             AND COALESCE(file_count,0)=0
+                             AND COALESCE(source_row_count,0)=0""",
+                        (label,reuse_notes,int(active['batch_id'])),
+                    )
+                    conn.commit()
+                    return {
+                        'created':False,
+                        'reused':True,
+                        'batch_id':int(active['batch_id']),
+                        'session_id':str(active['batch_key']),
+                        'device_id':WEB_UPLOAD_DEVICE,
+                    }
 
             # Fast blocker #2: a queued/running post-raw or Phase 3 job.
             if not active:
