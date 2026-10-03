@@ -1,3 +1,13 @@
+v7.0.437 Stock Flow Neutral Compact + Receipt Cost:
+- Yipman mobile Stock Flow now uses the approved neutral compact treatment: white/gray cards and controls with restrained blue navigation, red only for risk/warnings, and green reserved for receipt/healthy context.
+- Stock Flow default sort is Over-selling % descending instead of absolute Difference; Difference, 7D Receipt, 7D Selling, and Name remain available.
+- A red USUALLY FRIDAY DELIVERY warning appears only when Friday is the dominant observed physical-receipt weekday, with at least 2 Friday receipt dates and at least 50% of observed receipt dates.
+- Recent Receipts defaults to the latest event and exposes SHOW 2 / HIDE to expand the second receipt, reducing vertical empty space.
+- Stock Flow now shows Latest Receipt Cost in the Recent Receipts header. Cost uses MOVEMENT_RECEIPT_VALUATION on the latest physical receipt date, preserving 101/107 cost authority while receipt quantity/date remain canonical physical 101/109 semantics.
+- Stock Flow backend default ordering is receipt-over-selling percentage descending and contract advances to YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST.
+- Yipman service-worker shell cache advances to v437.
+Version: 7.0.437 Single-Service Edition
+
 v7.0.434 Current TPR Timeout Repair:
 - Current TPR review now uses a persistent asynchronous stale-while-refresh cache instead of recalculating the entire TPR dataset inside the mobile HTTP request.
 - The Current TPR cache is warmed automatically when the single-service server starts.
