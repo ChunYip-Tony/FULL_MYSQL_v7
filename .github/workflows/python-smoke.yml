@@ -914,12 +914,13 @@ jobs:
           assert "orderNextDate=plusDaysIso(orderDate,7)" in text
           assert "/v1/yipman/stock-flow?limit=100" in text
           assert "$$('[data-stock-category]').forEach" in text
-          assert "$('[data-stock-receipts]').forEach" in text
+          assert "$$('[data-stock-receipts]').forEach" in text
           assert 'id="headFreshness"' in text
           assert "/v1/yipman/header-freshness" in text
           assert "function renderHeaderFreshness" in text
           assert "function loadHeaderFreshness" in text
           assert "loadHeaderFreshness();" in text
+          assert "$('#headFreshness .hfitem').forEach" in text
           assert "html:not(.yipman-desktop) .brand{font-size:29px}" in text
           api_src=Path('api.py').read_text(encoding='utf-8')
           assert "@app.get('/v1/yipman/header-freshness')" in api_src
