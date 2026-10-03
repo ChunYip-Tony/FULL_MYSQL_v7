@@ -4427,6 +4427,7 @@ def yipman_ordering(
     category:str='ALL',
     delivery_date:str|None=None,
     next_delivery_date:str|None=None,
+    force:bool=False,
 ):
     try:
         parsed_delivery=None
@@ -4442,17 +4443,26 @@ def yipman_ordering(
             except ValueError:
                 raise ValueError('NEXT_DELIVERY_DATE_MUST_BE_YYYY_MM_DD')
         result=(
-            backoffice_cached_ordering_review(
+            backoffice_ordering_review(
                 category=category,
                 delivery_date=parsed_delivery,
                 next_delivery_date=parsed_next_delivery,
                 best_available_delivery_evidence=True,
             )
-            if parsed_delivery is not None
-            else backoffice_ordering_review(
-                category=category,
-                next_delivery_date=parsed_next_delivery,
-                best_available_delivery_evidence=True,
+            if parsed_delivery is not None and force
+            else (
+                backoffice_cached_ordering_review(
+                    category=category,
+                    delivery_date=parsed_delivery,
+                    next_delivery_date=parsed_next_delivery,
+                    best_available_delivery_evidence=True,
+                )
+                if parsed_delivery is not None
+                else backoffice_ordering_review(
+                    category=category,
+                    next_delivery_date=parsed_next_delivery,
+                    best_available_delivery_evidence=True,
+                )
             )
         )
     except ValueError as exc:
