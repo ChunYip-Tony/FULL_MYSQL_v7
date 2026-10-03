@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v441'" in ui
+          assert "const CACHE='yipman-v442'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -190,8 +190,8 @@ jobs:
 
           src=inspect.getsource(bo.current_tpr_review)
           cached_src=inspect.getsource(bo.cached_current_tpr_review)
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE' in src
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE' in cached_src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V5_EFFECTIVE_OH_FIFO' in src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_EFFECTIVE_OH_FIFO_ASYNC_CACHE' in cached_src
           assert 'NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH' in cached_src
           assert 'AUTHORITATIVE_LIVE_CURRENT_PRICE_TYPE_EQUALS_TPR' in src
           assert 'CONTINUOUS_PRICE_LIST_TPR' in src and 'CONTIGUOUS_POS_TPR' in src
@@ -201,6 +201,12 @@ jobs:
           assert 'MAKE_REGULAR' in src and 'RAISE_TPR_PRICE' in src and 'LOWER_TPR_PRICE' in src and 'CANCEL_TPR' in src
           assert 'projected_days_to_clear_oh' in src and 'required_velocity_to_clear' in src
           assert 'readiness != "READY"' in src
+          assert '_fifo_freshness_plan' in src
+          assert 'AGING_STOCK_ZERO_BY_THRESHOLD_END' in inspect.getsource(bo._fifo_freshness_plan)
+          assert 'freshness_window_start_doh' in src
+          assert 'aging_stock_quantity' in src
+          assert 'original_regular_price' in src
+          assert 'system_oh' in src and 'effective_oh' in src
 
           api_src=Path('api.py').read_text(encoding='utf-8')
           assert "@app.get('/v1/yipman/current-tpr-review')" in api_src
@@ -218,6 +224,13 @@ jobs:
           assert 'FIND NEW REGULAR SWEET SPOT' in ui
           assert 'FRESHNESS SELL-THROUGH' in ui
           assert 'BEFORE TPR' in ui and 'PROJECTED 7D' in ui
+          assert 'OLD-STOCK GOAL:' in ui
+          assert 'CANCEL → RESTORE ORIGINAL REG' in ui
+          assert 'IGNORE 12 HOURS' in ui
+          assert 'SUGGESTION_IGNORE_MS=12*60*60*1000' in ui
+          assert 'EFFECTIVE OH · TAP TO CHANGE' in ui
+          assert 'SYSTEM OH' in ui
+          assert '/v1/app/v2/pi/' in ui
           assert '/purpose' in ui
           assert 'reg_suggestion_actionable' in inspect.getsource(bo.pricing_review)
           assert 'tpr_suggestion_actionable' in inspect.getsource(bo.pricing_review)
@@ -288,8 +301,8 @@ jobs:
           assert 'WHERE family_id IN ({ph})' in src
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
-          assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
-          assert 'YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST' in src
+          assert 'stock_family_rows.setdefault(' in src
+          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -312,6 +325,9 @@ jobs:
           assert '"friday_delivery_warning": friday_delivery_warning' in src
           assert '"latest_receipt_cost"' in src
           assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
+          assert '_family_system_oh' in src and '_family_effective_oh' in src
+          assert 'system_oh_quantity' in src and 'effective_oh_quantity' in src
+          assert 'effective_dos' in src
           assert "$$('[data-stock-category]').forEach" in ui
           assert "$$('[data-stock-receipts]').forEach" in ui
           assert 'AVG PROMO PRICE' in ui
@@ -329,7 +345,10 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v441'" in ui
+          assert 'articleTone' in ui
+          assert 'EFFECTIVE OH · TAP TO CHANGE' in ui
+          assert 'SYSTEM OH' in ui
+          assert "const CACHE='yipman-v442'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
@@ -425,8 +444,14 @@ jobs:
           assert "setPath('[data-q-tested]',row.tested_price,'Not set')" in ui
           assert '.qprice b.qempty' in ui
           assert 'IGNORE 12 HOURS' in ui
-          assert 'priceIgnoredThisVisit.has(id)' in ui
+          assert 'Date.now()-ts>=PRICE_IGNORE_MS' in ui
           assert 'PRICE_IGNORE_MS=12*60*60*1000' in ui
+          assert 'SUGGESTION_IGNORE_MS=12*60*60*1000' in ui
+          assert "suggestionIsIgnored('ORDER'" in ui
+          assert "suggestionIsIgnored('TPR_PROGRESS'" in ui
+          assert '#quick .stockflowfilters{position:sticky' in ui
+          assert '#order .order-tools{position:sticky' in ui
+          assert '#price .price-tabs{position:sticky' in ui
           assert '.page{display:none;height:100%;overflow-y:auto;overflow-x:hidden' in ui
           assert 'grid-template-columns:minmax(0,1fr) minmax(0,1fr)' in ui
           assert '#data{overflow-x:hidden}' in ui
