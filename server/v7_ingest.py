@@ -171,8 +171,65 @@ def find_active_batch() -> dict[str,Any]|None:
             if isinstance(v,(date,datetime)): row[k]=_wire_value(v)
     return row
 
+def find_active_batch_core() -> dict[str,Any]|None:
+    """Fast active-batch check for upload creation.
+
+    Creating a batch must not depend on the enrichment-heavy find_active_batch()
+    path (QA issue counts, file summaries, progress payloads). Those diagnostics
+    are useful for display, but can make POST /v1/web-upload/batches wait behind
+    large QA tables or a busy Phase 3 run.
+    """
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            # First check the statuses that directly block a new RAW upload.
+            cur.execute(
+                """SELECT batch_id,batch_key,batch_label,processing_status,
+                          upload_started_at,completed_at,file_count,source_row_count,
+                          error_count,notes
+                   FROM ingest_batch
+                   WHERE processing_status IN (
+                     'API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED',
+                     'RELEASED','PHASE2C_READY'
+                   )
+                   ORDER BY batch_id DESC
+                   LIMIT 1"""
+            )
+            row=cur.fetchone()
+            if not row:
+                # A Phase 3 rerun can also block a new batch even after the
+                # ingest_batch status has advanced. Query the latest active run
+                # directly instead of a correlated EXISTS over all batches.
+                cur.execute(
+                    """SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
+                              ib.upload_started_at,ib.completed_at,ib.file_count,
+                              ib.source_row_count,ib.error_count,ib.notes,
+                              pr.pipeline_run_id AS active_pipeline_run_id,
+                              pr.stage_name AS active_stage_name,
+                              pr.processing_status AS active_run_status,
+                              pr.code_version AS active_code_version,
+                              pr.started_at AS active_run_started_at
+                       FROM pipeline_run pr
+                       JOIN ingest_batch ib ON ib.batch_id=pr.batch_id
+                       WHERE pr.pipeline_name=%s
+                         AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                         AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                       ORDER BY pr.pipeline_run_id DESC
+                       LIMIT 1""",
+                    (API_PIPELINE,),
+                )
+                row=cur.fetchone()
+        finally:
+            cur.close()
+    if row:
+        row['device_id']=_device_from_notes(row.get('notes'))
+        for k,v in list(row.items()):
+            if isinstance(v,(date,datetime)):
+                row[k]=_wire_value(v)
+    return row
+
 def begin_batch(device_id: str, label: str|None=None) -> dict[str,Any]:
-    active=find_active_batch()
+    active=find_active_batch_core()
     if active:
         return {'created':False,'active':active}
     batch_key=str(uuid.uuid4())
