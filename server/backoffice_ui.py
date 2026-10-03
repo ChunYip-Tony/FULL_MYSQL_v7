@@ -4720,8 +4720,10 @@ function phase3ProgressState(b){
   const heartbeatFresh=b?.active_heartbeat_fresh===true;
   let healthText='STARTED';
   if(runStatus==='QUEUED')healthText='WAITING FOR WORKER';
+  else if(b?.active_run_stale===true)healthText='⚠ NO WORKER HEARTBEAT';
   else if(heartbeatFresh)healthText='● WORKER ALIVE';
   else if(heartbeatKnown)healthText='⚠ HEARTBEAT DELAYED';
+  else if(runStatus==='STARTED')healthText='HEARTBEAT PENDING';
 
   const stageLabel=stage.replace(/^PHASE3_/,'').replaceAll('_',' ');
   return {
@@ -6496,7 +6498,8 @@ function activeCard(a){
       '<div class="meta" style="margin-top:7px"><b>'+fmt(ready,0)+' READY · '+fmt(hold,0)+' HOLD</b>'+completed+'</div>'+emptyUpload+'</div>';
   }
 
-  const status=runStatus||a.processing_status||a.status||'PROCESSING';
+  const stale=a.active_run_stale===true;
+  const status=stale?'POSSIBLY STUCK':(runStatus||a.processing_status||a.status||'PROCESSING');
   const p=phase3ProgressState(a);
   const files=Array.isArray(a.active_files)?a.active_files:[];
   const first=files[0]||{};
@@ -6535,6 +6538,7 @@ function activeCard(a){
     progress+
     '<div class="desktop-batch-file"><div><small>SOURCE FILE</small><b>'+esc(fileName)+'</b><span>'+esc(source||'Source')+' · '+esc(coverage)+' · '+esc(first.processing_status||'')+'</span></div></div>'+
     '<div class="desktop-batch-runtime"><span><small>Started</small><b>'+esc(started)+'</b></span><span><small>Heartbeat</small><b>'+esc(heartbeat)+'</b></span><span><small>Worker</small><b>'+esc(worker)+'</b></span></div>'+
+    (stale?'<div class="error" style="margin-top:10px"><b>Phase 3 may be stalled.</b> No fresh worker heartbeat is being reported. The worker recovery fence will replace a stale run rather than starting a duplicate copy.</div>':'')+
     '<div class="desktop-batch-issues-block"><div class="desktop-batch-issues-head"><b>Top current issues</b><span>'+fmt(errors,0)+' open</span></div>'+desktopBatchIssuesHtml(a,4)+'</div>'+
     '<button type="button" class="btn soft active-batch-monitor-btn" data-batch="'+esc(id)+'">Open Live Monitor</button>'+
   '</div>';
@@ -6542,7 +6546,7 @@ function activeCard(a){
 function openDesktopActiveBatchMonitor(){
   const b=state.active;if(!b){toast('No active batch');return}
   const runStatus=String(b.active_run_status||'').toUpperCase();
-  const displayStatus=runStatus||b.processing_status||b.status||'PROCESSING';
+  const displayStatus=b.active_run_stale===true?'POSSIBLY STUCK':(runStatus||b.processing_status||b.status||'PROCESSING');
   const p=phase3ProgressState(b);
   const first=(b.active_files||[])[0]||{};
   const fileName=b.active_file_name||first.original_filename||b.batch_label||'Current source batch';
