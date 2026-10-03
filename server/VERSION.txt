@@ -1,3 +1,19 @@
+v7.0.442 Ordering Readability + Searchable Manual Promotion:
+- Preserves the full v7.0.441 Price Review, TPR lifecycle, Clearance, Stock Flow, and source-freshness behavior.
+- Regular Ordering now defaults to Suggested Order Qty descending.
+- Family Article cards use larger fully wrapping names, a full-width Family identity row, and soft alternating Family colors while keeping OH and Suggested Order obvious.
+- Every selected delivery-day Family can show its historical Delivery Article #, full Delivery Article name, related pack size, and unique observed delivery-day count on the main card; full receipt history stays behind Family detail.
+- Delivery Article observed-day summaries are restricted to the selected delivery weekday so Friday-only receiving evidence does not appear in a Tuesday roster.
+- Ordering OH is directly editable in-place. Tap clears the current value for entry; a valid saved value commits through the existing Family True Stock endpoint and becomes the system-wide Effective OH baseline.
+- Promotion Ordering uses the same system-wide True Stock edit instead of request-only temporary OH as the mobile editing workflow.
+- Manual Promotion is search-first: search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name using current typo-tolerant search.
+- After item selection Yipman hydrates Family True Stock, 7D sales context, and Delivery/Receiving Article details before the user enters SALE price and promotion/delivery dates.
+- One selected item per Family prevents duplicate Family inventory from being counted twice in one manual promotion list.
+- Confirmed historical Delivery Articles can map into Manual Promotion through the active confirmed Article-to-Family bridge.
+- Fresh/Live promotion ordering retains the existing freshness / projected-discard-aware coverage logic.
+- Ordering review cache advances to V20_DELIVERY_ARTICLE_DAYS and Yipman service-worker cache advances to v442.
+Version: 7.0.442 Single-Service Edition
+
 v7.0.441 Four-Mode Price Review + TPR Lifecycle + Clearance:
 - Integrates the v7.0.440 larger mobile/header freshness build with the new price architecture.
 - Price Review has four operational lanes: REG, TPR Suggest, TPR Progress, and Clearance.
