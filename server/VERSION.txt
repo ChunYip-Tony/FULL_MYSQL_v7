@@ -1,3 +1,15 @@
+v7.0.431 Source-Aware Freshness Cache Repair:
+- Price Suggestions no longer treats cache age alone as freshness. Cached pricing is invalidated immediately when canonical POS or MVT data-through advances.
+- Ordering cache now compares its analysis basis against live canonical POS/MVT dates, so same-day uploads trigger an immediate rebuild even when the completed-through reference date is unchanged.
+- Home Summary uses the same source-signature check and refreshes counts/analysis immediately after newly published canonical data.
+- Mobile Price Suggestions always displays the live canonical POS/MVT data-through dates. If suggestions are still rebuilding, the prior analysis basis is shown separately instead of being presented as current.
+- Mobile Ordering auto-retries while a newer canonical source signature is being applied.
+- Quick Check price hydration continues polling when pricing is rebuilding from newer source data.
+- AI brief freshness metadata now prefers live canonical source health over a stale analysis snapshot.
+- Desktop Price and Ordering use the same live-source freshness behavior and automatically retry source-changed analysis.
+- Yipman PWA service-worker cache advanced to v431 so installed-app shell fallback cannot retain an older UI generation.
+Version: 7.0.431 Single-Service Edition
+
 v7.0.400 Manual Promotion + Freshness-Aware Ordering:
 - Promotion Ordering now supports manual entry in the current Yipman mobile UI in addition to saved/imported promotion lists.
 - Manual entry accepts one or multiple UPCs with SALE price, promotion start/end, Delivery Date, and Next Delivery Date; arbitrary manual promotion windows are stored as CUSTOM.
