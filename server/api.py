@@ -3952,6 +3952,103 @@ def backoffice_lineage_audit():
 
 
 
+@app.get('/v1/yipman/header-freshness')
+def yipman_header_freshness():
+    """Compact top-bar freshness for the Yipman mobile shell."""
+    try:
+        health=data_health_14_day_board(days=31)
+        latest=health.get('latest') or {}
+        today=health.get('today')
+        pos_required=health.get('pos_required_through')
+        mvt_required=health.get('mvt_required_through')
+
+        def _age(d):
+            return max(0,(today-d).days) if today is not None and d is not None else None
+
+        def _daily(label,required):
+            row=latest.get(label) or {}
+            d=row.get('date')
+            gap=max(0,(required-d).days) if required is not None and d is not None else None
+            if d is None:
+                state='MISSING'; tone='bad'
+            elif gap==0:
+                state='CURRENT'; tone='good'
+            elif gap==1:
+                state='1D'; tone='warn'
+            else:
+                state=f'{gap}D'; tone='bad'
+            return {'date':d,'state':state,'tone':tone,'file':row.get('file')}
+
+        def _snapshot(label):
+            row=latest.get(label) or {}
+            d=row.get('date')
+            age=_age(d)
+            if d is None:
+                state='MISSING'; tone='bad'
+            elif age==0:
+                state='CURRENT'; tone='good'
+            elif age==1:
+                state='1D'; tone='warn'
+            else:
+                state=f'{age}D'; tone='bad'
+            return {'date':d,'state':state,'tone':tone,'file':row.get('file')}
+
+        dash=operational_dashboard()
+        batch_id=(dash.get('quick_check') or {}).get('latest_publish_batch_id')
+        sheet={'date':None,'state':'NONE','tone':'bad','batch_id':batch_id}
+        if batch_id:
+            s=chatgpt_publish_status(int(batch_id),pipeline_name=API_PIPELINE)
+            run_status=str(s.get('status') or '').upper()
+            result=s.get('publish_result') or {}
+            result_status=str(result.get('status') or '').upper()
+            source_status=((result.get('readback') or {}).get('source_status') or {})
+            published_at=source_status.get('Snapshot_Published_At_UTC') or s.get('completed_at')
+            sheet_date=None
+            if published_at:
+                try:
+                    sheet_date=date.fromisoformat(str(published_at)[:10])
+                except Exception:
+                    sheet_date=None
+            if run_status=='COMPLETED' and result_status=='PASS':
+                state='PASS'; tone='good'
+            elif run_status in {'QUEUED','STARTED','PAUSE_REQUESTED'}:
+                state='BUILDING'; tone='warn'
+            elif run_status=='COMPLETED':
+                state='FAILED'; tone='bad'
+            elif run_status=='NONE':
+                state='NONE'; tone='bad'
+            else:
+                state=run_status or 'UNKNOWN'; tone='bad'
+            sheet={
+                'date':sheet_date,
+                'state':state,
+                'tone':tone,
+                'batch_id':batch_id,
+                'run_status':run_status,
+                'publish_result_status':result_status or None,
+            }
+
+        return json.loads(json.dumps({
+            'contract_version':'YIPMAN_HEADER_FRESHNESS_V1',
+            'today':today,
+            'sources':{
+                'POS':_daily('POS',pos_required),
+                'MVT':_daily('MVT',mvt_required),
+                'FRZ':_snapshot('FROZEN'),
+                'FRESH':_snapshot('LIVE_FRESH'),
+                'OH':_snapshot('OH'),
+                'CHATGPT':sheet,
+            },
+            'rules':{
+                'daily_sources':'CURRENT when latest canonical date reaches required-through; 1D warn; older bad',
+                'snapshot_sources':'age from business today; 0D current; 1D warn; older bad',
+                'chatgpt':'PASS only when current serving batch ChatGPT Sheet publish completed with PASS readback',
+            },
+        },default=j))
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman header freshness failed: {exc}')
+
+
 @app.get('/v1/yipman/best-sellers')
 def yipman_best_sellers(limit:int=8):
     try:
