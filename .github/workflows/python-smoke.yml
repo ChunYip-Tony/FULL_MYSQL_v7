@@ -147,6 +147,36 @@ jobs:
           print('ordering-pricing-no-grace-best-available=PASS')
           PY
 
+      - name: Validate source-aware freshness cache contract
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import backoffice_runtime as b
+
+          ordering=inspect.getsource(b.cached_ordering_review)
+          pricing=inspect.getsource(b.cached_pricing_review)
+          home=inspect.getsource(b.backoffice_home_summary)
+          assert 'source_changed_since_analysis' in ordering
+          assert 'current_source_health' in ordering
+          assert 'SOURCE_CHANGED_REFRESHING' in ordering
+          assert 'source_changed_since_analysis' in pricing
+          assert 'current_source_health' in pricing
+          assert 'READY_SOURCE_CHANGED_REFRESHING' in pricing
+          assert 'source_changed_since_analysis' in home
+          assert 'SOURCE_CHANGED_REFRESHING' in home
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+          assert "const CACHE='yipman-v431'" in ui
+          assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
+          assert "current_source_health||priceData?.current_source_health" in ui
+          assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
+          assert 'LATEST DATA · REBUILDING' in desktop
+          assert "cache==='SOURCE_CHANGED_REFRESHING'" in desktop
+          print('source-aware-freshness-cache-v431=PASS')
+          PY
+
       - name: Validate Stock Flow 28-day related-UPC promotion context
         run: |
           python - <<'PY'
