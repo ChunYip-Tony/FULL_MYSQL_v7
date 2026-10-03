@@ -3329,6 +3329,13 @@ function restoreRoute({replaceMissing=false}={}){
   show(route.view,{syncHash:false,scroll:false,dbTab:route.dbTab});
   if(!hadHash&&replaceMissing)syncRouteHash(route.view,route.dbTab,{replace:true});
 }
+
+// Start the app before the rest of the optional control bindings execute.
+// This protects desktop loading from a later non-critical binding exception.
+setTimeout(()=>{try{boot()}catch(e){
+  const box=document.getElementById('desktopOverviewError')||document.getElementById('invError');
+  if(box)box.innerHTML='<div class="error"><b>Desktop startup error</b><br>'+String(e?.message||e)+'</div>';
+}},0);
 $$('.navbtn').forEach(b=>b.onclick=()=>show(b.dataset.view));
 $$('.dbtab').forEach(b=>b.onclick=()=>showDbTab(b.dataset.dbtab));
 $$('.dbjump').forEach(b=>b.onclick=()=>showDbTab(b.dataset.target));
@@ -6637,7 +6644,24 @@ function desktopSubmitSearch(value){
 $('#searchForm').onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#searchInput').value)};
 const dg=$('#desktopGlobalSearchForm');if(dg)dg.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopGlobalSearch').value)};
 const dq=$('#desktopQuickSearchForm');if(dq)dq.onsubmit=e=>{e.preventDefault();desktopSubmitSearch($('#desktopQuickSearch').value)};
-async function boot(){await loadHealth().catch(()=>{});if(isMobileBackoffice()){await mobileRestoreCurrentRoute()}else{initDesktopV3();restoreRoute({replaceMissing:true});}setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000);setInterval(refreshDesktopActiveBatch,5000)}boot();
+let fullmysqlBootStarted=false;
+async function boot(){
+  if(fullmysqlBootStarted)return;
+  fullmysqlBootStarted=true;
+  try{
+    await loadHealth().catch(()=>{});
+    if(isMobileBackoffice())await mobileRestoreCurrentRoute();
+    else{initDesktopV3();restoreRoute({replaceMissing:true});}
+    setInterval(()=>{if(!document.hidden&&!isMobileBackoffice()&&$('#database').classList.contains('on')){const current=$('#database .subview.on');if(current?.id==='dboverview'){loadDatabaseOverview();loadBatches()}}},15000);
+    setInterval(refreshDesktopActiveBatch,5000);
+  }catch(e){
+    fullmysqlBootStarted=false;
+    const box=document.getElementById('desktopOverviewError')||document.getElementById('invError');
+    if(box)box.innerHTML='<div class="error"><b>Desktop startup error</b><br>'+esc(e?.message||e)+'</div>';
+    throw e;
+  }
+}
+boot().catch(()=>{});
 })();
 </script>
 </body></html>'''
