@@ -228,20 +228,48 @@ def _resolve_family(cur, code: str | None) -> dict[str,Any] | None:
         (raw,raw,raw,numeric,numeric,raw,raw,raw),
     )
     row=cur.fetchone()
-    if not row:
-        return None
-    basis=(
-        "FAMILY_ARTICLE"
-        if str(row.get("main_article_number") or "")==raw
-        else "SELLING_ARTICLE"
-        if str(row.get("article_number") or "")==raw
-        else "UPC"
+    if row:
+        basis=(
+            "FAMILY_ARTICLE"
+            if str(row.get("main_article_number") or "")==raw
+            else "SELLING_ARTICLE"
+            if str(row.get("article_number") or "")==raw
+            else "UPC"
+        )
+        return {
+            "family_id":int(row["family_id"]),
+            "family_article_number":str(row.get("main_article_number") or ""),
+            "family_name":row.get("family_description"),
+            "mapping_basis":basis,
+        }
+
+    # Search-first Manual Promotion also exposes confirmed historical Delivery /
+    # Receiving Articles. Those articles may not be a current Selling Article
+    # in quick_check_current, so resolve them through the authoritative
+    # confirmed Article -> Family bridge rather than sending a known item to
+    # REVIEW after the user selected it from search.
+    cur.execute(
+        """SELECT pf.family_id,pf.main_article_number,pf.family_description,
+                  a.article_number
+           FROM article a
+           JOIN bridge_article_family baf
+             ON baf.article_id=a.article_id
+            AND baf.mapping_status='CONFIRMED'
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN product_family pf ON pf.family_id=baf.family_id
+           WHERE a.article_number=%s
+           ORDER BY baf.valid_from DESC,baf.bridge_id DESC
+           LIMIT 1""",
+        (raw,),
     )
+    bridged=cur.fetchone()
+    if not bridged:
+        return None
     return {
-        "family_id":int(row["family_id"]),
-        "family_article_number":str(row.get("main_article_number") or ""),
-        "family_name":row.get("family_description"),
-        "mapping_basis":basis,
+        "family_id":int(bridged["family_id"]),
+        "family_article_number":str(bridged.get("main_article_number") or ""),
+        "family_name":bridged.get("family_description"),
+        "mapping_basis":"DELIVERY_ARTICLE_CONFIRMED_FAMILY_BRIDGE",
     }
 
 
