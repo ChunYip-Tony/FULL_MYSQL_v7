@@ -4848,6 +4848,56 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
 
 
 
+def invalidate_operational_review_caches_for_true_stock() -> dict[str,Any]:
+    """Invalidate every OH-dependent operational snapshot after True Stock.
+
+    True Stock is an immediate physical-count authority. Cached Ordering,
+    Pricing, Current TPR, and Home summaries must never keep the previous OH
+    after a successful count.
+    """
+    global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT
+
+    with _ORDERING_REVIEW_CACHE_LOCK:
+        _ORDERING_REVIEW_CACHE_VALUES.clear()
+        _ORDERING_REVIEW_CACHE_AT.clear()
+    with _PRICING_REVIEW_CACHE_LOCK:
+        _PRICING_REVIEW_CACHE_VALUES.clear()
+        _PRICING_REVIEW_CACHE_AT.clear()
+    with _TPR_REVIEW_CACHE_LOCK:
+        _TPR_REVIEW_CACHE_VALUES.clear()
+        _TPR_REVIEW_CACHE_AT.clear()
+    with _HOME_SUMMARY_CACHE_LOCK:
+        _HOME_SUMMARY_CACHE_VALUE=None
+        _HOME_SUMMARY_CACHE_AT=0.0
+
+    deleted=[]
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            for table in (
+                "backoffice_ordering_review_cache",
+                "backoffice_pricing_review_cache",
+                "yipman_current_tpr_review_cache",
+                "backoffice_home_summary_cache",
+            ):
+                try:
+                    cur.execute(f"DELETE FROM {table}")
+                    deleted.append(table)
+                except Exception:
+                    # A cache table may not exist yet on a new install.
+                    pass
+            conn.commit()
+            cur.close()
+    except Exception:
+        pass
+    return {
+        "status":"INVALIDATED",
+        "reason":"TRUE_STOCK_CHANGED",
+        "memory_caches":["ORDERING","PRICING","CURRENT_TPR","HOME"],
+        "persisted_caches":deleted,
+    }
+
+
 def best_sellers_review(limit: int = 8) -> dict[str, Any]:
     """Fast Family-level Best Sellers payload for the Yipman empty-search home.
 
@@ -5714,6 +5764,7 @@ def _home_price_performance_summary() -> dict[str, Any]:
         anchor_entry = days[-1]
         cur.execute("SELECT * FROM quick_check_current")
         rows = [dict(x) for x in cur.fetchall()]
+        _overlay_active_true_stock_effective_oh(cur,rows)
         daily = _batch_daily_sales_by_price_type(cur, rows, days)
 
         live_prices = _bulk_live_current_prices(cur, rows)
