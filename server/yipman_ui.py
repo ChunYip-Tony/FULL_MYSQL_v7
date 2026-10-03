@@ -1686,8 +1686,8 @@ function renderStockFlow(){
    (rows.length?rows.map(stockFlowFamilyHtml).join(''):'<div class="empty stockflowempty">No Stock Flow items match these filters.</div>');
  const sel=$('#stockFlowSort');if(sel){sel.value=stockFlowSort;sel.onchange=e=>{stockFlowSort=e.target.value;renderStockFlow()}}
  $$('[data-stock-delivery]').forEach(b=>b.onclick=()=>{stockFlowDeliveryFilter=b.dataset.stockDelivery||'ALL';renderStockFlow()});
- $('[data-stock-category]').forEach(b=>b.onclick=()=>{stockFlowCategoryFilter=b.dataset.stockCategory||'ALL';renderStockFlow()});
- $('[data-stock-receipts]').forEach(b=>b.onclick=e=>{
+ $$('[data-stock-category]').forEach(b=>b.onclick=()=>{stockFlowCategoryFilter=b.dataset.stockCategory||'ALL';renderStockFlow()});
+ $$('[data-stock-receipts]').forEach(b=>b.onclick=e=>{
    e.stopPropagation();
    const box=b.closest('.bestrecent');if(!box)return;
    box.classList.toggle('open');
