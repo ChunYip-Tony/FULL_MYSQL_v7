@@ -783,16 +783,61 @@ def web_upload_status(session_id:str,request:Request,response:Response):
 
 @app.get('/v1/web-upload/active')
 def web_upload_active(request:Request,response:Response):
+    """Fast upload-status probe for the browser.
+
+    This endpoint must stay lightweight because the upload page polls it.
+    Do not call find_active_batch() here: that routine enriches QA/progress
+    details and can block the entire upload page while processing tables are busy.
+    """
     _browser_upload_guard(request)
     response.headers['Cache-Control']='no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma']='no-cache'
     response.headers['Expires']='0'
 
-    active=find_active_batch()
+    active=None
     latest=None
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         try:
+            # First find the most recent ingest state that directly blocks or
+            # represents an active browser upload.
+            cur.execute(
+                """SELECT batch_id,batch_key,batch_label,processing_status,
+                          upload_started_at,completed_at,file_count,source_row_count,
+                          error_count,notes
+                   FROM ingest_batch
+                   WHERE processing_status IN (
+                     'API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED',
+                     'RELEASED','PHASE2C_READY'
+                   )
+                   ORDER BY batch_id DESC
+                   LIMIT 1"""
+            )
+            active=cur.fetchone()
+
+            # If ingest_batch already advanced, surface any queued/running
+            # post-raw/Phase3 work without touching QA issue tables.
+            if not active:
+                cur.execute(
+                    """SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
+                              ib.upload_started_at,ib.completed_at,ib.file_count,
+                              ib.source_row_count,ib.error_count,ib.notes,
+                              pr.pipeline_run_id AS active_pipeline_run_id,
+                              pr.stage_name AS active_stage_name,
+                              pr.processing_status AS active_run_status,
+                              pr.code_version AS active_code_version,
+                              pr.started_at AS active_run_started_at
+                       FROM pipeline_run pr
+                       JOIN ingest_batch ib ON ib.batch_id=pr.batch_id
+                       WHERE pr.pipeline_name=%s
+                         AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                         AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                       ORDER BY pr.pipeline_run_id DESC
+                       LIMIT 1""",
+                    (API_PIPELINE,),
+                )
+                active=cur.fetchone()
+
             cur.execute(
                 """SELECT batch_id,batch_key,batch_label,processing_status,
                           upload_started_at,completed_at,notes
@@ -815,6 +860,9 @@ def web_upload_active(request:Request,response:Response):
                 break
         finally:
             cur.close()
+
+    if active:
+        active.pop('notes',None)
 
     return json.loads(json.dumps({
         'active_batch':active,
