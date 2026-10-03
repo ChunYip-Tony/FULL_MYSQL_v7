@@ -491,6 +491,7 @@ def true_stock_adjustment_log(
             "clear_deletes_true_stock":False,
             "clear_changes_override_status":False,
             "clear_changes_effective_oh":False,
+            "clear_resolves_pending_dumping_tasks":True,
             "true_stock_rollforward":"ACTIVE_TRUE_STOCK_PLUS_VALID_MOVEMENTS_AFTER_ANCHOR",
         },
     }
@@ -510,14 +511,39 @@ def clear_true_stock_adjustment_log(
             conn.commit()
             conn.start_transaction()
             cur.execute(
-                """UPDATE manual_true_stock
-                   SET adjustment_list_cleared_at=CURRENT_TIMESTAMP(6),
-                       adjustment_list_cleared_by=%s,
-                       adjustment_list_clear_note=%s
-                   WHERE adjustment_list_cleared_at IS NULL""",
-                (who,clear_note),
+                """SELECT true_stock_id
+                   FROM manual_true_stock
+                   WHERE adjustment_list_cleared_at IS NULL
+                   ORDER BY true_stock_id"""
             )
-            cleared=int(cur.rowcount or 0)
+            pending_rows=cur.fetchall()
+            ids=[int(x["true_stock_id"]) for x in pending_rows]
+            if ids:
+                ph=",".join(["%s"]*len(ids))
+                cur.execute(
+                    f"""UPDATE manual_true_stock
+                        SET adjustment_list_cleared_at=CURRENT_TIMESTAMP(6),
+                            adjustment_list_cleared_by=%s,
+                            adjustment_list_clear_note=%s
+                        WHERE true_stock_id IN ({ph})
+                          AND adjustment_list_cleared_at IS NULL""",
+                    (who,clear_note,*ids),
+                )
+                cleared=int(cur.rowcount or 0)
+                cur.execute(
+                    f"""UPDATE dumping_discrepancy_queue
+                        SET queue_status='RESOLVED',
+                            resolved_at=CURRENT_TIMESTAMP(6),
+                            resolved_by=%s,
+                            resolution_note=%s
+                        WHERE source_true_stock_id IN ({ph})
+                          AND queue_status='PENDING'""",
+                    (who,clear_note,*ids),
+                )
+                dumping_resolved=int(cur.rowcount or 0)
+            else:
+                cleared=0
+                dumping_resolved=0
             cur.execute(
                 """SELECT MAX(true_stock_id) AS last_true_stock_id
                    FROM manual_true_stock
@@ -528,12 +554,13 @@ def clear_true_stock_adjustment_log(
             return {
                 "status":"CLEARED",
                 "cleared_count":cleared,
+                "dumping_rows_resolved":dumping_resolved,
                 "last_true_stock_id":last_id,
                 "actor":who,
                 "note":clear_note,
                 "true_stock_baselines_unchanged":True,
                 "effective_oh_unchanged":True,
-                "dumping_queue_unchanged":True,
+                "dumping_tasks_resolved":True,
             }
         except Exception:
             conn.rollback()
