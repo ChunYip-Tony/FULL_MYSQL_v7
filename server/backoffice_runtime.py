@@ -279,6 +279,65 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
     return out
 
 
+def _family_current_cost(cur, family_id: int) -> dict[str, Any]:
+    """Resolve Family Article cost using the operational authority ladder.
+
+    Priority is receipt valuation first, then Live/Fresh/Frozen report cost,
+    then OH explicit-cost fallback. Within a tier the newest valid observation
+    wins. This is Family-level evidence and is intentionally separate from a
+    selling-UPC converted cost.
+    """
+    tiers = [
+        ("MOVEMENT_RECEIPT_VALUATION",),
+        ("LIVE_FRESH_SUGGESTION_OFFICIAL_COST", "FROZEN_INVENTORY_OFFICIAL_COST"),
+        ("ON_HAND_EXPLICIT_COST_FALLBACK",),
+        ("USER_CONFIRMED_FAMILY_COST",),
+    ]
+    for sources in tiers:
+        ph=",".join(["%s"]*len(sources))
+        cur.execute(
+            f"""SELECT co.business_date,
+                       COALESCE(co.cost_per_base_uom,co.cost_amount) AS cost_value,
+                       COALESCE(bu.uom_code,cu.uom_code) AS cost_uom,
+                       co.source_type,co.movement_type,co.file_id,
+                       co.cost_observation_id
+                FROM article_cost_observation co
+                LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
+                LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
+                WHERE co.family_id=%s
+                  AND co.source_type IN ({ph})
+                  AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+                  AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
+                ORDER BY co.business_date DESC,co.cost_observation_id DESC
+                LIMIT 1""",
+            (int(family_id),*sources),
+        )
+        row=cur.fetchone()
+        if row:
+            return {
+                "status":"READY",
+                "cost":row.get("cost_value"),
+                "uom":row.get("cost_uom"),
+                "source":row.get("source_type"),
+                "date":row.get("business_date"),
+                "movement_type":row.get("movement_type"),
+                "file_id":row.get("file_id"),
+                "authority_priority":[
+                    "MOVEMENT_RECEIPT_VALUATION",
+                    "LIVE_FRESH_OR_FROZEN_REPORT_COST",
+                    "ON_HAND_EXPLICIT_COST_FALLBACK",
+                ],
+            }
+    return {
+        "status":"UNAVAILABLE","cost":None,"uom":None,"source":None,"date":None,
+        "authority_priority":[
+            "MOVEMENT_RECEIPT_VALUATION",
+            "LIVE_FRESH_OR_FROZEN_REPORT_COST",
+            "ON_HAND_EXPLICIT_COST_FALLBACK",
+        ],
+    }
+
+
 def _published_family_oh_fallback(children: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the last published family OH only when child snapshots agree.
 
@@ -5235,6 +5294,7 @@ def inventory_review(
 
         family_cache: dict[int, dict[str, Any]] = {}
         family_system_cache: dict[int, dict[str, Any]] = {}
+        family_cost_cache: dict[int, dict[str, Any]] = {}
         # Lightweight search stays fast by default. Yipman can explicitly request
         # one set-based CURRENT-price + SUGGEST preview pass for the returned
         # rows without enabling family OH roll-forward.
@@ -5279,6 +5339,9 @@ def inventory_review(
                 row["gp_pct_current"] = None
 
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
+            if fid is not None and fid not in family_cost_cache:
+                family_cost_cache[fid] = _family_current_cost(cur,fid)
+            family_cost = family_cost_cache.get(fid or -1,{})
 
             # Normal lightweight Quick Check search skips OH roll-forward for speed.
             # PI can explicitly request include_oh=True so System OH and Effective OH
@@ -5457,6 +5520,11 @@ def inventory_review(
                     "cost_uom": row.get("selling_uom"),
                     "cost_source": row.get("cost_source"),
                     "cost_date": row.get("cost_date"),
+                    "family_cost": family_cost.get("cost"),
+                    "family_cost_uom": family_cost.get("uom"),
+                    "family_cost_source": family_cost.get("source"),
+                    "family_cost_date": family_cost.get("date"),
+                    "family_cost_status": family_cost.get("status"),
                     "gp_pct": row.get("gp_pct_current"),
                     "qty_7d": row.get("pos_qty_7d"),
                     "velocity_7d": row.get("upc_velocity_7d"),
@@ -6172,6 +6240,7 @@ def pricing_review(
                 if r.get("family_id") is not None
             })
             delivery_pattern_by_family: dict[int,dict[str,Any]] = {}
+            family_effective_oh_by_id: dict[int,dict[str,Any]] = {}
             if family_ids:
                 receipt_days=source_data_days(
                     cur,
@@ -6190,6 +6259,12 @@ def pricing_review(
                         after_date=business_today(),
                         lookback_days=180,
                     )
+                    cur.execute(
+                        "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                        (fid,),
+                    )
+                    family_children=cur.fetchall()
+                    family_effective_oh_by_id[fid]=_family_effective_oh(cur,family_children)
             cur.close()
 
     for row in rows:
@@ -6222,8 +6297,26 @@ def pricing_review(
         row["current_cost_source"] = live.get("cost_source")
         row["cost_date"] = live.get("cost_date")
         row["cost_basis"] = "CURRENT_AUTHORITATIVE_COST"
-        row["current_oh"] = live.get("current_oh")
-        row["current_oh_uom"] = live.get("current_oh_uom")
+        family_id=live.get("family_id")
+        family_effective_oh=(
+            family_effective_oh_by_id.get(int(family_id),{})
+            if family_id is not None else {}
+        )
+        if (
+            family_effective_oh.get("status")=="READY"
+            and family_effective_oh.get("quantity") is not None
+        ):
+            row["current_oh"] = family_effective_oh.get("quantity")
+            row["current_oh_uom"] = family_effective_oh.get("uom")
+            row["current_oh_source"] = family_effective_oh.get("source")
+            row["current_oh_is_true_stock"] = (
+                str(family_effective_oh.get("source") or "").upper().startswith("FAMILY_TRUE_STOCK")
+            )
+        else:
+            row["current_oh"] = live.get("current_oh")
+            row["current_oh_uom"] = live.get("current_oh_uom")
+            row["current_oh_source"] = "QUICK_CHECK_CURRENT_PUBLISHED"
+            row["current_oh_is_true_stock"] = False
         row["doh"] = live.get("doh")
 
         row["current_gp_pct_reference"] = live.get("gp_pct_current")
@@ -6300,7 +6393,7 @@ def pricing_review(
         )
         if tested_price is None:
             tested_price = tested_evidence_price
-        current_oh = _d(live.get("current_oh")) if live.get("current_oh") is not None else None
+        current_oh = _d(row.get("current_oh")) if row.get("current_oh") is not None else None
 
         row["tested_price"] = tested_price
         row["tested_evidence_price"] = tested_evidence_price
@@ -8052,6 +8145,55 @@ _PRICING_REVIEW_CACHE_AT: dict[str,float]={}
 _PRICING_REVIEW_REFRESHING: set[str]=set()
 _PRICING_REVIEW_LAST_ERROR: dict[str,str]={}
 _PRICING_REVIEW_CACHE_TTL_SECONDS=120.0
+
+
+def invalidate_true_stock_dependent_caches() -> dict[str,Any]:
+    """Invalidate serving analyses whose math depends on effective OH.
+
+    A physical True Stock count is an immediate operational override. Cached
+    Ordering/Pricing/Home/TPR payloads must never continue to present an older
+    system-OH decision after the count is committed.
+    """
+    global _HOME_SUMMARY_CACHE_VALUE,_HOME_SUMMARY_CACHE_AT
+    with _ORDERING_REVIEW_CACHE_LOCK:
+        _ORDERING_REVIEW_CACHE_VALUES.clear()
+        _ORDERING_REVIEW_CACHE_AT.clear()
+    with _PRICING_REVIEW_CACHE_LOCK:
+        _PRICING_REVIEW_CACHE_VALUES.clear()
+        _PRICING_REVIEW_CACHE_AT.clear()
+    try:
+        with _TPR_REVIEW_CACHE_LOCK:
+            _TPR_REVIEW_CACHE_VALUES.clear()
+            _TPR_REVIEW_CACHE_AT.clear()
+    except Exception:
+        pass
+    with _HOME_SUMMARY_CACHE_LOCK:
+        _HOME_SUMMARY_CACHE_VALUE=None
+        _HOME_SUMMARY_CACHE_AT=0.0
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor()
+            for table in (
+                "backoffice_ordering_review_cache",
+                "backoffice_pricing_review_cache",
+                "backoffice_home_summary_cache",
+            ):
+                try:
+                    cur.execute(f"DELETE FROM {table}")
+                except Exception:
+                    pass
+            conn.commit()
+            cur.close()
+    except Exception:
+        pass
+    return {
+        "status":"INVALIDATED",
+        "scope":"TRUE_STOCK_DEPENDENT_OPERATIONAL_ANALYSES",
+        "ordering":True,
+        "pricing":True,
+        "home":True,
+        "tpr":True,
+    }
 
 
 def _pricing_review_cache_key(category: str, limit: int) -> str:
