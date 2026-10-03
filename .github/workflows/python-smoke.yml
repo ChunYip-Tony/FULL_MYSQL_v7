@@ -131,6 +131,10 @@ jobs:
           assert '/v1/app/v2/search?q=' in order_src_ui
           assert 'manualPromoSearchResults' in order_src_ui
           assert 'promo-card.tone0' in order_src_ui
+          import promotion_ordering as promo_ordering
+          promo_resolve_src=inspect.getsource(promo_ordering._resolve_family)
+          assert 'DELIVERY_ARTICLE_CONFIRMED_FAMILY_BRIDGE' in promo_resolve_src
+          assert "baf.mapping_status='CONFIRMED'" in promo_resolve_src
           assert 'weekday_number is not None' in hist_src
 
           # Delivery-date Ordering must retain observed families, including
