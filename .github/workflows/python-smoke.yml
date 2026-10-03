@@ -168,13 +168,52 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v431'" in ui
+          assert "const CACHE='yipman-v433'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
           assert 'LATEST DATA · REBUILDING' in desktop
           assert "cache==='SOURCE_CHANGED_REFRESHING'" in desktop
           print('source-aware-freshness-cache-v431=PASS')
+          PY
+
+      - name: Validate Current TPR review and TPR Suggestion Price contract
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import api
+          import backoffice_runtime as bo
+          import chatgpt_sheet_bridge as bridge
+
+          src=inspect.getsource(bo.current_tpr_review)
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V1' in src
+          assert 'AUTHORITATIVE_LIVE_CURRENT_PRICE_TYPE_EQUALS_TPR' in src
+          assert 'tpr_qty_3d' in src and 'velocity_lift_pct' in src
+          assert 'recommendation_code' in src and 'CONTINUE_TPR' in src
+          assert 'RAISE_TPR_PRICE' in src and 'LOWER_TPR_PRICE' in src and 'END_TPR' in src
+          assert 'readiness != "READY"' in src
+
+          api_src=Path('api.py').read_text(encoding='utf-8')
+          assert "@app.get('/v1/yipman/current-tpr-review')" in api_src
+
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert 'data-price-tab="TPR"' in ui
+          assert '/v1/yipman/current-tpr-review?category=ALL&limit=1000' in ui
+          assert 'TPR SUGGESTION PRICE' in ui
+          assert "$('[data-tpr-row]')" in ui
+          assert "$('[data-price-tab]')" in ui
+
+          desk=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+          assert 'TPR Suggestion Price' in desk
+          assert '<th>Testing</th>' not in desk
+          assert '<label>Testing Price</label>' not in desk
+
+          assert 'pos_qty_3d' in bridge.POS_3D_COLUMNS
+          bsrc=inspect.getsource(bridge._fetch_recent_3d_sales)
+          assert 'LATEST_3_COMPLETED_CANONICAL_POS_DATA_DAYS' in bsrc
+          assert 'Missing calendar dates are ignored rather than zero-filled' in bsrc
+          print('current-tpr-review-v433=PASS')
           PY
 
       - name: Validate Stock Flow 28-day related-UPC promotion context
@@ -222,7 +261,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER SELLING' in ui
-          assert "const CACHE='yipman-v431'" in ui
+          assert "const CACHE='yipman-v433'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
