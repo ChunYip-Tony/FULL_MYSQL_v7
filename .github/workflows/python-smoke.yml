@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v444'" in ui
+          assert "const CACHE='yipman-v446'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -329,7 +329,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v444'" in ui
+          assert "const CACHE='yipman-v446'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
@@ -941,6 +941,44 @@ jobs:
           assert "active['active_file_name']" in api_text
           assert "active['active_files']=active_files" in api_text
           print('backoffice-dom-bindings=PASS')
+          PY
+
+      - name: Validate Family cost and universal True Stock contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          runtime = Path('backoffice_runtime.py').read_text(encoding='utf-8')
+          webapp = Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
+          api = Path('api.py').read_text(encoding='utf-8')
+          ui = Path('yipman_ui.py').read_text(encoding='utf-8')
+
+          assert '_latest_cost as _family_current_cost' in runtime
+          assert '"family_cost": family_cost.get("cost_per_base")' in runtime
+          assert '"family_cost_uom": family_cost.get("base_uom")' in runtime
+          assert '_overlay_active_true_stock_effective_oh(cur,all_rows)' in runtime
+          assert '_overlay_active_true_stock_effective_oh(cur,list(live_by_upc.values()))' in runtime
+          assert 'def invalidate_operational_review_caches_for_true_stock' in runtime
+
+          assert 'def _overlay_active_true_stock_effective_oh' in webapp
+          assert '"current_oh_basis"]="LIVE_EFFECTIVE_OH_ACTIVE_TRUE_STOCK"' in webapp
+          assert 'FAMILY_TRUE_STOCK' in webapp
+          assert 'family_movement_7d' in webapp
+
+          assert 'backoffice_invalidate_true_stock_caches' in api
+          assert "dependent_cache_invalidation" in api
+
+          assert 'include_oh=true' in ui
+          assert 'CURRENT FAMILY COST' in ui
+          assert 'function ohEditHtml' in ui
+          assert 'function openFamilyTrueStock' in ui
+          assert '/v1/app/v2/pi/' in ui
+          assert 'SAVE TRUE STOCK & RECALCULATE' in ui
+          assert 'data-true-stock-family' in ui
+          assert 'CURRENT EFFECTIVE OH' in ui
+          assert 'data-promo-temp-oh' in ui
+          assert "$('[data-promo-temp-oh]').forEach" in ui
+          assert "const CACHE='yipman-v446'" in ui
+          print('family-cost-universal-true-stock-v446=PASS')
           PY
 
       - name: Validate Yipman DOM collection bindings
