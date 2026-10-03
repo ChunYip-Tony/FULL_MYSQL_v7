@@ -84,6 +84,7 @@ jobs:
         run: |
           python - <<'PY'
           import inspect
+          from pathlib import Path
           import backoffice_runtime as b
 
           order_sig=inspect.signature(b.ordering_review)
