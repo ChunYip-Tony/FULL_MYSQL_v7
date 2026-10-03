@@ -5390,7 +5390,7 @@ function renderDesktopStockFlow(){
      '<td><b>'+esc(over)+'</b><div class="meta">receipt vs selling</div></td>'+
      '<td>'+sfRecentCell(hist[0],ruom)+'</td><td>'+sfRecentCell(hist[1],ruom)+'</td></tr>';
  }).join('')||'<tr><td colspan="9" class="empty">No Stock Flow items match the selected filters.</td></tr>';
- $('.stockflow-family-btn').forEach(b=>{b.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('fullmysql:stockflow-family',{detail:{family:b.dataset.family}}))}});
+ document.querySelectorAll('.stockflow-family-btn').forEach(b=>{b.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('fullmysql:stockflow-family',{detail:{family:b.dataset.family}}))}});
  document.querySelectorAll('.stockflow-ohbtn').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openOH(b.dataset)});
 }
 async function loadDesktopStockFlow(requestSeq){
