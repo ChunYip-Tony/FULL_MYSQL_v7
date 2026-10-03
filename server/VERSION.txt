@@ -1,3 +1,13 @@
+v7.0.440 Larger Mobile + Header Freshness:
+- Yipman mobile sizing is increased modestly while preserving the compact layout and avoiding additional card whitespace.
+- The top header beside Yipman now shows six live freshness indicators: POS, MVT, Frozen Report, Fresh Report, OH, and ChatGPT Analysis Sheet.
+- POS/MVT freshness compares the latest canonical data date with the current required-through date; current is green, one day behind is amber, and older/missing is red.
+- Frozen/Fresh/OH report freshness shows the latest valid ingested source date and calendar age from business today.
+- ChatGPT Analysis Sheet is green PASS only when the current serving Quick Check batch has a completed ChatGPT Sheet publish with PASS readback; queued/started is amber BUILDING and missing/failed is red.
+- Pull-to-refresh refreshes the header freshness together with the current page.
+- Yipman service-worker shell cache advances to v440.
+Version: 7.0.440 Single-Service Edition
+
 v7.0.438 Stock Flow Selector Hotfix:
 - Fixes Quick Check Stock Flow render crash: $(...).forEach is not a function.
 - Stock Flow category and receipt-toggle bindings now use the NodeList helper $$() before forEach().
