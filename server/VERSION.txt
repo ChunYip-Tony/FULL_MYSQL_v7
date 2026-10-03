@@ -1,3 +1,10 @@
+v7.0.438 Stock Flow Selector Hotfix:
+- Fixes Quick Check Stock Flow render crash: $(...).forEach is not a function.
+- Stock Flow category and receipt-toggle bindings now use the NodeList helper $$() before forEach().
+- No Stock Flow layout, sorting, Friday warning, receipt cost, ordering, pricing, or Back Office behavior changed.
+- Yipman service-worker shell cache advances to v438.
+Version: 7.0.438 Single-Service Edition
+
 v7.0.437 Stock Flow Neutral Compact + Receipt Cost:
 - Yipman mobile Stock Flow now uses the approved neutral compact treatment: white/gray cards and controls with restrained blue navigation, red only for risk/warnings, and green reserved for receipt/healthy context.
 - Stock Flow default sort is Over-selling % descending instead of absolute Difference; Difference, 7D Receipt, 7D Selling, and Name remain available.
