@@ -951,7 +951,7 @@ async function loadHeaderFreshness(){
    const d=await api('/v1/yipman/header-freshness',{timeoutMs:9000});
    renderHeaderFreshness(d);
  }catch{
-   const box=$('#headFreshness');if(box)$('#headFreshness .hfitem').forEach(x=>{x.classList.remove('good','warn');x.classList.add('bad');const s=x.querySelector('span');if(s)s.textContent='— · ERROR'});
+   const box=$('#headFreshness');if(box)$$('#headFreshness .hfitem').forEach(x=>{x.classList.remove('good','warn');x.classList.add('bad');const s=x.querySelector('span');if(s)s.textContent='— · ERROR'});
  }
 }
 const app=$('#app'), pages=$('.page'), nav=$('.nav button');
