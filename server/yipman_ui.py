@@ -2447,7 +2447,7 @@ async function loadPrices(opts={}){
     openPrice(rows[Number(x.dataset.price)]);
   });
   $$('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
-  $('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
+  $$('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
   if(sourceChanged)schedulePriceRetry(requestId,2200);
  }catch(e){
   if(requestId!==priceRequestSeq)return;
