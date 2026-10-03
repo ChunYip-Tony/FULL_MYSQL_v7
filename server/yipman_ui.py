@@ -1768,7 +1768,7 @@ function fitQuickUpcNames(){
  });
 }
 function bindQuickRows(){
- $('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+ document.querySelectorAll('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
  bindEffectiveOhButtons($('#quickRows'));
  $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
  bindReceiptLinks();
@@ -2278,7 +2278,7 @@ async function loadPromotionOrder(){
    list_id:promoListId,
    delivery_date:orderDate,
    next_delivery_date:orderNextDate,
-   temporary_oh_overrides:[...promoTempOH.values()]
+   temporary_oh_overrides:[]
   };
   const data=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeoutMs:45000});
   const freshnessCount=(data.rows||[]).filter(x=>x.freshness_adjustment_applied).length;
@@ -2449,7 +2449,7 @@ function renderOrderRoster(rows,data,h,stale){
     : '';
   return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div>'+effectiveOhButton(r.family_article,r.family_name,r.oh,r.oh_uom,r.oh_source||'','orderoh')+'<div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+ document.querySelectorAll('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
  bindEffectiveOhButtons($('#orderRows'));
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
@@ -2781,7 +2781,7 @@ async function loadPrices(opts={}){
     openPrice(rows[Number(x.dataset.price)]);
   });
   $$('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
-  $('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
+  document.querySelectorAll('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
   bindEffectiveOhButtons($('#priceRows'));
   if(sourceChanged)schedulePriceRetry(requestId,2200);
  }catch(e){
@@ -2931,7 +2931,7 @@ function renderCurrentTpr(){
  }).join('')||'<div class="empty">No current TPR item matches this filter.</div>';
  $$('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
  $$('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
- $('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
+ document.querySelectorAll('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
  bindEffectiveOhButtons($('#tprRows'));
 }
 async function setTprPurpose(r,purpose){
@@ -2970,7 +2970,7 @@ function openCurrentTpr(r){
    '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether current velocity will clear effective OH before the freshness threshold.</div>'
  );
  bindEffectiveOhButtons($('#sheetBody'));
- $('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
+ document.querySelectorAll('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
 }
 async function loadCurrentTpr(opts={}){
  const requestId=++tprRequestSeq;
