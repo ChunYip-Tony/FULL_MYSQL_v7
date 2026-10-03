@@ -44,6 +44,7 @@ from backoffice_runtime import (
     accept_price_suggestion as backoffice_accept_price_suggestion,
     backoffice_home_summary,
     warm_backoffice_home_summary,
+    invalidate_operational_review_caches_for_true_stock as backoffice_invalidate_true_stock_caches,
     yipman_best_sellers as backoffice_yipman_best_sellers,
     yipman_receipt_event_detail as backoffice_yipman_receipt_event_detail,
     yipman_ordering_calendar as backoffice_yipman_ordering_calendar,
@@ -3757,6 +3758,7 @@ def app_negative_stock_submit_true_stock(
             body.uom,
             device,
         )
+        result['dependent_cache_invalidation']=backoffice_invalidate_true_stock_caches()
     except KeyError as exc:
         code=str(exc).strip("'")
         if code=='NEGATIVE_STOCK_ACTION_NOT_FOUND':
@@ -3829,6 +3831,7 @@ def app_submit_true_stock(
     device=public_app_actor(authorization)
     try:
         result=submit_true_stock(upc,body.true_stock,body.uom,device)
+        result['dependent_cache_invalidation']=backoffice_invalidate_true_stock_caches()
     except KeyError:
         raise HTTPException(404,'Quick Check UPC not found')
     except ValueError as exc:
@@ -3873,6 +3876,7 @@ def app_cancel_true_stock(
         raise HTTPException(400,'confirm must be CANCEL_ACTIVE_TRUE_STOCK')
     try:
         result=cancel_true_stock(upc,device,body.reason)
+        result['dependent_cache_invalidation']=backoffice_invalidate_true_stock_caches()
     except KeyError:
         raise HTTPException(404,'Quick Check UPC not found')
     except ValueError as exc:
@@ -4545,6 +4549,7 @@ def yipman_clearance_save(
                 actor,
                 note='CLEARANCE PLAN TRUE STOCK',
             )
+            true_stock_result['dependent_cache_invalidation']=backoffice_invalidate_true_stock_caches()
         result=save_yipman_clearance_plan(
             ean_upc=body.upc,
             expiry_date=body.expiry_date,
@@ -4693,6 +4698,7 @@ def app_v2_pi_submit_true_stock(
             device,
             body.note,
         )
+        committed['dependent_cache_invalidation']=backoffice_invalidate_true_stock_caches()
         detail=v2_pi_item(family_key)
     except KeyError:
         raise HTTPException(
