@@ -4696,9 +4696,59 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             })
             qualifying_ids.append(fid)
 
-        # Promotion evidence is intentionally calculated only for the small set
-        # of Families already qualified for Stock Flow.
+        # Resolve System OH and Effective OH (active True Stock when present)
+        # for the small set of Families already qualified for Stock Flow.
+        stock_family_rows: dict[int, list[dict[str, Any]]] = {}
+        all_family_rows: list[dict[str, Any]] = []
         if rows and qualifying_ids:
+            ph = ",".join(["%s"] * len(qualifying_ids))
+            cur.execute(
+                f"""SELECT *
+                    FROM quick_check_current
+                    WHERE family_id IN ({ph})
+                    ORDER BY family_id,upc_id""",
+                tuple(qualifying_ids),
+            )
+            all_family_rows = [dict(x) for x in cur.fetchall()]
+            for family_row in all_family_rows:
+                if family_row.get("family_id") is not None:
+                    stock_family_rows.setdefault(
+                        int(family_row["family_id"]), []
+                    ).append(family_row)
+
+            for stock_row in rows:
+                fid = int(stock_row["family_id"])
+                family_rows = stock_family_rows.get(fid, [])
+                system_oh = _family_system_oh(cur, family_rows)
+                effective_oh = _family_effective_oh(cur, family_rows)
+                stock_row["system_oh"] = system_oh
+                stock_row["effective_oh"] = effective_oh
+                stock_row["system_oh_quantity"] = system_oh.get("quantity")
+                stock_row["system_oh_uom"] = system_oh.get("uom")
+                stock_row["effective_oh_quantity"] = effective_oh.get("quantity")
+                stock_row["effective_oh_uom"] = effective_oh.get("uom")
+                stock_row["effective_oh_source"] = effective_oh.get("source")
+                stock_row["true_stock_override_active"] = (
+                    "TRUE_STOCK" in str(effective_oh.get("source") or "").upper()
+                )
+                avg_day = stock_row.get("family_group_avg_qty_day")
+                eff_qty = effective_oh.get("quantity")
+                eff_uom = str(effective_oh.get("uom") or "").upper()
+                sold_uom = str(
+                    stock_row.get("family_group_movement_uom") or ""
+                ).upper()
+                stock_row["effective_dos"] = (
+                    _d(eff_qty) / _d(avg_day)
+                    if eff_qty is not None
+                    and avg_day is not None
+                    and _d(avg_day) > 0
+                    and eff_uom
+                    and eff_uom == sold_uom
+                    else None
+                )
+
+            # Promotion evidence is intentionally calculated only for the same
+            # small qualified Family set.
             sales_days_28 = source_data_days(
                 cur,
                 "sales_by_price_type",
@@ -4706,30 +4756,17 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 up_to=completed_through_date(),
             )
             if sales_days_28:
-                ph = ",".join(["%s"] * len(qualifying_ids))
-                cur.execute(
-                    f"""SELECT *
-                        FROM quick_check_current
-                        WHERE family_id IN ({ph})
-                        ORDER BY family_id,upc_id""",
-                    tuple(qualifying_ids),
-                )
-                all_family_rows = [dict(x) for x in cur.fetchall()]
-                promo_family_rows: dict[int, list[dict[str, Any]]] = {}
-                for row in all_family_rows:
-                    if row.get("family_id") is not None:
-                        promo_family_rows.setdefault(int(row["family_id"]), []).append(row)
                 promo_daily = _batch_daily_sales_by_price_type(
                     cur,
                     all_family_rows,
                     sales_days_28,
                 )
-                for row in rows:
-                    row["recent_promotion_event"] = _recent_family_sale_event_from_batch(
-                        promo_family_rows.get(int(row["family_id"]), []),
+                for stock_row in rows:
+                    stock_row["recent_promotion_event"] = _recent_family_sale_event_from_batch(
+                        stock_family_rows.get(int(stock_row["family_id"]), []),
                         promo_daily,
                         sales_days_28,
-                        str(row.get("family_group_movement_uom") or ""),
+                        str(stock_row.get("family_group_movement_uom") or ""),
                     )
 
         # Latest receipt cost follows Family-detail receipt-cost authority:
@@ -4797,7 +4834,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST",
+        "contract_version": "YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4817,6 +4854,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "promotion_definition": "PRICE_TYPE_SALE_ONLY",
             "tpr_is_promotion": False,
             "observed_delivery_days": "CANONICAL_PHYSICAL_RECEIPTS_LATEST_180_COMPLETED_MVT_DAYS",
+            "oh_display": "EFFECTIVE_OH_AND_SYSTEM_OH_TOGETHER",
+            "effective_oh_authority": "ACTIVE_TRUE_STOCK_OVERRIDES_SYSTEM_OH_UNTIL_LATER_ACCEPTED_OH_UPLOAD",
         },
     }
 
@@ -6144,6 +6183,8 @@ def pricing_review(
         and x.get("current_price") is not None
     }
     latest_acceptance_by_upc: dict[str, dict[str, Any]] = {}
+    family_inventory_by_id: dict[int, dict[str, Any]] = {}
+    freshness_events_by_family: dict[int, list[dict[str, Any]]] = {}
     if upcs:
         with db_conn() as conn:
             cur = conn.cursor(dictionary=True)
@@ -6184,7 +6225,30 @@ def pricing_review(
                     family_ids,
                     data_days=receipt_days,
                 )
+                freshness_events_by_family = {
+                    int(fid): list(event_map.get(fid) or [])
+                    for fid in family_ids
+                }
+                fam_ph=",".join(["%s"]*len(family_ids))
+                cur.execute(
+                    f"""SELECT *
+                        FROM quick_check_current
+                        WHERE family_id IN ({fam_ph})
+                        ORDER BY family_id,upc_id""",
+                    tuple(family_ids),
+                )
+                family_children: dict[int,list[dict[str,Any]]] = {}
+                for child in cur.fetchall():
+                    if child.get("family_id") is not None:
+                        family_children.setdefault(
+                            int(child["family_id"]), []
+                        ).append(dict(child))
                 for fid in family_ids:
+                    children=family_children.get(fid,[])
+                    family_inventory_by_id[fid]={
+                        "system":_family_system_oh(cur,children),
+                        "effective":_family_effective_oh(cur,children),
+                    }
                     delivery_pattern_by_family[fid]=_delivery_pattern(
                         event_map.get(fid) or [],
                         after_date=business_today(),
@@ -6222,8 +6286,30 @@ def pricing_review(
         row["current_cost_source"] = live.get("cost_source")
         row["cost_date"] = live.get("cost_date")
         row["cost_basis"] = "CURRENT_AUTHORITATIVE_COST"
-        row["current_oh"] = live.get("current_oh")
-        row["current_oh_uom"] = live.get("current_oh_uom")
+        family_id=live.get("family_id")
+        family_inventory=(
+            family_inventory_by_id.get(int(family_id))
+            if family_id is not None else None
+        ) or {}
+        system_oh=family_inventory.get("system") or {}
+        effective_oh=family_inventory.get("effective") or {}
+        row["system_oh"] = system_oh
+        row["effective_oh"] = effective_oh
+        row["system_oh_quantity"] = system_oh.get("quantity")
+        row["system_oh_uom"] = system_oh.get("uom")
+        row["effective_oh_quantity"] = effective_oh.get("quantity")
+        row["effective_oh_uom"] = effective_oh.get("uom")
+        row["effective_oh_source"] = effective_oh.get("source")
+        row["current_oh"] = (
+            effective_oh.get("quantity")
+            if str(effective_oh.get("status") or "").upper()=="READY"
+            else live.get("current_oh")
+        )
+        row["current_oh_uom"] = (
+            effective_oh.get("uom")
+            if str(effective_oh.get("status") or "").upper()=="READY"
+            else live.get("current_oh_uom")
+        )
         row["doh"] = live.get("doh")
 
         row["current_gp_pct_reference"] = live.get("gp_pct_current")
@@ -6240,7 +6326,6 @@ def pricing_review(
         row["stale_calendar_days"] = data_health.get("stale_calendar_days")
         row["estimate_only"] = estimate_only
 
-        family_id=live.get("family_id")
         pattern=(
             delivery_pattern_by_family.get(int(family_id))
             if family_id is not None else None
@@ -6300,7 +6385,7 @@ def pricing_review(
         )
         if tested_price is None:
             tested_price = tested_evidence_price
-        current_oh = _d(live.get("current_oh")) if live.get("current_oh") is not None else None
+        current_oh = _d(row.get("current_oh")) if row.get("current_oh") is not None else None
 
         row["tested_price"] = tested_price
         row["tested_evidence_price"] = tested_evidence_price
@@ -6348,23 +6433,27 @@ def pricing_review(
         slow_velocity = bool(
             velocity_28d > 0 and velocity_7d < velocity_28d * Decimal("0.80")
         )
+        freshness_threshold = (
+            Decimal("7")
+            if pclass in {"FRESH", "LIVE"}
+            else (Decimal("60") if pclass == "FROZEN" else None)
+        )
+        freshness_plan = _fifo_freshness_plan(
+            freshness_events_by_family.get(int(family_id), [])
+            if family_id is not None else [],
+            effective_oh,
+            freshness_threshold,
+        )
+        row["freshness_plan"] = freshness_plan
+        aging_stock_qty = (
+            _d(freshness_plan.get("aging_stock_quantity"))
+            if freshness_plan.get("aging_stock_quantity") is not None
+            else Decimal("0")
+        )
         freshness_test_needed = bool(
             base_actionable
-            and (
-                (
-                    pclass in {"FRESH", "LIVE"}
-                    and (
-                        velocity_7d <= 0
-                        or slow_velocity
-                        or (doh is not None and doh >= Decimal("5"))
-                    )
-                )
-                or (
-                    pclass == "FROZEN"
-                    and doh is not None
-                    and doh >= Decimal("60")
-                )
-            )
+            and aging_stock_qty > 0
+            and bool(freshness_plan.get("window_active"))
         )
         tested_gap = bool(
             base_actionable
@@ -6556,7 +6645,7 @@ def pricing_review(
             )
         )
         row["tpr_suggestion_reason"] = (
-            "Temporarily reduce price to improve velocity before the freshness threshold"
+            "Temporarily reduce price during the final two-day freshness window to clear aging stock by the threshold end"
             if reason_code == "VELOCITY_TEST"
             else (
                 "Run a controlled TPR test to search for a stronger everyday GP$/day sweet spot"
@@ -6621,7 +6710,7 @@ def pricing_review(
         elif reason_code == "COMPANY_RANGE":
             row["primary_reason_text"] = "Current price is outside the applicable Company A/B/C range"
         elif reason_code == "VELOCITY_TEST":
-            row["primary_reason_text"] = "Slow movement / freshness risk: test a small price reduction and re-check velocity"
+            row["primary_reason_text"] = "Freshness window is active: reduce price as needed to clear the aging-stock target by the threshold end"
         elif reason_code == "SWEET_SPOT_GAP":
             row["primary_reason_text"] = "Current price is more than $0.25 from the strongest proved sweet spot; move gradually"
         elif reason_code == "GP_DOLLAR_TEST":
@@ -6646,7 +6735,7 @@ def pricing_review(
     actionable_count=sum(1 for row in visible_rows if row.get("actionable"))
 
     return {
-        "contract_version": "BACKOFFICE_PRICING_REVIEW_V11_REG_TPR_SPLIT",
+        "contract_version": "BACKOFFICE_PRICING_REVIEW_V12_EFFECTIVE_OH_FIFO",
         "category": report.get("category"),
         "report_date": report.get("report_date"),
         "summary": {
@@ -6884,12 +6973,41 @@ def _bulk_tpr_price_list_lifecycle(
                     "last_file_id": event.get("file_id"),
                 })
 
+        original_regular = None
+        # states are newest -> oldest.  History contains the continuous current
+        # TPR snapshots; scan older snapshots for the first real REG / in-store
+        # price so a Cancel TPR recommendation can explicitly restore it.
+        for prior_state in states[len(history):]:
+            prior_type = str(prior_state.get("price_type") or "").upper()
+            if prior_type not in {"REG", "REGULAR", "IN STORE", "IN_STORE", "INSTORE", "STOR"}:
+                continue
+            prior_price = _positive_price(prior_state.get("configured_price"))
+            if prior_price is None:
+                continue
+            original_regular = {
+                "price": prior_price,
+                "price_type": prior_type,
+                "date": prior_state.get("file_business_date"),
+                "source_since_date": prior_state.get("source_since_date"),
+                "file_id": prior_state.get("file_id"),
+            }
+            break
+
         out[uid] = {
             "tpr_start_date": min(lifecycle_dates) if lifecycle_dates else None,
             "current_price_step_start_date": (
                 min(current_step_dates) if current_step_dates else None
             ),
             "configured_tpr_price_steps": compressed[-8:],
+            "original_regular_price": (
+                original_regular.get("price") if original_regular else None
+            ),
+            "original_regular_price_type": (
+                original_regular.get("price_type") if original_regular else None
+            ),
+            "original_regular_price_date": (
+                original_regular.get("date") if original_regular else None
+            ),
         }
     return out
 
@@ -6984,21 +7102,193 @@ def _tpr_price_behavior_segments(
     return segments[-6:]
 
 
+def _fifo_freshness_plan(
+    events: list[dict[str, Any]],
+    effective_oh: dict[str, Any] | None,
+    threshold_days: int | Decimal | None,
+) -> dict[str, Any]:
+    """Estimate the portion of current Effective OH that belongs to aging lots.
+
+    FIFO assumption: current inventory is allocated to the newest compatible
+    receipt lots first.  Any residual quantity not traceable to the available
+    receipt window is conservatively treated as old stock.  Freshness TPR
+    targets only lots entering the final two days before their threshold.
+    """
+    if threshold_days is None:
+        return {"status": "NOT_APPLICABLE"}
+    threshold = int(Decimal(str(threshold_days)))
+    if threshold < 2:
+        return {"status": "INVALID_THRESHOLD", "threshold_days": threshold}
+    eff = effective_oh or {}
+    if str(eff.get("status") or "").upper() != "READY":
+        return {
+            "status": "EFFECTIVE_OH_UNAVAILABLE",
+            "threshold_days": threshold,
+        }
+    raw_qty = eff.get("quantity")
+    target_uom = str(eff.get("uom") or "").strip().upper()
+    if raw_qty is None or not target_uom:
+        return {
+            "status": "EFFECTIVE_OH_UNAVAILABLE",
+            "threshold_days": threshold,
+        }
+    total = max(Decimal("0"), _d(raw_qty))
+    if total <= 0:
+        return {
+            "status": "READY",
+            "threshold_days": threshold,
+            "window_start_age_days": threshold - 2,
+            "effective_oh_quantity": total,
+            "uom": target_uom,
+            "aging_stock_quantity": Decimal("0"),
+            "aging_lots": [],
+            "window_active": False,
+            "threshold_overdue": False,
+        }
+
+    remaining = total
+    lots: list[dict[str, Any]] = []
+    for event in sorted(
+        [x for x in (events or []) if x.get("posting_date") is not None],
+        key=lambda x: x.get("posting_date"),
+        reverse=True,
+    ):
+        base_uom = str(event.get("base_receipt_uom") or "").strip().upper()
+        entry_uom = str(event.get("receipt_uom") or "").strip().upper()
+        qty = None
+        if base_uom == target_uom and event.get("base_receipt_quantity") is not None:
+            qty = _d(event.get("base_receipt_quantity"))
+        elif entry_uom == target_uom and event.get("receipt_quantity") is not None:
+            qty = _d(event.get("receipt_quantity"))
+        if qty is None or qty <= 0:
+            continue
+        allocated = min(remaining, qty)
+        if allocated <= 0:
+            break
+        lots.append({
+            "receipt_date": event.get("posting_date"),
+            "quantity": allocated,
+            "uom": target_uom,
+            "source": event.get("receipt_source"),
+        })
+        remaining -= allocated
+        if remaining <= 0:
+            break
+
+    if remaining > 0:
+        lots.append({
+            "receipt_date": None,
+            "quantity": remaining,
+            "uom": target_uom,
+            "source": "UNTRACED_OPENING_STOCK",
+        })
+
+    today = business_today()
+    start_age = threshold - 2
+    aging_lots: list[dict[str, Any]] = []
+    for lot in lots:
+        receipt_date = lot.get("receipt_date")
+        is_aging = (
+            receipt_date is None
+            or (today - receipt_date).days >= start_age
+        )
+        if not is_aging:
+            continue
+        deadline = (
+            receipt_date + timedelta(days=threshold)
+            if receipt_date is not None else today
+        )
+        aging_lots.append({
+            **lot,
+            "window_start_date": (
+                receipt_date + timedelta(days=start_age)
+                if receipt_date is not None else today
+            ),
+            "threshold_date": deadline,
+            "age_days": (
+                (today - receipt_date).days
+                if receipt_date is not None else None
+            ),
+        })
+
+    aging_qty = sum(
+        (_d(x.get("quantity")) for x in aging_lots),
+        Decimal("0"),
+    )
+    deadline_dates = [
+        x.get("threshold_date") for x in aging_lots
+        if x.get("threshold_date") is not None
+    ]
+    threshold_date = min(deadline_dates) if deadline_dates else None
+    window_start_date = (
+        threshold_date - timedelta(days=2)
+        if threshold_date is not None else None
+    )
+    window_active = bool(
+        aging_qty > 0
+        and window_start_date is not None
+        and threshold_date is not None
+        and window_start_date <= today <= threshold_date
+    )
+    overdue = bool(
+        aging_qty > 0
+        and threshold_date is not None
+        and today > threshold_date
+    )
+    days_remaining_inclusive = (
+        max(0, (threshold_date - today).days + 1)
+        if threshold_date is not None and not overdue else 0
+    )
+    return {
+        "status": "READY",
+        "threshold_days": threshold,
+        "window_start_age_days": start_age,
+        "effective_oh_quantity": total,
+        "uom": target_uom,
+        "aging_stock_quantity": aging_qty,
+        "aging_lots": aging_lots,
+        "window_start_date": window_start_date,
+        "threshold_date": threshold_date,
+        "window_active": window_active,
+        "threshold_overdue": overdue,
+        "days_remaining_inclusive": days_remaining_inclusive,
+        "objective": "AGING_STOCK_ZERO_BY_THRESHOLD_END",
+        "allocation_basis": "FIFO_NEWEST_RECEIPTS_RECONSTRUCT_CURRENT_EFFECTIVE_OH",
+    }
+
+
 def _auto_tpr_purpose(
     product_class: str,
     doh: Decimal | None,
     dos: Decimal | None,
     current_oh: Decimal | None,
+    freshness_plan: dict[str, Any] | None = None,
 ) -> tuple[str, str]:
     pclass = str(product_class or "").upper()
     has_stock = current_oh is None or current_oh > 0
-    if pclass in {"FRESH", "LIVE"} and has_stock and (
-        (doh is not None and doh >= Decimal("5"))
-        or (dos is not None and dos >= Decimal("7"))
+    plan = freshness_plan or {}
+    aging_qty = (
+        _d(plan.get("aging_stock_quantity"))
+        if plan.get("aging_stock_quantity") is not None
+        else Decimal("0")
+    )
+    if has_stock and aging_qty > 0 and (
+        plan.get("window_active") or plan.get("threshold_overdue")
     ):
-        return "FRESHNESS_SELL_THROUGH", "AUTO_FRESHNESS_RISK"
-    if pclass == "FROZEN" and has_stock and doh is not None and doh >= Decimal("60"):
-        return "FRESHNESS_SELL_THROUGH", "AUTO_FROZEN_AGE_RISK"
+        return "FRESHNESS_SELL_THROUGH", "AUTO_FIFO_AGING_STOCK_WINDOW"
+    # Fallback when lot reconstruction is unavailable: still never start a
+    # freshness TPR earlier than two days before the configured threshold.
+    threshold = Decimal("7") if pclass in {"FRESH", "LIVE"} else (
+        Decimal("60") if pclass == "FROZEN" else None
+    )
+    if (
+        has_stock
+        and threshold is not None
+        and doh is not None
+        and doh >= threshold - Decimal("2")
+        and doh <= threshold
+    ):
+        return "FRESHNESS_SELL_THROUGH", "AUTO_FRESHNESS_FINAL_TWO_DAYS"
     return "SWEET_SPOT_TEST", "AUTO_SWEET_SPOT"
 
 
@@ -7149,6 +7439,26 @@ def current_tpr_review(
         )
         daily = _batch_daily_sales_by_price_type(cur, tpr_rows, data_days)
 
+        tpr_family_rows: dict[int,list[dict[str,Any]]] = {}
+        for family_row in all_rows:
+            if family_row.get("family_id") is not None:
+                tpr_family_rows.setdefault(
+                    int(family_row["family_id"]), []
+                ).append(family_row)
+        tpr_family_ids=sorted({
+            int(r["family_id"])
+            for r in tpr_rows if r.get("family_id") is not None
+        })
+        tpr_family_inventory: dict[int,dict[str,Any]] = {}
+        tpr_receipt_events: dict[int,list[dict[str,Any]]] = {}
+        for fid in tpr_family_ids:
+            children=tpr_family_rows.get(fid,[])
+            tpr_family_inventory[fid]={
+                "system":_family_system_oh(cur,children),
+                "effective":_family_effective_oh(cur,children),
+            }
+            tpr_receipt_events[fid]=_family_receipt_events(cur,fid,180)
+
         _ensure_tpr_purpose_table(cur)
         conn.commit()
         cur.execute(
@@ -7172,13 +7482,41 @@ def current_tpr_review(
         pclass = str(row.get("product_class") or "").upper()
         current_price = _positive_price(row.get("current_price"))
         current_cost = _positive_price(row.get("current_cost_per_selling_unit"))
+        family_id = int(row["family_id"]) if row.get("family_id") is not None else None
+        family_inventory = (
+            tpr_family_inventory.get(family_id)
+            if family_id is not None else None
+        ) or {}
+        system_oh = family_inventory.get("system") or {}
+        effective_oh = family_inventory.get("effective") or {}
         current_oh = (
-            _d(row.get("current_oh"))
-            if row.get("current_oh") is not None
-            else None
+            _d(effective_oh.get("quantity"))
+            if str(effective_oh.get("status") or "").upper()=="READY"
+            and effective_oh.get("quantity") is not None
+            else (
+                _d(row.get("current_oh"))
+                if row.get("current_oh") is not None else None
+            )
+        )
+        current_oh_uom = (
+            effective_oh.get("uom")
+            if str(effective_oh.get("status") or "").upper()=="READY"
+            else row.get("current_oh_uom")
         )
         doh = _d(row.get("doh")) if row.get("doh") is not None else None
-        dos = _d(row.get("dos")) if row.get("dos") is not None else None
+        velocity_7d_for_dos = (
+            _d(row.get("upc_velocity_7d"))
+            if row.get("upc_velocity_7d") is not None else None
+        )
+        dos = (
+            current_oh / velocity_7d_for_dos
+            if current_oh is not None
+            and velocity_7d_for_dos is not None
+            and velocity_7d_for_dos > 0
+            and str(current_oh_uom or "").upper()
+                == str(row.get("selling_uom") or "").upper()
+            else (_d(row.get("dos")) if row.get("dos") is not None else None)
+        )
         by_day = daily.get(uid, {})
 
         pl_life = price_lifecycle.get(uid) or {}
@@ -7312,8 +7650,30 @@ def current_tpr_review(
         previous_step = behavior_steps[-2] if len(behavior_steps) >= 2 else None
         current_step = behavior_steps[-1] if behavior_steps else None
 
+        freshness_threshold = (
+            Decimal("7")
+            if pclass in {"FRESH", "LIVE"}
+            else (Decimal("60") if pclass == "FROZEN" else None)
+        )
+        freshness_plan = _fifo_freshness_plan(
+            tpr_receipt_events.get(family_id, [])
+            if family_id is not None else [],
+            effective_oh,
+            freshness_threshold,
+        )
+        aging_stock_qty = (
+            _d(freshness_plan.get("aging_stock_quantity"))
+            if freshness_plan.get("aging_stock_quantity") is not None
+            else Decimal("0")
+        )
+        freshness_window_days_remaining = (
+            Decimal(str(freshness_plan.get("days_remaining_inclusive")))
+            if freshness_plan.get("days_remaining_inclusive") is not None
+            else None
+        )
+
         auto_purpose, auto_purpose_source = _auto_tpr_purpose(
-            pclass, doh, dos, current_oh
+            pclass, doh, dos, current_oh, freshness_plan
         )
         saved_purpose = purpose_by_upc.get(upc)
         saved_start = _as_date(saved_purpose.get("tpr_start_date")) if saved_purpose else None
@@ -7332,28 +7692,17 @@ def current_tpr_review(
             tpr_purpose = auto_purpose
             purpose_source = auto_purpose_source
 
-        freshness_threshold = (
-            Decimal("7")
-            if pclass in {"FRESH", "LIVE"}
-            else (Decimal("60") if pclass == "FROZEN" else None)
-        )
-        freshness_days_remaining = (
-            max(Decimal("0"), freshness_threshold - doh)
-            if freshness_threshold is not None and doh is not None
-            else None
-        )
+        freshness_days_remaining = freshness_window_days_remaining
         required_velocity_to_clear = (
-            current_oh / freshness_days_remaining
-            if current_oh is not None
-            and current_oh > 0
-            and freshness_days_remaining is not None
-            and freshness_days_remaining > 0
+            aging_stock_qty / freshness_window_days_remaining
+            if aging_stock_qty > 0
+            and freshness_window_days_remaining is not None
+            and freshness_window_days_remaining > 0
             else None
         )
         projected_days_to_clear = (
-            current_oh / tpr_velocity_3d
-            if current_oh is not None
-            and current_oh > 0
+            aging_stock_qty / tpr_velocity_3d
+            if aging_stock_qty > 0
             and tpr_velocity_3d is not None
             and tpr_velocity_3d > 0
             else None
@@ -7361,13 +7710,14 @@ def current_tpr_review(
         projected_oh_at_freshness_limit = (
             max(
                 Decimal("0"),
-                current_oh - (
-                    (tpr_velocity_3d or Decimal("0")) * freshness_days_remaining
+                aging_stock_qty - (
+                    (tpr_velocity_3d or Decimal("0"))
+                    * freshness_window_days_remaining
                 ),
             )
-            if current_oh is not None
-            and freshness_days_remaining is not None
-            else None
+            if aging_stock_qty > 0
+            and freshness_window_days_remaining is not None
+            else Decimal("0")
         )
         projected_qty_7d = (
             tpr_velocity_3d * Decimal("7")
@@ -7521,36 +7871,36 @@ def current_tpr_review(
             monitoring_phase = "COMPLETE"
         elif tpr_purpose == "FRESHNESS_SELL_THROUGH":
             monitoring_phase = "SELL_THROUGH"
-            overdue = (
-                freshness_threshold is not None
-                and doh is not None
-                and doh > freshness_threshold
-            )
-            extreme_age = (
-                freshness_threshold is not None
-                and doh is not None
-                and doh > freshness_threshold + Decimal("3")
-            )
+            window_active = bool(freshness_plan.get("window_active"))
+            overdue = bool(freshness_plan.get("threshold_overdue"))
 
-            if extreme_age:
+            if overdue:
                 recommendation_code = "CANCEL_TPR"
-                recommendation_label = "CANCEL / DISPOSITION"
+                recommendation_label = "END TPR / DISPOSITION"
                 recommendation_reason = (
-                    "Freshness threshold is more than three days past; stop treating this as a normal TPR and review disposition."
+                    "The freshness threshold has passed. The freshness TPR window is over; end TPR and disposition any remaining aging stock."
                 )
                 recommendation_final = True
                 recommendation_priority = 100
                 monitoring_phase = "FRESHNESS_LIMIT"
-            elif overdue:
-                recommendation_code = "LOWER_TPR_PRICE"
-                recommendation_label = "LOWER TPR"
+            elif not window_active:
+                recommendation_code = "CANCEL_TPR"
+                recommendation_label = "RESTORE REG"
                 recommendation_reason = (
-                    "Freshness threshold has been reached and stock remains. Use a stronger last-chance sell-through price."
+                    "Freshness TPR should run only during the final two days before the threshold through the threshold day. Restore REG until that window starts."
                 )
                 recommendation_final = True
-                recommendation_priority = 95
-                monitoring_phase = "LAST_CHANCE"
-                suggested_tpr_price = _freshness_tpr_candidate()
+                recommendation_priority = 92
+                monitoring_phase = "OUTSIDE_FRESHNESS_WINDOW"
+            elif aging_stock_qty <= 0:
+                recommendation_code = "CANCEL_TPR"
+                recommendation_label = "AGING STOCK CLEARED"
+                recommendation_reason = (
+                    "The aging-stock target is already cleared. End the freshness TPR; newer stock does not need to be forced to zero."
+                )
+                recommendation_final = True
+                recommendation_priority = 90
+                monitoring_phase = "COMPLETE"
             elif post_n < 1:
                 recommendation_code = "OBSERVE"
                 recommendation_label = "OBSERVE"
@@ -7562,7 +7912,7 @@ def current_tpr_review(
                 recommendation_code = "LOWER_TPR_PRICE"
                 recommendation_label = "LOWER TPR"
                 recommendation_reason = (
-                    "Freshness sell-through TPR has completed-day evidence but no TPR sales; lower the price while freshness time remains."
+                    "Aging stock remains in the freshness window but there are no completed-day TPR sales; lower the price to protect the Day-threshold sell-out goal."
                 )
                 recommendation_final = True
                 recommendation_priority = 90
@@ -7576,7 +7926,7 @@ def current_tpr_review(
                 recommendation_code = "CONTINUE_TPR"
                 recommendation_label = "CONTINUE"
                 recommendation_reason = (
-                    "Current TPR velocity is on pace to clear effective OH before the freshness threshold."
+                    "Current TPR velocity is on pace to clear the aging-stock target by the end of the freshness threshold day."
                 )
                 recommendation_final = True
                 recommendation_priority = 25
@@ -7589,7 +7939,7 @@ def current_tpr_review(
                 recommendation_code = "LOWER_TPR_PRICE"
                 recommendation_label = "LOWER TPR"
                 recommendation_reason = (
-                    "Current TPR velocity is below the sell-through rate required to clear OH before the freshness threshold."
+                    "Current TPR velocity is below the rate required to clear aging stock by the end of the freshness threshold day."
                 )
                 recommendation_final = True
                 recommendation_priority = 85
@@ -7599,7 +7949,7 @@ def current_tpr_review(
                 recommendation_code = "CONTINUE_TPR"
                 recommendation_label = "CONTINUE"
                 recommendation_reason = (
-                    "Continue the freshness sell-through TPR and reassess after the next completed POS day."
+                    "Continue the freshness TPR only through the threshold day and reassess the aging-stock target after the next completed POS day."
                 )
                 recommendation_priority = 35
         else:
@@ -7710,6 +8060,22 @@ def current_tpr_review(
                     recommendation_priority = 40
                     monitoring_phase = "LEARNING"
 
+        cancel_new_regular_price = suggested_regular_price
+        if (
+            str(recommendation_code).startswith("CANCEL")
+            and cancel_new_regular_price is None
+            and baseline_avg_price is not None
+            and (current_cost is None or baseline_avg_price > current_cost)
+        ):
+            cancel_new_regular_price = _retail_price_point(
+                baseline_avg_price,
+                min_price=(
+                    current_cost + Decimal("0.01")
+                    if current_cost is not None else None
+                ),
+                max_price=company_high,
+            )
+
         out.append({
             "upc": upc,
             "family_id": row.get("family_id"),
@@ -7738,6 +8104,10 @@ def current_tpr_review(
             "previous_tpr_step": previous_step,
             "current_tpr_step": current_step,
             "current_tpr_price": current_price,
+            "original_regular_price": pl_life.get("original_regular_price"),
+            "original_regular_price_type": pl_life.get("original_regular_price_type"),
+            "original_regular_price_date": pl_life.get("original_regular_price_date"),
+            "cancel_new_regular_price": cancel_new_regular_price,
             "current_price_type": "TPR",
             "current_price_source": row.get("current_price_source"),
             "current_price_asof_date": row.get("current_price_asof_date"),
@@ -7747,7 +8117,13 @@ def current_tpr_review(
             "cost_date": row.get("cost_date"),
             "current_gp_pct": current_gp_pct,
             "current_oh": current_oh,
-            "current_oh_uom": row.get("current_oh_uom"),
+            "current_oh_uom": current_oh_uom,
+            "effective_oh": effective_oh,
+            "system_oh": system_oh,
+            "effective_oh_source": effective_oh.get("source"),
+            "true_stock_override_active": (
+                "TRUE_STOCK" in str(effective_oh.get("source") or "").upper()
+            ),
             "dos": dos,
             "doh": doh,
             "qty_7d": row.get("pos_qty_7d"),
@@ -7820,6 +8196,16 @@ def current_tpr_review(
             "baseline_gp_per_day_current_cost": baseline_gp_per_day,
             "gp_day_lift_pct": gp_day_lift_pct,
             "freshness_threshold_doh": freshness_threshold,
+            "freshness_window_start_doh": (
+                freshness_threshold - Decimal("2")
+                if freshness_threshold is not None else None
+            ),
+            "freshness_window_start_date": freshness_plan.get("window_start_date"),
+            "freshness_threshold_date": freshness_plan.get("threshold_date"),
+            "freshness_window_active": freshness_plan.get("window_active"),
+            "freshness_threshold_overdue": freshness_plan.get("threshold_overdue"),
+            "aging_stock_quantity": aging_stock_qty,
+            "aging_stock_uom": freshness_plan.get("uom"),
             "freshness_days_remaining": freshness_days_remaining,
             "required_velocity_to_clear": required_velocity_to_clear,
             "projected_days_to_clear_oh": projected_days_to_clear,
@@ -7857,7 +8243,7 @@ def current_tpr_review(
     counts = Counter(str(r.get("recommendation_code") or "OBSERVE") for r in out)
     purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
-        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
+        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V5_EFFECTIVE_OH_FIFO",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
         "summary": {
@@ -7876,7 +8262,7 @@ def current_tpr_review(
             "tpr_lifecycle_start": "PRICE_LIST_SOURCE_SINCE_PLUS_CONTINUOUS_TPR_PRICE_LIST_AND_CONTIGUOUS_POS_TPR;NEW_UPLOAD_DOES_NOT_RESET",
             "tpr_purposes": "SWEET_SPOT_TEST_OR_FRESHNESS_SELL_THROUGH",
             "sweet_spot_objective": "FIND_SUSTAINABLE_TPR_PRICE_THAT_CAN_BECOME_NEW_REGULAR_PRICE",
-            "freshness_objective": "CLEAR_EFFECTIVE_OH_BEFORE_FRESHNESS_THRESHOLD_WITH_CONTROLLED_TPR_MARKDOWN",
+            "freshness_objective": "START_TPR_AT_THRESHOLD_MINUS_2_DAYS;END_ON_THRESHOLD_DAY;CLEAR_FIFO_AGING_STOCK_TO_ZERO_BY_THRESHOLD_END;NEWER_STOCK_MAY_REMAIN",
             "post_tpr_window": "LATEST_3_COMPLETED_CANONICAL_POS_DAYS_SINCE_CONTINUOUS_TPR_START",
             "baseline": "UP_TO_7_CLEAN_PRE_TPR_NON_SALE_NON_TPR_COMPLETED_POS_DAYS",
             "monitoring": "PREVIOUS_BASELINE_PLUS_CURRENT_TPR_PRICE_STEPS_PLUS_FORWARD_7D_AND_FRESHNESS_CLEARANCE_PROJECTION",
@@ -7896,7 +8282,7 @@ _TPR_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V3_CURRENT_TPR_LIFECYCLE|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V5_CURRENT_TPR_EFFECTIVE_OH_FIFO|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
@@ -8015,7 +8401,7 @@ def cached_current_tpr_review(
         if not already_refreshing:
             _request_tpr_review_refresh(cat,lim,key)
         return {
-            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
+            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V6_EFFECTIVE_OH_FIFO_ASYNC_CACHE",
             "category":cat,
             "analysis_status":"REFRESHING",
             "cache_status":"WARMING",
@@ -8025,7 +8411,7 @@ def cached_current_tpr_review(
             "rows":[],
             "rules":{
                 "serving":"NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH",
-                "calculation":"CURRENT_TPR_REVIEW_V3_LIFECYCLE",
+                "calculation":"CURRENT_TPR_REVIEW_V5_EFFECTIVE_OH_FIFO",
             },
         }
 
@@ -8038,7 +8424,7 @@ def cached_current_tpr_review(
 
     return {
         **cached,
-        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
+        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V6_EFFECTIVE_OH_FIFO_ASYNC_CACHE",
         "analysis_status":"READY_STALE_REFRESHING" if stale else "READY",
         "cache_status":"STALE_REFRESHING" if stale else "HIT",
         "refreshing":refreshing,
