@@ -2914,6 +2914,8 @@ BACKOFFICE_HTML = r'''<!doctype html>
   @media(max-width:1250px){.desktop-batch-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}.desktop-batch-issue-list{grid-template-columns:1fr}}
 }
 
+.m-q-oh-edit{display:block;border:0;background:transparent;padding:0;margin:0;text-align:right;cursor:pointer;color:inherit}
+.m-q-oh-edit b{display:block!important}.m-q-oh-edit span{display:block;font-size:6px;font-weight:850;color:#15785a;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -4061,7 +4063,17 @@ function mobileQuickFamilyGroups(rows){
       family_receipt_qty:r.family_receipt_qty,
       family_receipt_uom:r.family_receipt_uom||'',
       family_receipt_source:r.family_receipt_source||'',
-      family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[]
+      family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],
+      family_cost:r.family_cost,
+      family_cost_uom:r.family_cost_uom||'',
+      family_cost_source:r.family_cost_source||'',
+      family_cost_date:r.family_cost_date||'',
+      family_cost_status:r.family_cost_status||'',
+      family_oh:r.family_oh,
+      family_oh_uom:r.family_oh_uom||'',
+      family_oh_source:r.family_oh_source||'',
+      family_oh_status:r.family_oh_status||'',
+      family_oh_as_of:r.family_oh_as_of||''
     });
     const g=groups.get(familyKey);
     g.rows.push(r);
@@ -4077,6 +4089,14 @@ function mobileQuickFamilyGroups(rows){
     if(!g.group_uom&&r.family_group_movement_uom)g.group_uom=String(r.family_group_movement_uom);
     if(!g.group_status&&r.family_group_movement_status)g.group_status=String(r.family_group_movement_status);
     if(!g.group_basis&&r.family_group_movement_basis)g.group_basis=String(r.family_group_movement_basis);
+    if((g.family_cost===null||g.family_cost===undefined)&&r.family_cost!==null&&r.family_cost!==undefined)g.family_cost=r.family_cost;
+    if(!g.family_cost_uom&&r.family_cost_uom)g.family_cost_uom=String(r.family_cost_uom);
+    if(!g.family_cost_source&&r.family_cost_source)g.family_cost_source=String(r.family_cost_source);
+    if(!g.family_cost_date&&r.family_cost_date)g.family_cost_date=String(r.family_cost_date);
+    if((g.family_oh===null||g.family_oh===undefined)&&r.family_oh!==null&&r.family_oh!==undefined)g.family_oh=r.family_oh;
+    if(!g.family_oh_uom&&r.family_oh_uom)g.family_oh_uom=String(r.family_oh_uom);
+    if(!g.family_oh_source&&r.family_oh_source)g.family_oh_source=String(r.family_oh_source);
+    if(!g.family_oh_status&&r.family_oh_status)g.family_oh_status=String(r.family_oh_status);
     if(!g.reconciliation&&r.family_group_reconciliation)g.reconciliation=String(r.family_group_reconciliation);
     if((g.active_pos_upc_count===null||g.active_pos_upc_count===undefined)&&r.family_group_active_pos_upc_count!==null&&r.family_group_active_pos_upc_count!==undefined)g.active_pos_upc_count=Number(r.family_group_active_pos_upc_count);
     if((g.active_selling_article_count===null||g.active_selling_article_count===undefined)&&r.family_group_active_selling_article_count!==null&&r.family_group_active_selling_article_count!==undefined)g.active_selling_article_count=Number(r.family_group_active_selling_article_count);
@@ -4267,6 +4287,8 @@ function mobileQuickGroupedHtml(rows){
     const familyHead='<div class="m-q-family-head'+(familyPositiveMvt?' has-positive-mvt':'')+'">'+
       '<div class="m-q-family-identity"><div class="m-q-titleline"><span class="m-q-label">FAMILY ARTICLE</span><div class="m-q-family-number-line"><div class="m-q-family-number">'+esc(g.family_article||'—')+'</div>'+familyReceiptO+'</div></div><div class="m-q-family-name">'+esc(g.family_name||'Unmapped Family')+'</div>'+reconMeta+sourceMvtText+familyReceiptCaption+'</div>'+
       '<div class="m-q-family-kpis">'+
+        '<div class="m-q-kpi"><small>FAMILY COST</small><b>'+money(g.family_cost)+(g.family_cost_uom?' / '+esc(g.family_cost_uom):'')+'</b><span class="m-q-price-meta">'+esc(g.family_cost_source||'Cost unavailable')+(g.family_cost_date?' · '+esc(g.family_cost_date):'')+'</span></div>'+
+        '<div class="m-q-kpi"><small>EFFECTIVE OH</small><button type="button" class="m-q-oh-edit" data-oh-edit="1" data-family="'+esc(g.family_article||'')+'" data-uom="'+esc(g.family_oh_uom||'')+'" data-oh="'+esc(g.family_oh??'')+'" data-name="'+esc(g.family_name||'')+'"><b>'+fmt(g.family_oh)+' '+esc(g.family_oh_uom||'')+'</b><span>Tap to enter True Stock</span></button></div>'+
         '<div class="m-q-kpi"><small>7D TOTAL SELLING MVT</small><b>'+esc(gqty)+'</b></div>'+
         '<div class="m-q-kpi"><small>Avg/Day</small><b>'+esc(gavg)+'</b></div>'+
       '</div>'+
@@ -4466,6 +4488,7 @@ function mobileRenderList(){
   }
   box.innerHTML=html||'<div class="m-empty">No items match the current filter.</div>';
   box.querySelectorAll('[data-mobile-key]').forEach(b=>b.onclick=()=>mobileOpenItem(b.dataset.mobileKey));
+  box.querySelectorAll('[data-oh-edit]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openOH(b.dataset)});
   box.querySelectorAll('.m-q-hidden-toggle').forEach(btn=>btn.onclick=()=>{
     const id=btn.dataset.hiddenTarget;
     const wrap=id?document.getElementById(id):null;
@@ -4690,7 +4713,7 @@ function mobileOrderingDetail(key){
   let html='<div class="m-detailcard"><div class="m-label">Family / Receiving Article Order Review</div><div class="m-detailgrid">';
   html+=mobileMetric('Family Article',r.family_article||'—',r.family_name||'');
   html+=mobileMetric('Receiving Article',r.receiving_article||'—','Ordering / receiving level');
-  html+=mobileMetric('OH',fmt(r.oh)+' '+(r.oh_uom||''),'Current family OH');
+  html+='<div class="m-metric"><small>Effective OH</small><button id="mOrderingOH" type="button" class="linkbtn"><b>'+fmt(r.oh)+' '+esc(r.oh_uom||'')+'</b></button><span>Tap to enter True Stock</span></div>';
   html+=mobileMetric('Last Receipt',r.last_receipt_date||'—',fmt(r.last_receipt_qty_base)+' '+(r.last_receipt_base_uom||''));
   html+=mobileMetric('Delivery',r.selected_delivery_date||'—',r.delivery_day||'Observed delivery day');
   html+=mobileMetric('Observed Cadence',r.delivery_day?(r.delivery_day+' '+fmt(r.delivery_day_observed_count,0)+'/'+fmt(r.delivery_day_receipt_count,0)):(r.ordering_frequency||'—'),r.delivery_day_confidence_pct!==null&&r.delivery_day_confidence_pct!==undefined?fmt(r.delivery_day_confidence_pct,0)+'% confidence · recent 12 weeks':'Observed ordering cadence');
@@ -4706,6 +4729,7 @@ function mobileOrderingDetail(key){
   }
   html+='</div>';
   mobileShowDetail(r.family_article||'Ordering',r.family_name||'',html);
+  const oh=mNode('mOrderingOH');if(oh)oh.onclick=()=>openOH({family:r.family_article,uom:r.oh_uom||'',oh:r.oh??'',name:r.family_name||''});
 }
 function phase3ProgressState(b){
   const runStatus=String(b?.active_run_status||'').toUpperCase();
@@ -5285,7 +5309,7 @@ async function loadInventory(){
  $('#invRows').innerHTML='<tr><td colspan="11" class="loading">Loading...</td></tr>';
  try{
    const light=(isMobileBackoffice()&&mobileState.module==='quick');
-   const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=${light?120:300}&lightweight=${light?'true':'false'}${q?'&q='+encodeURIComponent(q):''}`;
+   const url=`/v1/backoffice/inventory?category=${encodeURIComponent(cat)}&limit=${light?120:300}&lightweight=${light?'true':'false'}${light?'&include_oh=true':''}${q?'&q='+encodeURIComponent(q):''}`;
    const requestTimeoutMs=light?12000:20000;
    const d=await api(url,{timeoutMs:requestTimeoutMs});
    if(requestSeq!==inventoryLoadSeq)return false;
@@ -5567,7 +5591,7 @@ $('#salesApplyRange').onclick=async()=>{state.salesStartDate=$('#salesStartDate'
 $('#salesStartDate').onchange=e=>{state.salesStartDate=e.target.value};
 $('#salesEndDate').onchange=e=>{state.salesEndDate=e.target.value};
 
-async function loadOrders(){
+async function loadOrders(force=false){
   const seq=++orderingLoadSeq;
   const err=$('#orderError');err.innerHTML='';state.orderLoadError='';state.orderHealth=null;
   $('#orderRows').innerHTML='<tr><td colspan="9" class="loading">Loading...</td></tr>';
@@ -5575,7 +5599,7 @@ async function loadOrders(){
     const deliveryParam=(isMobileBackoffice()&&mobileState.orderDeliveryDate)
       ? '&delivery_date='+encodeURIComponent(mobileState.orderDeliveryDate)
       : '';
-    const url='/v1/backoffice/ordering-review?category=ALL'+deliveryParam;
+    const url='/v1/backoffice/ordering-review?category=ALL'+deliveryParam+(force?'&force=true':'');
     let d=null;
     for(let poll=0;poll<15;poll++){
       try{
@@ -5685,9 +5709,10 @@ function renderOrders(){
   const warning=h.staleEstimate
     ? `<tr><td colspan="9"><div style="padding:10px 12px;border:1px solid #efd49d;background:#fff4d9;border-radius:12px;color:#8a5a00"><b>⚠ BEST AVAILABLE · POS ${esc(h.posThrough||'—')} · MVT ${esc(h.movementThrough||'—')}.</b> Missing dates are ignored, not zero-filled; missing MVT days are forecast into delivery coverage.</div></td></tr>`
     : '';
-  const body=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td>${fmt(r.oh)} ${esc(r.oh_uom||'')}</td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span>${r.estimate_only?' <span class="pill yellow">ESTIMATE</span>':''}</td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('');
+  const body=a.map(r=>`<tr><td><div class="name">${esc(r.family_name||'—')}</div></td><td><b>${esc(r.receiving_article||'—')}</b></td><td><b>${esc(r.family_article||'—')}</b></td><td><button type="button" class="linkbtn ohbtn" data-family="${esc(r.family_article||'')}" data-uom="${esc(r.oh_uom||'')}" data-oh="${esc(r.oh??'')}" data-name="${esc(r.family_name||'')}">${fmt(r.oh)} ${esc(r.oh_uom||'')}</button></td><td>${esc(r.last_receipt_date||'—')}</td><td><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></td><td>${esc(r.ordering_frequency||'—')}</td><td><span class="suggest">${fmt(r.suggested_delivery_qty)} ${esc(r.suggested_delivery_uom||'')}</span>${r.estimate_only?' <span class="pill yellow">ESTIMATE</span>':''}</td><td><button class="btn small orderdetail" data-family="${esc(r.family_article)}">Details / Why?</button></td></tr>`).join('');
   $('#orderRows').innerHTML=warning+(body||'<tr><td colspan="9" class="empty">No eligible families: none currently meet the Ordering rules.</td></tr>');
-  $$('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family))
+  $('.orderdetail').forEach(b=>b.onclick=()=>openOrderDetail(b.dataset.family));
+  $('#orderRows .ohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset))
 }
 $$('.ordfilter').forEach(b=>b.onclick=()=>{state.orderFilter=b.dataset.filter;$$('.ordfilter').forEach(x=>x.classList.toggle('on',x===b));renderOrders()});$('#orderSort').onchange=renderOrders;
 function openOrderDetail(fam){const r=state.orders.find(x=>String(x.family_article)===String(fam));if(!r)return;const d=r.details||{},reasons=d.reasons||[], recArts=d.receiving_articles_on_last_receipt||[];openDrawer('Ordering Detail / Why?',`${r.family_name} · Family ${r.family_article}`,`<div class="detailgrid"><div class="detail"><small>Receiving Article</small><b>${esc(r.receiving_article||'—')}</b></div><div class="detail"><small>Family OH</small><b>${fmt(r.oh)} ${esc(r.oh_uom||'')}</b></div><div class="detail"><small>Last Receipt</small><b>${esc(r.last_receipt_date||'—')}</b></div><div class="detail"><small>Receipt Qty · Base</small><b>${fmt(r.last_receipt_qty_base)} ${esc(r.last_receipt_base_uom||'')}</b></div><div class="detail"><small>Family 7D Movement</small><b>${fmt(d.qty_7d)}</b></div><div class="detail"><small>Family 28D Movement</small><b>${fmt(d.qty_28d)}</b></div><div class="detail"><small>7D Velocity</small><b>${fmt(d.velocity_7d)}/day</b></div><div class="detail"><small>DOS</small><b>${fmt(d.dos)}</b></div>${r.estimate_only?`<div class="detail"><small>Data Basis</small><b>ESTIMATE · through ${esc(r.data_through||'—')}</b></div>`:''}</div><div class="sectiontitle">Why this suggestion?</div><div class="reasonlist">${reasons.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.title)}</b><span>${esc(x.detail)}</span></div></div>`).join('')}</div><div class="calc">Coming delivery suggestion ≈ expected family usage through coverage window − usable family OH + promotion/safety adjustment. Incoming is not used as a displayed Ordering Review field.</div>${recArts.length?`<div class="sectiontitle">Receiving Articles on Last Receipt</div><div class="reasonlist">${recArts.map(x=>`<div class="reason"><span class="rdot"></span><div><b>${esc(x.article_number)}</b><span>${fmt(x.quantity)} ${esc(x.base_uom||'')} · Base UOM</span></div></div>`).join('')}</div>`:''}`,`<span class="pill blue">READ ONLY</span>`)}
@@ -5765,7 +5790,7 @@ function renderPrices(){
       <td><div class="name">${esc(r.upc)}</div><div class="meta">${esc(r.name||'')}</div></td>
       <td><b>${money(r.current_price)}</b><div class="meta">${esc(r.current_price_type||'—')} · ${esc(r.current_price_source||'—')}${r.current_price_observed_date?' · '+esc(r.current_price_observed_date):''}</div></td>
       <td><b>${money(r.candidate_price)}</b><div class="meta">${esc(r.selection_basis||r.suggestion_basis||'')}</div></td>
-      <td><b>${fmt(r.current_oh)} ${esc(r.current_oh_uom||'')}</b><div class="meta">DOH ${fmt(r.doh)}</div></td>
+      <td><button type="button" class="linkbtn priceohbtn" data-family="${esc(r.family_article||r.family_article_number||'')}" data-uom="${esc(r.current_oh_uom||'')}" data-oh="${esc(r.current_oh??'')}" data-name="${esc(r.family_name||r.name||'')}"><b>${fmt(r.current_oh)} ${esc(r.current_oh_uom||'')}</b></button><div class="meta">${r.current_oh_is_true_stock?'TRUE STOCK · ':''}DOH ${fmt(r.doh)} · tap OH to edit</div></td>
       <td><b>${esc(range)}</b><div class="meta">${r.has_company_reference?'Candidate constrained':'No company constraint'}</div></td>
       <td><b>${money(r.current_cost)}</b><div class="meta">${esc(r.current_cost_source||r.cost_basis||'—')}${r.cost_date?' · '+esc(r.cost_date):''}</div></td>
       <td>${pct(r.current_gp_pct_reference)}</td><td>${fmt(r.qty_14d)}</td>
@@ -5774,8 +5799,9 @@ function renderPrices(){
       <td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn small pricedetail" data-upc="${esc(r.upc)}">Why?</button>${String(r.review_status||"").toUpperCase()==="ACTIONABLE"&&r.current_price!==null&&r.current_price!==undefined&&r.candidate_price!==null&&r.candidate_price!==undefined?`<button class="btn small primary priceaccept" data-upc="${esc(r.upc)}">Accepted</button>`:""}</div></td>
     </tr>`;
   }).join('')||`<tr><td colspan="12" class="empty"><b>No qualified price changes in the current snapshot.</b>${Number(state.priceMeta?.suppressedAccepted||0)?'<br>'+esc(state.priceMeta.suppressedAccepted)+' accepted suggestion(s) remain suppressed until price evidence or the candidate changes.':''}</td></tr>`;
-  $$('.pricedetail').forEach(b=>b.onclick=()=>openPriceDetail(b.dataset.upc));
-  $$('.priceaccept').forEach(b=>b.onclick=()=>acceptPriceSuggestion(b.dataset.upc,b));
+  $('.pricedetail').forEach(b=>b.onclick=()=>openPriceDetail(b.dataset.upc));
+  $('.priceohbtn').forEach(b=>b.onclick=()=>openOH(b.dataset));
+  $('.priceaccept').forEach(b=>b.onclick=()=>acceptPriceSuggestion(b.dataset.upc,b));
 }
 
 async function acceptPriceSuggestion(upc,button){
@@ -5851,6 +5877,7 @@ function openPriceDetail(upc){
       '<div class="detail"><small>Current GP%</small><b>'+pct(r.current_gp_pct_reference)+'</b></div>'+
       '<div class="detail"><small>Candidate GP%</small><b>'+pct(r.suggested_gp_pct_at_current_cost)+'</b></div>'+
       '<div class="detail"><small>Company A/B/C</small><b>'+esc(companyText)+'</b><span>Range: '+esc(rangeText)+'</span></div>'+
+      '<div class="detail"><small>Effective OH</small><button type="button" class="linkbtn" id="priceDetailOH"><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></button><span>'+(r.current_oh_is_true_stock?'TRUE STOCK':'Tap to enter True Stock')+'</span></div>'+
       '<div class="detail"><small>DOH</small><b>'+fmt(r.doh)+'</b><span>'+(r.clearance_due_to_doh?'Clearance mode':'Standard pricing mode')+'</span></div>'+
       '<div class="detail"><small>14D Qty</small><b>'+fmt(r.qty_14d)+'</b></div>'+
       '<div class="detail"><small>7D Velocity</small><b>'+fmt(r.velocity_7d)+'</b></div>'+
@@ -5865,6 +5892,7 @@ function openPriceDetail(upc){
     '<div id="priceDetail7d" class="m-quick7d"><div class="m-loading">Loading 7-day sales history…</div></div>',
     '<span class="pill blue">READ ONLY</span>'
   );
+  const oh=$('#priceDetailOH');if(oh)oh.onclick=()=>openOH({family:r.family_article||r.family_article_number,uom:r.current_oh_uom||'',oh:r.current_oh??'',name:r.family_name||r.name||''});
   loadPriceDetail7d(r.upc);
 }
 
