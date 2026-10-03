@@ -3538,6 +3538,111 @@ def _family_effective_oh(cur, rows: list[dict[str,Any]]) -> dict[str,Any]:
     return _family_owner_positions(cur,rows,use_child_true_stock=True)
 
 
+def _overlay_active_true_stock_effective_oh(
+    cur,
+    rows: list[dict[str,Any]],
+) -> list[dict[str,Any]]:
+    """Overlay active Family True Stock onto serving rows immediately.
+
+    Phase 3 publishes a snapshot, but a physical True Stock count is a newer
+    operational fact. Any page/function calculating with OH must see that count
+    without waiting for another Phase 3 rebuild. Only Families with an ACTIVE
+    True Stock are recalculated here; all other rows retain their published OH.
+    """
+    if not rows or not _table_exists(cur,"manual_true_stock"):
+        return rows
+
+    cur.execute(
+        """SELECT DISTINCT family_id
+           FROM manual_true_stock
+           WHERE override_status='ACTIVE'
+             AND family_id IS NOT NULL"""
+    )
+    active_family_ids={
+        int(x["family_id"])
+        for x in cur.fetchall()
+        if x.get("family_id") is not None
+    }
+    target_ids={
+        int(x["family_id"])
+        for x in rows
+        if x.get("family_id") is not None
+        and int(x["family_id"]) in active_family_ids
+    }
+    if not target_ids:
+        return rows
+
+    ph=",".join(["%s"]*len(target_ids))
+    cur.execute(
+        f"""SELECT *
+            FROM quick_check_current
+            WHERE family_id IN ({ph})
+            ORDER BY family_id,ean_upc""",
+        tuple(sorted(target_ids)),
+    )
+    children_by_family: dict[int,list[dict[str,Any]]]={}
+    for child in cur.fetchall():
+        if child.get("family_id") is not None:
+            children_by_family.setdefault(int(child["family_id"]),[]).append(child)
+
+    movement_days_7=source_data_days(
+        cur,"movement",limit=7,up_to=completed_through_date(),
+    )
+    supported_movement_days=max(0,len(movement_days_7))
+    effective_by_family: dict[int,dict[str,Any]]={}
+    for fid in target_ids:
+        effective_by_family[fid]=_family_effective_oh(
+            cur,children_by_family.get(fid,[]),
+        )
+
+    for row in rows:
+        if row.get("family_id") is None:
+            continue
+        fid=int(row["family_id"])
+        if fid not in target_ids:
+            continue
+        effective=effective_by_family.get(fid) or {}
+        row["live_effective_oh_status"]=effective.get("status")
+        row["live_effective_oh_source"]=effective.get("source")
+        row["live_effective_oh_reason"]=effective.get("reason")
+        row["live_true_stock_id"]=effective.get("family_true_stock_id")
+        if (
+            effective.get("status")=="READY"
+            and effective.get("quantity") is not None
+            and effective.get("uom")
+        ):
+            qty=_d(effective.get("quantity"))
+            uom=str(effective.get("uom") or "").upper()
+            row["current_oh"]=qty
+            row["current_oh_uom"]=uom
+            row["current_oh_source"]=effective.get("source") or "FAMILY_TRUE_STOCK"
+            row["current_oh_basis"]="LIVE_EFFECTIVE_OH_ACTIVE_TRUE_STOCK"
+
+            # Recalculate DOH/DOS from Family demand, not a single UPC velocity.
+            # family_movement_7d is the canonical 251-252 Family demand authority.
+            movement=row.get("family_movement_7d")
+            movement_uom=str(row.get("family_movement_uom") or "").upper()
+            if (
+                movement is not None
+                and _d(movement)>0
+                and movement_uom==uom
+                and supported_movement_days>0
+            ):
+                family_velocity=_d(movement)/Decimal(supported_movement_days)
+                days=(max(Decimal("0"),qty)/family_velocity) if family_velocity>0 else None
+                row["doh"]=days
+                row["dos"]=days
+                row["doh_basis"]="LIVE_EFFECTIVE_OH_DIV_FAMILY_251_252_SUPPORTED_DAY_VELOCITY"
+                row["dos_basis"]="LIVE_EFFECTIVE_OH_DIV_FAMILY_251_252_SUPPORTED_DAY_VELOCITY"
+            else:
+                # Never retain a stale published DOH after OH authority changed.
+                row["doh"]=None
+                row["dos"]=None
+                row["doh_basis"]="UNRESOLVED_LIVE_EFFECTIVE_OH_TO_FAMILY_DEMAND_UOM"
+                row["dos_basis"]="UNRESOLVED_LIVE_EFFECTIVE_OH_TO_FAMILY_DEMAND_UOM"
+    return rows
+
+
 def _family_effective_oh_for_ordering(
     cur,
     rows: list[dict[str,Any]],
@@ -5928,7 +6033,8 @@ def performance_report(
                    WHERE UPPER(COALESCE(product_class,''))=%s""",
                 (cat,),
             )
-        rows=cur.fetchall()
+        rows=[dict(x) for x in cur.fetchall()]
+        _overlay_active_true_stock_effective_oh(cur,rows)
 
         # Price Change and Daily Performance share this endpoint.  Load the
         # complete 90 supported-day sales window once, then reuse it for every
