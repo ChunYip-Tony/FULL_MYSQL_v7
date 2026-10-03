@@ -113,9 +113,15 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V19_RECEIVING_PACK' in cache_src
+          assert 'V20_DELIVERY_ARTICLE_DAYS' in cache_src
           assert hasattr(b,'_historical_receiving_article_summary')
           assert hasattr(b,'_article_manual_family_pack_context')
+          hist_src=inspect.getsource(b._historical_receiving_article_summary)
+          assert '"observed_day_count":len(' in hist_src
+          order_src_ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in order_src_ui
+          assert 'observed_day_count??h.receipt_event_count' in order_src_ui
+          assert 'data-order-oh' in order_src_ui
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -168,7 +174,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v434'" in ui
+          assert "const CACHE='yipman-v435'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -266,7 +272,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER SELLING' in ui
-          assert "const CACHE='yipman-v433'" in ui
+          assert "const CACHE='yipman-v435'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
@@ -616,12 +622,16 @@ jobs:
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'WEEKLY · THU → THU' in ui
           assert 'WEEKEND · FRI → SUN' in ui
-          assert 'TEMP TRUE STOCK' in ui
-          assert 'temporary OH values are NOT saved' in ui
           assert "data-order-mode=\"PROMOTION\"" in ui
           assert 'id="promoManualBtn"' in ui
           assert 'Manual Promotion' in ui
+          assert '/v1/app/v2/search?q=' in ui
+          assert 'manualPromoSearchResults' in ui
+          assert 'MANUAL_SEARCH_ENTRY' in ui
           assert "promotion_type:'CUSTOM'" in ui
+          assert 'True Stock edits save system-wide' in ui
+          assert '/v1/app/v2/pi/' in ui
+          assert 'data-promo-true-stock' in ui
           assert 'freshness_adjustment_applied' in ui
           print('yipman-promotion-ordering=PASS')
           PY
