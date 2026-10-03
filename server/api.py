@@ -17,7 +17,7 @@ from product_identity_audit import audit_product_identity
 from maintenance_api import run_manual_authority_refresh, run_confirmed_uom_refresh, run_safe_cost_refresh, run_confirmed_cost_conversion_refresh, run_on_hand_repair, run_article_manual_roster_repair, run_operational_uom_quick_check_refresh, run_cost_authority_refresh
 from uom_evidence_diagnostic import diagnose_uom_lineage
 from global_cost_hold_diagnostic import diagnose_global_cost_holds, diagnose_oh_cost_schema
-from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard, add_order_recommendation_to_draft, update_order_draft_line, order_draft_history, transition_order_draft, order_delivery_reconciliation, update_order_external_reference
+from quick_check_app import search_quick_check, get_quick_check_detail, submit_true_stock, submit_negative_stock_true_stock, cancel_true_stock, pending_dumping_discrepancies, negative_stock_queue, quick_check_lineage, ready_quick_checks_with_system_oh, diagnose_on_hand_lineage, inventory_position_diagnostic, inventory_rollforward_candidates, ordering_queue, price_change_queue, resolve_dumping_discrepancy, list_ordering_policies, upsert_ordering_policy, price_change_preview, create_price_change_proposal, list_price_change_proposals, review_price_change_proposal, mark_price_change_executed, dumping_discrepancy_history, operational_dashboard, add_order_recommendation_to_draft, update_order_draft_line, order_draft_history, transition_order_draft, order_delivery_reconciliation, update_order_external_reference, true_stock_adjustment_log, clear_true_stock_adjustment_log
 from movement_repair import repair_movement_history
 from movement_snapshot_diagnostic import movement_same_day_compare
 from receipt_audit import receipt_double_count_audit
@@ -3822,6 +3822,11 @@ class BackofficePriceAcceptRequest(BaseModel):
     candidate_price: Decimal
 
 
+class BackofficeTrueStockAdjustmentClearRequest(BaseModel):
+    confirm: str
+    note: str | None = None
+
+
 class YipmanPromotionListRequest(BaseModel):
     list_name: str
     items: list[dict[str,Any]]
@@ -4012,6 +4017,36 @@ def backoffice_inventory(
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     except Exception as exc:
         raise HTTPException(500,f'Backoffice inventory failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/backoffice/true-stock-adjustments')
+def backoffice_true_stock_adjustments(
+    limit:int=300,
+    include_cleared:bool=False,
+):
+    try:
+        result=true_stock_adjustment_log(
+            limit=limit,
+            include_cleared=include_cleared,
+        )
+    except Exception as exc:
+        raise HTTPException(500,f'True Stock adjustment log failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/backoffice/true-stock-adjustments/clear')
+def backoffice_clear_true_stock_adjustments(
+    body:BackofficeTrueStockAdjustmentClearRequest,
+    authorization:Annotated[str|None,Header()]=None,
+):
+    if body.confirm!='CLEAR_TRUE_STOCK_ADJUSTMENT_LIST':
+        raise HTTPException(400,'confirm must be CLEAR_TRUE_STOCK_ADJUSTMENT_LIST')
+    actor=public_app_actor(authorization)
+    try:
+        result=clear_true_stock_adjustment_log(actor,body.note)
+    except Exception as exc:
+        raise HTTPException(500,f'True Stock adjustment list clear failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 
