@@ -84,6 +84,7 @@ jobs:
         run: |
           python - <<'PY'
           import inspect
+          from pathlib import Path
           import backoffice_runtime as b
 
           order_sig=inspect.signature(b.ordering_review)
@@ -113,9 +114,24 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V19_RECEIVING_PACK' in cache_src
+          assert 'V20_DELIVERY_ARTICLE_DAYS' in cache_src
           assert hasattr(b,'_historical_receiving_article_summary')
           assert hasattr(b,'_article_manual_family_pack_context')
+          hist_src=inspect.getsource(b._historical_receiving_article_summary)
+          assert '"observed_day_count":len(' in hist_src
+          order_src_ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in order_src_ui
+          assert 'observed_day_count??h.receipt_event_count' in order_src_ui
+          assert 'data-order-oh' in order_src_ui
+          assert "let orderSort='QTY'" in order_src_ui
+          assert 'if(!raw){input.value=input.dataset.original' in order_src_ui
+          assert 'current_oh_system' in order_src_ui
+          assert 'data-promo-true-stock' in order_src_ui
+          assert 'MANUAL_SEARCH_ENTRY' in order_src_ui
+          assert '/v1/app/v2/search?q=' in order_src_ui
+          assert 'manualPromoSearchResults' in order_src_ui
+          assert 'promo-card.tone0' in order_src_ui
+          assert 'weekday_number is not None' in hist_src
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -168,7 +184,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v434'" in ui
+          assert "const CACHE='yipman-v435'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -233,10 +249,12 @@ jobs:
           assert 'limit=28' in src
           assert '"sales_by_price_type"' in src
           assert 'WHERE family_id IN ({ph})' in src
-          assert '"recent_promotion_event": recent_promotion' in src
+          assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
-          assert 'ANY_RELATED_FAMILY_UPC' in src
-          assert 'YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS' in src
+          assert 'all_family_rows = [dict(x) for x in cur.fetchall()]' in src
+          assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
+          assert 'YIPMAN_STOCK_FLOW_V6_FAST_SERVING_PATH' in src
+          assert '"promotion_scope": "QUALIFIED_FAMILIES_ONLY"' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -260,13 +278,13 @@ jobs:
           assert '.quicksearch{border-width:2.4px}' in ui
           assert "orderitemcard tone'+(i%5)" in ui
           assert "pcard tone'+(i%5)" in ui
-          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in ui
           assert 'h.article_name' in ui
           assert '.stockflowgrid{display:grid;grid-template-columns:' in ui
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER SELLING' in ui
-          assert "const CACHE='yipman-v433'" in ui
+          assert "const CACHE='yipman-v435'" in ui
           print('stock-flow-observed-delivery-v395=PASS')
           PY
 
@@ -392,7 +410,7 @@ jobs:
           assert '#order .familyline b{font-size:18px' in ui
           assert '#order .orderitemmain .orderqty{font-size:19px' in ui
           assert '#order .orderitemmain .cell{text-align:right;font-size:15px' in ui
-          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in ui
           assert '#order .orderrecvhistory{margin:0 12px 12px' in ui
           assert "$('#orderList').classList.remove('futurecards')" in ui
           assert '#price .ptop b{font-size:17px!important}' in ui
@@ -451,7 +469,7 @@ jobs:
           assert "priceFilter='UPC_240'" in ui
           assert "priceFilter.startsWith('UPC_')" in ui
           assert "upcPrefix(r)===priceFilter.slice(4)" in ui
-          assert 'Testing must still move at least $0.45 from Current' in ui
+          assert 'TPR Suggestion Price must still move at least $0.45 from Current' in ui
           assert '.29 / .49 / .59 / .69 / .79 / .99' in ui
           assert 'const retailPoint=v=>' in ui
           assert 'Raw proved sweet-spot evidence is preserved' in ui
@@ -477,7 +495,8 @@ jobs:
           assert 'cached_pricing_review(' in src
           assert 'BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT' in src
           assert 'SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
-          assert 'SAME_CANONICAL_TESTING_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'BACKWARD_COMPATIBILITY_ALIAS_FOR_TPR_SUGGESTION_PRICE' in src
+          assert 'SAME_CANONICAL_CONTROLLED_PRICE_OR_FRESHNESS_TEST_STEP_AS_PRICE_SUGGESTIONS' in src
           assert '_quick_price_preview_by_upc(' not in src
           assert 'YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW' in src
 
@@ -616,12 +635,16 @@ jobs:
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'WEEKLY · THU → THU' in ui
           assert 'WEEKEND · FRI → SUN' in ui
-          assert 'TEMP TRUE STOCK' in ui
-          assert 'temporary OH values are NOT saved' in ui
           assert "data-order-mode=\"PROMOTION\"" in ui
           assert 'id="promoManualBtn"' in ui
           assert 'Manual Promotion' in ui
+          assert '/v1/app/v2/search?q=' in ui
+          assert 'manualPromoSearchResults' in ui
+          assert 'MANUAL_SEARCH_ENTRY' in ui
           assert "promotion_type:'CUSTOM'" in ui
+          assert 'True Stock edits save system-wide' in ui
+          assert '/v1/app/v2/pi/' in ui
+          assert 'data-promo-true-stock' in ui
           assert 'freshness_adjustment_applied' in ui
           print('yipman-promotion-ordering=PASS')
           PY
@@ -1325,6 +1348,39 @@ jobs:
           assert 'uploadCoverageText' in backoffice
           assert 'UPLOAD NOT COMMITTED' in backoffice
           print('final-pricing-review-rules=PASS')
+          PY
+
+      - name: Validate non-destructive True Stock adjustment worklist
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import api
+          import quick_check_app as qc
+
+          ensure_src=inspect.getsource(qc.ensure_true_stock_tables)
+          list_src=inspect.getsource(qc.true_stock_adjustment_log)
+          clear_src=inspect.getsource(qc.clear_true_stock_adjustment_log)
+          api_src=Path('api.py').read_text(encoding='utf-8')
+          desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+
+          assert 'adjustment_list_cleared_at' in ensure_src
+          assert 'adjustment_list_cleared_by' in ensure_src
+          assert 'adjustment_list_clear_note' in ensure_src
+          assert 'ACKNOWLEDGE_WORKLIST_ONLY' in list_src
+          assert '"clear_changes_override_status":False' in list_src.replace(' ','')
+          assert 'SET adjustment_list_cleared_at=CURRENT_TIMESTAMP(6)' in clear_src
+          assert 'true_stock_baselines_unchanged' in clear_src
+          assert 'effective_oh_unchanged' in clear_src
+          assert 'DELETE FROM manual_true_stock' not in clear_src
+          assert "override_status='CANCEL" not in clear_src
+          assert "/v1/backoffice/true-stock-adjustments" in api_src
+          assert 'CLEAR_TRUE_STOCK_ADJUSTMENT_LIST' in api_src
+          assert 'Inventory / True Stock' in desktop
+          assert 'True Stock Adjustment Worklist' in desktop
+          assert 'Clear List After Dumping' in desktop
+          assert 'This does NOT delete or cancel True Stock' in desktop
+          print('true-stock-adjustment-worklist-v435=PASS')
           PY
 
       - name: Import worker and Phase 3 modules

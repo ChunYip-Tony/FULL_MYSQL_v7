@@ -1,3 +1,18 @@
+v7.0.435 Ordering Readability + Searchable Manual Promotion:
+- Ordering Family cards use larger fully wrapping Family names while retaining the five soft Family color tones.
+- Every selected-day Family can show historical Delivery Articles, including zero-order/review rows.
+- Delivery Article summary shows Article #, full Article Name, Pack Size, and unique observed delivery-day count; full receipt detail remains behind the Family detail view.
+- Ordering OH is directly editable in-place; the saved value commits through the Family True Stock endpoint and is used system-wide.
+- Promotion Ordering uses the same system-wide True Stock edit instead of request-only temporary OH from the mobile page.
+- Manual Promotion is search-first: search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name using the current typo-tolerant item search.
+- Search selections hydrate Family OH, 7D sales context, and receiving/delivery Article details before SALE price and promotion/delivery dates are entered.
+- Selecting another item from the same Family replaces the prior selection so Family inventory cannot be counted twice in one manual promotion list.
+- Ordering cache advanced to V20 for Delivery Article observed-day data.
+- Yipman service-worker shell cache advanced to v435.
+- Desktop Inventory / True Stock now includes an uncleared True Stock Adjustment Worklist with recorded date/time, Family, System OH, True Stock, difference/dumping status, submitter, and active/superseded inventory status.
+- “Clear List After Dumping” is deliberately non-destructive: it only acknowledges/hides worklist rows. It does not delete True Stock, change override_status, change Effective OH, or alter the dumping queue.
+Version: 7.0.435 Single-Service Edition
+
 v7.0.434 Current TPR Timeout Repair:
 - Current TPR review now uses a persistent asynchronous stale-while-refresh cache instead of recalculating the entire TPR dataset inside the mobile HTTP request.
 - The Current TPR cache is warmed automatically when the single-service server starts.
