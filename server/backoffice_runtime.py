@@ -677,8 +677,15 @@ def _historical_receiving_article_summary(
     family_article: str | None,
     events: list[dict[str, Any]],
     limit: int = 8,
+    weekday_number: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Summarize historically used Receiving Articles for an ordering Family."""
+    """Summarize Delivery Articles used on the selected delivery weekday.
+
+    When weekday_number is supplied, only canonical positive physical receipts
+    on that weekday contribute to the visible Delivery Article list or its
+    observed-day count. Full receipt-event history remains available in Family
+    detail, while the ordering card can stay compact.
+    """
     pack=_article_manual_family_pack_context(cur,family_article)
     grouped: dict[str,dict[str,Any]] = {}
 
@@ -688,6 +695,8 @@ def _historical_receiving_article_summary(
         receipt_qty=event.get("receipt_quantity")
         base_qty=event.get("base_receipt_quantity")
         if not article or posting_date is None:
+            continue
+        if weekday_number is not None and int(posting_date.weekday()) != int(weekday_number):
             continue
         if (
             (receipt_qty is None or _d(receipt_qty)<=0)
@@ -701,11 +710,13 @@ def _historical_receiving_article_summary(
                 "article_number":article,
                 "last_receipt_date":posting_date,
                 "receipt_event_count":0,
+                "observed_dates":set(),
                 "observed_pack_size":None,
                 "observed_pack_date":None,
             },
         )
         slot["receipt_event_count"]+=1
+        slot["observed_dates"].add(posting_date)
         if posting_date>slot["last_receipt_date"]:
             slot["last_receipt_date"]=posting_date
 
@@ -720,14 +731,18 @@ def _historical_receiving_article_summary(
     article_names=_article_description_map(cur,set(grouped))
     out=[]
     for slot in grouped.values():
-        if pack.get("status")=="READY" and pack.get("pack_size"):
-            pack_size=pack.get("pack_size")
-            pack_source="ARTICLE_MANUAL"
-            pack_status="READY"
-        elif slot.get("observed_pack_size"):
+        # Historical Delivery Article rows need the pack relationship for that
+        # specific article. Prefer the article's observed receiving/base ratio;
+        # use the current Family Article Manual pack only when no article-level
+        # receipt conversion is available.
+        if slot.get("observed_pack_size"):
             pack_size=slot.get("observed_pack_size")
             pack_source="HISTORICAL_RECEIPT_CONVERSION"
             pack_status="OBSERVED"
+        elif pack.get("status")=="READY" and pack.get("pack_size"):
+            pack_size=pack.get("pack_size")
+            pack_source="ARTICLE_MANUAL"
+            pack_status="READY"
         elif pack.get("pack_size_options"):
             opts=list(pack.get("pack_size_options") or [])
             pack_size=" / ".join(opts[:2])+(" …" if len(opts)>2 else "")
@@ -743,6 +758,7 @@ def _historical_receiving_article_summary(
             "article_name":article_names.get(slot["article_number"]),
             "last_receipt_date":slot["last_receipt_date"],
             "receipt_event_count":slot["receipt_event_count"],
+            "observed_day_count":len(slot.get("observed_dates") or ()),
             "pack_size":pack_size,
             "pack_size_status":pack_status,
             "pack_size_source":pack_source,
@@ -1414,14 +1430,11 @@ def ordering_review(
                     cur, fid, str(s.get("family_article_number") or "") or None
                 )
                 suggested_qty=s.get("suggested_order_qty")
-                historical_receiving_articles=(
-                    _historical_receiving_article_summary(
-                        cur,
-                        str(s.get("family_article_number") or "") or None,
-                        events,
-                    )
-                    if suggested_qty is not None and _d(suggested_qty)>0
-                    else []
+                historical_receiving_articles=_historical_receiving_article_summary(
+                    cur,
+                    str(s.get("family_article_number") or "") or None,
+                    events,
+                    weekday_number=(delivery_date.weekday() if delivery_date is not None else None),
                 )
                 receiving_names=_article_description_map(
                     cur,
@@ -1435,8 +1448,9 @@ def ordering_review(
                     "receiving_article": receiving_article,
                     "receiving_article_name": receiving_article_name,
                     "historical_receiving_articles": historical_receiving_articles,
-                    "oh": s.get("ordering_oh_used"),
+                    "oh": s.get("effective_oh_raw"),
                     "oh_uom": s.get("uom"),
+                    "ordering_usable_oh": s.get("ordering_oh_used"),
                     "last_receipt_date": receipt.get("date"),
                     "last_receipt_qty_base": receipt.get("quantity"),
                     "last_receipt_base_uom": receipt.get("base_uom"),
@@ -1574,6 +1588,13 @@ def ordering_review(
                         cur,
                         [receiving_article] if receiving_article else [],
                     ).get(str(receiving_article or "").strip())
+                    roster_events=delivery_event_cache.get(fid) or []
+                    historical_receiving_articles=_historical_receiving_article_summary(
+                        cur,
+                        str(fam.get("main_article_number") or "") or None,
+                        roster_events,
+                        weekday_number=delivery_date.weekday(),
+                    )
                     roster_uom=(
                         calc.get("demand_uom")
                         or calc.get("oh_uom")
@@ -1585,8 +1606,9 @@ def ordering_review(
                         "family_article":fam.get("main_article_number"),
                         "receiving_article":receiving_article,
                         "receiving_article_name":receiving_article_name,
-                        "historical_receiving_articles":[],
-                        "oh":calc.get("oh"),
+                        "historical_receiving_articles":historical_receiving_articles,
+                        "oh":calc.get("effective_oh_raw") if calc.get("effective_oh_raw") is not None else calc.get("oh"),
+                        "ordering_usable_oh":calc.get("ordering_oh_used") if calc.get("ordering_oh_used") is not None else calc.get("oh"),
                         "oh_uom":calc.get("oh_uom") or roster_uom,
                         "last_receipt_date":receipt.get("date"),
                         "last_receipt_qty_base":receipt.get("quantity"),
@@ -1687,7 +1709,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V19_RECEIVING_PACK",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V20_DELIVERY_ARTICLE_DAYS",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
@@ -1731,7 +1753,7 @@ def ordering_review(
             "regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS",
             "pre_delivery_shortage_is_not_added_to_future_order":True,
             "fresh_live_coverage_cap_days":7,
-            "cache_schema":"V18_WEEKDAY_USAGE",
+            "cache_schema":"V20_DELIVERY_ARTICLE_DAYS",
         },
     }
 
@@ -1758,7 +1780,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V19_RECEIVING_PACK|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V20_DELIVERY_ARTICLE_DAYS|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
