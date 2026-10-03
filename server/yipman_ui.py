@@ -563,6 +563,26 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 }
 
 
+/* Current TPR review tab */
+.price-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#e8eef3;border:1px solid #d4dfe7;border-radius:13px;padding:4px;margin:0 0 9px}
+.price-tab{border:0;background:transparent;border-radius:10px;padding:9px 6px;font-size:11px;font-weight:950;color:#687784}
+.price-tab.on{background:#fff;color:#0870c8;box-shadow:0 2px 8px rgba(16,43,64,.10)}
+.price-tab span{font-size:9px;color:#6f8190}
+.price-tab.on span{color:#0870c8}
+.tpr-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-bottom:7px}
+.tpr-summary>div{border:1px solid #dce5eb;background:#fff;border-radius:11px;padding:7px 5px;text-align:center}
+.tpr-summary b{display:block;font-size:18px;line-height:1}.tpr-summary span{display:block;font-size:7px;font-weight:950;color:#788793;margin-top:3px}
+.tpr-rule{border:1px solid #c7e1f5;background:#edf7ff;color:#35627f;border-radius:11px;padding:8px 9px;font-size:9px;line-height:1.35;font-weight:780;margin-bottom:7px}
+.tpr-rule b{color:#0a5f9e}
+.tpr-tools{display:grid;grid-template-columns:minmax(0,1fr) 118px;gap:7px;align-items:end;margin-bottom:7px}
+.tpr-tools .hint{margin:0!important;font-size:10px!important;line-height:1.3!important}
+.tpr-tools label{font-size:7px;color:#71808d;font-weight:950}.tpr-tools select{display:block;width:100%;margin-top:3px;border:1px solid #d7e0e6;border-radius:9px;background:#fff;padding:7px 23px 7px 8px;font-size:9px;font-weight:900}
+.tprcard .preasoncall{margin-top:7px}
+.tprcard .tprwindow{font-size:8px;color:#73818d;font-weight:850;margin-top:5px}
+.tprcard .tprlift{font-weight:1000}.tprcard .tprlift.good{color:#167448}.tprcard .tprlift.bad{color:#b82d38}.tprcard .tprlift.neutral{color:#6f7b85}
+.tprcard .pbadge.continue{background:#e5f7eb;color:#147946}.tprcard .pbadge.observe{background:#edf1f5;color:#647280}.tprcard .pbadge.adjust{background:#fff0d9;color:#986000}.tprcard .pbadge.urgent{background:#fde4e7;color:#ae2330}.tprcard .pbadge.end{background:#efe9fb;color:#6945b5}
+@media(max-width:370px){.price-tab{font-size:10px}.tpr-tools{grid-template-columns:minmax(0,1fr) 105px}.tpr-summary b{font-size:17px}}
+
 /* V386 Yipman AI: compact read-only assistant with live sales/performance lookup. */
 .nav{grid-template-columns:repeat(4,1fr)}
 .nav button[data-go="ai"] i{color:#ffd84d}
@@ -745,7 +765,35 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
       </div>
     </section>
 
-    <section class="page" id="price"><div class="topline"><h2>Price Suggestions</h2><div class="hint">LIVE REVIEW</div></div><div class="filters"><button class="pill on" data-price-filter="UPC_240">240</button><button class="pill" data-price-filter="UPC_245">245</button><button class="pill" data-price-filter="UPC_247">247</button><button class="pill" data-price-filter="UPC_249">249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div><div class="price-tools"><label>REASON<select id="priceReasonFilter"><option value="ALL">ALL REASONS</option><option value="PAIR">240≠249</option><option value="VELOCITY">VELOCITY / FRESHNESS</option><option value="GP">GP$ OPPORTUNITY</option><option value="RANGE">COMPANY RANGE</option><option value="SWEET">SWEET SPOT GAP</option></select></label><label>SORT<select id="priceSort"><option value="URGENCY">URGENCY</option><option value="GPDOLLAR">GP$ OPPORTUNITY ↓</option><option value="GAP">PRICE GAP ↓</option><option value="OH">OH ↓</option><option value="VELOCITY">VELOCITY ↑</option><option value="NAME">NAME A–Z</option></select></label></div><div id="priceStatus" class="hint" style="margin:0 2px 7px"></div><div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div></section>
+    <section class="page" id="price">
+      <div class="topline"><h2>Price Review</h2><div class="hint">LIVE REVIEW</div></div>
+      <div class="price-tabs">
+        <button class="price-tab on" data-price-tab="SUGGESTIONS">Price Suggestions</button>
+        <button class="price-tab" data-price-tab="TPR">Current TPR <span id="tprTabCount"></span></button>
+      </div>
+      <div id="priceSuggestionPane">
+        <div class="filters"><button class="pill on" data-price-filter="UPC_240">240</button><button class="pill" data-price-filter="UPC_245">245</button><button class="pill" data-price-filter="UPC_247">247</button><button class="pill" data-price-filter="UPC_249">249</button><button class="pill" data-price-filter="LIVE">LIVE</button><button class="pill" data-price-filter="TUE">OBSERVED TUE</button><button class="pill" data-price-filter="FRI_SAT">OBSERVED FRI / SAT</button></div>
+        <div class="price-tools"><label>REASON<select id="priceReasonFilter"><option value="ALL">ALL REASONS</option><option value="PAIR">240≠249</option><option value="VELOCITY">VELOCITY / FRESHNESS</option><option value="GP">GP$ OPPORTUNITY</option><option value="RANGE">COMPANY RANGE</option><option value="SWEET">SWEET SPOT GAP</option></select></label><label>SORT<select id="priceSort"><option value="URGENCY">URGENCY</option><option value="GPDOLLAR">GP$ OPPORTUNITY ↓</option><option value="GAP">PRICE GAP ↓</option><option value="OH">OH ↓</option><option value="VELOCITY">VELOCITY ↑</option><option value="NAME">NAME A–Z</option></select></label></div>
+        <div id="priceStatus" class="hint" style="margin:0 2px 7px"></div>
+        <div class="pricecards" id="priceRows"><div class="loading">Loading price review…</div></div>
+      </div>
+      <div id="currentTprPane" class="hide">
+        <div class="tpr-summary" id="tprSummary"><div><b>—</b><span>CURRENT TPR</span></div><div><b>—</b><span>SOLD 7D</span></div><div><b>—</b><span>240 TPR UPCs</span></div></div>
+        <div class="tpr-rule"><b>TPR performance:</b> decision uses current TPR price, completed-day 3D POS response, pre-TPR baseline, GP$/day, OH and freshness. Hard safety issues are flagged immediately.</div>
+        <div class="filters tprfilters">
+          <button class="pill on" data-tpr-filter="ALL">ALL</button>
+          <button class="pill" data-tpr-filter="UPC_240">240 ONLY</button>
+          <button class="pill" data-tpr-filter="SOLD">SOLD 7D</button>
+          <button class="pill" data-tpr-filter="CONTINUE">CONTINUE</button>
+          <button class="pill" data-tpr-filter="ADJUST">ADJUST</button>
+          <button class="pill" data-tpr-filter="LIVE">LIVE</button>
+          <button class="pill" data-tpr-filter="FRESH">FRESH</button>
+          <button class="pill" data-tpr-filter="FROZEN">FROZEN</button>
+        </div>
+        <div class="tpr-tools"><div id="tprStatus" class="hint">Loading current TPR items…</div><label>SORT<select id="tprSort"><option value="QTY">7D QTY ↓</option><option value="DECISION">ACTION FIRST</option><option value="LIFT">3D LIFT ↓</option><option value="OH">OH ↓</option><option value="NAME">NAME A–Z</option></select></label></div>
+        <div class="pricecards" id="tprRows"><div class="loading">Loading current TPR review…</div></div>
+      </div>
+    </section>
 
     
     <section class="page" id="ai">
@@ -801,6 +849,7 @@ let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[],
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='DIFFERENCE', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
+let priceView='SUGGESTIONS', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, lastTprRows=[], lastTprPayload=null;
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
 function aiBubble(html,who='ai',tone=''){
@@ -995,7 +1044,7 @@ async function aiAnswer(question){
  if(q.includes('249')||q.includes('240')||q.includes('price')||q.includes('sweet')){
    if(!price)return '<b>Price Review</b><br>No actionable price row is currently loaded.';
    if(price.priority_240_249_mismatch)return '<b>249 / 240 alignment</b><br>249 '+esc(price.upc||'')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'. The 249 review remains only while those current prices differ.';
-   return '<b>Price Review</b><br>'+esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+(price.testing_price!=null?' · testing '+money(price.testing_price):'')+'.';
+   return '<b>Price Review</b><br>'+esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+(price.testing_price!=null?' · TPR suggestion '+money(price.testing_price):'')+'.';
  }
  if(q.includes('receipt')||q.includes('stock flow')||q.includes('over receipt')){
    if(!stock)return '<b>Stock Flow</b><br>No Stock Flow row is currently loaded.';
@@ -1072,7 +1121,7 @@ function renderView(id,{restore=false,reload=true,state=null}={}){
   if(reload){
     if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
     if(id==='order')initOrdering();
-    if(id==='price')loadPrices();
+    if(id==='price')(priceView==='TPR'?loadCurrentTpr():loadPrices());
     if(id==='data')loadData();
     if(id==='ai'){bindAi();loadAiBrief();}
   }else if(id==='data'){
@@ -1404,7 +1453,7 @@ function quickUpcHtml(r){
  const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
    '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
    '<div class="qprice tested"><small>TESTED</small><b data-q-tested>'+testedText(r.sweet_spot_price)+'</b></div>'+
-   '<div class="qprice testing"><small>TESTING</small><b data-q-testing>…</b></div>'+
+   '<div class="qprice testing"><small>TPR SUGGESTION</small><b data-q-testing>…</b></div>'+
    comp('COMP A','data-q-comp-a',r.company_price_a)+
    comp('COMP B','data-q-comp-b',r.company_price_b)+
    comp('COMP C','data-q-comp-c',r.company_price_c,'companyc')+
@@ -1503,7 +1552,7 @@ async function hydrateQuickPrices(rows,requestId,attempt=0){
       strip.dataset.qpriceStatus=String(row.suggestion_status||'READY');
       strip.title='Current: '+String(row.current_price_source||'—')+(row.current_price_asof_date?' · '+String(row.current_price_asof_date):'')+
         ' | Tested: '+(num(row.tested_price)===null?'—':money(row.tested_price))+
-        ' | Testing: '+(num(row.testing_price)===null?'—':money(row.testing_price))+
+        ' | TPR Suggestion: '+(num(row.testing_price)===null?'—':money(row.testing_price))+
         ' | '+String(row.suggestion_reason||row.suggestion_status||'—');
     }
   });
@@ -2334,7 +2383,7 @@ async function loadPrices(opts={}){
  const requestId=++priceRequestSeq;
  clearTimeout(priceRetryTimer);
  if(!quiet)$('#priceRows').innerHTML='<div class="loading">Loading actionable pricing…</div>';
- $('#priceStatus').textContent='Current · strongest proved Tested · controlled Testing';
+ $('#priceStatus').textContent='Current · strongest proved Tested · TPR Suggestion for price/freshness testing';
  try{
   const d=await api('/v1/yipman/pricing-review?category=ALL&limit=1000',{timeoutMs:12000});
   if(requestId!==priceRequestSeq)return;
@@ -2416,7 +2465,7 @@ async function loadPrices(opts={}){
       '<div class="pricepath">'+
         '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div>'+
         '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
-        '<div class="pp testing"><small>TESTING</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
+        '<div class="pp testing"><small>TPR SUGGESTION</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
       '</div>'+
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
@@ -2462,19 +2511,19 @@ function openPrice(r){
  const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
  const company=(companyLow!==null&&companyHigh!==null)?money(companyLow)+' – '+money(companyHigh):'—';
  sheet(r.name||r.upc,r.upc||'Price suggestion',
- '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TESTING · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TPR SUGGESTION · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
  '<div class="detail"><b>Suggested action</b><br>'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+
  (String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').startsWith('249')&&r.related_240_current_price!=null?'<br><br><b>240 → 249 price rule</b><br>240 '+esc(r.related_240_upc||'—')+' current '+money(r.related_240_current_price)+' → 249 '+esc(r.upc||'—')+' current '+money(r.current_price)+' · required 249 price '+money(r.related_240_current_price):'')+
  '<br><br><b>Current cost</b><br>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+
- '<br><br><b>Price path + GP%</b><br>Current '+money(r.current_price)+' ('+esc(gpText(r.current_price,r.current_cost))+') → Testing '+money(r.testing_price)+' ('+esc(gpText(r.testing_price,r.current_cost))+') · Tested '+money(r.tested_price)+' ('+esc(gpText(r.tested_price,r.current_cost))+')'+
+ '<br><br><b>Price path + GP%</b><br>Current '+money(r.current_price)+' ('+esc(gpText(r.current_price,r.current_cost))+') → TPR Suggestion '+money(r.testing_price)+' ('+esc(gpText(r.testing_price,r.current_cost))+') · Tested '+money(r.tested_price)+' ('+esc(gpText(r.tested_price,r.current_cost))+')'+
  (r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?'<br>Raw proved sweet-spot evidence '+money(r.tested_evidence_price)+' → retail-aligned Tested '+money(r.tested_price):'')+
  '<br>Action price '+money(r.candidate_price)+(r.testing_target_price?(' · eventual test target '+money(r.testing_target_price)):'')+
  '<br><br><b>Progress now</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · 28D '+fmt(r.velocity_28d)+' /day · DOH '+fmt(r.doh)+
  '<br>GP$/day now '+money(r.current_gp_per_day_7d)+' · supported target evidence '+money(r.candidate_expected_gp_per_day)+
  '<br><br><b>Company A/B/C range</b><br>'+esc(company)+(r.company_range_violation?' · CURRENT OUTSIDE RANGE':'')+
  '<br><br><b>Current price evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
- '<br><br><b>Pricing rule</b><br>Retail-facing Tested, suggested sweet-spot targets, and Testing prices use the nearest normal store ending: .29 / .49 / .59 / .69 / .79 / .99. Testing must still move at least $0.45 from Current. Raw proved sweet-spot evidence is preserved in Detail when rounding changes the displayed Tested price. Re-check completed-day velocity and GP$/day before the next step.'+
+ '<br><br><b>Pricing rule</b><br>Retail-facing Tested, suggested sweet-spot targets, and TPR Suggestion prices use the nearest normal store ending: .29 / .49 / .59 / .69 / .79 / .99. TPR Suggestion must still move at least $0.45 from Current. Raw proved sweet-spot evidence is preserved in Detail when rounding changes the displayed Tested price. Re-check completed-day velocity and GP$/day before the next step.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
  '<div class="actions"><button class="secondary" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
@@ -2487,6 +2536,120 @@ $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
 });
 $('#priceReasonFilter').onchange=e=>{priceReasonFilter=e.target.value;loadPrices({quiet:true})};
 $('#priceSort').onchange=e=>{priceSort=e.target.value;loadPrices({quiet:true})};
+
+
+function tprRecommendationMeta(r){
+ const code=String(r?.recommendation_code||'OBSERVE').toUpperCase();
+ if(code==='CONTINUE_TPR')return {label:'CONTINUE',cls:'continue',group:'CONTINUE'};
+ if(code==='OBSERVE')return {label:'OBSERVE',cls:'observe',group:'OBSERVE'};
+ if(code==='URGENT_REVIEW'||code==='REVIEW_DATA'||code==='MATCH_240')return {label:String(r?.recommendation_label||'URGENT REVIEW'),cls:'urgent',group:'ADJUST'};
+ if(code==='END_TPR')return {label:String(r?.recommendation_label||'END TPR'),cls:'end',group:'ADJUST'};
+ return {label:String(r?.recommendation_label||'ADJUST'),cls:'adjust',group:'ADJUST'};
+}
+function tprUpcPrefix(r){return String(r?.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3)}
+function tprLiftText(v){
+ const n=num(v);if(n===null)return {text:'—',cls:'neutral'};
+ return {text:(n>=0?'+':'')+n.toFixed(0)+'%',cls:n>=10?'good':n<=0?'bad':'neutral'};
+}
+function currentTprFilteredRows(){
+ let rows=[...(lastTprRows||[])];
+ rows=rows.filter(r=>{
+   const meta=tprRecommendationMeta(r),cat=String(r.category||'').toUpperCase();
+   if(tprFilter==='UPC_240')return tprUpcPrefix(r)==='240';
+   if(tprFilter==='SOLD')return (num(r.qty_7d)||0)>0;
+   if(tprFilter==='CONTINUE')return meta.group==='CONTINUE';
+   if(tprFilter==='ADJUST')return meta.group==='ADJUST';
+   if(['LIVE','FRESH','FROZEN'].includes(tprFilter))return cat===tprFilter;
+   return true;
+ });
+ rows.sort((a,b)=>{
+   if(tprSort==='DECISION')return (num(b.recommendation_priority)||0)-(num(a.recommendation_priority)||0)||(num(b.qty_7d)||0)-(num(a.qty_7d)||0);
+   if(tprSort==='LIFT')return (num(b.velocity_lift_pct)??-999999)-(num(a.velocity_lift_pct)??-999999)||(num(b.qty_7d)||0)-(num(a.qty_7d)||0);
+   if(tprSort==='OH')return (num(b.current_oh)||0)-(num(a.current_oh)||0);
+   if(tprSort==='NAME')return String(a.name||a.upc||'').localeCompare(String(b.name||b.upc||''));
+   return (num(b.qty_7d)||0)-(num(a.qty_7d)||0)||(num(b.recommendation_priority)||0)-(num(a.recommendation_priority)||0);
+ });
+ return rows;
+}
+function renderCurrentTpr(){
+ const d=lastTprPayload||{},s=d.summary||{},rows=currentTprFilteredRows();
+ const tab=$('#tprTabCount');if(tab)tab.textContent=s.current_tpr_count!=null?'· '+fmt(s.current_tpr_count,0):'';
+ const sum=$('#tprSummary');
+ if(sum)sum.innerHTML='<div><b>'+fmt(s.current_tpr_count,0)+'</b><span>CURRENT TPR</span></div><div><b>'+fmt(s.sold_7d_count,0)+'</b><span>SOLD 7D</span></div><div><b>'+fmt(s.upc_240_count,0)+'</b><span>240 TPR UPCs</span></div>';
+ const status=$('#tprStatus');
+ if(status)status.textContent=rows.length+' shown · '+(String(d.data_day_definition||'').includes('COMPLETED')?'completed POS days':'best available POS');
+ $('#tprRows').innerHTML=rows.map((r,i)=>{
+   const meta=tprRecommendationMeta(r),lift=tprLiftText(r.velocity_lift_pct),gpLift=tprLiftText(r.gp_day_lift_pct);
+   const gp=num(r.current_gp_pct),post=num(r.post_tpr_supported_day_count),base=num(r.baseline_day_count);
+   const pair=String(r.recommendation_code||'').toUpperCase()==='MATCH_240'&&r.related_240_current_price!=null
+     ?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+'</span></div><div class="pairarrow">→</div><div><small>TPR CURRENT</small><b>'+money(r.current_tpr_price)+'</b><span>249 must match 240</span></div></div>'
+     :'';
+   return '<article class="pcard tprcard tone'+(i%5)+'" data-tpr-row="'+i+'">'+
+     '<div class="ptop"><div class="pidentity"><div class="pupc"><span>UPC#</span><strong>'+esc(r.upc||'—')+'</strong></div><b>'+esc(r.name||r.upc||'Item')+'</b><small>Family '+esc(r.family_article_number||'—')+' · '+esc(r.category||'')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
+     '<div class="preasoncall '+(meta.cls==='urgent'?'red':meta.cls==='continue'?'green':'amber')+'"><span class="preasonmark">!</span><div><strong>TPR decision:</strong> '+esc(r.recommendation_reason||'Review current TPR performance')+'</div><span class="preasonchev">›</span></div>'+
+     '<div class="pricepath">'+
+       '<div class="pp current"><small>CURRENT TPR</small><b>'+money(r.current_tpr_price)+'</b><span>'+esc(gpText(r.current_tpr_price,r.current_cost))+'</span></div>'+
+       '<div class="pp tested"><small>CURRENT COST</small><b>'+money(r.current_cost)+'</b><span>'+esc(r.selling_uom||'unit')+'</span></div>'+
+       '<div class="pp testing"><small>3D TPR QTY</small><b>'+fmt(r.tpr_qty_3d)+'</b><span>'+fmt(r.tpr_velocity_3d)+'/day</span></div>'+
+     '</div>'+pair+
+     '<div class="pmetrics">'+
+       '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
+       '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.selling_uom||'')+'</b></div>'+
+       '<div class="pm"><small>3D VEL LIFT</small><b class="tprlift '+lift.cls+'">'+esc(lift.text)+'</b></div>'+
+       '<div class="pm"><small>GP$/D LIFT</small><b class="tprlift '+gpLift.cls+'">'+esc(gpLift.text)+'</b></div>'+
+     '</div>'+
+     '<div class="pcost"><span>GP% · DOH / DOS</span><b>'+((gp===null)?'—':(gp*100).toFixed(1)+'%')+' · '+fmt(r.doh)+' / '+fmt(r.dos)+'</b></div>'+
+     '<div class="tprwindow">TPR evidence '+fmt(post,0)+' supported day'+(post===1?'':'s')+' · baseline '+fmt(base,0)+' day'+(base===1?'':'s')+(r.post_tpr_window_start?' · '+esc(shortDate(r.post_tpr_window_start))+'–'+esc(shortDate(r.post_tpr_window_end)):'')+'</div>'+
+     '<div class="pcard-actions"><button class="pdetail" data-tpr-detail="'+i+'">DETAIL</button><button class="pdetail" data-tpr-action="'+i+'">'+esc(meta.label)+'</button></div>'+
+   '</article>';
+ }).join('')||'<div class="empty">No current TPR item matches this filter.</div>';
+ $('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
+ $('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
+ $('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
+}
+function openCurrentTpr(r){
+ const meta=tprRecommendationMeta(r),lift=tprLiftText(r.velocity_lift_pct),gpLift=tprLiftText(r.gp_day_lift_pct);
+ sheet(r.name||r.upc,r.upc||'Current TPR review',
+   '<div class="dmetrics"><div class="dm"><b>'+money(r.current_tpr_price)+'</b><span>CURRENT TPR · '+esc(gpText(r.current_tpr_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.current_cost)+'</b><span>CURRENT COST · '+esc(r.selling_uom||'unit')+'</span></div><div class="dm"><b>'+fmt(r.tpr_qty_3d)+'</b><span>3D TPR QTY · '+fmt(r.tpr_velocity_3d)+'/day</span></div></div>'+
+   '<div class="detail"><b>Recommendation</b><br><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span><br>'+esc(r.recommendation_reason||'Review current TPR performance')+
+   '<br><br><b>3D response vs baseline</b><br>TPR velocity '+fmt(r.tpr_velocity_3d)+'/day · baseline '+fmt(r.baseline_velocity)+'/day · lift '+esc(lift.text)+
+   '<br>TPR GP$/day '+money(r.tpr_gp_per_day_3d)+' · baseline normalized GP$/day '+money(r.baseline_gp_per_day_current_cost)+' · lift '+esc(gpLift.text)+
+   '<br><br><b>Inventory / freshness</b><br>OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+
+   '<br><br><b>Evidence window</b><br>Post-TPR '+esc(r.post_tpr_window_start||'—')+' → '+esc(r.post_tpr_window_end||'—')+' · '+fmt(r.post_tpr_supported_day_count,0)+' supported day(s)'+
+   '<br>Baseline '+esc(r.baseline_window_start||'—')+' → '+esc(r.baseline_window_end||'—')+' · '+fmt(r.baseline_day_count,0)+' non-TPR day(s)'+
+   (r.related_240_current_price!=null?'<br><br><b>240 authority</b><br>'+esc(r.related_240_upc||'240')+' · '+money(r.related_240_current_price):'')+
+   '<br><br><b>Decision rule</b><br>Hard safety issues can act immediately. Otherwise Yipman waits for at least two post-TPR completed POS days and three usable baseline days before making a final continue/adjust call.</div>'
+ );
+}
+async function loadCurrentTpr(opts={}){
+ const requestId=++tprRequestSeq;
+ if(!opts.quiet)$('#tprRows').innerHTML='<div class="loading">Loading all current TPR items…</div>';
+ $('#tprStatus').textContent='Checking authoritative current TPR prices and completed-day POS response…';
+ try{
+   const d=await api('/v1/yipman/current-tpr-review?category=ALL&limit=1000',{timeoutMs:22000});
+   if(requestId!==tprRequestSeq)return;
+   lastTprPayload=d||{};lastTprRows=Array.isArray(d?.rows)?d.rows:[];
+   renderCurrentTpr();
+ }catch(e){
+   if(requestId!==tprRequestSeq)return;
+   $('#tprStatus').textContent='Current TPR review temporarily unavailable';
+   $('#tprRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+ }
+}
+function switchPriceTab(tab){
+ priceView=String(tab||'SUGGESTIONS').toUpperCase()==='TPR'?'TPR':'SUGGESTIONS';
+ $('[data-price-tab]').forEach(b=>b.classList.toggle('on',b.dataset.priceTab===priceView));
+ $('#priceSuggestionPane').classList.toggle('hide',priceView!=='SUGGESTIONS');
+ $('#currentTprPane').classList.toggle('hide',priceView!=='TPR');
+ if(priceView==='TPR')loadCurrentTpr();else loadPrices();
+}
+$('[data-price-tab]').forEach(b=>b.onclick=()=>switchPriceTab(b.dataset.priceTab));
+$('[data-tpr-filter]').forEach(b=>b.onclick=()=>{
+ tprFilter=b.dataset.tprFilter;
+ $('[data-tpr-filter]').forEach(x=>x.classList.toggle('on',x===b));
+ renderCurrentTpr();
+});
+$('#tprSort').onchange=e=>{tprSort=e.target.value;renderCurrentTpr()};
 
 function qaFixLabel(x){
  const k=String(x?.fix_kind||'').toUpperCase();
@@ -2701,7 +2864,7 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await loadPrices();else if(current==='data')await loadData();toast('Yipman refreshed')}
+async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await (priceView==='TPR'?loadCurrentTpr():loadPrices());else if(current==='data')await loadData();toast('Yipman refreshed')}
 
 if(!window.__YIPMAN_DESKTOP_ACTIVE__){
  const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
