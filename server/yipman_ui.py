@@ -14,27 +14,7 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "
-/* V446: every operational OH surface is a True Stock entry point. */
-.ohedit{display:inline-flex;flex-direction:column;align-items:inherit;justify-content:center;min-width:0;border:0;background:transparent;padding:0;margin:0;color:inherit;text-align:inherit;font:inherit;cursor:pointer}
-.ohedit b{font:inherit;font-weight:1000;color:inherit;white-space:nowrap}
-.ohedit span{display:block;font-size:7px!important;line-height:1.05!important;font-weight:950!important;color:#1671a8!important;white-space:nowrap;margin-top:2px}
-.ohedit.true span{color:#14754f!important}
-.qffocusbox.ohbox{background:#edf8ff;border-color:#b8d9eb}
-.qffocusbox.costbox{background:#fff8e8;border-color:#ead8a9}
-.qffocusbox.costbox b{font-size:18px}
-.stockohrow{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:4px;padding:5px 6px;border:1px solid #c9dce8;border-radius:8px;background:#f4fbff}
-.stockohrow small{font-size:6px;font-weight:1000;color:#61798b}
-.stockohrow .ohedit{align-items:flex-end}
-.stockohrow .ohedit b{font-size:16px}
-#order .cell .ohedit{align-items:center;width:100%}
-#order .cell .ohedit b{font-size:inherit}
-#price .pm .ohedit{align-items:flex-start}
-#price .pm .ohedit b{font-size:inherit}
-.dm .ohedit{align-items:center;width:100%}
-.promo-metric .ohedit{align-items:flex-start}
-.promo-temp-action{border:1px solid #d7dee5;background:#fff;border-radius:8px;padding:4px 7px;font-size:7px;font-weight:950;color:#5d6975}
-</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -845,6 +825,25 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
  html:not(.yipman-desktop) .hfitem span{font-size:6.3px}
 }
 
+/* V446: every operational OH surface is a True Stock entry point. */
+.ohedit{display:inline-flex;flex-direction:column;align-items:inherit;justify-content:center;min-width:0;border:0;background:transparent;padding:0;margin:0;color:inherit;text-align:inherit;font:inherit;cursor:pointer}
+.ohedit b{font:inherit;font-weight:1000;color:inherit;white-space:nowrap}
+.ohedit span{display:block;font-size:7px!important;line-height:1.05!important;font-weight:950!important;color:#1671a8!important;white-space:nowrap;margin-top:2px}
+.ohedit.true span{color:#14754f!important}
+.qffocusbox.ohbox{background:#edf8ff;border-color:#b8d9eb}
+.qffocusbox.costbox{background:#fff8e8;border-color:#ead8a9}
+.qffocusbox.costbox b{font-size:18px}
+.stockohrow{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-top:4px;padding:5px 6px;border:1px solid #c9dce8;border-radius:8px;background:#f4fbff}
+.stockohrow small{font-size:6px;font-weight:1000;color:#61798b}
+.stockohrow .ohedit{align-items:flex-end}
+.stockohrow .ohedit b{font-size:16px}
+#order .cell .ohedit{align-items:center;width:100%}
+#order .cell .ohedit b{font-size:inherit}
+#price .pm .ohedit{align-items:flex-start}
+#price .pm .ohedit b{font-size:inherit}
+.dm .ohedit{align-items:center;width:100%}
+.promo-metric .ohedit{align-items:flex-start}
+.promo-temp-action{border:1px solid #d7dee5;background:#fff;border-radius:8px;padding:4px 7px;font-size:7px;font-weight:950;color:#5d6975}
 </style>
 </head>
 <body>
