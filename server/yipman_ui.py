@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v433';
+const CACHE='yipman-v434';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -849,7 +849,7 @@ let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[],
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='DIFFERENCE', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
-let priceView='SUGGESTIONS', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, lastTprRows=[], lastTprPayload=null;
+let priceView='SUGGESTIONS', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null;
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
 function aiBubble(html,who='ai',tone=''){
@@ -1117,6 +1117,7 @@ function renderView(id,{restore=false,reload=true,state=null}={}){
     else{p.scrollTop=0;p.scrollLeft=0;pagePositions.set(id,{scrollTop:0,scrollLeft:0})}
   }
   if(id!=='order'){clearTimeout(orderRetryTimer);orderRetryTimer=null}
+  if(id!=='price'){clearTimeout(tprRetryTimer);tprRetryTimer=null}
   if(id!=='data'){clearTimeout(dataLiveTimer);dataLiveTimer=null}
   if(reload){
     if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
@@ -2623,13 +2624,25 @@ function openCurrentTpr(r){
 }
 async function loadCurrentTpr(opts={}){
  const requestId=++tprRequestSeq;
+ clearTimeout(tprRetryTimer);tprRetryTimer=null;
  if(!opts.quiet)$('#tprRows').innerHTML='<div class="loading">Loading all current TPR items…</div>';
  $('#tprStatus').textContent='Checking authoritative current TPR prices and completed-day POS response…';
  try{
-   const d=await api('/v1/yipman/current-tpr-review?category=ALL&limit=1000',{timeoutMs:22000});
+   const d=await api('/v1/yipman/current-tpr-review?category=ALL&limit=1000',{timeoutMs:10000});
    if(requestId!==tprRequestSeq)return;
    lastTprPayload=d||{};lastTprRows=Array.isArray(d?.rows)?d.rows:[];
-   renderCurrentTpr();
+   const warming=String(d?.analysis_status||'').toUpperCase()==='REFRESHING'&&!lastTprRows.length;
+   if(warming){
+     const tab=$('#tprTabCount');if(tab)tab.textContent='';
+     $('#tprSummary').innerHTML='<div><b>—</b><span>CURRENT TPR</span></div><div><b>—</b><span>SOLD 7D</span></div><div><b>—</b><span>240 TPR UPCs</span></div>';
+     $('#tprStatus').textContent='Building Current TPR review in the background…';
+     $('#tprRows').innerHTML='<div class="loading">Calculating TPR performance. This page will update automatically.</div>';
+   }else{
+     renderCurrentTpr();
+   }
+   if(d?.refreshing&&current==='price'&&priceView==='TPR'){
+     tprRetryTimer=setTimeout(()=>loadCurrentTpr({quiet:true}),2500);
+   }
  }catch(e){
    if(requestId!==tprRequestSeq)return;
    $('#tprStatus').textContent='Current TPR review temporarily unavailable';
