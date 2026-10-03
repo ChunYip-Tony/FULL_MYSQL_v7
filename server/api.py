@@ -861,9 +861,31 @@ def web_upload_active(request:Request,response:Response):
             )
             active=cur.fetchone()
 
-            # If ingest_batch already advanced, surface any queued/running
-            # post-raw/Phase3 work without touching QA issue tables.
-            if not active:
+            # Surface queued/running post-raw or Phase 3 work even when
+            # ingest_batch itself is still PHASE2C_READY. Manual resume creates
+            # a PHASE3_RERUN row first; without this enrichment /active kept
+            # returning only PHASE2C_READY and the UI looked like Retry did
+            # nothing even though a run had been queued.
+            if active:
+                cur.execute(
+                    """SELECT pipeline_run_id AS active_pipeline_run_id,
+                              stage_name AS active_stage_name,
+                              processing_status AS active_run_status,
+                              code_version AS active_code_version,
+                              started_at AS active_run_started_at
+                       FROM pipeline_run
+                       WHERE batch_id=%s
+                         AND pipeline_name=%s
+                         AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                         AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
+                       ORDER BY pipeline_run_id DESC
+                       LIMIT 1""",
+                    (int(active['batch_id']),API_PIPELINE),
+                )
+                run=cur.fetchone()
+                if run:
+                    active.update(run)
+            else:
                 cur.execute(
                     """SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
                               ib.upload_started_at,ib.completed_at,ib.file_count,
