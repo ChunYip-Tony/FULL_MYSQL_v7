@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v438';
+const CACHE='yipman-v440';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -769,13 +769,53 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
  #quick .stockratio{min-width:66px}
 }
 
+/* V440 mobile scale + always-visible source freshness. */
+.headfresh{display:none}
+html:not(.yipman-desktop) .header{padding:8px 11px 8px}
+html:not(.yipman-desktop) .head{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:8px}
+html:not(.yipman-desktop) .brandblock{min-width:0}
+html:not(.yipman-desktop) .brand{font-size:29px}
+html:not(.yipman-desktop) .ver{font-size:12.5px;margin-top:2px}
+html:not(.yipman-desktop) .dbbtn{width:46px;height:46px;font-size:23px;border-radius:15px}
+html:not(.yipman-desktop) .headfresh{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 4px;min-width:0;padding:4px 5px;background:#fff;border:1px solid #dbe3ea;border-radius:12px;box-shadow:0 4px 13px rgba(18,38,56,.055)}
+html:not(.yipman-desktop) .hfitem{display:grid;grid-template-columns:7px minmax(0,1fr);column-gap:4px;row-gap:1px;align-items:center;min-width:0;padding:2px 3px;border-radius:7px;background:#f6f8fa}
+html:not(.yipman-desktop) .hfitem i{width:7px;height:7px;border-radius:50%;background:#98a5af;box-shadow:0 0 0 2px rgba(152,165,175,.10)}
+html:not(.yipman-desktop) .hfitem.good i{background:#329b65;box-shadow:0 0 0 2px rgba(50,155,101,.11)}
+html:not(.yipman-desktop) .hfitem.warn i{background:#d29a22;box-shadow:0 0 0 2px rgba(210,154,34,.11)}
+html:not(.yipman-desktop) .hfitem.bad i{background:#c94950;box-shadow:0 0 0 2px rgba(201,73,80,.10)}
+html:not(.yipman-desktop) .hfitem b{min-width:0;font-size:7.4px;line-height:1;font-weight:1000;color:#415266;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html:not(.yipman-desktop) .hfitem span{grid-column:2;min-width:0;font-size:6.8px;line-height:1;color:#708090;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+html:not(.yipman-desktop) .workspace{height:calc(100% - 70px)}
+html:not(.yipman-desktop) .page{padding-left:12px;padding-right:12px}
+html:not(.yipman-desktop) .topline h2{font-size:26px}
+html:not(.yipman-desktop) .hint{font-size:13px}
+html:not(.yipman-desktop) .quicksearch{min-height:64px;grid-template-columns:44px minmax(0,1fr) 66px}
+html:not(.yipman-desktop) .quicksearch>span{width:35px;height:35px;font-size:22px}
+html:not(.yipman-desktop) .quicksearch input{font-size:18.5px}
+html:not(.yipman-desktop) .nav{height:61px}
+html:not(.yipman-desktop) .nav button{font-size:10px}
+html:not(.yipman-desktop) .nav i{font-size:22px}
+html:not(.yipman-desktop) #quick .bestname{font-size:18.5px}
+html:not(.yipman-desktop) #quick .stockflowgrid .bestmetric b{font-size:17.5px}
+html:not(.yipman-desktop) #quick .stocktag,html:not(.yipman-desktop) #quick .stockfridaywarn{font-size:7.2px}
+html:not(.yipman-desktop) #quick .stocklatestcost{font-size:7.2px}
+html:not(.yipman-desktop) #quick .stocklatestcost b{font-size:8.2px}
+html:not(.yipman-desktop) #quick .bestreceipt{font-size:9.2px}
+html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
+@media(max-width:370px){
+ html:not(.yipman-desktop) .brand{font-size:27px}
+ html:not(.yipman-desktop) .ver{font-size:11.5px}
+ html:not(.yipman-desktop) .hfitem b{font-size:6.8px}
+ html:not(.yipman-desktop) .hfitem span{font-size:6.3px}
+}
+
 </style>
 </head>
 <body>
 <div id="app">
   <div class="ptr" id="ptr"><div id="ptrText">Pull to refresh</div></div>
   <header class="header">
-    <div class="head"><div><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
+    <div class="head"><div class="brandblock"><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><div class="headfresh" id="headFreshness" aria-label="Source freshness"><div class="hfitem"><i></i><b>POS</b><span>…</span></div><div class="hfitem"><i></i><b>MVT</b><span>…</span></div><div class="hfitem"><i></i><b>FRZ RPT</b><span>…</span></div><div class="hfitem"><i></i><b>FRESH RPT</b><span>…</span></div><div class="hfitem"><i></i><b>OH</b><span>…</span></div><div class="hfitem"><i></i><b>CHATGPT</b><span>…</span></div></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
   </header>
   <main class="workspace">
     <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading stock flow…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
@@ -890,7 +930,31 @@ const appDate=v=>{
   const wd=dt.toLocaleDateString(undefined,{weekday:'short'});
   return mo+'/'+d+' '+wd;
 };
-const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
+
+function freshnessShortDate(v){
+ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
+ return m?(Number(m[2])+'/'+Number(m[3])):'—';
+}
+function renderHeaderFreshness(d){
+ const box=$('#headFreshness');if(!box)return;
+ const s=d?.sources||{};
+ const order=[['POS','POS'],['MVT','MVT'],['FRZ','FRZ RPT'],['FRESH','FRESH RPT'],['OH','OH'],['CHATGPT','CHATGPT']];
+ box.innerHTML=order.map(([key,label])=>{
+   const x=s[key]||{},tone=['good','warn','bad'].includes(String(x.tone||''))?String(x.tone):'';
+   const date=freshnessShortDate(x.date);
+   const state=String(x.state||'—');
+   return '<div class="hfitem '+tone+'" title="'+esc(label+' · '+date+' · '+state)+'"><i></i><b>'+esc(label)+'</b><span>'+esc(date+' · '+state)+'</span></div>';
+ }).join('');
+}
+async function loadHeaderFreshness(){
+ try{
+   const d=await api('/v1/yipman/header-freshness',{timeoutMs:9000});
+   renderHeaderFreshness(d);
+ }catch{
+   const box=$('#headFreshness');if(box)$('#headFreshness .hfitem').forEach(x=>{x.classList.remove('good','warn');x.classList.add('bad');const s=x.querySelector('span');if(s)s.textContent='— · ERROR'});
+ }
+}
+const app=$('#app'), pages=$('.page'), nav=$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
 const pagePositions=new Map();
@@ -2940,7 +3004,7 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await (priceView==='TPR'?loadCurrentTpr():loadPrices());else if(current==='data')await loadData();toast('Yipman refreshed')}
+async function refreshCurrent(){const fresh=loadHeaderFreshness();if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await (priceView==='TPR'?loadCurrentTpr():loadPrices());else if(current==='data')await loadData();await fresh;toast('Yipman refreshed')}
 
 if(!window.__YIPMAN_DESKTOP_ACTIVE__){
  const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
@@ -2949,6 +3013,7 @@ if(!window.__YIPMAN_DESKTOP_ACTIVE__){
  history.pushState({yipman:true,view:initialView,guard:true,scrollTop:0,scrollLeft:0},'', '#'+initialView);
  historyReady=true;
  renderView(initialView);
+ loadHeaderFreshness();
  pagePositions.set(initialView,{scrollTop:0,scrollLeft:0});
 }
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
