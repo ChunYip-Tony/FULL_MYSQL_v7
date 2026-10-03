@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v441'" in ui
+          assert "const CACHE='yipman-v444'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -176,7 +176,7 @@ jobs:
           assert '/v1/yipman/header-freshness' in ui
           assert 'LATEST DATA · REBUILDING' in desktop
           assert "cache==='SOURCE_CHANGED_REFRESHING'" in desktop
-          print('source-aware-freshness-cache-v431=PASS')
+          print('source-aware-freshness-cache-v444=PASS')
           PY
 
       - name: Validate Current TPR review and TPR Suggestion Price contract
