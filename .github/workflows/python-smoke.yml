@@ -1349,6 +1349,39 @@ jobs:
           print('final-pricing-review-rules=PASS')
           PY
 
+      - name: Validate non-destructive True Stock adjustment worklist
+        run: |
+          python - <<'PY'
+          import inspect
+          from pathlib import Path
+          import api
+          import quick_check_app as qc
+
+          ensure_src=inspect.getsource(qc.ensure_true_stock_tables)
+          list_src=inspect.getsource(qc.true_stock_adjustment_log)
+          clear_src=inspect.getsource(qc.clear_true_stock_adjustment_log)
+          api_src=Path('api.py').read_text(encoding='utf-8')
+          desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
+
+          assert 'adjustment_list_cleared_at' in ensure_src
+          assert 'adjustment_list_cleared_by' in ensure_src
+          assert 'adjustment_list_clear_note' in ensure_src
+          assert 'ACKNOWLEDGE_WORKLIST_ONLY' in list_src
+          assert '"clear_changes_override_status":False' in list_src.replace(' ','')
+          assert 'SET adjustment_list_cleared_at=CURRENT_TIMESTAMP(6)' in clear_src
+          assert 'true_stock_baselines_unchanged' in clear_src
+          assert 'effective_oh_unchanged' in clear_src
+          assert 'DELETE FROM manual_true_stock' not in clear_src
+          assert "override_status='CANCEL" not in clear_src
+          assert "/v1/backoffice/true-stock-adjustments" in api_src
+          assert 'CLEAR_TRUE_STOCK_ADJUSTMENT_LIST' in api_src
+          assert 'Inventory / True Stock' in desktop
+          assert 'True Stock Adjustment Worklist' in desktop
+          assert 'Clear List After Dumping' in desktop
+          assert 'This does NOT delete or cancel True Stock' in desktop
+          print('true-stock-adjustment-worklist-v435=PASS')
+          PY
+
       - name: Import worker and Phase 3 modules
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
