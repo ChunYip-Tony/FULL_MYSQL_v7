@@ -2235,7 +2235,7 @@ function renderPromotionRows(data){
    '<div class="promo-metrics"><div class="promo-metric"><small>CURRENT EFFECTIVE OH</small>'+ohEditHtml(r.family_article_number,r.family_article_name,effectiveOh,r.uom,r.oh_source)+'</div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · TEMP OH only for this calculation':'')+' <button type="button" class="promo-temp-action" data-promo-temp-oh="'+i+'">TEMP ORDER OH</button></div></div></div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
- $('[data-promo-temp-oh]').forEach(x=>x.onclick=e=>{e.stopPropagation();openPromoTempOH(promoLastRows[Number(x.dataset.promoTempOh)])});
+ $$('[data-promo-temp-oh]').forEach(x=>x.onclick=e=>{e.stopPropagation();openPromoTempOH(promoLastRows[Number(x.dataset.promoTempOh)])});
 }
 async function loadPromotionOrder(){
  if(orderMode!=='PROMOTION')return;
