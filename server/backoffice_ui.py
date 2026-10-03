@@ -4896,18 +4896,18 @@ async function mobileSubmitUpload(){
   btn.disabled=true;result.innerHTML='<p>Creating batch…</p>';
   try{
     const label=(mNode('mUploadNote').value||'').trim()||('Mobile Backoffice upload '+new Date().toLocaleString());
-    const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});
+    const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label}),timeoutMs:15000});
     const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');
     const uploaded=[];
     for(let i=0;i<files.length;i++){
       result.innerHTML='<p>Uploading '+(i+1)+' / '+files.length+' · '+esc(files[i].name)+'</p>';
       const fd=new FormData();fd.append('file',files[i]);
-      const u=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd});
+      const u=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd,timeoutMs:120000});
       uploaded.push(u);
       result.innerHTML='<p><b>File received.</b><br>'+esc(uploadCoverageText(u))+'</p>'+uploadEvidenceHtml(uploaded);
     }
     result.innerHTML='<p>Committing batch and starting processing…</p>';
-    const commit=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});
+    const commit=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST',timeoutMs:30000});
     result.innerHTML='<p><b>Upload verified · Batch #'+esc(commit.batch_id||created.batch_id||'—')+'</b></p>'+uploadEvidenceHtml(uploaded);
     $('#uploadFiles').value='';
     toast('Upload verified · '+uploaded.map(uploadCoverageText).join(' | '),4800);
@@ -6538,7 +6538,7 @@ function openBatchDetail(id){
 }
 $('#refreshBatch').onclick=loadBatches;
 
-$('#uploadBtn').onclick=async()=>{const files=[...$('#uploadFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#uploadBtn');btn.disabled=true;$('#uploadResult').innerHTML='<span class="meta">Creating batch...</span>';try{const label=($('#uploadNote').value||'').trim()||`Web direct upload ${new Date().toLocaleString()}`;const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label})});const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');const uploaded=[];for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('#uploadResult').innerHTML=`<span class="meta">Uploading ${i+1}/${files.length}: ${esc(files[i].name)}</span>`;const u=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/files`,{method:'POST',body:fd});uploaded.push(u);$('#uploadResult').innerHTML=`<b>File received</b><div class="meta">${esc(uploadCoverageText(u))}</div>${uploadEvidenceHtml(uploaded)}`;}$('#uploadResult').innerHTML='<span class="meta">Committing batch and starting processing...</span>';const commit=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/commit`,{method:'POST'});$('#uploadResult').innerHTML=`<b>Upload verified · Batch #${esc(commit.batch_id||created.batch_id||'—')}</b><div class="meta">${files.length} file(s) · source type and business-date coverage verified below</div>${uploadEvidenceHtml(uploaded)}`;$('#uploadFiles').value='';$('#uploadNote').value='';toast('Upload verified · Batch #'+String(commit.batch_id||created.batch_id||'—'),3600);showDbTab('dboverview');await loadBatches()}catch(e){$('#uploadResult').innerHTML=`<div class="error" style="margin:-9px"><b>UPLOAD NOT COMMITTED</b><br>${esc(e.message)}</div>`;toast('UPLOAD NOT COMMITTED · '+String(e.message||e),4800)}finally{btn.disabled=false}};
+$('#uploadBtn').onclick=async()=>{const files=[...$('#uploadFiles').files];if(!files.length){toast('Select files first');return}const btn=$('#uploadBtn');btn.disabled=true;$('#uploadResult').innerHTML='<span class="meta">Creating batch...</span>';try{const label=($('#uploadNote').value||'').trim()||`Web direct upload ${new Date().toLocaleString()}`;const created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label}),timeoutMs:15000});const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw new Error('Upload batch session ID was not returned');const uploaded=[];for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('#uploadResult').innerHTML=`<span class="meta">Uploading ${i+1}/${files.length}: ${esc(files[i].name)}</span>`;const u=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/files`,{method:'POST',body:fd,timeoutMs:120000});uploaded.push(u);$('#uploadResult').innerHTML=`<b>File received</b><div class="meta">${esc(uploadCoverageText(u))}</div>${uploadEvidenceHtml(uploaded)}`;}$('#uploadResult').innerHTML='<span class="meta">Committing batch and starting processing...</span>';const commit=await api(`/v1/web-upload/batches/${encodeURIComponent(session)}/commit`,{method:'POST',timeoutMs:30000});$('#uploadResult').innerHTML=`<b>Upload verified · Batch #${esc(commit.batch_id||created.batch_id||'—')}</b><div class="meta">${files.length} file(s) · source type and business-date coverage verified below</div>${uploadEvidenceHtml(uploaded)}`;$('#uploadFiles').value='';$('#uploadNote').value='';toast('Upload verified · Batch #'+String(commit.batch_id||created.batch_id||'—'),3600);showDbTab('dboverview');await loadBatches()}catch(e){$('#uploadResult').innerHTML=`<div class="error" style="margin:-9px"><b>UPLOAD NOT COMMITTED</b><br>${esc(e.message)}</div>`;toast('UPLOAD NOT COMMITTED · '+String(e.message||e),4800)}finally{btn.disabled=false}};
 
 async function loadData(){
   const err=$('#dataHealthError');if(err)err.innerHTML='';
