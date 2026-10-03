@@ -97,7 +97,7 @@ YIPMAN_DESKTOP_CSS = r"""
 YIPMAN_DESKTOP_JS = r"""
 (function(){
  if(!window.__YIPMAN_DESKTOP_ACTIVE__)return;
- const D={mod:'quick',best:[],families:[],inventory:[],stockFlow:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceSort:'urgency',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickMode:'stock',quickFilter:'all',stockDelivery:'all',stockCategory:'all',stockSort:'difference',quickSearchSeq:0,quickSearchTimer:null,quickSearchQuery:'',delivery:null,next:null,calendar:null,promoLists:[]};
+ const D={mod:'quick',best:[],families:[],inventory:[],stockFlow:[],prices:[],orderRows:[],orderData:null,perf:null,piGroups:[],trueStockLog:null,health:null,qa:[],ignored:new Set(),pricePrefix:'all',priceOperational:'all',priceReason:'all',priceSearch:'',priceSort:'urgency',priceShowIgnored:false,priceRetry:0,priceMeta:null,quickMode:'stock',quickFilter:'all',stockDelivery:'all',stockCategory:'all',stockSort:'difference',quickSearchSeq:0,quickSearchTimer:null,quickSearchQuery:'',delivery:null,next:null,calendar:null,promoLists:[]};
  const ctx=r=>typeof r==='string'?document.querySelector(r):r;
  const $=(s,r=document)=>ctx(r)?.querySelector(s)||null, $$=(s,r=document)=>Array.from(ctx(r)?.querySelectorAll(s)||[]);
  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -125,7 +125,7 @@ YIPMAN_DESKTOP_JS = r"""
   },{passive:false});
  }
  function root(){
-  const r=document.createElement('div');r.id='ydesk';r.innerHTML='<div class="app"><aside class="side"><div class="brand"><h1>Yip<span>man</span></h1><small>FULL MYSQL · DESKTOP WORKSTATION</small></div><nav class="nav"><button class="navbtn active" data-m="quick"><span class="ico">⌕</span><span>Quick Check</span></button><button class="navbtn" data-m="order"><span class="ico">▤</span><span>Ordering</span></button><button class="navbtn" data-m="price"><span class="ico">$</span><span>Price Suggestions</span></button><button class="navbtn" data-m="performance"><span class="ico">▥</span><span>Performance</span></button><div class="sep"></div><button class="navbtn" data-m="pi"><span class="ico">◎</span><span>PI / True Stock</span></button><button class="navbtn" data-m="data"><span class="ico">▦</span><span>Data Center</span></button></nav><div class="sidefoot"><div class="fresh"><h4>DATA FRESHNESS</h4><div id="ydFresh"><div class="loading">Loading…</div></div></div><div class="version">Store #1032 · Seafood<br>v__VERSION__</div></div></aside><section class="shell"><header class="topbar"><div class="gsearch"><span>⌕</span><input id="ydSearch" placeholder="Search Article / UPC / Receiving / SAP / Name..."><span class="kbd">Ctrl K</span></div><span class="live">LIVE DATA</span><div class="topstats"><div class="topstat">Price actions<b id="ydPc">—</b></div><div class="topstat">Order candidates<b id="ydOc">—</b></div><div class="topstat">QA holds<b id="ydQc">—</b></div></div><div class="avatar">TY</div></header><main class="work"><section class="mod active" id="yd-quick"></section><section class="mod" id="yd-order"></section><section class="mod" id="yd-price"></section><section class="mod" id="yd-performance"></section><section class="mod" id="yd-pi"></section><section class="mod" id="yd-data"></section></main></section></div><div class="toast" id="ydToast"></div>';document.body.appendChild(r);
+  const r=document.createElement('div');r.id='ydesk';r.innerHTML='<div class="app"><aside class="side"><div class="brand"><h1>Yip<span>man</span></h1><small>FULL MYSQL · DESKTOP WORKSTATION</small></div><nav class="nav"><button class="navbtn active" data-m="quick"><span class="ico">⌕</span><span>Quick Check</span></button><button class="navbtn" data-m="order"><span class="ico">▤</span><span>Ordering</span></button><button class="navbtn" data-m="price"><span class="ico">$</span><span>Price Suggestions</span></button><button class="navbtn" data-m="performance"><span class="ico">▥</span><span>Performance</span></button><div class="sep"></div><button class="navbtn" data-m="pi"><span class="ico">◎</span><span>Inventory / True Stock</span></button><button class="navbtn" data-m="data"><span class="ico">▦</span><span>Data Center</span></button></nav><div class="sidefoot"><div class="fresh"><h4>DATA FRESHNESS</h4><div id="ydFresh"><div class="loading">Loading…</div></div></div><div class="version">Store #1032 · Seafood<br>v__VERSION__</div></div></aside><section class="shell"><header class="topbar"><div class="gsearch"><span>⌕</span><input id="ydSearch" placeholder="Search Article / UPC / Receiving / SAP / Name..."><span class="kbd">Ctrl K</span></div><span class="live">LIVE DATA</span><div class="topstats"><div class="topstat">Price actions<b id="ydPc">—</b></div><div class="topstat">Order candidates<b id="ydOc">—</b></div><div class="topstat">QA holds<b id="ydQc">—</b></div></div><div class="avatar">TY</div></header><main class="work"><section class="mod active" id="yd-quick"></section><section class="mod" id="yd-order"></section><section class="mod" id="yd-price"></section><section class="mod" id="yd-performance"></section><section class="mod" id="yd-pi"></section><section class="mod" id="yd-data"></section></main></section></div><div class="toast" id="ydToast"></div>';document.body.appendChild(r);
   $$('.navbtn',r).forEach(b=>b.onclick=()=>openMod(b.dataset.m));
   const search=$('#ydSearch');
   const runSearch=()=>{
@@ -505,19 +505,47 @@ async function loadPerformance(){const root=$('#yd-performance');if(!root.datase
   const root=$('#yd-pi');
   if(!root.dataset.init){
     root.dataset.init='1';
-    root.innerHTML='<div class="pagehead"><div><h2>PI / True Stock</h2><p>Family-level verification, effective OH evidence and Pending Dumping behavior.</p></div><div class="actions"><input id="ydPiSearch" class="input" placeholder="Search Family / Item"><select id="ydPiSort" class="select"><option value="selling">Most selling</option><option value="oh">Highest OH</option><option value="negative">Negative OH first</option></select><button id="ydPiRefresh" class="btn">Refresh</button></div></div><div id="ydPiMain"><div class="loading">Loading family inventory…</div></div>';
+    root.innerHTML='<div class="pagehead"><div><h2>Inventory / True Stock</h2><p>Family-level physical counts, Effective OH, Pending Dumping and the uncleared True Stock adjustment worklist.</p></div><div class="actions"><input id="ydPiSearch" class="input" placeholder="Search Family / Item"><select id="ydPiSort" class="select"><option value="selling">Most selling</option><option value="oh">Highest OH</option><option value="negative">Negative OH first</option></select><button id="ydPiRefresh" class="btn">Refresh</button></div></div><div id="ydTsLog"><div class="loading">Loading True Stock adjustments…</div></div><div id="ydPiMain"><div class="loading">Loading family inventory…</div></div>';
     $('#ydPiSearch').oninput=renderPI;$('#ydPiSort').onchange=renderPI;$('#ydPiRefresh').onclick=()=>loadPI(true);
   }
-  if(D.piGroups.length&&!force){renderPI();return}
+  if(D.piGroups.length&&!force){renderTrueStockLog();renderPI();return}
   $('#ydPiMain').innerHTML='<div class="loading">Loading current family inventory…</div>';
+  $('#ydTsLog').innerHTML='<div class="loading">Loading True Stock adjustments…</div>';
   try{
-    const d=await api('/v1/backoffice/inventory?category=ALL&limit=400&lightweight=true&include_oh=true');
+    const [d,log]=await Promise.all([
+      api('/v1/backoffice/inventory?category=ALL&limit=400&lightweight=true&include_oh=true'),
+      api('/v1/backoffice/true-stock-adjustments?limit=300').catch(e=>({rows:[],uncleared_count:0,error:e.message}))
+    ]);
     D.piGroups=group(d.rows||[]);
+    D.trueStockLog=log;
+    renderTrueStockLog();
     renderPI();
   }catch(e){
-    $('#ydPiMain').innerHTML='<div class="priceEmpty"><h3>PI inventory did not finish loading</h3><p>'+esc(e.message)+'</p><button id="ydPiRetry" class="btn primary">Retry</button></div>';
+    $('#ydPiMain').innerHTML='<div class="priceEmpty"><h3>Inventory did not finish loading</h3><p>'+esc(e.message)+'</p><button id="ydPiRetry" class="btn primary">Retry</button></div>';
     const b=$('#ydPiRetry');if(b)b.onclick=()=>loadPI(true);
   }
+ }
+ function renderTrueStockLog(){
+  const box=$('#ydTsLog');if(!box)return;
+  const d=D.trueStockLog||{},rows=Array.isArray(d.rows)?d.rows:[];
+  const rule='<div class="note blue"><b>Clear List is non-destructive.</b> Use it after dumping is handled. It only clears this desktop worklist; active True Stock remains the Effective OH baseline and continues to roll forward with valid later movements.</div>';
+  const table=rows.length
+   ? '<div class="tablewrap"><table><thead><tr><th>Recorded</th><th>Family</th><th>System OH</th><th>True Stock</th><th>Difference / Dumping</th><th>Source</th><th>Inventory status</th></tr></thead><tbody>'+rows.map(r=>'<tr><td><b>'+esc(String(r.submitted_at||'').replace('T',' ').slice(0,19)||'—')+'</b></td><td><b>'+esc(r.main_article_number||r.family_id||'—')+'</b><div class="tiny">'+esc(r.family_name||'')+'</div></td><td>'+fmt(r.system_oh_quantity)+' '+esc(r.system_oh_uom_code||r.uom_code||'')+'</td><td><b>'+fmt(r.true_stock_quantity)+' '+esc(r.uom_code||'')+'</b></td><td><b>'+fmt(r.discrepancy_quantity)+' '+esc(r.uom_code||'')+'</b><div class="tiny">'+esc(r.dumping_status||'NO DUMPING ROW')+'</div></td><td>'+esc(r.submitted_by||'—')+'<div class="tiny">'+esc(r.count_note||'')+'</div></td><td><span class="badge '+(String(r.override_status||'').toUpperCase()==='ACTIVE'?'green':'gray')+'">'+esc(r.override_status||'—')+'</span><div class="tiny">Movement anchor '+esc(appDate(r.anchor_movement_date))+'</div></td></tr>').join('')+'</tbody></table></div>'
+   : '<div class="cardbody"><div class="small">'+(d.error?'Adjustment log unavailable · '+esc(d.error):'No uncleared True Stock adjustments.')+'</div></div>';
+  box.innerHTML='<div class="card" style="margin-bottom:12px"><div class="cardhead"><div><h3>True Stock Adjustment Worklist</h3><div class="tiny">'+fmt(d.uncleared_count??rows.length,0)+' uncleared record(s)'+(d.last_clear_at?' · last cleared '+esc(String(d.last_clear_at).replace('T',' ').slice(0,16)):'')+'</div></div><button id="ydTsClear" class="btn danger" '+(rows.length?'':'disabled')+'>Clear List After Dumping</button></div><div class="cardbody" style="padding-bottom:8px">'+rule+'</div>'+table+'</div>';
+  const clear=$('#ydTsClear');if(clear&&!clear.disabled)clear.onclick=clearTrueStockLog;
+ }
+ async function clearTrueStockLog(){
+  const d=D.trueStockLog||{},n=Number(d.uncleared_count??(d.rows||[]).length);
+  if(!n){toast('True Stock adjustment list is already clear');return}
+  if(!confirm('Clear '+n+' True Stock adjustment record(s) from this worklist?\n\nThis does NOT delete or cancel True Stock. Effective OH and movement rollforward remain unchanged.'))return;
+  const btn=$('#ydTsClear');if(btn){btn.disabled=true;btn.textContent='Clearing…'}
+  try{
+    const r=await api('/v1/backoffice/true-stock-adjustments/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirm:'CLEAR_TRUE_STOCK_ADJUSTMENT_LIST',note:'Dumping handled · cleared from Yipman desktop Inventory worklist'})});
+    D.trueStockLog=await api('/v1/backoffice/true-stock-adjustments?limit=300');
+    renderTrueStockLog();
+    toast('Cleared '+fmt(r.cleared_count,0)+' worklist record(s). True Stock remains active.');
+  }catch(e){toast(e.message);renderTrueStockLog()}
  }
  function renderPI(){let a=D.piGroups.slice(),q=$('#ydPiSearch')?.value.trim().toLowerCase()||'';if(q)a=a.filter(g=>(g.id+' '+g.name).toLowerCase().includes(q));const s=$('#ydPiSort')?.value||'selling';if(s==='oh')a.sort((x,y)=>(num(y.row.family_system_oh)||0)-(num(x.row.family_system_oh)||0));if(s==='negative')a.sort((x,y)=>(num(x.row.family_system_oh)||0)-(num(y.row.family_system_oh)||0));$('#ydPiMain').innerHTML='<div class="pigrid"><div class="card"><div class="cardhead"><h3>Family True Stock Worklist</h3><span class="badge blue">'+a.length+' families</span></div>'+a.slice(0,120).map(g=>'<div class="pirow" data-family="'+esc(g.id)+'"><div><b>'+esc(g.name)+'</b><div class="tiny">Family '+esc(g.id)+'</div></div><span>System OH<br><b>'+fmt(g.row.family_system_oh)+' '+esc(g.row.family_system_oh_uom||'')+'</b><div class="tiny">Effective '+fmt(g.row.family_oh)+' '+esc(g.row.family_oh_uom||'')+'</div></span><span>7D MVT<br><b>'+fmt(g.row.family_group_movement_7d)+'</b></span><span>DOH<br><b>'+fmt(g.row.doh)+'</b></span><span>Last Receipt<br><b>'+(recHist(g.row)[0]?esc(appDate(recDate(recHist(g.row)[0]))):'—')+'</b></span><span>Status<br><b>'+esc(g.row.readiness||'—')+'</b></span><div><button class="btn primary">Count</button></div></div>').join('')+'</div><aside class="analysis" id="ydPiAnalysis"><div class="card"><div class="loading">Select a family to submit True Stock.</div></div></aside></div>';$$('.pirow','#ydPiMain').forEach(x=>x.onclick=()=>{selectPI(x.dataset.family);$$('.pirow','#ydPiMain').forEach(y=>y.classList.remove('selected'));x.classList.add('selected')});if(a[0])selectPI(a[0].id)}
  async function selectPI(id){
