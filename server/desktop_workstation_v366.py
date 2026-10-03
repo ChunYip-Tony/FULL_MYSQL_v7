@@ -140,7 +140,7 @@ DESKTOP_WORKSTATION_JS = r"""
   function fmt(v,d){if(v===null||v===undefined||v==='')return '—';var x=Number(v);return Number.isFinite(x)?x.toLocaleString(undefined,{maximumFractionDigits:d==null?1:d}):esc(v)}
   function money(v){if(v===null||v===undefined||v==='')return '—';var x=Number(v);return Number.isFinite(x)?'$'+x.toFixed(2):esc(v)}
   function pct(v){if(v===null||v===undefined||v==='')return '—';var x=Number(v);if(!Number.isFinite(x))return esc(v);if(Math.abs(x)<=1.5)x*=100;return x.toFixed(1)+'%'}
-  async function getJson(url,opts){var r=await fetch(url,Object.assign({cache:'no-store'},opts||{}));var d;try{d=await r.json()}catch(e){d={detail:await r.text()}}if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'HTTP '+r.status);return d}
+  async function getJson(url,opts){var r=await fetch(url,Object.assign({cache:'no-store'},opts||{}));var raw=await r.text(),d={};if(raw){try{d=JSON.parse(raw)}catch(e){d={detail:raw}}}if(!r.ok)throw new Error(typeof d.detail==='string'?d.detail:'HTTP '+r.status);return d}
   function metric(label,value,sub){return '<div class="v366-metric"><small>'+esc(label)+'</small><b>'+esc(value)+'</b>'+(sub?'<span>'+esc(sub)+'</span>':'')+'</div>'}
   function kv(rows){return '<div class="v366-kv">'+rows.map(function(x){return '<span>'+esc(x[0])+'</span><span>'+esc(x[1])+'</span>'}).join('')+'</div>'}
   function side(view){return q('#v366-side-'+view)}
@@ -436,7 +436,9 @@ DESKTOP_WORKSTATION_JS = r"""
   function observe(){
     var drawer=q('.drawer');if(drawer)new MutationObserver(function(){if(drawer.classList.contains('on'))setTimeout(copyDrawerToWorkspace,30)}).observe(drawer,{attributes:true,attributeFilter:['class']});
     var sell=q('#sellRows');if(sell)new MutationObserver(function(){setTimeout(performanceSummary,60)}).observe(sell,{childList:true,subtree:true});
-    var db=q('#database');if(db)new MutationObserver(function(){if(q('#database.view.on'))setTimeout(dataAnalysis,120)}).observe(db,{childList:true,subtree:true});
+    // Do NOT observe Database Center child mutations here. dataAnalysis() itself
+    // updates that subtree; observing childList caused a self-triggering request
+    // loop that repeatedly fired active/recent/QA/data-health calls.
   }
   document.addEventListener('click',function(e){
     var sf=e.target.closest('.stockflow-family-btn');if(sf){e.preventDefault();e.stopPropagation();setTimeout(function(){stockFlowFamilyAnalysis(sf.dataset.family)},0);return}
@@ -457,7 +459,7 @@ DESKTOP_WORKSTATION_JS = r"""
     ensureWorkstation('database','Data Diagnostics','Batch, source freshness and QA in one workspace.');
     addOrderingControls();
     performanceSummary();
-    dataAnalysis();
+    // Data Diagnostics loads only when Data Center is actually opened.
     observe();
     var hash=(location.hash||'').toLowerCase();
     if(!hash||hash==='#overview'){
