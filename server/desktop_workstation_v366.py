@@ -212,6 +212,22 @@ DESKTOP_WORKSTATION_JS = r"""
     if(cache.pricing&&Date.now()-cache.pricingAt<60000)return cache.pricing;
     cache.pricing=await getJson('/v1/yipman/pricing-review?category=ALL&limit=1000');cache.pricingAt=Date.now();return cache.pricing;
   }
+  async function stockFlowFamilyAnalysis(family){
+    if(!family)return;
+    loading('quick','Item Intelligence','Family '+family);
+    try{
+      var d=await getJson('/v1/backoffice/inventory?category=ALL&limit=80&lightweight=false&q='+encodeURIComponent(family));
+      var rows=(d.rows||[]).filter(function(x){return String(x.family_article||'')===String(family)});
+      if(!rows.length)rows=d.rows||[];
+      if(!rows.length)throw new Error('Family not found');
+      rows.sort(function(a,b){return n(b.qty_7d)-n(a.qty_7d)});
+      var best=rows.find(function(x){return x.upc})||rows[0];
+      if(!best||!best.upc)throw new Error('No selling UPC found for this family');
+      await quickAnalysis(String(best.upc));
+    }catch(e){
+      setSide('quick','Item Intelligence','Family '+family,'<div class="v366-note warn">'+esc(e.message||e)+'</div>');
+    }
+  }
   async function quickAnalysis(upc){
     activeAnalysis={view:'quick',key:upc};loading('quick','Item Intelligence','UPC '+upc);
     try{
@@ -419,6 +435,7 @@ DESKTOP_WORKSTATION_JS = r"""
     var db=q('#database');if(db)new MutationObserver(function(){if(q('#database.view.on'))setTimeout(dataAnalysis,120)}).observe(db,{childList:true,subtree:true});
   }
   document.addEventListener('click',function(e){
+    var sf=e.target.closest('.stockflow-family-btn');if(sf){e.preventDefault();setTimeout(function(){stockFlowFamilyAnalysis(sf.dataset.family)},0);return}
     var qd=e.target.closest('.quickdetailbtn');if(qd){setTimeout(function(){quickAnalysis(qd.dataset.upc)},0);return}
     var od=e.target.closest('.orderdetail');if(od){setTimeout(function(){orderAnalysis(od.dataset.family)},0);return}
     var pd=e.target.closest('.pricedetail');if(pd){setTimeout(function(){priceAnalysis(pd.dataset.upc)},0);return}
