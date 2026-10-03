@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v441';
+const CACHE='yipman-v442';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -824,6 +824,152 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
  html:not(.yipman-desktop) .hfitem span{font-size:6.3px}
 }
 
+
+/* V442 Ordering: large full names, denser space use, search-first Manual Promotion. */
+#order #orderList.futurecards .orderitemhead{display:none}
+#order #orderList.futurecards .orderitemmain{
+  display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:8px 10px 9px
+}
+#order #orderList.futurecards .orderitemmain>div{padding:0}
+#order #orderList.futurecards .orderitemmain>div:first-child{
+  grid-column:1/-1;min-width:0;padding:0 1px 3px
+}
+#order .orderitemmain .name{
+  font-size:24px;line-height:1.08;font-weight:1000;
+  white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere
+}
+#order .familyline{margin-top:0}
+#order .familyline b{
+  font-size:20px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere
+}
+#order .orderitemmain .sub{font-size:11px;line-height:1.3}
+#order #orderList.futurecards .orderitemmain .cell{
+  min-height:68px;border:1px solid rgba(108,135,157,.22);border-radius:12px;
+  background:rgba(255,255,255,.74);padding:7px 8px;text-align:center;
+  display:flex;flex-wrap:wrap;align-content:center;justify-content:center;gap:2px
+}
+#order .ordercelllabel{
+  display:block;flex-basis:100%;font-size:8px!important;color:#6c7d8c!important;
+  font-weight:1000;letter-spacing:.04em
+}
+#order .orderitemmain .orderqty{font-size:27px;color:#0d4f8b}
+#order .orderitemmain .orderqty>span{flex-basis:100%;font-size:10px}
+#order .orderohcell{display:flex;flex-direction:column;align-items:center;justify-content:center}
+#order .orderohinput{
+  width:84px;border:1.5px dashed #72a8cf;border-radius:10px;background:rgba(255,255,255,.84);
+  color:#16202a;text-align:center;font-size:23px;line-height:1;font-weight:1000;padding:7px 6px;outline:0
+}
+#order .orderohinput:focus{
+  border-style:solid;border-color:#0d6fbd;background:#fff;box-shadow:0 0 0 3px rgba(13,111,189,.12)
+}
+#order .orderohhint{
+  display:block;flex-basis:100%;font-size:8px!important;color:#0d6fbd!important;
+  margin-top:2px!important;font-weight:950
+}
+#order .orderrecvhistory{margin:0 10px 9px}
+#order .orderrecvhistoryhead{padding:7px 9px}
+#order .orderrecvhistoryhead b{font-size:10px}
+#order .orderrecvhistoryhead span{font-size:8px}
+#order .orderrecvrow{
+  grid-template-columns:minmax(0,1fr) 78px;gap:8px;align-items:center;padding:8px 9px
+}
+#order .orderrecvarticle b{
+  font-size:26px;line-height:1.02;color:#0d4f8b;font-weight:1000;
+  white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere
+}
+#order .orderrecvarticle .receivingname{
+  display:block;font-size:15px;line-height:1.16;color:#27465e;font-weight:950;
+  margin-top:4px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere
+}
+#order .orderrecvarticle .recvpackline{
+  display:block;font-size:11px;color:#53687a;font-weight:900;margin-top:5px;
+  white-space:normal;overflow-wrap:anywhere
+}
+#order .orderrecvdays{
+  text-align:center;border-left:1px solid rgba(80,95,110,.15);padding-left:8px
+}
+#order .orderrecvdays b{display:block;font-size:25px;line-height:1;color:#9a620a;font-weight:1000}
+#order .orderrecvdays span{
+  display:block;font-size:7px;color:#7a6540;font-weight:950;margin-top:3px;letter-spacing:.03em
+}
+#order .orderitemcard.tone0{background:linear-gradient(100deg,#fff8d8,#fff 62%)}
+#order .orderitemcard.tone1{background:linear-gradient(100deg,#edf9f0,#fff 62%)}
+#order .orderitemcard.tone2{background:linear-gradient(100deg,#edf5ff,#fff 62%)}
+#order .orderitemcard.tone3{background:linear-gradient(100deg,#fff0f4,#fff 62%)}
+#order .orderitemcard.tone4{background:linear-gradient(100deg,#f5efff,#fff 62%)}
+
+.manual-promo-search{display:grid;gap:9px}
+.manual-promo-searchbar{display:flex;gap:7px;align-items:center}
+.manual-promo-searchbar input{
+  flex:1;min-width:0;border:2px solid #bdd5e7;border-radius:13px;background:#fff;
+  min-height:49px;padding:0 12px;font-size:17px;font-weight:850;outline:0
+}
+.manual-promo-searchbar input:focus{
+  border-color:#1672bd;box-shadow:0 0 0 3px rgba(22,114,189,.10)
+}
+.manual-promo-searchbar button{
+  border:0;border-radius:12px;background:#174f78;color:#fff;padding:13px 13px;
+  font-size:11px;font-weight:950
+}
+.manual-promo-search-note{font-size:11px;line-height:1.35;color:#637585;font-weight:800}
+.manual-promo-results{display:grid;gap:6px;max-height:270px;overflow:auto}
+.manual-promo-result{
+  width:100%;text-align:left;border:1px solid #d9e4ec;border-radius:13px;
+  background:#f8fbfe;padding:10px 11px;color:#183349
+}
+.manual-promo-result b{
+  display:block;font-size:17px;line-height:1.12;white-space:normal;overflow-wrap:anywhere
+}
+.manual-promo-result strong{display:block;font-size:13px;color:#0d609f;margin-top:3px}
+.manual-promo-result span{
+  display:block;font-size:11px;line-height:1.35;color:#667786;margin-top:4px;font-weight:800
+}
+.manual-promo-selected{display:grid;gap:7px}
+.manual-promo-selected-card{
+  border:1.5px solid #8fc6a7;border-radius:14px;background:#effaf4;padding:10px 11px
+}
+.manual-promo-selected-top{
+  display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:8px;align-items:start
+}
+.manual-promo-selected-card h4{
+  font-size:19px;line-height:1.1;margin:0;font-weight:1000;overflow-wrap:anywhere
+}
+.manual-promo-selected-card .selmeta{
+  font-size:11px;line-height:1.35;color:#526b5f;font-weight:850;margin-top:4px
+}
+.manual-promo-selected-card label{display:block;font-size:8px;color:#62756c;font-weight:950}
+.manual-promo-selected-card input{
+  width:100%;margin-top:3px;border:1px solid #bfd6ca;border-radius:9px;background:#fff;
+  padding:8px;font-size:17px;font-weight:950
+}
+.manual-promo-delivery{
+  margin-top:6px;padding-top:7px;border-top:1px solid rgba(55,110,80,.14);
+  font-size:11px;line-height:1.4;color:#53685e;font-weight:850;overflow-wrap:anywhere
+}
+.manual-promo-remove{
+  border:0;background:transparent;color:#b52e38;font-size:10px;font-weight:950;padding:5px 0 0
+}
+#order .promo-card-head b{
+  font-size:20px;line-height:1.08;white-space:normal;overflow-wrap:anywhere
+}
+#order .promo-true-stock-input{
+  width:82px;border:1.5px dashed #72a8cf;border-radius:9px;background:#fff;
+  text-align:center;font-size:20px;font-weight:1000;padding:6px 5px;outline:0
+}
+#order .promo-true-stock-input:focus{
+  border-style:solid;border-color:#0d6fbd;box-shadow:0 0 0 3px rgba(13,111,189,.12)
+}
+#order .promo-card.tone0{background:linear-gradient(100deg,#fff4c4,#fff 64%);border-left:5px solid #d8b21f}
+#order .promo-card.tone1{background:linear-gradient(100deg,#e8f7ec,#fff 64%);border-left:5px solid #4ca76a}
+#order .promo-card.tone2{background:linear-gradient(100deg,#e7f1ff,#fff 64%);border-left:5px solid #4c83d1}
+#order .promo-card.tone3{background:linear-gradient(100deg,#ffe9ef,#fff 64%);border-left:5px solid #cf6f88}
+#order .promo-card.tone4{background:linear-gradient(100deg,#f2e9ff,#fff 64%);border-left:5px solid #8f70cf}
+@media(max-width:370px){
+ #order .orderitemmain .name{font-size:22px}
+ #order .orderrecvarticle b{font-size:23px}
+ #order .orderrecvarticle .receivingname{font-size:14px}
+}
+
 </style>
 </head>
 <body>
@@ -847,7 +993,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
         <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span id="orderCoverageSub">Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
       </div>
       <div id="regularOrderPanel">
-        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
+        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="QTY">ORDER QTY ↓</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
         <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
         <div class="list" id="orderList"><div class="lh" id="orderListHead"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
       </div>
@@ -856,7 +1002,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
           <h3>Promotion Order</h3>
           <p>Weekly items use Thursday → following Thursday. Weekend items use Friday → Sunday. The selected delivery window can contain both promotion and regular-price days.</p>
           <div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div>
-          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT</button><button class="promo-manual" id="promoManualBtn">MANUAL</button></div>
+          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT</button><button class="promo-manual" id="promoManualBtn">＋ MANUAL ITEM</button></div>
           <div class="promo-date-inputs"><label>WEEKLY START (THU)<input type="date" id="promoWeeklyStart"></label><label>WEEKEND START (FRI)<input type="date" id="promoWeekendStart"></label></div>
           <input type="file" id="promoFileInput" accept=".csv,.xls,.xlsx,.xlsm" class="hide">
           <div class="promo-status" id="promoListStatus">Choose a saved list, import a file, or enter one / multiple UPC promotions manually.</div>
@@ -985,7 +1131,7 @@ let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
-let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
+let orderSort='QTY', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
@@ -2052,67 +2198,184 @@ function openManualPromotion(){
  const endDefault=plusDaysIso(startDefault,6);
  const deliveryDefault=orderDate||startDefault;
  const nextDefault=orderNextDate||plusDaysIso(deliveryDefault,7);
+ const selected=new Map();
+ let searchTimer=null;
+ let latestSearchToken=0;
+
  sheet(
   'Manual Promotion',
-  'One or multiple UPCs · manual promotion and delivery window',
-  '<div class="detail"><b>Manual promotion setup</b><br><span style="color:#71808d">One line per UPC. Format: UPC, SALE price. Example: 24081600000, 8.99</span>'+
-  '<div class="manual-promo-fields">'+
-   '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
-   '<label class="wide">UPCs + SALE PRICE<textarea id="manualPromoItems" placeholder="24081600000, 8.99&#10;24981600000, 8.99"></textarea></label>'+
-   '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
-   '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
-   '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
-   '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
-  '</div>'+
-  '<div class="estimatebar" style="margin-top:10px">Delivery → Next Delivery is the ordering coverage window. Promo Start → End marks the SALE-demand days inside that window. Fresh/Live OH that crosses the freshness threshold is not credited as usable future stock.</div>'+
-  '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">SAVE & RECALCULATE</button></div></div>'
+  'Search item first · then enter promotion details',
+  '<div class="detail manual-promo-search">'+
+   '<div><b>1. Search item</b><div class="manual-promo-search-note">Search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name. Typo-tolerant search is supported.</div></div>'+
+   '<div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="Search salmon, 240816, article…" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div>'+
+   '<div id="manualPromoSearchStatus" class="manual-promo-search-note">Start typing to find an item.</div>'+
+   '<div id="manualPromoSearchResults" class="manual-promo-results"></div>'+
+   '<div><b>2. Selected promotion item(s)</b><div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item selected yet.</div></div></div>'+
+   '<div><b>3. Promotion + delivery window</b></div>'+
+   '<div class="manual-promo-fields">'+
+    '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
+    '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
+    '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
+    '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
+    '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
+   '</div>'+
+   '<div class="estimatebar" style="margin-top:10px">Yipman uses the selected Family True Stock, canonical sales history, promotion history, observed delivery evidence, and Fresh/Live freshness limits. Manual uplift is not required.</div>'+
+   '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">ADD TO PROMOTION ORDER</button></div>'+
+  '</div>'
  );
+
+ const searchInput=$('#manualPromoSearch');
+ const searchStatus=$('#manualPromoSearchStatus');
+ const searchResults=$('#manualPromoSearchResults');
+ const selectedBox=$('#manualPromoSelected');
+
+ function familyKeyFor(item){
+  return String(item?.family_article_number||(String(item?.result_type||'').toUpperCase()==='FAMILY'?item?.number:'')||'').trim();
+ }
+ function relatedDeliverySummary(fam){
+  const rows=Array.isArray(fam?.receiving_ordering_articles)?fam.receiving_ordering_articles:[];
+  if(!rows.length)return 'Delivery Article: —';
+  return rows.slice(0,4).map(a=>{
+   const n=a.article_number||a.receiving_article||a.number||'—';
+   const name=a.article_description||a.article_name||a.name||'';
+   const pack=a.pack_size||a.pack||a.receiving_pack_size||'';
+   return String(n)+(name?' · '+name:'')+(pack?' · Pack '+pack:'');
+  }).join(' | ')+(rows.length>4?' · +'+(rows.length-4)+' more':'');
+ }
+ function effectiveOHText(fam){
+  const oh=fam?.current_effective_oh||{};
+  const qty=oh.quantity??oh.current_oh??oh.effective_oh;
+  const uom=oh.uom||oh.uom_code||fam?.family_sales_7d?.uom||'';
+  return qty==null?'—':fmtNullable(qty)+' '+String(uom||'');
+ }
+ function selectedPrice(id){
+  const el=document.querySelector('[data-manual-promo-price="'+CSS.escape(String(id))+'"]');
+  return el?Number(el.value):NaN;
+ }
+ function renderSelected(){
+  const rows=[...selected.values()];
+  if(!rows.length){selectedBox.innerHTML='<div class="empty">No item selected yet.</div>';return}
+  selectedBox.innerHTML=rows.map(x=>{
+   const fam=x.family||{}, item=x.item||{};
+   const fid=String(fam.family_id||item.family_id||x.familyKey||'');
+   const price=item.current_price??'';
+   const q7=item.pos_qty_7d??item.qty_7d??fam?.family_sales_7d?.sold_quantity;
+   const q7u=item.selling_uom||item.qty_uom||fam?.family_sales_7d?.uom||'';
+   return '<div class="manual-promo-selected-card">'+
+    '<div class="manual-promo-selected-top"><div><h4>'+esc(fam.family_article_name||item.family_name||item.name||x.familyKey)+'</h4>'+
+     '<div class="selmeta">Family '+esc(x.familyKey)+' · Selected '+esc(x.code)+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+' · True Stock '+esc(effectiveOHText(fam))+'</div>'+
+    '</div><label>SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
+    '<div class="manual-promo-delivery">'+esc(relatedDeliverySummary(fam))+'</div>'+
+    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
+   '</div>';
+  }).join('');
+  $$('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
+   selected.delete(String(btn.dataset.manualPromoRemove));renderSelected();
+  });
+ }
+ async function hydrateFamily(item){
+  const familyKey=familyKeyFor(item);
+  if(!familyKey)throw new Error('Family Article unavailable for this result');
+  const fam=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:12000});
+  return {familyKey,fam};
+ }
+ async function chooseResult(entry){
+  try{
+   searchStatus.textContent='Loading Family inventory and Delivery Article details…';
+   const hydrated=entry.family?{familyKey:entry.familyKey,fam:entry.family}:await hydrateFamily(entry.item);
+   const item=entry.item;
+   const fid=String(hydrated.fam?.family_id||item.family_id||hydrated.familyKey);
+   const type=String(item.result_type||'').toUpperCase();
+   const code=type==='UPC'?String(item.number||''):(type==='ARTICLE'?String(item.number||hydrated.familyKey):String(hydrated.familyKey));
+   if(!code)throw new Error('Selectable UPC / Article number unavailable');
+   const previous=selected.get(fid);
+   selected.set(fid,{familyKey:hydrated.familyKey,family:hydrated.fam,item,code});
+   renderSelected();
+   searchStatus.textContent=previous
+    ? 'Replaced the previous selection for Family '+hydrated.familyKey+' so Family inventory is counted once.'
+    : 'Added Family '+hydrated.familyKey+'. Search again to add another Family.';
+   searchInput.focus();searchInput.select();
+  }catch(e){searchStatus.textContent='Unable to select item · '+e.message}
+ }
+ async function runSearch(){
+  const q=String(searchInput.value||'').trim();
+  const token=++latestSearchToken;
+  if(q.length<2){searchResults.innerHTML='';searchStatus.textContent='Enter at least 2 characters.';return}
+  searchStatus.textContent='Searching…';
+  searchResults.innerHTML='<div class="loading">Searching current item master…</div>';
+  try{
+   const d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=12',{timeoutMs:12000});
+   if(token!==latestSearchToken)return;
+   const raw=Array.isArray(d.results)?d.results:[];
+   const base=raw.slice(0,10);
+   const enriched=await Promise.all(base.map(async item=>{
+    const familyKey=familyKeyFor(item);
+    let family=null;
+    if(familyKey){try{family=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:9000})}catch(e){}}
+    return {item,familyKey,family};
+   }));
+   if(token!==latestSearchToken)return;
+   searchStatus.textContent=enriched.length?enriched.length+' result(s) · choose the correct item':'No matching item.';
+   searchResults.innerHTML=enriched.map((x,i)=>{
+    const item=x.item||{}, fam=x.family||{};
+    const familyName=fam.family_article_name||item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
+    const itemName=item.name||familyName||'Item';
+    const q7=item.pos_qty_7d??item.qty_7d??fam?.family_sales_7d?.sold_quantity;
+    const q7u=item.selling_uom||item.qty_uom||fam?.family_sales_7d?.uom||'';
+    return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
+     '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
+     '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
+      ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
+      (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
+      ' · True Stock '+esc(effectiveOHText(fam))+'</span></button>';
+   }).join('');
+   $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
+  }catch(e){
+   if(token!==latestSearchToken)return;
+   searchResults.innerHTML='';
+   searchStatus.textContent='Search unavailable · '+e.message;
+  }
+ }
+ searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,260)};
+ searchInput.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(searchTimer);runSearch()}};
+ $('#manualPromoSearchBtn').onclick=()=>{clearTimeout(searchTimer);runSearch()};
  $('#manualPromoCancel').onclick=()=>closeSheet(true);
  $('#manualPromoSave').onclick=async()=>{
-  const raw=$('#manualPromoItems').value.trim();
+  const rows=[...selected.values()];
   const start=$('#manualPromoStart').value;
   const end=$('#manualPromoEnd').value;
   const delivery=$('#manualPromoDelivery').value;
   const next=$('#manualPromoNext').value;
-  if(!raw){toast('Enter at least one UPC and SALE price');return}
+  if(!rows.length){toast('Select at least one item');return}
   if(!start||!end||!delivery||!next){toast('Complete all promotion and delivery dates');return}
   if(end<start){toast('Promotion end must be after start');return}
   if(next<=delivery){toast('Next delivery must be after delivery date');return}
-  const parsed=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
-   const parts=line.split(/[,\t]+/).map(x=>x.trim()).filter(Boolean);
-   const code=parts[0]||'';
-   const price=Number(String(parts[1]||'').replace(/[$,]/g,''));
-   return {code,price};
+  const items=rows.map(x=>{
+   const fid=String(x.family?.family_id||x.item?.family_id||x.familyKey);
+   return {
+    upc:x.code,
+    description:x.family?.family_article_name||x.item?.name||'',
+    promotion_type:'CUSTOM',
+    promotion_start_date:start,
+    promotion_end_date:end,
+    promotion_price:selectedPrice(fid)
+   };
   });
-  if(parsed.some(x=>!x.code||!Number.isFinite(x.price)||x.price<=0)){
-   toast('Use one line per UPC: UPC, SALE price');return
+  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){
+   toast('Enter a valid SALE price for every selected item');return
   }
   const name=$('#manualPromoName').value.trim()||('Manual Promotion '+start);
-  $('#manualPromoSave').disabled=true;
-  $('#manualPromoSave').textContent='SAVING…';
+  const save=$('#manualPromoSave');save.disabled=true;save.textContent='SAVING…';
   try{
    const created=await api('/v1/yipman/promotion-lists',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-     list_name:name,
-     source_filename:'MANUAL_ENTRY',
-     items:parsed.map(x=>({
-      upc:x.code,
-      promotion_type:'CUSTOM',
-      promotion_start_date:start,
-      promotion_end_date:end,
-      promotion_price:x.price
-     }))
-    }),
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({list_name:name,source_filename:'MANUAL_SEARCH_ENTRY',items}),
     timeoutMs:30000
    });
    promoListId=Number(created.list_id);
    promoTempOH.clear();
-   orderDate=delivery;
-   orderNextDate=next;
-   closeSheet(true);
-   buildDays();updateOrderWindowUI();
+   orderDate=delivery;orderNextDate=next;
+   closeSheet(true);buildDays();updateOrderWindowUI();
    await loadPromotionLists();
    $('#promoListSelect').value=String(promoListId);
    if(Number(created.ready_count||0)>0)await loadPromotionOrder();
@@ -2120,13 +2383,15 @@ function openManualPromotion(){
     $('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';
     $('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>';
    }
-   toast('Manual promotion saved');
+   toast('Manual promotion added');
   }catch(err){
    toast('Manual promotion failed · '+err.message);
-   const save=$('#manualPromoSave');
-   if(save){save.disabled=false;save.textContent='SAVE & RECALCULATE'}
+   if(document.getElementById('manualPromoSave')){
+    save.disabled=false;save.textContent='ADD TO PROMOTION ORDER';
+   }
   }
  };
+ setTimeout(()=>searchInput?.focus(),80);
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
@@ -2136,18 +2401,46 @@ function renderPromotionRows(data){
  const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b><br>'+reviewItems.slice(0,5).map(x=>esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)).join('<br>')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
  $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
   const p=r.promotion_list_item||{}, type=String(p.promotion_type||'').toUpperCase();
-  const temp=!!r.temporary_oh_override_used;
-  const oh=r.current_oh_for_calculation;
+  const oh=r.current_oh_system;
   const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage, totalNeed=r.forecast_coverage_usage;
   const freshnessHtml=r.freshness_adjustment_applied
    ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · latest receipt '+esc(appDate(r.freshness_latest_receipt_date))+' · DOH '+fmtNullable(r.freshness_current_doh)+' · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
    : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live order coverage stops at 7 days; later demand needs another delivery.</div>':'');
-  return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
-   '<div class="promo-metrics"><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>'+(temp?'TEMP TRUE STOCK':'CURRENT OH ✎')+'</small><b>'+fmtNullable(oh)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
-   '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · TEMP OH only for this calculation':'')+'</div></div></div>';
+  return '<div class="promo-card tone'+(i%5)+'"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
+   '<div class="promo-metrics"><div class="promo-metric"><small>TRUE STOCK OH · TAP TO EDIT</small><div><input class="promo-true-stock-input" data-promo-true-stock="'+i+'" inputmode="decimal" value="'+esc(oh==null?'':oh)+'"> <b>'+esc(r.uom||'')+'</b></div></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
+   '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+' · True Stock edits save system-wide</div></div></div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
- $$('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
+ $$('[data-promo-true-stock]').forEach(input=>{
+  input.onclick=e=>e.stopPropagation();
+  input.onfocus=e=>{e.stopPropagation();input.dataset.original=input.value;input.select();input.value=''};
+  input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur()}};
+  input.onchange=async e=>{
+   e.stopPropagation();
+   const r=promoLastRows[Number(input.dataset.promoTrueStock)];
+   const raw=String(input.value||'').trim();
+   if(!raw){input.value=input.dataset.original||'';return}
+   const qty=Number(raw);
+   if(!r||!Number.isFinite(qty)||qty<0){
+    input.value=input.dataset.original||'';
+    toast('Enter a valid True Stock quantity');return
+   }
+   input.disabled=true;
+   try{
+    await api('/v1/app/v2/pi/'+encodeURIComponent(r.family_article_number)+'/true-stock',{
+     method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({true_stock:qty,uom:r.uom,note:'Yipman Promotion Ordering inline True Stock'}),
+     timeoutMs:20000
+    });
+    promoTempOH.delete(Number(r.family_id));
+    toast('True Stock saved system-wide');
+    await loadPromotionOrder();
+   }catch(err){
+    input.disabled=false;input.value=input.dataset.original||'';toast(err.message)
+   }
+  };
+ });
 }
+
 async function loadPromotionOrder(){
  if(orderMode!=='PROMOTION')return;
  if(!promoListId){$('#promoOrderStatus').textContent='Choose or import a promotion list.';$('#promoRows').innerHTML='<div class="empty">No promotion list selected.</div>';return}
@@ -2158,11 +2451,11 @@ async function loadPromotionOrder(){
    list_id:promoListId,
    delivery_date:orderDate,
    next_delivery_date:orderNextDate,
-   temporary_oh_overrides:[...promoTempOH.values()]
+   temporary_oh_overrides:[]
   };
   const data=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeoutMs:45000});
   const freshnessCount=(data.rows||[]).filter(x=>x.freshness_adjustment_applied).length;
-  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' calculated · coverage through '+appDate(data.coverage_end_date)+(freshnessCount?' · '+freshnessCount+' freshness adjusted':'')+' · temporary OH values are NOT saved';
+  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' calculated · coverage through '+appDate(data.coverage_end_date)+(freshnessCount?' · '+freshnessCount+' freshness adjusted':'')+' · True Stock edits save system-wide';
   renderPromotionRows(data);
  }catch(e){
   $('#promoOrderStatus').textContent='Promotion calculation unavailable · '+e.message;
@@ -2319,17 +2612,45 @@ function renderOrderRoster(rows,data,h,stale){
   const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
   const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
   const freshness=r.freshness_adjustment_applied?'<span class="order-freshness">FRESHNESS +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'</span>':'';
-  const hist=state==='ORDER'&&num(q)>0&&Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
-  const shownHist=hist.slice(0,3);
-  const histHtml=shownHist.length
-    ? '<div class="orderrecvhistory"><div class="orderrecvhistoryhead"><span class="orderrecvhistoryicon">◇</span><b>RELATED RECEIVING ARTICLES FOR THIS ITEM</b><span>FAMILY '+esc(r.family_article||'—')+'</span></div>'
-      +shownHist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span>Last received '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK SIZE</span></div></div>').join('')
-      +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
-      +'</div>'
+  const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
+  const histHtml=hist.length
+    ? '<div class="orderrecvhistory"><div class="orderrecvhistoryhead"><span class="orderrecvhistoryicon">◇</span><b>HISTORICAL DELIVERY ARTICLE(S)</b><span>FAMILY '+esc(r.family_article||'—')+'</span></div>'
+      +hist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span class="recvpackline">Pack size · '+esc(h.pack_size||'—')+'</span></div><div class="orderrecvdays"><b>'+fmt(h.observed_day_count??h.receipt_event_count,0)+'</b><span>OBSERVED<br>DAYS</span></div></div>').join('')
+      +'<div class="orderrecvmore">Tap Family card to view full delivery history.</div></div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell orderohcell"><small class="ordercelllabel">TRUE STOCK OH</small><input class="orderohinput" data-order-oh="'+i+'" inputmode="decimal" value="'+esc(r.oh==null?'':r.oh)+'"><span>'+esc(r.oh_uom||'')+'</span><span class="orderohhint">TAP TO EDIT</span></div><div class="cell orderqty"><small class="ordercelllabel">SUGGEST ORDER</small>'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+ $('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+ $('[data-order-oh]').forEach(input=>{
+  input.onclick=e=>e.stopPropagation();
+  input.onfocus=e=>{e.stopPropagation();input.dataset.original=input.value;input.select();input.value=''};
+  input.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();input.blur()}};
+  input.onchange=async e=>{
+   e.stopPropagation();
+   const row=renderedOrderRows[Number(input.dataset.orderOh)];
+   const raw=String(input.value||'').trim();
+   if(!raw){input.value=input.dataset.original||'';return}
+   const qty=Number(raw);
+   if(!row||!Number.isFinite(qty)||qty<0){
+    input.value=input.dataset.original||'';toast('Enter a valid True Stock quantity');return
+   }
+   if(!row.family_article||!row.oh_uom){
+    input.value=input.dataset.original||'';toast('Family or OH UOM unavailable');return
+   }
+   input.disabled=true;
+   try{
+    await api('/v1/app/v2/pi/'+encodeURIComponent(row.family_article)+'/true-stock',{
+     method:'POST',headers:{'Content-Type':'application/json'},
+     body:JSON.stringify({true_stock:qty,uom:row.oh_uom,note:'Yipman Ordering inline True Stock'}),
+     timeoutMs:20000
+    });
+    toast('True Stock saved system-wide');
+    await loadOrder(orderDate);
+   }catch(err){
+    input.disabled=false;input.value=input.dataset.original||'';toast(err.message)
+   }
+  };
+ });
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
