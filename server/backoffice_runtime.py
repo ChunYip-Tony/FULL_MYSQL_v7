@@ -4461,211 +4461,172 @@ def _recent_family_sale_event_from_batch(
 
 
 def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
-    """Family Stock Flow watch for the Yipman empty-search home.
+    """Fast Family Stock Flow watch for the Yipman / desktop Quick Check home.
 
-    Surface Families where canonical 7D physical receipts exceed 7D Family
-    selling movement by at least 50% (receipt >= 1.50 * selling). This replaces
-    the former Best Sellers list so the manager sees possible over-receiving /
-    stock-build signals first. Only same-UOM READY receipt totals are compared.
+    Keep Stock Flow on published Family movement plus canonical physical receipt
+    events. Do not invoke the full Family -> Receiving Article -> UPC lineage
+    builder here; that path is appropriate for item detail but is too expensive
+    for an empty-search dashboard.
     """
     lim = max(1, min(int(limit or 40), 100))
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
+
         movement_days_7 = source_data_days(
             cur,
             "movement",
             limit=7,
             up_to=completed_through_date(),
         )
+        completed_7_dates = {x["date"] for x in movement_days_7}
         day_count = len(movement_days_7)
 
-        # One representative row per active Family. Receipt context is then
-        # calculated from all linked Receiving Articles for those Families.
+        # One row per active Family from the serving table. Family movement is
+        # already published/reconciled there, so Stock Flow does not need to
+        # rebuild article lineage on every page load.
         cur.execute(
-            """SELECT q.*
-               FROM quick_check_current q
-               JOIN (
-                   SELECT family_id,
-                          MIN(upc_id) AS sample_upc_id,
-                          MAX(COALESCE(family_movement_7d,0)) AS family_movement_7d
-                   FROM quick_check_current
-                   WHERE family_id IS NOT NULL
-                     AND COALESCE(family_movement_7d,0) > 0
-                     AND COALESCE(quick_check_status,'') <> 'HISTORICAL_ONLY'
-                   GROUP BY family_id
-               ) fam ON fam.sample_upc_id=q.upc_id
-               ORDER BY fam.family_movement_7d DESC, q.family_id""",
+            """SELECT family_id,
+                      MAX(main_article_number) AS family_article,
+                      MAX(family_description) AS family_name,
+                      MAX(product_class) AS category,
+                      MAX(family_movement_7d) AS family_movement_7d,
+                      MAX(family_movement_uom) AS family_movement_uom
+               FROM quick_check_current
+               WHERE family_id IS NOT NULL
+                 AND COALESCE(family_movement_7d,0) > 0
+                 AND COALESCE(quick_check_status,'') <> 'HISTORICAL_ONLY'
+               GROUP BY family_id
+               ORDER BY family_id"""
         )
-        qrows = cur.fetchall()
-        family_ctx = _quick_receiving_article_context(
-            cur,
-            qrows,
-            movement_days_7,
-        ) if qrows else {}
+        families = cur.fetchall()
+        family_ids = [
+            int(x["family_id"])
+            for x in families
+            if x.get("family_id") is not None
+        ]
 
-        # Pre-qualify Families BEFORE the expensive 28D promotion and 180D
-        # delivery-evidence scans. Previously those scans ran for every active
-        # selling Family even though Stock Flow ultimately returns only Families
-        # whose 7D receipts are >= 150% of 7D selling movement. Keeping the
-        # exact same qualification here dramatically reduces the evidence scope
-        # without changing Stock Flow semantics.
-        qualifying_qrows = []
-        for q in qrows:
-            fid = int(q["family_id"])
-            ctx = family_ctx.get(fid, {})
-            sold = ctx.get("family_group_movement_7d")
-            if sold is None:
-                sold = q.get("family_movement_7d")
-            sold_d = _d(sold) if sold is not None else Decimal("0")
-            if sold_d <= 0:
-                continue
-            sold_uom = str(
-                ctx.get("family_group_movement_uom")
-                or q.get("family_movement_uom")
-                or ""
-            ).strip().upper()
-            receipt = ctx.get("family_receipt_7d_qty")
-            receipt_uom = str(
-                ctx.get("family_receipt_7d_uom") or sold_uom
-            ).strip().upper()
-            receipt_status = str(ctx.get("family_receipt_7d_status") or "")
-            if (
-                receipt is None
-                or not sold_uom
-                or receipt_uom != sold_uom
-                or not receipt_status.startswith("READY")
-            ):
-                continue
-            receipt_d = _d(receipt)
-            ratio = receipt_d / sold_d if sold_d > 0 else None
-            if ratio is None or ratio < Decimal("1.50"):
-                continue
-            qualifying_qrows.append(q)
-
-        # Promotion evidence now scans only Families that actually qualify for
-        # Stock Flow. SALE is promotion; TPR is explicitly not promotion.
-        sales_days_28 = source_data_days(
-            cur,
-            "sales_by_price_type",
-            limit=28,
-            up_to=completed_through_date(),
-        )
-        family_ids = sorted({
-            int(q["family_id"])
-            for q in qualifying_qrows
-            if q.get("family_id") is not None
-        })
-
-        # Stock Flow delivery filters use the same canonical observed-delivery
-        # evidence as Ordering: positive physical 101/109 receipts only, across
-        # the latest 180 completed movement-data days. A weekday is "observed"
-        # when at least one qualifying Family receipt date exists in that window.
-        receipt_days_180 = source_data_days(
-            cur,
-            "movement",
-            limit=180,
-            up_to=completed_through_date(),
-        )
-        delivery_event_map = (
+        # One set-based canonical receipt read supplies both 7D receipt totals,
+        # recent receipt history, and observed-delivery weekdays.
+        receipt_events = (
             _family_receipt_events_bulk(
                 cur,
                 family_ids,
-                data_days=receipt_days_180,
+                data_day_limit=180,
             )
             if family_ids
             else {}
         )
 
-        promo_family_rows: dict[int, list[dict[str, Any]]] = {}
-        promo_daily: dict[int, dict[date, dict[str, Any]]] = {}
-        if family_ids and sales_days_28:
-            ph = ",".join(["%s"] * len(family_ids))
-            cur.execute(
-                f"""SELECT *
-                    FROM quick_check_current
-                    WHERE family_id IN ({ph})
-                    ORDER BY family_id,upc_id""",
-                tuple(family_ids),
-            )
-            all_family_rows = [dict(x) for x in cur.fetchall()]
-            for row in all_family_rows:
-                if row.get("family_id") is None:
-                    continue
-                promo_family_rows.setdefault(int(row["family_id"]), []).append(row)
-            promo_daily = _batch_daily_sales_by_price_type(
-                cur,
-                all_family_rows,
-                sales_days_28,
-            )
-
         rows: list[dict[str, Any]] = []
-        for q in qualifying_qrows:
-            fid = int(q["family_id"])
-            ctx = family_ctx.get(fid, {})
-            sold = ctx.get("family_group_movement_7d")
-            if sold is None:
-                sold = q.get("family_movement_7d")
+        qualifying_ids: list[int] = []
+
+        for family in families:
+            fid = int(family["family_id"])
+            sold = family.get("family_movement_7d")
             sold_d = _d(sold) if sold is not None else Decimal("0")
             if sold_d <= 0:
                 continue
 
-            sold_uom = str(
-                ctx.get("family_group_movement_uom")
-                or q.get("family_movement_uom")
-                or ""
-            ).strip().upper()
-            receipt = ctx.get("family_receipt_7d_qty")
-            receipt_uom = str(
-                ctx.get("family_receipt_7d_uom") or sold_uom
-            ).strip().upper()
-            receipt_status = str(ctx.get("family_receipt_7d_status") or "")
-            if (
-                receipt is None
-                or not sold_uom
-                or receipt_uom != sold_uom
-                or not receipt_status.startswith("READY")
-            ):
+            sold_uom = str(family.get("family_movement_uom") or "").strip().upper()
+            if not sold_uom:
                 continue
 
-            receipt_d = _d(receipt)
-            difference = receipt_d - sold_d
-            ratio = receipt_d / sold_d if sold_d > 0 else None
+            events = [
+                x for x in receipt_events.get(fid, [])
+                if x.get("posting_date") is not None
+                and x.get("receipt_quantity") is not None
+                and _d(x.get("receipt_quantity")) > 0
+            ]
+
+            def receipt_value(event: dict[str, Any]) -> tuple[Any, str | None]:
+                base_uom = str(event.get("base_receipt_uom") or "").strip().upper()
+                entry_uom = str(event.get("receipt_uom") or "").strip().upper()
+                if (
+                    base_uom == sold_uom
+                    and event.get("base_receipt_quantity") is not None
+                ):
+                    return event.get("base_receipt_quantity"), base_uom
+                if (
+                    entry_uom == sold_uom
+                    and event.get("receipt_quantity") is not None
+                ):
+                    return event.get("receipt_quantity"), entry_uom
+                if event.get("base_receipt_quantity") is not None and base_uom:
+                    return event.get("base_receipt_quantity"), base_uom
+                return event.get("receipt_quantity"), entry_uom or None
+
+            events_7 = [
+                x for x in events
+                if x.get("posting_date") in completed_7_dates
+            ]
+            normalized = [receipt_value(x) for x in events_7]
+            uoms = {u for _, u in normalized if u}
+            missing_qty = any(q is None for q, _ in normalized)
+
+            if normalized and len(uoms) == 1 and not missing_qty:
+                receipt_qty = sum((_d(q) for q, _ in normalized), Decimal("0"))
+                receipt_uom = next(iter(uoms))
+                receipt_status = "READY"
+            elif not normalized:
+                receipt_qty = Decimal("0")
+                receipt_uom = sold_uom
+                receipt_status = "READY_ZERO_RECEIPTS"
+            else:
+                continue
+
+            # Stock Flow only compares like-for-like Family movement UOM.
+            if receipt_uom != sold_uom:
+                continue
+
+            ratio = receipt_qty / sold_d if sold_d > 0 else None
             if ratio is None or ratio < Decimal("1.50"):
                 continue
 
-            avg = ctx.get("family_group_avg_qty_day")
-            if avg is None and day_count:
-                avg = sold_d / Decimal(day_count)
-            recent_promotion = _recent_family_sale_event_from_batch(
-                promo_family_rows.get(fid, []),
-                promo_daily,
-                sales_days_28,
-                sold_uom,
-            )
+            history = []
+            for event in events[:2]:
+                qty, uom = receipt_value(event)
+                history.append({
+                    "date": event.get("posting_date"),
+                    "quantity": qty,
+                    "uom": uom,
+                    "receipt_date": event.get("posting_date"),
+                    "receipt_qty": qty,
+                    "receipt_uom": uom,
+                    "receipt_movement_type": event.get("movement_type"),
+                    "receipt_source": event.get("receipt_source"),
+                })
+
             delivery_pattern = _delivery_pattern(
-                delivery_event_map.get(fid, []),
+                events,
                 lookback_days=180,
             )
             observed_delivery_days = list(
                 delivery_pattern.get("observed_delivery_days") or []
             )
+
             rows.append({
                 "family_id": fid,
-                "family_article": q.get("main_article_number"),
-                "family_name": q.get("family_description"),
-                "category": q.get("product_class"),
+                "family_article": family.get("family_article"),
+                "family_name": family.get("family_name"),
+                "category": family.get("category"),
                 "family_group_movement_7d": sold_d,
-                "family_group_avg_qty_day": avg,
+                "family_group_avg_qty_day": (
+                    sold_d / Decimal(day_count)
+                    if day_count > 0 else None
+                ),
                 "family_group_movement_uom": sold_uom,
-                "family_receipt_history": ctx.get("family_receipt_history", []),
-                "family_receipt_7d_qty": receipt_d,
+                "family_receipt_history": history,
+                "family_receipt_7d_qty": receipt_qty,
                 "family_receipt_7d_uom": receipt_uom,
-                "family_receipt_7d_day_count": ctx.get("family_receipt_7d_day_count"),
+                "family_receipt_7d_day_count": len({
+                    x.get("posting_date") for x in events_7
+                    if x.get("posting_date") is not None
+                }),
                 "family_receipt_7d_status": receipt_status,
-                "receipt_minus_selling_7d": difference,
+                "receipt_minus_selling_7d": receipt_qty - sold_d,
                 "receipt_to_selling_ratio": ratio,
                 "receipt_over_selling_pct": (ratio - Decimal("1")) * Decimal("100"),
-                "recent_promotion_event": recent_promotion,
+                "recent_promotion_event": None,
                 "observed_delivery_days": observed_delivery_days,
                 "observed_delivery_weekday_numbers": [
                     int(x.get("weekday_number"))
@@ -4677,6 +4638,44 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 "delivery_pattern_lookback_days": delivery_pattern.get("lookback_days"),
                 "delivery_pattern_basis": delivery_pattern.get("basis"),
             })
+            qualifying_ids.append(fid)
+
+        # Promotion evidence is intentionally calculated only for the small set
+        # of Families already qualified for Stock Flow.
+        if rows and qualifying_ids:
+            sales_days_28 = source_data_days(
+                cur,
+                "sales_by_price_type",
+                limit=28,
+                up_to=completed_through_date(),
+            )
+            if sales_days_28:
+                ph = ",".join(["%s"] * len(qualifying_ids))
+                cur.execute(
+                    f"""SELECT *
+                        FROM quick_check_current
+                        WHERE family_id IN ({ph})
+                        ORDER BY family_id,upc_id""",
+                    tuple(qualifying_ids),
+                )
+                all_family_rows = [dict(x) for x in cur.fetchall()]
+                promo_family_rows: dict[int, list[dict[str, Any]]] = {}
+                for row in all_family_rows:
+                    if row.get("family_id") is not None:
+                        promo_family_rows.setdefault(int(row["family_id"]), []).append(row)
+                promo_daily = _batch_daily_sales_by_price_type(
+                    cur,
+                    all_family_rows,
+                    sales_days_28,
+                )
+                for row in rows:
+                    row["recent_promotion_event"] = _recent_family_sale_event_from_batch(
+                        promo_family_rows.get(int(row["family_id"]), []),
+                        promo_daily,
+                        sales_days_28,
+                        str(row.get("family_group_movement_uom") or ""),
+                    )
+
         cur.close()
 
     rows.sort(
@@ -4687,7 +4686,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS",
+        "contract_version": "YIPMAN_STOCK_FLOW_V6_FAST_SERVING_PATH",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4698,19 +4697,13 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "default_sort": "RECEIPT_MINUS_SELLING_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
+            "movement_source": "PUBLISHED_QUICK_CHECK_CURRENT_FAMILY_7D",
+            "receipt_source": "CANONICAL_PHYSICAL_101_109_EVENTS",
             "recent_promotion_window": "LATEST_28_COMPLETED_CANONICAL_POS_SALES_DAYS",
-            "promotion_scope": "ANY_RELATED_FAMILY_UPC",
+            "promotion_scope": "QUALIFIED_FAMILIES_ONLY",
             "promotion_definition": "PRICE_TYPE_SALE_ONLY",
             "tpr_is_promotion": False,
-            "promotion_quantity": "PROMOTION_WEEK_EXTRA_QTY_VS_NON_SALE_28D_DAILY_BASELINE",
-            "average_promotion_selling_price": "SALE_EVENT_SALES_DOLLARS_DIVIDED_BY_SALE_EVENT_QTY_IN_FAMILY_MOVEMENT_UOM",
-            "observed_delivery_days": "POSITIVE_CANONICAL_PHYSICAL_101_109_FAMILY_RECEIPT_DATES_LATEST_180_COMPLETED_MVT_DAYS",
-            "delivery_filter_groups": {
-                "TUE_WED": ["Tuesday", "Wednesday"],
-                "THU_FRI": ["Thursday", "Friday"],
-            },
-            "promotion_week": "LATEST_7_COMPLETED_POS_DAYS_ENDING_AT_PROMO_EVENT_END",
-            "nonpromotion_baseline": "NON_SALE_COMPLETED_DAYS_OUTSIDE_PROMOTION_WEEK_IN_28D_WINDOW",
+            "observed_delivery_days": "CANONICAL_PHYSICAL_RECEIPTS_LATEST_180_COMPLETED_MVT_DAYS",
         },
     }
 
