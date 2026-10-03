@@ -667,6 +667,11 @@ def web_upload_create_batch(body:BatchCreate,request:Request):
             if lock_acquired:
                 try:
                     cur.execute("SELECT RELEASE_LOCK(%s)",('fullmysql_web_upload_create',))
+                    # mysql.connector requires the SELECT result to be consumed.
+                    # Leaving it unread makes cur.close() raise "Unread result found",
+                    # which was masking an otherwise successful create-batch response
+                    # as a generic HTTP 500.
+                    cur.fetchone()
                 except Exception:
                     pass
             cur.close()
