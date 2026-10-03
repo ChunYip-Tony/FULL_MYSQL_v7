@@ -475,6 +475,18 @@ QC_COLUMNS = [
 
 DERIVED_QC_COLUMNS = ["negative_stock", "stock_status"]
 
+POS_3D_COLUMNS = [
+    "pos_3d_window_start",
+    "pos_3d_window_end",
+    "pos_3d_supported_days",
+    "sales_dollars_3d",
+    "pos_qty_3d",
+    "upc_velocity_3d",
+    "selling_days_3d",
+    "pos_3d_coverage_status",
+    "pos_3d_data_day_definition",
+]
+
 LATEST_DAILY_COLUMNS = [
     "latest_daily_business_date",
     "latest_daily_sales_dollars",
@@ -837,6 +849,156 @@ def _fetch_latest_daily_sales(
     }
 
 
+
+def _fetch_recent_3d_sales(
+    cur,
+    batch_id: int,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Attach strict latest-3 completed canonical POS metrics to every serving UPC.
+
+    Missing calendar dates are ignored rather than zero-filled. UPC sold quantity
+    remains POS-only. These fields are exported to the ChatGPT bridge so 3-day
+    TPR and recent-sales analysis never has to infer a 3D window from 7D totals.
+    """
+    coverage = coverage_summary(
+        cur,
+        "sales_by_price_type",
+        include_batch_id=int(batch_id),
+    )
+    target_date = coverage.get("latest_valid_date")
+    days = []
+    if target_date is not None:
+        days = sorted(
+            source_data_days(
+                cur,
+                "sales_by_price_type",
+                include_batch_id=int(batch_id),
+                up_to=target_date,
+            ),
+            key=lambda x: x["date"],
+        )[-3:]
+
+    start_date = min((x["date"] for x in days), default=None)
+    end_date = max((x["date"] for x in days), default=None)
+    supported_days = len(days)
+    coverage_status = "COMPLETE" if supported_days >= 3 else "PARTIAL"
+
+    by_upc_id = {
+        int(r["upc_id"]): r for r in rows if r.get("upc_id") is not None
+    }
+    by_ean = {
+        str(r.get("ean_upc") or "").strip(): r
+        for r in rows
+        if str(r.get("ean_upc") or "").strip()
+    }
+
+    aggregates: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        row["pos_3d_window_start"] = start_date
+        row["pos_3d_window_end"] = end_date
+        row["pos_3d_supported_days"] = supported_days
+        row["sales_dollars_3d"] = Decimal("0")
+        row["pos_qty_3d"] = Decimal("0")
+        row["upc_velocity_3d"] = Decimal("0") if supported_days else None
+        row["selling_days_3d"] = 0
+        row["pos_3d_coverage_status"] = coverage_status
+        row["pos_3d_data_day_definition"] = (
+            "LATEST_3_COMPLETED_CANONICAL_POS_DATA_DAYS"
+        )
+
+    for day in days:
+        file_id = int(day["file_id"])
+        business_date = day["date"]
+        coverage_kind = str(day.get("coverage_kind") or "")
+        if coverage_kind == "DERIVED_PERIOD_RESIDUAL":
+            cur.execute(
+                """SELECT b.ean_upc,MAX(b.upc_id) AS upc_id,
+                          COALESCE(SUM(b.sales_amount),0) AS sales_dollars,
+                          COALESCE(SUM(b.sold_quantity),0) AS pos_qty
+                   FROM pos_daily_backfill_observation b
+                   WHERE b.source_file_id=%s
+                     AND b.business_date=%s
+                     AND EXISTS (
+                         SELECT 1
+                         FROM upc_department_observation d
+                         WHERE d.file_id=b.source_file_id
+                           AND d.ean_upc=b.ean_upc
+                           AND d.source_type='POS'
+                           AND UPPER(TRIM(d.department_name))='SEAFOOD'
+                     )
+                   GROUP BY b.ean_upc""",
+                (file_id, business_date),
+            )
+        else:
+            cur.execute(
+                """SELECT s.ean_upc,MAX(s.upc_id) AS upc_id,
+                          COALESCE(SUM(s.sales_amount),0) AS sales_dollars,
+                          COALESCE(SUM(s.sold_quantity),0) AS pos_qty
+                   FROM sales_period_observation s
+                   WHERE s.file_id=%s
+                     AND s.period_start_date=%s
+                     AND s.period_end_date=%s
+                     AND s.temporal_grain='SINGLE_DATE'
+                     AND EXISTS (
+                         SELECT 1
+                         FROM upc_department_observation d
+                         WHERE d.file_id=s.file_id
+                           AND d.sheet_id=s.sheet_id
+                           AND d.source_row_number=s.source_row_number
+                           AND d.ean_upc=s.ean_upc
+                           AND d.source_type='POS'
+                           AND UPPER(TRIM(d.department_name))='SEAFOOD'
+                     )
+                   GROUP BY s.ean_upc""",
+                (file_id, business_date, business_date),
+            )
+
+        day_seen: set[int] = set()
+        for obs in cur.fetchall():
+            row = None
+            if obs.get("upc_id") is not None:
+                row = by_upc_id.get(int(obs["upc_id"]))
+            if row is None:
+                row = by_ean.get(str(obs.get("ean_upc") or "").strip())
+            if row is None or row.get("upc_id") is None:
+                continue
+            uid = int(row["upc_id"])
+            agg = aggregates.setdefault(
+                uid,
+                {"sales": Decimal("0"), "qty": Decimal("0"), "selling_days": 0},
+            )
+            sales = Decimal(str(obs.get("sales_dollars") or 0))
+            qty = Decimal(str(obs.get("pos_qty") or 0))
+            agg["sales"] += sales
+            agg["qty"] += qty
+            if qty != 0 and uid not in day_seen:
+                agg["selling_days"] += 1
+                day_seen.add(uid)
+
+    for row in rows:
+        uid = int(row["upc_id"]) if row.get("upc_id") is not None else None
+        agg = aggregates.get(uid) if uid is not None else None
+        if not agg:
+            continue
+        row["sales_dollars_3d"] = agg["sales"]
+        row["pos_qty_3d"] = agg["qty"]
+        row["selling_days_3d"] = agg["selling_days"]
+        row["upc_velocity_3d"] = (
+            agg["qty"] / Decimal(supported_days)
+            if supported_days
+            else None
+        )
+
+    return {
+        "window_start": start_date,
+        "window_end": end_date,
+        "supported_days": supported_days,
+        "coverage_status": coverage_status,
+        "data_day_definition": "LATEST_3_COMPLETED_CANONICAL_POS_DATA_DAYS",
+    }
+
+
 def _fetch_quick_rows(cur) -> list[dict[str, Any]]:
     cur.execute("SELECT " + ",".join(QC_COLUMNS) + " FROM quick_check_current ORDER BY ean_upc")
     rows = list(cur.fetchall())
@@ -865,7 +1027,7 @@ def _build_lookup(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def _build_quick(rows: list[dict[str, Any]]) -> list[list[Any]]:
-    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS + LATEST_DAILY_COLUMNS
+    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS + POS_3D_COLUMNS + LATEST_DAILY_COLUMNS
     return [["Sheet_Row"] + export_columns] + [
         [sheet_row] + [row.get(col) for col in export_columns]
         for sheet_row, row in enumerate(rows, start=2)
@@ -894,11 +1056,12 @@ def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
         row for row in rows
         if str(row.get("quick_check_status") or "").upper() == "READY"
     ]
-    out = [["Sheet_Row"] + ANALYSIS_COLUMNS + LATEST_DAILY_COLUMNS + ["Analysis_Source"]]
+    out = [["Sheet_Row"] + ANALYSIS_COLUMNS + POS_3D_COLUMNS + LATEST_DAILY_COLUMNS + ["Analysis_Source"]]
     for sheet_row, row in enumerate(ready, start=2):
         out.append(
             [sheet_row]
             + [row.get(col) for col in ANALYSIS_COLUMNS]
+            + [row.get(col) for col in POS_3D_COLUMNS]
             + [row.get(col) for col in LATEST_DAILY_COLUMNS]
             + ["FULL_MYSQL_PHASE3_READY_ONLY"]
         )
@@ -1066,6 +1229,7 @@ def _source_status(
     analysis_hold_rows: int,
     freshness: dict[str, Any],
     latest_daily: dict[str, Any],
+    recent_3d: dict[str, Any],
 ) -> list[list[Any]]:
     fields = [
         ("Snapshot_Status","MYSQL_PUBLISH_READY"),("MySQL_Batch_ID",batch.get("batch_id")),
@@ -1099,6 +1263,11 @@ def _source_status(
         ("Latest_Daily_Cost_Unresolved_Sales",latest_daily.get("cost_unresolved_sales")),
         ("Latest_Daily_Unmapped_Sales",latest_daily.get("unmapped_sales")),
         ("Latest_Daily_Sales_Row_Count",latest_daily.get("sales_row_count")),
+        ("POS_3D_Window_Start",recent_3d.get("window_start")),
+        ("POS_3D_Window_End",recent_3d.get("window_end")),
+        ("POS_3D_Supported_Days",recent_3d.get("supported_days")),
+        ("POS_3D_Coverage_Status",recent_3d.get("coverage_status")),
+        ("POS_3D_Data_Day_Definition",recent_3d.get("data_day_definition")),
         ("Snapshot_Published_At_UTC",datetime.now(timezone.utc).isoformat()),
         ("Publisher","FULL_MYSQL_CHATGPT_SHEET_BRIDGE"),("Active_ChatGPT_Source",_active_source()),
         ("Analysis_Cutover_Status","READY_ONLY_SAFE_PARTIAL"),
@@ -1232,6 +1401,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 rows = _fetch_quick_rows(cur)
                 freshness = _canonical_freshness(cur, batch_id)
                 latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
+                recent_3d = _fetch_recent_3d_sales(cur, batch_id, rows)
             finally:
                 cur.close()
 
@@ -1289,6 +1459,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 analysis_hold_rows=len(hold_rows),
                 freshness=freshness,
                 latest_daily=latest_daily,
+                recent_3d=recent_3d,
             ),
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
