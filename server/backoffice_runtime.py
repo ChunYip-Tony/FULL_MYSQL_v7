@@ -338,6 +338,58 @@ def _family_current_cost(cur, family_id: int) -> dict[str, Any]:
     }
 
 
+def _family_effective_oh_map(cur, family_ids: list[int] | set[int] | tuple[int, ...]) -> dict[int, dict[str, Any]]:
+    """Resolve current effective Family OH for multiple Families.
+
+    True Stock is authoritative whenever an active physical count exists.
+    Otherwise use the live Family OH roll-forward, with the last published
+    Family OH only as a clearly labelled fallback when the live position is
+    temporarily blocked.
+    """
+    ids=sorted({int(x) for x in family_ids if x is not None})
+    if not ids:
+        return {}
+    ph=",".join(["%s"]*len(ids))
+    cur.execute(
+        f"""SELECT * FROM quick_check_current
+            WHERE family_id IN ({ph})
+            ORDER BY family_id,ean_upc""",
+        tuple(ids),
+    )
+    children_by_family: dict[int,list[dict[str,Any]]]={}
+    for row in cur.fetchall():
+        if row.get("family_id") is None:
+            continue
+        children_by_family.setdefault(int(row["family_id"]),[]).append(row)
+
+    out: dict[int,dict[str,Any]]={}
+    for fid in ids:
+        children=children_by_family.get(fid,[])
+        if not children:
+            out[fid]={
+                "status":"UNAVAILABLE","quantity":None,"uom":None,
+                "source":None,"reason":"FAMILY_SERVING_ROWS_NOT_FOUND",
+            }
+            continue
+        live=_family_effective_oh(cur,children)
+        if live.get("status")=="READY" and live.get("quantity") is not None:
+            live["as_of_date"]=(
+                live.get("movement_through_date")
+                or live.get("anchor_date")
+                or live.get("true_stock_observed_at")
+            )
+            out[fid]=live
+            continue
+        published=_published_family_oh_fallback(children)
+        if published:
+            published["live_status"]=live.get("status")
+            published["live_reason"]=live.get("reason")
+            out[fid]=published
+        else:
+            out[fid]=live
+    return out
+
+
 def _published_family_oh_fallback(children: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Return the last published family OH only when child snapshots agree.
 
@@ -4846,6 +4898,21 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 row["latest_receipt_cost_uom"] = cost_row.get("cost_uom")
                 row["latest_receipt_cost_source"] = cost_row.get("source_type")
 
+        effective_by_family=_family_effective_oh_map(
+            cur,
+            [int(row["family_id"]) for row in rows if row.get("family_id") is not None],
+        )
+        for row in rows:
+            eff=effective_by_family.get(int(row["family_id"]),{})
+            row["family_oh"]=eff.get("quantity")
+            row["family_oh_uom"]=eff.get("uom")
+            row["family_oh_source"]=eff.get("source")
+            row["family_oh_status"]=eff.get("status")
+            row["family_oh_as_of"]=eff.get("as_of_date")
+            row["family_oh_live_status"]=eff.get("live_status")
+            row["family_oh_reason"]=eff.get("live_reason") or eff.get("reason")
+            row["family_oh_is_true_stock"]=str(eff.get("source") or "").upper().startswith("FAMILY_TRUE_STOCK")
+
         cur.close()
 
     rows.sort(
@@ -4856,7 +4923,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST",
+        "contract_version": "YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4867,6 +4934,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "default_sort": "RECEIPT_OVER_SELLING_PCT_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "latest_receipt_cost": "MOVEMENT_RECEIPT_VALUATION_ON_LATEST_PHYSICAL_RECEIPT_DATE",
+            "effective_oh": "LIVE_FAMILY_EFFECTIVE_OH_TRUE_STOCK_AUTHORITY_WITH_PUBLISHED_FALLBACK",
             "friday_warning": "FRIDAY_DOMINANT_AT_LEAST_2_DATES_AND_AT_LEAST_50_PERCENT_SHARE",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
             "movement_source": "PUBLISHED_QUICK_CHECK_CURRENT_FAMILY_7D",
@@ -7241,6 +7309,14 @@ def current_tpr_review(
             cur, tpr_rows, live_prices
         )
         daily = _batch_daily_sales_by_price_type(cur, tpr_rows, data_days)
+        tpr_family_oh_by_id=_family_effective_oh_map(
+            cur,
+            {
+                int(row["family_id"])
+                for row in tpr_rows
+                if row.get("family_id") is not None
+            },
+        )
 
         _ensure_tpr_purpose_table(cur)
         conn.commit()
@@ -7265,10 +7341,24 @@ def current_tpr_review(
         pclass = str(row.get("product_class") or "").upper()
         current_price = _positive_price(row.get("current_price"))
         current_cost = _positive_price(row.get("current_cost_per_selling_unit"))
+        family_id = int(row["family_id"]) if row.get("family_id") is not None else None
+        family_oh = tpr_family_oh_by_id.get(family_id or -1,{})
         current_oh = (
-            _d(row.get("current_oh"))
-            if row.get("current_oh") is not None
-            else None
+            _d(family_oh.get("quantity"))
+            if family_oh.get("quantity") is not None
+            else (
+                _d(row.get("current_oh"))
+                if row.get("current_oh") is not None
+                else None
+            )
+        )
+        current_oh_uom = (
+            family_oh.get("uom")
+            or row.get("current_oh_uom")
+        )
+        current_oh_source = (
+            family_oh.get("source")
+            or "QUICK_CHECK_CURRENT_PUBLISHED"
         )
         doh = _d(row.get("doh")) if row.get("doh") is not None else None
         dos = _d(row.get("dos")) if row.get("dos") is not None else None
@@ -7840,7 +7930,11 @@ def current_tpr_review(
             "cost_date": row.get("cost_date"),
             "current_gp_pct": current_gp_pct,
             "current_oh": current_oh,
-            "current_oh_uom": row.get("current_oh_uom"),
+            "current_oh_uom": current_oh_uom,
+            "current_oh_source": current_oh_source,
+            "current_oh_status": family_oh.get("status"),
+            "current_oh_as_of": family_oh.get("as_of_date"),
+            "current_oh_is_true_stock": str(current_oh_source or "").upper().startswith("FAMILY_TRUE_STOCK"),
             "dos": dos,
             "doh": doh,
             "qty_7d": row.get("pos_qty_7d"),
