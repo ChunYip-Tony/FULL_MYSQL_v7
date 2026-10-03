@@ -423,6 +423,15 @@ DESKTOP_WORKSTATION_JS = r"""
     var drawer=q('.drawer.on');if(!drawer)return;
     var current=q('.view.on'),id=current?current.id:'';
     var view=moduleName(id),target=side(view);if(!target)return;
+
+    // A live batch monitor is time-sensitive and must never be frozen into the
+    // persistent workstation panel. The drawer itself now polls every 3s.
+    // Keep the right-side Data Diagnostics panel current instead.
+    if(view==='database'&&drawer.dataset.liveBatchId){
+      setTimeout(dataAnalysis,0);
+      return;
+    }
+
     var title=q('#drawerTitle')?q('#drawerTitle').textContent:'Detail',sub=q('#drawerSub')?q('#drawerSub').textContent:'';
     var body=q('#drawerBody')?q('#drawerBody').cloneNode(true):null;
     if(!body)return;
@@ -432,6 +441,9 @@ DESKTOP_WORKSTATION_JS = r"""
   document.addEventListener('fullmysql:stockflow-family',function(e){
     var family=e&&e.detail?e.detail.family:null;
     if(family)setTimeout(function(){stockFlowFamilyAnalysis(family)},0);
+  });
+  document.addEventListener('fullmysql:active-batch-finished',function(){
+    if(document.body.dataset.desktopView==='database')setTimeout(dataAnalysis,80);
   });
   function observe(){
     var drawer=q('.drawer');if(drawer)new MutationObserver(function(){if(drawer.classList.contains('on'))setTimeout(copyDrawerToWorkspace,30)}).observe(drawer,{attributes:true,attributeFilter:['class']});
