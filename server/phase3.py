@@ -2659,6 +2659,8 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
             "type":config["price_type"],
             "source":"PRICE_LIST",
             "date":price_date,
+            "source_since_date":config.get("source_since_date"),
+            "price_list_file_id":config.get("file_id"),
             "match_mode":config.get("match_mode"),
         }
     if pos is not None:
@@ -2667,6 +2669,8 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
             "type":pos["type"],
             "source":"POS_CALCULATED",
             "date":pos["date"],
+            "source_since_date":None,
+            "price_list_file_id":None,
             "match_mode":pos.get("match_mode"),
         }
     if config is not None:
@@ -2675,6 +2679,8 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
             "type":config["price_type"],
             "source":"PRICE_LIST",
             "date":price_date,
+            "source_since_date":config.get("source_since_date"),
+            "price_list_file_id":config.get("file_id"),
             "match_mode":config.get("match_mode"),
         }
     return None

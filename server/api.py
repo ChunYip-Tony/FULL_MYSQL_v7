@@ -38,6 +38,7 @@ from backoffice_runtime import (
     cached_pricing_review as backoffice_cached_pricing_review,
     current_tpr_review as backoffice_current_tpr_review,
     cached_current_tpr_review as backoffice_cached_current_tpr_review,
+    set_current_tpr_purpose as backoffice_set_current_tpr_purpose,
     quick_price_preview as backoffice_quick_price_preview,
     sales_lineage_audit as backoffice_sales_lineage_audit,
     accept_price_suggestion as backoffice_accept_price_suggestion,
@@ -60,6 +61,12 @@ from promotion_ordering import (
     get_promotion_list as get_yipman_promotion_list,
     calculate_promotion_order as calculate_yipman_promotion_order,
     parse_promotion_upload as parse_yipman_promotion_upload,
+)
+from clearance import (
+    save_clearance_plan as save_yipman_clearance_plan,
+    list_clearance_plans as list_yipman_clearance_plans,
+    get_clearance_plan as get_yipman_clearance_plan,
+    close_clearance_plan as close_yipman_clearance_plan,
 )
 from version import VERSION
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
@@ -3822,6 +3829,27 @@ class BackofficePriceAcceptRequest(BaseModel):
     candidate_price: Decimal
 
 
+class YipmanTprPurposeRequest(BaseModel):
+    tpr_start_date: date
+    purpose: str
+    note: str | None = None
+
+
+class YipmanClearancePlanRequest(BaseModel):
+    clearance_plan_id: int | None = None
+    upc: str
+    expiry_date: date
+    expiring_quantity: Decimal
+    uom: str
+    true_stock: Decimal | None = None
+    true_stock_uom: str | None = None
+    note: str | None = None
+
+
+class YipmanClearanceCloseRequest(BaseModel):
+    status: str = 'CLOSED'
+
+
 class YipmanPromotionListRequest(BaseModel):
     list_name: str
     items: list[dict[str,Any]]
@@ -4370,6 +4398,118 @@ def yipman_current_tpr_review(category:str='ALL',limit:int=1000,force:bool=False
         raise HTTPException(400,str(exc))
     except Exception as exc:
         raise HTTPException(500,f'Yipman current TPR review failed: {exc}')
+
+
+@app.get('/v1/yipman/clearance')
+def yipman_clearance_list(status:str='ACTIVE',limit:int=100):
+    try:
+        result=list_yipman_clearance_plans(status=status,limit=limit)
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman clearance list failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.get('/v1/yipman/clearance/{clearance_plan_id}')
+def yipman_clearance_detail(clearance_plan_id:int):
+    try:
+        result=get_yipman_clearance_plan(clearance_plan_id)
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'CLEARANCE_PLAN_NOT_FOUND'})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman clearance detail failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/clearance')
+def yipman_clearance_save(
+    body:YipmanClearancePlanRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    true_stock_result=None
+    try:
+        if body.true_stock is not None:
+            true_uom=str(body.true_stock_uom or body.uom or '').strip().upper()
+            true_stock_result=submit_true_stock(
+                body.upc,
+                body.true_stock,
+                true_uom,
+                actor,
+                note='CLEARANCE PLAN TRUE STOCK',
+            )
+        result=save_yipman_clearance_plan(
+            ean_upc=body.upc,
+            expiry_date=body.expiry_date,
+            expiring_quantity=body.expiring_quantity,
+            uom=body.uom,
+            actor=actor,
+            note=body.note,
+            clearance_plan_id=body.clearance_plan_id,
+        )
+        result['true_stock_commit']=true_stock_result
+    except KeyError as exc:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':str(exc).strip("'")})
+    except ValueError as exc:
+        code=str(exc)
+        if code.startswith('CLEARANCE_UOM_MISMATCH:') or code.startswith('TRUE_STOCK_UOM_MISMATCH:'):
+            required=code.split(':',1)[1]
+            raise HTTPException(422,detail={'status':'INVALID','reason':code.split(':',1)[0],'required_uom':required})
+        if code in {
+            'SYSTEM_OH_NOT_AVAILABLE','SYSTEM_OH_LINEAGE_NOT_AVAILABLE',
+            'SYSTEM_OH_SCOPE_UNRESOLVED','SYSTEM_OH_ROLLFORWARD_BLOCKED',
+            'FAMILY_ID_NOT_AVAILABLE',
+        }:
+            raise HTTPException(409,detail={'status':'BLOCKED','reason':code})
+        raise HTTPException(422,detail={'status':'INVALID','reason':code})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman clearance save failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/clearance/{clearance_plan_id}/close')
+def yipman_clearance_close(
+    clearance_plan_id:int,
+    body:YipmanClearanceCloseRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=close_yipman_clearance_plan(
+            clearance_plan_id,
+            actor=actor,
+            status=body.status,
+        )
+    except KeyError:
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':'CLEARANCE_PLAN_NOT_FOUND'})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman clearance close failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/yipman/current-tpr-review/{upc}/purpose')
+def yipman_set_current_tpr_purpose(
+    upc: str,
+    body: YipmanTprPurposeRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor=public_app_actor(authorization)
+    try:
+        result=backoffice_set_current_tpr_purpose(
+            ean_upc=upc,
+            tpr_start_date=body.tpr_start_date,
+            purpose=body.purpose,
+            actor=actor,
+            note=body.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman TPR purpose save failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.post('/v1/yipman/pricing-review/{upc}/accept')
