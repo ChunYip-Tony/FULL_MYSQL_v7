@@ -484,8 +484,8 @@ jobs:
           src=inspect.getsource(bo.quick_price_preview)
           assert 'cached_pricing_review(' in src
           assert 'BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT' in src
-          assert 'SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
-          assert 'SAME_CANONICAL_TESTING_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'tested_price":"SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'tpr_suggestion_price":"SAME_CANONICAL_CONTROLLED_PRICE_OR_FRESHNESS_TEST_STEP_AS_PRICE_SUGGESTIONS;NO_INDEPENDENT_QUICK_CHECK_RECALCULATION' in src
           assert '_quick_price_preview_by_upc(' not in src
           assert 'YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW' in src
 
