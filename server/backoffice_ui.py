@@ -4942,7 +4942,7 @@ function mobileFreshnessDetail(key){
     const x=(r.sources||{})[k]||{},st=mobileDataHealthStatus(x);
     html+=mobileMetric(names[k],st.text,(x.file||'No source')+(x.batch_id?' · Batch #'+x.batch_id:''));
   });
-  html+='</div><div class="m-detailsection"><h3>Coverage rule</h3><p>POS and MVT are daily-required through the latest completed business day. Price, OH, Live/Fresh and Frozen are snapshot sources; “—” means no new snapshot was ingested on that date.</p></div></div>';
+  html+='</div><div class="m-detailsection"><h3>Coverage rule</h3><p>POS and MVT become required only after the store-local daily grace cutoff. Today is the only CURRENT_DAY. A prior day still inside grace is PENDING / NOT DUE, not missing. Price, OH, Live/Fresh and Frozen are snapshot sources; “—” means no new snapshot was ingested on that date and is not itself a daily-file miss.</p></div></div>';
   mobileShowDetail(r.date||'Data Health',(r.weekday||'')+' · '+(r.overall_status||''),html);
 }
 
@@ -6754,17 +6754,22 @@ async function loadData(){
       if(s==='NOT_DUE')return '<span class="pill blue">NOT DUE</span>';
       return '<span class="pill blue">—</span>';
     };
-    const overallTag=s=>{
-      const v=String(s||'').toUpperCase();
+    const overallTag=r=>{
+      const v=String(r?.overall_status||'').toUpperCase();
       if(v==='COMPLETE')return '<span class="pill green">COMPLETE</span>';
-      if(v==='MISSING')return '<span class="pill red">MISSING</span>';
-      return '<span class="pill blue">CURRENT DAY</span>';
+      if(v==='MISSING'){
+        const miss=(r?.missing_required||[]).join(' + ');
+        return '<span class="pill red">MISSING'+(miss?' · '+esc(miss):'')+'</span>';
+      }
+      if(v==='CURRENT_DAY')return '<span class="pill blue">CURRENT DAY</span>';
+      if(v==='PENDING')return '<span class="pill amber">PENDING · NOT DUE YET</span>';
+      return '<span class="pill amber">'+esc(v||'PENDING')+'</span>';
     };
     $('#dataHealthRows').innerHTML=(d.rows||[]).map(r=>{
       const s=r.sources||{};
       return '<tr class="data-health-row" data-date="'+esc(r.date)+'">'+
         '<td><b>'+esc(r.date)+'</b><div class="meta">'+esc(r.weekday||'')+'</div></td>'+
-        '<td>'+overallTag(r.overall_status)+'</td>'+
+        '<td>'+overallTag(r)+'</td>'+
         '<td>'+stateTag(s.POS)+'</td>'+
         '<td>'+stateTag(s.MVT)+'</td>'+
         '<td>'+stateTag(s.PRICE)+'</td>'+
@@ -6786,12 +6791,22 @@ function openDataHealthDetail(dateKey){
   const names={POS:'POS',MVT:'MVT',PRICE:'Price List',OH:'OH',LIVE_FRESH:'Live / Fresh',FROZEN:'Frozen'};
   const blocks=Object.keys(names).map(k=>{
     const x=(r.sources||{})[k]||{};
-    const requirement=(k==='POS'||k==='MVT')?'Daily required':'Snapshot source';
+    const daily=(k==='POS'||k==='MVT');
+    const requirement=daily
+      ? (x.status==='MISSING'?'Daily required · actually missing now':x.status==='NOT_DUE'?'Daily required · not due yet':'Daily required')
+      : 'Snapshot source · absence that date is informational';
     return '<div class="reason"><span class="rdot"></span><div><b>'+esc(names[k])+' · '+esc(x.status||'NONE')+'</b><span>'+
       esc(requirement)+' · '+esc(x.file||'No source')+(x.batch_id?' · Batch #'+esc(x.batch_id):'')+
     '</span></div></div>';
   }).join('');
-  openDrawer('Data Health · '+r.date,(r.weekday||'')+' · '+(r.overall_status||''),'<div class="reasonlist">'+blocks+'</div>','<span class="pill blue">READ ONLY</span>');
+  const missing=(r.missing_required||[]);
+  const pending=(r.not_due_required||[]);
+  const summary=missing.length
+    ? '<div class="error" style="margin:0 0 10px"><b>Actually missing now:</b> '+esc(missing.join(' + '))+'</div>'
+    : pending.length
+      ? '<div class="calc" style="margin:0 0 10px"><b>Not due yet:</b> '+esc(pending.join(' + '))+' · becomes missing only after the configured daily grace cutoff if still absent.</div>'
+      : '<div class="calc" style="margin:0 0 10px"><b>No required POS / MVT file is missing for this date.</b></div>';
+  openDrawer('Data Health · '+r.date,(r.weekday||'')+' · '+(r.overall_status||''),summary+'<div class="reasonlist">'+blocks+'</div>','<span class="pill blue">READ ONLY</span>');
 }
 $('#refreshData').onclick=loadData;
 $('#dbRefreshAll').onclick=()=>{loadDatabaseOverview();loadBatches();};
