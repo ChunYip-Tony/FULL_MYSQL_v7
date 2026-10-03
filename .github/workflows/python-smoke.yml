@@ -123,6 +123,15 @@ jobs:
           assert 'HISTORICAL DELIVERY ARTICLE(S)' in order_src_ui
           assert 'observed_day_count??h.receipt_event_count' in order_src_ui
           assert 'data-order-oh' in order_src_ui
+          assert "let orderSort='QTY'" in order_src_ui
+          assert 'if(!raw){input.value=input.dataset.original' in order_src_ui
+          assert 'current_oh_system' in order_src_ui
+          assert 'data-promo-true-stock' in order_src_ui
+          assert 'MANUAL_SEARCH_ENTRY' in order_src_ui
+          assert '/v1/app/v2/search?q=' in order_src_ui
+          assert 'manualPromoSearchResults' in order_src_ui
+          assert 'promo-card.tone0' in order_src_ui
+          assert 'weekday_number is not None' in hist_src
 
           # Delivery-date Ordering must retain observed families, including
           # sufficient-stock rows, and may relax ONLY a missing-MVT-day gap.
@@ -240,7 +249,7 @@ jobs:
           assert 'limit=28' in src
           assert '"sales_by_price_type"' in src
           assert 'WHERE family_id IN ({ph})' in src
-          assert '"recent_promotion_event": recent_promotion' in src
+          assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'ANY_RELATED_FAMILY_UPC' in src
           assert 'YIPMAN_STOCK_FLOW_V5_OBSERVED_DELIVERY_FILTERS' in src
@@ -267,7 +276,7 @@ jobs:
           assert '.quicksearch{border-width:2.4px}' in ui
           assert "orderitemcard tone'+(i%5)" in ui
           assert "pcard tone'+(i%5)" in ui
-          assert 'RELATED RECEIVING ARTICLES FOR THIS ITEM' in ui
+          assert 'HISTORICAL DELIVERY ARTICLE(S)' in ui
           assert 'h.article_name' in ui
           assert '.stockflowgrid{display:grid;grid-template-columns:' in ui
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
