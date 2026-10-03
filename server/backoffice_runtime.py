@@ -19,6 +19,7 @@ from manual_overrides import USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930
 from phase3 import (
     PRICE_TYPE_PRIORITY,
     _current_price as _live_current_price,
+    _latest_cost as _family_current_cost,
     _price_list_upload_business_date,
 )
 from receipt_semantics import physical_receipt_stage_rows
@@ -29,6 +30,7 @@ from webapp_v2_runtime import (
     _delivery_pattern,
     _delivery_day_evidence,
     _family_effective_oh,
+    _overlay_active_true_stock_effective_oh,
     _family_system_oh,
     _family_receipt_events,
     _family_receipt_events_bulk,
@@ -4787,6 +4789,30 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 row["latest_receipt_cost_uom"] = cost_row.get("cost_uom")
                 row["latest_receipt_cost_source"] = cost_row.get("source_type")
 
+        # Stock Flow also shows live Effective OH. A Family True Stock count is
+        # therefore visible here immediately instead of waiting for Phase 3.
+        if rows:
+            sf_ids=sorted({int(x["family_id"]) for x in rows if x.get("family_id") is not None})
+            sf_ph=",".join(["%s"]*len(sf_ids))
+            cur.execute(
+                f"""SELECT * FROM quick_check_current
+                    WHERE family_id IN ({sf_ph})
+                    ORDER BY family_id,ean_upc""",
+                tuple(sf_ids),
+            )
+            sf_children: dict[int,list[dict[str,Any]]]={}
+            for child in cur.fetchall():
+                if child.get("family_id") is not None:
+                    sf_children.setdefault(int(child["family_id"]),[]).append(child)
+            for row in rows:
+                fid=int(row["family_id"])
+                effective=_family_effective_oh(cur,sf_children.get(fid,[]))
+                row["family_oh"]=effective.get("quantity")
+                row["family_oh_uom"]=effective.get("uom")
+                row["family_oh_source"]=effective.get("source")
+                row["family_oh_status"]=effective.get("status")
+                row["family_oh_reason"]=effective.get("reason")
+
         cur.close()
 
     rows.sort(
@@ -5235,6 +5261,7 @@ def inventory_review(
 
         family_cache: dict[int, dict[str, Any]] = {}
         family_system_cache: dict[int, dict[str, Any]] = {}
+        family_cost_cache: dict[int, dict[str, Any] | None] = {}
         # Lightweight search stays fast by default. Yipman can explicitly request
         # one set-based CURRENT-price + SUGGEST preview pass for the returned
         # rows without enabling family OH roll-forward.
@@ -5279,6 +5306,13 @@ def inventory_review(
                 row["gp_pct_current"] = None
 
             fid = int(row["family_id"]) if row.get("family_id") is not None else None
+
+            # Family/Main Article cost is a separate authority from the UPC
+            # converted selling-unit cost. Resolve it once per Family for Quick
+            # Search so the Family header can show the actual current Family cost.
+            if q and fid is not None and fid not in family_cost_cache:
+                family_cost_cache[fid]=_family_current_cost(cur,fid)
+            family_cost=family_cost_cache.get(fid) if fid is not None else None
 
             # Normal lightweight Quick Check search skips OH roll-forward for speed.
             # PI can explicitly request include_oh=True so System OH and Effective OH
@@ -5457,6 +5491,10 @@ def inventory_review(
                     "cost_uom": row.get("selling_uom"),
                     "cost_source": row.get("cost_source"),
                     "cost_date": row.get("cost_date"),
+                    "family_cost": family_cost.get("cost_per_base") if family_cost else None,
+                    "family_cost_uom": family_cost.get("base_uom") if family_cost else None,
+                    "family_cost_source": family_cost.get("source") if family_cost else None,
+                    "family_cost_date": family_cost.get("date") if family_cost else None,
                     "gp_pct": row.get("gp_pct_current"),
                     "qty_7d": row.get("pos_qty_7d"),
                     "velocity_7d": row.get("upc_velocity_7d"),
@@ -6164,6 +6202,7 @@ def pricing_review(
                 str(r.get("ean_upc") or ""): r
                 for r in cur.fetchall()
             }
+            _overlay_active_true_stock_effective_oh(cur,list(live_by_upc.values()))
             latest_acceptance_by_upc=_latest_price_acceptances(cur,upcs)
 
             family_ids=sorted({
@@ -6224,7 +6263,10 @@ def pricing_review(
         row["cost_basis"] = "CURRENT_AUTHORITATIVE_COST"
         row["current_oh"] = live.get("current_oh")
         row["current_oh_uom"] = live.get("current_oh_uom")
+        row["current_oh_source"] = live.get("current_oh_source") or live.get("live_effective_oh_source") or "QUICK_CHECK_CURRENT"
+        row["current_oh_basis"] = live.get("current_oh_basis") or "PUBLISHED_QUICK_CHECK_CURRENT"
         row["doh"] = live.get("doh")
+        row["dos"] = live.get("dos")
 
         row["current_gp_pct_reference"] = live.get("gp_pct_current")
         row["current_gp_per_day_7d"] = live.get("gp_per_day_7d")
@@ -7107,6 +7149,7 @@ def current_tpr_review(
 
         cur.execute("SELECT * FROM quick_check_current")
         all_rows = [dict(x) for x in cur.fetchall()]
+        _overlay_active_true_stock_effective_oh(cur,all_rows)
         live_prices = _bulk_live_current_prices(cur, all_rows)
 
         for row in all_rows:
