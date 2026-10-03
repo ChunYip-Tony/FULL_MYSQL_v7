@@ -171,55 +171,9 @@ def find_active_batch() -> dict[str,Any]|None:
             if isinstance(v,(date,datetime)): row[k]=_wire_value(v)
     return row
 
-def _find_upload_blocker_fast() -> dict[str,Any]|None:
-    """Minimal active-work check used only when creating a new browser upload.
-
-    Do not call the full find_active_batch() here: that function intentionally
-    enriches the response with QA counts, active files and Phase 3 progress,
-    which is useful for dashboards but unnecessary on the create-batch POST.
-    """
-    with db_conn() as conn:
-        cur=conn.cursor(dictionary=True)
-        try:
-            cur.execute(
-                """SELECT batch_id,batch_key,batch_label,processing_status,
-                          upload_started_at,completed_at
-                   FROM ingest_batch
-                   WHERE processing_status IN (
-                     'API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED',
-                     'RELEASED','PHASE2C_READY'
-                   )
-                   ORDER BY batch_id DESC
-                   LIMIT 1"""
-            )
-            row=cur.fetchone()
-            if row:
-                return row
-            cur.execute(
-                """SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
-                          ib.upload_started_at,ib.completed_at,
-                          pr.pipeline_run_id AS active_pipeline_run_id,
-                          pr.stage_name AS active_stage_name,
-                          pr.processing_status AS active_run_status
-                   FROM pipeline_run pr
-                   JOIN ingest_batch ib ON ib.batch_id=pr.batch_id
-                   WHERE pr.pipeline_name=%s
-                     AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
-                     AND pr.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
-                   ORDER BY pr.pipeline_run_id DESC
-                   LIMIT 1""",
-                (API_PIPELINE,),
-            )
-            return cur.fetchone()
-        finally:
-            cur.close()
-
 def begin_batch(device_id: str, label: str|None=None) -> dict[str,Any]:
-    active=_find_upload_blocker_fast()
+    active=find_active_batch()
     if active:
-        for k,v in list(active.items()):
-            if isinstance(v,(date,datetime)):
-                active[k]=_wire_value(v)
         return {'created':False,'active':active}
     batch_key=str(uuid.uuid4())
     with db_conn() as conn:
