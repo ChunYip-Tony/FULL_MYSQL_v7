@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v437'" in ui
+          assert "const CACHE='yipman-v438'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -274,7 +274,7 @@ jobs:
           assert '"friday_delivery_warning": friday_delivery_warning' in src
           assert '"latest_receipt_cost"' in src
           assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
-          assert "const CACHE='yipman-v437'" in ui
+          assert "const CACHE='yipman-v438'" in ui
           print('stock-flow-v437=PASS')
           PY
 
@@ -484,8 +484,8 @@ jobs:
           src=inspect.getsource(bo.quick_price_preview)
           assert 'cached_pricing_review(' in src
           assert 'BACKOFFICE_PRICING_REVIEW_CANONICAL_SNAPSHOT' in src
-          assert 'SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
-          assert 'SAME_CANONICAL_TESTING_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'tested_price":"SAME_CANONICAL_TESTED_PRICE_AS_PRICE_SUGGESTIONS' in src
+          assert 'tpr_suggestion_price":"SAME_CANONICAL_CONTROLLED_PRICE_OR_FRESHNESS_TEST_STEP_AS_PRICE_SUGGESTIONS;NO_INDEPENDENT_QUICK_CHECK_RECALCULATION' in src
           assert '_quick_price_preview_by_upc(' not in src
           assert 'YIPMAN_QUICK_PRICE_PREVIEW_V2_CANONICAL_PRICE_REVIEW' in src
 
@@ -696,8 +696,8 @@ jobs:
           assert 'MVT_PHYSICAL_101_109_FAMILY_DAILY_AGGREGATE' in quick_receipt_src
           assert '"family_receipt_history": family_receipt_history' in quick_receipt_src
           stock_src=inspect.getsource(backoffice_runtime.yipman_best_sellers)
-          assert 'ratio < Decimal("1.50")' in stock_src
-          assert '"receipt_minus_selling_7d": difference' in stock_src
+          assert 'ratio is None or ratio < Decimal("1.50")' in stock_src
+          assert '"receipt_minus_selling_7d": receipt_qty - sold_d' in stock_src
           cal_src=inspect.getsource(backoffice_runtime.yipman_ordering_calendar)
           assert 'default_next=default_delivery+timedelta(days=7)' in cal_src
           assert 'strongest_weekday' in cal_src
@@ -913,6 +913,8 @@ jobs:
           assert "/v1/yipman/ordering-calendar?lookback_days=180" in text
           assert "orderNextDate=plusDaysIso(orderDate,7)" in text
           assert "/v1/yipman/stock-flow?limit=100" in text
+          assert "$$('[data-stock-category]').forEach" in text
+          assert "$$('[data-stock-receipts]').forEach" in text
           assert "Stock Flow Watch" in text
           assert "DIFFERENCE ↓" in text
           assert "/v1/app/v2/performance/range?" in text
