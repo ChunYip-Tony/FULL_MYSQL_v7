@@ -680,7 +680,8 @@ jobs:
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           assert 'WEEKLY · THU → THU' in ui
           assert 'WEEKEND · FRI → SUN' in ui
-          assert 'TEMP TRUE STOCK' in ui
+          assert 'TEMP ORDER OH' in ui
+          assert 'Use the CURRENT EFFECTIVE OH value on the item card to enter a real physical True Stock count.' in ui
           assert 'temporary OH values are NOT saved' in ui
           assert "data-order-mode=\"PROMOTION\"" in ui
           assert 'id="promoManualBtn"' in ui
