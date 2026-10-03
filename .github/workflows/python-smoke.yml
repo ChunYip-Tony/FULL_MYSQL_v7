@@ -1376,6 +1376,8 @@ jobs:
           assert 'SET adjustment_list_cleared_at=CURRENT_TIMESTAMP(6)' in clear_src
           assert 'true_stock_baselines_unchanged' in clear_src
           assert 'effective_oh_unchanged' in clear_src
+          assert "queue_status='RESOLVED'" in clear_src
+          assert 'dumping_rows_resolved' in clear_src
           assert 'DELETE FROM manual_true_stock' not in clear_src
           assert "override_status='CANCEL" not in clear_src
           assert "/v1/backoffice/true-stock-adjustments" in api_src
@@ -1383,6 +1385,7 @@ jobs:
           assert 'Inventory / True Stock' in desktop
           assert 'True Stock Adjustment Worklist' in desktop
           assert 'Clear List After Dumping' in desktop
+          assert 'Pending Dumping tasks for these records will be marked resolved' in desktop
           assert 'This does NOT delete or cancel True Stock' in desktop
           print('true-stock-adjustment-worklist-v435=PASS')
           PY
