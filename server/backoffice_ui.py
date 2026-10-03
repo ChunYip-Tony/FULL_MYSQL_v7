@@ -3246,9 +3246,19 @@ async function api(url,opts={}){
   let ctl=null,timer=null;
   if(timeoutMs>0&&!o.signal){ctl=new AbortController();o.signal=ctl.signal;timer=setTimeout(()=>ctl.abort(),timeoutMs)}
   try{
-    const r=await fetch(url,{cache:'no-store',...o});let data=null;
-    try{data=await r.json()}catch{data={detail:await r.text()}}
-    if(!r.ok){const d=data?.detail;throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))}
+    const r=await fetch(url,{cache:'no-store',...o});
+    const raw=await r.text();
+    let data=null;
+    if(raw){
+      try{data=JSON.parse(raw)}
+      catch{data={detail:raw}}
+    }else{
+      data={};
+    }
+    if(!r.ok){
+      const d=data?.detail;
+      throw new Error(typeof d==='string'?d:(d?.message||d?.reason||JSON.stringify(d)||`HTTP ${r.status}`))
+    }
     return data
   }catch(e){
     if(e?.name==='AbortError'){
