@@ -2398,6 +2398,44 @@ BACKOFFICE_HTML = r'''<!doctype html>
   #database .sectiontitle{font-size:11px;font-weight:950;color:#25435f}
   #dataGrid .kpi{border-top:3px solid #15999c}
   #dbqa .tablewrap{max-height:calc(100vh - 330px)}
+  #dbqa .qa-tablewrap{overflow-x:hidden}
+  #dbqa .qa-table{
+    width:100%;
+    min-width:0!important;
+    table-layout:fixed;
+  }
+  #dbqa .qa-table th:nth-child(1){width:34%}
+  #dbqa .qa-table th:nth-child(2){width:24%}
+  #dbqa .qa-table th:nth-child(3){width:14%}
+  #dbqa .qa-table th:nth-child(4){width:17%}
+  #dbqa .qa-table th:nth-child(5){width:11%}
+  #dbqa .qa-table th,#dbqa .qa-table td{
+    min-width:0;
+    white-space:normal;
+    overflow-wrap:anywhere;
+    word-break:normal;
+  }
+  #dbqa .qa-issue-head{display:flex;align-items:center;gap:7px;min-width:0}
+  #dbqa .qa-issue-head .name{min-width:0;overflow-wrap:anywhere}
+  #dbqa .qa-summary{max-width:none!important;line-height:1.35}
+  #dbqa .qa-entity-cell>b{display:block;overflow-wrap:anywhere}
+  #dbqa .qa-activity-cell{display:grid;grid-template-columns:1fr;gap:6px}
+  #dbqa .qa-activity-cell>div{min-width:0}
+  #dbqa .qa-activity-cell small{display:block;font-size:8px;color:#7a8799;font-weight:850}
+  #dbqa .qa-activity-cell b{display:block;font-size:11px;margin-top:1px;white-space:normal}
+  #dbqa .qa-state-cell{font-size:10px;line-height:1.4}
+  #dbqa .qa-action-cell{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+  #dbqa .qa-action-cell .btn{width:100%;min-width:0}
+  @media(max-width:1180px) and (min-width:760px){
+    #dbqa .qa-table th,#dbqa .qa-table td{padding:8px 7px}
+    #dbqa .qa-table th:nth-child(1){width:32%}
+    #dbqa .qa-table th:nth-child(2){width:24%}
+    #dbqa .qa-table th:nth-child(3){width:15%}
+    #dbqa .qa-table th:nth-child(4){width:17%}
+    #dbqa .qa-table th:nth-child(5){width:12%}
+    #dbqa .qa-issue-head{align-items:flex-start;flex-direction:column;gap:4px}
+    #dbqa .qa-action-cell .pill{font-size:7px;padding:4px 6px}
+  }
 
   @media(min-width:1400px){
     .shell{grid-template-columns:272px minmax(0,1fr);gap:20px;padding:16px 18px 36px}
@@ -3183,7 +3221,7 @@ BACKOFFICE_HTML = r'''<!doctype html>
     <div class="panelhead"><div><div class="title">QA Fixes</div><div class="sub">Only issues that require review or user-confirmed correction. Raw source rows are never edited.</div></div><span class="pill amber">CONTROLLED FIX</span></div>
     <div class="toolrow"><div class="filters"><button class="filter qafilter on" data-qafilter="ALL">All Open</button><button class="filter qafilter" data-qafilter="FIXABLE">Fixable</button><button class="filter qafilter" data-qafilter="VIEW_ONLY">Review Only</button><button class="filter qafilter" data-qafilter="HIGH">High / Critical</button></div><div class="tools"><input id="qaSearch" class="qa-search" placeholder="Search UPC / Article / Family / item / reason"><select id="qaSort" class="select"><option value="oh_vel_desc">Highest OH → Highest Velocity</option><option value="vel_oh_desc">Highest Velocity → Highest OH</option><option value="severity">Severity</option><option value="name">Item A → Z</option><option value="upc">UPC</option></select><span id="qaCount" class="pill sea">—</span><button id="qaRefresh" class="btn small">Refresh</button></div></div>
     <div id="qaError"></div>
-    <div class="tablewrap"><table class="table" style="min-width:1180px"><thead><tr><th>Severity</th><th>Issue</th><th>Entity</th><th>OH</th><th>7D Velocity</th><th>Current State</th><th>Fix Type</th><th></th></tr></thead><tbody id="qaRows"></tbody></table></div>
+    <div class="tablewrap qa-tablewrap"><table class="table qa-table"><thead><tr><th>Issue</th><th>Entity</th><th>Activity</th><th>Current State</th><th>Action</th></tr></thead><tbody id="qaRows"></tbody></table></div>
     <div class="sectiontitle" style="padding:0 11px">Recent Resolution History</div>
     <div class="tablewrap"><table class="table"><thead><tr><th>Time</th><th>Entity</th><th>Issue</th><th>Resolution</th><th>Actor</th><th>Note</th></tr></thead><tbody id="qaHistoryRows"></tbody></table></div>
   </div></div>
@@ -5863,16 +5901,13 @@ function renderQA(){
    }
    const stateText=stateParts.filter(Boolean).join(' · ');
    return `<tr>
-     <td>${pill(x.severity)}</td>
-     <td><div class="name">${esc(x.issue_code)}</div><div class="meta" style="max-width:380px">${esc(x.issue_summary||'')}</div></td>
-     <td><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.item_name||cur.selling_description||'Item name unavailable'):(cur.item_name||x.entity_type||''))}</div>${cur.chinese_name?`<div class="qa-cn-list">${esc(cur.chinese_name)}</div>`:''}${cur.main_article_number?`<div class="meta">Family ${esc(cur.main_article_number)}${cur.family_description?' · '+esc(cur.family_description):''}</div>`:''}</td>
-     <td><b>${fmt(cur.current_oh)}</b><div class="meta">${esc(cur.current_oh_uom||'')}</div></td>
-     <td><b>${fmt(cur.upc_velocity_7d)}</b><div class="meta">${esc(cur.selling_uom||'unit')}/day</div></td>
-     <td>${esc(stateText||'No current serving row')}</td>
-     <td>${x.can_fix?'<span class="pill amber">USER CONFIRM</span>':'<span class="pill blue">VIEW ONLY</span>'}</td>
-     <td><button class="btn small qadetail" data-key="${esc(String(x.issue_id??('QC:'+x.entity_key)))}">${x.can_fix?'Fix':'Details'}</button></td>
+     <td class="qa-issue-cell"><div class="qa-issue-head">${pill(x.severity)}<div class="name">${esc(x.issue_code)}</div></div><div class="meta qa-summary">${esc(x.issue_summary||'')}</div></td>
+     <td class="qa-entity-cell"><b>${esc(x.entity_key||'—')}</b><div class="meta">${esc(entityType==='UPC'?(cur.item_name||cur.selling_description||'Item name unavailable'):(cur.item_name||x.entity_type||''))}</div>${cur.chinese_name?`<div class="qa-cn-list">${esc(cur.chinese_name)}</div>`:''}${cur.main_article_number?`<div class="meta">Family ${esc(cur.main_article_number)}${cur.family_description?' · '+esc(cur.family_description):''}</div>`:''}</td>
+     <td class="qa-activity-cell"><div><small>OH</small><b>${fmt(cur.current_oh)} ${esc(cur.current_oh_uom||'')}</b></div><div><small>7D VEL</small><b>${fmt(cur.upc_velocity_7d)} ${esc(cur.selling_uom||'unit')}/day</b></div></td>
+     <td class="qa-state-cell">${esc(stateText||'No current serving row')}</td>
+     <td class="qa-action-cell">${x.can_fix?'<span class="pill amber">USER CONFIRM</span>':'<span class="pill blue">VIEW ONLY</span>'}<button class="btn small qadetail" data-key="${esc(String(x.issue_id??('QC:'+x.entity_key)))}">${x.can_fix?'Fix':'Details'}</button></td>
    </tr>`;
- }).join('')||'<tr><td colspan="8" class="empty">No QA issues match this search / filter.</td></tr>';
+ }).join('')||'<tr><td colspan="5" class="empty">No QA issues match this search / filter.</td></tr>';
  $$('.qadetail').forEach(b=>b.onclick=()=>openQAIssue(b.dataset.key));
  $('#qaHistoryRows').innerHTML=state.qaHistory.map(h=>`<tr><td>${esc(h.created_at||'—')}</td><td><b>${esc(h.entity_key||'')}</b><div class="meta">${esc(h.entity_type||'')}</div></td><td>${esc(h.issue_code||'')}</td><td>${esc(h.resolution_kind||'')}</td><td>${esc(h.actor||'')}</td><td>${esc(h.resolution_note||'—')}</td></tr>`).join('')||'<tr><td colspan="6" class="empty">No manual QA resolutions yet.</td></tr>';
 }
