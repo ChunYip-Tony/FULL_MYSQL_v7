@@ -673,8 +673,15 @@ def _historical_receiving_article_summary(
     family_article: str | None,
     events: list[dict[str, Any]],
     limit: int = 8,
+    weekday_number: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Summarize historically used Receiving Articles for an ordering Family."""
+    """Summarize Delivery Articles used on the selected delivery weekday.
+
+    When weekday_number is supplied, the visible Delivery Article list and its
+    observed-day count are restricted to canonical physical receipts on that
+    weekday. This prevents a Friday-only Receiving Article from appearing on a
+    Tuesday ordering roster for the same Family.
+    """
     pack=_article_manual_family_pack_context(cur,family_article)
     grouped: dict[str,dict[str,Any]] = {}
 
@@ -684,6 +691,8 @@ def _historical_receiving_article_summary(
         receipt_qty=event.get("receipt_quantity")
         base_qty=event.get("base_receipt_quantity")
         if not article or posting_date is None:
+            continue
+        if weekday_number is not None and int(posting_date.weekday()) != int(weekday_number):
             continue
         if (
             (receipt_qty is None or _d(receipt_qty)<=0)
@@ -1419,6 +1428,7 @@ def ordering_review(
                     cur,
                     str(s.get("family_article_number") or "") or None,
                     events,
+                    weekday_number=(delivery_date.weekday() if delivery_date is not None else None),
                 )
                 receiving_names=_article_description_map(
                     cur,
@@ -1432,8 +1442,9 @@ def ordering_review(
                     "receiving_article": receiving_article,
                     "receiving_article_name": receiving_article_name,
                     "historical_receiving_articles": historical_receiving_articles,
-                    "oh": s.get("ordering_oh_used"),
+                    "oh": s.get("effective_oh_raw"),
                     "oh_uom": s.get("uom"),
+                    "ordering_usable_oh": s.get("ordering_oh_used"),
                     "last_receipt_date": receipt.get("date"),
                     "last_receipt_qty_base": receipt.get("quantity"),
                     "last_receipt_base_uom": receipt.get("base_uom"),
@@ -1576,6 +1587,7 @@ def ordering_review(
                         cur,
                         str(fam.get("main_article_number") or "") or None,
                         roster_events,
+                        weekday_number=delivery_date.weekday(),
                     )
                     roster_uom=(
                         calc.get("demand_uom")
