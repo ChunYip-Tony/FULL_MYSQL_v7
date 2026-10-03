@@ -6379,9 +6379,12 @@ function activeCard(a){
     const ready=Number.isFinite(Number(readyRaw))?Number(readyRaw):0;
     const hold=Number.isFinite(Number(holdRaw))?Number(holdRaw):0;
     const completed=a.completed_at?' · Completed '+esc(a.completed_at):'';
+    const emptyUpload=String(status).toUpperCase()==='API_UPLOADING'&&Number(a.file_count||0)===0&&a.batch_key
+      ? '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button type="button" class="btn soft empty-upload-abort-btn" data-session="'+esc(a.batch_key)+'" data-batch="'+esc(id)+'">Clear Empty Upload</button></div>'
+      : '';
     return '<div class="batch"><div class="batchtop"><div><div class="batchid">Batch #'+esc(id)+'</div><div class="meta">'+esc(a.batch_label||'Completed batch')+'</div></div>'+pill(status)+'</div>'+
       '<div class="batchmeta"><div><small>Files</small><b>'+fmt(a.file_count,0)+'</b></div><div><small>Run</small><b>'+esc(runId)+'</b></div><div><small>Blockers</small><b>'+fmt(blockers,0)+'</b></div></div>'+
-      '<div class="meta" style="margin-top:7px"><b>'+fmt(ready,0)+' READY · '+fmt(hold,0)+' HOLD</b>'+completed+'</div></div>';
+      '<div class="meta" style="margin-top:7px"><b>'+fmt(ready,0)+' READY · '+fmt(hold,0)+' HOLD</b>'+completed+'</div>'+emptyUpload+'</div>';
   }
 
   const status=runStatus||a.processing_status||a.status||'PROCESSING';
@@ -6447,8 +6450,24 @@ function openDesktopActiveBatchMonitor(){
     '<div class="desktop-detail-section"><h3>Current Issues</h3>'+desktopBatchIssuesHtml(b,12)+'</div>';
   openDrawer('Batch #'+esc(b.batch_id||b.id||'—'),displayStatus+' · '+desktopBatchStageLabel(b.active_phase3_stage||b.active_last_phase3_stage||''),body,'');
 }
+async function clearEmptyUpload(session,batchId,btn){
+  if(!session)return;
+  if(!window.confirm('Clear empty Batch #'+String(batchId||'')+'?\n\nThis batch has 0 files. It will be marked API_ABORTED so a new upload can start.'))return;
+  if(btn){btn.disabled=true;btn.textContent='Clearing…'}
+  try{
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/abort',{method:'POST'});
+    toast('Empty Batch #'+String(batchId||'')+' cleared');
+    state.active=null;
+    await loadDatabaseOverview().catch(()=>{});
+    await loadBatches().catch(()=>{});
+  }catch(e){
+    toast('Unable to clear empty upload · '+String(e.message||e),4800);
+    if(btn){btn.disabled=false;btn.textContent='Clear Empty Upload'}
+  }
+}
 function wireActiveBatchButtons(root=document){
   root.querySelectorAll('.active-batch-monitor-btn').forEach(x=>x.onclick=openDesktopActiveBatchMonitor);
+  root.querySelectorAll('.empty-upload-abort-btn').forEach(x=>x.onclick=()=>clearEmptyUpload(x.dataset.session,x.dataset.batch,x));
 }
 async function loadBatches(){
   const [activeRes,recentRes]=await Promise.allSettled([
