@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v400';
+const CACHE='yipman-v431';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -858,7 +858,7 @@ async function loadAiBrief(force=false){
    const stockRows=[...(stockData?.rows||[])].sort((a,b)=>(num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0));
    const priceRows=(priceData?.rows||[]).filter(r=>r?.priority_240_249_mismatch||r?.actionable||String(r?.suggestion_reason_code||''));
    const orderRows=(orderData?.rows||[]).filter(r=>aiOrderState(r)==='ORDER'&&(num(r?.suggested_delivery_qty)||0)>0).sort((a,b)=>(num(b.suggested_delivery_qty)||0)-(num(a.suggested_delivery_qty)||0));
-   aiBriefData={stock:stockRows[0]||null,price:aiPriceRow(priceRows),orders:orderRows,dataThrough:orderData?.data_health||priceData?.data_health||stockData?.data_health||null};
+   aiBriefData={stock:stockRows[0]||null,price:aiPriceRow(priceRows),orders:orderRows,dataThrough:orderData?.current_source_health||priceData?.current_source_health||orderData?.data_health||priceData?.data_health||stockData?.data_health||null};
    if(box)box.innerHTML='<div class="aibubble ai brief">'+aiAttentionHtml()+'</div>';
    aiBriefLoaded=true;
  })();
@@ -1491,7 +1491,9 @@ async function hydrateQuickPrices(rows,requestId,attempt=0){
     const setPath=(sel,val,empty)=>{const n=card.querySelector(sel);if(n){const missing=num(val)===null;n.textContent=missing?empty:money(val);n.classList.toggle('qempty',missing)}};
     set('[data-q-current]',row.current_price);
     setPath('[data-q-tested]',row.tested_price,'Not set');
-    const pricingWarming=['REFRESHING','WARMING'].includes(String(d.price_review_analysis_status||'').toUpperCase())||String(d.price_review_cache_status||'').toUpperCase()==='WARMING';
+    const pricingAnalysis=String(d.price_review_analysis_status||'').toUpperCase();
+    const pricingCache=String(d.price_review_cache_status||'').toUpperCase();
+    const pricingWarming=['REFRESHING','WARMING'].includes(pricingAnalysis)||pricingCache==='WARMING'||pricingCache==='SOURCE_CHANGED_REFRESHING'||pricingAnalysis.includes('SOURCE_CHANGED');
     setPath('[data-q-testing]',row.testing_price,pricingWarming?'…':'None');
     set('[data-q-comp-a]',row.company_price_a);
     set('[data-q-comp-b]',row.company_price_b);
@@ -1505,7 +1507,9 @@ async function hydrateQuickPrices(rows,requestId,attempt=0){
         ' | '+String(row.suggestion_reason||row.suggestion_status||'—');
     }
   });
-  const pricingWarming=['REFRESHING','WARMING'].includes(String(d.price_review_analysis_status||'').toUpperCase())||String(d.price_review_cache_status||'').toUpperCase()==='WARMING';
+  const pricingAnalysis=String(d.price_review_analysis_status||'').toUpperCase();
+  const pricingCache=String(d.price_review_cache_status||'').toUpperCase();
+  const pricingWarming=['REFRESHING','WARMING'].includes(pricingAnalysis)||pricingCache==='WARMING'||pricingCache==='SOURCE_CHANGED_REFRESHING'||pricingAnalysis.includes('SOURCE_CHANGED');
   if(pricingWarming&&attempt<8){
     setTimeout(()=>{
       if(requestId===quickRequestSeq)hydrateQuickPrices(rows,requestId,attempt+1);
@@ -2158,12 +2162,16 @@ async function loadOrder(value){
    try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out|failed to fetch|network|aborted/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · retrying best-available ordering data';await new Promise(r=>setTimeout(r,1200));continue}throw e}
    if(requestId!==orderRequestSeq)return;
    const status=String(data.analysis_status||'').toUpperCase();
-   if(!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(String(data.cache_status||'').toUpperCase()))break;
+   const cacheStatus=String(data.cache_status||'').toUpperCase();
+   const sourceRefreshing=!!data.source_changed_since_analysis||cacheStatus==='SOURCE_CHANGED_REFRESHING'||status.includes('SOURCE_CHANGED');
+   if(!sourceRefreshing&&!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(cacheStatus))break;
    $('#orderStatus').textContent='Calculating '+appDate(orderDate)+' · receipt cadence first';
    await new Promise(r=>setTimeout(r,1500));
   }
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
-  if(['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(String(data?.cache_status||'').toUpperCase())){
+  const finalCache=String(data?.cache_status||'').toUpperCase();
+  const sourceRefreshing=!!data?.source_changed_since_analysis||finalCache==='SOURCE_CHANGED_REFRESHING'||finalStatus.includes('SOURCE_CHANGED');
+  if(sourceRefreshing||['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(finalCache)){
     orderRetryCount++;
     const delay=Math.min(8000,2500+Math.max(0,orderRetryCount-1)*500);
     const err=data?.refresh_error;
@@ -2332,6 +2340,7 @@ async function loadPrices(opts={}){
   if(requestId!==priceRequestSeq)return;
   const analysisStatus=String(d.analysis_status||'').toUpperCase();
   const cacheStatus=String(d.cache_status||'').toUpperCase();
+  const sourceChanged=!!d.source_changed_since_analysis||cacheStatus==='SOURCE_CHANGED_REFRESHING'||analysisStatus.includes('SOURCE_CHANGED');
   const warming=analysisStatus==='REFRESHING'||cacheStatus==='WARMING';
   if(warming){
     $('#priceStatus').textContent='Building current Price Suggestions…';
@@ -2340,12 +2349,13 @@ async function loadPrices(opts={}){
     return;
   }
   const h=d.data_health||{};
-  if(String(h.status||'').includes('BLOCKED')){
+  const live=d.current_source_health||h;
+  if(String(live.status||h.status||'').includes('BLOCKED')){
     $('#priceStatus').textContent='Price estimate unavailable';
     $('#priceRows').innerHTML='<div class="empty">No usable POS or MVT history is available for a best-available price estimate.<br>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'</div>';
     return;
   }
-  const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||String(d.cache_status||'').toUpperCase()==='STALE_REFRESHING';
+  const stale=String(h.status||'').toUpperCase()==='STALE_ESTIMATE_AVAILABLE'||cacheStatus==='STALE_REFRESHING'||sourceChanged;
   const meaningful=(d.rows||[]).filter(r=>r.priority_240_249_mismatch||r.actionable||String(r.suggestion_reason_code||''));
   const observed=r=>(Array.isArray(r.observed_delivery_weekdays)?r.observed_delivery_weekdays:[]).map(x=>String(x||'').toUpperCase());
   const upcPrefix=r=>String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3);
@@ -2388,7 +2398,9 @@ async function loadPrices(opts={}){
   const ignoredCount=sorted.filter(priceIsIgnored).length;
   const rows=sorted.filter(r=>!priceIsIgnored(r)).slice(0,40);
   const filterLabel=priceFilter.startsWith('UPC_')?(priceFilter.slice(4)+' UPC'):priceFilter==='LIVE'?'Live':priceFilter==='TUE'?'Observed Tuesday delivery':'Observed Friday / Saturday delivery';
-  $('#priceStatus').innerHTML=(stale?'<div class="estimatebar">BEST AVAILABLE · POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. Missing dates are ignored, not zero-filled.</div>':'')+esc(filterLabel)+' · '+esc(priceReasonFilter==='ALL'?'all reasons':friendlySignal(priceReasonFilter))+' · '+esc(friendlySignal(priceSort))+' sort · '+rows.length+' shown · '+ignoredCount+' ignored <12h';
+  const freshnessLabel=sourceChanged?'LATEST DATA · REFRESHING SUGGESTIONS':(String(live.status||'').toUpperCase()==='CURRENT'?'CURRENT DATA':'BEST AVAILABLE');
+  const basisNote=sourceChanged?'<br><span>Prior suggestion basis: POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'. New canonical data is being applied now.</span>':(String(live.status||'').toUpperCase()==='CURRENT'?'':'<br><span>Missing dates are ignored, not zero-filled.</span>');
+  $('#priceStatus').innerHTML='<div class="estimatebar">'+freshnessLabel+' · POS '+esc(live.pos_data_through||'—')+' · MVT '+esc(live.movement_data_through||'—')+'.'+basisNote+'</div>'+esc(filterLabel)+' · '+esc(priceReasonFilter==='ALL'?'all reasons':friendlySignal(priceReasonFilter))+' · '+esc(friendlySignal(priceSort))+' sort · '+rows.length+' shown · '+ignoredCount+' ignored <12h';
 
   $('#priceRows').innerHTML=rows.map((r,i)=>{
     const meta=priceReasonMeta(r,stale),prog=priceProgress(r),signals=priceSignals(r);
@@ -2435,7 +2447,8 @@ async function loadPrices(opts={}){
     openPrice(rows[Number(x.dataset.price)]);
   });
   $$('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
-  $$('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
+  $('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
+  if(sourceChanged)schedulePriceRetry(requestId,2200);
  }catch(e){
   if(requestId!==priceRequestSeq)return;
   $('#priceStatus').textContent='Price suggestions temporarily unavailable';
