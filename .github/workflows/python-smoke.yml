@@ -696,8 +696,8 @@ jobs:
           assert 'MVT_PHYSICAL_101_109_FAMILY_DAILY_AGGREGATE' in quick_receipt_src
           assert '"family_receipt_history": family_receipt_history' in quick_receipt_src
           stock_src=inspect.getsource(backoffice_runtime.yipman_best_sellers)
-          assert 'ratio < Decimal("1.50")' in stock_src
-          assert '"receipt_minus_selling_7d": difference' in stock_src
+          assert 'ratio is None or ratio < Decimal("1.50")' in stock_src
+          assert '"receipt_minus_selling_7d": receipt_qty - sold_d' in stock_src
           cal_src=inspect.getsource(backoffice_runtime.yipman_ordering_calendar)
           assert 'default_next=default_delivery+timedelta(days=7)' in cal_src
           assert 'strongest_weekday' in cal_src
