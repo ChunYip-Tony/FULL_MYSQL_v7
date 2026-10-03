@@ -1044,7 +1044,7 @@ async function aiAnswer(question){
  if(q.includes('249')||q.includes('240')||q.includes('price')||q.includes('sweet')){
    if(!price)return '<b>Price Review</b><br>No actionable price row is currently loaded.';
    if(price.priority_240_249_mismatch)return '<b>249 / 240 alignment</b><br>249 '+esc(price.upc||'')+' is '+money(price.current_price)+' while paired 240 is '+money(price.related_240_current_price)+'. The 249 review remains only while those current prices differ.';
-   return '<b>Price Review</b><br>'+esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+(price.testing_price!=null?' · TPR suggestion '+money(price.testing_price):'')+'.';
+   return '<b>Price Review</b><br>'+esc(price.name||price.upc||'Item')+' · current '+money(price.current_price)+(price.tested_sweet_spot_price!=null?' · tested '+money(price.tested_sweet_spot_price):'')+(price.testing_price!=null?' · TPR suggestion price '+money(price.testing_price):'')+'.';
  }
  if(q.includes('receipt')||q.includes('stock flow')||q.includes('over receipt')){
    if(!stock)return '<b>Stock Flow</b><br>No Stock Flow row is currently loaded.';
@@ -1453,7 +1453,7 @@ function quickUpcHtml(r){
  const priceStrip=active?'<div class="qupcprices" data-qprice-status="loading">'+
    '<div class="qprice"><small>CURRENT</small><b data-q-current>'+pm(r.price)+'</b></div>'+
    '<div class="qprice tested"><small>TESTED</small><b data-q-tested>'+testedText(r.sweet_spot_price)+'</b></div>'+
-   '<div class="qprice testing"><small>TPR SUGGESTION</small><b data-q-testing>…</b></div>'+
+   '<div class="qprice testing"><small>TPR SUGGESTION PRICE</small><b data-q-testing>…</b></div>'+
    comp('COMP A','data-q-comp-a',r.company_price_a)+
    comp('COMP B','data-q-comp-b',r.company_price_b)+
    comp('COMP C','data-q-comp-c',r.company_price_c,'companyc')+
@@ -1552,7 +1552,7 @@ async function hydrateQuickPrices(rows,requestId,attempt=0){
       strip.dataset.qpriceStatus=String(row.suggestion_status||'READY');
       strip.title='Current: '+String(row.current_price_source||'—')+(row.current_price_asof_date?' · '+String(row.current_price_asof_date):'')+
         ' | Tested: '+(num(row.tested_price)===null?'—':money(row.tested_price))+
-        ' | TPR Suggestion: '+(num(row.testing_price)===null?'—':money(row.testing_price))+
+        ' | TPR Suggestion Price: '+(num(row.testing_price)===null?'—':money(row.testing_price))+
         ' | '+String(row.suggestion_reason||row.suggestion_status||'—');
     }
   });
@@ -2465,7 +2465,7 @@ async function loadPrices(opts={}){
       '<div class="pricepath">'+
         '<div class="pp current"><small>CURRENT</small><b>'+money(r.current_price)+'</b><span>'+esc(r.current_price_type||r.current_price_source||'latest effective')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div>'+
         '<div class="pp tested"><small>TESTED</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
-        '<div class="pp testing"><small>TPR SUGGESTION</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
+        '<div class="pp testing"><small>TPR SUGGESTION PRICE</small><b>'+money(r.testing_price)+'</b><span>'+esc(meta.testing)+' · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div>'+
       '</div>'+
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
@@ -2511,19 +2511,19 @@ function openPrice(r){
  const companyLow=num(r.company_range_low),companyHigh=num(r.company_range_high);
  const company=(companyLow!==null&&companyHigh!==null)?money(companyLow)+' – '+money(companyHigh):'—';
  sheet(r.name||r.upc,r.upc||'Price suggestion',
- '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TPR SUGGESTION · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>TESTED · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.testing_price)+'</b><span>TPR SUGGESTION PRICE · '+esc(gpText(r.testing_price,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
  '<div class="detail"><b>Suggested action</b><br>'+esc(r.primary_reason_text||r.suggestion_reason||'Pricing review')+
  (String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').startsWith('249')&&r.related_240_current_price!=null?'<br><br><b>240 → 249 price rule</b><br>240 '+esc(r.related_240_upc||'—')+' current '+money(r.related_240_current_price)+' → 249 '+esc(r.upc||'—')+' current '+money(r.current_price)+' · required 249 price '+money(r.related_240_current_price):'')+
  '<br><br><b>Current cost</b><br>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+
- '<br><br><b>Price path + GP%</b><br>Current '+money(r.current_price)+' ('+esc(gpText(r.current_price,r.current_cost))+') → TPR Suggestion '+money(r.testing_price)+' ('+esc(gpText(r.testing_price,r.current_cost))+') · Tested '+money(r.tested_price)+' ('+esc(gpText(r.tested_price,r.current_cost))+')'+
+ '<br><br><b>Price path + GP%</b><br>Current '+money(r.current_price)+' ('+esc(gpText(r.current_price,r.current_cost))+') → TPR Suggestion Price '+money(r.testing_price)+' ('+esc(gpText(r.testing_price,r.current_cost))+') · Tested '+money(r.tested_price)+' ('+esc(gpText(r.tested_price,r.current_cost))+')'+
  (r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?'<br>Raw proved sweet-spot evidence '+money(r.tested_evidence_price)+' → retail-aligned Tested '+money(r.tested_price):'')+
  '<br>Action price '+money(r.candidate_price)+(r.testing_target_price?(' · eventual test target '+money(r.testing_target_price)):'')+
  '<br><br><b>Progress now</b><br>7D '+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+' · '+fmt(r.velocity_7d)+' /day · 28D '+fmt(r.velocity_28d)+' /day · DOH '+fmt(r.doh)+
  '<br>GP$/day now '+money(r.current_gp_per_day_7d)+' · supported target evidence '+money(r.candidate_expected_gp_per_day)+
  '<br><br><b>Company A/B/C range</b><br>'+esc(company)+(r.company_range_violation?' · CURRENT OUTSIDE RANGE':'')+
  '<br><br><b>Current price evidence</b><br>'+esc(r.current_price_source||'—')+(r.current_price_observed_date?' · '+esc(r.current_price_observed_date):'')+
- '<br><br><b>Pricing rule</b><br>Retail-facing Tested, suggested sweet-spot targets, and TPR Suggestion prices use the nearest normal store ending: .29 / .49 / .59 / .69 / .79 / .99. TPR Suggestion must still move at least $0.45 from Current. Raw proved sweet-spot evidence is preserved in Detail when rounding changes the displayed Tested price. Re-check completed-day velocity and GP$/day before the next step.'+
+ '<br><br><b>Pricing rule</b><br>Retail-facing Tested, suggested sweet-spot targets, and TPR Suggestion Prices use the nearest normal store ending: .29 / .49 / .59 / .69 / .79 / .99. TPR Suggestion Price must still move at least $0.45 from Current. Raw proved sweet-spot evidence is preserved in Detail when rounding changes the displayed Tested price. Re-check completed-day velocity and GP$/day before the next step.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
  '<div class="actions"><button class="secondary" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
