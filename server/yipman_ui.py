@@ -18,7 +18,75 @@ def yipman_html(version: str = "") -> str:
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
     mobile_v2_css = YIPMAN_MOBILE_V2_CSS.replace("__VERSION__", v)
     mobile_v2_js = YIPMAN_MOBILE_V2_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-mobile-v2-css\">" + mobile_v2_css + "</style><style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-mobile-v2-css\">" + mobile_v2_css + "
+/* v7.0.467 Ordering UX: simpler header, visible workflow, touch-first controls. */
+html:not(.yipman-desktop) .head{grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important}
+html:not(.yipman-desktop) .workspace{height:calc(100% - 58px)!important}
+.headfresh{display:none!important}
+#order .order-workflow-note{display:grid;gap:3px;margin:0 0 8px;padding:10px 11px;border-radius:13px;background:#eef6fd;border:1px solid #c9deef}
+#order .order-workflow-note b{font-size:11px;color:#155987}
+#order .order-workflow-note span{font-size:10px;line-height:1.35;color:#506879;font-weight:800}
+#order .order-tools{position:sticky;top:0;z-index:22;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;padding:7px 0;background:#f6f7f9;border-bottom:1px solid #dbe3e8}
+#order .order-summary{font-size:11px;font-weight:1000;color:#213747;margin-bottom:5px}
+#order .order-quickfilters{display:flex;gap:5px;overflow:auto;padding-bottom:1px;scrollbar-width:none}
+#order .order-quickfilters::-webkit-scrollbar{display:none}
+#order .order-quickfilters button{border:1px solid #cfdbe5;background:#fff;color:#536878;border-radius:999px;padding:7px 9px;font-size:9px;font-weight:1000;white-space:nowrap}
+#order .order-quickfilters button.on{background:#173b57;border-color:#173b57;color:#fff}
+#order .order-controls{display:grid!important;grid-template-columns:minmax(112px,1fr) auto!important;gap:6px!important;align-items:end!important}
+#order .order-controls label{font-size:7px!important;font-weight:950;color:#6b7a86}
+#order .order-controls select{min-height:38px!important;font-size:10px!important}
+#order .order-refresh-btn{min-height:38px;border:0;border-radius:10px;background:#e9f0f5;color:#24485f;font-size:9px;font-weight:1000;padding:0 10px}
+#order .order-live-status{margin:7px 2px!important;font-size:11px!important;line-height:1.35!important}
+#order .order-loading-card{border:1px solid #d9e4ec;background:#fff;border-radius:15px;padding:14px;margin-top:8px}
+#order .order-loading-card b{display:block;font-size:14px;color:#294a61}
+#order .order-loading-card span{display:block;font-size:10px;line-height:1.4;color:#71808d;margin-top:4px}
+#order .order-loading-actions{display:flex;gap:6px;margin-top:9px}
+#order .order-loading-actions button{border:0;border-radius:10px;padding:9px 11px;font-size:9px;font-weight:950}
+#order .promo-shell{padding:11px;border:1px solid #dbe4eb;box-shadow:none}
+#order .promo-shell-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+#order .promo-shell-head h3{font-size:19px}
+#order .promo-shell-head p{font-size:10px;margin:3px 0 0}
+#order .promo-add-main{border:0;border-radius:12px;background:#f0b82b;color:#382a00;min-height:46px;padding:0 13px;font-size:10px;font-weight:1000;white-space:nowrap}
+#order .promo-controls-friendly{grid-template-columns:minmax(0,1fr) auto}
+#order .promo-controls-friendly select{min-height:44px;font-size:11px}
+#order .promo-import{min-height:44px;background:#e9f0f5;color:#28475d;font-size:9px}
+#order .promo-import-options{margin-top:7px;border-top:1px solid #e6ebef;padding-top:7px}
+#order .promo-import-options summary{font-size:9px;color:#667784;font-weight:950;cursor:pointer}
+#order .promo-tools{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;margin:7px 0}
+#order .promo-summary{margin:0}
+#order .promo-list-controls{display:flex;gap:5px}
+#order .promo-list-controls select{border:1px solid #d2dde5;border-radius:9px;background:#fff;padding:7px 8px;font-size:9px;font-weight:900;max-width:118px}
+#order .promo-card{padding:11px;border-radius:16px}
+#order .promo-card-head b{font-size:17px;line-height:1.1}
+#order .promo-card-head small{font-size:9px;line-height:1.35}
+#order .promo-metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#order .promo-metric{padding:8px}
+#order .promo-metric small{font-size:7px}
+#order .promo-metric b{font-size:16px}
+#order .promo-order{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:center;padding:9px 10px}
+#order .promo-order b{font-size:25px;text-align:right}
+#order .promo-break{grid-column:1/-1;font-size:9px}
+.manual-promo-search{gap:10px}
+.manual-promo-search .detailstep{border:1px solid #dbe5ed;border-radius:12px;padding:9px;background:#f8fbfd}
+.manual-promo-mode{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.manual-promo-mode button{border:1px solid #d4dfe7;background:#fff;border-radius:10px;padding:9px 5px;font-size:9px;font-weight:1000}
+.manual-promo-mode button.on{background:#163f5f;color:#fff;border-color:#163f5f}
+.manual-promo-selected-card{position:relative}
+.manual-promo-selected-top{grid-template-columns:minmax(0,1fr) 95px}
+.manual-promo-selected-card .familyohinline{margin-top:7px}
+.manual-promo-fields.compact{grid-template-columns:1fr 1fr}
+.manual-promo-fields .optional-name{grid-column:1/-1}
+.manual-promo-selected-count{font-size:10px;font-weight:1000;color:#17683c}
+@media(max-width:390px){
+ #order .order-tools{grid-template-columns:1fr}
+ #order .order-controls{grid-template-columns:minmax(0,1fr) auto!important}
+ #order .promo-shell-head{grid-template-columns:1fr}
+ #order .promo-add-main{width:100%}
+ #order .promo-tools{grid-template-columns:1fr}
+ #order .promo-list-controls select{max-width:none;flex:1}
+}
+
+</style><style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-mobile-v2-js\">" + mobile_v2_js + "</script><script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -947,7 +1015,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 <div id="app">
   <div class="ptr" id="ptr"><div id="ptrText">Pull to refresh</div></div>
   <header class="header">
-    <div class="head"><div class="brandblock"><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><div class="headfresh" id="headFreshness" aria-label="Source freshness"><div class="hfitem"><i></i><b>POS</b><span>…</span></div><div class="hfitem"><i></i><b>MVT</b><span>…</span></div><div class="hfitem"><i></i><b>FRZ RPT</b><span>…</span></div><div class="hfitem"><i></i><b>FRESH RPT</b><span>…</span></div><div class="hfitem"><i></i><b>OH</b><span>…</span></div><div class="hfitem"><i></i><b>CHATGPT</b><span>…</span></div></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
+    <div class="head"><div class="brandblock"><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
   </header>
   <main class="workspace">
     <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading stock flow…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
@@ -964,23 +1032,22 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
         <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span id="orderCoverageSub">Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
       </div>
       <div id="regularOrderPanel">
-        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="QTY_URGENT">ORDER QTY ↓ · URGENT</option><option value="QTY">ORDER QTY ↓</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
-        <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
+        <div class="order-workflow-note"><b>REGULAR ORDER</b><span>Pick a delivery date. Yipman includes Families historically received on the selected weekday ±1 day, then calculates the exact selected coverage window.</span></div>
+        <div class="order-tools" id="orderTools"><div><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-quickfilters" id="orderQuickFilters"><button type="button" class="on" data-order-quick-filter="ALL">ALL</button><button type="button" data-order-quick-filter="ORDER">NEED ORDER</button><button type="button" data-order-quick-filter="ZERO_ORDER">0 ORDER</button><button type="button" data-order-quick-filter="REVIEW">REVIEW</button></div></div><div class="order-controls"><label>SORT<select id="orderSort"><option value="QTY_URGENT">ORDER QTY ↓ · URGENT</option><option value="QTY">ORDER QTY ↓</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label><button type="button" class="order-refresh-btn" id="orderRefreshBtn">↻ REFRESH</button><select id="orderFilter" class="hide"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></div></div>
+        <div id="orderStatus" class="hint order-live-status"></div>
         <div class="list" id="orderList"><div class="lh" id="orderListHead"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
       </div>
       <div id="promotionOrderPanel" class="hide">
         <div class="promo-shell">
-          <h3>Promotion Order</h3>
-          <p>Weekly items use Thursday → following Thursday. Weekend items use Friday → Sunday. The selected delivery window can contain both promotion and regular-price days.</p>
-          <div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div>
-          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT</button><button class="promo-manual" id="promoManualBtn">MANUAL</button></div>
-          <div class="promo-date-inputs"><label>WEEKLY START (THU)<input type="date" id="promoWeeklyStart"></label><label>WEEKEND START (FRI)<input type="date" id="promoWeekendStart"></label></div>
+          <div class="promo-shell-head"><div><h3>Promotion Order</h3><p>Add promotion items first. Sale price and dates are entered in one simple form.</p></div><button class="promo-add-main" id="promoManualBtn" type="button">＋ ADD PROMO ITEM</button></div>
+          <div class="promo-controls promo-controls-friendly"><select id="promoListSelect"><option value="">Choose saved promotion…</option></select><button class="promo-import" id="promoImportBtn">IMPORT LIST</button></div>
+          <details class="promo-import-options"><summary>Import date defaults</summary><div class="promo-date-inputs"><label>WEEKLY START (THU)<input type="date" id="promoWeeklyStart"></label><label>WEEKEND START (FRI)<input type="date" id="promoWeekendStart"></label></div><div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div></details>
           <input type="file" id="promoFileInput" accept=".csv,.xls,.xlsx,.xlsm" class="hide">
-          <div class="promo-status" id="promoListStatus">Choose a saved list, import a file, or enter one / multiple UPC promotions manually.</div>
+          <div class="promo-status" id="promoListStatus">Add an item, choose a saved promotion, or import a list.</div>
         </div>
-        <div class="promo-summary" id="promoSummary"></div>
-        <div id="promoOrderStatus" class="promo-status"></div>
-        <div id="promoRows"><div class="empty">Choose or import a promotion list.</div></div>
+        <div class="promo-tools"><div class="promo-summary" id="promoSummary"></div><div class="promo-list-controls"><select id="promoFilter"><option value="ALL">ALL ITEMS</option><option value="ORDER">NEED ORDER</option><option value="ZERO">0 ORDER</option><option value="FRESHNESS">FRESHNESS</option></select><select id="promoSort"><option value="QTY">ORDER QTY ↓</option><option value="FRESHNESS">FRESHNESS FIRST</option><option value="NAME">NAME A–Z</option></select></div></div>
+        <div id="promoOrderStatus" class="promo-status promo-live-status"></div>
+        <div id="promoRows"><div class="empty">Add a promotion item or choose a saved promotion.</div></div>
       </div>
     </section>
 
