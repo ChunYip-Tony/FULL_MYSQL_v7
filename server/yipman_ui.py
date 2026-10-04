@@ -39,6 +39,7 @@ def yipman_v1_html(version: str = "") -> str:
         "navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'})",
         "navigator.serviceWorker.register('/app/yipman-v1/sw.js',{scope:'/app/yipman-v1/'})",
     )
+    html = html.replace("<body>", '<body class="yipman-v1">', 1)
     return html
 
 
@@ -1221,6 +1222,60 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 #overlay .sheet .truestockhint{padding:9px 10px;border-radius:10px;background:#eef7f2;color:#356149;font-size:9px;line-height:1.35;font-weight:850}
 #overlay .sheet .truestockactions{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
 #overlay .sheet .truestockactions button{min-height:48px;border-radius:11px;font-size:10px;font-weight:1000}
+
+/* V473 V1 readability scale: larger pages without horizontal overflow. */
+body.yipman-v1 .header{padding:10px 14px 11px}
+body.yipman-v1 .brand{font-size:32px;line-height:1}
+body.yipman-v1 .ver{font-size:13.5px;line-height:1.15;margin-top:4px}
+body.yipman-v1 .dbbtn{width:50px;height:50px;border-radius:15px;font-size:25px}
+body.yipman-v1 .page{padding-left:14px;padding-right:14px;padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+body.yipman-v1 .topline h2{font-size:28px}
+body.yipman-v1 .hint{font-size:13px}
+body.yipman-v1 .order-tab{min-height:54px!important;font-size:15px!important;border-radius:14px!important}
+body.yipman-v1 #order .order-summary>span{min-width:61px;padding:7px 8px}
+body.yipman-v1 #order .order-summary b{font-size:17px}
+body.yipman-v1 #order .order-summary small{font-size:7.5px}
+body.yipman-v1 #order .order-controls label{font-size:9px}
+body.yipman-v1 #order .order-controls select{min-height:44px;font-size:13px;border-radius:12px}
+body.yipman-v1 #order #orderStatus .estimatebar{font-size:10.5px;line-height:1.35;padding:9px 10px}
+body.yipman-v1 #order .orderitemmain{grid-template-columns:minmax(0,1fr) 100px 84px;gap:8px;padding:11px 11px 8px}
+body.yipman-v1 #order .familyline b{font-size:19px}
+body.yipman-v1 #order .familyline span{font-size:8px}
+body.yipman-v1 #order .orderitemmain .name{font-size:18px;line-height:1.12}
+body.yipman-v1 #order .orderitemmain .sub{font-size:9.5px;line-height:1.3}
+body.yipman-v1 #order .orderohcompact{min-height:82px;padding:8px 6px}
+body.yipman-v1 #order .orderohcompact small{font-size:7.5px}
+body.yipman-v1 #order .orderohcompact b{font-size:18px}
+body.yipman-v1 #order .orderohcompact span{font-size:8px}
+body.yipman-v1 #order .orderqty small{font-size:7px}
+body.yipman-v1 #order .orderqty b{font-size:24px}
+body.yipman-v1 #order .orderqty span{font-size:9px}
+body.yipman-v1 #order .ordersystemoh{padding:6px 8px}
+body.yipman-v1 #order .ordersystemoh small{font-size:7px}
+body.yipman-v1 #order .ordersystemoh b{font-size:12px}
+body.yipman-v1 #order .orderrecvhistory summary{padding:9px}
+body.yipman-v1 #order .orderrecvhistory summary span{font-size:8px}
+body.yipman-v1 #order .orderrecvhistory summary b{font-size:9px}
+body.yipman-v1 #order .orderrecvhistory summary em{font-size:8px;padding:5px 8px}
+body.yipman-v1 #order .snooze12{min-height:42px;font-size:10px}
+body.yipman-v1 #quick .bestname{font-size:20px}
+body.yipman-v1 #price .ptop b{font-size:19px!important}
+body.yipman-v1 #price .ptop small{font-size:12px!important}
+body.yipman-v1 .nav{left:12px;right:12px;height:68px;border-radius:20px}
+body.yipman-v1 .nav button{font-size:10px}
+body.yipman-v1 .nav i{font-size:23px;margin-bottom:3px}
+body.yipman-v1 .sheet{max-height:82%;border-radius:24px 24px 0 0}
+body.yipman-v1 .shead{padding:14px 15px}
+body.yipman-v1 .shead h3{font-size:23px}
+body.yipman-v1 .shead p{font-size:11px}
+body.yipman-v1 .sbody{padding:12px 14px 18px}
+body.yipman-v1 .detail{font-size:12px;padding:12px}
+body.yipman-v1 .actions button{min-height:48px;font-size:11px}
+@media(max-width:390px){
+ body.yipman-v1 #order .orderitemmain{grid-template-columns:minmax(0,1fr) 92px 76px;gap:6px}
+ body.yipman-v1 #order .orderqty b{font-size:22px}
+ body.yipman-v1 #order .orderohcompact b{font-size:16px}
+}
 </style>
 </head>
 <body>
