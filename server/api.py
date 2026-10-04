@@ -3830,6 +3830,9 @@ def app_submit_true_stock(
     device=public_app_actor(authorization)
     try:
         result=submit_true_stock(upc,body.true_stock,body.uom,device)
+        cache_invalidation=backoffice_invalidate_true_stock_dependent_caches()
+        if isinstance(result,dict):
+            result={**result,"cache_invalidation":cache_invalidation}
     except KeyError:
         raise HTTPException(404,'Quick Check UPC not found')
     except ValueError as exc:
@@ -3874,6 +3877,9 @@ def app_cancel_true_stock(
         raise HTTPException(400,'confirm must be CANCEL_ACTIVE_TRUE_STOCK')
     try:
         result=cancel_true_stock(upc,device,body.reason)
+        cache_invalidation=backoffice_invalidate_true_stock_dependent_caches()
+        if isinstance(result,dict):
+            result={**result,"cache_invalidation":cache_invalidation}
     except KeyError:
         raise HTTPException(404,'Quick Check UPC not found')
     except ValueError as exc:
