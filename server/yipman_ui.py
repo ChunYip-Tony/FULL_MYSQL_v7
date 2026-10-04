@@ -268,12 +268,22 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qfamily .qfnum{font-size:17px;line-height:1}
 .qfamily .qfname{font-size:21px;font-weight:1000;line-height:1.02;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip}
 .qfamily .qmeta{font-size:7px;margin-top:2px}
-.qffocus{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:5px}
+.qffocus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
 .qffocusbox{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;background:rgba(255,255,255,.58);border:1px solid rgba(95,105,113,.14);border-radius:8px;padding:4px 6px}
 .qffocusbox small{display:block;font-size:6px;color:#6d7b86;font-weight:950;line-height:1}
 .qffocusbox span{display:block;font-size:6px;color:#849099;font-weight:850;line-height:1;margin-top:2px;white-space:nowrap}
 .qffocusbox b{font-size:21px;line-height:1;font-weight:1000;letter-spacing:-.03em;white-space:nowrap}
 .qffocusbox.receipt b{color:#26343e}
+.familyohbtn{width:100%;border:1px solid #a8d5c3;background:#ecf8f2;color:#155f48;border-radius:8px;padding:5px 6px;text-align:left;cursor:pointer;min-width:0}
+.familyohbtn small{display:block;font-size:6px;font-weight:1000;color:#4e7d6d;line-height:1}
+.familyohbtn b{display:block;font-size:15px;font-weight:1000;line-height:1.05;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.familyohbtn span{display:block;font-size:6px;font-weight:900;color:#278566;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.familyohinline{border:1px solid #a8d5c3;background:#ecf8f2;color:#155f48;border-radius:9px;padding:5px 6px;cursor:pointer;text-align:right;min-width:54px}
+.familyohinline b{display:block;font-size:15px;line-height:1;font-weight:1000}.familyohinline span{display:block;font-size:7px;color:#278566;font-weight:900;margin-top:2px}
+.stockohbar{margin-top:5px}.stockohbar .familyohbtn{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:7px;text-align:left;padding:6px 8px}
+.stockohbar .familyohbtn small{font-size:7px}.stockohbar .familyohbtn b{text-align:right;font-size:17px}.stockohbar .familyohbtn span{text-align:right}
+.pm .familyohbtn{border:0;background:transparent;padding:0;text-align:left}.pm .familyohbtn b{font-size:12px}.pm .familyohbtn span{font-size:6px}
+.dm .familyohbtn{border:0;background:transparent;padding:0;text-align:center}.dm .familyohbtn b{font-size:20px}.dm .familyohbtn span{font-size:7px}
 .qreceivingrow{padding:4px 6px}
 .qsap{margin:4px 5px;border-left-width:3px;border-radius:9px}
 .qsaphead{padding:4px 6px}
@@ -990,6 +1000,63 @@ let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null,
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
+
+async function refreshAfterFamilyTrueStock(){
+ aiBriefLoaded=false;aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
+ if(current==='quick'){
+   bestSellerGroups=null;
+   if(lastQuickQuery)await loadQuick(lastQuickQuery);else await loadBestSellers(true);
+ }else if(current==='order'&&orderMode==='REGULAR'){
+   await loadOrder(orderDate);
+ }else if(current==='price'){
+   await loadPriceCurrentView();
+ }
+}
+function bindFamilyOhEditors(root=document){
+ root.querySelectorAll('[data-family-oh]').forEach(btn=>{
+  if(btn.dataset.trueStockBound==='1')return;
+  btn.dataset.trueStockBound='1';
+  btn.onclick=e=>{
+   e.preventDefault();e.stopPropagation();
+   openFamilyTrueStock({
+    family:btn.dataset.family,
+    name:btn.dataset.name||'',
+    oh:btn.dataset.oh,
+    uom:btn.dataset.uom||''
+   });
+  };
+ });
+}
+function openFamilyTrueStock(d){
+ const family=String(d?.family||'').trim(),uom=String(d?.uom||'').trim().toUpperCase();
+ if(!family)return toast('Family Article unavailable');
+ if(!uom)return toast('Effective OH UOM unavailable');
+ const currentQty=(d.oh===null||d.oh===undefined||d.oh==='')?'':d.oh;
+ sheet(
+  d.name||'True Stock',
+  'Family '+esc(family)+' · Effective OH',
+  '<div class="detail"><b>Current Effective OH</b><br>'+fmtNullable(currentQty)+' '+esc(uom)+
+  '<br><br><b>Enter Physical True Stock</b><br><input id="familyTrueStockInput" type="number" min="0" step="0.01" inputmode="decimal" value="'+esc(currentQty)+'" style="width:100%;font-size:26px;font-weight:1000;padding:11px;border:2px solid #9dcfbd;border-radius:12px">'+
+  '<br><br><label style="display:block;font-size:9px;font-weight:900;color:#65737e">NOTE</label><input id="familyTrueStockNote" placeholder="Physical count / optional note" style="width:100%;padding:10px;border:1px solid #d8e1e6;border-radius:10px;margin-top:4px">'+
+  '<div class="estimatebar" style="margin-top:10px"><b>Immediate authority:</b> saving this count makes it the Family Effective OH for Quick Check, Stock Flow, Ordering, Price Review and other OH-dependent calculations. If lower than System OH, the PI / Pending Dumping workflow is updated.</div>'+
+  '<div class="actions"><button class="secondary" id="familyTrueStockCancel">CANCEL</button><button class="primary" id="familyTrueStockSave">SAVE TRUE STOCK & RECALCULATE</button></div></div>'
+ );
+ $('#familyTrueStockCancel').onclick=()=>closeSheet(true);
+ $('#familyTrueStockSave').onclick=async()=>{
+  const qty=Number($('#familyTrueStockInput').value);
+  if(!Number.isFinite(qty)||qty<0)return toast('Enter valid True Stock');
+  const btn=$('#familyTrueStockSave');btn.disabled=true;btn.textContent='SAVING & RECALCULATING…';
+  try{
+   await api('/v1/app/v2/pi/'+encodeURIComponent(family)+'/true-stock',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({true_stock:qty,uom,note:($('#familyTrueStockNote').value||'').trim()||null}),
+    timeoutMs:30000
+   });
+   closeSheet(false);toast('True Stock saved · Effective OH recalculating');
+   await refreshAfterFamilyTrueStock();
+  }catch(e){toast(e.message||'Could not save True Stock');btn.disabled=false;btn.textContent='SAVE TRUE STOCK & RECALCULATE'}
+ };
+}
 function aiBubble(html,who='ai',tone=''){
  const box=$('#aiChat');if(!box)return null;
  const d=document.createElement('div');d.className='aibubble '+who+(tone?' '+tone:'');d.innerHTML=html;box.appendChild(d);box.scrollTop=box.scrollHeight;return d;
@@ -1472,7 +1539,12 @@ function quickFamilyGroups(rows){
      family_receipt_7d_qty:r.family_receipt_7d_qty??null,
      family_receipt_7d_uom:r.family_receipt_7d_uom||'',
      family_receipt_7d_status:r.family_receipt_7d_status||'',
-     family_receipt_7d_day_count:r.family_receipt_7d_day_count??null
+     family_receipt_7d_day_count:r.family_receipt_7d_day_count??null,
+     family_oh:r.family_oh??null,
+     family_oh_uom:r.family_oh_uom||'',
+     family_oh_source:r.family_oh_source||'',
+     family_oh_status:r.family_oh_status||'',
+     family_oh_is_true_stock:String(r.family_oh_source||'').toUpperCase().startsWith('FAMILY_TRUE_STOCK')
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -1640,6 +1712,7 @@ function quickGroupedHtml(rows){
      '<div class="qfidentity"><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div>'+
      '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div>'+
      '<div class="qffocus">'+
+       '<button type="button" class="familyohbtn" data-family-oh data-family="'+esc(g.family_article||'')+'" data-name="'+esc(g.family_name||'')+'" data-oh="'+esc(g.family_oh??'')+'" data-uom="'+esc(g.family_oh_uom||'')+'"><small>EFFECTIVE OH</small><b>'+fmt(g.family_oh)+' '+esc(g.family_oh_uom||'')+'</b><span>'+(g.family_oh_is_true_stock?'TRUE STOCK · tap to update':'TAP TO ENTER TRUE STOCK')+'</span></button>'+
        '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
        '<div class="qffocusbox receipt"><div><small>7D RECEIPT</small><span>PHYSICAL · DE-DUPED</span></div><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b></div>'+
      '</div></div>';
@@ -1661,6 +1734,7 @@ function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
  $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
  bindReceiptLinks();
+ bindFamilyOhEditors();
  requestAnimationFrame(fitQuickUpcNames);
 }
 async function hydrateQuickPrices(rows,requestId,attempt=0){
@@ -1778,13 +1852,14 @@ function renderStockFlow(){
  const sel=$('#stockFlowSort');if(sel){sel.value=stockFlowSort;sel.onchange=e=>{stockFlowSort=e.target.value;renderStockFlow()}}
  $$('[data-stock-delivery]').forEach(b=>b.onclick=()=>{stockFlowDeliveryFilter=b.dataset.stockDelivery||'ALL';renderStockFlow()});
  $$('[data-stock-category]').forEach(b=>b.onclick=()=>{stockFlowCategoryFilter=b.dataset.stockCategory||'ALL';renderStockFlow()});
- $$('[data-stock-receipts]').forEach(b=>b.onclick=e=>{
+ document.querySelectorAll('[data-stock-receipts]').forEach(b=>b.onclick=e=>{
    e.stopPropagation();
    const box=b.closest('.bestrecent');if(!box)return;
    box.classList.toggle('open');
    b.textContent=box.classList.contains('open')?'HIDE':'SHOW 2';
  });
  bindReceiptLinks();
+ bindFamilyOhEditors();
 }
 function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
@@ -1811,6 +1886,7 @@ function stockFlowFamilyHtml(g,idx){
  const promoHtml=promo?'<div class="stocksale stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+promoPrice+'</div>':'';
  const overSelling=ratio===null?'—':((ratio-1)*100).toFixed(0)+'%';
  return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
+   '<div class="stockohbar"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(g.family_article||'')+'" data-name="'+esc(g.family_name||'')+'" data-oh="'+esc(g.effective_oh??'')+'" data-uom="'+esc(g.effective_oh_uom||'')+'"><small>EFFECTIVE OH</small><b>'+fmt(g.effective_oh)+' '+esc(g.effective_oh_uom||'')+'</b><span>'+(g.effective_oh_is_true_stock?'TRUE STOCK · TAP TO UPDATE':'TAP TO ENTER TRUE STOCK')+'</span></button></div>'+
    '<div class="stockflowgrid"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div>'+
    '<div class="stockdiff'+(promo?' promoted':' nosale')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+overSelling+' over selling</span><span class="stockwatch">'+(promo?'RECENT SALE':'NO RECENT SALE')+'</span></div></div>'+
@@ -1841,7 +1917,12 @@ async function loadBestSellers(force=false){
     latest_receipt_date:r.latest_receipt_date||null,
     latest_receipt_cost:r.latest_receipt_cost,
     latest_receipt_cost_uom:r.latest_receipt_cost_uom||'',
-    latest_receipt_cost_source:r.latest_receipt_cost_source||null
+    latest_receipt_cost_source:r.latest_receipt_cost_source||null,
+    effective_oh:r.effective_oh,
+    effective_oh_uom:r.effective_oh_uom||'',
+    effective_oh_source:r.effective_oh_source||'',
+    effective_oh_status:r.effective_oh_status||'',
+    effective_oh_is_true_stock:!!r.effective_oh_is_true_stock
   }));
   renderStockFlow();
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
@@ -1852,7 +1933,7 @@ async function loadQuick(q){
  if(!query){lastQuickQuery='';await loadBestSellers();return}
  const requestId=++quickRequestSeq;lastQuickQuery=query;box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(query),{timeoutMs:18000});
+  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_oh=true&q='+encodeURIComponent(query),{timeoutMs:18000});
   if(requestId!==quickRequestSeq)return;
   const rows=d.rows||[];
   if(!rows.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
@@ -1871,7 +1952,8 @@ async function openUpc(upc){
  try{
   const d=await api('/v1/app/v2/upc/'+encodeURIComponent(upc),{timeoutMs:16000});
   const oh=d.effective_oh||{}, q7=d.qty_7d||{};
-  sheet(d.upc_name||upc,(d.upc||upc)+' · Family '+(d.family_article_number||'—'),'<div class="dmetrics"><div class="dm"><b>'+fmt(oh.quantity)+' '+esc(oh.uom||'')+'</b><span>EFFECTIVE OH</span></div><div class="dm"><b>'+fmt(d.upc_velocity_7d)+'</b><span>'+esc(d.qty_uom||d.selling_uom||'UNIT')+' / DAY</span></div><div class="dm"><b>'+money(d.current_price)+'</b><span>CURRENT '+esc(d.current_price_type||'PRICE')+'</span></div></div><div class="detail"><b>7D sales</b><br>'+fmt(q7.sold_quantity)+' '+esc(d.qty_uom||'')+' across '+fmt(q7.supported_day_count,0)+' completed data day(s).<br><br><b>Current price source</b><br>'+esc(d.current_price_source||'—')+(d.current_price_asof_date?' · '+esc(d.current_price_asof_date):'')+'<br><br><b>Current cost</b><br>'+money(d.current_cost_per_selling_unit)+' / '+esc(d.selling_uom||'unit')+'<br><br><b>OH status</b><br>'+esc(oh.status||'—')+(oh.reason?'<br>'+esc(oh.reason):'')+'</div>');
+  sheet(d.upc_name||upc,(d.upc||upc)+' · Family '+(d.family_article_number||'—'),'<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(d.family_article_number||'')+'" data-name="'+esc(d.family_article_name||d.upc_name||'')+'" data-oh="'+esc(oh.quantity??'')+'" data-uom="'+esc(oh.uom||'')+'"><b>'+fmt(oh.quantity)+' '+esc(oh.uom||'')+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmt(d.upc_velocity_7d)+'</b><span>'+esc(d.qty_uom||d.selling_uom||'UNIT')+' / DAY</span></div><div class="dm"><b>'+money(d.current_price)+'</b><span>CURRENT '+esc(d.current_price_type||'PRICE')+'</span></div></div><div class="detail"><b>7D sales</b><br>'+fmt(q7.sold_quantity)+' '+esc(d.qty_uom||'')+' across '+fmt(q7.supported_day_count,0)+' completed data day(s).<br><br><b>Current price source</b><br>'+esc(d.current_price_source||'—')+(d.current_price_asof_date?' · '+esc(d.current_price_asof_date):'')+'<br><br><b>Current cost</b><br>'+money(d.current_cost_per_selling_unit)+' / '+esc(d.selling_uom||'unit')+'<br><br><b>OH status</b><br>'+esc(oh.status||'—')+(oh.reason?'<br>'+esc(oh.reason):'')+'</div>');
+  bindFamilyOhEditors();
  }catch(e){sheet('Unable to load',upc,'<div class="detail">'+esc(e.message)+'</div>')}
 }
 
@@ -2328,9 +2410,10 @@ function renderOrderRoster(rows,data,h,stale){
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell"><button type="button" class="familyohinline" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+'</b><span>'+esc(r.oh_uom||'')+' · EDIT</span></button></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+ document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('[data-family-oh]'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
+ bindFamilyOhEditors();
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
@@ -2448,7 +2531,7 @@ function openOrder(r){
  const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
- '<div class="dmetrics"><div class="dm"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>CURRENT OH</span></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  histDetail+
@@ -2467,6 +2550,7 @@ function openOrder(r){
  (d.freshness_adjustment_applied?'<br><br><b>⚠ Current OH freshness adjustment</b><br>Latest valid receipt '+esc(appDate(d.freshness_latest_receipt_date))+' · current DOH '+fmtNullable(d.freshness_current_doh)+' · discard threshold '+fmtNullable(d.freshness_threshold_days)+' days.<br>Projected discard '+fmtNullable(d.freshness_projected_discard_qty)+' '+esc(r.oh_uom||'')+' · existing OH credited '+fmtNullable(d.freshness_existing_oh_credit)+' '+esc(r.oh_uom||'')+' · order increased '+fmtNullable(d.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'.':'')+
  '<br><br><b>Delivery evidence</b><br>'+fmt(r.delivery_day_observed_count,0)+' / '+fmt(r.delivery_day_receipt_count,0)+' receipt dates · '+fmt(r.delivery_day_confidence_pct,0)+'% confidence'+
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
+ bindFamilyOhEditors();
 }
 
 
@@ -2634,7 +2718,7 @@ async function loadPrices(opts={}){
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       '<div class="pmetrics">'+
-        '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
+        '<div class="pm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article_number||'')+'" data-name="'+esc(r.family_name||r.name||'')+'" data-oh="'+esc(r.current_oh??'')+'" data-uom="'+esc(r.current_oh_uom||'')+'"><small>EFFECTIVE OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>'+(r.current_oh_is_true_stock?'TRUE STOCK · EDIT':'TAP TO ENTER TRUE STOCK')+'</span></button></div>'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
         '<div class="pm"><small>'+(gap!==null?'TESTED GAP':'DOH')+'</small><b>'+(gap!==null?money(gap):fmt(r.doh))+'</b></div>'+
@@ -2655,11 +2739,12 @@ async function loadPrices(opts={}){
     '</article>';
   }).join('')||'<div class="empty">No '+(regMode?'REG replacement':'TPR suggestion')+' matches this filter.</div>';
 
-  $$('[data-price]').forEach(x=>x.onclick=e=>{
+  document.querySelectorAll('[data-price]').forEach(x=>x.onclick=e=>{
     if(e.target.closest('button,details,summary'))return;
     openPrice(rows[Number(x.dataset.price)]);
   });
-  $$('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
+  bindFamilyOhEditors();
+  document.querySelectorAll('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
   $$('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
   if(sourceChanged)schedulePriceRetry(requestId,2200);
  }catch(e){

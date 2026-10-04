@@ -4846,6 +4846,34 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 row["latest_receipt_cost_uom"] = cost_row.get("cost_uom")
                 row["latest_receipt_cost_source"] = cost_row.get("source_type")
 
+        # Every Stock Flow Family card carries the same live Effective OH
+        # authority used by Quick Check / Ordering / PI. This includes active
+        # Family True Stock observations immediately, without waiting for a new
+        # Quick Check publish.
+        for row in rows:
+            fid=int(row["family_id"])
+            cur.execute(
+                "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                (fid,),
+            )
+            children=cur.fetchall()
+            effective=_family_effective_oh(cur,children)
+            if effective.get("status")=="READY" and effective.get("quantity") is not None:
+                row["effective_oh"]=effective.get("quantity")
+                row["effective_oh_uom"]=effective.get("uom")
+                row["effective_oh_source"]=effective.get("source")
+                row["effective_oh_status"]="READY"
+                row["effective_oh_is_true_stock"]=str(
+                    effective.get("source") or ""
+                ).upper().startswith("FAMILY_TRUE_STOCK")
+            else:
+                published=_published_family_oh_fallback(children)
+                row["effective_oh"]=published.get("quantity") if published else None
+                row["effective_oh_uom"]=published.get("uom") if published else effective.get("uom")
+                row["effective_oh_source"]=published.get("source") if published else effective.get("source")
+                row["effective_oh_status"]=published.get("status") if published else effective.get("status")
+                row["effective_oh_is_true_stock"]=False
+
         cur.close()
 
     rows.sort(
@@ -4856,7 +4884,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST",
+        "contract_version": "YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4867,6 +4895,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "default_sort": "RECEIPT_OVER_SELLING_PCT_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "latest_receipt_cost": "MOVEMENT_RECEIPT_VALUATION_ON_LATEST_PHYSICAL_RECEIPT_DATE",
+            "effective_oh": "LIVE_FAMILY_EFFECTIVE_OH_WITH_TRUE_STOCK_AUTHORITY",
             "friday_warning": "FRIDAY_DOMINANT_AT_LEAST_2_DATES_AND_AT_LEAST_50_PERCENT_SHARE",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
             "movement_source": "PUBLISHED_QUICK_CHECK_CURRENT_FAMILY_7D",
@@ -6293,6 +6322,9 @@ def pricing_review(
         )
         row["current_price_basis"] = "TODAY_PRICE_LIST_VS_LATEST_COMPLETED_DAY_POS_FRESHNESS_GATE"
 
+        row["family_id"] = live.get("family_id")
+        row["family_article_number"] = live.get("main_article_number")
+        row["family_name"] = live.get("family_description")
         row["current_cost"] = current_cost
         row["current_cost_source"] = live.get("cost_source")
         row["cost_date"] = live.get("cost_date")

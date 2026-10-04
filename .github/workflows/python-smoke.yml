@@ -289,7 +289,7 @@ jobs:
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
-          assert 'YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST' in src
+          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -313,7 +313,7 @@ jobs:
           assert '"latest_receipt_cost"' in src
           assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
           assert "$$('[data-stock-category]').forEach" in ui
-          assert "$$('[data-stock-receipts]').forEach" in ui
+          assert "querySelectorAll('[data-stock-receipts]').forEach" in ui
           assert 'AVG PROMO PRICE' in ui
           assert '.stockdiff.promoted>b{display:inline-block;background:#fff34a' in ui
           assert '.stockpromo .promolift{display:inline-block' in ui
@@ -980,6 +980,12 @@ jobs:
           assert "'effective_oh':" in submit
           assert 'force:bool=False' in ordering_ep
           assert 'if parsed_delivery is not None and force' in ordering_ep
+          stockflow=inspect.getsource(bo.yipman_best_sellers)
+          assert '"effective_oh"' in stockflow
+          assert 'FAMILY_TRUE_STOCK' in stockflow
+          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in stockflow
+          assert 'row["family_article_number"] = live.get("main_article_number")' in pricing
+          assert 'row["family_name"] = live.get("family_description")' in pricing
           print('family-cost-global-true-stock=PASS')
           PY
 
@@ -1018,7 +1024,7 @@ jobs:
           assert "orderNextDate=plusDaysIso(orderDate,7)" in text
           assert "/v1/yipman/stock-flow?limit=100" in text
           assert "$$('[data-stock-category]').forEach" in text
-          assert "$$('[data-stock-receipts]').forEach" in text
+          assert "querySelectorAll('[data-stock-receipts]').forEach" in text
           assert 'id="headFreshness"' in text
           assert "/v1/yipman/header-freshness" in text
           assert "function renderHeaderFreshness" in text
@@ -1043,6 +1049,15 @@ jobs:
           assert "data-ai-question=" not in text
           assert "receipt_minus_selling_7d" in text
           assert "next_delivery_date=" in text
+          assert "function openFamilyTrueStock" in text
+          assert "function bindFamilyOhEditors" in text
+          assert "SAVE TRUE STOCK & RECALCULATE" in text
+          assert "data-family-oh" in text
+          assert "EFFECTIVE OH · EDIT TRUE STOCK" in text
+          assert "include_oh=true" in text
+          assert "stockohbar" in text
+          assert "effective_oh:r.effective_oh" in text
+          assert "TAP TO ENTER TRUE STOCK" in text
           print('yipman-dom-bindings=PASS')
           PY
 
