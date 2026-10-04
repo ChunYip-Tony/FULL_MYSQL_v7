@@ -120,6 +120,64 @@ html:not(.yipman-desktop) .workspace{height:calc(100% - 58px)!important}
  #order .order-simple-qty b{font-size:26px}
 }
 
+
+/* v7.0.467 simple, readable Promotion Ordering */
+html:not(.yipman-desktop) #order{padding-left:8px;padding-right:8px}
+html:not(.yipman-desktop) #order .topline h2{font-size:28px}
+html:not(.yipman-desktop) #order .order-tab{min-height:48px;font-size:13px}
+html:not(.yipman-desktop) #order .order-date-card{min-height:72px;padding:10px}
+html:not(.yipman-desktop) #order .order-date-card small{font-size:8px}
+html:not(.yipman-desktop) #order .order-date-card b{font-size:20px}
+html:not(.yipman-desktop) #order .order-date-card span{font-size:9px}
+html:not(.yipman-desktop) #order .daypill{min-width:48px;min-height:52px}
+html:not(.yipman-desktop) #order .daypill b{font-size:16px}
+#order .promo-card.simple{padding:12px;margin:9px 0;border-radius:17px}
+#order .promo-card.simple .promo-card-head{align-items:start}
+#order .promo-card.simple .promo-card-head b{font-size:19px;line-height:1.15}
+#order .promo-card.simple .promo-card-head small{font-size:10px;line-height:1.35;margin-top:3px}
+#order .promo-price-pill{border-radius:999px;background:#eef5fb;color:#235675;padding:6px 8px;font-size:10px;font-weight:1000;white-space:nowrap}
+#order .promo-primary-row{display:grid;grid-template-columns:minmax(0,1fr) 116px;gap:8px;margin-top:9px}
+#order .promo-primary-oh .familyohbtn{min-height:70px;border-radius:12px}
+#order .promo-primary-oh .familyohbtn small{font-size:8px}
+#order .promo-primary-oh .familyohbtn b{font-size:22px}
+#order .promo-primary-order{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;border-radius:12px;padding:9px;background:#f2f5f7;border:1px solid #d8e1e7}
+#order .promo-primary-order.need{background:#fff5cf;border-color:#e3ca72}
+#order .promo-primary-order small{font-size:7px;font-weight:1000;color:#6c7982}
+#order .promo-primary-order b{font-size:29px;line-height:1;color:#273f4f}
+#order .promo-primary-order.need b{color:#6b5000}
+#order .promo-primary-order span{font-size:9px;font-weight:950;color:#60717d}
+#order .promo-more{margin-top:8px;border:1px solid #dbe4ea;border-radius:11px;background:#fbfcfd}
+#order .promo-more summary{padding:9px 10px;font-size:10px;font-weight:1000;color:#3d5d72;cursor:pointer}
+#order .promo-more[open] summary{border-bottom:1px solid #e1e7eb}
+#order .promo-more .promo-metrics{padding:8px}
+#order .promo-remove-item{min-height:40px;margin-top:8px;font-size:10px}
+html:not(.yipman-desktop) .sheet{width:calc(100% - 8px)!important;max-width:none!important;max-height:94vh!important;border-radius:19px 19px 0 0!important}
+html:not(.yipman-desktop) .sheet h2{font-size:22px}
+html:not(.yipman-desktop) .sheet .sub{font-size:11px}
+html:not(.yipman-desktop) .sheet input,html:not(.yipman-desktop) .sheet select{min-height:48px;font-size:16px}
+html:not(.yipman-desktop) .manual-promo-searchbar{grid-template-columns:minmax(0,1fr) 82px}
+html:not(.yipman-desktop) .manual-promo-searchbar button{min-height:48px;font-size:10px}
+.manual-promo-result.friendly{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;text-align:left;gap:8px;min-height:68px}
+.manual-promo-result.friendly b{display:block;font-size:15px;line-height:1.15}
+.manual-promo-result.friendly strong{display:block;font-size:11px;margin-top:3px}
+.manual-promo-result.friendly span{display:block;font-size:9px;margin-top:3px}
+.manual-promo-result.friendly em{font-style:normal;font-size:10px;font-weight:1000;color:#17683c}
+.manual-promo-selected-heading{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.manual-promo-selected-card h4{font-size:17px;line-height:1.15}
+.manual-promo-selected-card .selmeta{font-size:9px;line-height:1.35}
+.manual-promo-selected-card .saleprice{font-size:8px;font-weight:1000}
+.manual-promo-selected-card .saleprice input{font-size:20px;font-weight:1000;text-align:center}
+.manual-promo-delivery{font-size:10px;line-height:1.4}
+.manual-promo-remove{min-height:38px;font-size:9px}
+.manual-promo-mode button{min-height:52px;font-size:10px}
+.manual-promo-mode button small{font-size:7px}
+.manual-promo-savebar{position:sticky;bottom:-1px;display:grid;grid-template-columns:90px minmax(0,1fr);gap:7px;padding:9px 0 2px;background:#fff;z-index:3}
+.manual-promo-savebar button{min-height:48px;font-size:10px;font-weight:1000}
+@media(max-width:390px){
+ #order .promo-primary-row{grid-template-columns:minmax(0,1fr) 104px}
+ #order .promo-primary-order b{font-size:26px}
+}
+
 </style><style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-mobile-v2-js\">" + mobile_v2_js + "</script><script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
@@ -1214,7 +1272,7 @@ async function loadHeaderFreshness(){
  }
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
-let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
+let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], promoLastData=null, promoFilter='ALL', promoSort='QTY', pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', dataPublishedBatch=null, historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
@@ -2803,6 +2861,8 @@ function openManualPromotion(){
  };
 }
 $('#promoManualBtn').onclick=openManualPromotion;
+const promoFilterEl=$('#promoFilter');if(promoFilterEl)promoFilterEl.onchange=e=>{promoFilter=e.target.value;renderPromotionRows(promoLastData)};
+const promoSortEl=$('#promoSort');if(promoSortEl)promoSortEl.onchange=e=>{promoSort=e.target.value;renderPromotionRows(promoLastData)};
 
 async function removeManualPromotionItem(itemId,btn=null){
  const id=Number(itemId);
@@ -2829,26 +2889,47 @@ async function removeManualPromotionItem(itemId,btn=null){
 }
 
 function renderPromotionRows(data){
- promoLastRows=Array.isArray(data?.rows)?data.rows:[];
- const manualList=Boolean(data?.list?.manual_item_removal_allowed??promoListDetail?.manual_item_removal_allowed)||String(data?.list?.source_filename||promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
+ promoLastData=data||promoLastData||{};
+ promoLastRows=Array.isArray(promoLastData?.rows)?promoLastData.rows:[];
+ const manualList=Boolean(promoLastData?.list?.manual_item_removal_allowed??promoListDetail?.manual_item_removal_allowed)||String(promoLastData?.list?.source_filename||promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
  const reviewItems=(promoListDetail?.items||[]).filter(x=>x.mapping_status!=='READY');
- const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b>'+reviewItems.slice(0,5).map(x=>'<div class="promo-review-item"><span>'+esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)+'</span>'+(manualList&&x.item_id?'<button type="button" data-promo-remove-item="'+esc(x.item_id)+'">REMOVE</button>':'')+'</div>').join('')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
- $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
+ const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' item(s) need review</b>'+reviewItems.slice(0,5).map(x=>'<div class="promo-review-item"><span>'+esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)+'</span>'+(manualList&&x.item_id?'<button type="button" data-promo-remove-item="'+esc(x.item_id)+'">REMOVE</button>':'')+'</div>').join('')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
+
+ let entries=promoLastRows.map((r,index)=>({r,index}));
+ entries=entries.filter(({r})=>{
+  const qty=num(r?.suggested_order_qty)??0;
+  if(promoFilter==='ORDER')return qty>0;
+  if(promoFilter==='ZERO')return qty<=0;
+  if(promoFilter==='FRESHNESS')return !!(r?.freshness_adjustment_applied||r?.freshness_coverage_capped);
+  return true;
+ });
+ entries.sort((a,b)=>{
+  const ra=a.r,rb=b.r;
+  if(promoSort==='NAME')return String(ra.family_article_name||'').localeCompare(String(rb.family_article_name||''));
+  if(promoSort==='FRESHNESS')return Number(!!(rb.freshness_adjustment_applied||rb.freshness_coverage_capped))-Number(!!(ra.freshness_adjustment_applied||ra.freshness_coverage_capped))||((num(rb.suggested_order_qty)||0)-(num(ra.suggested_order_qty)||0));
+  return (num(rb.suggested_order_qty)||0)-(num(ra.suggested_order_qty)||0)||String(ra.family_article_name||'').localeCompare(String(rb.family_article_name||''));
+ });
+
+ $('#promoRows').innerHTML=reviewHtml+entries.map(({r,index:i})=>{
   const p=r.promotion_list_item||{}, type=String(p.promotion_type||'').toUpperCase();
   const temp=!!r.temporary_oh_override_used;
   const effectiveOh=r.current_effective_oh??r.effective_oh_raw;
   const effectiveUom=r.current_effective_oh_uom||r.effective_oh_uom||r.uom||'';
   const effectiveSource=r.current_effective_oh_source||r.effective_oh_source||'';
   const calcOh=r.current_oh_for_calculation;
-  const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage, totalNeed=r.forecast_coverage_usage;
+  const promoNeed=r.forecast_promotion_coverage, regNeed=r.forecast_regular_coverage;
+  const qty=num(r.suggested_order_qty)??0;
   const freshnessHtml=r.freshness_adjustment_applied
-   ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · latest receipt '+esc(appDate(r.freshness_latest_receipt_date))+' · DOH '+fmtNullable(r.freshness_current_doh)+' · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
-   : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live order coverage stops at 7 days; later demand needs another delivery.</div>':'');
-  const remove=manualList&&p.item_id?'<button class="promo-remove-item" type="button" data-promo-remove-item="'+esc(p.item_id)+'">REMOVE FROM PROMOTION</button>':'';
-  return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
-   '<div class="promo-metrics"><div class="promo-metric real-oh">'+familyOhActionHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_article_name||p.family_name,oh:effectiveOh,uom:effectiveUom,source:effectiveSource},'promooh')+'</div><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>SCENARIO OH ✎</small><b>'+fmtNullable(calcOh)+' '+esc(r.uom||'')+'</b><span>'+(temp?'TEMPORARY OVERRIDE':'OPTIONAL WHAT-IF')+'</span></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
-   '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · SCENARIO OH only for this calculation':'')+'</div></div>'+remove+'</div>';
- }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
+   ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
+   : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live coverage stops at 7 days.</div>':'');
+  const remove=manualList&&p.item_id?'<button class="promo-remove-item" type="button" data-promo-remove-item="'+esc(p.item_id)+'">REMOVE ITEM</button>':'';
+  return '<div class="promo-card simple">'+
+   '<div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · '+esc(type||'PROMO')+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-price-pill">SALE '+money(p.promotion_price)+'</span></div>'+
+   '<div class="promo-primary-row"><div class="promo-primary-oh">'+familyOhActionHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_article_name||p.family_name,oh:effectiveOh,uom:effectiveUom,source:effectiveSource},'promooh')+'</div><div class="promo-primary-order '+(qty>0?'need':'zero')+'"><small>SUGGESTED ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+'</b><span>'+esc(r.suggested_order_uom||r.uom||'')+'</span></div></div>'+
+   freshnessHtml+
+   '<details class="promo-more"><summary>Order details</summary><div class="promo-metrics"><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>SCENARIO OH ✎</small><b>'+fmtNullable(calcOh)+' '+esc(r.uom||'')+'</b><span>'+(temp?'TEMP OVERRIDE':'OPTIONAL WHAT-IF')+'</span></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>PROMO NEED</small><b>'+fmtNullable(promoNeed)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>REGULAR NEED</small><b>'+fmtNullable(regNeed)+' '+esc(r.uom||'')+'</b></div></div></details>'+
+   remove+'</div>';
+ }).join('')||reviewHtml||'<div class="empty">No promotion items match this filter.</div>';
  document.querySelectorAll('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
  document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem,x)});
  bindFamilyOhEditors();
@@ -4190,7 +4271,6 @@ async function loadData(){
   ]);
   if(freshness){
    renderDataFreshness(freshness);
-   renderHeaderFreshness(freshness);
   }else{
    const df=$('#dataFreshness');if(df)df.innerHTML='<div class="empty">Freshness temporarily unavailable.</div>';
   }
@@ -4234,7 +4314,7 @@ function activePage(){return $('#'+current)}
 app.addEventListener('touchstart',e=>{const p=activePage();if($('#overlay').classList.contains('on')||!p||p.scrollTop>0||e.touches.length!==1)return;pullStart=e.touches[0].clientY;pull=0},{passive:true});
 app.addEventListener('touchmove',e=>{if(pullStart==null)return;const dy=e.touches[0].clientY-pullStart;if(dy<=0)return;pull=Math.min(105,dy*.52);$('#ptr').style.height=pull+'px';$('#ptrText').textContent=pull>=68?'Release to refresh':'Pull to refresh'},{passive:true});
 app.addEventListener('touchend',()=>{if(pullStart==null)return;const refresh=pull>=68;pullStart=null;if(!refresh){$('#ptr').style.height='0';return}$('#ptr').style.height='48px';$('#ptrText').textContent='Refreshing Yipman…';refreshCurrent().finally(()=>setTimeout(()=>{$('#ptr').style.height='0'},250))});
-async function refreshCurrent(){const fresh=loadHeaderFreshness();if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await loadPriceCurrentView();else if(current==='data')await loadData();await fresh;toast('Yipman refreshed')}
+async function refreshCurrent(){if(current==='quick'){const q=$('#globalInput').value.trim();if(q)await loadQuick(q);else await loadBestSellers(true)}else if(current==='order')await initOrdering(true);else if(current==='price')await loadPriceCurrentView();else if(current==='data')await loadData();toast('Yipman refreshed')}
 
 if(!window.__YIPMAN_DESKTOP_ACTIVE__){
  const initialHash=String(location.hash||'').replace(/^#/,'').split('/')[0];
@@ -4243,7 +4323,6 @@ if(!window.__YIPMAN_DESKTOP_ACTIVE__){
  history.pushState({yipman:true,view:initialView,guard:true,scrollTop:0,scrollLeft:0},'', '#'+initialView);
  historyReady=true;
  renderView(initialView);
- loadHeaderFreshness();
  pagePositions.set(initialView,{scrollTop:0,scrollLeft:0});
 }
 if('serviceWorker'in navigator)navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'}).catch(()=>{});
