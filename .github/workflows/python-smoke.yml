@@ -289,8 +289,12 @@ jobs:
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'promo_family_rows = children_by_family' in src
-          assert 'YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY' in src
+          assert 'YIPMAN_STOCK_FLOW_V10_ZERO_SELLING_INCLUDED' in src
           assert 'qualified_count = len(rows)' in src
+          assert 'no_recent_selling = bool(sold_d == 0 and receipt_qty > 0)' in src
+          assert '"no_recent_selling": no_recent_selling' in src
+          assert 'family_movement_7d >= 0' in src
+          assert 'COALESCE(family_movement_7d,0) > 0' not in src
           assert 'children_by_family' in src
           assert 'active_family_true_stock_ids' in src
           assert 'SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc' not in src
@@ -310,12 +314,15 @@ jobs:
           assert 'promotion_week_extra_qty' in ui
           assert "stockFlowSort='RATIO'" in ui
           assert 'OVER-SELLING % ↓' in ui
+          assert '0 SELLING MVT' in ui
+          assert 'positive receipts with 0 selling mvt' in ui
+          assert 'Number(zeroSelling(b))-Number(zeroSelling(a))' in ui
           assert 'USUALLY FRIDAY DELIVERY' in ui
           assert 'LATEST COST' in ui
           assert 'stockreceiptmore' in ui
           assert '"friday_delivery_warning": friday_delivery_warning' in src
           assert '"latest_receipt_cost"' in src
-          assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
+          assert 'ZERO_SELLING_FIRST_THEN_RECEIPT_OVER_SELLING_PCT_DESC' in src
           assert "$$('[data-stock-category]').forEach" in ui
           assert "querySelectorAll('[data-stock-receipts]').forEach" in ui
           assert 'AVG PROMO PRICE' in ui
@@ -997,7 +1004,7 @@ jobs:
           stockflow=inspect.getsource(bo.yipman_best_sellers)
           assert '"effective_oh"' in stockflow
           assert 'FAMILY_TRUE_STOCK' in stockflow
-          assert 'YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY' in stockflow
+          assert 'YIPMAN_STOCK_FLOW_V10_ZERO_SELLING_INCLUDED' in stockflow
           assert 'row["family_article_number"] = live.get("main_article_number")' in pricing
           assert 'row["family_name"] = live.get("family_description")' in pricing
           print('family-cost-global-true-stock=PASS')
