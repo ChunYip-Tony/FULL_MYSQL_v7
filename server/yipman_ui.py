@@ -1085,7 +1085,7 @@ async function loadHeaderFreshness(){
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', historyScrollTimer=null;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
@@ -1456,10 +1456,32 @@ async function resetQuickHome({push=true}={}){
 $$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
 const quickNav=$('.nav button[data-go="quick"]');
 if(quickNav)quickNav.onclick=()=>resetQuickHome();
+function stashCurrentSheet(){
+  const body=$('#sheetBody'),frag=document.createDocumentFragment(),sh=$('.sheet');
+  while(body?.firstChild)frag.appendChild(body.firstChild);
+  return {
+    title:$('#sheetTitle')?.textContent||'',
+    sub:$('#sheetSub')?.textContent||'',
+    body:frag,
+    scrollTop:Number(sh?.scrollTop||0),
+  };
+}
+function restorePreviousSheet(){
+  const prev=sheetStack.pop();if(!prev)return false;
+  const body=$('#sheetBody');
+  $('#sheetTitle').textContent=prev.title||'';
+  $('#sheetSub').textContent=prev.sub||'';
+  if(body){body.innerHTML='';body.appendChild(prev.body)}
+  $('#overlay').classList.add('on');
+  requestAnimationFrame(()=>{const sh=$('.sheet');if(sh)sh.scrollTop=Number(prev.scrollTop||0)});
+  return true;
+}
 function sheet(title,sub,html){
   const wasOpen=$('#overlay').classList.contains('on');
-  if(!wasOpen)saveCurrentHistoryPosition();
+  if(!wasOpen){saveCurrentHistoryPosition();sheetStack=[]}
+  else sheetStack.push(stashCurrentSheet());
   $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
+  const sh=$('.sheet');if(sh)sh.scrollTop=0;
   if(historyReady&&!wasOpen){
     const pos=currentPagePosition(current);
     history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
@@ -1468,7 +1490,9 @@ function sheet(title,sub,html){
 }
 function closeSheet(useHistory=true){
   if(!$('#overlay').classList.contains('on'))return;
+  if(useHistory&&sheetStack.length){restorePreviousSheet();return}
   $('#overlay').classList.remove('on');
+  sheetStack=[];
   const had=detailHistory;detailHistory=false;
   if(useHistory&&had){history.back();return}
   if(had&&historyReady){
@@ -1490,6 +1514,15 @@ window.addEventListener('popstate',e=>{
     hideExitConfirm();renderView('quick',{restore:true,reload:false,state:{...pos}});return;
   }
   if($('#overlay').classList.contains('on')){
+    if(sheetStack.length){
+      restorePreviousSheet();
+      if(historyReady){
+        const pos=pagePositions.get(current)||currentPagePosition(current);
+        history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
+        detailHistory=true;
+      }
+      return;
+    }
     $('#overlay').classList.remove('on');detailHistory=false;
     if(st?.yipman&&st.view){
       renderView(st.view,{restore:true,reload:false,state:st});
