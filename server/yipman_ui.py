@@ -178,6 +178,11 @@ html:not(.yipman-desktop) .manual-promo-searchbar button{min-height:48px;font-si
  #order .promo-primary-order b{font-size:26px}
 }
 
+
+.manual-promo-item-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}
+.manual-promo-item-actions button{min-height:40px;border:1px solid #cad9e4;border-radius:10px;background:#eef6fb;color:#245675;font-size:9px;font-weight:1000}
+.manual-promo-item-actions .manual-promo-remove{background:#fff0f0;color:#9b3434;border-color:#ecc3c3}
+
 </style><style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-mobile-v2-js\">" + mobile_v2_js + "</script><script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
@@ -2734,11 +2739,26 @@ function openManualPromotion(){
      '<div class="selmeta">Effective OH '+esc(effectiveOHText(fam))+' · Current price '+(item.current_price!=null?money(item.current_price):'—')+'</div></div>'+
      '<label class="saleprice">SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
     '<div class="manual-promo-delivery">'+esc(relatedDeliverySummary(fam))+'</div>'+
-    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE ITEM</button>'+
+    '<div class="manual-promo-item-actions"><button type="button" data-manual-promo-stock="'+esc(fid)+'">EDIT TRUE STOCK</button><button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE ITEM</button></div>'+
    '</div>';
   }).join('');
  }
  selectedBox.onclick=e=>{
+  const stock=e.target.closest?.('[data-manual-promo-stock]');
+  if(stock){
+   e.preventDefault();e.stopPropagation();
+   const x=selected.get(String(stock.dataset.manualPromoStock));
+   if(!x)return;
+   const fam=x.family||{},oh=fam?.current_effective_oh||{};
+   openFamilyTrueStock({
+    family:x.familyKey,
+    family_id:fam.family_id,
+    name:fam.family_article_name||x.item?.family_name||x.item?.name||x.familyKey,
+    oh:oh.quantity??oh.current_oh??oh.effective_oh,
+    uom:oh.uom||oh.uom_code||fam?.family_sales_7d?.uom||''
+   });
+   return;
+  }
   const btn=e.target.closest?.('[data-manual-promo-remove]');
   if(!btn)return;
   e.preventDefault();e.stopPropagation();
@@ -2915,11 +2935,21 @@ function renderPromotionRows(data){
  document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem,x)});
  bindFamilyOhEditors();
 }
+function promoLoadingHtml(message='Calculating promotion order…',detail='Yipman is combining promotion demand, regular demand, Effective OH and freshness.'){
+ return '<div class="order-loading-card promo-calc-loading"><b>'+esc(message)+'</b><span>'+esc(detail)+'</span><div class="order-loading-actions"><button type="button" id="promoCalcRetry">↻ CHECK NOW</button></div></div>';
+}
+function bindPromoCalcRetry(){
+ const b=$('#promoCalcRetry');if(b)b.onclick=()=>loadPromotionOrder();
+}
 async function loadPromotionOrder(){
  if(orderMode!=='PROMOTION')return;
- if(!promoListId){$('#promoOrderStatus').textContent='Choose or import a promotion list.';$('#promoRows').innerHTML='<div class="empty">No promotion list selected.</div>';return}
+ if(!promoListId){$('#promoOrderStatus').textContent='Add a promotion item or choose a saved promotion.';$('#promoRows').innerHTML='<div class="empty">No promotion selected yet.</div>';return}
  if(!orderDate||!orderNextDate)return;
- $('#promoOrderStatus').textContent='Calculating promotion + regular usage for '+appDate(orderDate)+' → '+appDate(orderNextDate)+'…';
+ $('#promoOrderStatus').textContent='Calculating '+appDate(orderDate)+' → '+appDate(orderNextDate)+'…';
+ if(!promoLastRows.length){
+  $('#promoRows').innerHTML=promoLoadingHtml();
+  bindPromoCalcRetry();
+ }
  try{
   const body={
    list_id:promoListId,
@@ -2927,13 +2957,19 @@ async function loadPromotionOrder(){
    next_delivery_date:orderNextDate,
    temporary_oh_overrides:[...promoTempOH.values()]
   };
-  const data=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeoutMs:45000});
+  const data=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),timeoutMs:20000});
   const freshnessCount=(data.rows||[]).filter(x=>x.freshness_adjustment_applied).length;
-  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' calculated · coverage through '+appDate(data.coverage_end_date)+(freshnessCount?' · '+freshnessCount+' freshness adjusted':'')+' · temporary OH values are NOT saved';
+  $('#promoOrderStatus').textContent=fmt(data.order_count,0)+' need order · '+fmt(data.suggestion_count,0)+' item'+(Number(data.suggestion_count||0)===1?'':'s')+(freshnessCount?' · '+freshnessCount+' freshness adjusted':'');
   renderPromotionRows(data);
  }catch(e){
-  $('#promoOrderStatus').textContent='Promotion calculation unavailable · '+e.message;
-  $('#promoRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+  const retryable=/timed out|failed to fetch|network|aborted/i.test(String(e?.message||''));
+  $('#promoOrderStatus').textContent=retryable?'Still calculating or reconnecting · tap CHECK NOW':'Promotion calculation needs attention';
+  if(!promoLastRows.length){
+   $('#promoRows').innerHTML=promoLoadingHtml(retryable?'Still calculating':'Could not calculate promotion order',String(e.message||e));
+   bindPromoCalcRetry();
+  }else{
+   toast('Could not refresh promotion calculation · showing previous results');
+  }
  }
 }
 function openPromoTempOH(r){
