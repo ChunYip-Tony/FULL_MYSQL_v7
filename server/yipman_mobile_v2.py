@@ -10,10 +10,11 @@ YIPMAN_MOBILE_V2_CSS = r"""
   #yv2 button{cursor:pointer}
   #yv2 .yv2-head{position:absolute;inset:0 0 auto 0;z-index:10;background:rgba(238,241,244,.98);border-bottom:2px solid #c7cfd8;padding:max(env(safe-area-inset-top,0px),10px) 14px 10px}
   @media(display-mode:standalone),(display-mode:fullscreen){#yv2 .yv2-head{padding-top:max(env(safe-area-inset-top,0px),26px)}}
-  #yv2 .yv2-headrow{display:flex;justify-content:space-between;align-items:center;gap:10px}
-  #yv2 .yv2-brand{font-size:24px;font-weight:1000;letter-spacing:-.04em}.yv2-brand span{color:var(--blue)}
-  #yv2 .yv2-version{font-size:11px;color:#667085;font-weight:800;margin-top:1px}
-  #yv2 .yv2-health{border:1.5px solid #a8cfbb;background:#edf8f2;color:#155f43;border-radius:999px;padding:7px 9px;font-size:11px;font-weight:950;white-space:nowrap}
+  #yv2 .yv2-headrow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px}
+  #yv2 .yv2-headrow>div:first-child{min-width:0}
+  #yv2 .yv2-brand{font-size:23px;font-weight:1000;letter-spacing:-.04em;white-space:nowrap}.yv2-brand span{color:var(--blue)}
+  #yv2 .yv2-version{font-size:10px;color:#667085;font-weight:800;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #yv2 .yv2-health{max-width:55vw;overflow:hidden;text-overflow:ellipsis;border:1.5px solid #a8cfbb;background:#edf8f2;color:#155f43;border-radius:999px;padding:7px 9px;font-size:10px;font-weight:950;white-space:nowrap}
   #yv2 .yv2-search{display:flex;align-items:center;gap:7px;margin-top:9px;background:#fff;border:2px solid #c8d0d9;border-radius:14px;padding:0 11px}
   #yv2 .yv2-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:12px 4px;font-size:17px;font-weight:700}
   #yv2 .yv2-search button{border:0;background:transparent;font-size:18px;padding:8px 3px}
@@ -73,7 +74,7 @@ YIPMAN_MOBILE_V2_CSS = r"""
   #yv2 .yv2-kpi span{font-size:10px;color:#5f6b7a;font-weight:900}
   #yv2 .yv2-select{width:100%;border:2px solid #cfd6de;background:#fff;border-radius:12px;padding:10px;font-size:13px;font-weight:900}
   #yv2 .yv2-bottom{position:absolute;inset:auto 0 0 0;z-index:12;background:var(--nav);padding:5px 5px max(env(safe-area-inset-bottom,0px),5px);display:grid;grid-template-columns:repeat(5,1fr);gap:2px}
-  #yv2 .yv2-nav{border:0;background:transparent;color:#bcc5cf;border-radius:11px;padding:6px 2px 5px;font-size:9px;font-weight:900;min-height:55px}
+  #yv2 .yv2-nav{border:0;background:transparent;color:#bcc5cf;border-radius:11px;padding:6px 2px 5px;font-size:9px;font-weight:900;min-height:55px;pointer-events:auto!important;touch-action:manipulation}
   #yv2 .yv2-nav i{font-style:normal;display:block;font-size:20px;margin-bottom:1px}.yv2-nav.on{background:#2c3946;color:#fff}
   #yv2 .yv2-empty{background:#fff;border:2px solid #d2d8df;border-radius:15px;padding:22px 14px;text-align:center;color:#5f6b7a;font-size:13px;font-weight:720}
   #yv2 .yv2-loading{padding:18px;text-align:center;color:#5f6b7a;font-size:13px;font-weight:800}
@@ -98,6 +99,8 @@ YIPMAN_MOBILE_V2_JS = r"""
   if(!window.matchMedia('(max-width:759px)').matches)return;
   if(new URLSearchParams(location.search).get('classic')==='1')return;
   document.documentElement.classList.add('yv2-active');
+  window.__YV2_READY__=false;
+  window.__YV2_LAST_ERROR__='';
 
   const V={
     page:'lookup', actionFilter:'all', orderMode:'regular', actions:[], orderRows:[],
@@ -133,20 +136,38 @@ YIPMAN_MOBILE_V2_JS = r"""
   document.body.appendChild(root);
 
   const $=s=>root.querySelector(s), $$=s=>[...root.querySelectorAll(s)];
+  const setUiError=(msg)=>{
+    window.__YV2_LAST_ERROR__=String(msg||'Unknown UI error');
+    const box=$('#yv2Health');
+    if(box){
+      box.textContent='UI ERROR';
+      box.title=window.__YV2_LAST_ERROR__;
+      box.style.background='#fff0ee';box.style.color='#a82820';box.style.borderColor='#dca6a0';
+    }
+  };
+  window.addEventListener('error',e=>setUiError(e?.error?.message||e?.message||'JavaScript error'));
+  window.addEventListener('unhandledrejection',e=>setUiError(e?.reason?.message||e?.reason||'Unhandled promise error'));
   const toast=m=>{const e=$('#yv2Toast');e.textContent=m;e.classList.add('on');clearTimeout(V.toastTimer);V.toastTimer=setTimeout(()=>e.classList.remove('on'),1800)};
   const modal=(html)=>{$('#yv2ModalBody').innerHTML=html;$('#yv2Modal').classList.add('on')};
   const closeModal=()=>$('#yv2Modal').classList.remove('on');
   $('#yv2Modal').onclick=e=>{if(e.target.id==='yv2Modal')closeModal()};
 
   function go(p){
-    V.page=p;root.classList.toggle('lookup-mode',p==='lookup');$$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
-    $('#yv2SearchForm').style.display=p==='lookup'?'flex':'none';
-    document.querySelector('#yv2-'+p)?.scrollTo(0,0);
+    if(!['lookup','actions','order','performance','more'].includes(p))return;
+    V.page=p;
+    root.classList.toggle('lookup-mode',p==='lookup');
+    $$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));
+    $$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
+    const searchForm=$('#yv2SearchForm');if(searchForm)searchForm.style.display=p==='lookup'?'flex':'none';
+    const page=$('#yv2-'+p);if(page&&typeof page.scrollTo==='function')page.scrollTo(0,0);
     if(p==='actions'&&!V.actionsLoaded)loadActions();
     if(p==='order'&&!V.orderLoaded)initOrder();
     if(p==='performance'&&!V.performanceLoaded)loadPerformance(1);
   }
-  $$('.yv2-nav').forEach(b=>b.onclick=()=>go(b.dataset.page));
+  root.addEventListener('click',e=>{
+    const nav=e.target.closest?.('[data-page]');
+    if(nav&&root.contains(nav)){e.preventDefault();go(nav.dataset.page);return}
+  },true);
 
   async function loadHealth(){
     const box=$('#yv2Health');
@@ -172,11 +193,14 @@ YIPMAN_MOBILE_V2_JS = r"""
       const staleBySource=['warn','bad'].includes(String(src?.POS?.tone||''))||['warn','bad'].includes(String(src?.MVT?.tone||''));
       const stale=staleByDate||staleBySource;
       if(V.dataThrough){
-        box.textContent=stale?('Data thru '+V.dataThrough+(expected?' · expected '+expected:'')):('Published thru '+V.dataThrough);
+        const short=v=>String(v||'').slice(5).replace('-','/');
+        box.textContent=stale?('DATA '+short(V.dataThrough)+' → '+short(expected||'')):('DATA '+short(V.dataThrough)+' ✓');
+        box.title=stale?('Data through '+V.dataThrough+' · expected '+expected):('Published through '+V.dataThrough);
       }else if(posDate||mvtDate){
-        box.textContent='POS '+String(posDate||'—')+' · MVT '+String(mvtDate||'—');
+        box.textContent='DATA CHECK';
+        box.title='POS '+String(posDate||'—')+' · MVT '+String(mvtDate||'—');
       }else{
-        box.textContent='Data unavailable';
+        box.textContent='DATA unavailable';
       }
       if(stale||!V.dataThrough){box.style.background='#fff4d1';box.style.color='#7d5300';box.style.borderColor='#d9bb6d'}
     }catch(e){
@@ -211,9 +235,11 @@ YIPMAN_MOBILE_V2_JS = r"""
       bindStockButtons(box);box.querySelectorAll('[data-upc]').forEach(b=>b.onclick=()=>openUpc(b.dataset.upc));
     }catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
-  $('#yv2SearchForm').onsubmit=e=>{e.preventDefault();const q=$('#yv2Search').value.trim();if(q.length<2){toast('Enter at least 2 characters');$('#yv2Search').focus();return}searchLookup(q);$('#yv2Search').blur()};
-  let st;$('#yv2Search').oninput=()=>{clearTimeout(st);const q=$('#yv2Search').value.trim();if(q.length>=2)st=setTimeout(()=>searchLookup(q),330)};
-  $('#yv2SearchClear').onclick=()=>{$('#yv2Search').value='';$('#yv2LookupRows').innerHTML='<div class="yv2-empty">Search a UPC, Family Article, Receiving Article, English name, or Chinese name.</div>';$('#yv2Search').focus()};
+  $('#yv2SearchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('#yv2Search').value.trim();if(q.length<2){toast('Enter at least 2 characters');$('#yv2Search').focus();return}searchLookup(q);$('#yv2Search').blur()});
+  let st;$('#yv2Search').addEventListener('input',()=>{clearTimeout(st);const q=$('#yv2Search').value.trim();if(q.length>=2)st=setTimeout(()=>searchLookup(q),330)});
+  root.addEventListener('click',e=>{
+    if(e.target.closest?.('#yv2SearchClear')){$('#yv2Search').value='';$('#yv2LookupRows').innerHTML='<div class="yv2-empty">Search a UPC, Family Article, Receiving Article, English name, or Chinese name.</div>';$('#yv2Search').focus()}
+  });
 
   async function openUpc(upc){
     modal('<h3>Loading item…</h3><p>'+esc(upc)+'</p><div class="yv2-loading">Loading current item detail…</div>');
@@ -372,6 +398,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   $$('[data-more]').forEach(b=>b.onclick=()=>{const x=b.dataset.more;if(x==='tpr'){go('actions');V.actionFilter='price';renderActions()}else if(x==='data')modal('<h3>Data Status</h3><p>Published through '+esc(V.dataThrough||'—')+'. Detailed batch and QA administration remains on Desktop Back Office.</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>'),$('#yv2ModalClose')&&($('#yv2ModalClose').onclick=closeModal);else if(x==='pi'){go('lookup');$('#yv2Search').focus()}else toast('Use Item Lookup for receipt details')});
   $('#yv2Classic').onclick=()=>{const u=new URL(location.href);u.searchParams.set('classic','1');location.href=u.toString()};
 
-  loadHealth();
+  window.__YV2_READY__=true;
+  loadHealth().catch(e=>setUiError(e?.message||e));
 })();
 """
