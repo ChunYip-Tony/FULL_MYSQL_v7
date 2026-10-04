@@ -2929,6 +2929,7 @@ function renderCurrentTpr(){
    return '<article class="pcard tprcard tone'+(i%5)+'" data-tpr-row="'+i+'">'+
      '<div class="ptop"><div class="pidentity"><div class="pupc"><span>UPC#</span><strong>'+esc(r.upc||'—')+'</strong></div><b>'+esc(r.name||r.upc||'Item')+'</b><small>Family '+esc(r.family_article_number||'—')+' · '+esc(r.category||'')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
      '<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>START '+esc(shortDate(r.tpr_start_date))+(String(r.tpr_purpose_source||'').startsWith('USER')?' · USER SET':'')+'</span></div>'+
+     effectiveOhDisplay(r.current_oh,r.system_oh,r.current_oh_uom||r.system_oh_uom,r.current_oh_source,true).replace('data-family-oh-edit="1"','data-family-oh-edit="1" data-oh-context="'+esc(JSON.stringify({family_article:r.family_article_number,family_name:r.name,action_upc:r.upc,uom:r.current_oh_uom||r.system_oh_uom,effective_oh:r.current_oh,system_oh:r.system_oh}))+'"')+
      '<div class="preasoncall '+(meta.cls==='urgent'?'red':meta.cls==='continue'?'green':'amber')+'"><span class="preasonmark">!</span><div><strong>TPR decision:</strong> '+esc(r.recommendation_reason||'Review current TPR performance')+'</div><span class="preasonchev">›</span></div>'+
      '<div class="pricepath">'+
        '<div class="pp current"><small>CURRENT TPR</small><b>'+money(r.current_tpr_price)+'</b><span>'+esc(gpText(r.current_tpr_price,r.current_cost))+'</span></div>'+
@@ -2941,7 +2942,7 @@ function renderCurrentTpr(){
        '<div><small>PROJECTED</small><b>'+esc(future.main)+'</b><span>'+esc(future.sub)+'</span></div>'+
      '</div>'+
      '<div class="pmetrics">'+
-       '<div class="pm"><small>OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
+       '<div class="pm"><small>EFFECTIVE OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
        '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.selling_uom||'')+'</b></div>'+
        '<div class="pm"><small>3D VEL LIFT</small><b class="tprlift '+lift.cls+'">'+esc(lift.text)+'</b></div>'+
        '<div class="pm"><small>GP$/D LIFT</small><b class="tprlift '+gpLift.cls+'">'+esc(gpLift.text)+'</b></div>'+
@@ -2951,10 +2952,11 @@ function renderCurrentTpr(){
      '<div class="pcard-actions"><button class="pdetail" data-tpr-detail="'+i+'">DETAIL</button><button class="pdetail" data-tpr-action="'+i+'">'+esc(meta.label)+'</button><button class="pignore snooze12" data-tpr-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
    '</article>';
  }).join('')||'<div class="empty">No current TPR item matches this filter.</div>';
- $$('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
- $$('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
+ $('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
+ $('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
  $('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
  $('[data-tpr-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreTprProgress(rows[Number(b.dataset.tprIgnore)])});
+ bindFamilyOhEditors();
 }
 async function setTprPurpose(r,purpose){
  if(!r?.upc||!r?.tpr_start_date){toast('TPR start date unavailable');return}
@@ -2989,13 +2991,15 @@ function openCurrentTpr(r){
    '<br><br><b>Continuous TPR lifecycle</b><br>Started '+esc(r.tpr_start_date||'—')+' · basis '+esc(r.tpr_start_basis||'—')+'<br>Current price step since '+esc(r.current_tpr_price_step_start_date||'—')+
    '<br><br><b>Current response vs clean pre-TPR baseline</b><br>TPR velocity '+fmt(r.tpr_velocity_3d)+'/day · baseline '+fmt(r.baseline_velocity)+'/day · lift '+esc(lift.text)+
    '<br>TPR GP$/day '+money(r.tpr_gp_per_day_3d)+' · baseline normalized GP$/day '+money(r.baseline_gp_per_day_current_cost)+' · lift '+esc(gpLift.text)+
-   cancelAction+'<br><br><b>Inventory</b><br>Effective OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
+   cancelAction+'<br><br><b>Inventory</b><br>Effective OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · System OH '+fmt(r.system_oh)+' '+esc(r.system_oh_uom||r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
    '<br><br><b>Observed TPR price behavior</b>'+tprPriceStepsHtml(r)+
-   '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether current velocity will clear effective OH before the freshness threshold.</div>'
+   '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether the aging stock that reaches the freshness threshold will be cleared by the threshold day; newer stock is not forced to zero.</div><div class="actions" id="tprDetailActions"></div>'
  );
  $('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
- const act=$('#sheetBody .actions');if(act)act.insertAdjacentHTML('beforeend','<button class="secondary snooze12" id="tprProgressIgnore12h">IGNORE 12 HOURS</button>');
+ const act=$('#tprDetailActions');
+ if(act)act.innerHTML='<button class="secondary snooze12" id="tprProgressIgnore12h">IGNORE 12 HOURS</button><button class="secondary" id="tprTrueStockEdit">EDIT TRUE STOCK</button>';
  const ign=$('#tprProgressIgnore12h');if(ign)ign.onclick=()=>ignoreTprProgress(r);
+ const tso=$('#tprTrueStockEdit');if(tso)tso.onclick=()=>openFamilyTrueStock({family_article:r.family_article_number,family_name:r.name,action_upc:r.upc,uom:r.current_oh_uom||r.system_oh_uom,effective_oh:r.current_oh,system_oh:r.system_oh});
 }
 async function loadCurrentTpr(opts={}){
  const requestId=++tprRequestSeq;
