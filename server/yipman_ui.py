@@ -2781,8 +2781,9 @@ async function loadPrices(opts={}){
       '</div>'+
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
+      familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
       '<div class="pmetrics">'+
-        '<div class="pm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article_number||'')+'" data-name="'+esc(r.family_name||r.name||'')+'" data-oh="'+esc(r.current_oh??'')+'" data-uom="'+esc(r.current_oh_uom||'')+'"><small>EFFECTIVE OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b><span>'+(r.current_oh_is_true_stock?'TRUE STOCK · EDIT':'TAP TO ENTER TRUE STOCK')+'</span></button></div>'+
+        '<div class="pm"><small>EFFECTIVE OH</small><b>'+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
         '<div class="pm"><small>'+(gap!==null?'TESTED GAP':'DOH')+'</small><b>'+(gap!==null?money(gap):fmt(r.doh))+'</b></div>'+
@@ -2799,7 +2800,7 @@ async function loadPrices(opts={}){
         '<br><b>Test target:</b> '+money(r.testing_target_price||r.target_sweet_spot_price)+
         (detailSignals?'<br><b>Signals:</b><br>'+detailSignals:'')+
       '</div></details>'+
-      '<div class="pcard-actions"><button class="pdetail" data-price-detail="'+i+'">DETAIL</button><button class="pignore" data-price-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
+      '<div class="pcard-actions"><button class="pdetail" data-price-detail="'+i+'">DETAIL</button><button class="pignore snooze12" data-price-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
     '</article>';
   }).join('')||'<div class="empty">No '+(regMode?'REG replacement':'TPR suggestion')+' matches this filter.</div>';
 
@@ -2827,8 +2828,9 @@ function openPrice(r){
  const suggestion=regMode?(r.reg_suggestion_price??r.tested_price):(r.tpr_suggestion_price??r.testing_price);
  const why=regMode?(r.reg_suggestion_reason||r.primary_reason_text||'REG review'):(r.tpr_suggestion_reason||r.primary_reason_text||'TPR review');
  const suggestionLabel=regMode?'SUGGESTED REG':'TPR SUGGESTION PRICE';
+ const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
  sheet(r.name||r.upc,r.upc||(regMode?'REG suggestion':'TPR suggestion'),
- '<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT '+esc(r.current_price_type||'')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>PROVED SWEET SPOT · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(suggestion)+'</b><span>'+esc(suggestionLabel)+' · '+esc(gpText(suggestion,r.current_cost))+'</span></div></div>'+
+ ohPair+'<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT '+esc(r.current_price_type||'')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>PROVED SWEET SPOT · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(suggestion)+'</b><span>'+esc(suggestionLabel)+' · '+esc(gpText(suggestion,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
  '<div class="detail"><b>Suggested action</b><br>'+esc(why)+
  (String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').startsWith('249')&&r.related_240_current_price!=null?'<br><br><b>240 → 249 price rule</b><br>240 '+esc(r.related_240_upc||'—')+' current '+money(r.related_240_current_price)+' → 249 '+esc(r.upc||'—')+' current '+money(r.current_price)+' · required 249 price '+money(r.related_240_current_price):'')+
@@ -2846,8 +2848,10 @@ function openPrice(r){
  '<br>Retail-facing prices use normal store endings .29 / .49 / .59 / .69 / .79 / .99. Controlled TPR tests move at least $0.45 from Current.'+
  '<br><br><b>Observed delivery pattern</b><br>'+(delivery||'No positive receipt weekday observed in the 180-day window.')+
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
- '<div class="actions"><button class="secondary" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
+ '<div class="actions"><button class="secondary" id="priceTrueStockEdit">EDIT TRUE STOCK</button><button class="secondary snooze12" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
  const ig=$('#priceIgnore12h');if(ig)ig.onclick=()=>ignorePriceSuggestion(r);
+ const ts=$('#priceTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,name:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
+ bindFamilyOhEditors();
 }
 $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
  priceFilter=b.dataset.priceFilter;
