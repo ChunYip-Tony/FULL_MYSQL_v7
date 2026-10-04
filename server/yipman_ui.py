@@ -176,7 +176,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v474';
+const CACHE='yipman-v1-v475';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -212,7 +212,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v474';
+const CACHE='yipman-v475';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1426,6 +1426,22 @@ body.yipman-v1 #overlay .truestockactions button{min-height:54px;font-size:12px}
  body.yipman-v1 #order .orderohcompact b{font-size:18px}
  body.yipman-v1 #quick .stockfilterbtn{padding:6px 8px;font-size:8px}
 }
+
+/* V475 · Company A/B/C references are always visible on Price Review cards when applicable. */
+.companyrefs{margin-top:8px;padding:8px;border:1px solid #d7e2ea;border-radius:12px;background:#f7fafc}
+.companyrefs-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.companyrefs-head span{font-size:8px;font-weight:1000;letter-spacing:.04em;color:#536979}
+.companyrefs-head em{font-style:normal;font-size:8px;font-weight:1000;color:#6f7f8c;white-space:nowrap}
+.companyrefs-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}
+.companyref{min-width:0;text-align:center;border:1px solid #dfe6eb;border-radius:9px;background:#fff;padding:6px}
+.companyref small{display:block;font-size:7px;line-height:1;color:#6d7a86;font-weight:1000}
+.companyref b{display:block;margin-top:4px;font-size:16px;line-height:1;color:#22384b;font-weight:1000;white-space:nowrap}
+.companyref.a{background:#f4f8ff}.companyref.b{background:#f4fbf6}.companyref.c{background:#fff9e9}
+body.yipman-v1 .companyrefs{padding:9px;border-radius:13px}
+body.yipman-v1 .companyrefs-head span,body.yipman-v1 .companyrefs-head em{font-size:9px}
+body.yipman-v1 .companyref{padding:8px 6px}
+body.yipman-v1 .companyref small{font-size:8px}
+body.yipman-v1 .companyref b{font-size:19px}
 </style>
 </head>
 <body>
@@ -3680,6 +3696,14 @@ function priceProgress(r){
   const ratio=v7/v28,delta=(ratio-1)*100,pct=Math.max(0,Math.min(100,ratio*100));
   return {pct,label:'Velocity '+fmt(v7)+' /day',delta:'vs 28D '+fmt(v28)+' /day · '+(delta>=0?'+':'')+delta.toFixed(0)+'%'};
 }
+function companyPriceRefsHtml(r){
+ const a=num(r?.company_price_a??r?.company_a),b=num(r?.company_price_b??r?.company_b),c=num(r?.company_price_c??r?.company_c);
+ if(a===null&&b===null&&c===null)return '';
+ const vals=[a,b,c].filter(x=>x!==null);
+ const low=vals.length?Math.min(...vals):null,high=vals.length?Math.max(...vals):null;
+ const box=(label,value,cls)=>'<div class="companyref '+cls+'"><small>COMPANY '+label+'</small><b>'+(value===null?'—':money(value))+'</b></div>';
+ return '<div class="companyrefs"><div class="companyrefs-head"><span>COMPANY SUGGESTION PRICES</span><em>'+(low!==null&&high!==null?(low===high?money(low):money(low)+'–'+money(high)):'REFERENCE')+'</em></div><div class="companyrefs-grid">'+box('A',a,'a')+box('B',b,'b')+box('C',c,'c')+'</div></div>';
+}
 function priceSignals(r){
   const out=[],code=String(r?.suggestion_reason_code||'');
   if(r?.priority_240_249_mismatch||code==='PAIR_FIX')out.push('240≠249');
@@ -3797,6 +3821,7 @@ async function loadPrices(opts={}){
         '<div class="pp tested"><small>'+esc(regMode?'PROVED SWEET SPOT':'TESTED SWEET SPOT')+'</small><b>'+money(r.tested_price)+'</b><span>'+esc(gpText(r.tested_price,r.current_cost))+(r.tested_evidence_price!=null&&num(r.tested_evidence_price)!==num(r.tested_price)?' · evidence '+money(r.tested_evidence_price):'')+'</span></div>'+
         '<div class="pp testing"><small>'+esc(regMode?'SUGGESTED REG':'TPR SUGGESTION PRICE')+'</small><b>'+money(suggested)+'</b><span>'+esc(regMode?'NEW EVERYDAY PRICE':(r.tpr_suggestion_purpose==='FRESHNESS_SELL_THROUGH'?'FRESHNESS':'SWEET SPOT TEST'))+' · '+esc(gpText(suggested,r.current_cost))+'</span></div>'+
       '</div>'+
+      companyPriceRefsHtml(r)+
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
@@ -4000,7 +4025,7 @@ function renderCurrentTpr(){
        '<div class="pp current"><small>CURRENT TPR</small><b>'+money(r.current_tpr_price)+'</b><span>'+esc(gpText(r.current_tpr_price,r.current_cost))+'</span></div>'+
        '<div class="pp tested"><small>CURRENT COST</small><b>'+money(r.current_cost)+'</b><span>'+esc(r.selling_uom||'unit')+'</span></div>'+
        '<div class="pp testing"><small>3D TPR QTY</small><b>'+fmt(r.tpr_qty_3d)+'</b><span>'+fmt(r.tpr_velocity_3d)+'/day</span></div>'+
-     '</div>'+pair+suggestion+
+     '</div>'+companyPriceRefsHtml(r)+pair+suggestion+
      '<div class="tprmonitor">'+
        '<div><small>BEFORE TPR</small><b>'+fmt(prev.velocity)+'/day</b><span>GP$/d '+money(prev.gp_per_day_current_cost)+'</span></div>'+
        '<div><small>NOW</small><b>'+fmt(now.velocity)+'/day</b><span>GP$/d '+money(now.gp_per_day)+'</span></div>'+
@@ -4134,6 +4159,7 @@ function renderClearanceRows(){
        '<div><small>7D VEL</small><b>'+fmt(r.current_velocity_7d)+'</b></div>'+
      '</div>'+
      '<div class="pcost"><span>CURRENT '+esc(r.current_price_type||'PRICE')+' · '+esc(trueStock)+'</span><b>'+money(r.current_price)+' · cost '+money(r.current_cost)+'</b></div>'+
+     companyPriceRefsHtml(r)+
      '<div class="tprwindow">'+fmt(r.days_to_expiry,0)+' day(s) to expiry · '+fmt(r.sell_days_including_today,0)+' selling day(s) including today'+(warn?' · '+esc(warn):'')+'</div>'+
      '<div style="margin-top:6px">'+stages.map(s=>'<div class="clearance-stage"><span>'+esc(s.label||('STEP '+s.stage))+'</span><b>'+money(s.suggested_price)+'</b><span>'+esc(shortDate(s.start_date))+'–'+esc(shortDate(s.end_date))+' · target '+fmt(s.required_daily_qty_reference)+'/day'+(s.margin_floor_applied?' · COST FLOOR':'')+'</span></div>').join('')+'</div>'+
      '<div class="clearance-actions"><button data-clearance-stock="'+i+'">TRUE STOCK</button><button class="primary" data-clearance-edit="'+i+'">EDIT PLAN</button><button class="snooze12" data-clearance-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
