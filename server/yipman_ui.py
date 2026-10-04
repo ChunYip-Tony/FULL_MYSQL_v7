@@ -3058,13 +3058,28 @@ async function loadCurrentTpr(opts={}){
    $('#tprRows').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
  }
 }
+
+function clearanceIgnoreId(r){return 'CLEARANCE:'+String(r?.upc||'').trim()+':'+String(r?.expiry_date||'')}
+function clearanceIsIgnored(r){
+ const id=clearanceIgnoreId(r);if(!id)return false;
+ const map=readPriceIgnores(),ts=Number(map[id]||0);
+ if(!(ts>0))return false;
+ if(Date.now()-ts>=PRICE_IGNORE_MS){delete map[id];writePriceIgnores(map);return false}
+ return true;
+}
+function ignoreClearanceSuggestion(r){
+ const id=clearanceIgnoreId(r);if(!id)return;
+ const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
+ toast('Clearance suggestion hidden for 12 hours');
+ renderClearanceRows();
+}
 function clearanceWarningText(r){
  const a=Array.isArray(r?.warnings)?r.warnings:[];
  return a.map(friendlySignal).join(' · ');
 }
 function renderClearanceRows(){
- const rows=clearanceRows||[];
- $('#clearanceStatus').textContent=rows.length+' active clearance plan'+(rows.length===1?'':'s')+' · expiry priority';
+ const all=clearanceRows||[],ignored=all.filter(clearanceIsIgnored).length,rows=all.filter(r=>!clearanceIsIgnored(r));
+ $('#clearanceStatus').textContent=rows.length+' active clearance plan'+(rows.length===1?'':'s')+' · expiry priority'+(ignored?' · '+ignored+' ignored <12h':'');
  $('#clearanceRows').innerHTML=rows.map((r,i)=>{
    const stages=Array.isArray(r.stages)?r.stages:[];
    const trueStock=r.active_true_stock?('TRUE STOCK '+fmt(r.effective_oh)+' '+esc(r.effective_oh_uom||'')):('OH '+fmt(r.effective_oh)+' '+esc(r.effective_oh_uom||''));
@@ -3080,12 +3095,13 @@ function renderClearanceRows(){
      '<div class="pcost"><span>CURRENT '+esc(r.current_price_type||'PRICE')+' · '+esc(trueStock)+'</span><b>'+money(r.current_price)+' · cost '+money(r.current_cost)+'</b></div>'+
      '<div class="tprwindow">'+fmt(r.days_to_expiry,0)+' day(s) to expiry · '+fmt(r.sell_days_including_today,0)+' selling day(s) including today'+(warn?' · '+esc(warn):'')+'</div>'+
      '<div style="margin-top:6px">'+stages.map(s=>'<div class="clearance-stage"><span>'+esc(s.label||('STEP '+s.stage))+'</span><b>'+money(s.suggested_price)+'</b><span>'+esc(shortDate(s.start_date))+'–'+esc(shortDate(s.end_date))+' · target '+fmt(s.required_daily_qty_reference)+'/day'+(s.margin_floor_applied?' · COST FLOOR':'')+'</span></div>').join('')+'</div>'+
-     '<div class="clearance-actions"><button data-clearance-stock="'+i+'">TRUE STOCK</button><button class="primary" data-clearance-edit="'+i+'">EDIT PLAN</button></div>'+
+     '<div class="clearance-actions"><button data-clearance-stock="'+i+'">TRUE STOCK</button><button class="primary" data-clearance-edit="'+i+'">EDIT PLAN</button><button class="snooze12" data-clearance-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
    '</article>';
  }).join('')||'<div class="empty">No active clearance plan. Search an item above to add expiring stock.</div>';
  document.querySelectorAll('[data-clearance-detail]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openClearanceDetail(rows[Number(x.dataset.clearanceDetail)])});
  document.querySelectorAll('[data-clearance-stock]').forEach(b=>b.onclick=e=>{e.stopPropagation();openClearanceTrueStock(rows[Number(b.dataset.clearanceStock)])});
  document.querySelectorAll('[data-clearance-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();openClearanceSetup({number:rows[Number(b.dataset.clearanceEdit)].upc,name:rows[Number(b.dataset.clearanceEdit)].name,selling_uom:rows[Number(b.dataset.clearanceEdit)].uom_code},rows[Number(b.dataset.clearanceEdit)])});
+ document.querySelectorAll('[data-clearance-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreClearanceSuggestion(rows[Number(b.dataset.clearanceIgnore)])});
 }
 async function loadClearance(){
  $('#clearanceStatus').textContent='Loading active clearance plans…';
