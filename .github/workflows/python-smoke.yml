@@ -113,7 +113,7 @@ jobs:
           home_src=inspect.getsource(b._build_backoffice_home_summary)
           assert '{"CURRENT","STALE_ESTIMATE_AVAILABLE"}' in home_src
           cache_src=inspect.getsource(b._ordering_review_cache_key)
-          assert 'V19_RECEIVING_PACK' in cache_src
+          assert 'V20_DAY_PLUS_MINUS_ONE' in cache_src
           assert hasattr(b,'_historical_receiving_article_summary')
           assert hasattr(b,'_article_manual_family_pack_context')
 
@@ -179,7 +179,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v464'" in ui
+          assert "const CACHE='yipman-v465'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -387,7 +387,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v464'" in ui
+          assert "const CACHE='yipman-v465'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'CACHED STOCK FLOW' in ui
           assert 'data-stock-retry' in ui
@@ -645,6 +645,26 @@ jobs:
           assert baseline['regular_weekday_detail'][1]['forecast_basis']=='HISTORICAL_WEEKDAY_AVERAGE'
           assert baseline['regular_velocity_by_weekday'][0] != baseline['regular_velocity_by_weekday'][1]
 
+          # Selected Tuesday must include observed Monday / Tuesday / Wednesday
+          # receipt cadence; Thursday-only history must not enter this roster.
+          pattern={
+              'receipt_date_count':7,
+              'lookback_days':180,
+              'observed_delivery_days':[
+                  {'weekday':'Monday','weekday_number':0,'receipt_date_count':2,'confidence_percent':29},
+                  {'weekday':'Tuesday','weekday_number':1,'receipt_date_count':1,'confidence_percent':14},
+                  {'weekday':'Wednesday','weekday_number':2,'receipt_date_count':3,'confidence_percent':43},
+                  {'weekday':'Thursday','weekday_number':3,'receipt_date_count':1,'confidence_percent':14},
+              ],
+          }
+          window=bo._yipman_delivery_window_evidence(pattern,date(2026,9,8),radius_days=1)
+          assert date(2026,9,8).weekday()==1
+          assert window['window_weekdays']==['Monday','Tuesday','Wednesday']
+          assert window['matched_weekdays']==['Monday','Tuesday','Wednesday']
+          assert window['observed_count']==6
+          assert window['eligible'] is True
+          assert 'Thursday' not in window['window_weekdays']
+
           src=Path('webapp_v2_runtime.py').read_text(encoding='utf-8')
           assert 'pre_delivery_stockout_qty' in src
           assert 'coverage_usage-freshness_existing_oh_credit' in src
@@ -659,7 +679,11 @@ jobs:
 
           bo_src=Path('backoffice_runtime.py').read_text(encoding='utf-8')
           assert bo_src.count('def yipman_ordering_calendar(')==1
-          assert 'V18_WEEKDAY_USAGE' in bo_src
+          assert 'V20_SELECTED_DAY_PLUS_MINUS_ONE' in bo_src
+          assert 'ANY_OBSERVED_SELECTED_WEEKDAY_PLUS_OR_MINUS_ONE_DAY_WITHIN_180_DAYS' in bo_src
+          assert 'observed_family_is_included_even_when_suggested_order_qty_is_zero' in bo_src
+          assert 'SUGGESTED_ORDER_QTY_DESC_THEN_URGENT' in bo_src
+          assert 'historical_receiving_articles=_historical_receiving_article_summary' in bo_src
           assert 'pre_delivery_stockout_risk' in bo_src
           assert 'regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS"' in bo_src
 
@@ -668,6 +692,11 @@ jobs:
           assert 'orderNextDate=plusDaysIso(orderDate,7)' in ui
           assert 'STOCKOUT BEFORE DELIVERY' in ui
           assert 'Coverage need' in ui
+          assert "let orderSort='QTY_URGENT'" in ui
+          assert 'ORDER QTY ↓ · URGENT' in ui
+          assert 'function orderDeliveryWindowText(r)' in ui
+          assert '±1 DAY' in ui
+          assert "const hist=Array.isArray(r.historical_receiving_articles)" in ui
           print('yipman-ordering-suggestion-quality=PASS')
           PY
 
@@ -769,6 +798,9 @@ jobs:
           assert "/v1/yipman/promotion-item-search?q=" in ui
           manual_block=ui[ui.index('function openManualPromotion()'):ui.index("$('#promoManualBtn').onclick=openManualPromotion;")]
           assert "/v1/app/v2/search?q=" not in manual_block
+          assert "setTimeout(()=>searchInput?.focus(),80)" not in manual_block
+          assert "searchInput.focus();searchInput.select();" not in manual_block
+          assert 'Android keyboard opens only after an explicit input tap' in manual_block
           assert 'REMOVE FROM PROMOTION' in ui
           assert 'removeManualPromotionItem' in ui
           assert "method:'DELETE'" in ui
@@ -1321,7 +1353,7 @@ jobs:
           assert ".overlay{position:absolute" in ui and "z-index:80" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v464'" in ui
+          assert "const CACHE='yipman-v465'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
