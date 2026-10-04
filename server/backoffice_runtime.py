@@ -838,11 +838,13 @@ def _historical_receiving_article_summary(
                 "article_number":article,
                 "last_receipt_date":posting_date,
                 "receipt_event_count":0,
+                "_receipt_dates":set(),
                 "observed_pack_size":None,
                 "observed_pack_date":None,
             },
         )
         slot["receipt_event_count"]+=1
+        slot["_receipt_dates"].add(posting_date)
         if posting_date>slot["last_receipt_date"]:
             slot["last_receipt_date"]=posting_date
 
@@ -880,6 +882,7 @@ def _historical_receiving_article_summary(
             "article_name":article_names.get(slot["article_number"]),
             "last_receipt_date":slot["last_receipt_date"],
             "receipt_event_count":slot["receipt_event_count"],
+            "receipt_day_count":len(slot.get("_receipt_dates") or set()),
             "pack_size":pack_size,
             "pack_size_status":pack_status,
             "pack_size_source":pack_source,
