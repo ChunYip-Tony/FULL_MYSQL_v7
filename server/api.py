@@ -1012,7 +1012,12 @@ def web_upload_active(request:Request,response:Response):
                 run=cur.fetchone()
                 if run:
                     active.update(run)
-            else:
+                elif str(active.get('processing_status') or '').upper()=='PHASE2C_READY':
+                    # PHASE2C_READY is a completed hand-off state, not proof
+                    # that work is still running. Without an active pipeline
+                    # row it belongs in latest/recent, not Current Processing.
+                    active=None
+            if not active:
                 cur.execute(
                     """SELECT ib.batch_id,ib.batch_key,ib.batch_label,ib.processing_status,
                               ib.upload_started_at,ib.completed_at,ib.file_count,
