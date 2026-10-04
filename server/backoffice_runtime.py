@@ -32,6 +32,7 @@ from webapp_v2_runtime import (
     _family_system_oh,
     _family_receipt_events,
     _family_receipt_events_bulk,
+    _family_provisional_today_receipts_bulk,
     _ordering_candidate_families,
     _gp_day_price_suggestion_from_batch,
     _performance_cost_for_day,
@@ -6950,6 +6951,123 @@ def _ensure_tpr_purpose_table(cur) -> None:
              KEY idx_yipman_tpr_purpose_start (tpr_start_date)
            )"""
     )
+
+
+def _ensure_freshness_tpr_anchor_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS yipman_freshness_tpr_anchor (
+             ean_upc VARCHAR(32) NOT NULL,
+             tpr_start_date DATE NOT NULL,
+             family_id BIGINT NULL,
+             anchor_date DATE NOT NULL,
+             freshness_deadline_date DATE NOT NULL,
+             initial_aging_qty DECIMAL(18,4) NULL,
+             aging_uom VARCHAR(16) NULL,
+             created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+             updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+               ON UPDATE CURRENT_TIMESTAMP(6),
+             PRIMARY KEY (ean_upc,tpr_start_date),
+             KEY idx_yipman_fresh_anchor_family (family_id,anchor_date)
+           )"""
+    )
+
+
+def _freshness_tpr_anchor(
+    *,
+    ean_upc: str,
+    tpr_start_date: date | None,
+    family_id: int | None,
+    current_oh: Decimal | None,
+    current_uom: str | None,
+    doh: Decimal | None,
+    freshness_threshold: Decimal | None,
+    allow_create: bool,
+) -> dict[str,Any] | None:
+    """Persist the aging-lot deadline/target so a newer receipt cannot reset it."""
+    upc=str(ean_upc or "").strip()
+    if not upc or tpr_start_date is None:
+        return None
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_freshness_tpr_anchor_table(cur)
+        conn.commit()
+        cur.execute(
+            """SELECT ean_upc,tpr_start_date,family_id,anchor_date,
+                      freshness_deadline_date,initial_aging_qty,aging_uom
+               FROM yipman_freshness_tpr_anchor
+               WHERE ean_upc=%s AND tpr_start_date=%s
+               LIMIT 1""",
+            (upc,tpr_start_date),
+        )
+        row=cur.fetchone()
+        if row or not allow_create:
+            cur.close()
+            return dict(row) if row else None
+
+        uom=str(current_uom or "").strip().upper()
+        if (
+            family_id is None
+            or current_oh is None or current_oh <= 0
+            or not uom
+            or doh is None
+            or freshness_threshold is None
+            or doh > freshness_threshold
+        ):
+            cur.close()
+            return None
+        days_left=max(0,int((freshness_threshold-doh).to_integral_value(rounding=ROUND_HALF_UP)))
+        anchor_date=business_today()
+        deadline=anchor_date+timedelta(days=days_left)
+        cur.execute(
+            """INSERT IGNORE INTO yipman_freshness_tpr_anchor
+                 (ean_upc,tpr_start_date,family_id,anchor_date,
+                  freshness_deadline_date,initial_aging_qty,aging_uom)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (
+                upc,tpr_start_date,int(family_id),anchor_date,deadline,
+                current_oh,uom,
+            ),
+        )
+        conn.commit()
+        cur.execute(
+            """SELECT ean_upc,tpr_start_date,family_id,anchor_date,
+                      freshness_deadline_date,initial_aging_qty,aging_uom
+               FROM yipman_freshness_tpr_anchor
+               WHERE ean_upc=%s AND tpr_start_date=%s
+               LIMIT 1""",
+            (upc,tpr_start_date),
+        )
+        row=cur.fetchone()
+        cur.close()
+        return dict(row) if row else None
+
+
+def _receipt_qty_in_uom_since(
+    events: list[dict[str,Any]],
+    *,
+    start_date: date,
+    uom: str,
+) -> tuple[Decimal | None,str]:
+    """Sum completed physical receipts after an aging anchor in one comparable UOM."""
+    target=str(uom or "").strip().upper()
+    if not target:
+        return None,"AGING_UOM_MISSING"
+    total=Decimal("0")
+    seen=0
+    for event in events or []:
+        d=event.get("posting_date")
+        if d is None or d < start_date:
+            continue
+        b_uom=str(event.get("base_receipt_uom") or "").strip().upper()
+        e_uom=str(event.get("receipt_uom") or "").strip().upper()
+        if b_uom==target and event.get("base_receipt_quantity") is not None:
+            total+=_d(event.get("base_receipt_quantity"));seen+=1
+        elif e_uom==target and event.get("receipt_quantity") is not None:
+            total+=_d(event.get("receipt_quantity"));seen+=1
+        else:
+            return None,"RECEIPT_UOM_NOT_COMPARABLE"
+    return total,("READY" if seen else "READY_ZERO_NEW_RECEIPTS")
+
 
 
 def _bulk_tpr_price_list_lifecycle(
