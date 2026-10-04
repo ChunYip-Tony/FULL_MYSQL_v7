@@ -65,7 +65,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v470';
+const CACHE='yipman-v1-v471';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -101,7 +101,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v470';
+const CACHE='yipman-v471';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1050,6 +1050,78 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 #order .ordersystemoh b{font-size:12px;line-height:1;font-weight:1000;color:#263b4e;white-space:nowrap}
 #order .ordersystemoh span{min-width:0;font-size:7px;font-weight:850;line-height:1.2;text-align:right;color:#71808d}
 @media(max-width:380px){#order .ordersystemoh{grid-template-columns:auto auto}#order .ordersystemoh span{grid-column:1/-1;text-align:left}}
+
+/* V471 Ordering card cleanup + two-step manual Promotion workflow. */
+#order .order-tools{grid-template-columns:minmax(0,1fr) minmax(190px,1.4fr);gap:8px;align-items:end}
+#order .order-summary{display:flex;gap:5px;align-items:stretch;min-width:0}
+#order .order-summary>span{display:grid;place-items:center;min-width:52px;padding:5px 6px;border:1px solid #d7e0e7;border-radius:9px;background:#fff}
+#order .order-summary b{font-size:14px;line-height:1;color:#1d3447}
+#order .order-summary small{font-size:6.5px;line-height:1;margin-top:3px;color:#71808d;font-weight:1000;white-space:nowrap}
+#order .order-summary .need{background:#eef8f2;border-color:#c8e4d2}#order .order-summary .need b{color:#177347}
+#order .order-summary .review{background:#fff7e5;border-color:#ead7a2}
+#order .order-controls{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#order .order-controls select{max-width:none;width:100%;min-height:36px;padding:6px 24px 6px 8px}
+#order .orderitemhead{display:none!important}
+#order #orderList.futurecards #orderRows{gap:8px}
+#order .orderitemcard{border-radius:14px}
+#order .orderitemmain{display:grid;grid-template-columns:minmax(0,1fr) 92px 78px;gap:7px;align-items:stretch;padding:9px 10px 7px}
+#order .orderitemmain>div{padding:0}
+#order .orderidentity{min-width:0}
+#order .familyline{display:flex;align-items:baseline;gap:6px;margin:0}
+#order .familyline span{font-size:7px}
+#order .familyline b{font-size:17px}
+#order .orderitemmain .name{font-size:16px;line-height:1.12;margin-top:3px}
+#order .orderbadges{display:flex;align-items:center;gap:3px;flex-wrap:wrap;margin-top:5px}
+#order .orderbadges .orderstate,#order .orderbadges .order-risk,#order .orderbadges .order-lowconf,#order .orderbadges .order-freshness{margin:0}
+#order .orderitemmain .sub{font-size:8px;line-height:1.25;margin-top:5px}
+#order .ohcell{display:flex;align-items:stretch}
+#order .orderohcompact{width:100%;min-width:0;border:1px solid #9ccce8;border-radius:10px;background:#eef8ff;color:#173247;padding:6px 5px;text-align:center;font:inherit;cursor:pointer}
+#order .orderohcompact small{display:block;font-size:6.5px;line-height:1;color:#52738b;font-weight:1000}
+#order .orderohcompact b{display:block;font-size:16px;line-height:1.05;margin-top:4px;font-weight:1000}
+#order .orderohcompact span{display:block;font-size:7px;line-height:1.05;margin-top:4px;color:#287b5b;font-weight:1000}
+#order .orderqty{display:flex;flex-direction:column;justify-content:center;align-items:flex-end;min-width:0;text-align:right}
+#order .orderqty small{font-size:6.5px;color:#71808d;font-weight:1000;line-height:1}
+#order .orderqty b{font-size:21px;line-height:1;color:#0d4f8b;margin-top:4px;white-space:nowrap}
+#order .orderqty span{font-size:8px;color:#71808d;font-weight:950;margin-top:3px}
+#order .ordercardmeta{padding:0 10px 9px}
+#order .ordersystemoh{display:flex;align-items:center;gap:6px;margin:0 0 6px;padding:5px 7px;border-radius:8px}
+#order .ordersystemoh small{font-size:6.5px}#order .ordersystemoh b{font-size:10px}#order .ordersystemoh span{margin-left:auto;font-size:6px;text-align:right}
+#order .orderrecvhistory{margin:0;border-radius:9px;padding:0!important;background:rgba(255,255,255,.65)}
+#order .orderrecvhistory summary{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;align-items:center;padding:7px 8px;cursor:pointer;list-style:none;color:#355b79}
+#order .orderrecvhistory summary::-webkit-details-marker{display:none}
+#order .orderrecvhistory summary span{font-size:7.5px;font-weight:1000;letter-spacing:.02em}
+#order .orderrecvhistory summary b{font-size:8px;color:#526d83}
+#order .orderrecvhistory summary em{font-style:normal;border-radius:999px;background:#edf5fb;padding:4px 7px;font-size:7px;font-weight:1000;color:#0d659f}
+#order .orderrecvhistory[open] summary em{background:#e8eef3;color:#536575}#order .orderrecvhistory[open] summary em::after{content:' LESS'}#order .orderrecvbody{border-top:1px solid #dbe7f0}
+#order .orderrecvrow{padding:8px 9px}.orderrecvarticle b{font-size:15px!important}#order .orderrecvpack b{font-size:13px}
+#order .pcard-actions{margin-top:0;padding-top:0}
+#order .snooze12{min-height:34px}
+.manual-promo-step{display:grid;gap:10px}
+.manual-promo-steptitle{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:8px;align-items:center}
+.manual-promo-steptitle>span{width:30px;height:30px;border-radius:10px;background:#173f5f;color:#fff;display:grid;place-items:center;font-size:14px;font-weight:1000}
+.manual-promo-steptitle b{display:block;font-size:13px;line-height:1.1}.manual-promo-steptitle small{display:block;font-size:8.5px;line-height:1.25;color:#71808d;margin-top:3px;font-weight:800}
+.manual-promo-edit{border:1px solid #cbd9e3;border-radius:9px;background:#fff;color:#235978;padding:7px 8px;font-size:8px;font-weight:1000}
+.manual-promo-help{border-radius:9px;background:#f2f6f9;padding:7px 8px;font-size:9px;line-height:1.3;color:#5e7180;font-weight:850}
+.manual-promo-next,.manual-promo-addanother{width:100%;border:0;border-radius:11px;background:#1769e0;color:#fff;min-height:44px;padding:9px 12px;font-size:11px;font-weight:1000}
+.manual-promo-addanother{background:#173f5f;margin-top:1px}
+.manual-promo-searchstage{display:grid;gap:7px;border:1px solid #d6e2eb;border-radius:12px;background:#f8fbfd;padding:9px}
+.manual-promo-selected-card{padding:9px;border-radius:12px}
+.manual-promo-selected-top{grid-template-columns:minmax(0,1fr) 92px}
+.manual-promo-selected-card h4{font-size:15px}
+.manual-promo-selected-card .selmeta{font-size:8.5px}
+.manual-promo-selected-card input{font-size:17px;min-height:40px}
+.manual-promo-delivery{font-size:8.5px}
+.manual-promo-searchbar input{min-height:44px;font-size:15px}
+.manual-promo-results{max-height:230px}
+.manual-promo-result{padding:8px 9px}.manual-promo-result b{font-size:14px}.manual-promo-result strong{font-size:10px}.manual-promo-result span{font-size:8.5px}
+@media(max-width:390px){
+ #order .order-tools{grid-template-columns:1fr}
+ #order .order-summary{justify-content:flex-start}
+ #order .orderitemmain{grid-template-columns:minmax(0,1fr) 82px 70px;gap:5px}
+ #order .orderohcompact b{font-size:14px}
+ #order .orderqty b{font-size:19px}
+ .manual-promo-fields{gap:6px}
+}
 </style>
 </head>
 <body>
@@ -2619,38 +2691,76 @@ function openManualPromotion(){
  let latestSearchToken=0;
 
  sheet(
-  'Manual Promotion',
-  'Search item first · then enter promotion details',
+  'New Promotion',
+  'Set the promotion window first · then add items',
   '<div class="detail manual-promo-search">'+
-   '<div><b>1. Search item</b><div class="manual-promo-search-note">Search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name. Typo-tolerant search is supported.</div></div>'+
-   '<div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="Search salmon, 240816, article…" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div>'+
-   '<div id="manualPromoSearchStatus" class="manual-promo-search-note">Start typing to find an item.</div>'+
-   '<div id="manualPromoSearchResults" class="manual-promo-results"></div>'+
-   '<div><b>2. Selected promotion item(s)</b><div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item selected yet.</div></div></div>'+
-   '<div><b>3. Promotion + delivery window</b></div>'+
-   '<div class="manual-promo-fields">'+
-    '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
-    '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
-    '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
-    '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
-    '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
-   '</div>'+
-   '<div class="estimatebar" style="margin-top:10px">Yipman uses the selected Family True Stock, canonical sales history, promotion history, observed delivery evidence, and Fresh/Live freshness limits. Manual uplift is not required.</div>'+
-   '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">ADD TO PROMOTION ORDER</button></div>'+
+   '<section class="manual-promo-step" id="manualPromoSetupStep">'+
+    '<div class="manual-promo-steptitle"><span>1</span><div><b>PROMOTION & DELIVERY</b><small>These dates apply to every item in this promotion list.</small></div></div>'+
+    '<div class="manual-promo-fields">'+
+     '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
+     '<label>PROMOTION START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
+     '<label>PROMOTION END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
+     '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
+     '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
+    '</div>'+
+    '<div class="manual-promo-help">SALE price is entered separately for each item after you select it.</div>'+
+    '<button class="manual-promo-next" id="manualPromoContinue" type="button">CONTINUE · ADD ITEMS</button>'+
+   '</section>'+
+   '<section class="manual-promo-step hide" id="manualPromoItemsStep">'+
+    '<div class="manual-promo-steptitle"><span>2</span><div><b>ADD PROMOTION ITEMS</b><small id="manualPromoSetupSummary"></small></div><button class="manual-promo-edit" id="manualPromoEditSetup" type="button">EDIT DATES</button></div>'+
+    '<div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item added yet.</div></div>'+
+    '<div id="manualPromoItemStatus" class="manual-promo-search-note">Add an item, then enter its SALE price.</div>'+
+    '<button class="manual-promo-addanother" id="manualPromoAddAnother" type="button">+ ADD ITEM</button>'+
+    '<div class="manual-promo-searchstage" id="manualPromoSearchStage">'+
+     '<div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="UPC, article or item name…" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div>'+
+     '<div id="manualPromoSearchStatus" class="manual-promo-search-note">Search UPC, SAP article, Family, Delivery Article, English or Chinese name.</div>'+
+     '<div id="manualPromoSearchResults" class="manual-promo-results"></div>'+
+    '</div>'+
+    '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">SAVE PROMOTION & CALCULATE</button></div>'+
+   '</section>'+
   '</div>'
  );
 
- const searchInput=$('#manualPromoSearch');
- const searchStatus=$('#manualPromoSearchStatus');
- const searchResults=$('#manualPromoSearchResults');
- const selectedBox=$('#manualPromoSelected');
+ const setupStep=$('#manualPromoSetupStep'),itemsStep=$('#manualPromoItemsStep');
+ const searchInput=$('#manualPromoSearch'),searchStatus=$('#manualPromoSearchStatus'),searchResults=$('#manualPromoSearchResults'),searchStage=$('#manualPromoSearchStage');
+ const selectedBox=$('#manualPromoSelected'),itemStatus=$('#manualPromoItemStatus');
 
+ function setupValues(){
+  return {
+   name:$('#manualPromoName').value.trim(),
+   start:$('#manualPromoStart').value,
+   end:$('#manualPromoEnd').value,
+   delivery:$('#manualPromoDelivery').value,
+   next:$('#manualPromoNext').value
+  };
+ }
+ function validateSetup(showToast=true){
+  const v=setupValues();
+  let msg='';
+  if(!v.start||!v.end||!v.delivery||!v.next)msg='Complete all promotion and delivery dates';
+  else if(v.end<v.start)msg='Promotion end must be after start';
+  else if(v.next<=v.delivery)msg='Next delivery must be after delivery date';
+  if(msg&&showToast)toast(msg);
+  return msg?null:v;
+ }
+ function renderSetupSummary(){
+  const v=setupValues();
+  $('#manualPromoSetupSummary').textContent=appDate(v.start)+' → '+appDate(v.end)+' · Delivery '+appDate(v.delivery)+' · Next '+appDate(v.next);
+ }
+ function showItemsStep(){
+  const v=validateSetup(true);if(!v)return;
+  renderSetupSummary();
+  setupStep.classList.add('hide');itemsStep.classList.remove('hide');
+  searchStage.classList.remove('hide');
+  searchResults.innerHTML='';searchInput.value='';
+  searchStatus.textContent='Search UPC, article or item name to add the first promotion item.';
+ }
  function familyKeyFor(item){
   return String(item?.family_article_number||(String(item?.result_type||'').toUpperCase()==='FAMILY'?item?.number:'')||'').trim();
  }
  function relatedDeliverySummary(fam){
   const rows=Array.isArray(fam?.receiving_ordering_articles)?fam.receiving_ordering_articles:[];
-  if(!rows.length)return 'Delivery article: —';
+  if(!rows.length)return 'Receiving article: —';
   return rows.slice(0,3).map(a=>{
    const n=a.article_number||a.receiving_article||a.number||'—';
    const name=a.article_description||a.article_name||a.name||'';
@@ -2665,34 +2775,38 @@ function openManualPromotion(){
   return qty==null?'—':fmtNullable(qty)+' '+String(uom||'');
  }
  function selectedPrice(id){
-  const el=document.querySelector('[data-manual-promo-price="'+CSS.escape(String(id))+'"]');
-  return el?Number(el.value):NaN;
+  const row=selected.get(String(id));
+  const raw=row?.promotionPrice;
+  const n=Number(raw);return Number.isFinite(n)?n:NaN;
  }
  function renderSelected(){
   const rows=[...selected.values()];
-  if(!rows.length){selectedBox.innerHTML='<div class="empty">No item selected yet.</div>';return}
+  if(!rows.length){selectedBox.innerHTML='<div class="empty">No item added yet.</div>';return}
   selectedBox.innerHTML=rows.map(x=>{
    const fam=x.family||{}, item=x.item||{};
    const fid=String(fam.family_id||item.family_id||x.familyKey||'');
-   const price=item.current_price??'';
    const q7=item.pos_qty_7d??fam?.family_sales_7d?.sold_quantity;
    const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
+   const current=item.current_price!=null?money(item.current_price):'—';
    return '<div class="manual-promo-selected-card">'+
     '<div class="manual-promo-selected-top"><div><h4>'+esc(fam.family_article_name||item.family_name||item.name||x.familyKey)+'</h4>'+
-     '<div class="selmeta">Family '+esc(x.familyKey)+' · Selected '+esc(x.code)+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+' · True Stock '+esc(effectiveOHText(fam))+'</div>'+
-    '</div><label>SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
+     '<div class="selmeta">Family '+esc(x.familyKey)+' · '+esc(x.code)+' · Current '+current+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+' · OH '+esc(effectiveOHText(fam))+'</div>'+
+    '</div><label>SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(x.promotionPrice??'')+'" placeholder="Enter price"></label></div>'+
     '<div class="manual-promo-delivery">'+esc(relatedDeliverySummary(fam))+'</div>'+
-    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
+    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE ITEM</button>'+
    '</div>';
   }).join('');
  }
+ selectedBox.oninput=e=>{
+  const input=e.target.closest?.('[data-manual-promo-price]');if(!input)return;
+  const row=selected.get(String(input.dataset.manualPromoPrice));if(row)row.promotionPrice=input.value;
+ };
  selectedBox.onclick=e=>{
-  const btn=e.target.closest?.('[data-manual-promo-remove]');
-  if(!btn)return;
+  const btn=e.target.closest?.('[data-manual-promo-remove]');if(!btn)return;
   e.preventDefault();e.stopPropagation();
   selected.delete(String(btn.dataset.manualPromoRemove));
   renderSelected();
-  searchStatus.textContent='Selected promotion item removed.';
+  itemStatus.textContent=selected.size?'Item removed · '+selected.size+' item(s) remain.':'No items yet · tap + ADD ITEM.';
  };
  async function hydrateFamily(item){
   const familyKey=familyKeyFor(item);
@@ -2710,11 +2824,13 @@ function openManualPromotion(){
    const code=type==='UPC'?String(item.number||''):(type==='ARTICLE'?String(item.number||hydrated.familyKey):String(hydrated.familyKey));
    if(!code)throw new Error('Selectable UPC / Article number unavailable');
    const previous=selected.get(fid);
-   selected.set(fid,{familyKey:hydrated.familyKey,family:hydrated.fam,item,code});
+   selected.set(fid,{familyKey:hydrated.familyKey,family:hydrated.fam,item,code,promotionPrice:previous?.promotionPrice??''});
    renderSelected();
-   searchStatus.textContent=previous
-    ? 'Replaced the previous selection for Family '+hydrated.familyKey+' to avoid duplicate Family inventory.'
-    : 'Added Family '+hydrated.familyKey+'. Search again to add another Family.';
+   // Selection is complete: clear and hide the entire search result stage.
+   latestSearchToken++;
+   clearTimeout(searchTimer);
+   searchResults.innerHTML='';searchInput.value='';searchStage.classList.add('hide');
+   itemStatus.textContent=(previous?'Updated':'Added')+' '+(hydrated.fam?.family_article_name||item.name||hydrated.familyKey)+' · enter SALE price above, or add another item.';
   }catch(e){searchStatus.textContent='Unable to select item · '+e.message}
  }
  async function runSearch(){
@@ -2723,23 +2839,18 @@ function openManualPromotion(){
   if(q.length<2){searchResults.innerHTML='';searchStatus.textContent='Enter at least 2 characters.';return}
   searchStatus.textContent='Searching…';searchResults.innerHTML='<div class="loading">Searching promotion item index…</div>';
   try{
-   // Promotion search avoids the full Quick Check 28D ranking path. Family
-   // inventory/delivery details are fetched only after the user selects a result.
    const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});
    if(token!==latestSearchToken)return;
    const raw=Array.isArray(d.results)?d.results:[];
    const enriched=raw.slice(0,14).map(item=>({item,familyKey:familyKeyFor(item),family:null}));
-   searchStatus.textContent=enriched.length?enriched.length+' result(s) · tap an item to add it':'No matching item.';
+   searchStatus.textContent=enriched.length?enriched.length+' result(s) · tap one to add it':'No matching item.';
    searchResults.innerHTML=enriched.map((x,i)=>{
     const item=x.item||{}, familyName=item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
     const itemName=item.name||familyName||'Item';
     const q7=item.pos_qty_7d, q7u=item.selling_uom||'';
     return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
      '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
-     '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
-      ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
-      (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
-      ' · inventory + delivery details load after selection</span></button>';
+     '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+' · Current '+(item.current_price!=null?money(item.current_price):'—')+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+'</span></button>';
    }).join('');
    $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
   }catch(e){
@@ -2747,39 +2858,37 @@ function openManualPromotion(){
    searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message+' · tap SEARCH to retry.';
   }
  }
+
+ $('#manualPromoContinue').onclick=showItemsStep;
+ $('#manualPromoEditSetup').onclick=()=>{itemsStep.classList.add('hide');setupStep.classList.remove('hide')};
+ $('#manualPromoAddAnother').onclick=()=>{latestSearchToken++;clearTimeout(searchTimer);searchResults.innerHTML='';searchInput.value='';searchStatus.textContent='Search UPC, article or item name.';searchStage.classList.remove('hide')};
  searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,380)};
  searchInput.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(searchTimer);runSearch()}};
  $('#manualPromoSearchBtn').onclick=()=>{clearTimeout(searchTimer);runSearch()};
  $('#manualPromoCancel').onclick=()=>closeSheet(true);
  $('#manualPromoSave').onclick=async()=>{
   const rows=[...selected.values()];
-  const start=$('#manualPromoStart').value;
-  const end=$('#manualPromoEnd').value;
-  const delivery=$('#manualPromoDelivery').value;
-  const next=$('#manualPromoNext').value;
-  if(!rows.length){toast('Select at least one item');return}
-  if(!start||!end||!delivery||!next){toast('Complete all promotion and delivery dates');return}
-  if(end<start){toast('Promotion end must be after start');return}
-  if(next<=delivery){toast('Next delivery must be after delivery date');return}
+  const setup=validateSetup(true);if(!setup)return;
+  if(!rows.length){toast('Add at least one promotion item');return}
   const items=rows.map(x=>{
    const fid=String(x.family?.family_id||x.item?.family_id||x.familyKey);
-   return {upc:x.code,description:x.family?.family_article_name||x.item?.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:selectedPrice(fid)};
+   return {upc:x.code,description:x.family?.family_article_name||x.item?.name||'',promotion_type:'CUSTOM',promotion_start_date:setup.start,promotion_end_date:setup.end,promotion_price:selectedPrice(fid)};
   });
-  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){toast('Enter a valid SALE price for every selected item');return}
-  const name=$('#manualPromoName').value.trim()||('Manual Promotion '+start);
+  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){toast('Enter a valid SALE price for every item');return}
+  const name=setup.name||('Manual Promotion '+setup.start);
   const save=$('#manualPromoSave');save.disabled=true;save.textContent='SAVING…';
   try{
    const created=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:name,source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});
    promoListId=Number(created.list_id);promoTempOH.clear();
-   orderDate=delivery;orderNextDate=next;
+   orderDate=setup.delivery;orderNextDate=setup.next;
    closeSheet(true);buildDays();updateOrderWindowUI();
    await loadPromotionLists();$('#promoListSelect').value=String(promoListId);
    if(Number(created.ready_count||0)>0)await loadPromotionOrder();
    else{$('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';$('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>'}
-   toast('Manual promotion added');
+   toast('Promotion saved');
   }catch(err){
    toast('Manual promotion failed · '+err.message);
-   if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='ADD TO PROMOTION ORDER'}
+   if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='SAVE PROMOTION & CALCULATE'}
   }
  };
 }
@@ -2998,7 +3107,7 @@ function renderOrderRoster(rows,data,h,stale){
   zero:Number(summary.zero_order_count??all.filter(r=>orderState(r)==='ZERO_ORDER').length),
   review:Number(summary.review_count??all.filter(r=>orderState(r)==='REVIEW').length)
  };
- $('#orderSummary').textContent='OBSERVED '+counts.total+' · ORDER '+counts.order+' · 0 ORDER '+counts.zero+' · REVIEW '+counts.review;
+ $('#orderSummary').innerHTML='<span><b>'+counts.total+'</b><small>OBSERVED</small></span><span class="need"><b>'+counts.order+'</b><small>ORDER</small></span><span><b>'+counts.zero+'</b><small>0 ORDER</small></span>'+(counts.review?'<span class="review"><b>'+counts.review+'</b><small>REVIEW</small></span>':'');
  let visible=all.filter(r=>orderFilter==='ALL'||orderState(r)===orderFilter);
  const ignoredOrderCount=visible.filter(r=>orderState(r)!=='ZERO_ORDER'&&orderIsIgnored(r)).length;
  visible=visible.filter(r=>orderState(r)==='ZERO_ORDER'||!orderIsIgnored(r));
@@ -3033,16 +3142,18 @@ function renderOrderRoster(rows,data,h,stale){
   const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
   const shownHist=hist.slice(0,3);
   const histHtml=shownHist.length
-    ? '<div class="orderrecvhistory"><div class="orderrecvhistoryhead"><span class="orderrecvhistoryicon">◇</span><b>RECEIVING ARTICLES OBSERVED IN ±1 DAY WINDOW</b><span>FAMILY '+esc(r.family_article||'—')+'</span></div>'
+    ? '<details class="orderrecvhistory"><summary><span class="orderrecvsummarylabel">RECEIVING ARTICLES</span><b>'+fmt(hist.length,0)+' observed</b><em>VIEW</em></summary><div class="orderrecvbody">'
       +shownHist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span>Last received '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK SIZE</span></div></div>').join('')
-      +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
-      +'</div>'
+      +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap card for full history</div>':'')
+      +'</div></details>'
     : '';
-  const systemOhHtml='<div class="ordersystemoh"><small>SYSTEM OH</small><b>'+fmtNullable(r.system_oh)+' '+esc(r.system_oh_uom||r.oh_uom||'')+'</b><span>Reference only · Effective OH above is used for ordering</span></div>';
+  const effectiveOh=r.effective_oh??r.oh, effectiveUom=r.effective_oh_uom||r.oh_uom||'', effectiveSource=String(r.effective_oh_source||r.oh_source||'').toUpperCase();
+  const orderOhHtml='<button type="button" class="orderohcompact" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(effectiveOh??'')+'" data-uom="'+esc(effectiveUom)+'"><small>EFFECTIVE OH</small><b>'+fmtNullable(effectiveOh)+' '+esc(effectiveUom)+'</b><span>'+(effectiveSource.includes('TRUE_STOCK')?'TRUE STOCK':'TAP TO EDIT')+'</span></button>';
+  const systemOhHtml='<div class="ordersystemoh"><small>SYSTEM OH</small><b>'+fmtNullable(r.system_oh)+' '+esc(r.system_oh_uom||r.oh_uom||'')+'</b><span>REFERENCE</span></div>';
   const snooze=state==='ZERO_ORDER'?'':'<div class="pcard-actions"><button class="pignore snooze12" data-order-ignore="'+i+'">IGNORE 12 HOURS</button></div>';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_window_observed_count??r.delivery_day_observed_count,0)+' observed across '+esc((r.delivery_window_observed_weekdays||[r.delivery_day]).filter(Boolean).join(' / ')||'selected day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell ohcell">'+familyOhActionHtml({family:r.family_article,name:r.family_name,oh:r.effective_oh??r.oh,uom:r.effective_oh_uom||r.oh_uom,source:r.effective_oh_source||r.oh_source},'orderoh')+'</div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>' +systemOhHtml+histHtml+snooze+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemmain"><div class="orderidentity"><div class="familyline"><span>FAMILY</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="orderbadges"><span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_window_observed_count??r.delivery_day_observed_count,0)+' observed · '+esc((r.delivery_window_observed_weekdays||[r.delivery_day]).filter(Boolean).join(' / ')||'selected day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="ohcell">'+orderOhHtml+'</div><div class="orderqty"><small>SUGGESTED ORDER</small><b>'+orderText+'</b><span>'+orderSub+'</span></div></div><div class="ordercardmeta">'+systemOhHtml+histHtml+'</div>'+snooze+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.'+(ignoredOrderCount?' '+ignoredOrderCount+' ignored suggestion(s) return automatically after 12 hours.':'')+'</div>';
- document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
+ document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,summary,input,select,label'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
  $$('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
  bindFamilyOhEditors();
 }
