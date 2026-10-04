@@ -1896,9 +1896,10 @@ function stockFlowFilteredRows(){
 }
 function stockFlowSortedRows(){
  const rows=stockFlowFilteredRows();
+ const zeroSelling=r=>!!r.no_recent_selling||((num(r.group_qty_7d)??0)===0&&(num(r.family_receipt_7d_qty)||0)>0);
  if(stockFlowSort==='RECEIPT')return rows.sort((a,b)=>(num(b.family_receipt_7d_qty)||0)-(num(a.family_receipt_7d_qty)||0));
  if(stockFlowSort==='SELLING')return rows.sort((a,b)=>(num(b.group_qty_7d)||0)-(num(a.group_qty_7d)||0));
- if(stockFlowSort==='RATIO')return rows.sort((a,b)=>(num(b.receipt_to_selling_ratio)||0)-(num(a.receipt_to_selling_ratio)||0));
+ if(stockFlowSort==='RATIO')return rows.sort((a,b)=>(Number(zeroSelling(b))-Number(zeroSelling(a)))||((num(b.receipt_to_selling_ratio)||0)-(num(a.receipt_to_selling_ratio)||0))||((num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0)));
  if(stockFlowSort==='NAME')return rows.sort((a,b)=>String(a.family_name||'').localeCompare(String(b.family_name||'')));
  return rows.sort((a,b)=>(num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0));
 }
@@ -1946,6 +1947,7 @@ function renderStockFlow(){
 function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
  const count=num(g.family_receipt_7d_day_count),diff=num(g.receipt_minus_selling_7d),ratio=num(g.receipt_to_selling_ratio),promo=g.recent_promotion_event||null;
+ const zeroSelling=!!g.no_recent_selling||((num(g.group_qty_7d)??0)===0&&(num(g.family_receipt_7d_qty)||0)>0);
  const category=String(g.category||'').trim().toUpperCase();
  const observed=(Array.isArray(g.observed_delivery_days)?g.observed_delivery_days:[])
    .filter(x=>x&&x.weekday)
@@ -1966,12 +1968,12 @@ function stockFlowFamilyHtml(g,idx){
    ? '<span class="promoprice"><small>AVG PROMO PRICE</small><b>'+money(promo.avg_promotion_selling_price)+' / '+esc(promo.avg_promotion_selling_price_uom||uom)+'</b></span>'
    : '';
  const promoHtml=promo?'<div class="stocksale stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+promoPrice+'</div>':'';
- const overSelling=ratio===null?'—':((ratio-1)*100).toFixed(0)+'%';
+ const overSelling=zeroSelling?'∞':(ratio===null?'—':((ratio-1)*100).toFixed(0)+'%');
  return '<section class="bestfam article-tone-'+articleTone(g.family_article||g.family_id)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
    familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.effective_oh,effective_uom:g.effective_oh_uom,effective_source:g.effective_oh_source,system:g.system_oh,system_uom:g.system_oh_uom})+
    '<div class="stockflowgrid"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div>'+
-   '<div class="stockdiff'+(promo?' promoted':' nosale')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+overSelling+' over selling</span><span class="stockwatch">'+(promo?'RECENT SALE':'NO RECENT SALE')+'</span></div></div>'+
+   '<div class="stockdiff'+(zeroSelling?' nosale':(promo?' promoted':' nosale'))+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(zeroSelling?'positive receipts with 0 selling mvt':overSelling+' over selling')+'</span><span class="stockwatch">'+(zeroSelling?'0 SELLING MVT':(promo?'RECENT SALE':'NO RECENT SALE'))+'</span></div></div>'+
    promoHtml+
    '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span class="stockreceiptmeta">'+costHtml+receiptToggle+'</span></div>'+recent+'</div></section>';
 }
@@ -2030,7 +2032,7 @@ async function loadBestSellers(force=false){
     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
     family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count,
     receipt_minus_selling_7d:r.receipt_minus_selling_7d,receipt_to_selling_ratio:r.receipt_to_selling_ratio,
-    receipt_over_selling_pct:r.receipt_over_selling_pct,recent_promotion_event:r.recent_promotion_event||null,
+    receipt_over_selling_pct:r.receipt_over_selling_pct,no_recent_selling:!!r.no_recent_selling,recent_promotion_event:r.recent_promotion_event||null,
     observed_delivery_days:Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[],
     observed_delivery_weekday_numbers:Array.isArray(r.observed_delivery_weekday_numbers)?r.observed_delivery_weekday_numbers:[],
     delivery_pattern_frequency:r.delivery_pattern_frequency||null,
