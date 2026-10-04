@@ -8746,7 +8746,7 @@ def _current_tpr_data_health() -> dict[str,Any]:
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V6_CURRENT_TPR_FOUR_ACTION_PRICE_CARD|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V7_CURRENT_TPR_COMPANY_REFS|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
