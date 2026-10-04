@@ -179,7 +179,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v462'" in ui
+          assert "const CACHE='yipman-v463'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -373,7 +373,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v462'" in ui
+          assert "const CACHE='yipman-v463'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'CACHED STOCK FLOW' in ui
           assert 'data-stock-retry' in ui
@@ -731,6 +731,8 @@ jobs:
           remove_src=inspect.getsource(p.remove_manual_promotion_list_item)
           assert 'ONLY_MANUAL_PROMOTION_ITEMS_CAN_BE_REMOVED' in remove_src
           assert 'DELETE FROM yipman_promotion_list_item' in remove_src
+          assert 'manual_item_removal_allowed' in promo
+          assert 'YIPMAN_PROMOTION_LIST_V2_MANUAL_REMOVE' in promo
 
           api=Path('api.py').read_text(encoding='utf-8')
           assert "/v1/yipman/promotion-lists/import" in api
@@ -756,6 +758,9 @@ jobs:
           assert 'REMOVE FROM PROMOTION' in ui
           assert 'removeManualPromotionItem' in ui
           assert "method:'DELETE'" in ui
+          assert "btn.textContent='REMOVING…'" in ui
+          assert "window.confirm('Remove this item from the manual promotion?')" not in ui
+          assert "d?.family||d?.family_id" in ui
           print('yipman-promotion-ordering=PASS')
           PY
 
@@ -1101,6 +1106,20 @@ jobs:
           print('family-cost-global-true-stock=PASS')
           PY
 
+      - name: Validate Price Review Family identity for True Stock
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          runtime=Path('backoffice_runtime.py').read_text(encoding='utf-8')
+          ui=Path('yipman_ui.py').read_text(encoding='utf-8')
+          assert 'family_id,main_article_number,family_description' in runtime
+          assert 'V5_FAMILY_IDENTITY_TRUE_STOCK' in runtime
+          assert 'row["family_article_number"] = live.get("main_article_number")' in runtime
+          assert 'family_id:r.family_id' in ui
+          assert "d?.family||d?.family_id" in ui
+          print('price-review-family-identity-true-stock=PASS')
+          PY
+
       - name: Validate Yipman DOM collection bindings
         run: |
           python - <<'PY'
@@ -1281,7 +1300,7 @@ jobs:
           assert ".overlay{position:absolute" in ui and "z-index:80" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v462'" in ui
+          assert "const CACHE='yipman-v463'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
