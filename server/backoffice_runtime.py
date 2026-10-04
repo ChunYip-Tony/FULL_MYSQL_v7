@@ -7555,6 +7555,19 @@ def current_tpr_review(
                 "effective":_family_effective_oh(cur,children),
             }
 
+        # Completed receipt history is used only to separate newer stock from
+        # the anchored aging lot. Same-day accepted MVT is exposed separately
+        # as provisional visibility and never enters completed-day math.
+        completed_receipts_by_family=_family_receipt_events_bulk(
+            cur,tpr_family_ids,data_day_limit=180
+        )
+        provisional_receipt_payload=_family_provisional_today_receipts_bulk(
+            cur,tpr_family_ids
+        )
+        provisional_receipts_by_family=(
+            provisional_receipt_payload.get("by_family") or {}
+        )
+
         _ensure_tpr_purpose_table(cur)
         conn.commit()
         cur.execute(
@@ -7596,6 +7609,12 @@ def current_tpr_review(
         current_oh_uom=family_effective.get("uom") or row.get("current_oh_uom")
         system_oh_uom=family_system.get("uom") or current_oh_uom
         current_oh_source=family_effective.get("source") or "QUICK_CHECK_CURRENT_PUBLISHED"
+        family_effective_status=str(family_effective.get("status") or "")
+        family_id=int(row["family_id"]) if row.get("family_id") is not None else None
+        today_receipt=(
+            provisional_receipts_by_family.get(family_id,{})
+            if family_id is not None else {}
+        )
         doh = _d(row.get("doh")) if row.get("doh") is not None else None
         dos = _d(row.get("dos")) if row.get("dos") is not None else None
         by_day = daily.get(uid, {})
