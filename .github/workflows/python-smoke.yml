@@ -1325,6 +1325,49 @@ jobs:
           print('universal-effective-oh-true-stock=PASS')
           PY
 
+      - name: Validate Mobile V2 Promotion and True Stock interactions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          ui=Path('yipman_mobile_v2.py').read_text(encoding='utf-8')
+
+          # Promotion must be usable directly on the page; no prerequisite
+          # modal/button is allowed for the primary add-item workflow.
+          assert '1 · Search & add promotion items' in ui
+          assert 'id="yv2PromoSearchForm"' in ui
+          assert 'id="yv2PromoSearchStatus"' in ui
+          assert 'Start typing to find an item.' in ui
+          assert '+ Add Items' not in ui
+          assert 'function bindPromoInlineControls()' in ui
+          assert 'function bindPromoSearchResults()' in ui
+          assert 'function bindPromoSelectedRemove()' in ui
+          assert 'function bindPromoPersistedRemove(ctx=root)' in ui
+          assert "/v1/yipman/promotion-item-search?q=" in ui
+          assert "/v1/app/v2/family/" in ui
+          assert 'TAP TO ADD' in ui
+          assert 'Promotion item added' in ui
+          assert 'data-promo-remove' in ui
+          assert 'data-promo-remove-item' in ui
+          assert "/items/'+encodeURIComponent(id)" in ui
+
+          # Every Effective-OH control is directly touch/click bound so dynamic
+          # Android/PWA re-renders do not depend on root event delegation.
+          assert 'function bindStockButtons(ctx=root)' in ui
+          assert "btn.addEventListener('pointerup',fire" in ui
+          assert "btn.addEventListener('click',fire" in ui
+          assert "btn.addEventListener('touchend',fire" in ui
+          assert "data-stock-upc" in ui
+          assert "await openTrueStock({family,name,oh,uom})" in ui
+          assert "else if(V.page==='actions')await loadActions()" in ui
+          assert "V.orderMode==='promotion')await calcPromotion()" in ui
+          assert "bindStockButtons($('#yv2Actions'))" in ui
+          assert "bindStockButtons($('#yv2OrderRows'))" in ui
+          assert 'Effective OH · tap to enter True Stock' in ui
+
+          print('mobile-v2-promotion-true-stock=PASS')
+          PY
+
       - name: Validate live mobile batch progress contract
         run: |
           python - <<'PY'

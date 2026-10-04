@@ -179,26 +179,18 @@ YIPMAN_MOBILE_V2_JS = r"""
   let lastControlPointerAt=0,promoSearchTimer=null;
   const controlDispatch=e=>{
     const target=e.target;
-    const actionable=target.closest?.('[data-stock-family],#yv2AddPromo,#yv2PromoSearchBtn,[data-promo-result],[data-promo-remove],[data-promo-remove-item],#yv2PromoCancel,#yv2PromoSave,#yv2StockCancel,#yv2StockSave,#yv2ModalClose');
+    const actionable=target.closest?.('#yv2StockCancel,#yv2StockSave,#yv2ModalClose');
     if(!actionable||!root.contains(actionable))return false;
     if(e.type==='click'&&Date.now()-lastControlPointerAt<650){e.preventDefault();return true}
     if(e.type==='pointerup')lastControlPointerAt=Date.now();
     e.preventDefault();e.stopPropagation();
-    if(actionable.matches('[data-stock-family]')){openTrueStock({family:actionable.dataset.stockFamily,name:actionable.dataset.stockName,oh:actionable.dataset.stockOh,uom:actionable.dataset.stockUom});return true}
-    if(actionable.id==='yv2AddPromo'){openPromoBuilder();return true}
-    if(actionable.id==='yv2PromoSearchBtn'){runPromoSearch();return true}
-    if(actionable.matches('[data-promo-result]')){selectPromo(V.promoSearchRows[Number(actionable.dataset.promoResult)]);return true}
-    if(actionable.matches('[data-promo-remove]')){V.promoSelected.delete(actionable.dataset.promoRemove);renderPromoSelected();toast('Promotion item removed');return true}
-    if(actionable.matches('[data-promo-remove-item]')){removePersistedPromoItem(actionable.dataset.promoRemoveItem,actionable);return true}
-    if(actionable.id==='yv2PromoCancel'||actionable.id==='yv2StockCancel'||actionable.id==='yv2ModalClose'){V.stockContext=null;closeModal();return true}
-    if(actionable.id==='yv2PromoSave'){savePromo();return true}
+    if(actionable.id==='yv2StockCancel'||actionable.id==='yv2ModalClose'){V.stockContext=null;closeModal();return true}
     if(actionable.id==='yv2StockSave'){saveTrueStock();return true}
     return false;
   };
   root.addEventListener('pointerup',controlDispatch,true);
   root.addEventListener('click',controlDispatch,true);
-  root.addEventListener('submit',e=>{if(e.target?.id==='yv2PromoSearchForm'){e.preventDefault();runPromoSearch()}});
-  root.addEventListener('input',e=>{if(e.target?.id==='yv2PromoSearch'){clearTimeout(promoSearchTimer);const q=e.target.value.trim();if(q.length>=2)promoSearchTimer=setTimeout(runPromoSearch,350)}});
+
 
   async function loadHealth(){
     const box=$('#yv2Health');
@@ -283,7 +275,39 @@ YIPMAN_MOBILE_V2_JS = r"""
     }catch(e){modal('<h3>Unable to load</h3><p>'+esc(e.message)+'</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>');$('#yv2ModalClose').onclick=closeModal}
   }
 
-  function bindStockButtons(ctx=root){return ctx}
+  function bindStockButtons(ctx=root){
+    ctx.querySelectorAll('[data-stock-family],[data-stock-upc]').forEach(btn=>{
+      if(btn.dataset.yv2StockBound==='1')return;
+      btn.dataset.yv2StockBound='1';
+      let lastAt=0;
+      const fire=async e=>{
+        const now=Date.now();
+        if(now-lastAt<550){e.preventDefault();e.stopPropagation();return}
+        lastAt=now;
+        e.preventDefault();e.stopPropagation();
+        let family=String(btn.dataset.stockFamily||'').trim();
+        let name=btn.dataset.stockName||'';
+        let oh=btn.dataset.stockOh||'';
+        let uom=btn.dataset.stockUom||'';
+        const upc=String(btn.dataset.stockUpc||'').trim();
+        try{
+          if(!family&&upc){
+            const d=await api('/v1/app/v2/upc/'+encodeURIComponent(upc),{timeoutMs:12000});
+            family=String(d.family_article_number||'').trim();
+            name=name||d.family_article_name||d.upc_name||upc;
+            oh=d?.effective_oh?.quantity??oh;
+            uom=d?.effective_oh?.uom||d.selling_uom||uom;
+          }
+          if(!family)return toast('Family Article unavailable');
+          await openTrueStock({family,name,oh,uom});
+        }catch(err){toast(err?.message||'True Stock unavailable')}
+      };
+      btn.addEventListener('pointerup',fire,{passive:false});
+      btn.addEventListener('click',fire,{passive:false});
+      btn.addEventListener('touchend',fire,{passive:false});
+    });
+    return ctx;
+  }
   async function openTrueStock(d){
     if(!d.family)return toast('Family Article unavailable');
     let qty=d.oh,uom=d.uom;
@@ -354,7 +378,8 @@ YIPMAN_MOBILE_V2_JS = r"""
     const filtered=V.actions.filter(a=>V.actionFilter==='all'||a.type===V.actionFilter);
     const rows=filtered.slice(0,40);
     $('#yv2ActionCount').textContent=filtered.length>40?('Top 40 · '+filtered.length+' total'):(filtered.length+' need attention');
-    $('#yv2Actions').innerHTML=rows.map((a,i)=>`<article class="yv2-card yv2-action ${esc(a.tone)}"><div class="yv2-topline"><div><div class="yv2-actiontype">${esc(a.type)}</div><div class="yv2-actionname">${esc(a.name)}</div></div><span class="yv2-badge ${esc(a.tone)}">${esc(a.badge)}</span></div><div class="yv2-reason">${a.reason}</div>${a.family?`<button class="yv2-metric edit" style="width:100%;margin-top:9px" data-stock-family="${esc(a.family)}" data-stock-name="${esc(a.nameStock||a.name)}" data-stock-oh="${esc(a.oh??'')}" data-stock-uom="${esc(a.uom||'')}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(a.oh)} ${esc(a.uom||'')}</div></button>`:''}<div class="yv2-btnrow"><button class="yv2-btn primary" data-act-open="${i}">Review</button><button class="yv2-btn ignore" data-act-ignore="${i}">Ignore 12H</button></div></article>`).join('')||'<div class="yv2-empty">No actions in this filter.</div>';
+    $('#yv2Actions').innerHTML=rows.map((a,i)=>`<article class="yv2-card yv2-action ${esc(a.tone)}"><div class="yv2-topline"><div><div class="yv2-actiontype">${esc(a.type)}</div><div class="yv2-actionname">${esc(a.name)}</div></div><span class="yv2-badge ${esc(a.tone)}">${esc(a.badge)}</span></div><div class="yv2-reason">${a.reason}</div>${(a.family||a.upc)?`<button class="yv2-metric edit" style="width:100%;margin-top:9px" data-stock-family="${esc(a.family||'')}" data-stock-upc="${esc(a.upc||'')}" data-stock-name="${esc(a.nameStock||a.name)}" data-stock-oh="${esc(a.oh??'')}" data-stock-uom="${esc(a.uom||'')}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(a.oh)} ${esc(a.uom||'')}</div></button>`:''}<div class="yv2-btnrow"><button class="yv2-btn primary" data-act-open="${i}">Review</button><button class="yv2-btn ignore" data-act-ignore="${i}">Ignore 12H</button></div></article>`).join('')||'<div class="yv2-empty">No actions in this filter.</div>';
+    bindStockButtons($('#yv2Actions'));
     $$('[data-act-open]').forEach(b=>b.onclick=()=>{const a=rows[Number(b.dataset.actOpen)];if(a.upc){go('lookup');$('#yv2Search').value=a.upc;searchLookup(a.upc)}else if(a.type==='order')go('order')});
     $$('[data-act-ignore]').forEach(b=>b.onclick=()=>ignore(rows[Number(b.dataset.actIgnore)].id));
   }
@@ -383,20 +408,79 @@ YIPMAN_MOBILE_V2_JS = r"""
   $('#yv2NextDelivery').onchange=e=>{V.nextDelivery=e.target.value;V.orderMode==='promotion'?loadPromotion():loadRegularOrder()};
   $$('[data-om]').forEach(b=>b.onclick=()=>{V.orderMode=b.dataset.om;$$('[data-om]').forEach(x=>x.classList.toggle('on',x===b));V.orderMode==='promotion'?loadPromotion():loadRegularOrder()});
 
+  function directPress(el,fn){
+    if(!el||el.dataset.yv2DirectBound==='1')return;
+    el.dataset.yv2DirectBound='1';
+    let last=0;
+    const fire=e=>{const now=Date.now();if(now-last<550){e.preventDefault();e.stopPropagation();return}last=now;e.preventDefault();e.stopPropagation();fn(e)};
+    el.addEventListener('pointerup',fire,{passive:false});
+    el.addEventListener('click',fire,{passive:false});
+    el.addEventListener('touchend',fire,{passive:false});
+  }
+  function bindPromoInlineControls(){
+    const form=$('#yv2PromoSearchForm'),input=$('#yv2PromoSearch'),search=$('#yv2PromoSearchBtn'),save=$('#yv2PromoSave');
+    if(form&&form.dataset.yv2SubmitBound!=='1'){form.dataset.yv2SubmitBound='1';form.addEventListener('submit',e=>{e.preventDefault();runPromoSearch()})}
+    if(input&&input.dataset.yv2InputBound!=='1'){input.dataset.yv2InputBound='1';input.addEventListener('input',()=>{clearTimeout(promoSearchTimer);const q=input.value.trim();if(q.length>=2)promoSearchTimer=setTimeout(runPromoSearch,350)})}
+    directPress(search,()=>runPromoSearch());
+    directPress(save,()=>savePromo());
+  }
+  function bindPromoSearchResults(){
+    $$('#yv2PromoResults [data-promo-result]').forEach(btn=>directPress(btn,()=>selectPromo(V.promoSearchRows[Number(btn.dataset.promoResult)])));
+  }
+  function bindPromoSelectedRemove(){
+    $$('#yv2PromoSelected [data-promo-remove]').forEach(btn=>directPress(btn,()=>{V.promoSelected.delete(btn.dataset.promoRemove);renderPromoSelected();toast('Promotion item removed')}));
+  }
+  function bindPromoPersistedRemove(ctx=root){
+    ctx.querySelectorAll('[data-promo-remove-item]').forEach(btn=>directPress(btn,()=>removePersistedPromoItem(btn.dataset.promoRemoveItem,btn)));
+  }
+
   async function loadPromoDetail(){
     if(!V.promoListId){V.promoListDetail=null;return null}
     const d=await api('/v1/yipman/promotion-lists/'+encodeURIComponent(V.promoListId),{timeoutMs:12000});
     V.promoListDetail=d;return d;
   }
   async function loadPromotion(){
-    $('#yv2OrderRows').innerHTML='<div class="yv2-loading">Loading promotion lists…</div>';
+    $('#yv2OrderRows').innerHTML='<div class="yv2-loading">Loading promotion tools…</div>';
     try{
       const d=await api('/v1/yipman/promotion-lists?limit=30',{timeoutMs:12000}),rows=d.rows||[];
       if(!V.promoListId&&rows.length)V.promoListId=rows[0].list_id;
-      $('#yv2OrderRows').innerHTML=`<div class="yv2-card"><div class="yv2-topline"><div><div class="yv2-familyname">Promotion Ordering</div><div class="yv2-meta">Search and add multiple items · manual items can be removed</div></div><button class="yv2-btn primary" id="yv2AddPromo" style="flex:0 0 auto">+ Add Items</button></div><select class="yv2-select" id="yv2PromoList"><option value="">Choose promotion list…</option>${rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready</option>').join('')}</select><div id="yv2PromoCalc" style="margin-top:9px"></div></div>`;
+      const start=V.delivery||iso(new Date()),next=V.nextDelivery||plus(start,7);
+      $('#yv2OrderRows').innerHTML=`
+        <div class="yv2-card">
+          <div class="yv2-familyname">Promotion Ordering</div>
+          <div class="yv2-meta">Search UPC / Article / English / 中文 directly on this page.</div>
+          <div class="yv2-line"></div>
+          <div class="yv2-actiontype">1 · Search & add promotion items</div>
+          <form class="yv2-promosearch" id="yv2PromoSearchForm">
+            <input id="yv2PromoSearch" placeholder="Search salmon, 240816, article…" enterkeyhint="search" autocomplete="off">
+            <button type="submit" class="yv2-btn primary" id="yv2PromoSearchBtn" style="flex:0 0 auto">Search</button>
+          </form>
+          <div class="yv2-meta" id="yv2PromoSearchStatus" style="margin-top:7px">Start typing to find an item.</div>
+          <div id="yv2PromoResults"></div>
+          <div class="yv2-line"></div>
+          <div class="yv2-actiontype">2 · Selected items</div>
+          <div id="yv2PromoSelected"><div class="yv2-meta" style="margin-top:8px">No promotion items selected yet.</div></div>
+          <div class="yv2-line"></div>
+          <div class="yv2-actiontype">3 · Promotion & delivery window</div>
+          <input class="yv2-input" id="yv2PromoName" style="font-size:14px" value="Manual Promotion ${esc(start)}">
+          <div class="yv2-formgrid">
+            <label>START<input type="date" id="yv2PromoStart" value="${esc(start)}"></label>
+            <label>END<input type="date" id="yv2PromoEnd" value="${esc(plus(start,6))}"></label>
+            <label>DELIVERY<input type="date" id="yv2PromoDelivery" value="${esc(start)}"></label>
+            <label>NEXT DELIVERY<input type="date" id="yv2PromoNext" value="${esc(next)}"></label>
+          </div>
+          <div class="yv2-btnrow"><button class="yv2-btn primary" type="button" id="yv2PromoSave">Save Promotion</button></div>
+          <div class="yv2-line"></div>
+          <div class="yv2-actiontype">Saved promotion list</div>
+          <select class="yv2-select" id="yv2PromoList"><option value="">Choose promotion list…</option>${rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready</option>').join('')}</select>
+          <div id="yv2PromoCalc" style="margin-top:9px"></div>
+        </div>`;
       $('#yv2PromoList').value=String(V.promoListId||'');
-      $('#yv2PromoList').addEventListener('change',async e=>{V.promoListId=e.target.value?Number(e.target.value):null;V.promoListDetail=null;if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">Create or choose a promotion list.</div>'});
-      if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">Create or choose a promotion list.</div>';
+      $('#yv2PromoList').addEventListener('change',async e=>{V.promoListId=e.target.value?Number(e.target.value):null;V.promoListDetail=null;if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>'});
+      if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>';
+      renderPromoSelected();
+      bindPromoInlineControls();
+      setTimeout(()=>$('#yv2PromoSearch')?.focus(),50);
     }catch(e){$('#yv2OrderRows').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
   async function calcPromotion(){
@@ -414,6 +498,8 @@ YIPMAN_MOBILE_V2_JS = r"""
         return `<div class="yv2-card" style="margin-bottom:8px"><div class="yv2-topline"><div><div class="yv2-actionname">${esc(name)}</div><div class="yv2-meta">UPC ${esc(r.upc||p.upc||p.raw_item_code||'—')} · Family ${esc(family||'—')}</div></div><span class="yv2-badge ${r.freshness_adjustment_applied?'amber':'green'}">${r.freshness_adjustment_applied?'FRESHNESS':'PROMO'}</span></div><div class="yv2-grid2"><button class="yv2-metric edit" data-stock-family="${esc(family)}" data-stock-name="${esc(name)}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button><div class="yv2-metric"><div class="yv2-label">Promo price</div><div class="yv2-value">${money(p.promotion_price??r.promotion_price)}</div></div></div><div class="yv2-orderqty"><div class="yv2-label">Suggested promo order</div><b>${fmt(r.suggested_order_qty??r.suggested_delivery_qty)} ${esc(r.suggested_order_uom||r.suggested_delivery_uom||r.uom||r.selling_uom||'')}</b></div>${remove?'<div class="yv2-btnrow">'+remove+'</div>':''}</div>`;
       }).join('');
       box.innerHTML=(manual&&reviewHtml?'<div class="yv2-meta" style="margin:5px 0 7px"><b>Manual promotion items needing review</b></div>'+reviewHtml:'')+rowsHtml||'<div class="yv2-empty">No calculable promotion items.</div>';
+      bindStockButtons(box);
+      bindPromoPersistedRemove(box);
     }catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
   async function removePersistedPromoItem(itemId,btn){
@@ -425,24 +511,60 @@ YIPMAN_MOBILE_V2_JS = r"""
       await loadPromotion();
     }catch(e){toast(e.message||'Could not remove promotion item');if(btn){btn.disabled=false;btn.textContent='Remove from promotion'}}
   }
-  function openPromoBuilder(){
-    V.promoSelected=new Map();
-    modal(`<h3>Manual Promotion</h3><p>Search one or multiple UPC / Article / item names. Tap a result to add it; every selected item can be removed before saving.</p><form class="yv2-promosearch" id="yv2PromoSearchForm"><input id="yv2PromoSearch" placeholder="UPC / article / English / 中文" enterkeyhint="search" autocomplete="off"><button type="submit" class="yv2-btn primary" id="yv2PromoSearchBtn" style="flex:0 0 auto">Search</button></form><div id="yv2PromoResults"></div><div id="yv2PromoSelected"></div><div class="yv2-formgrid"><label>START<input type="date" id="yv2PromoStart" value="${esc(V.delivery||iso(new Date()))}"></label><label>END<input type="date" id="yv2PromoEnd" value="${esc(plus(V.delivery||iso(new Date()),2))}"></label><label>DELIVERY<input type="date" id="yv2PromoDelivery" value="${esc(V.delivery||'')}"></label><label>NEXT DELIVERY<input type="date" id="yv2PromoNext" value="${esc(V.nextDelivery||'')}"></label></div><input class="yv2-input" id="yv2PromoName" style="font-size:14px" value="Manual Promotion ${esc(V.delivery||'')}"><div class="yv2-btnrow"><button class="yv2-btn" id="yv2PromoCancel">Cancel</button><button class="yv2-btn primary" id="yv2PromoSave">Save Promotion</button></div>`);
-    setTimeout(()=>$('#yv2PromoSearch')?.focus(),60);
-  }
+  function openPromoBuilder(){go('order');V.orderMode='promotion';loadPromotion().then(()=>$('#yv2PromoSearch')?.focus())}
+
   async function runPromoSearch(){
-    const q=$('#yv2PromoSearch').value.trim(),box=$('#yv2PromoResults');if(q.length<2)return toast('Enter at least 2 characters');box.innerHTML='<div class="yv2-loading">Searching…</div>';
-    try{const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});V.promoSearchRows=d.results||[];box.innerHTML=V.promoSearchRows.slice(0,12).map((r,i)=>`<button type="button" class="yv2-promoresult" data-promo-result="${i}"><b>${esc(r.name||r.number||'Item')}</b><span>${esc(r.result_type||'ITEM')} ${esc(r.number||'—')} · Family ${esc(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'—')} · Current ${money(r.current_price)} · TAP TO ADD</span></button>`).join('')||'<div class="yv2-empty">No matching item.</div>'}catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
+    const input=$('#yv2PromoSearch'),box=$('#yv2PromoResults'),status=$('#yv2PromoSearchStatus');if(!input||!box)return;
+    const q=input.value.trim();
+    if(q.length<2){box.innerHTML='';if(status)status.textContent='Enter at least 2 characters.';return}
+    if(status)status.textContent='Searching…';
+    box.innerHTML='<div class="yv2-loading">Searching promotion item index…</div>';
+    try{
+      const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});
+      V.promoSearchRows=Array.isArray(d?.results)?d.results:[];
+      if(status)status.textContent=V.promoSearchRows.length?(V.promoSearchRows.length+' result(s) · tap an item to add it'):'No matching item.';
+      box.innerHTML=V.promoSearchRows.slice(0,14).map((r,i)=>{
+        const family=String(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'');
+        return `<button type="button" class="yv2-promoresult" data-promo-result="${i}"><b>${esc(r.name||r.family_name||r.number||'Item')}</b><span>${esc(r.result_type||'ITEM')} ${esc(r.number||'—')} · Family ${esc(family||'—')} · Current ${money(r.current_price)} · TAP TO ADD</span></button>`;
+      }).join('')||'<div class="yv2-empty">No matching item.</div>';
+      bindPromoSearchResults();
+    }catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>';if(status)status.textContent='Search unavailable · '+(e.message||'error')}
   }
-  function selectPromo(r){if(!r)return;const family=String(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'');const key=family||String(r.number||'');if(!key)return toast('Item mapping unavailable');V.promoSelected.set(key,{...r,familyKey:family,price:r.current_price});renderPromoSelected();toast('Promotion item added')}
-  function renderPromoSelected(){const box=$('#yv2PromoSelected');if(!box)return;box.innerHTML=[...V.promoSelected.entries()].map(([k,r])=>`<div class="yv2-selected"><button type="button" data-promo-remove="${esc(k)}">Remove</button><b>${esc(r.name||r.number)}</b><div class="yv2-meta">Family ${esc(r.familyKey||'—')} · selected ${esc(r.number||'—')}</div><input class="yv2-input" style="font-size:16px" data-promo-price="${esc(k)}" value="${esc(r.price??'')}" placeholder="SALE price"></div>`).join('')||'<div class="yv2-meta" style="margin-top:8px">No promotion items selected yet.</div>'}
+  async function selectPromo(r){
+    if(!r)return;
+    const status=$('#yv2PromoSearchStatus');
+    const familyKey=String(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'').trim();
+    if(!familyKey){if(status)status.textContent='Family Article unavailable for this result.';return}
+    try{
+      if(status)status.textContent='Loading Family inventory and delivery details…';
+      const fam=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:12000});
+      const fid=String(fam?.family_id||r.family_id||familyKey);
+      const type=String(r.result_type||'').toUpperCase();
+      const code=type==='UPC'?String(r.number||''):(type==='ARTICLE'?String(r.number||familyKey):familyKey);
+      if(!code)throw new Error('Selectable UPC / Article number unavailable');
+      V.promoSelected.set(fid,{...r,familyKey,family:fam,code,price:r.current_price});
+      renderPromoSelected();
+      if(status)status.textContent='Added Family '+familyKey+'. Search again to add another Family.';
+      toast('Promotion item added');
+      $('#yv2PromoSearch')?.focus();
+    }catch(e){if(status)status.textContent='Unable to add item · '+(e.message||'error')}
+  }
+  function renderPromoSelected(){
+    const box=$('#yv2PromoSelected');if(!box)return;
+    box.innerHTML=[...V.promoSelected.entries()].map(([k,r])=>{
+      const fam=r.family||{},eff=fam.current_effective_oh||fam.effective_oh||{},oh=eff.quantity??eff.current_oh??eff.effective_oh,uom=eff.uom||eff.uom_code||fam?.family_sales_7d?.uom||r.selling_uom||'';
+      return `<div class="yv2-selected"><button type="button" data-promo-remove="${esc(k)}">Remove</button><b>${esc(fam.family_article_name||r.family_name||r.name||r.number)}</b><div class="yv2-meta">Family ${esc(r.familyKey||'—')} · Selected ${esc(r.code||r.number||'—')}</div>${r.familyKey?`<button type="button" class="yv2-metric edit" style="width:100%;margin-top:7px" data-stock-family="${esc(r.familyKey)}" data-stock-name="${esc(fam.family_article_name||r.name||'')}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button>`:''}<input class="yv2-input" style="font-size:16px" data-promo-price="${esc(k)}" value="${esc(r.price??'')}" placeholder="SALE price"></div>`;
+    }).join('')||'<div class="yv2-meta" style="margin-top:8px">No promotion items selected yet.</div>';
+    bindStockButtons(box);
+    bindPromoSelectedRemove();
+  }
   async function savePromo(){
     const selected=[...V.promoSelected.entries()];if(!selected.length)return toast('Select at least one item');
     const start=$('#yv2PromoStart').value,end=$('#yv2PromoEnd').value,delivery=$('#yv2PromoDelivery').value,next=$('#yv2PromoNext').value;if(!start||!end||!delivery||!next)return toast('Complete all dates');if(end<start||next<=delivery)return toast('Check promotion / delivery dates');
-    const items=selected.map(([k,r])=>{const price=Number(root.querySelector('[data-promo-price="'+CSS.escape(k)+'"]').value);return {upc:String(r.number||r.familyKey||''),description:r.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:price}});
+    const items=selected.map(([k,r])=>{const price=Number(root.querySelector('[data-promo-price="'+CSS.escape(k)+'"]').value);return {upc:String(r.code||r.number||r.familyKey||''),description:r.family?.family_article_name||r.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:price}});
     if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0))return toast('Enter valid SALE price for each item');
     const btn=$('#yv2PromoSave');btn.disabled=true;btn.textContent='Saving…';
-    try{const d=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:$('#yv2PromoName').value.trim()||('Manual Promotion '+start),source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});V.promoListId=d.list_id;V.promoListDetail=null;V.delivery=delivery;V.nextDelivery=next;closeModal();$('#yv2Delivery').value=delivery;$('#yv2NextDelivery').value=next;toast('Promotion saved');await loadPromotion()}catch(e){toast(e.message);btn.disabled=false;btn.textContent='Save Promotion'}
+    try{const d=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:$('#yv2PromoName').value.trim()||('Manual Promotion '+start),source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});V.promoListId=d.list_id;V.promoListDetail=null;V.delivery=delivery;V.nextDelivery=next;V.promoSelected=new Map();$('#yv2Delivery').value=delivery;$('#yv2NextDelivery').value=next;toast('Promotion saved');await loadPromotion()}catch(e){toast(e.message);btn.disabled=false;btn.textContent='Save Promotion'}
   }
 
   async function loadPerformance(days){
