@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v457';
+const CACHE='yipman-v458';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -121,7 +121,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .cbmeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.cbmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbmeta b{display:block;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cblive{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f6f8fa;border:1px solid #e6ecef;border-radius:10px;padding:7px 8px}.cblive-main{display:flex;align-items:center;gap:6px;min-width:0}.cblive-dot{width:9px;height:9px;border-radius:50%;background:#9aa6af;box-shadow:0 0 0 3px rgba(154,166,175,.12);flex:0 0 auto}.cblive-dot.running{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.13)}.cblive-dot.queued{background:#d19a00;box-shadow:0 0 0 3px rgba(209,154,0,.13)}.cblive-dot.stuck{background:#d93025;box-shadow:0 0 0 3px rgba(217,48,37,.13)}.cblive b{font-size:9px;line-height:1.15}.cblive span{font-size:7px;color:var(--muted);font-weight:800;white-space:nowrap}.cblivecheck{font-size:7px!important;color:#788690!important}
 .cbprogress{background:#f8fafb;border:1px solid #e7ecef;border-radius:10px;padding:8px}.cbprogress-top{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}.cbprogress-top b{font-size:11px}.cbprogress-top span{font-size:8px;color:var(--muted);font-weight:850}.cbbar{height:6px;background:#e3e9ed;border-radius:999px;overflow:hidden;margin-top:6px}.cbbar i{display:block;height:100%;background:#1488c6;border-radius:999px;transition:width .25s ease}.cbprogress-sub{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:7px;color:#667581;font-weight:850}.cbprogress-sub span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
+.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px;overflow-wrap:anywhere}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
+.mobileupload p{margin:0 0 7px;font-size:8px;color:var(--muted);font-weight:750;line-height:1.3}.duploadpick{display:block;width:100%;border:1px dashed #aabac6;border-radius:10px;background:#f7fafc;padding:9px;font-size:9px;font-weight:850;color:#344754}.duploadpick::file-selector-button{border:0;border-radius:8px;background:#142033;color:#fff;padding:7px 9px;margin-right:8px;font-size:8px;font-weight:950}.duploadnote{width:100%;margin-top:7px;border:1px solid var(--line);border-radius:9px;padding:8px 9px;font-size:10px;font-weight:800;background:#fff}.duploadsummary{margin-top:7px;font-size:8px;color:#667581;font-weight:800;line-height:1.35;overflow-wrap:anywhere}.duploadbtn{width:100%;margin-top:7px;border:0;border-radius:10px;background:#1488c6;color:#fff;padding:10px;font-size:9px;font-weight:1000}.duploadbtn:disabled{opacity:.55}.duploadresult{margin-top:7px;border-radius:9px;background:#f6f8fa;padding:7px 8px;font-size:8px;color:#52616d;font-weight:850;line-height:1.35;overflow-wrap:anywhere}
 .batchrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;padding:9px 0;border-top:1px solid var(--line);align-items:start}.batchrow:first-child{border-top:0}.batchrow>div{min-width:0}.batchrow b{display:block;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batchrow span{display:block;min-width:0;font-size:8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.batchdate{font-size:8px!important;color:#84909a!important;white-space:nowrap}.batchstate{display:inline-block!important;width:auto;border-radius:999px;padding:3px 6px;background:#f3f6f8;color:#5f6d78!important;font-size:7px!important;font-weight:900;line-height:1.15}.batchstate.hold{background:var(--redbg);color:var(--red)!important}.batchstate.ready{background:var(--greenbg);color:var(--green)!important}
 .qaresolutioncard{grid-column:1/-1}.qareshead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.qareshead h3{margin-bottom:2px}.qareshead p{margin:0;font-size:8px;line-height:1.3;color:var(--muted);font-weight:750}.qaresbadge{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:#eef3f7;color:#51606c;font-size:8px;font-weight:950}.qaresbadge.bad{background:var(--redbg);color:var(--red)}.qaresbadge.ok{background:var(--greenbg);color:var(--green)}
 .qaresstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.qaresstat{background:#f6f8fa;border-radius:9px;padding:7px}.qaresstat small{display:block;font-size:6px;color:var(--muted);font-weight:950}.qaresstat b{display:block;font-size:13px;margin-top:2px}
@@ -267,7 +268,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qfamily .qlabel{font-size:7px}
 .qfamily .qfnum{font-size:17px;line-height:1}
 .qfamily .qfname{font-size:21px;font-weight:1000;line-height:1.02;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip}
-.qfamily .qmeta{font-size:7px;margin-top:2px}
+.qfamily .qmeta{font-size:7px;margin-top:2px}.qfamilycost{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px;padding:4px 6px;border:1px solid rgba(95,105,113,.14);border-radius:8px;background:rgba(255,255,255,.58)}.qfamilycost span{font-size:6px;color:#6d7b86;font-weight:950}.qfamilycost b{font-size:12px;line-height:1;font-weight:1000;color:#253949}.qfamilycost small{font-size:6px;color:#849099;font-weight:850}
 .qffocus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
 .qffocusbox{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;background:rgba(255,255,255,.58);border:1px solid rgba(95,105,113,.14);border-radius:8px;padding:4px 6px}
 .qffocusbox small{display:block;font-size:6px;color:#6d7b86;font-weight:950;line-height:1}
@@ -371,7 +372,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .bestmetrics{display:grid;grid-template-columns:1.35fr 1fr;gap:4px;margin-top:5px}.bestmetric{background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.13);border-radius:8px;padding:4px 6px}.bestmetric small{display:block;font-size:6px;color:#6e7c87;font-weight:950}.bestmetric b{display:block;font-size:22px;line-height:1;font-weight:1000;margin-top:2px}.bestmetric span{display:block;font-size:7px;color:#7e8a93;font-weight:850;margin-top:2px}
 .bestrecent{margin-top:4px;background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.12);border-radius:8px;padding:4px 6px}.bestrecenthead{display:flex;justify-content:space-between;gap:6px;font-size:7px;color:#6d7a85;font-weight:950}.bestreceipt{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:3px;font-size:9px;font-weight:900}.bestreceipt b{font-size:10px}.bestreceipt.receiptlink{width:100%;padding:2px 0;border:0;background:transparent;text-align:left;color:inherit}.receiptlink{cursor:pointer}.receiptlink:active{opacity:.62}.qdelivery.receiptlink{border:0;background:transparent;padding:2px 0 2px 4px;font:inherit;color:inherit}
 .qsap.nohead{border-left-width:1px;margin-top:3px}.qsap.nohead .qupc:first-child{border-top:0}
-.qupcname{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important}
+.qupcname{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word!important;overflow-wrap:anywhere}
 @media(max-width:430px){.bestname{font-size:17px}.bestmetric b{font-size:21px}.quicksearch{left:8px;right:8px}}
 
 
@@ -1005,7 +1006,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
       </div>
     </section>
 
-<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard mobileupload"><h3>Upload new file</h3><p>Select one or more source files. Yipman creates one batch, uploads every file, then starts processing only after all files are received.</p><input class="duploadpick" id="dataUploadFiles" type="file" multiple accept=".csv,.xls,.xlsx,.xlsm,.txt"><input class="duploadnote" id="dataUploadNote" placeholder="Optional batch note"><div class="duploadsummary" id="dataUploadSummary">No files selected.</div><button class="duploadbtn" id="dataUploadBtn" type="button">UPLOAD & START PROCESSING</button><div class="duploadresult" id="dataUploadResult">No upload started.</div></div><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
     <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="ai"><i>✦</i>AI</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
@@ -1081,7 +1082,7 @@ async function loadHeaderFreshness(){
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', dataPublishedBatch=null, historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
@@ -1754,7 +1755,12 @@ function quickFamilyGroups(rows){
      family_oh_is_true_stock:String(r.family_oh_source||'').toUpperCase().startsWith('FAMILY_TRUE_STOCK'),
      family_system_oh:r.family_system_oh??null,
      family_system_oh_uom:r.family_system_oh_uom||'',
-     family_system_oh_source:r.family_system_oh_source||''
+     family_system_oh_source:r.family_system_oh_source||'',
+     family_cost:r.family_cost??null,
+     family_cost_uom:r.family_cost_uom||'',
+     family_cost_source:r.family_cost_source||'',
+     family_cost_date:r.family_cost_date||null,
+     family_cost_status:r.family_cost_status||''
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -1918,9 +1924,12 @@ function quickSellingHtml(a,idx,seq){
 function quickGroupedHtml(rows){
  return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
    const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',recon=String(g.reconciliation||'').toUpperCase();
+   const familyCost=num(g.family_cost),familyCostUom=g.family_cost_uom||'';
+   const familyCostMeta=[g.family_cost_source?friendlySignal(g.family_cost_source):'',g.family_cost_date?shortDate(g.family_cost_date):''].filter(Boolean).join(' · ');
+   const familyCostHtml='<div class="qfamilycost"><span>FAMILY COST</span><b>'+(familyCost===null?'—':money(familyCost)+(familyCostUom?' / '+esc(familyCostUom):''))+'</b>'+(familyCostMeta?'<small>'+esc(familyCostMeta)+'</small>':'')+'</div>';
    const familyHead='<div class="qfhead">'+
      '<div class="qfidentity"><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div>'+
-     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div>'+
+     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div>'+familyCostHtml+'</div>'+
      '<div class="qffocus">'+
        familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.family_oh,effective_uom:g.family_oh_uom,effective_source:g.family_oh_source,system:g.family_system_oh,system_uom:g.family_system_oh_uom})+
        '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
@@ -2811,6 +2820,7 @@ function openOrderHistory(r){
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[], state=orderState(r), reason=orderReasonLabel(r.roster_reason);
+ const effectiveOh=r.effective_oh??r.oh, effectiveUom=r.effective_oh_uom||r.oh_uom||'';
  const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
  const histDetail=hist.length
    ? '<br><br><b>Historical Receiving Articles / Pack Size</b><br>'+hist.map(h=>'• '+esc(h.article_number||'—')+' · '+esc(h.pack_size||'—')+' · last '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+(h.pack_size_source?' · '+esc(h.pack_size_source):'')).join('<br>')
@@ -2818,7 +2828,7 @@ function openOrder(r){
  const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
- '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(effectiveOh??'')+'" data-uom="'+esc(effectiveUom)+'"><b>'+fmtNullable(effectiveOh)+' '+esc(effectiveUom)+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  histDetail+
