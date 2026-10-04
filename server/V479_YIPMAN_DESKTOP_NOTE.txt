@@ -1,0 +1,3 @@
+v7.0.479
+/app/backoffice now renders the Yipman desktop shell so desktop and Yipman use one interface and one ordering implementation.
+This removes the separate legacy backoffice Ordering Review loader that was hanging at Loading... and keeps the v476 promotion workflow plus v477/v478 ordering stability behavior.
