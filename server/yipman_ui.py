@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v457';
+const CACHE='yipman-v458';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -121,7 +121,8 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .cbmeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.cbmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbmeta b{display:block;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cblive{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f6f8fa;border:1px solid #e6ecef;border-radius:10px;padding:7px 8px}.cblive-main{display:flex;align-items:center;gap:6px;min-width:0}.cblive-dot{width:9px;height:9px;border-radius:50%;background:#9aa6af;box-shadow:0 0 0 3px rgba(154,166,175,.12);flex:0 0 auto}.cblive-dot.running{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.13)}.cblive-dot.queued{background:#d19a00;box-shadow:0 0 0 3px rgba(209,154,0,.13)}.cblive-dot.stuck{background:#d93025;box-shadow:0 0 0 3px rgba(217,48,37,.13)}.cblive b{font-size:9px;line-height:1.15}.cblive span{font-size:7px;color:var(--muted);font-weight:800;white-space:nowrap}.cblivecheck{font-size:7px!important;color:#788690!important}
 .cbprogress{background:#f8fafb;border:1px solid #e7ecef;border-radius:10px;padding:8px}.cbprogress-top{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}.cbprogress-top b{font-size:11px}.cbprogress-top span{font-size:8px;color:var(--muted);font-weight:850}.cbbar{height:6px;background:#e3e9ed;border-radius:999px;overflow:hidden;margin-top:6px}.cbbar i{display:block;height:100%;background:#1488c6;border-radius:999px;transition:width .25s ease}.cbprogress-sub{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:7px;color:#667581;font-weight:850}.cbprogress-sub span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
+.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px;overflow-wrap:anywhere}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
+.mobileupload p{margin:0 0 7px;font-size:8px;color:var(--muted);font-weight:750;line-height:1.3}.duploadpick{display:block;width:100%;border:1px dashed #aabac6;border-radius:10px;background:#f7fafc;padding:9px;font-size:9px;font-weight:850;color:#344754}.duploadpick::file-selector-button{border:0;border-radius:8px;background:#142033;color:#fff;padding:7px 9px;margin-right:8px;font-size:8px;font-weight:950}.duploadnote{width:100%;margin-top:7px;border:1px solid var(--line);border-radius:9px;padding:8px 9px;font-size:10px;font-weight:800;background:#fff}.duploadsummary{margin-top:7px;font-size:8px;color:#667581;font-weight:800;line-height:1.35;overflow-wrap:anywhere}.duploadbtn{width:100%;margin-top:7px;border:0;border-radius:10px;background:#1488c6;color:#fff;padding:10px;font-size:9px;font-weight:1000}.duploadbtn:disabled{opacity:.55}.duploadresult{margin-top:7px;border-radius:9px;background:#f6f8fa;padding:7px 8px;font-size:8px;color:#52616d;font-weight:850;line-height:1.35;overflow-wrap:anywhere}
 .batchrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;padding:9px 0;border-top:1px solid var(--line);align-items:start}.batchrow:first-child{border-top:0}.batchrow>div{min-width:0}.batchrow b{display:block;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batchrow span{display:block;min-width:0;font-size:8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.batchdate{font-size:8px!important;color:#84909a!important;white-space:nowrap}.batchstate{display:inline-block!important;width:auto;border-radius:999px;padding:3px 6px;background:#f3f6f8;color:#5f6d78!important;font-size:7px!important;font-weight:900;line-height:1.15}.batchstate.hold{background:var(--redbg);color:var(--red)!important}.batchstate.ready{background:var(--greenbg);color:var(--green)!important}
 .qaresolutioncard{grid-column:1/-1}.qareshead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.qareshead h3{margin-bottom:2px}.qareshead p{margin:0;font-size:8px;line-height:1.3;color:var(--muted);font-weight:750}.qaresbadge{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:#eef3f7;color:#51606c;font-size:8px;font-weight:950}.qaresbadge.bad{background:var(--redbg);color:var(--red)}.qaresbadge.ok{background:var(--greenbg);color:var(--green)}
 .qaresstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.qaresstat{background:#f6f8fa;border-radius:9px;padding:7px}.qaresstat small{display:block;font-size:6px;color:var(--muted);font-weight:950}.qaresstat b{display:block;font-size:13px;margin-top:2px}
@@ -169,6 +170,28 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .promo-shell{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:13px}.promo-shell h3{font-size:16px;margin:0}.promo-shell p{font-size:9px;color:var(--muted);line-height:1.4}.promo-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.promo-type{border-radius:999px;padding:6px 8px;font-size:8px;font-weight:950}.promo-type.weekly{background:#f0eaff;color:#6b21a8}.promo-type.weekend{background:#fff4d6;color:#8a5b00}
 
 .promo-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;margin-top:9px}.promo-controls select,.promo-date-inputs input{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;padding:9px;font-size:10px;font-weight:850}.promo-import,.promo-manual{border:0;border-radius:11px;background:#142033;color:#fff;padding:9px 11px;font-size:9px;font-weight:950}.promo-manual{background:#f0b82b;color:#332400}.promo-date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.promo-date-inputs label{font-size:7px;color:var(--muted);font-weight:950}.promo-date-inputs input{display:block;margin-top:3px;padding:7px}.manual-promo-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.manual-promo-fields label{font-size:8px;color:var(--muted);font-weight:950}.manual-promo-fields input,.manual-promo-fields textarea{display:block;width:100%;margin-top:3px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px;font-size:11px;font-weight:850}.manual-promo-fields .wide{grid-column:1/-1}.manual-promo-fields textarea{min-height:112px;resize:vertical;line-height:1.45}.promo-freshness{margin-top:7px;border:1px solid #efc48a;background:#fff3df;border-radius:10px;padding:7px 8px;font-size:8px;line-height:1.35;color:#7a4b0a;font-weight:850}
+.manual-promo-search{display:grid;gap:8px}
+.manual-promo-searchbar{display:flex;gap:7px;align-items:center}
+.manual-promo-searchbar input{flex:1;min-width:0;border:2px solid #bdd5e7;border-radius:13px;background:#fff;min-height:48px;padding:0 12px;font-size:16px;font-weight:850;outline:0}
+.manual-promo-searchbar input:focus{border-color:#1672bd;box-shadow:0 0 0 3px rgba(22,114,189,.10)}
+.manual-promo-searchbar button{border:0;border-radius:12px;background:#174f78;color:#fff;padding:12px 13px;font-size:11px;font-weight:950}
+.manual-promo-search-note{font-size:10px;line-height:1.35;color:#637585;font-weight:800}
+.manual-promo-results{display:grid;gap:6px;max-height:260px;overflow:auto}
+.manual-promo-result{width:100%;text-align:left;border:1px solid #d9e4ec;border-radius:13px;background:#f8fbfe;padding:9px 10px;color:#183349}
+.manual-promo-result b{display:block;font-size:16px;line-height:1.12;white-space:normal;overflow-wrap:anywhere}
+.manual-promo-result strong{display:block;font-size:12px;color:#0d609f;margin-top:2px}
+.manual-promo-result span{display:block;font-size:10px;line-height:1.35;color:#667786;margin-top:4px;font-weight:800}
+.manual-promo-selected{display:grid;gap:7px}
+.manual-promo-selected-card{border:1.5px solid #8fc6a7;border-radius:14px;background:#effaf4;padding:9px 10px}
+.manual-promo-selected-top{display:grid;grid-template-columns:minmax(0,1fr) 86px;gap:8px;align-items:start}
+.manual-promo-selected-card h4{font-size:17px;line-height:1.1;margin:0;font-weight:1000;overflow-wrap:anywhere}
+.manual-promo-selected-card .selmeta{font-size:10px;line-height:1.35;color:#526b5f;font-weight:850;margin-top:4px}
+.manual-promo-selected-card label{display:block;font-size:8px;color:#62756c;font-weight:950}
+.manual-promo-selected-card input{width:100%;margin-top:3px;border:1px solid #bfd6ca;border-radius:9px;background:#fff;padding:8px;font-size:16px;font-weight:950}
+.manual-promo-delivery{margin-top:5px;padding-top:6px;border-top:1px solid rgba(55,110,80,.14);font-size:10px;line-height:1.35;color:#53685e;font-weight:850}
+.manual-promo-remove{border:0;background:transparent;color:#b52e38;font-size:10px;font-weight:950;padding:4px 0 0}
+
+.promo-freshness{margin-top:7px;border:1px solid #efc48a;background:#fff3df;border-radius:10px;padding:7px 8px;font-size:8px;line-height:1.35;color:#7a4b0a;font-weight:850}
 .promo-status{font-size:9px;color:var(--muted);font-weight:800;margin:7px 2px}.promo-summary{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.promo-card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px;margin-bottom:8px;box-shadow:var(--shadow)}.promo-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.promo-card-head b{font-size:14px}.promo-card-head small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.promo-badge{border-radius:999px;padding:5px 7px;font-size:7px;font-weight:950;white-space:nowrap}.promo-badge.weekly{background:#f0eaff;color:#6b21a8}.promo-badge.weekend{background:#fff4d6;color:#8a5b00}.promo-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:8px}.promo-metric{background:#f7f9fb;border-radius:9px;padding:7px;text-align:center;min-width:0}.promo-metric[data-promo-oh]{cursor:pointer;border:1px dashed #aebbc6}.promo-metric small{display:block;font-size:6px;color:var(--muted);font-weight:950}.promo-metric b{display:block;font-size:14px;margin-top:2px}.promo-metric span{display:block;font-size:6px;color:var(--muted);font-weight:850;margin-top:2px}.promo-metric.real-oh{padding:3px}.promo-metric.real-oh .familyohinline{text-align:center;border:0;background:transparent;padding:2px}.promo-metric.temp{background:#fff5e9;border:1px solid #f7bc7a;cursor:pointer}.promo-order{margin-top:7px;background:#eaf8ef;border:1px solid #b8e3c6;border-radius:11px;padding:8px}.promo-order small{font-size:7px;color:#397450;font-weight:950}.promo-order b{display:block;font-size:22px;color:#17683c}.promo-break{font-size:8px;color:#436052;margin-top:2px}.promo-review{background:#fff8e1;border:1px solid #efdca2;border-radius:11px;padding:8px;font-size:9px;margin-bottom:7px}
 
 .lh{font-size:9px}.orow .name{font-size:14px}.orow .sub{font-size:9px}.cell{font-size:14px}.cell span{font-size:9px}.rtrace-line{font-size:10px}.rtrace-more{font-size:9px}.receipt-meta{font-size:10px}
@@ -267,7 +290,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qfamily .qlabel{font-size:7px}
 .qfamily .qfnum{font-size:17px;line-height:1}
 .qfamily .qfname{font-size:21px;font-weight:1000;line-height:1.02;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip}
-.qfamily .qmeta{font-size:7px;margin-top:2px}
+.qfamily .qmeta{font-size:7px;margin-top:2px}.qfamilycost{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px;padding:4px 6px;border:1px solid rgba(95,105,113,.14);border-radius:8px;background:rgba(255,255,255,.58)}.qfamilycost span{font-size:6px;color:#6d7b86;font-weight:950}.qfamilycost b{font-size:12px;line-height:1;font-weight:1000;color:#253949}.qfamilycost small{font-size:6px;color:#849099;font-weight:850}
 .qffocus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
 .qffocusbox{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;background:rgba(255,255,255,.58);border:1px solid rgba(95,105,113,.14);border-radius:8px;padding:4px 6px}
 .qffocusbox small{display:block;font-size:6px;color:#6d7b86;font-weight:950;line-height:1}
@@ -371,7 +394,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .bestmetrics{display:grid;grid-template-columns:1.35fr 1fr;gap:4px;margin-top:5px}.bestmetric{background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.13);border-radius:8px;padding:4px 6px}.bestmetric small{display:block;font-size:6px;color:#6e7c87;font-weight:950}.bestmetric b{display:block;font-size:22px;line-height:1;font-weight:1000;margin-top:2px}.bestmetric span{display:block;font-size:7px;color:#7e8a93;font-weight:850;margin-top:2px}
 .bestrecent{margin-top:4px;background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.12);border-radius:8px;padding:4px 6px}.bestrecenthead{display:flex;justify-content:space-between;gap:6px;font-size:7px;color:#6d7a85;font-weight:950}.bestreceipt{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:3px;font-size:9px;font-weight:900}.bestreceipt b{font-size:10px}.bestreceipt.receiptlink{width:100%;padding:2px 0;border:0;background:transparent;text-align:left;color:inherit}.receiptlink{cursor:pointer}.receiptlink:active{opacity:.62}.qdelivery.receiptlink{border:0;background:transparent;padding:2px 0 2px 4px;font:inherit;color:inherit}
 .qsap.nohead{border-left-width:1px;margin-top:3px}.qsap.nohead .qupc:first-child{border-top:0}
-.qupcname{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important}
+.qupcname{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word!important;overflow-wrap:anywhere}
 @media(max-width:430px){.bestname{font-size:17px}.bestmetric b{font-size:21px}.quicksearch{left:8px;right:8px}}
 
 
@@ -783,6 +806,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #quick .stocksale.stockpromo strong,#quick .stockpromo .promobasis{color:#405568}
 #quick .stockpromo .promolift,#quick .stockpromo .promoprice,#quick .stockdiff.promoted>b{background:#e9edf2}
 #quick .stockpromo .promoprice,#quick .stockpromo .promoprice small,#quick .stockpromo .promoprice b{color:#31485d!important}
+#quick .stocksale.stockpromo strong,#quick .stockpromo .promobasis,#quick .stockpromo .promolift,#quick .stockpromo .promoprice{white-space:normal;overflow-wrap:anywhere;min-width:0}
+#quick .stockpromo .promoprice{flex-wrap:wrap}
+@media(max-width:380px){#quick .stocksale.stockpromo{grid-template-columns:1fr}#quick .stockpromo .promoprice{justify-content:flex-start}}
 #quick .bestrecent{margin-top:4px;padding:4px 6px;background:#fff;border-color:#d8e0e7}
 #quick .bestrecenthead{align-items:center}
 #quick .stockreceiptmeta{display:flex;align-items:center;gap:4px}
@@ -1005,7 +1031,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
       </div>
     </section>
 
-<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard mobileupload"><h3>Upload new file</h3><p>Select one or more source files. Yipman creates one batch, uploads every file, then starts processing only after all files are received.</p><input class="duploadpick" id="dataUploadFiles" type="file" multiple accept=".csv,.xls,.xlsx,.xlsm,.txt"><input class="duploadnote" id="dataUploadNote" placeholder="Optional batch note"><div class="duploadsummary" id="dataUploadSummary">No files selected.</div><button class="duploadbtn" id="dataUploadBtn" type="button">UPLOAD & START PROCESSING</button><div class="duploadresult" id="dataUploadResult">No upload started.</div></div><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
     <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="ai"><i>✦</i>AI</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
@@ -1081,9 +1107,9 @@ async function loadHeaderFreshness(){
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', dataPublishedBatch=null, historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
 const stockFlowCacheKey='yipman-stock-flow-v9';
@@ -1563,10 +1589,34 @@ async function resetQuickHome({push=true}={}){
 $$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
 const quickNav=$('.nav button[data-go="quick"]');
 if(quickNav)quickNav.onclick=()=>resetQuickHome();
+function stashCurrentSheet(){
+  const body=$('#sheetBody'),frag=document.createDocumentFragment(),sh=$('.sheet');
+  while(body?.firstChild)frag.appendChild(body.firstChild);
+  return {
+    title:$('#sheetTitle')?.textContent||'',
+    sub:$('#sheetSub')?.textContent||'',
+    body:frag,
+    scrollTop:Number(sh?.scrollTop||0),
+  };
+}
+function restorePreviousSheet(){
+  const prev=sheetStack.pop();if(!prev)return false;
+  const body=$('#sheetBody');
+  $('#sheetTitle').textContent=prev.title||'';
+  $('#sheetSub').textContent=prev.sub||'';
+  if(body){body.innerHTML='';body.appendChild(prev.body)}
+  $('#overlay').classList.add('on');
+  requestAnimationFrame(()=>{const sh=$('.sheet');if(sh)sh.scrollTop=Number(prev.scrollTop||0)});
+  return true;
+}
 function sheet(title,sub,html){
   const wasOpen=$('#overlay').classList.contains('on');
-  if(!wasOpen)saveCurrentHistoryPosition();
-  $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
+  const body=$('#sheetBody');
+  const replacingLoading=wasOpen&&!!body?.firstElementChild?.classList?.contains('loading')&&body.children.length===1;
+  if(!wasOpen){saveCurrentHistoryPosition();sheetStack=[]}
+  else if(!replacingLoading)sheetStack.push(stashCurrentSheet());
+  $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';body.innerHTML=html;$('#overlay').classList.add('on');
+  const sh=$('.sheet');if(sh)sh.scrollTop=0;
   if(historyReady&&!wasOpen){
     const pos=currentPagePosition(current);
     history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
@@ -1575,7 +1625,9 @@ function sheet(title,sub,html){
 }
 function closeSheet(useHistory=true){
   if(!$('#overlay').classList.contains('on'))return;
+  if(useHistory&&sheetStack.length){restorePreviousSheet();return}
   $('#overlay').classList.remove('on');
+  sheetStack=[];
   const had=detailHistory;detailHistory=false;
   if(useHistory&&had){history.back();return}
   if(had&&historyReady){
@@ -1597,6 +1649,15 @@ window.addEventListener('popstate',e=>{
     hideExitConfirm();renderView('quick',{restore:true,reload:false,state:{...pos}});return;
   }
   if($('#overlay').classList.contains('on')){
+    if(sheetStack.length){
+      restorePreviousSheet();
+      if(historyReady){
+        const pos=pagePositions.get(current)||currentPagePosition(current);
+        history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
+        detailHistory=true;
+      }
+      return;
+    }
     $('#overlay').classList.remove('on');detailHistory=false;
     if(st?.yipman&&st.view){
       renderView(st.view,{restore:true,reload:false,state:st});
@@ -1754,7 +1815,12 @@ function quickFamilyGroups(rows){
      family_oh_is_true_stock:String(r.family_oh_source||'').toUpperCase().startsWith('FAMILY_TRUE_STOCK'),
      family_system_oh:r.family_system_oh??null,
      family_system_oh_uom:r.family_system_oh_uom||'',
-     family_system_oh_source:r.family_system_oh_source||''
+     family_system_oh_source:r.family_system_oh_source||'',
+     family_cost:r.family_cost??null,
+     family_cost_uom:r.family_cost_uom||'',
+     family_cost_source:r.family_cost_source||'',
+     family_cost_date:r.family_cost_date||null,
+     family_cost_status:r.family_cost_status||''
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -1918,9 +1984,12 @@ function quickSellingHtml(a,idx,seq){
 function quickGroupedHtml(rows){
  return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
    const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',recon=String(g.reconciliation||'').toUpperCase();
+   const familyCost=num(g.family_cost),familyCostUom=g.family_cost_uom||'';
+   const familyCostMeta=[g.family_cost_source?friendlySignal(g.family_cost_source):'',g.family_cost_date?shortDate(g.family_cost_date):''].filter(Boolean).join(' · ');
+   const familyCostHtml='<div class="qfamilycost"><span>FAMILY COST</span><b>'+(familyCost===null?'—':money(familyCost)+(familyCostUom?' / '+esc(familyCostUom):''))+'</b>'+(familyCostMeta?'<small>'+esc(familyCostMeta)+'</small>':'')+'</div>';
    const familyHead='<div class="qfhead">'+
      '<div class="qfidentity"><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div>'+
-     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div>'+
+     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div>'+familyCostHtml+'</div>'+
      '<div class="qffocus">'+
        familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.family_oh,effective_uom:g.family_oh_uom,effective_source:g.family_oh_source,system:g.family_system_oh,system_uom:g.family_system_oh_uom})+
        '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
@@ -2026,9 +2095,10 @@ function stockFlowFilteredRows(){
 }
 function stockFlowSortedRows(){
  const rows=stockFlowFilteredRows();
+ const zeroSelling=r=>!!r.no_recent_selling||((num(r.group_qty_7d)??0)===0&&(num(r.family_receipt_7d_qty)||0)>0);
  if(stockFlowSort==='RECEIPT')return rows.sort((a,b)=>(num(b.family_receipt_7d_qty)||0)-(num(a.family_receipt_7d_qty)||0));
  if(stockFlowSort==='SELLING')return rows.sort((a,b)=>(num(b.group_qty_7d)||0)-(num(a.group_qty_7d)||0));
- if(stockFlowSort==='RATIO')return rows.sort((a,b)=>(num(b.receipt_to_selling_ratio)||0)-(num(a.receipt_to_selling_ratio)||0));
+ if(stockFlowSort==='RATIO')return rows.sort((a,b)=>(Number(zeroSelling(b))-Number(zeroSelling(a)))||((num(b.receipt_to_selling_ratio)||0)-(num(a.receipt_to_selling_ratio)||0))||((num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0)));
  if(stockFlowSort==='NAME')return rows.sort((a,b)=>String(a.family_name||'').localeCompare(String(b.family_name||'')));
  return rows.sort((a,b)=>(num(b.receipt_minus_selling_7d)||0)-(num(a.receipt_minus_selling_7d)||0));
 }
@@ -2076,6 +2146,7 @@ function renderStockFlow(){
 function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
  const count=num(g.family_receipt_7d_day_count),diff=num(g.receipt_minus_selling_7d),ratio=num(g.receipt_to_selling_ratio),promo=g.recent_promotion_event||null;
+ const zeroSelling=!!g.no_recent_selling||((num(g.group_qty_7d)??0)===0&&(num(g.family_receipt_7d_qty)||0)>0);
  const category=String(g.category||'').trim().toUpperCase();
  const observed=(Array.isArray(g.observed_delivery_days)?g.observed_delivery_days:[])
    .filter(x=>x&&x.weekday)
@@ -2096,12 +2167,12 @@ function stockFlowFamilyHtml(g,idx){
    ? '<span class="promoprice"><small>AVG PROMO PRICE</small><b>'+money(promo.avg_promotion_selling_price)+' / '+esc(promo.avg_promotion_selling_price_uom||uom)+'</b></span>'
    : '';
  const promoHtml=promo?'<div class="stocksale stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+promoPrice+'</div>':'';
- const overSelling=ratio===null?'—':((ratio-1)*100).toFixed(0)+'%';
+ const overSelling=zeroSelling?'∞':(ratio===null?'—':((ratio-1)*100).toFixed(0)+'%');
  return '<section class="bestfam article-tone-'+articleTone(g.family_article||g.family_id)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
    familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.effective_oh,effective_uom:g.effective_oh_uom,effective_source:g.effective_oh_source,system:g.system_oh,system_uom:g.system_oh_uom})+
    '<div class="stockflowgrid"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div>'+
-   '<div class="stockdiff'+(promo?' promoted':' nosale')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+overSelling+' over selling</span><span class="stockwatch">'+(promo?'RECENT SALE':'NO RECENT SALE')+'</span></div></div>'+
+   '<div class="stockdiff'+(zeroSelling?' nosale':(promo?' promoted':' nosale'))+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+(zeroSelling?'positive receipts with 0 selling mvt':overSelling+' over selling')+'</span><span class="stockwatch">'+(zeroSelling?'0 SELLING MVT':(promo?'RECENT SALE':'NO RECENT SALE'))+'</span></div></div>'+
    promoHtml+
    '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span class="stockreceiptmeta">'+costHtml+receiptToggle+'</span></div>'+recent+'</div></section>';
 }
@@ -2114,7 +2185,18 @@ function stockFlowReadCache(){
  }catch{return null}
 }
 function stockFlowWriteCache(rows){
- try{localStorage.setItem(stockFlowCacheKey,JSON.stringify({saved_at:new Date().toISOString(),rows:rows||[]}))}catch{}
+ try{
+  stockFlowCacheSavedAt=new Date().toISOString();
+  localStorage.setItem(stockFlowCacheKey,JSON.stringify({saved_at:stockFlowCacheSavedAt,rows:rows||[]}));
+ }catch{}
+}
+function stockFlowCacheNotice(savedAt,suffix){
+ const parsed=Date.parse(String(savedAt||''));
+ const valid=Number.isFinite(parsed);
+ const ageMs=valid?Math.max(0,Date.now()-parsed):null;
+ const stale=ageMs!==null&&ageMs>12*60*60*1000;
+ const when=valid?new Date(parsed).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'unknown time';
+ return (stale?'STALE CACHE':'CACHED STOCK FLOW')+' · saved '+when+' · '+suffix;
 }
 function stockFlowSkeletonHtml(){
  return '<div class="stockflowskeleton" aria-label="Loading Stock Flow"><div></div><div></div><div></div></div>';
@@ -2130,7 +2212,8 @@ async function loadBestSellers(force=false){
   const cached=stockFlowReadCache();
   if(cached?.rows?.length){
    bestSellerGroups=cached.rows;
-   stockFlowNotice='Showing last saved Stock Flow · refreshing latest';
+   stockFlowCacheSavedAt=cached.saved_at||null;
+   stockFlowNotice=stockFlowCacheNotice(stockFlowCacheSavedAt,'refreshing latest');
    renderStockFlow();
   }else{
    box.innerHTML=stockFlowSkeletonHtml();
@@ -2148,7 +2231,7 @@ async function loadBestSellers(force=false){
     family_receipt_history:Array.isArray(r.family_receipt_history)?r.family_receipt_history:[],family_receipt_7d_qty:r.family_receipt_7d_qty,
     family_receipt_7d_uom:r.family_receipt_7d_uom||'',family_receipt_7d_day_count:r.family_receipt_7d_day_count,
     receipt_minus_selling_7d:r.receipt_minus_selling_7d,receipt_to_selling_ratio:r.receipt_to_selling_ratio,
-    receipt_over_selling_pct:r.receipt_over_selling_pct,recent_promotion_event:r.recent_promotion_event||null,
+    receipt_over_selling_pct:r.receipt_over_selling_pct,no_recent_selling:!!r.no_recent_selling,recent_promotion_event:r.recent_promotion_event||null,
     observed_delivery_days:Array.isArray(r.observed_delivery_days)?r.observed_delivery_days:[],
     observed_delivery_weekday_numbers:Array.isArray(r.observed_delivery_weekday_numbers)?r.observed_delivery_weekday_numbers:[],
     delivery_pattern_frequency:r.delivery_pattern_frequency||null,
@@ -2173,9 +2256,10 @@ async function loadBestSellers(force=false){
  }catch(e){
   if(requestId!==quickRequestSeq)return;
   if(bestSellerGroups?.length){
-   stockFlowNotice=String(e?.message||'').toLowerCase().includes('timed out')
-     ? 'Latest refresh timed out · showing last saved data'
-     : 'Latest refresh failed · showing last saved data';
+   stockFlowNotice=stockFlowCacheNotice(
+     stockFlowCacheSavedAt,
+     String(e?.message||'').toLowerCase().includes('timed out')?'latest refresh timed out':'latest refresh failed'
+   );
    renderStockFlow();
   }else{
    box.innerHTML='<div class="stockflowerror">'+esc(e.message||'Stock Flow unavailable')+'<button type="button" data-stock-retry>RETRY</button></div>';
@@ -2392,81 +2476,178 @@ function openManualPromotion(){
  const endDefault=plusDaysIso(startDefault,6);
  const deliveryDefault=orderDate||startDefault;
  const nextDefault=orderNextDate||plusDaysIso(deliveryDefault,7);
+ const selected=new Map();
+ let searchTimer=null;
+ let latestSearchToken=0;
+
  sheet(
   'Manual Promotion',
-  'One or multiple UPCs · manual promotion and delivery window',
-  '<div class="detail"><b>Manual promotion setup</b><br><span style="color:#71808d">One line per UPC. Format: UPC, SALE price. Example: 24081600000, 8.99</span>'+
-  '<div class="manual-promo-fields">'+
-   '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
-   '<label class="wide">UPCs + SALE PRICE<textarea id="manualPromoItems" placeholder="24081600000, 8.99&#10;24981600000, 8.99"></textarea></label>'+
-   '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
-   '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
-   '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
-   '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
-  '</div>'+
-  '<div class="estimatebar" style="margin-top:10px">Delivery → Next Delivery is the ordering coverage window. Promo Start → End marks the SALE-demand days inside that window. Fresh/Live OH that crosses the freshness threshold is not credited as usable future stock.</div>'+
-  '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">SAVE & RECALCULATE</button></div></div>'
+  'Search item first · then enter promotion details',
+  '<div class="detail manual-promo-search">'+
+   '<div><b>1. Search item</b><div class="manual-promo-search-note">Search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name. Typo-tolerant search is supported.</div></div>'+
+   '<div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="Search salmon, 240816, article…" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div>'+
+   '<div id="manualPromoSearchStatus" class="manual-promo-search-note">Start typing to find an item.</div>'+
+   '<div id="manualPromoSearchResults" class="manual-promo-results"></div>'+
+   '<div><b>2. Selected promotion item(s)</b><div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item selected yet.</div></div></div>'+
+   '<div><b>3. Promotion + delivery window</b></div>'+
+   '<div class="manual-promo-fields">'+
+    '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
+    '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
+    '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
+    '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
+    '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
+   '</div>'+
+   '<div class="estimatebar" style="margin-top:10px">Yipman uses the selected Family True Stock, canonical sales history, promotion history, observed delivery evidence, and Fresh/Live freshness limits. Manual uplift is not required.</div>'+
+   '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">ADD TO PROMOTION ORDER</button></div>'+
+  '</div>'
  );
+
+ const searchInput=$('#manualPromoSearch');
+ const searchStatus=$('#manualPromoSearchStatus');
+ const searchResults=$('#manualPromoSearchResults');
+ const selectedBox=$('#manualPromoSelected');
+
+ function familyKeyFor(item){
+  return String(item?.family_article_number||(String(item?.result_type||'').toUpperCase()==='FAMILY'?item?.number:'')||'').trim();
+ }
+ function relatedDeliverySummary(fam){
+  const rows=Array.isArray(fam?.receiving_ordering_articles)?fam.receiving_ordering_articles:[];
+  if(!rows.length)return 'Delivery article: —';
+  return rows.slice(0,3).map(a=>{
+   const n=a.article_number||a.receiving_article||a.number||'—';
+   const name=a.article_description||a.article_name||a.name||'';
+   const pack=a.pack_size||a.pack||a.receiving_pack_size||'';
+   return String(n)+(name?' · '+name:'')+(pack?' · '+pack:'');
+  }).join(' | ')+(rows.length>3?' · +'+(rows.length-3)+' more':'');
+ }
+ function effectiveOHText(fam){
+  const oh=fam?.current_effective_oh||{};
+  const qty=oh.quantity??oh.current_oh??oh.effective_oh;
+  const uom=oh.uom||oh.uom_code||fam?.family_sales_7d?.uom||'';
+  return qty==null?'—':fmtNullable(qty)+' '+String(uom||'');
+ }
+ function selectedPrice(id){
+  const el=document.querySelector('[data-manual-promo-price="'+CSS.escape(String(id))+'"]');
+  return el?Number(el.value):NaN;
+ }
+ function renderSelected(){
+  const rows=[...selected.values()];
+  if(!rows.length){selectedBox.innerHTML='<div class="empty">No item selected yet.</div>';return}
+  selectedBox.innerHTML=rows.map(x=>{
+   const fam=x.family||{}, item=x.item||{};
+   const fid=String(fam.family_id||item.family_id||x.familyKey||'');
+   const price=item.current_price??'';
+   const q7=item.pos_qty_7d??fam?.family_sales_7d?.sold_quantity;
+   const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
+   return '<div class="manual-promo-selected-card">'+
+    '<div class="manual-promo-selected-top"><div><h4>'+esc(fam.family_article_name||item.family_name||item.name||x.familyKey)+'</h4>'+
+     '<div class="selmeta">Family '+esc(x.familyKey)+' · Selected '+esc(x.code)+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+' · True Stock '+esc(effectiveOHText(fam))+'</div>'+
+    '</div><label>SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
+    '<div class="manual-promo-delivery">'+esc(relatedDeliverySummary(fam))+'</div>'+
+    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
+   '</div>';
+  }).join('');
+  $$('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
+   selected.delete(String(btn.dataset.manualPromoRemove));renderSelected();
+  });
+ }
+ async function hydrateFamily(item){
+  const familyKey=familyKeyFor(item);
+  if(!familyKey)throw new Error('Family Article unavailable for this result');
+  const fam=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:12000});
+  return {familyKey,fam};
+ }
+ async function chooseResult(entry){
+  try{
+   searchStatus.textContent='Loading Family inventory and delivery details…';
+   const hydrated=entry.family?{familyKey:entry.familyKey,fam:entry.family}:await hydrateFamily(entry.item);
+   const item=entry.item;
+   const fid=String(hydrated.fam?.family_id||item.family_id||hydrated.familyKey);
+   const type=String(item.result_type||'').toUpperCase();
+   const code=type==='UPC'?String(item.number||''):(type==='ARTICLE'?String(item.number||hydrated.familyKey):String(hydrated.familyKey));
+   if(!code)throw new Error('Selectable UPC / Article number unavailable');
+   const previous=selected.get(fid);
+   selected.set(fid,{familyKey:hydrated.familyKey,family:hydrated.fam,item,code});
+   renderSelected();
+   searchStatus.textContent=previous
+    ? 'Replaced the previous selection for Family '+hydrated.familyKey+' to avoid duplicate Family inventory.'
+    : 'Added Family '+hydrated.familyKey+'. Search again to add another Family.';
+   searchInput.focus();searchInput.select();
+  }catch(e){searchStatus.textContent='Unable to select item · '+e.message}
+ }
+ async function runSearch(){
+  const q=String(searchInput.value||'').trim();
+  const token=++latestSearchToken;
+  if(q.length<2){searchResults.innerHTML='';searchStatus.textContent='Enter at least 2 characters.';return}
+  searchStatus.textContent='Searching…';searchResults.innerHTML='<div class="loading">Searching current item master…</div>';
+  try{
+   const d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=12',{timeoutMs:12000});
+   if(token!==latestSearchToken)return;
+   const raw=Array.isArray(d.results)?d.results:[];
+   const base=raw.slice(0,10);
+   const enriched=await Promise.all(base.map(async item=>{
+    const familyKey=familyKeyFor(item);
+    let family=null;
+    if(familyKey){try{family=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:9000})}catch(e){}}
+    return {item,familyKey,family};
+   }));
+   if(token!==latestSearchToken)return;
+   searchStatus.textContent=enriched.length?enriched.length+' result(s) · choose the correct item':'No matching item.';
+   searchResults.innerHTML=enriched.map((x,i)=>{
+    const item=x.item||{}, fam=x.family||{};
+    const familyName=fam.family_article_name||item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
+    const itemName=item.name||familyName||'Item';
+    const q7=item.pos_qty_7d??fam?.family_sales_7d?.sold_quantity;
+    const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
+    return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
+     '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
+     '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
+      ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
+      (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
+      ' · OH '+esc(effectiveOHText(fam))+'</span></button>';
+   }).join('');
+   $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
+  }catch(e){
+   if(token!==latestSearchToken)return;
+   searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message;
+  }
+ }
+ searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,260)};
+ searchInput.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(searchTimer);runSearch()}};
+ $('#manualPromoSearchBtn').onclick=()=>{clearTimeout(searchTimer);runSearch()};
  $('#manualPromoCancel').onclick=()=>closeSheet(true);
  $('#manualPromoSave').onclick=async()=>{
-  const raw=$('#manualPromoItems').value.trim();
+  const rows=[...selected.values()];
   const start=$('#manualPromoStart').value;
   const end=$('#manualPromoEnd').value;
   const delivery=$('#manualPromoDelivery').value;
   const next=$('#manualPromoNext').value;
-  if(!raw){toast('Enter at least one UPC and SALE price');return}
+  if(!rows.length){toast('Select at least one item');return}
   if(!start||!end||!delivery||!next){toast('Complete all promotion and delivery dates');return}
   if(end<start){toast('Promotion end must be after start');return}
   if(next<=delivery){toast('Next delivery must be after delivery date');return}
-  const parsed=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
-   const parts=line.split(/[,\t]+/).map(x=>x.trim()).filter(Boolean);
-   const code=parts[0]||'';
-   const price=Number(String(parts[1]||'').replace(/[$,]/g,''));
-   return {code,price};
+  const items=rows.map(x=>{
+   const fid=String(x.family?.family_id||x.item?.family_id||x.familyKey);
+   return {upc:x.code,description:x.family?.family_article_name||x.item?.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:selectedPrice(fid)};
   });
-  if(parsed.some(x=>!x.code||!Number.isFinite(x.price)||x.price<=0)){
-   toast('Use one line per UPC: UPC, SALE price');return
-  }
+  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){toast('Enter a valid SALE price for every selected item');return}
   const name=$('#manualPromoName').value.trim()||('Manual Promotion '+start);
-  $('#manualPromoSave').disabled=true;
-  $('#manualPromoSave').textContent='SAVING…';
+  const save=$('#manualPromoSave');save.disabled=true;save.textContent='SAVING…';
   try{
-   const created=await api('/v1/yipman/promotion-lists',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-     list_name:name,
-     source_filename:'MANUAL_ENTRY',
-     items:parsed.map(x=>({
-      upc:x.code,
-      promotion_type:'CUSTOM',
-      promotion_start_date:start,
-      promotion_end_date:end,
-      promotion_price:x.price
-     }))
-    }),
-    timeoutMs:30000
-   });
-   promoListId=Number(created.list_id);
-   promoTempOH.clear();
-   orderDate=delivery;
-   orderNextDate=next;
-   closeSheet(true);
-   buildDays();updateOrderWindowUI();
-   await loadPromotionLists();
-   $('#promoListSelect').value=String(promoListId);
+   const created=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:name,source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});
+   promoListId=Number(created.list_id);promoTempOH.clear();
+   orderDate=delivery;orderNextDate=next;
+   closeSheet(true);buildDays();updateOrderWindowUI();
+   await loadPromotionLists();$('#promoListSelect').value=String(promoListId);
    if(Number(created.ready_count||0)>0)await loadPromotionOrder();
-   else{
-    $('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';
-    $('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>';
-   }
-   toast('Manual promotion saved');
+   else{$('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';$('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>'}
+   toast('Manual promotion added');
   }catch(err){
    toast('Manual promotion failed · '+err.message);
-   const save=$('#manualPromoSave');
-   if(save){save.disabled=false;save.textContent='SAVE & RECALCULATE'}
+   if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='ADD TO PROMOTION ORDER'}
   }
  };
+ setTimeout(()=>searchInput?.focus(),80);
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
@@ -2811,6 +2992,7 @@ function openOrderHistory(r){
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[], state=orderState(r), reason=orderReasonLabel(r.roster_reason);
+ const effectiveOh=r.effective_oh??r.oh, effectiveUom=r.effective_oh_uom||r.oh_uom||'';
  const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
  const histDetail=hist.length
    ? '<br><br><b>Historical Receiving Articles / Pack Size</b><br>'+hist.map(h=>'• '+esc(h.article_number||'—')+' · '+esc(h.pack_size||'—')+' · last '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+(h.pack_size_source?' · '+esc(h.pack_size_source):'')).join('<br>')
@@ -2818,7 +3000,7 @@ function openOrder(r){
  const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
- '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(effectiveOh??'')+'" data-uom="'+esc(effectiveUom)+'"><b>'+fmtNullable(effectiveOh)+' '+esc(effectiveUom)+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  histDetail+
@@ -3537,6 +3719,22 @@ function fmtElapsedSeconds(v){
  const m=Math.floor(sec/60),s=sec%60;if(m<60)return m+'m '+s+'s';
  const h=Math.floor(m/60),mm=m%60;return h+'h '+mm+'m';
 }
+function dataBatchIsActivelyProcessing(b){
+ if(!b?.batch_id)return false;
+ const run=String(b.active_run_status||'').toUpperCase();
+ const st=String(b.processing_status||'').toUpperCase();
+ return ['QUEUED','STARTED','PAUSE_REQUESTED'].includes(run)
+   || ['API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED','RELEASED'].includes(st);
+}
+function dataBatchSignature(b){
+ if(!b?.batch_id)return 'NONE';
+ return [
+   b.batch_id,
+   String(b.processing_status||'').toUpperCase(),
+   String(b.active_run_status||'').toUpperCase(),
+   b.active_pipeline_run_id||''
+ ].join('|');
+}
 function batchLiveState(b){
  const run=String(b?.active_run_status||'').toUpperCase();
  const fresh=b?.active_heartbeat_fresh===true;
@@ -3559,7 +3757,7 @@ function renderLivePipeline(activeBatch,latestPublished){
  const itemHolds=num(b?.quick_check_hold_rows)??num(b?.qa_summary?.phase3?.quick_check_hold_rows)??0;
  const uploaded=st!=='NONE';
  const ingested=/INGEST|PHASE|QUICK|READY|RELEASE/.test(st);
- const qaDone=published||(/PHASE3|QUICK|READY/.test(st)&&!blockingHold);
+ const qaDone=published;
  let qaClass='',qaText='WAIT';
  if(blockingHold){qaClass='bad';qaText='BLOCKED'}
  else if(published&&itemHolds>0){qaClass='warn';qaText='DONE · '+fmt(itemHolds,0)+' ITEM HOLD'}
@@ -3584,6 +3782,12 @@ function renderCurrentBatchPanel(b){
  const issueTotal=b.active_issue_total??b.open_issue_total??b.error_count??b.qa_hold_count??0;
  const ready=b.active_progress_ready,hold=b.active_progress_hold,hist=b.active_progress_historical;
  const item=[b.active_progress_current_upc,b.active_progress_current_name].filter(Boolean).join(' · ');
+ const fileName=String(b.active_file_name||'').trim();
+ const fileMeta=[
+   b.active_source_type?friendlySignal(b.active_source_type):'',
+   b.active_file_status?friendlySignal(b.active_file_status):'',
+   b.active_file_rows!=null?(fmt(b.active_file_rows,0)+' rows'):''
+ ].filter(Boolean).join(' · ');
  const progressLabel=hasPct?(pct.toFixed(pct%1?1:0)+'%'):hasCounts?(fmt(cur,0)+' / '+fmt(tot,0)):String(b.active_progress_kind||'Processing');
  const progressDetail=hasCounts?(fmt(cur,0)+' of '+fmt(tot,0)+' '+esc(b.active_progress_unit||'rows')):(b.active_progress_kind?friendlySignal(b.active_progress_kind):'No numeric progress reported yet');
  const alert=live.key==='stuck'?'<div class="cbwarn"><b>Heartbeat is stale.</b> The run still says STARTED, but the worker is not reporting live progress. Open the batch detail or refresh before deciding to rerun it.</div>':'';
@@ -3593,6 +3797,7 @@ function renderCurrentBatchPanel(b){
   '<div class="cbprogress"><div class="cbprogress-top"><b>'+esc(friendlySignal(stage))+'</b><span>'+esc(progressLabel)+'</span></div><div class="cbbar"><i style="width:'+(hasPct?pct:(hasCounts?Math.max(3,Math.min(100,(cur/tot)*100)):0)).toFixed(1)+'%"></i></div><div class="cbprogress-sub"><span>'+progressDetail+'</span><span>'+((ready!=null||hold!=null)?('Ready '+fmt(ready,0)+' · Hold '+fmt(hold,0)):(hist!=null?('Historical '+fmt(hist,0)):'Run #'+esc(runId)))+'</span></div></div>'+
   '<div class="cbrunmeta"><div><small>RUN</small><b>#'+esc(runId)+'</b></div><div><small>HEARTBEAT</small><b>'+esc(hbAge)+'</b></div><div><small>ELAPSED</small><b>'+esc(elapsed)+'</b></div><div><small>ETA</small><b>'+esc(eta)+'</b></div></div>'+
   '<div class="cbmeta"><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(issueTotal,0)+'</b></div><div><small>RATE</small><b>'+(rate!==null?fmt(rate,1)+'/s':'—')+'</b></div></div>'+
+  (fileName?'<div class="cbcurrentitem"><small>CURRENT PROCESSING FILE</small><b title="'+esc(fileName)+'">'+esc(fileName)+'</b>'+(fileMeta?'<span>'+esc(fileMeta)+'</span>':'')+'</div>':'')+
   (item?'<div class="cbcurrentitem"><small>CURRENT WORK ITEM</small><b>'+esc(item)+'</b></div>':'')+alert+'</div>';
  const el=$('#currentBatch [data-batch]');if(el)el.onclick=()=>openBatch(el.dataset.batch,b);
 }
@@ -3621,14 +3826,85 @@ async function pollDataLive(){
  if(current!=='data')return;
  try{
   const active=await api('/v1/web-upload/active',{timeoutMs:9000});
-  const currentBatch=active.active_batch||null;
+  const activeCandidate=active.active_batch||null;
+  const nextSignature=dataBatchSignature(activeCandidate);
+  if(dataLiveSignature&&nextSignature!==dataLiveSignature){
+    dataLiveSignature=nextSignature;
+    await loadData();
+    return;
+  }
+  dataLiveSignature=nextSignature;
+  const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
   const latestBatch=active.latest_batch||null;
-  renderLivePipeline(currentBatch,latestBatch);
+  renderLivePipeline(currentBatch,dataPublishedBatch||latestBatch);
   renderCurrentBatchPanel(currentBatch);
  }catch(e){
   const live=$('#currentBatch .cblivecheck');if(live)live.textContent='LIVE CHECK FAILED';
  }finally{scheduleDataLivePoll()}
 }
+function dataUploadSelectionSummary(){
+ const input=$('#dataUploadFiles'),box=$('#dataUploadSummary');if(!input||!box)return;
+ const files=[...(input.files||[])];
+ box.textContent=files.length
+  ? files.length+' file(s): '+files.map(x=>x.name).join(' · ')
+  : 'No files selected.';
+}
+async function uploadDataFiles(){
+ const input=$('#dataUploadFiles'),btn=$('#dataUploadBtn'),result=$('#dataUploadResult');
+ const files=[...(input?.files||[])];
+ if(!files.length){toast('Select files first');return}
+ let session=null;
+ if(btn){btn.disabled=true;btn.textContent='CREATING BATCH…'}
+ if(result)result.textContent='Creating upload batch…';
+ try{
+  const label=String($('#dataUploadNote')?.value||'').trim()||('Yipman mobile upload '+new Date().toLocaleString());
+  const created=await api('/v1/web-upload/batches',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({label}),
+    timeoutMs:20000
+  });
+  session=created.session_id||created.batch_key||created.session?.session_id;
+  if(!session)throw new Error('Upload batch session ID was not returned');
+  for(let i=0;i<files.length;i++){
+    if(btn)btn.textContent='UPLOADING '+(i+1)+' / '+files.length;
+    if(result)result.textContent='Current file: '+files[i].name;
+    const fd=new FormData();fd.append('file',files[i]);
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{
+      method:'POST',body:fd,timeoutMs:60000
+    });
+  }
+  if(btn)btn.textContent='STARTING PROCESSING…';
+  if(result)result.textContent='All files received · committing batch…';
+  const committed=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{
+    method:'POST',timeoutMs:30000
+  });
+  if(input)input.value='';
+  const note=$('#dataUploadNote');if(note)note.value='';
+  dataUploadSelectionSummary();
+  if(result)result.textContent='Batch #'+String(committed.batch_id||created.batch_id||'—')+' committed · processing started.';
+  toast('Upload committed · processing started');
+  await loadData();
+ }catch(e){
+  let cleanup='';
+  if(session){
+   try{
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/abort',{method:'POST',timeoutMs:12000});
+    cleanup=' · incomplete batch aborted';
+   }catch(abortErr){
+    cleanup=' · batch cleanup needs review';
+   }
+  }
+  if(result)result.textContent='UPLOAD NOT COMMITTED · '+String(e.message||e)+cleanup;
+  toast('Upload not committed'+cleanup);
+  loadData().catch(()=>{});
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent='UPLOAD & START PROCESSING'}
+ }
+}
+const dataUploadFiles=$('#dataUploadFiles');if(dataUploadFiles)dataUploadFiles.onchange=dataUploadSelectionSummary;
+const dataUploadBtn=$('#dataUploadBtn');if(dataUploadBtn)dataUploadBtn.onclick=uploadDataFiles;
+
 async function loadData(){
  try{
   const [health,active,recent,qa,dash]=await Promise.all([
@@ -3640,13 +3916,24 @@ async function loadData(){
   ]);
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
   const rb=recent.batches||recent.rows||[];
-  const currentBatch=active.active_batch||null;
-  const publishId=dash?.quick_check?.latest_publish_batch_id;
-  const latestPublished=(publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null)||active.latest_batch||rb[0]||null;
+  const activeCandidate=active.active_batch||null;
+  const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
+  dataLiveSignature=dataBatchSignature(activeCandidate);
+  const quick=dash?.quick_check||{},publishId=quick.latest_publish_batch_id;
+  const publishedFromRecent=publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null;
+  const latestPublished=publishedFromRecent||(
+    publishId?{
+      batch_id:publishId,
+      processing_status:Number(quick.qa_hold_rows||0)>0?'QUICK_CHECK_READY_WITH_HOLDS':'QUICK_CHECK_READY',
+      completed_at:quick.latest_published_at||null,
+      quick_check_hold_rows:Number(quick.qa_hold_rows||0)
+    }:(active.latest_batch||rb[0]||null)
+  );
+  dataPublishedBatch=latestPublished;
   renderLivePipeline(currentBatch,latestPublished);
   renderCurrentBatchPanel(currentBatch);
   renderPublishedSnapshot(dash,health,latestPublished);
-  renderQAResolution(qa,latestPublished||currentBatch);
+  renderQAResolution(qa,latestPublished||activeCandidate||currentBatch);
   $('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{
     const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();
     const cls=/^QUICK_CHECK_READY/.test(xs)?' ready':((xs==='PHASE3_QA_HOLD'||xs==='QA_HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':''));
