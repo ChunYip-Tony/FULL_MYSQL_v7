@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v455';
+const CACHE='yipman-v456';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -854,6 +854,9 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 .familyohbtn,.familyohinline{touch-action:manipulation;-webkit-tap-highlight-color:rgba(23,105,224,.10);position:relative;z-index:2}
 .familyohbtn:active,.familyohinline:active{transform:scale(.995);filter:brightness(.98)}
 .familyohinlineeditor{min-width:0;border:2px solid #64a9d8;border-radius:10px;background:#eef8ff;padding:7px;box-shadow:0 3px 10px rgba(28,91,132,.10)}
+.familyohpair.editing{grid-template-columns:1fr}
+.familyohpair.editing .familyohinlineeditor{grid-column:1/-1}
+.familyohpair.editing .familysystemoh{display:none}
 .familyohinlineeditor small{display:block;font-size:6.5px;color:#52738b;font-weight:1000;line-height:1.1}
 .familyohinlineeditor .truecurrent{font-size:7px;color:#5d7180;font-weight:850;margin:3px 0 5px}
 .familyohinlineeditor input{width:100%;box-sizing:border-box;border:2px solid #72b7df;border-radius:9px;background:#fff;color:#173247;font-size:20px;font-weight:1000;padding:8px 9px;outline:none}
@@ -1157,6 +1160,10 @@ function beginFamilyOhInlineEdit(btn){
  const editor=document.createElement('div');
  editor.className='familyohinlineeditor';
  editor.dataset.family=family;
+ const pair=btn.closest('.familyohpair');if(pair)pair.classList.add('editing');
+ editor.addEventListener('click',e=>e.stopPropagation());
+ editor.addEventListener('pointerup',e=>e.stopPropagation());
+ editor.addEventListener('pointerdown',e=>e.stopPropagation());
  const current=(d.oh===null||d.oh===undefined||d.oh==='')?'—':fmtNullable(d.oh);
  let resolvedUom=String(d.uom||'').trim().toUpperCase();
  editor.innerHTML='<small>ENTER PHYSICAL TRUE STOCK</small>'+
@@ -1173,7 +1180,7 @@ function beginFamilyOhInlineEdit(btn){
    const cur=editor.querySelector('.truecurrent');if(cur)cur.textContent='Current Effective OH · '+liveQty+(resolvedUom?' '+resolvedUom:'');
    return pi;
  }).catch(()=>null);
- const restore=()=>{editor.replaceWith(original);bindFamilyOhEditors(original.parentNode||document)};
+ const restore=()=>{const parent=editor.parentNode;editor.replaceWith(original);if(pair)pair.classList.remove('editing');bindFamilyOhEditors(parent||document)};
  cancel.onclick=e=>{e.preventDefault();e.stopPropagation();restore()};
  save.onclick=async e=>{
    e.preventDefault();e.stopPropagation();
