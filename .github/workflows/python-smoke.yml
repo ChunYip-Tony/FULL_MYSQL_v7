@@ -201,8 +201,8 @@ jobs:
 
           src=inspect.getsource(bo.current_tpr_review)
           cached_src=inspect.getsource(bo.cached_current_tpr_review)
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_FOUR_ACTION_PRICE_CARD' in src
           assert 'YIPMAN_CURRENT_TPR_REVIEW_V5_AGING_ANCHOR_SAME_DAY_RECEIPT' in src
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW' in src
           assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_AGING_ANCHOR_RECEIPT_ASYNC_CACHE' in cached_src
           assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_PRICE_LIST_SOURCE_AWARE_AGING_ANCHOR_CACHE' in cached_src
           assert 'NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH' in cached_src
@@ -220,7 +220,14 @@ jobs:
           assert 'SWEET_SPOT_TEST' in src and 'FRESHNESS_SELL_THROUGH' in src
           assert 'tpr_qty_3d' in src and 'velocity_lift_pct' in src
           assert 'recommendation_code' in src and 'CONTINUE_TPR' in src
-          assert 'MAKE_REGULAR' in src and 'RAISE_TPR_PRICE' in src and 'LOWER_TPR_PRICE' in src and 'CANCEL_TPR' in src
+          assert 'RAISE_TPR_PRICE' in src and 'LOWER_TPR_PRICE' in src and 'CANCEL_TPR' in src
+          assert 'USER_FACING_EXACTLY_ONE_OF_CONTINUE_TPR_CANCEL_TPR_LOWER_TPR_PRICE_RAISE_TPR_PRICE' in src
+          assert 'recommendation_source_code' in src
+          assert 'suggested_regular_price_basis' in src
+          assert 'PROVEN_CURRENT_TPR_BECOMES_NEW_REGULAR' in src
+          assert 'CURRENT_TPR_FALLBACK_NO_BETTER_REG_EVIDENCE' in src
+          assert 'no valid next price within current cost/company bounds' in src
+          assert 'V6_CURRENT_TPR_FOUR_ACTION_PRICE_CARD' in inspect.getsource(bo._tpr_review_cache_key)
           assert 'projected_days_to_clear_oh' in src and 'required_velocity_to_clear' in src
           assert 'readiness != "READY"' in src
 
@@ -246,6 +253,13 @@ jobs:
           assert 'aging deadline' in ui
           assert 'FAMILY DOH / DOS' in ui
           assert 'BEFORE TPR' in ui and 'PROJECTED 7D' in ui
+          assert 'Every item gets exactly one action: CONTINUE, CANCEL TPR, LOWER TPR, or RAISE TPR.' in ui
+          assert 'SUGGESTED NEW REG PRICE' in ui
+          assert 'SUGGESTED LOWER TPR PRICE' in ui
+          assert 'SUGGESTED HIGHER TPR PRICE' in ui
+          assert 'CONTINUE CURRENT TPR' in ui
+          assert "function tprActionPriceHtml" in ui
+          assert "recommendation_source_code||r.recommendation_code" in ui
           assert '/purpose' in ui
           assert 'reg_suggestion_actionable' in inspect.getsource(bo.pricing_review)
           assert 'tpr_suggestion_actionable' in inspect.getsource(bo.pricing_review)
