@@ -3135,7 +3135,7 @@ function renderOrderRoster(rows,data,h,stale){
   const receivingPack=primary.pack_size||'—';
   const histHtml=hist.length
    ? '<details class="orderrecvhistory simple"><summary>Receiving history · '+hist.length+' article'+(hist.length===1?'':'s')+'</summary>'+
-     hist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span>'+fmt(h.receipt_event_count,0)+' observed receipt day'+(Number(h.receipt_event_count||0)===1?'':'s')+' · last '+esc(appDate(h.last_receipt_date))+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK</span></div></div>').join('')+
+     hist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span>'+fmt(h.receipt_day_count??h.receipt_event_count,0)+' observed receipt day'+(Number(h.receipt_day_count??h.receipt_event_count||0)===1?'':'s')+' · last '+esc(appDate(h.last_receipt_date))+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK</span></div></div>').join('')+
      '</details>'
    : '';
   const snooze=state==='ZERO_ORDER'?'':'<div class="pcard-actions"><button class="pignore snooze12" data-order-ignore="'+i+'">IGNORE 12 HOURS</button></div>';
@@ -3152,9 +3152,9 @@ function renderOrderRoster(rows,data,h,stale){
  $$('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
  bindFamilyOhEditors();
 }
-$('#orderFilter').onchange=e=>{orderFilter=e.target.value;$('[data-order-quick-filter]').forEach(b=>b.classList.toggle('on',b.dataset.orderQuickFilter===orderFilter));renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
+$('#orderFilter').onchange=e=>{orderFilter=e.target.value;document.querySelectorAll('[data-order-quick-filter]').forEach(b=>b.classList.toggle('on',b.dataset.orderQuickFilter===orderFilter));renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
-$('[data-order-quick-filter]').forEach(b=>b.onclick=()=>{orderFilter=b.dataset.orderQuickFilter;$('#orderFilter').value=orderFilter;$('[data-order-quick-filter]').forEach(x=>x.classList.toggle('on',x===b));renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)});
+document.querySelectorAll('[data-order-quick-filter]').forEach(b=>b.onclick=()=>{orderFilter=b.dataset.orderQuickFilter;$('#orderFilter').value=orderFilter;document.querySelectorAll('[data-order-quick-filter]').forEach(x=>x.classList.toggle('on',x===b));renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)});
 const orderRefreshBtn=$('#orderRefreshBtn');if(orderRefreshBtn)orderRefreshBtn.onclick=()=>loadOrder(orderDate);
 const ORDER_VIEW_CACHE_PREFIX='yipman-order-view-v467:';
 const ORDER_VIEW_CACHE_MAX_MS=30*60*1000;
@@ -3317,7 +3317,7 @@ function openOrder(r){
  const effectiveOh=r.effective_oh??r.oh, effectiveUom=r.effective_oh_uom||r.oh_uom||'';
  const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
  const histDetail=hist.length
-   ? '<br><br><b>Historical Receiving Articles / Pack Size</b><br>'+hist.map(h=>'• '+esc(h.article_number||'—')+' · '+esc(h.pack_size||'—')+' · last '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+(h.pack_size_source?' · '+esc(h.pack_size_source):'')).join('<br>')
+   ? '<br><br><b>Historical Receiving Articles / Pack Size</b><br>'+hist.map(h=>'• '+esc(h.article_number||'—')+' · '+esc(h.pack_size||'—')+' · last '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_day_count??h.receipt_event_count||0)===1?'':'s')+(h.pack_size_source?' · '+esc(h.pack_size_source):'')).join('<br>')
    : '';
  const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
