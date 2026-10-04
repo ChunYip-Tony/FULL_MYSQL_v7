@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v452';
+const CACHE='yipman-v453';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -121,7 +121,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .cbmeta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px}.cbmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbmeta b{display:block;font-size:10px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cblive{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f6f8fa;border:1px solid #e6ecef;border-radius:10px;padding:7px 8px}.cblive-main{display:flex;align-items:center;gap:6px;min-width:0}.cblive-dot{width:9px;height:9px;border-radius:50%;background:#9aa6af;box-shadow:0 0 0 3px rgba(154,166,175,.12);flex:0 0 auto}.cblive-dot.running{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.13)}.cblive-dot.queued{background:#d19a00;box-shadow:0 0 0 3px rgba(209,154,0,.13)}.cblive-dot.stuck{background:#d93025;box-shadow:0 0 0 3px rgba(217,48,37,.13)}.cblive b{font-size:9px;line-height:1.15}.cblive span{font-size:7px;color:var(--muted);font-weight:800;white-space:nowrap}.cblivecheck{font-size:7px!important;color:#788690!important}
 .cbprogress{background:#f8fafb;border:1px solid #e7ecef;border-radius:10px;padding:8px}.cbprogress-top{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}.cbprogress-top b{font-size:11px}.cbprogress-top span{font-size:8px;color:var(--muted);font-weight:850}.cbbar{height:6px;background:#e3e9ed;border-radius:999px;overflow:hidden;margin-top:6px}.cbbar i{display:block;height:100%;background:#1488c6;border-radius:999px;transition:width .25s ease}.cbprogress-sub{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:7px;color:#667581;font-weight:850}.cbprogress-sub span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
+.cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px;overflow-wrap:anywhere}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
 .batchrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;padding:9px 0;border-top:1px solid var(--line);align-items:start}.batchrow:first-child{border-top:0}.batchrow>div{min-width:0}.batchrow b{display:block;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batchrow span{display:block;min-width:0;font-size:8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.batchdate{font-size:8px!important;color:#84909a!important;white-space:nowrap}.batchstate{display:inline-block!important;width:auto;border-radius:999px;padding:3px 6px;background:#f3f6f8;color:#5f6d78!important;font-size:7px!important;font-weight:900;line-height:1.15}.batchstate.hold{background:var(--redbg);color:var(--red)!important}.batchstate.ready{background:var(--greenbg);color:var(--green)!important}
 .qaresolutioncard{grid-column:1/-1}.qareshead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.qareshead h3{margin-bottom:2px}.qareshead p{margin:0;font-size:8px;line-height:1.3;color:var(--muted);font-weight:750}.qaresbadge{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:#eef3f7;color:#51606c;font-size:8px;font-weight:950}.qaresbadge.bad{background:var(--redbg);color:var(--red)}.qaresbadge.ok{background:var(--greenbg);color:var(--green)}
 .qaresstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.qaresstat{background:#f6f8fa;border-radius:9px;padding:7px}.qaresstat small{display:block;font-size:6px;color:var(--muted);font-weight:950}.qaresstat b{display:block;font-size:13px;margin-top:2px}
@@ -1064,7 +1064,7 @@ const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
 const pagePositions=new Map();
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
 const stockFlowCacheKey='yipman-stock-flow-v9';
@@ -1984,7 +1984,18 @@ function stockFlowReadCache(){
  }catch{return null}
 }
 function stockFlowWriteCache(rows){
- try{localStorage.setItem(stockFlowCacheKey,JSON.stringify({saved_at:new Date().toISOString(),rows:rows||[]}))}catch{}
+ try{
+  stockFlowCacheSavedAt=new Date().toISOString();
+  localStorage.setItem(stockFlowCacheKey,JSON.stringify({saved_at:stockFlowCacheSavedAt,rows:rows||[]}));
+ }catch{}
+}
+function stockFlowCacheNotice(savedAt,suffix){
+ const parsed=Date.parse(String(savedAt||''));
+ const valid=Number.isFinite(parsed);
+ const ageMs=valid?Math.max(0,Date.now()-parsed):null;
+ const stale=ageMs!==null&&ageMs>12*60*60*1000;
+ const when=valid?new Date(parsed).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):'unknown time';
+ return (stale?'STALE CACHE':'CACHED STOCK FLOW')+' · saved '+when+' · '+suffix;
 }
 function stockFlowSkeletonHtml(){
  return '<div class="stockflowskeleton" aria-label="Loading Stock Flow"><div></div><div></div><div></div></div>';
@@ -2000,7 +2011,8 @@ async function loadBestSellers(force=false){
   const cached=stockFlowReadCache();
   if(cached?.rows?.length){
    bestSellerGroups=cached.rows;
-   stockFlowNotice='Showing last saved Stock Flow · refreshing latest';
+   stockFlowCacheSavedAt=cached.saved_at||null;
+   stockFlowNotice=stockFlowCacheNotice(stockFlowCacheSavedAt,'refreshing latest');
    renderStockFlow();
   }else{
    box.innerHTML=stockFlowSkeletonHtml();
@@ -2043,9 +2055,12 @@ async function loadBestSellers(force=false){
  }catch(e){
   if(requestId!==quickRequestSeq)return;
   if(bestSellerGroups?.length){
-   stockFlowNotice=String(e?.message||'').toLowerCase().includes('timed out')
-     ? 'Latest refresh timed out · showing last saved data'
-     : 'Latest refresh failed · showing last saved data';
+   stockFlowNotice=stockFlowCacheNotice(
+     stockFlowCacheSavedAt,
+     String(e?.message||'').toLowerCase().includes('timed out')
+       ? 'latest refresh timed out'
+       : 'latest refresh failed'
+   );
    renderStockFlow();
   }else{
    box.innerHTML='<div class="stockflowerror">'+esc(e.message||'Stock Flow unavailable')+'<button type="button" data-stock-retry>RETRY</button></div>';
@@ -2681,6 +2696,7 @@ function openOrderHistory(r){
 }
 function openOrder(r){
  const d=r.details||{}, reasons=d.reasons||[], state=orderState(r), reason=orderReasonLabel(r.roster_reason);
+ const effectiveOh=r.effective_oh??r.oh, effectiveUom=r.effective_oh_uom||r.oh_uom||'';
  const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
  const histDetail=hist.length
    ? '<br><br><b>Historical Receiving Articles / Pack Size</b><br>'+hist.map(h=>'• '+esc(h.article_number||'—')+' · '+esc(h.pack_size||'—')+' · last '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+(h.pack_size_source?' · '+esc(h.pack_size_source):'')).join('<br>')
@@ -2688,7 +2704,7 @@ function openOrder(r){
  const orderMetric=state==='REVIEW'?'REVIEW':fmtNullable(orderQty(r))+' '+esc(r.suggested_delivery_uom||'');
  const orderMetricLabel=state==='REVIEW'?'ORDER STATUS':(r.estimate_only?'ESTIMATE ORDER':'SUGGESTED ORDER');
  sheet(r.family_name||'Ordering','Family '+esc(r.family_article||'—')+' · Delivery '+esc(appDate(r.selected_delivery_date||orderDate)),
- '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+' '+esc(r.oh_uom||'')+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
+ '<div class="dmetrics"><div class="dm"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(effectiveOh??'')+'" data-uom="'+esc(effectiveUom)+'"><b>'+fmtNullable(effectiveOh)+' '+esc(effectiveUom)+'</b><span>EFFECTIVE OH · EDIT TRUE STOCK</span></button></div><div class="dm"><b>'+fmtNullable(d.velocity_7d)+'</b><span>7D VELOCITY</span></div><div class="dm"><b>'+orderMetric+'</b><span>'+orderMetricLabel+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this order suggestion.</div>':'')+
  '<div class="detail"><b>Roster status</b><br>'+(state==='ORDER'?'Needs order':state==='ZERO_ORDER'?'Observed delivery family · no order suggested':'Review required · '+esc(reason))+
  histDetail+
@@ -3456,6 +3472,12 @@ function renderCurrentBatchPanel(b){
  const issueTotal=b.active_issue_total??b.open_issue_total??b.error_count??b.qa_hold_count??0;
  const ready=b.active_progress_ready,hold=b.active_progress_hold,hist=b.active_progress_historical;
  const item=[b.active_progress_current_upc,b.active_progress_current_name].filter(Boolean).join(' · ');
+ const fileName=String(b.active_file_name||'').trim();
+ const fileMeta=[
+   b.active_source_type?friendlySignal(b.active_source_type):'',
+   b.active_file_status?friendlySignal(b.active_file_status):'',
+   b.active_file_rows!=null?(fmt(b.active_file_rows,0)+' rows'):''
+ ].filter(Boolean).join(' · ');
  const progressLabel=hasPct?(pct.toFixed(pct%1?1:0)+'%'):hasCounts?(fmt(cur,0)+' / '+fmt(tot,0)):String(b.active_progress_kind||'Processing');
  const progressDetail=hasCounts?(fmt(cur,0)+' of '+fmt(tot,0)+' '+esc(b.active_progress_unit||'rows')):(b.active_progress_kind?friendlySignal(b.active_progress_kind):'No numeric progress reported yet');
  const alert=live.key==='stuck'?'<div class="cbwarn"><b>Heartbeat is stale.</b> The run still says STARTED, but the worker is not reporting live progress. Open the batch detail or refresh before deciding to rerun it.</div>':'';
@@ -3465,6 +3487,7 @@ function renderCurrentBatchPanel(b){
   '<div class="cbprogress"><div class="cbprogress-top"><b>'+esc(friendlySignal(stage))+'</b><span>'+esc(progressLabel)+'</span></div><div class="cbbar"><i style="width:'+(hasPct?pct:(hasCounts?Math.max(3,Math.min(100,(cur/tot)*100)):0)).toFixed(1)+'%"></i></div><div class="cbprogress-sub"><span>'+progressDetail+'</span><span>'+((ready!=null||hold!=null)?('Ready '+fmt(ready,0)+' · Hold '+fmt(hold,0)):(hist!=null?('Historical '+fmt(hist,0)):'Run #'+esc(runId)))+'</span></div></div>'+
   '<div class="cbrunmeta"><div><small>RUN</small><b>#'+esc(runId)+'</b></div><div><small>HEARTBEAT</small><b>'+esc(hbAge)+'</b></div><div><small>ELAPSED</small><b>'+esc(elapsed)+'</b></div><div><small>ETA</small><b>'+esc(eta)+'</b></div></div>'+
   '<div class="cbmeta"><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(issueTotal,0)+'</b></div><div><small>RATE</small><b>'+(rate!==null?fmt(rate,1)+'/s':'—')+'</b></div></div>'+
+  (fileName?'<div class="cbcurrentitem"><small>CURRENT PROCESSING FILE</small><b title="'+esc(fileName)+'">'+esc(fileName)+'</b>'+(fileMeta?'<span>'+esc(fileMeta)+'</span>':'')+'</div>':'')+
   (item?'<div class="cbcurrentitem"><small>CURRENT WORK ITEM</small><b>'+esc(item)+'</b></div>':'')+alert+'</div>';
  const el=$('#currentBatch [data-batch]');if(el)el.onclick=()=>openBatch(el.dataset.batch,b);
 }
