@@ -1361,6 +1361,11 @@ jobs:
           assert "@app.delete('/v1/yipman/promotion-lists/{list_id}')" in api
           assert 'delete_yipman_manual_promotion_list(list_id)' in api
           assert 'id="yv2PromoDeleteList"' in ui
+          assert 'id="yv2PromoSelectedName"' in ui
+          assert 'yv2-promo-name-row' in ui
+          assert 'yv2-promo-delete-small' in ui
+          assert 'data-promo-remove-item' in ui
+          assert 'data-promo-remove' in ui
           assert 'Delete Saved Promotion' in ui
           assert 'async function deleteSavedPromotion()' in ui
           assert "method:'DELETE'" in ui
