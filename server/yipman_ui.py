@@ -2001,7 +2001,7 @@ function quickGroupedHtml(rows){
  }).join('');
 }
 function fitQuickUpcNames(){
- $('.qupcname').forEach(el=>{el.style.fontSize='';el.style.letterSpacing=''});
+ $$('.qupcname').forEach(el=>{el.style.fontSize='';el.style.letterSpacing=''});
 }
 function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
