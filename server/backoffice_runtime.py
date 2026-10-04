@@ -1810,11 +1810,11 @@ def ordering_review(
 
     rows.sort(
         key=lambda x: (
+            -float(x.get("suggested_delivery_qty") or 0),
+            -int(bool(x.get("attention"))),
             0 if str(x.get("roster_status") or "")=="ORDER" else (
                 1 if str(x.get("roster_status") or "")=="REVIEW" else 2
             ),
-            -int(bool(x.get("attention"))),
-            -float(x.get("suggested_delivery_qty") or 0),
             str(x.get("family_name") or ""),
         )
     )
@@ -1881,6 +1881,7 @@ def ordering_review(
             "delivery_roster_weekday_window":"DAY_BEFORE_SELECTED_DAY_DAY_AFTER",
             "delivery_roster_all_observed_families_in_window":bool(delivery_date),
             "zero_order_rows_retained":bool(delivery_date),
+            "default_sort":"SUGGESTED_ORDER_QTY_DESC_THEN_URGENT",
             "coverage_window_selected_by_user": bool(
                 delivery_date is not None and next_delivery_date is not None
             ),
