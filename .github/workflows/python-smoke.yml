@@ -179,7 +179,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v459'" in ui
+          assert "const CACHE='yipman-v460'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -201,9 +201,17 @@ jobs:
 
           src=inspect.getsource(bo.current_tpr_review)
           cached_src=inspect.getsource(bo.cached_current_tpr_review)
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE' in src
-          assert 'YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE' in cached_src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V5_AGING_ANCHOR_SAME_DAY_RECEIPT' in src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW' in src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_AGING_ANCHOR_RECEIPT_ASYNC_CACHE' in cached_src
+          assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_PRICE_LIST_SOURCE_AWARE_AGING_ANCHOR_CACHE' in cached_src
           assert 'NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH' in cached_src
+          assert 'today_receipt_qty' in src and 'PROVISIONAL_TODAY_RECEIPT' in src
+          assert 'freshness_deadline_date' in src
+          assert 'aging_stock_initial_target' in src
+          assert 'ANCHORED_OLD_STOCK_CURRENT_OH_MINUS_NEW_COMPLETED_RECEIPTS' in src
+          assert 'NEW_RECEIPTS_CANNOT_RESET_OR_INCREASE_AGING_TARGET' in src
+          assert 'provisional_today_movement_file_id' in cached_src
           assert 'AUTHORITATIVE_LIVE_CURRENT_PRICE_TYPE_EQUALS_TPR' in src
           assert 'CONTINUOUS_PRICE_LIST_TPR' in src and 'CONTIGUOUS_POS_TPR' in src
           assert 'SWEET_SPOT_TEST' in src and 'FRESHNESS_SELL_THROUGH' in src
@@ -228,6 +236,12 @@ jobs:
           assert 'TPR SUGGESTION PRICE' in ui
           assert 'FIND NEW REGULAR SWEET SPOT' in ui
           assert 'FRESHNESS SELL-THROUGH' in ui
+          assert 'TODAY RECEIPT · ' in ui
+          assert 'PROVISIONAL' in ui
+          assert 'Latest accepted same-day MVT' in ui
+          assert 'Aging remaining' in ui
+          assert 'aging deadline' in ui
+          assert 'FAMILY DOH / DOS' in ui
           assert 'BEFORE TPR' in ui and 'PROJECTED 7D' in ui
           assert '/purpose' in ui
           assert 'reg_suggestion_actionable' in inspect.getsource(bo.pricing_review)
@@ -356,7 +370,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v459'" in ui
+          assert "const CACHE='yipman-v460'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'CACHED STOCK FLOW' in ui
           assert 'data-stock-retry' in ui
@@ -725,6 +739,42 @@ jobs:
           assert "promotion_type:'CUSTOM'" in ui
           assert 'freshness_adjustment_applied' in ui
           print('yipman-promotion-ordering=PASS')
+          PY
+
+      - name: Validate same-day provisional receipt visibility
+        run: |
+          python - <<'PY'
+          from datetime import date
+          from decimal import Decimal
+          import inspect
+          import webapp_v2_runtime as v2
+          import backoffice_runtime as bo
+
+          events=[{
+              'posting_date':date(2026,10,3),
+              'receipt_quantity':Decimal('12.5'),
+              'receipt_uom':'LB',
+              'base_receipt_quantity':Decimal('12.5'),
+              'base_receipt_uom':'LB',
+              'article_number':'1361120',
+          }]
+          summary=v2._receipt_events_summary(events)
+          assert summary['quantity']==Decimal('12.5')
+          assert summary['uom']=='LB'
+          assert summary['quantity_basis']=='BASE_UOM'
+
+          psrc=inspect.getsource(v2._latest_provisional_today_movement_day)
+          assert "processing_status='INGESTED'" in psrc
+          assert "m.posting_date=%s" in psrc
+          assert 'PROVISIONAL_SAME_DAY_ACCEPTED_MVT' in psrc
+          assert 'completed_through_date()' not in psrc
+
+          bsrc=inspect.getsource(bo._freshness_tpr_anchor)
+          assert 'INSERT IGNORE INTO yipman_freshness_tpr_anchor' in bsrc
+          assert 'freshness_deadline_date' in bsrc
+          qsrc=inspect.getsource(bo._receipt_qty_in_uom_since)
+          assert 'RECEIPT_UOM_NOT_COMPARABLE' in qsrc
+          print('same-day-provisional-receipt-aging-anchor=PASS')
           PY
 
       - name: Validate canonical physical receipt semantics
@@ -1208,7 +1258,7 @@ jobs:
           assert ".overlay{position:absolute" in ui and "z-index:80" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v459'" in ui
+          assert "const CACHE='yipman-v460'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
