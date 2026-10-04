@@ -819,6 +819,53 @@ def _historical_receiving_article_summary(
 
 
 
+
+def _delivery_roster_window_evidence(
+    pattern: dict[str, Any],
+    target_date: date | None,
+) -> dict[str, Any]:
+    """Return the selected delivery weekday plus the day before/after.
+
+    Yipman regular ordering uses this three-weekday receipt-cadence window only
+    to decide which historical Families belong on the roster. Order quantity is
+    still calculated for the user's exact selected delivery/coverage dates.
+    """
+    if target_date is None:
+        return {
+            "target_date":None,
+            "weekday_numbers":[],
+            "weekdays":[],
+            "observed_weekdays":[],
+            "observed_count":0,
+            "eligible":False,
+            "evidence":[],
+            "rule":"SELECTED_WEEKDAY_PLUS_MINUS_ONE_DAY",
+        }
+
+    evidence=[]
+    for offset,role in ((-1,"DAY_BEFORE"),(0,"SELECTED_DAY"),(1,"DAY_AFTER")):
+        day=target_date+timedelta(days=offset)
+        item=dict(_delivery_day_evidence(pattern,day))
+        item["offset_days"]=offset
+        item["role"]=role
+        evidence.append(item)
+
+    return {
+        "target_date":target_date,
+        "weekday_numbers":[int(x.get("weekday_number")) for x in evidence],
+        "weekdays":[str(x.get("weekday") or "") for x in evidence],
+        "observed_weekdays":[
+            str(x.get("weekday") or "")
+            for x in evidence
+            if int(x.get("observed_count") or 0)>0
+        ],
+        "observed_count":sum(int(x.get("observed_count") or 0) for x in evidence),
+        "eligible":any(int(x.get("observed_count") or 0)>0 for x in evidence),
+        "evidence":evidence,
+        "rule":"SELECTED_WEEKDAY_PLUS_MINUS_ONE_DAY",
+    }
+
+
 def _fallback_receiving_article(cur, family_id: int, family_article: str | None) -> str | None:
     cur.execute(
         """SELECT a.article_number
@@ -1367,7 +1414,7 @@ def ordering_review(
             }
 
         for kind in kinds:
-            delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
+            delivery_cache: dict[int, tuple[dict[str,Any],dict[str,Any],dict[str,Any],dict[str,Any]]] = {}
             delivery_event_cache: dict[int,list[dict[str,Any]]] = {}
             candidate_family_map: dict[int,dict[str,Any]] = {}
             eligible_family_ids: list[int] | None = None
@@ -1396,26 +1443,31 @@ def ordering_review(
                         lookback_days=(180 if best_available_delivery_evidence else 84),
                     )
                     delivery_day=_delivery_day_evidence(pattern,delivery_date)
-                    observed_count=int(delivery_day.get("observed_count") or 0)
+                    delivery_window=_delivery_roster_window_evidence(pattern,delivery_date)
+                    observed_count=int(delivery_window.get("observed_count") or 0)
+                    standard_window_match=any(
+                        bool(x.get("eligible"))
+                        for x in (delivery_window.get("evidence") or [])
+                    )
                     best_available_match=bool(
                         best_available_delivery_evidence and observed_count>=1
                     )
-                    if delivery_day.get("eligible") or best_available_match:
-                        if best_available_match and not delivery_day.get("eligible"):
-                            delivery_day=dict(delivery_day)
-                            delivery_day["eligible"]=True
-                            delivery_day["best_available_low_confidence"]=True
-                            delivery_day["eligibility_rule"]="YIPMAN_ANY_OBSERVED_RECEIPT_ON_SELECTED_WEEKDAY_WITHIN_180_DAYS"
+                    if standard_window_match or best_available_match:
+                        if best_available_match:
+                            delivery_window=dict(delivery_window)
+                            delivery_window["best_available_low_confidence"]=not standard_window_match
+                            delivery_window["eligibility_rule"]="YIPMAN_ANY_OBSERVED_RECEIPT_ON_SELECTED_WEEKDAY_PLUS_MINUS_ONE_WITHIN_180_DAYS"
                         eligible_family_ids.append(fid)
-                        delivery_cache[fid]=(receipt,pattern,delivery_day)
+                        delivery_cache[fid]=(receipt,pattern,delivery_day,delivery_window)
                     else:
                         skipped.append({
                             "family_id":fid,
                             "family_article_number":fam.get("main_article_number"),
                             "family_article_name":fam.get("family_description"),
-                            "reason":"DELIVERY_DAY_NOT_OBSERVED_ENOUGH",
+                            "reason":"DELIVERY_WINDOW_NOT_OBSERVED",
                             "delivery_date":delivery_date,
                             "delivery_day_evidence":delivery_day,
+                            "delivery_window_evidence":delivery_window,
                         })
 
             # Inventory movement evidence is current through the newest usable
@@ -1461,26 +1513,37 @@ def ordering_review(
                         # Compatibility with an older worker that cannot accept
                         # family_ids: never leak a nonmatching delivery family.
                         continue
-                    receipt,pattern,delivery_day=cached
+                    receipt,pattern,delivery_day,delivery_window=cached
                     events=delivery_event_cache.get(fid) or []
                 else:
                     events = _family_receipt_events(cur, fid, data_days=receipt_days)
                     receipt = _last_receipt_base_summary_from_events(events)
                     pattern = _delivery_pattern(events)
                     delivery_day = None
+                    delivery_window = None
 
                 receiving_article = receipt.get("receiving_article") or _fallback_receiving_article(
                     cur, fid, str(s.get("family_article_number") or "") or None
                 )
                 suggested_qty=s.get("suggested_order_qty")
-                historical_receiving_articles=(
-                    _historical_receiving_article_summary(
-                        cur,
-                        str(s.get("family_article_number") or "") or None,
-                        events,
+                delivery_window_weekdays=set(
+                    int(x) for x in (delivery_window.get("weekday_numbers") or [])
+                ) if delivery_date is not None else set()
+                delivery_window_events=[
+                    x for x in events
+                    if (
+                        x.get("posting_date") is not None
+                        and (
+                            not delivery_window_weekdays
+                            or int(x["posting_date"].weekday()) in delivery_window_weekdays
+                        )
                     )
-                    if suggested_qty is not None and _d(suggested_qty)>0
-                    else []
+                ]
+                historical_receiving_articles=_historical_receiving_article_summary(
+                    cur,
+                    str(s.get("family_article_number") or "") or None,
+                    delivery_window_events,
+                    limit=20,
                 )
                 receiving_names=_article_description_map(
                     cur,
@@ -1512,6 +1575,10 @@ def ordering_review(
                     "selected_next_delivery_date": next_delivery_date,
                     "delivery_day": delivery_day.get("weekday") if delivery_day else None,
                     "delivery_day_observed_count": delivery_day.get("observed_count") if delivery_day else None,
+                    "delivery_window_weekdays":delivery_window.get("weekdays") if delivery_date is not None else [],
+                    "delivery_window_observed_weekdays":delivery_window.get("observed_weekdays") if delivery_date is not None else [],
+                    "delivery_window_observed_count":delivery_window.get("observed_count") if delivery_date is not None else None,
+                    "delivery_window_evidence":delivery_window if delivery_date is not None else None,
                     "delivery_day_receipt_count": delivery_day.get("receipt_date_count") if delivery_day else pattern.get("receipt_date_count"),
                     "delivery_day_confidence_pct": delivery_day.get("confidence_percent") if delivery_day else pattern.get("confidence_percent"),
                     "delivery_day_confidence": delivery_day.get("confidence") if delivery_day else pattern.get("confidence"),
@@ -1589,17 +1656,18 @@ def ordering_review(
                         "historical_receiving_articles": historical_receiving_articles,
                         "delivery_pattern": pattern,
                         "delivery_day_evidence": delivery_day,
+                        "delivery_window_evidence": delivery_window if delivery_date is not None else None,
                         "reasons": _suggestion_reason(s, pattern, receipt)
                         + (
                             [{
-                                "title":"Selected delivery day",
+                                "title":"Delivery roster ±1 day",
                                 "detail":(
-                                    f"Observed {delivery_day.get('weekday')} "
-                                    f"{delivery_day.get('observed_count')}/{delivery_day.get('receipt_date_count')} receipt dates "
-                                    f"in the recent {delivery_day.get('lookback_days')} day window · "
-                                    f"{delivery_day.get('confidence_percent')}% confidence."
+                                    "Family is included because canonical receipts were observed on "
+                                    + " / ".join(delivery_window.get("observed_weekdays") or [])
+                                    + f" within the {delivery_window.get('evidence',[{}])[0].get('lookback_days') or 180}-day cadence window. "
+                                    + "The suggested quantity still uses the exact selected delivery and next-delivery dates."
                                 ),
-                            }] if delivery_day else []
+                            }] if delivery_window else []
                         )
                         + (
                             [{
@@ -1630,7 +1698,7 @@ def ordering_review(
                     cached=delivery_cache.get(fid)
                     if not cached:
                         continue
-                    receipt,pattern,delivery_day=cached
+                    receipt,pattern,delivery_day,delivery_window=cached
                     calc=bulk_skipped_by_family.get(fid) or {}
                     reason=str(calc.get("reason") or "ORDERING_CALCULATION_UNAVAILABLE")
                     no_recent_sales=reason in no_recent_sales_reasons
@@ -1643,6 +1711,20 @@ def ordering_review(
                         cur,
                         [receiving_article] if receiving_article else [],
                     ).get(str(receiving_article or "").strip())
+                    delivery_window_weekdays=set(
+                        int(x) for x in (delivery_window.get("weekday_numbers") or [])
+                    )
+                    delivery_window_events=[
+                        x for x in (delivery_event_cache.get(fid) or [])
+                        if x.get("posting_date") is not None
+                        and int(x["posting_date"].weekday()) in delivery_window_weekdays
+                    ]
+                    historical_receiving_articles=_historical_receiving_article_summary(
+                        cur,
+                        str(fam.get("main_article_number") or "") or None,
+                        delivery_window_events,
+                        limit=20,
+                    )
                     roster_uom=(
                         calc.get("demand_uom")
                         or calc.get("oh_uom")
@@ -1654,7 +1736,7 @@ def ordering_review(
                         "family_article":fam.get("main_article_number"),
                         "receiving_article":receiving_article,
                         "receiving_article_name":receiving_article_name,
-                        "historical_receiving_articles":[],
+                        "historical_receiving_articles":historical_receiving_articles,
                         "oh":calc.get("oh"),
                         "oh_uom":calc.get("oh_uom") or roster_uom,
                         "last_receipt_date":receipt.get("date"),
@@ -1667,6 +1749,10 @@ def ordering_review(
                         "selected_next_delivery_date":next_delivery_date,
                         "delivery_day":delivery_day.get("weekday"),
                         "delivery_day_observed_count":delivery_day.get("observed_count"),
+                        "delivery_window_weekdays":delivery_window.get("weekdays"),
+                        "delivery_window_observed_weekdays":delivery_window.get("observed_weekdays"),
+                        "delivery_window_observed_count":delivery_window.get("observed_count"),
+                        "delivery_window_evidence":delivery_window,
                         "delivery_day_receipt_count":delivery_day.get("receipt_date_count"),
                         "delivery_day_confidence_pct":delivery_day.get("confidence_percent"),
                         "delivery_day_confidence":delivery_day.get("confidence"),
@@ -1695,6 +1781,7 @@ def ordering_review(
                             "receiving_articles_on_last_receipt":receipt.get("receiving_articles"),
                             "delivery_pattern":pattern,
                             "delivery_day_evidence":delivery_day,
+                            "delivery_window_evidence":delivery_window,
                             "roster_reason":reason,
                             "reasons":[
                                 {
@@ -1709,12 +1796,11 @@ def ordering_review(
                                     ),
                                 },
                                 {
-                                    "title":"Selected delivery day",
+                                    "title":"Delivery roster ±1 day",
                                     "detail":(
-                                        f"Observed {delivery_day.get('weekday')} "
-                                        f"{delivery_day.get('observed_count')}/{delivery_day.get('receipt_date_count')} receipt dates "
-                                        f"in the recent {delivery_day.get('lookback_days')} day window · "
-                                        f"{delivery_day.get('confidence_percent')}% confidence."
+                                        "Family is included because canonical receipts were observed on "
+                                        + " / ".join(delivery_window.get("observed_weekdays") or [])
+                                        + " around the selected weekday. The exact selected delivery date still drives order math."
                                     ),
                                 },
                             ],
@@ -1727,6 +1813,7 @@ def ordering_review(
             0 if str(x.get("roster_status") or "")=="ORDER" else (
                 1 if str(x.get("roster_status") or "")=="REVIEW" else 2
             ),
+            -int(bool(x.get("attention"))),
             -float(x.get("suggested_delivery_qty") or 0),
             str(x.get("family_name") or ""),
         )
@@ -1756,13 +1843,17 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V19_RECEIVING_PACK",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V20_DELIVERY_PLUS_MINUS_ONE_ROSTER",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
         "selected_delivery_weekday": (
             ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"][delivery_date.weekday()]
             if delivery_date else None
+        ),
+        "selected_delivery_weekday_window":(
+            _delivery_roster_window_evidence({},delivery_date).get("weekdays")
+            if delivery_date else []
         ),
         "analysis_status": analysis_status,
         "data_health": ordering_data_health,
@@ -1778,15 +1869,18 @@ def ordering_review(
             "last_receipt_quantity_basis": "MOVEMENT_BASE_UOM_ONLY",
             "incoming_field_used": False,
             "write_enabled": False,
-            "delivery_date_filter": "CANONICAL_PHYSICAL_101_109_WEEKDAY_EVIDENCE",
+            "delivery_date_filter": "CANONICAL_PHYSICAL_101_109_SELECTED_WEEKDAY_PLUS_MINUS_ONE_EVIDENCE",
             "delivery_day_eligibility": (
-                "ANY_OBSERVED_SELECTED_WEEKDAY_WITHIN_180_DAYS"
+                "ANY_OBSERVED_SELECTED_WEEKDAY_PLUS_MINUS_ONE_WITHIN_180_DAYS"
                 if best_available_delivery_evidence
                 else "EXPECTED_WEEKDAY_OR_AT_LEAST_2_RECEIPTS_AND_25_PERCENT_SHARE"
             ),
             "delivery_evidence_lookback_days": 180 if best_available_delivery_evidence else 84,
             "best_available_delivery_evidence": bool(best_available_delivery_evidence),
             "delivery_roster_complete": bool(delivery_date),
+            "delivery_roster_weekday_window":"DAY_BEFORE_SELECTED_DAY_DAY_AFTER",
+            "delivery_roster_all_observed_families_in_window":bool(delivery_date),
+            "zero_order_rows_retained":bool(delivery_date),
             "coverage_window_selected_by_user": bool(
                 delivery_date is not None and next_delivery_date is not None
             ),
@@ -1800,7 +1894,7 @@ def ordering_review(
             "regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS",
             "pre_delivery_shortage_is_not_added_to_future_order":True,
             "fresh_live_coverage_cap_days":7,
-            "cache_schema":"V18_WEEKDAY_USAGE",
+            "cache_schema":"V20_DELIVERY_PLUS_MINUS_ONE_ROSTER",
         },
     }
 
@@ -1827,7 +1921,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V19_RECEIVING_PACK|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V20_DELIVERY_PLUS_MINUS_ONE_ROSTER|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
