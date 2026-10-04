@@ -4590,7 +4590,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                       MAX(family_movement_uom) AS family_movement_uom
                FROM quick_check_current
                WHERE family_id IS NOT NULL
-                 AND COALESCE(family_movement_7d,0) > 0
+                 AND family_movement_7d IS NOT NULL
+                 AND family_movement_7d >= 0
                  AND COALESCE(quick_check_status,'') <> 'HISTORICAL_ONLY'
                GROUP BY family_id
                ORDER BY family_id"""
@@ -4621,7 +4622,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             fid = int(family["family_id"])
             sold = family.get("family_movement_7d")
             sold_d = _d(sold) if sold is not None else Decimal("0")
-            if sold_d <= 0:
+            if sold_d < 0:
                 continue
 
             sold_uom = str(family.get("family_movement_uom") or "").strip().upper()
@@ -4676,7 +4677,10 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 continue
 
             ratio = receipt_qty / sold_d if sold_d > 0 else None
-            if ratio is None or ratio < Decimal("1.50"):
+            no_recent_selling = bool(sold_d == 0 and receipt_qty > 0)
+            if not no_recent_selling and (
+                ratio is None or ratio < Decimal("1.50")
+            ):
                 continue
 
             history = []
@@ -4748,7 +4752,11 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 "family_receipt_7d_status": receipt_status,
                 "receipt_minus_selling_7d": receipt_qty - sold_d,
                 "receipt_to_selling_ratio": ratio,
-                "receipt_over_selling_pct": (ratio - Decimal("1")) * Decimal("100"),
+                "receipt_over_selling_pct": (
+                    (ratio - Decimal("1")) * Decimal("100")
+                    if ratio is not None else None
+                ),
+                "no_recent_selling": no_recent_selling,
                 "recent_promotion_event": None,
                 "observed_delivery_days": observed_delivery_days,
                 "observed_delivery_weekday_numbers": [
@@ -4770,6 +4778,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         # never needs live calculations for Families that will not be returned.
         rows.sort(
             key=lambda r: (
+                0 if r.get("no_recent_selling") else 1,
                 -float(r.get("receipt_over_selling_pct") or 0),
                 -float(r.get("receipt_minus_selling_7d") or 0),
                 str(r.get("family_name") or ""),
@@ -4965,16 +4974,16 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY",
+        "contract_version": "YIPMAN_STOCK_FLOW_V10_ZERO_SELLING_INCLUDED",
         "count": qualified_count,
         "returned_count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
         "rules": {
             "scope": "FAMILY_ARTICLE_ONLY",
-            "qualification": "7D_RECEIPT_AT_LEAST_150_PERCENT_OF_7D_SELLING_MVT",
+            "qualification": "7D_RECEIPT_AT_LEAST_150_PERCENT_OF_7D_SELLING_MVT_OR_POSITIVE_RECEIPT_WITH_ZERO_SELLING_MVT",
             "comparison_uom": "SAME_FAMILY_MOVEMENT_UOM_ONLY",
-            "default_sort": "RECEIPT_OVER_SELLING_PCT_DESC",
+            "default_sort": "ZERO_SELLING_FIRST_THEN_RECEIPT_OVER_SELLING_PCT_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "latest_receipt_cost": "MOVEMENT_RECEIPT_VALUATION_ON_LATEST_PHYSICAL_RECEIPT_DATE",
             "effective_oh": "PUBLISHED_SYSTEM_OH_PLUS_ACTIVE_FAMILY_TRUE_STOCK_OVERLAY",
