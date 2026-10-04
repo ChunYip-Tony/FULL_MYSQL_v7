@@ -591,7 +591,7 @@ def get_promotion_list(list_id: int) -> dict[str,Any]:
 
 
 def delete_manual_promotion_list(list_id: int) -> dict[str,Any]:
-    """Delete one manually-created saved promotion list and all of its items."""
+    """Delete one saved Yipman promotion list and all of its items."""
     list_id=int(list_id)
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
@@ -605,9 +605,6 @@ def delete_manual_promotion_list(list_id: int) -> dict[str,Any]:
         if not head:
             cur.close()
             raise KeyError("PROMOTION_LIST_NOT_FOUND")
-        if str(head.get("source_filename") or "").strip().upper()!="MANUAL_SEARCH_ENTRY":
-            cur.close()
-            raise ValueError("ONLY_MANUAL_PROMOTION_LISTS_CAN_BE_DELETED")
         cur.execute(
             "SELECT COUNT(*) AS item_count FROM yipman_promotion_list_item WHERE list_id=%s",
             (list_id,),
@@ -630,7 +627,7 @@ def delete_manual_promotion_list(list_id: int) -> dict[str,Any]:
         "list_id":list_id,
         "list_name":head.get("list_name"),
         "deleted_item_count":item_count,
-        "manual_only":True,
+        "saved_promotion_record":True,
     }
 
 def remove_manual_promotion_list_item(list_id: int, item_id: int) -> dict[str,Any]:
@@ -647,9 +644,6 @@ def remove_manual_promotion_list_item(list_id: int, item_id: int) -> dict[str,An
         if not head:
             cur.close()
             raise KeyError("PROMOTION_LIST_NOT_FOUND")
-        if str(head.get("source_filename") or "").strip().upper()!="MANUAL_SEARCH_ENTRY":
-            cur.close()
-            raise ValueError("ONLY_MANUAL_PROMOTION_ITEMS_CAN_BE_REMOVED")
         cur.execute(
             "SELECT item_id FROM yipman_promotion_list_item WHERE list_id=%s AND item_id=%s LIMIT 1",
             (int(list_id),int(item_id)),
