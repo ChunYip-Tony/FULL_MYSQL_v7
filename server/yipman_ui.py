@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v462';
+const CACHE='yipman-v463';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1078,12 +1078,12 @@ function freshnessShortDate(v){
 function articleTone(value){let h=0;for(const ch of String(value||''))h=(h*31+ch.charCodeAt(0))>>>0;return h%8}
 // Compatibility wording retained for the established True Stock control contract: TAP TO ENTER TRUE STOCK
 function familyOhActionHtml(d,cls=''){
- const family=String(d?.family||''),name=String(d?.name||''),uom=String(d?.uom||''),src=String(d?.source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
+ const family=String(d?.family||d?.family_id||''),name=String(d?.name||''),uom=String(d?.uom||''),src=String(d?.source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
  return '<button type="button" class="familyohinline '+esc(cls)+'" data-family-oh data-family="'+esc(family)+'" data-name="'+esc(name)+'" data-oh="'+esc(d?.oh??'')+'" data-uom="'+esc(uom)+'">'+
    '<small>EFFECTIVE OH · ENTER TRUE STOCK</small><b>'+fmtNullable(d?.oh)+' '+esc(uom)+'</b><span>'+(isTrue?'TRUE STOCK ACTIVE':'TAP TO COUNT & RECALCULATE')+'</span></button>';
 }
 function familyOhPairHtml(d){
- const family=String(d?.family||''),name=String(d?.name||''),euom=String(d?.effective_uom||d?.system_uom||''),suom=String(d?.system_uom||euom);
+ const family=String(d?.family||d?.family_id||''),name=String(d?.name||''),euom=String(d?.effective_uom||d?.system_uom||''),suom=String(d?.system_uom||euom);
  const src=String(d?.effective_source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
  return '<div class="familyohpair">'+
  '<button type="button" class="familyohbtn" data-family-oh data-family="'+esc(family)+'" data-name="'+esc(name)+'" data-oh="'+esc(d?.effective??'')+'" data-uom="'+esc(euom)+'"><small>EFFECTIVE OH · ENTER TRUE STOCK</small><b>'+fmt(d?.effective)+' '+esc(euom)+'</b><span>'+(isTrue?'TRUE STOCK ACTIVE':'TAP TO COUNT & RECALCULATE')+'</span></button>'+
@@ -2571,10 +2571,15 @@ function openManualPromotion(){
     '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
    '</div>';
   }).join('');
-  $$('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
-   selected.delete(String(btn.dataset.manualPromoRemove));renderSelected();
-  });
  }
+ selectedBox.onclick=e=>{
+  const btn=e.target.closest?.('[data-manual-promo-remove]');
+  if(!btn)return;
+  e.preventDefault();e.stopPropagation();
+  selected.delete(String(btn.dataset.manualPromoRemove));
+  renderSelected();
+  searchStatus.textContent='Selected promotion item removed.';
+ };
  async function hydrateFamily(item){
   const familyKey=familyKeyFor(item);
   if(!familyKey)throw new Error('Family Article unavailable for this result');
@@ -2668,29 +2673,33 @@ function openManualPromotion(){
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
-async function removeManualPromotionItem(itemId){
+async function removeManualPromotionItem(itemId,btn=null){
  const id=Number(itemId);
- if(!promoListId||!Number.isFinite(id))return;
- if(String(promoListDetail?.source_filename||'').toUpperCase()!=='MANUAL_SEARCH_ENTRY')return toast('Only manually added promotion items can be removed here');
- if(!window.confirm('Remove this item from the manual promotion?'))return;
+ if(!promoListId||!Number.isFinite(id)){toast('Promotion item unavailable');return}
+ const oldText=btn?.textContent||'REMOVE FROM PROMOTION';
+ if(btn){btn.disabled=true;btn.textContent='REMOVING…'}
  try{
-  await api('/v1/yipman/promotion-lists/'+encodeURIComponent(promoListId)+'/items/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:12000});
+  const updated=await api('/v1/yipman/promotion-lists/'+encodeURIComponent(promoListId)+'/items/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:12000});
   promoTempOH.clear();
+  promoListDetail=updated;
   await loadPromotionLists();
   if($('#promoListSelect'))$('#promoListSelect').value=String(promoListId);
   if(Number(promoListDetail?.ready_count||0)>0){
    await loadPromotionOrder();
   }else{
    $('#promoOrderStatus').textContent='No READY items remain in this manual promotion.';
-   renderPromotionRows({rows:[],delivery_date:orderDate});
+   renderPromotionRows({rows:[],delivery_date:orderDate,list:{manual_item_removal_allowed:true,source_filename:'MANUAL_SEARCH_ENTRY'}});
   }
   toast('Promotion item removed');
- }catch(e){toast('Could not remove promotion item · '+e.message)}
+ }catch(e){
+  if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent=oldText}
+  toast('Could not remove promotion item · '+e.message);
+ }
 }
 
 function renderPromotionRows(data){
  promoLastRows=Array.isArray(data?.rows)?data.rows:[];
- const manualList=String(promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
+ const manualList=Boolean(data?.list?.manual_item_removal_allowed??promoListDetail?.manual_item_removal_allowed)||String(data?.list?.source_filename||promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
  const reviewItems=(promoListDetail?.items||[]).filter(x=>x.mapping_status!=='READY');
  const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b>'+reviewItems.slice(0,5).map(x=>'<div class="promo-review-item"><span>'+esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)+'</span>'+(manualList&&x.item_id?'<button type="button" data-promo-remove-item="'+esc(x.item_id)+'">REMOVE</button>':'')+'</div>').join('')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
  $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
@@ -2710,7 +2719,7 @@ function renderPromotionRows(data){
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · SCENARIO OH only for this calculation':'')+'</div></div>'+remove+'</div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
  document.querySelectorAll('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
- document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem)});
+ document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem,x)});
  bindFamilyOhEditors();
 }
 async function loadPromotionOrder(){
@@ -3230,7 +3239,7 @@ async function loadPrices(opts={}){
       '</div>'+
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
-      familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
+      familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
       '<div class="pmetrics price-metrics3">'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
@@ -3276,7 +3285,7 @@ function openPrice(r){
  const suggestion=regMode?(r.reg_suggestion_price??r.tested_price):(r.tpr_suggestion_price??r.testing_price);
  const why=regMode?(r.reg_suggestion_reason||r.primary_reason_text||'REG review'):(r.tpr_suggestion_reason||r.primary_reason_text||'TPR review');
  const suggestionLabel=regMode?'SUGGESTED REG':'TPR SUGGESTION PRICE';
- const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+ const ohPair=familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
  sheet(r.name||r.upc,r.upc||(regMode?'REG suggestion':'TPR suggestion'),
  ohPair+'<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT '+esc(r.current_price_type||'')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>PROVED SWEET SPOT · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(suggestion)+'</b><span>'+esc(suggestionLabel)+' · '+esc(gpText(suggestion,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
