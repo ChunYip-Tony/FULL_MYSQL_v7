@@ -3917,10 +3917,14 @@ async function loadData(){
    api('/v1/web-upload/recent?limit=4',{timeoutMs:12000}),
    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000}),
    api('/v1/app/dashboard',{timeoutMs:12000}),
-   api('/v1/yipman/header-freshness',{timeoutMs:9000})
+   api('/v1/yipman/header-freshness',{timeoutMs:9000}).catch(()=>null)
   ]);
-  renderDataFreshness(freshness);
-  renderHeaderFreshness(freshness);
+  if(freshness){
+   renderDataFreshness(freshness);
+   renderHeaderFreshness(freshness);
+  }else{
+   const df=$('#dataFreshness');if(df)df.innerHTML='<div class="empty">Freshness temporarily unavailable.</div>';
+  }
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
   const rb=recent.batches||recent.rows||[];
   const activeCandidate=active.active_batch||null;
