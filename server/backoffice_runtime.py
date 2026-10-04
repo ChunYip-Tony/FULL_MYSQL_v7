@@ -6364,8 +6364,8 @@ def pricing_review(
             cur = conn.cursor(dictionary=True)
             placeholders = ",".join(["%s"] * len(upcs))
             cur.execute(
-                f"""SELECT upc_id,ean_upc,family_id,product_class,
-                           current_price,current_price_type,
+                f"""SELECT upc_id,ean_upc,family_id,main_article_number,family_description,
+                           product_class,current_price,current_price_type,
                            current_price_source,current_price_asof_date,
                            current_cost_per_selling_unit,cost_source,cost_date,
                            current_oh,current_oh_uom,doh,sweet_spot_price,
@@ -8753,7 +8753,7 @@ def invalidate_true_stock_dependent_caches() -> dict[str,Any]:
 def _pricing_review_cache_key(category: str, limit: int) -> str:
     # V3 invalidates persisted V2 snapshots that may contain an empty queue
     # produced by the older inherited-review-status gate.
-    return f"V4_REG_TPR_SPLIT|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
+    return f"V5_FAMILY_IDENTITY_TRUE_STOCK|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),1000))}"
 
 
 def _ensure_pricing_review_cache_table(cur) -> None:
