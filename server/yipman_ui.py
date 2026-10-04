@@ -2479,7 +2479,7 @@ function renderOrderRoster(rows,data,h,stale){
   return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.effective_oh??r.oh)+'<span>'+esc(r.effective_oh_uom||r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+ohPair+histHtml+snooze+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.'+(ignoredOrderCount?' '+ignoredOrderCount+' ignored suggestion(s) return automatically after 12 hours.':'')+'</div>';
  document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
- $('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
+ $$('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
  bindFamilyOhEditors();
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
@@ -2993,8 +2993,8 @@ function renderCurrentTpr(){
  }).join('')||'<div class="empty">No current TPR item matches this filter.</div>';
  $$('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
  $$('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
- $('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
- $('[data-tpr-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreTprProgress(rows[Number(b.dataset.tprIgnore)])});
+ $$('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
+ $$('[data-tpr-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreTprProgress(rows[Number(b.dataset.tprIgnore)])});
  bindFamilyOhEditors();
 }
 async function setTprPurpose(r,purpose){
@@ -3035,7 +3035,7 @@ function openCurrentTpr(r){
    '<br><br><b>Observed TPR price behavior</b>'+tprPriceStepsHtml(r)+
    '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether the aging stock reaching the freshness threshold is cleared by the threshold day; newer stock is not forced to zero.</div><div class="actions"><button class="secondary" id="tprTrueStockEdit">EDIT TRUE STOCK</button><button class="secondary snooze12" id="tprIgnore12h">IGNORE 12 HOURS</button></div>'
  );
- $('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
+ $$('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
  const ts=$('#tprTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,name:r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
  const ig=$('#tprIgnore12h');if(ig)ig.onclick=()=>ignoreTprProgress(r);
  bindFamilyOhEditors();
