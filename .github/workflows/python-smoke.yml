@@ -931,8 +931,11 @@ jobs:
           assert "const activeRun=Boolean(a.active_pipeline_run_id)" in text
           assert "<small>Blockers</small>" in text
           assert "READY · '+fmt(hold,0)+' HOLD" in text
-          assert "Rebuild After QA Fixes" in text
-          assert "does not clear unresolved blockers by itself" in text
+          assert "Open QA Fixes" in text
+          assert "Fix This UPC" in text
+          assert "Fix QA Blocker First" in text
+          assert "active_unmapped_upcs" in text
+          assert "rebuilding now would only reproduce the same blocker" in text
           assert "FAMILY COST" in text
           assert "Tap to enter True Stock" in text
           assert "Save True Stock & Recalculate" in text
