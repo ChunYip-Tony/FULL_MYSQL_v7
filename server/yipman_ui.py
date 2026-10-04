@@ -267,7 +267,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qfamily .qlabel{font-size:7px}
 .qfamily .qfnum{font-size:17px;line-height:1}
 .qfamily .qfname{font-size:21px;font-weight:1000;line-height:1.02;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip}
-.qfamily .qmeta{font-size:7px;margin-top:2px}
+.qfamily .qmeta{font-size:7px;margin-top:2px}.qfamilycost{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px;padding:4px 6px;border:1px solid rgba(95,105,113,.14);border-radius:8px;background:rgba(255,255,255,.58)}.qfamilycost span{font-size:6px;color:#6d7b86;font-weight:950}.qfamilycost b{font-size:12px;line-height:1;font-weight:1000;color:#253949}.qfamilycost small{font-size:6px;color:#849099;font-weight:850}
 .qffocus{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:5px}
 .qffocusbox{display:flex;align-items:center;justify-content:space-between;gap:5px;min-width:0;background:rgba(255,255,255,.58);border:1px solid rgba(95,105,113,.14);border-radius:8px;padding:4px 6px}
 .qffocusbox small{display:block;font-size:6px;color:#6d7b86;font-weight:950;line-height:1}
@@ -1624,7 +1624,12 @@ function quickFamilyGroups(rows){
      family_oh_is_true_stock:String(r.family_oh_source||'').toUpperCase().startsWith('FAMILY_TRUE_STOCK'),
      family_system_oh:r.family_system_oh??null,
      family_system_oh_uom:r.family_system_oh_uom||'',
-     family_system_oh_source:r.family_system_oh_source||''
+     family_system_oh_source:r.family_system_oh_source||'',
+     family_cost:r.family_cost??null,
+     family_cost_uom:r.family_cost_uom||'',
+     family_cost_source:r.family_cost_source||'',
+     family_cost_date:r.family_cost_date||null,
+     family_cost_status:r.family_cost_status||''
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -1788,9 +1793,12 @@ function quickSellingHtml(a,idx,seq){
 function quickGroupedHtml(rows){
  return quickFamilyGroups(rows).slice(0,12).map((g,idx)=>{
    const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',recon=String(g.reconciliation||'').toUpperCase();
+   const familyCost=num(g.family_cost),familyCostUom=g.family_cost_uom||'';
+   const familyCostMeta=[g.family_cost_source?friendlySignal(g.family_cost_source):'',g.family_cost_date?shortDate(g.family_cost_date):''].filter(Boolean).join(' · ');
+   const familyCostHtml='<div class="qfamilycost"><span>FAMILY COST</span><b>'+(familyCost===null?'—':money(familyCost)+(familyCostUom?' / '+esc(familyCostUom):''))+'</b>'+(familyCostMeta?'<small>'+esc(familyCostMeta)+'</small>':'')+'</div>';
    const familyHead='<div class="qfhead">'+
      '<div class="qfidentity"><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div>'+
-     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div>'+
+     '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div>'+familyCostHtml+'</div>'+
      '<div class="qffocus">'+
        familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.family_oh,effective_uom:g.family_oh_uom,effective_source:g.family_oh_source,system:g.family_system_oh,system_uom:g.family_system_oh_uom})+
        '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
