@@ -1496,6 +1496,11 @@ def ordering_review(
                     "historical_receiving_articles": historical_receiving_articles,
                     "oh": s.get("ordering_oh_used"),
                     "oh_uom": s.get("uom"),
+                    "effective_oh": s.get("effective_oh_raw"),
+                    "effective_oh_uom": s.get("effective_oh_uom") or s.get("uom"),
+                    "effective_oh_source": s.get("effective_oh_source"),
+                    "system_oh": s.get("system_oh_raw"),
+                    "system_oh_uom": s.get("system_oh_uom") or s.get("uom"),
                     "last_receipt_date": receipt.get("date"),
                     "last_receipt_qty_base": receipt.get("quantity"),
                     "last_receipt_base_uom": receipt.get("base_uom"),
@@ -6325,6 +6330,7 @@ def pricing_review(
             })
             delivery_pattern_by_family: dict[int,dict[str,Any]] = {}
             family_effective_oh_by_id: dict[int,dict[str,Any]] = {}
+            family_system_oh_by_id: dict[int,dict[str,Any]] = {}
             if family_ids:
                 receipt_days=source_data_days(
                     cur,
@@ -6349,6 +6355,7 @@ def pricing_review(
                     )
                     family_children=cur.fetchall()
                     family_effective_oh_by_id[fid]=_family_effective_oh(cur,family_children)
+                    family_system_oh_by_id[fid]=_family_system_oh(cur,family_children)
             cur.close()
 
     for row in rows:
@@ -6386,6 +6393,13 @@ def pricing_review(
             family_effective_oh_by_id.get(int(family_id),{})
             if family_id is not None else {}
         )
+        family_system_oh=(
+            family_system_oh_by_id.get(int(family_id),{})
+            if family_id is not None else {}
+        )
+        row["system_oh"]=family_system_oh.get("quantity")
+        row["system_oh_uom"]=family_system_oh.get("uom")
+        row["system_oh_status"]=family_system_oh.get("status")
         if (
             family_effective_oh.get("status")=="READY"
             and family_effective_oh.get("quantity") is not None
@@ -7326,6 +7340,22 @@ def current_tpr_review(
         )
         daily = _batch_daily_sales_by_price_type(cur, tpr_rows, data_days)
 
+        tpr_family_inventory: dict[int,dict[str,Any]] = {}
+        tpr_family_ids=sorted({
+            int(x["family_id"]) for x in tpr_rows
+            if x.get("family_id") is not None
+        })
+        for fid in tpr_family_ids:
+            cur.execute(
+                "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                (fid,),
+            )
+            children=cur.fetchall()
+            tpr_family_inventory[fid]={
+                "system":_family_system_oh(cur,children),
+                "effective":_family_effective_oh(cur,children),
+            }
+
         _ensure_tpr_purpose_table(cur)
         conn.commit()
         cur.execute(
@@ -7349,11 +7379,24 @@ def current_tpr_review(
         pclass = str(row.get("product_class") or "").upper()
         current_price = _positive_price(row.get("current_price"))
         current_cost = _positive_price(row.get("current_cost_per_selling_unit"))
+        family_inv=tpr_family_inventory.get(int(row["family_id"]),{}) if row.get("family_id") is not None else {}
+        family_effective=family_inv.get("effective") or {}
+        family_system=family_inv.get("system") or {}
         current_oh = (
-            _d(row.get("current_oh"))
-            if row.get("current_oh") is not None
-            else None
+            _d(family_effective.get("quantity"))
+            if family_effective.get("status")=="READY" and family_effective.get("quantity") is not None
+            else (
+                _d(row.get("current_oh"))
+                if row.get("current_oh") is not None else None
+            )
         )
+        system_oh = (
+            _d(family_system.get("quantity"))
+            if family_system.get("quantity") is not None else None
+        )
+        current_oh_uom=family_effective.get("uom") or row.get("current_oh_uom")
+        system_oh_uom=family_system.get("uom") or current_oh_uom
+        current_oh_source=family_effective.get("source") or "QUICK_CHECK_CURRENT_PUBLISHED"
         doh = _d(row.get("doh")) if row.get("doh") is not None else None
         dos = _d(row.get("dos")) if row.get("dos") is not None else None
         by_day = daily.get(uid, {})
@@ -7722,7 +7765,7 @@ def current_tpr_review(
                 recommendation_code = "LOWER_TPR_PRICE"
                 recommendation_label = "LOWER TPR"
                 recommendation_reason = (
-                    "Freshness threshold has been reached and stock remains. Use a stronger last-chance sell-through price."
+                    "Freshness threshold has been reached and aging stock remains. Use a stronger last-chance sell-through price for the aging quantity; do not force newer stock to zero."
                 )
                 recommendation_final = True
                 recommendation_priority = 95
@@ -7776,7 +7819,7 @@ def current_tpr_review(
                 recommendation_code = "CONTINUE_TPR"
                 recommendation_label = "CONTINUE"
                 recommendation_reason = (
-                    "Continue the freshness sell-through TPR and reassess after the next completed POS day."
+                    "Continue the freshness sell-through TPR during the threshold-minus-2 through threshold-day window and reassess aging-stock sell-through after the next completed POS day."
                 )
                 recommendation_priority = 35
         else:
@@ -7924,7 +7967,12 @@ def current_tpr_review(
             "cost_date": row.get("cost_date"),
             "current_gp_pct": current_gp_pct,
             "current_oh": current_oh,
-            "current_oh_uom": row.get("current_oh_uom"),
+            "current_oh_uom": current_oh_uom,
+            "current_oh_source": current_oh_source,
+            "system_oh": system_oh,
+            "system_oh_uom": system_oh_uom,
+            "original_regular_price": baseline_avg_price,
+            "original_regular_price_basis": "CLEAN_PRE_TPR_NON_SALE_NON_TPR_AVG_SOLD_PRICE",
             "dos": dos,
             "doh": doh,
             "qty_7d": row.get("pos_qty_7d"),
@@ -8034,7 +8082,7 @@ def current_tpr_review(
     counts = Counter(str(r.get("recommendation_code") or "OBSERVE") for r in out)
     purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
-        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
+        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
         "summary": {
@@ -8053,7 +8101,8 @@ def current_tpr_review(
             "tpr_lifecycle_start": "PRICE_LIST_SOURCE_SINCE_PLUS_CONTINUOUS_TPR_PRICE_LIST_AND_CONTIGUOUS_POS_TPR;NEW_UPLOAD_DOES_NOT_RESET",
             "tpr_purposes": "SWEET_SPOT_TEST_OR_FRESHNESS_SELL_THROUGH",
             "sweet_spot_objective": "FIND_SUSTAINABLE_TPR_PRICE_THAT_CAN_BECOME_NEW_REGULAR_PRICE",
-            "freshness_objective": "CLEAR_EFFECTIVE_OH_BEFORE_FRESHNESS_THRESHOLD_WITH_CONTROLLED_TPR_MARKDOWN",
+            "freshness_objective": "CLEAR_AGING_STOCK_REACHING_FRESHNESS_THRESHOLD_NOT_ALL_NEWER_EFFECTIVE_OH",
+            "fresh_live_tpr_window": "START_THRESHOLD_MINUS_2_DAYS_END_ON_THRESHOLD_DAY;DAY_5_THROUGH_DAY_7_FOR_7_DAY_THRESHOLD",
             "post_tpr_window": "LATEST_3_COMPLETED_CANONICAL_POS_DAYS_SINCE_CONTINUOUS_TPR_START",
             "baseline": "UP_TO_7_CLEAN_PRE_TPR_NON_SALE_NON_TPR_COMPLETED_POS_DAYS",
             "monitoring": "PREVIOUS_BASELINE_PLUS_CURRENT_TPR_PRICE_STEPS_PLUS_FORWARD_7D_AND_FRESHNESS_CLEARANCE_PROJECTION",
@@ -8073,7 +8122,7 @@ _TPR_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V3_CURRENT_TPR_LIFECYCLE|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V4_CURRENT_TPR_AGING_STOCK|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
@@ -8202,7 +8251,7 @@ def cached_current_tpr_review(
             "rows":[],
             "rules":{
                 "serving":"NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH",
-                "calculation":"CURRENT_TPR_REVIEW_V3_LIFECYCLE",
+                "calculation":"CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
             },
         }
 
