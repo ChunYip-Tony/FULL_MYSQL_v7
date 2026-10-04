@@ -915,7 +915,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
       </div>
       <div id="currentTprPane" class="hide">
         <div class="tpr-summary" id="tprSummary"><div><b>—</b><span>CURRENT TPR</span></div><div><b>—</b><span>SWEET TEST</span></div><div><b>—</b><span>FRESHNESS</span></div></div>
-        <div class="tpr-rule"><b>TPR has one purpose:</b> either test a price that may become the new regular sweet spot, or temporarily reduce price to sell through freshness-risk inventory. Yipman monitors before → now → projected behavior and recommends continue, change TPR price, make regular, or cancel.</div>
+        <div class="tpr-rule"><b>TPR has one purpose:</b> either test a price that may become the new regular sweet spot, or temporarily reduce price to clear aging stock by its freshness threshold. Fresh/Live freshness TPR runs Day 5 → Day 7 for a Day-7 threshold; newer stock is not forced to zero. Yipman monitors before → now → projected behavior and recommends continue, change TPR price, make regular, or cancel.</div>
         <div class="filters tprfilters">
           <button class="pill on" data-tpr-filter="ALL">ALL</button>
           <button class="pill" data-tpr-filter="PURPOSE_SWEET">SWEET SPOT</button>
@@ -2367,6 +2367,30 @@ function orderReasonLabel(reason){
  };
  return labels[x]||x.replaceAll('_',' ')||'REVIEW';
 }
+
+const ORDER_IGNORE_KEY='yipman-order-ignore-v448';
+const ORDER_IGNORE_MS=12*60*60*1000;
+let orderIgnoreMemory={};
+function readOrderIgnores(){
+ try{const raw=JSON.parse(localStorage.getItem(ORDER_IGNORE_KEY)||'{}');if(raw&&typeof raw==='object'){orderIgnoreMemory=raw;return raw}}catch{}
+ return orderIgnoreMemory||{};
+}
+function writeOrderIgnores(v){orderIgnoreMemory=v||{};try{localStorage.setItem(ORDER_IGNORE_KEY,JSON.stringify(orderIgnoreMemory))}catch{}}
+function orderIgnoreId(r){return String(orderMode||'REGULAR')+':'+String(r?.family_id??r?.family_article??'').trim()}
+function orderIsIgnored(r){
+ const id=orderIgnoreId(r);if(!id)return false;
+ const map=readOrderIgnores(),ts=Number(map[id]||0);
+ if(!(ts>0))return false;
+ if(Date.now()-ts>=ORDER_IGNORE_MS){delete map[id];writeOrderIgnores(map);return false}
+ return true;
+}
+function ignoreOrderSuggestion(r){
+ const id=orderIgnoreId(r);if(!id)return;
+ const map=readOrderIgnores();map[id]=Date.now();writeOrderIgnores(map);
+ if($('#overlay').classList.contains('on'))closeSheet(true);
+ toast('Ordering suggestion hidden for 12 hours');
+ renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale);
+}
 function renderOrderRoster(rows,data,h,stale){
  lastOrderRows=Array.isArray(rows)?rows:[];
  lastOrderData=data||{};
@@ -2381,6 +2405,8 @@ function renderOrderRoster(rows,data,h,stale){
  };
  $('#orderSummary').textContent='OBSERVED '+counts.total+' · ORDER '+counts.order+' · 0 ORDER '+counts.zero+' · REVIEW '+counts.review;
  let visible=all.filter(r=>orderFilter==='ALL'||orderState(r)===orderFilter);
+ const ignoredOrderCount=visible.filter(r=>orderState(r)!=='ZERO_ORDER'&&orderIsIgnored(r)).length;
+ visible=visible.filter(r=>orderState(r)==='ZERO_ORDER'||!orderIsIgnored(r));
  const dos=r=>{const v=r?.details?.dos;if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
  const obs=r=>Number(r?.delivery_day_observed_count||0);
  const conf=r=>({HIGH:0,MEDIUM:1,LOW:2,NONE:3}[String(r?.delivery_day_confidence||'NONE').toUpperCase()]??3);
@@ -2395,7 +2421,7 @@ function renderOrderRoster(rows,data,h,stale){
  renderedOrderRows=visible;
  $('#orderStatus').innerHTML=stale
   ? '<div class="estimatebar">BEST AVAILABLE · POS '+esc(h?.pos_data_through||'—')+' · MVT '+esc(h?.movement_data_through||'—')+'. Missing source dates are ignored, not zero-filled; missing MVT days are forecast forward.</div>'
-  : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster';
+  : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster'+(ignoredOrderCount?' · '+ignoredOrderCount+' suggestion'+(ignoredOrderCount===1?'':'s')+' ignored <12h':'');
  $('#orderList').classList.add('futurecards');
  $('#orderListHead').style.display='none';
  $('#orderRows').innerHTML=visible.map((r,i)=>{
@@ -2415,9 +2441,11 @@ function renderOrderRoster(rows,data,h,stale){
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
- }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $$('[data-order]').forEach(x=>x.onclick=()=>openOrder(renderedOrderRows[Number(x.dataset.order)]));
+  const snooze=state==='ZERO_ORDER'?'':'<div class="pcard-actions"><button class="pignore snooze12" data-order-ignore="'+i+'">IGNORE 12 HOURS</button></div>';
+  return '<article class="orderitemcard tone'+articleTone(r.family_article||r.family_id)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.oh)+'<span>'+esc(r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+snooze+'</article>';
+ }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.'+(ignoredOrderCount?' '+ignoredOrderCount+' suggestion(s) will return automatically after 12 hours.':'')+'</div>';
+ $('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
+ $('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
@@ -2574,16 +2602,16 @@ function writePriceIgnores(v){
 function priceIgnoreId(r){return String(r?.upc||'').trim()}
 function priceIsIgnored(r){
   const id=priceIgnoreId(r);if(!id)return false;
-  if(priceIgnoredThisVisit.has(id))return true;
   const map=readPriceIgnores(),ts=Number(map[id]||0);
-  return ts>0&&(Date.now()-ts)<PRICE_IGNORE_MS;
+  if(!(ts>0))return false;
+  if(Date.now()-ts>=PRICE_IGNORE_MS){delete map[id];writePriceIgnores(map);return false}
+  return true;
 }
 function ignorePriceSuggestion(r){
   const id=priceIgnoreId(r);if(!id)return;
-  priceIgnoredThisVisit.add(id);
   const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
   if($('#overlay').classList.contains('on'))closeSheet(true);
-  toast('Ignored for 12 hours');
+  toast('Price suggestion hidden for 12 hours');
   loadPrices({quiet:true});
 }
 function priceReasonMeta(r,stale=false){
@@ -2796,6 +2824,22 @@ $('#priceReasonFilter').onchange=e=>{priceReasonFilter=e.target.value;loadPrices
 $('#priceSort').onchange=e=>{priceSort=e.target.value;loadPrices({quiet:true})};
 
 
+
+function tprProgressIgnoreId(r){return 'TPR_PROGRESS:'+String(r?.upc||'').trim()}
+function tprProgressIsIgnored(r){
+ const id=tprProgressIgnoreId(r);if(!id)return false;
+ const map=readPriceIgnores(),ts=Number(map[id]||0);
+ if(!(ts>0))return false;
+ if(Date.now()-ts>=PRICE_IGNORE_MS){delete map[id];writePriceIgnores(map);return false}
+ return true;
+}
+function ignoreTprProgress(r){
+ const id=tprProgressIgnoreId(r);if(!id)return;
+ const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
+ if($('#overlay').classList.contains('on'))closeSheet(true);
+ toast('TPR progress suggestion hidden for 12 hours');
+ renderCurrentTpr();
+}
 function tprRecommendationMeta(r){
  const code=String(r?.recommendation_code||'OBSERVE').toUpperCase();
  if(code==='CONTINUE_TPR')return {label:String(r?.recommendation_label||'CONTINUE'),cls:'continue',group:'CONTINUE'};
@@ -2811,7 +2855,7 @@ function tprLiftText(v){
  return {text:(n>=0?'+':'')+n.toFixed(0)+'%',cls:n>=10?'good':n<=0?'bad':'neutral'};
 }
 function currentTprFilteredRows(){
- let rows=[...(lastTprRows||[])];
+ let rows=[...(lastTprRows||[])].filter(r=>!tprProgressIsIgnored(r));
  rows=rows.filter(r=>{
    const meta=tprRecommendationMeta(r),cat=String(r.category||'').toUpperCase();
    if(tprFilter==='PURPOSE_SWEET')return String(r.tpr_purpose||'').toUpperCase()==='SWEET_SPOT_TEST';
@@ -2857,7 +2901,8 @@ function renderCurrentTpr(){
  const sum=$('#tprSummary');
  if(sum)sum.innerHTML='<div><b>'+fmt(s.current_tpr_count,0)+'</b><span>CURRENT TPR</span></div><div><b>'+fmt(s.sweet_spot_test_count,0)+'</b><span>SWEET TEST</span></div><div><b>'+fmt(s.freshness_sell_through_count,0)+'</b><span>FRESHNESS</span></div>';
  const status=$('#tprStatus');
- if(status)status.textContent=rows.length+' shown · continuous TPR lifecycle · completed POS';
+ const ignoredTpr=(lastTprRows||[]).filter(tprProgressIsIgnored).length;
+ if(status)status.textContent=rows.length+' shown · continuous TPR lifecycle · completed POS'+(ignoredTpr?' · '+ignoredTpr+' ignored <12h':'');
  $('#tprRows').innerHTML=rows.map((r,i)=>{
    const meta=tprRecommendationMeta(r),purpose=tprPurposeMeta(r),lift=tprLiftText(r.velocity_lift_pct),gpLift=tprLiftText(r.gp_day_lift_pct),future=tprFutureHeadline(r);
    const gp=num(r.current_gp_pct),post=num(r.post_tpr_supported_day_count),base=num(r.baseline_day_count);
@@ -2868,6 +2913,11 @@ function renderCurrentTpr(){
    const suggestion=r.suggested_regular_price!=null
      ?'<div class="tprsuggest"><span>SUGGESTED NEW REGULAR PRICE</span><b>'+money(r.suggested_regular_price)+'</b></div>'
      :(r.suggested_tpr_price!=null?'<div class="tprsuggest"><span>SUGGESTED TPR PRICE</span><b>'+money(r.suggested_tpr_price)+'</b></div>':'');
+   const cancelCode=['CANCEL_TPR','END_TPR'].includes(String(r.recommendation_code||'').toUpperCase());
+   const originalReg=num(r.original_regular_price??r.baseline_avg_price);
+   const newReg=num(r.suggested_regular_price);
+   const cancelChoices=cancelCode?'<div class="tprcancelchoices"><div class="tprcancelchoice"><small>CANCEL → RESTORE ORIGINAL REG</small><b>'+money(originalReg)+'</b></div><div class="tprcancelchoice"><small>CANCEL → NEW REG</small><b>'+(newReg===null?'REVIEW':money(newReg))+'</b></div></div>':'';
+   const freshWindow=purpose.fresh?'<div class="freshwindow"><b>FRESHNESS TPR WINDOW:</b> starts 2 days before the freshness threshold and ends on the threshold day. For Fresh/Live Day 7, use Day 5 → Day 7 to clear the aging stock that reaches Day 7; newer stock does not need to be forced to zero.</div>':'';
    return '<article class="pcard tprcard tone'+(i%5)+'" data-tpr-row="'+i+'">'+
      '<div class="ptop"><div class="pidentity"><div class="pupc"><span>UPC#</span><strong>'+esc(r.upc||'—')+'</strong></div><b>'+esc(r.name||r.upc||'Item')+'</b><small>Family '+esc(r.family_article_number||'—')+' · '+esc(r.category||'')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
      '<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>START '+esc(shortDate(r.tpr_start_date))+(String(r.tpr_purpose_source||'').startsWith('USER')?' · USER SET':'')+'</span></div>'+
@@ -2876,7 +2926,7 @@ function renderCurrentTpr(){
        '<div class="pp current"><small>CURRENT TPR</small><b>'+money(r.current_tpr_price)+'</b><span>'+esc(gpText(r.current_tpr_price,r.current_cost))+'</span></div>'+
        '<div class="pp tested"><small>CURRENT COST</small><b>'+money(r.current_cost)+'</b><span>'+esc(r.selling_uom||'unit')+'</span></div>'+
        '<div class="pp testing"><small>3D TPR QTY</small><b>'+fmt(r.tpr_qty_3d)+'</b><span>'+fmt(r.tpr_velocity_3d)+'/day</span></div>'+
-     '</div>'+pair+suggestion+
+     '</div>'+pair+suggestion+cancelChoices+freshWindow+
      '<div class="tprmonitor">'+
        '<div><small>BEFORE TPR</small><b>'+fmt(prev.velocity)+'/day</b><span>GP$/d '+money(prev.gp_per_day_current_cost)+'</span></div>'+
        '<div><small>NOW</small><b>'+fmt(now.velocity)+'/day</b><span>GP$/d '+money(now.gp_per_day)+'</span></div>'+
@@ -2890,12 +2940,13 @@ function renderCurrentTpr(){
      '</div>'+
      '<div class="pcost"><span>GP% · DOH / DOS</span><b>'+((gp===null)?'—':(gp*100).toFixed(1)+'%')+' · '+fmt(r.doh)+' / '+fmt(r.dos)+'</b></div>'+
      '<div class="tprwindow">Continuous TPR since '+esc(shortDate(r.tpr_start_date))+' · current price step '+esc(shortDate(r.current_tpr_price_step_start_date))+' · evidence '+fmt(post,0)+' day'+(post===1?'':'s')+' · clean baseline '+fmt(base,0)+' day'+(base===1?'':'s')+'</div>'+
-     '<div class="pcard-actions"><button class="pdetail" data-tpr-detail="'+i+'">DETAIL</button><button class="pdetail" data-tpr-action="'+i+'">'+esc(meta.label)+'</button></div>'+
+     '<div class="pcard-actions"><button class="pdetail" data-tpr-detail="'+i+'">DETAIL</button><button class="pdetail" data-tpr-action="'+i+'">'+esc(meta.label)+'</button><button class="pignore snooze12" data-tpr-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
    '</article>';
  }).join('')||'<div class="empty">No current TPR item matches this filter.</div>';
  $$('[data-tpr-row]').forEach(x=>x.onclick=e=>{if(e.target.closest('button,details,summary'))return;openCurrentTpr(rows[Number(x.dataset.tprRow)])});
  $$('[data-tpr-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprDetail)])});
- $$('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
+ $('[data-tpr-action]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCurrentTpr(rows[Number(b.dataset.tprAction)])});
+ $('[data-tpr-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreTprProgress(rows[Number(b.dataset.tprIgnore)])});
 }
 async function setTprPurpose(r,purpose){
  if(!r?.upc||!r?.tpr_start_date){toast('TPR start date unavailable');return}
@@ -2916,8 +2967,11 @@ function openCurrentTpr(r){
  const actionPrice=r.suggested_regular_price!=null
    ?'<br><b>Suggested new REG</b> '+money(r.suggested_regular_price)
    :(r.suggested_tpr_price!=null?'<br><b>Suggested TPR</b> '+money(r.suggested_tpr_price):'');
+ const cancelCode=['CANCEL_TPR','END_TPR'].includes(String(r.recommendation_code||'').toUpperCase());
+ const originalReg=num(r.original_regular_price??r.baseline_avg_price),newReg=num(r.suggested_regular_price);
+ const cancelAction=cancelCode?'<br><br><b>After cancelling TPR</b><br>Option A · restore original REG '+money(originalReg)+'<br>Option B · cancel and set a new REG '+(newReg===null?'after REG review':money(newReg)):'';
  const freshness=purpose.fresh
-   ?'<br><br><b>Freshness projection</b><br>Time remaining '+fmt(future.freshness_days_remaining)+' day(s) · required '+fmt(future.required_velocity_to_clear)+'/day · projected clear '+fmt(future.projected_days_to_clear_oh)+' day(s) · projected OH at limit '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.current_oh_uom||'')
+   ?'<br><br><b>Freshness sell-through window</b><br>Start 2 days before threshold → end on threshold day. Fresh/Live: Day 5 → Day 7. The objective is to clear the aging stock reaching Day 7, not every newer unit in Effective OH.<br>Current projection: time remaining '+fmt(future.freshness_days_remaining)+' day(s) · required pace '+fmt(future.required_velocity_to_clear)+'/day · projected old/at-risk stock remaining at limit '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.current_oh_uom||'')
    :'';
  sheet(r.name||r.upc,r.upc||'Current TPR review',
    '<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>SINCE '+esc(shortDate(r.tpr_start_date))+'</span></div>'+
@@ -2927,11 +2981,13 @@ function openCurrentTpr(r){
    '<br><br><b>Continuous TPR lifecycle</b><br>Started '+esc(r.tpr_start_date||'—')+' · basis '+esc(r.tpr_start_basis||'—')+'<br>Current price step since '+esc(r.current_tpr_price_step_start_date||'—')+
    '<br><br><b>Current response vs clean pre-TPR baseline</b><br>TPR velocity '+fmt(r.tpr_velocity_3d)+'/day · baseline '+fmt(r.baseline_velocity)+'/day · lift '+esc(lift.text)+
    '<br>TPR GP$/day '+money(r.tpr_gp_per_day_3d)+' · baseline normalized GP$/day '+money(r.baseline_gp_per_day_current_cost)+' · lift '+esc(gpLift.text)+
-   '<br><br><b>Inventory</b><br>OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
+   cancelAction+'<br><br><b>Inventory</b><br>Effective OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
    '<br><br><b>Observed TPR price behavior</b>'+tprPriceStepsHtml(r)+
    '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether current velocity will clear effective OH before the freshness threshold.</div>'
  );
- $$('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
+ $('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
+ const act=$('#sheetBody .actions');if(act)act.insertAdjacentHTML('beforeend','<button class="secondary snooze12" id="tprProgressIgnore12h">IGNORE 12 HOURS</button>');
+ const ign=$('#tprProgressIgnore12h');if(ign)ign.onclick=()=>ignoreTprProgress(r);
 }
 async function loadCurrentTpr(opts={}){
  const requestId=++tprRequestSeq;
