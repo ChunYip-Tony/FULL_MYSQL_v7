@@ -1171,6 +1171,14 @@ jobs:
           assert "active['active_file_name']" in api
           assert 'CURRENT PROCESSING FILE' in yipman
           assert 'b.active_file_name' in yipman
+          assert "elif str(active.get('processing_status') or '').upper()=='PHASE2C_READY'" in api
+          assert "active=None" in api
+          assert 'id="dataUploadFiles"' in yipman
+          assert 'id="dataUploadBtn"' in yipman
+          assert 'function uploadDataFiles' in yipman
+          assert "new FormData()" in yipman
+          assert "/v1/web-upload/batches/'" in yipman
+          assert "'/commit'" in yipman
           assert 'function stockFlowCacheNotice' in yipman
           assert "'STALE CACHE'" in yipman
           assert 'cached.saved_at' in yipman
