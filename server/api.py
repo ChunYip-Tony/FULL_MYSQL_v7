@@ -29,7 +29,7 @@ from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from backoffice_ui import backoffice_html
-from yipman_ui import yipman_html, yipman_manifest, yipman_service_worker, yipman_icon_svg, yipman_v1_html, yipman_v1_manifest, yipman_v1_service_worker
+from yipman_ui import yipman_html, yipman_manifest, yipman_service_worker, yipman_icon_svg, yipman_v1_html, yipman_v1_manifest, yipman_v1_service_worker, yipman_v1_install_html, yipman_v1_exit_html
 from backoffice_runtime import (
     inventory_review as backoffice_inventory_review,
     ordering_review as backoffice_ordering_review,
@@ -382,6 +382,36 @@ def yipman_v1_web_app():
             'Expires':'0',
             'X-FULLMYSQL-Version':VERSION,
             'X-Yipman-Mobile':'V1',
+        },
+    )
+
+
+@app.get('/app/yipman-v1/install',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/yipman-v1/install/',response_class=HTMLResponse,include_in_schema=False)
+def yipman_v1_install_page():
+    return HTMLResponse(
+        yipman_v1_install_html(VERSION),
+        headers={
+            'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma':'no-cache',
+            'Expires':'0',
+            'X-FULLMYSQL-Version':VERSION,
+            'X-Yipman-Mobile':'V1-INSTALL',
+        },
+    )
+
+
+@app.get('/app/yipman-v1/exit',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/yipman-v1/exit/',response_class=HTMLResponse,include_in_schema=False)
+def yipman_v1_exit_page():
+    return HTMLResponse(
+        yipman_v1_exit_html(VERSION),
+        headers={
+            'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma':'no-cache',
+            'Expires':'0',
+            'X-FULLMYSQL-Version':VERSION,
+            'X-Yipman-Mobile':'V1-EXIT',
         },
     )
 
