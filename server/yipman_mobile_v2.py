@@ -106,7 +106,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   const V={
     page:'lookup', actionFilter:'all', orderMode:'regular', actions:[], orderRows:[],
     delivery:null,nextDelivery:null, orderCalendar:null, performanceEnd:null,
-    promoListId:null,promoSelected:new Map(), promoSearchRows:[], dataThrough:null
+    promoListId:null,promoListDetail:null,promoSelected:new Map(),promoSearchRows:[],stockContext:null,dataThrough:null
   };
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
@@ -175,6 +175,29 @@ YIPMAN_MOBILE_V2_JS = r"""
   };
   root.addEventListener('pointerup',navDispatch,true);
   root.addEventListener('click',navDispatch,true);
+
+  let lastControlPointerAt=0,promoSearchTimer=null;
+  const controlDispatch=e=>{
+    const target=e.target;
+    const actionable=target.closest?.('[data-stock-family],#yv2AddPromo,[data-promo-result],[data-promo-remove],[data-promo-remove-item],#yv2PromoCancel,#yv2PromoSave,#yv2StockCancel,#yv2StockSave,#yv2ModalClose');
+    if(!actionable||!root.contains(actionable))return false;
+    if(e.type==='click'&&Date.now()-lastControlPointerAt<650){e.preventDefault();return true}
+    if(e.type==='pointerup')lastControlPointerAt=Date.now();
+    e.preventDefault();e.stopPropagation();
+    if(actionable.matches('[data-stock-family]')){openTrueStock({family:actionable.dataset.stockFamily,name:actionable.dataset.stockName,oh:actionable.dataset.stockOh,uom:actionable.dataset.stockUom});return true}
+    if(actionable.id==='yv2AddPromo'){openPromoBuilder();return true}
+    if(actionable.matches('[data-promo-result]')){selectPromo(V.promoSearchRows[Number(actionable.dataset.promoResult)]);return true}
+    if(actionable.matches('[data-promo-remove]')){V.promoSelected.delete(actionable.dataset.promoRemove);renderPromoSelected();toast('Promotion item removed');return true}
+    if(actionable.matches('[data-promo-remove-item]')){removePersistedPromoItem(actionable.dataset.promoRemoveItem,actionable);return true}
+    if(actionable.id==='yv2PromoCancel'||actionable.id==='yv2StockCancel'||actionable.id==='yv2ModalClose'){V.stockContext=null;closeModal();return true}
+    if(actionable.id==='yv2PromoSave'){savePromo();return true}
+    if(actionable.id==='yv2StockSave'){saveTrueStock();return true}
+    return false;
+  };
+  root.addEventListener('pointerup',controlDispatch,true);
+  root.addEventListener('click',controlDispatch,true);
+  root.addEventListener('submit',e=>{if(e.target?.id==='yv2PromoSearchForm'){e.preventDefault();runPromoSearch()}});
+  root.addEventListener('input',e=>{if(e.target?.id==='yv2PromoSearch'){clearTimeout(promoSearchTimer);const q=e.target.value.trim();if(q.length>=2)promoSearchTimer=setTimeout(runPromoSearch,350)}});
 
   async function loadHealth(){
     const box=$('#yv2Health');
@@ -259,7 +282,7 @@ YIPMAN_MOBILE_V2_JS = r"""
     }catch(e){modal('<h3>Unable to load</h3><p>'+esc(e.message)+'</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>');$('#yv2ModalClose').onclick=closeModal}
   }
 
-  function bindStockButtons(ctx=root){ctx.querySelectorAll('[data-stock-family]').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openTrueStock({family:b.dataset.stockFamily,name:b.dataset.stockName,oh:b.dataset.stockOh,uom:b.dataset.stockUom})})}
+  function bindStockButtons(ctx=root){return ctx}
   async function openTrueStock(d){
     if(!d.family)return toast('Family Article unavailable');
     let qty=d.oh,uom=d.uom;
@@ -268,14 +291,24 @@ YIPMAN_MOBILE_V2_JS = r"""
       const pi=await api('/v1/app/v2/pi/'+encodeURIComponent(d.family),{timeoutMs:10000}),eff=pi?.effective_oh||{},sys=pi?.system_oh||{};
       qty=eff.quantity??qty;uom=pi?.required_true_stock_uom||eff.uom||sys.uom||uom;
       if(!uom)throw new Error('True Stock UOM unavailable');
-      modal(`<h3>True Stock · ${esc(d.name||d.family)}</h3><p>Family ${esc(d.family)} · Current Effective OH ${fmt(qty)} ${esc(uom)}. Saving becomes immediate OH authority for all mobile calculations.</p><input class="yv2-input" id="yv2StockQty" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(qty??'')}"><input class="yv2-input" id="yv2StockNote" style="font-size:14px" placeholder="Physical count note (optional)"><div class="yv2-btnrow"><button class="yv2-btn" id="yv2StockCancel">Cancel</button><button class="yv2-btn primary" id="yv2StockSave">Save & Recalculate</button></div>`);
-      $('#yv2StockCancel').onclick=closeModal;$('#yv2StockSave').onclick=async()=>{
-        const n=Number($('#yv2StockQty').value);if(!Number.isFinite(n)||n<0)return toast('Enter valid True Stock');
-        const btn=$('#yv2StockSave');btn.disabled=true;btn.textContent='Saving…';
-        try{await api('/v1/app/v2/pi/'+encodeURIComponent(d.family)+'/true-stock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:n,uom,note:$('#yv2StockNote').value.trim()||null}),timeoutMs:30000});closeModal();toast('True Stock saved · recalculating');V.actionsLoaded=false;V.orderLoaded=false;if(V.page==='lookup'&&$('#yv2Search').value.trim())searchLookup($('#yv2Search').value.trim());if(V.page==='order')initOrder(true)}catch(e){toast(e.message);btn.disabled=false;btn.textContent='Save & Recalculate'}
-      };
+      V.stockContext={family:String(d.family),name:d.name||d.family,uom:String(uom)};
+      modal(`<h3>True Stock · ${esc(d.name||d.family)}</h3><p>Family ${esc(d.family)} · Current Effective OH ${fmt(qty)} ${esc(uom)}. Saving becomes immediate OH authority for every OH-dependent page.</p><input class="yv2-input" id="yv2StockQty" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(qty??'')}"><input class="yv2-input" id="yv2StockNote" style="font-size:14px" placeholder="Physical count note (optional)"><div class="yv2-btnrow"><button class="yv2-btn" id="yv2StockCancel">Cancel</button><button class="yv2-btn primary" id="yv2StockSave">Save & Recalculate</button></div>`);
       setTimeout(()=>$('#yv2StockQty')?.select(),60);
-    }catch(e){modal('<h3>True Stock unavailable</h3><p>'+esc(e.message)+'</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>');$('#yv2ModalClose').onclick=closeModal}
+    }catch(e){V.stockContext=null;modal('<h3>True Stock unavailable</h3><p>'+esc(e.message)+'</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>')}
+  }
+  async function saveTrueStock(){
+    const d=V.stockContext,qtyEl=$('#yv2StockQty');if(!d||!qtyEl)return;
+    const n=Number(qtyEl.value);if(!Number.isFinite(n)||n<0)return toast('Enter valid True Stock');
+    const btn=$('#yv2StockSave');if(btn){btn.disabled=true;btn.textContent='Saving…'}
+    try{
+      await api('/v1/app/v2/pi/'+encodeURIComponent(d.family)+'/true-stock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:n,uom:d.uom,note:$('#yv2StockNote')?.value?.trim()||null}),timeoutMs:30000});
+      V.stockContext=null;closeModal();toast('True Stock saved · recalculating');
+      V.actionsLoaded=false;V.orderLoaded=false;
+      if(V.page==='lookup'&&$('#yv2Search')?.value?.trim())await searchLookup($('#yv2Search').value.trim());
+      else if(V.page==='actions')await loadActions();
+      else if(V.page==='order'&&V.orderMode==='promotion')await calcPromotion();
+      else if(V.page==='order')await loadRegularOrder();
+    }catch(e){toast(e.message||'Could not save True Stock');if(btn){btn.disabled=false;btn.textContent='Save & Recalculate'}}
   }
 
   const ignored=id=>{const t=Number(localStorage.getItem('yv2-ignore-'+id)||0);return t>Date.now()};
@@ -298,19 +331,20 @@ YIPMAN_MOBILE_V2_JS = r"""
       ]);
       for(const r of p.rows||[]){
         const prefix=String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3);
-        if(r.priority_240_249_mismatch)addAction({id:'pair-'+r.upc,type:'price',tone:'red',badge:'240≠249',name:r.name||r.upc,reason:'249 '+money(r.current_price)+' must match 240 '+money(r.related_240_current_price)+'.',upc:r.upc,rank:100});
-        else if(r.reg_suggestion_actionable)addAction({id:'reg-'+r.upc,type:'price',tone:'blue',badge:'REG',name:r.name||r.upc,reason:'Current '+money(r.current_price)+' · proved sweet spot '+money(r.reg_suggestion_price??r.tested_price)+'. '+(r.reg_suggestion_reason||r.primary_reason_text||''),upc:r.upc,rank:55});
-        else if(r.tpr_suggestion_actionable)addAction({id:'tpr-'+r.upc,type:(String(r.tpr_suggestion_purpose||'').includes('FRESH')?'freshness':'price'),tone:'purple',badge:'TPR',name:r.name||r.upc,reason:'TPR suggestion '+money(r.tpr_suggestion_price??r.testing_price)+' · '+(r.tpr_suggestion_reason||r.primary_reason_text||''),upc:r.upc,rank:50});
+        const stock={family:r.family_article_number,name:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.selling_uom};
+        if(r.priority_240_249_mismatch)addAction({id:'pair-'+r.upc,type:'price',tone:'red',badge:'240≠249',name:r.name||r.upc,reason:'249 '+money(r.current_price)+' must match 240 '+money(r.related_240_current_price)+'.',upc:r.upc,...stock,rank:100});
+        else if(r.reg_suggestion_actionable)addAction({id:'reg-'+r.upc,type:'price',tone:'blue',badge:'REG',name:r.name||r.upc,reason:'Current '+money(r.current_price)+' · proved sweet spot '+money(r.reg_suggestion_price??r.tested_price)+'. '+(r.reg_suggestion_reason||r.primary_reason_text||''),upc:r.upc,...stock,rank:55});
+        else if(r.tpr_suggestion_actionable)addAction({id:'tpr-'+r.upc,type:(String(r.tpr_suggestion_purpose||'').includes('FRESH')?'freshness':'price'),tone:'purple',badge:'TPR',name:r.name||r.upc,reason:'TPR suggestion '+money(r.tpr_suggestion_price??r.testing_price)+' · '+(r.tpr_suggestion_reason||r.primary_reason_text||''),upc:r.upc,...stock,rank:50});
       }
       for(const r of t.rows||[]){
         const code=String(r.recommendation_code||'CONTINUE_TPR').toUpperCase();
         const fresh=String(r.tpr_purpose||r.tpr_purpose_source||'').toUpperCase().includes('FRESH')||num(r.doh)>=5;
-        if(code!=='CONTINUE_TPR'||fresh)addAction({id:'progress-'+r.upc,type:fresh?'freshness':'price',tone:fresh?'red':'purple',badge:code==='CONTINUE_TPR'?'TPR CHECK':code.replaceAll('_',' '),name:r.name||r.upc,reason:(r.recommendation_reason||'Review current TPR performance')+' · current '+money(r.current_tpr_price)+(r.suggested_tpr_price!=null?' → '+money(r.suggested_tpr_price):''),upc:r.upc,rank:fresh?90:65});
+        if(code!=='CONTINUE_TPR'||fresh)addAction({id:'progress-'+r.upc,type:fresh?'freshness':'price',tone:fresh?'red':'purple',badge:code==='CONTINUE_TPR'?'TPR CHECK':code.replaceAll('_',' '),name:r.name||r.upc,reason:(r.recommendation_reason||'Review current TPR performance')+' · current '+money(r.current_tpr_price)+(r.suggested_tpr_price!=null?' → '+money(r.suggested_tpr_price):''),upc:r.upc,family:r.family_article_number,nameStock:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.selling_uom,rank:fresh?90:65});
       }
-      for(const r of c.rows||[])addAction({id:'clear-'+(r.clearance_plan_id||r.upc),type:'freshness',tone:'red',badge:'CLEARANCE',name:r.name||r.upc||'Clearance',reason:'Active clearance · '+(r.reason||r.clearance_reason||'sell through before freshness/expiry threshold'),upc:r.upc,rank:95});
+      for(const r of c.rows||[])addAction({id:'clear-'+(r.clearance_plan_id||r.upc),type:'freshness',tone:'red',badge:'CLEARANCE',name:r.name||r.upc||'Clearance',reason:'Active clearance · '+(r.reason||r.clearance_reason||'sell through before freshness/expiry threshold'),upc:r.upc,family:r.family_article_number||r.family_article,nameStock:r.family_name||r.name,oh:r.current_oh??r.effective_oh,uom:r.current_oh_uom||r.effective_oh_uom||r.selling_uom,rank:95});
       for(const r of o.rows||[]){
         const q=num(r.suggested_delivery_qty),state=String(r.roster_status||'').toUpperCase();
-        if(r.pre_delivery_stockout_risk||r.attention||state==='REVIEW'||q>0)addAction({id:'order-'+(r.family_article||r.family_id),type:'order',tone:r.pre_delivery_stockout_risk?'red':'green',badge:r.pre_delivery_stockout_risk?'STOCKOUT':'ORDER',name:r.family_name||r.family_article,reason:(q===null?'Review order':('Suggested '+fmt(q)+' '+esc(r.suggested_delivery_uom||'')))+' · Effective OH '+fmt(r.effective_oh??r.oh)+' '+esc(r.effective_oh_uom||r.oh_uom||'')+(r.freshness_adjustment_applied?' · freshness adjusted':''),family:r.family_article,rank:r.pre_delivery_stockout_risk?85:40});
+        if(r.pre_delivery_stockout_risk||r.attention||state==='REVIEW'||q>0)addAction({id:'order-'+(r.family_article||r.family_id),type:'order',tone:r.pre_delivery_stockout_risk?'red':'green',badge:r.pre_delivery_stockout_risk?'STOCKOUT':'ORDER',name:r.family_name||r.family_article,reason:(q===null?'Review order':('Suggested '+fmt(q)+' '+esc(r.suggested_delivery_uom||'')))+(r.freshness_adjustment_applied?' · freshness adjusted':''),family:r.family_article,nameStock:r.family_name,oh:r.effective_oh??r.oh,uom:r.effective_oh_uom||r.oh_uom||'',rank:r.pre_delivery_stockout_risk?85:40});
       }
       V.actions.sort((a,b)=>b.rank-a.rank);renderActions();
     }catch(e){$('#yv2Actions').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
@@ -319,7 +353,7 @@ YIPMAN_MOBILE_V2_JS = r"""
     const filtered=V.actions.filter(a=>V.actionFilter==='all'||a.type===V.actionFilter);
     const rows=filtered.slice(0,40);
     $('#yv2ActionCount').textContent=filtered.length>40?('Top 40 · '+filtered.length+' total'):(filtered.length+' need attention');
-    $('#yv2Actions').innerHTML=rows.map((a,i)=>`<article class="yv2-card yv2-action ${esc(a.tone)}"><div class="yv2-topline"><div><div class="yv2-actiontype">${esc(a.type)}</div><div class="yv2-actionname">${esc(a.name)}</div></div><span class="yv2-badge ${esc(a.tone)}">${esc(a.badge)}</span></div><div class="yv2-reason">${a.reason}</div><div class="yv2-btnrow"><button class="yv2-btn primary" data-act-open="${i}">Review</button><button class="yv2-btn ignore" data-act-ignore="${i}">Ignore 12H</button></div></article>`).join('')||'<div class="yv2-empty">No actions in this filter.</div>';
+    $('#yv2Actions').innerHTML=rows.map((a,i)=>`<article class="yv2-card yv2-action ${esc(a.tone)}"><div class="yv2-topline"><div><div class="yv2-actiontype">${esc(a.type)}</div><div class="yv2-actionname">${esc(a.name)}</div></div><span class="yv2-badge ${esc(a.tone)}">${esc(a.badge)}</span></div><div class="yv2-reason">${a.reason}</div>${a.family?`<button class="yv2-metric edit" style="width:100%;margin-top:9px" data-stock-family="${esc(a.family)}" data-stock-name="${esc(a.nameStock||a.name)}" data-stock-oh="${esc(a.oh??'')}" data-stock-uom="${esc(a.uom||'')}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(a.oh)} ${esc(a.uom||'')}</div></button>`:''}<div class="yv2-btnrow"><button class="yv2-btn primary" data-act-open="${i}">Review</button><button class="yv2-btn ignore" data-act-ignore="${i}">Ignore 12H</button></div></article>`).join('')||'<div class="yv2-empty">No actions in this filter.</div>';
     $$('[data-act-open]').forEach(b=>b.onclick=()=>{const a=rows[Number(b.dataset.actOpen)];if(a.upc){go('lookup');$('#yv2Search').value=a.upc;searchLookup(a.upc)}else if(a.type==='order')go('order')});
     $$('[data-act-ignore]').forEach(b=>b.onclick=()=>ignore(rows[Number(b.dataset.actIgnore)].id));
   }
@@ -348,41 +382,66 @@ YIPMAN_MOBILE_V2_JS = r"""
   $('#yv2NextDelivery').onchange=e=>{V.nextDelivery=e.target.value;V.orderMode==='promotion'?loadPromotion():loadRegularOrder()};
   $$('[data-om]').forEach(b=>b.onclick=()=>{V.orderMode=b.dataset.om;$$('[data-om]').forEach(x=>x.classList.toggle('on',x===b));V.orderMode==='promotion'?loadPromotion():loadRegularOrder()});
 
+  async function loadPromoDetail(){
+    if(!V.promoListId){V.promoListDetail=null;return null}
+    const d=await api('/v1/yipman/promotion-lists/'+encodeURIComponent(V.promoListId),{timeoutMs:12000});
+    V.promoListDetail=d;return d;
+  }
   async function loadPromotion(){
     $('#yv2OrderRows').innerHTML='<div class="yv2-loading">Loading promotion lists…</div>';
     try{
       const d=await api('/v1/yipman/promotion-lists?limit=30',{timeoutMs:12000}),rows=d.rows||[];
       if(!V.promoListId&&rows.length)V.promoListId=rows[0].list_id;
-      $('#yv2OrderRows').innerHTML=`<div class="yv2-card"><div class="yv2-topline"><div><div class="yv2-familyname">Promotion Ordering</div><div class="yv2-meta">Existing lists or manual searchable entry</div></div><button class="yv2-btn primary" id="yv2AddPromo" style="flex:0 0 auto">+ Add</button></div><select class="yv2-select" id="yv2PromoList"><option value="">Choose promotion list…</option>${rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready</option>').join('')}</select><div id="yv2PromoCalc" style="margin-top:9px"></div></div>`;
-      $('#yv2PromoList').value=String(V.promoListId||'');$('#yv2PromoList').onchange=e=>{V.promoListId=e.target.value;calcPromotion()};$('#yv2AddPromo').onclick=openPromoBuilder;
-      if(V.promoListId)calcPromotion();else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">Create or choose a promotion list.</div>';
+      $('#yv2OrderRows').innerHTML=`<div class="yv2-card"><div class="yv2-topline"><div><div class="yv2-familyname">Promotion Ordering</div><div class="yv2-meta">Search and add multiple items · manual items can be removed</div></div><button class="yv2-btn primary" id="yv2AddPromo" style="flex:0 0 auto">+ Add Items</button></div><select class="yv2-select" id="yv2PromoList"><option value="">Choose promotion list…</option>${rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready</option>').join('')}</select><div id="yv2PromoCalc" style="margin-top:9px"></div></div>`;
+      $('#yv2PromoList').value=String(V.promoListId||'');
+      $('#yv2PromoList').addEventListener('change',async e=>{V.promoListId=e.target.value?Number(e.target.value):null;V.promoListDetail=null;if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">Create or choose a promotion list.</div>'});
+      if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">Create or choose a promotion list.</div>';
     }catch(e){$('#yv2OrderRows').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
   async function calcPromotion(){
     const box=$('#yv2PromoCalc');if(!box||!V.promoListId)return;box.innerHTML='<div class="yv2-loading">Calculating promotion order…</div>';
     try{
+      const detail=V.promoListDetail||await loadPromoDetail();
       const d=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_id:Number(V.promoListId),delivery_date:V.delivery,next_delivery_date:V.nextDelivery,temporary_oh_overrides:[]}),timeoutMs:45000});
-      box.innerHTML=(d.rows||[]).map(r=>`<div class="yv2-card" style="margin-bottom:8px"><div class="yv2-topline"><div><div class="yv2-actionname">${esc(r.name||r.description||r.upc||'Promotion item')}</div><div class="yv2-meta">UPC ${esc(r.upc||'—')} · Family ${esc(r.family_article_number||r.family_article||'—')}</div></div><span class="yv2-badge ${r.freshness_adjustment_applied?'amber':'green'}">${r.freshness_adjustment_applied?'FRESHNESS':'PROMO'}</span></div><div class="yv2-grid2"><div class="yv2-metric"><div class="yv2-label">Effective OH</div><div class="yv2-value">${fmt(r.effective_oh??r.current_oh)} ${esc(r.oh_uom||r.selling_uom||'')}</div></div><div class="yv2-metric"><div class="yv2-label">Promo price</div><div class="yv2-value">${money(r.promotion_price)}</div></div></div><div class="yv2-orderqty"><div class="yv2-label">Suggested promo order</div><b>${fmt(r.suggested_delivery_qty??r.suggested_order_qty)} ${esc(r.suggested_delivery_uom||r.selling_uom||'')}</b></div></div>`).join('')||'<div class="yv2-empty">No calculated promotion rows.</div>';
+      const manual=Boolean(detail?.manual_item_removal_allowed)||String(detail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
+      const review=(detail?.items||[]).filter(x=>x.mapping_status!=='READY');
+      const reviewHtml=review.map(x=>`<div class="yv2-selected"><button type="button" data-promo-remove-item="${esc(x.item_id||'')}">Remove</button><b>${esc(x.raw_description||x.raw_item_code||'Promotion item')}</b><div class="yv2-meta">${esc(x.mapping_status||'REVIEW')} · ${esc(x.validation_error||'Needs mapping review')}</div></div>`).join('');
+      const rowsHtml=(d.rows||[]).map(r=>{
+        const p=r.promotion_list_item||{},family=r.family_article_number||r.family_article||p.family_article_number||'',name=r.family_article_name||p.family_name||r.name||r.description||r.upc||'Promotion item';
+        const oh=r.current_effective_oh??r.effective_oh_raw??r.effective_oh??r.current_oh,uom=r.current_effective_oh_uom||r.effective_oh_uom||r.oh_uom||r.uom||r.selling_uom||'';
+        const remove=manual&&p.item_id?`<button class="yv2-btn ignore" type="button" data-promo-remove-item="${esc(p.item_id)}">Remove from promotion</button>`:'';
+        return `<div class="yv2-card" style="margin-bottom:8px"><div class="yv2-topline"><div><div class="yv2-actionname">${esc(name)}</div><div class="yv2-meta">UPC ${esc(r.upc||p.upc||p.raw_item_code||'—')} · Family ${esc(family||'—')}</div></div><span class="yv2-badge ${r.freshness_adjustment_applied?'amber':'green'}">${r.freshness_adjustment_applied?'FRESHNESS':'PROMO'}</span></div><div class="yv2-grid2"><button class="yv2-metric edit" data-stock-family="${esc(family)}" data-stock-name="${esc(name)}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button><div class="yv2-metric"><div class="yv2-label">Promo price</div><div class="yv2-value">${money(p.promotion_price??r.promotion_price)}</div></div></div><div class="yv2-orderqty"><div class="yv2-label">Suggested promo order</div><b>${fmt(r.suggested_order_qty??r.suggested_delivery_qty)} ${esc(r.suggested_order_uom||r.suggested_delivery_uom||r.uom||r.selling_uom||'')}</b></div>${remove?'<div class="yv2-btnrow">'+remove+'</div>':''}</div>`;
+      }).join('');
+      box.innerHTML=(manual&&reviewHtml?'<div class="yv2-meta" style="margin:5px 0 7px"><b>Manual promotion items needing review</b></div>'+reviewHtml:'')+rowsHtml||'<div class="yv2-empty">No calculable promotion items.</div>';
     }catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
+  }
+  async function removePersistedPromoItem(itemId,btn){
+    const id=Number(itemId);if(!V.promoListId||!Number.isFinite(id))return toast('Promotion item unavailable');
+    if(btn){btn.disabled=true;btn.textContent='Removing…'}
+    try{
+      V.promoListDetail=await api('/v1/yipman/promotion-lists/'+encodeURIComponent(V.promoListId)+'/items/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:12000});
+      toast('Promotion item removed');
+      await loadPromotion();
+    }catch(e){toast(e.message||'Could not remove promotion item');if(btn){btn.disabled=false;btn.textContent='Remove from promotion'}}
   }
   function openPromoBuilder(){
     V.promoSelected=new Map();
-    modal(`<h3>Manual Promotion</h3><p>Search one or multiple items, remove any selection, then save one promotion list.</p><div class="yv2-promosearch"><input id="yv2PromoSearch" placeholder="Search UPC / article / item"><button class="yv2-btn primary" id="yv2PromoSearchBtn" style="flex:0 0 auto">Search</button></div><div id="yv2PromoResults"></div><div id="yv2PromoSelected"></div><div class="yv2-formgrid"><label>START<input type="date" id="yv2PromoStart" value="${esc(V.delivery||iso(new Date()))}"></label><label>END<input type="date" id="yv2PromoEnd" value="${esc(plus(V.delivery||iso(new Date()),2))}"></label><label>DELIVERY<input type="date" id="yv2PromoDelivery" value="${esc(V.delivery||'')}"></label><label>NEXT DELIVERY<input type="date" id="yv2PromoNext" value="${esc(V.nextDelivery||'')}"></label></div><input class="yv2-input" id="yv2PromoName" style="font-size:14px" value="Manual Promotion ${esc(V.delivery||'')}"><div class="yv2-btnrow"><button class="yv2-btn" id="yv2PromoCancel">Cancel</button><button class="yv2-btn primary" id="yv2PromoSave">Save Promotion</button></div>`);
-    $('#yv2PromoCancel').onclick=closeModal;$('#yv2PromoSearchBtn').onclick=runPromoSearch;$('#yv2PromoSearch').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();runPromoSearch()}};$('#yv2PromoSave').onclick=savePromo;
+    modal(`<h3>Manual Promotion</h3><p>Search one or multiple UPC / Article / item names. Tap a result to add it; every selected item can be removed before saving.</p><form class="yv2-promosearch" id="yv2PromoSearchForm"><input id="yv2PromoSearch" placeholder="UPC / article / English / 中文" enterkeyhint="search" autocomplete="off"><button type="submit" class="yv2-btn primary" id="yv2PromoSearchBtn" style="flex:0 0 auto">Search</button></form><div id="yv2PromoResults"></div><div id="yv2PromoSelected"></div><div class="yv2-formgrid"><label>START<input type="date" id="yv2PromoStart" value="${esc(V.delivery||iso(new Date()))}"></label><label>END<input type="date" id="yv2PromoEnd" value="${esc(plus(V.delivery||iso(new Date()),2))}"></label><label>DELIVERY<input type="date" id="yv2PromoDelivery" value="${esc(V.delivery||'')}"></label><label>NEXT DELIVERY<input type="date" id="yv2PromoNext" value="${esc(V.nextDelivery||'')}"></label></div><input class="yv2-input" id="yv2PromoName" style="font-size:14px" value="Manual Promotion ${esc(V.delivery||'')}"><div class="yv2-btnrow"><button class="yv2-btn" id="yv2PromoCancel">Cancel</button><button class="yv2-btn primary" id="yv2PromoSave">Save Promotion</button></div>`);
+    setTimeout(()=>$('#yv2PromoSearch')?.focus(),60);
   }
   async function runPromoSearch(){
     const q=$('#yv2PromoSearch').value.trim(),box=$('#yv2PromoResults');if(q.length<2)return toast('Enter at least 2 characters');box.innerHTML='<div class="yv2-loading">Searching…</div>';
-    try{const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});V.promoSearchRows=d.results||[];box.innerHTML=V.promoSearchRows.slice(0,12).map((r,i)=>`<button class="yv2-promoresult" data-promo-result="${i}"><b>${esc(r.name||r.number||'Item')}</b><span>${esc(r.result_type||'ITEM')} ${esc(r.number||'—')} · Family ${esc(r.family_article_number||'—')} · Current ${money(r.current_price)}</span></button>`).join('')||'<div class="yv2-empty">No matching item.</div>';$$('[data-promo-result]').forEach(b=>b.onclick=()=>selectPromo(V.promoSearchRows[Number(b.dataset.promoResult)]))}catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
+    try{const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});V.promoSearchRows=d.results||[];box.innerHTML=V.promoSearchRows.slice(0,12).map((r,i)=>`<button type="button" class="yv2-promoresult" data-promo-result="${i}"><b>${esc(r.name||r.number||'Item')}</b><span>${esc(r.result_type||'ITEM')} ${esc(r.number||'—')} · Family ${esc(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'—')} · Current ${money(r.current_price)} · TAP TO ADD</span></button>`).join('')||'<div class="yv2-empty">No matching item.</div>'}catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
-  function selectPromo(r){const family=String(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'');const key=family||String(r.number||'');V.promoSelected.set(key,{...r,familyKey:family,price:r.current_price});renderPromoSelected()}
-  function renderPromoSelected(){const box=$('#yv2PromoSelected');box.innerHTML=[...V.promoSelected.entries()].map(([k,r])=>`<div class="yv2-selected"><button data-promo-remove="${esc(k)}">Remove</button><b>${esc(r.name||r.number)}</b><div class="yv2-meta">Family ${esc(r.familyKey||'—')} · selected ${esc(r.number||'—')}</div><input class="yv2-input" style="font-size:16px" data-promo-price="${esc(k)}" value="${esc(r.price??'')}" placeholder="SALE price"></div>`).join('');$$('[data-promo-remove]').forEach(b=>b.onclick=()=>{V.promoSelected.delete(b.dataset.promoRemove);renderPromoSelected()})}
+  function selectPromo(r){if(!r)return;const family=String(r.family_article_number||(String(r.result_type||'').toUpperCase()==='FAMILY'?r.number:'')||'');const key=family||String(r.number||'');if(!key)return toast('Item mapping unavailable');V.promoSelected.set(key,{...r,familyKey:family,price:r.current_price});renderPromoSelected();toast('Promotion item added')}
+  function renderPromoSelected(){const box=$('#yv2PromoSelected');if(!box)return;box.innerHTML=[...V.promoSelected.entries()].map(([k,r])=>`<div class="yv2-selected"><button type="button" data-promo-remove="${esc(k)}">Remove</button><b>${esc(r.name||r.number)}</b><div class="yv2-meta">Family ${esc(r.familyKey||'—')} · selected ${esc(r.number||'—')}</div><input class="yv2-input" style="font-size:16px" data-promo-price="${esc(k)}" value="${esc(r.price??'')}" placeholder="SALE price"></div>`).join('')||'<div class="yv2-meta" style="margin-top:8px">No promotion items selected yet.</div>'}
   async function savePromo(){
     const selected=[...V.promoSelected.entries()];if(!selected.length)return toast('Select at least one item');
     const start=$('#yv2PromoStart').value,end=$('#yv2PromoEnd').value,delivery=$('#yv2PromoDelivery').value,next=$('#yv2PromoNext').value;if(!start||!end||!delivery||!next)return toast('Complete all dates');if(end<start||next<=delivery)return toast('Check promotion / delivery dates');
     const items=selected.map(([k,r])=>{const price=Number(root.querySelector('[data-promo-price="'+CSS.escape(k)+'"]').value);return {upc:String(r.number||r.familyKey||''),description:r.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:price}});
     if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0))return toast('Enter valid SALE price for each item');
     const btn=$('#yv2PromoSave');btn.disabled=true;btn.textContent='Saving…';
-    try{const d=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:$('#yv2PromoName').value.trim()||('Manual Promotion '+start),source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});V.promoListId=d.list_id;V.delivery=delivery;V.nextDelivery=next;closeModal();$('#yv2Delivery').value=delivery;$('#yv2NextDelivery').value=next;toast('Promotion saved');loadPromotion()}catch(e){toast(e.message);btn.disabled=false;btn.textContent='Save Promotion'}
+    try{const d=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:$('#yv2PromoName').value.trim()||('Manual Promotion '+start),source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});V.promoListId=d.list_id;V.promoListDetail=null;V.delivery=delivery;V.nextDelivery=next;closeModal();$('#yv2Delivery').value=delivery;$('#yv2NextDelivery').value=next;toast('Promotion saved');await loadPromotion()}catch(e){toast(e.message);btn.disabled=false;btn.textContent='Save Promotion'}
   }
 
   async function loadPerformance(days){
