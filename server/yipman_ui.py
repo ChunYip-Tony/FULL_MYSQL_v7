@@ -14,7 +14,33 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "
+/* v7.0.449 consolidated mobile workflow */
+#quick .stockflowfilters{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px)}
+#quick .stockflowresultbar{position:sticky;top:35px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 1px}
+#order .order-tabs{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:3px 0}
+#order .order-tools{position:sticky;top:45px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
+#price .price-tabs{position:sticky;top:0;z-index:19;background:#e8eef3}
+#price #priceSuggestionPane>.filters,#price #currentTprPane>.filters{position:sticky;top:49px;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
+#price .price-tools,#price .tpr-tools{position:sticky;top:88px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 0}
+.familyohpair{display:grid;grid-template-columns:1.08fr .92fr;gap:4px;margin-top:5px}
+.familyohpair .familyohbtn,.familysystemoh{min-width:0;border:1px solid #d7e1e8;border-radius:9px;padding:6px 7px;background:rgba(255,255,255,.82);text-align:left}
+.familyohpair .familyohbtn{background:#eef8ff;border-color:#acd1eb}
+.familyohpair small{display:block;font-size:6.5px;color:#71808d;font-weight:1000}.familyohpair b{display:block;font-size:14px;line-height:1.05;margin-top:2px}.familyohpair span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px}
+.familyohpair .familysystemoh{background:#f7f9fb}
+.snooze12{border:1px solid #edb9bd!important;background:#fdebed!important;color:#a52831!important}
+.snoozebar{margin:5px 0;padding:6px 8px;border:1px dashed #deb6ba;border-radius:9px;background:#fff7f8;color:#7c4d51;font-size:8px;font-weight:900}
+.tprcancelchoices{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}.tprcancelchoice{border:1px solid #d5dee5;border-radius:9px;background:#fff;padding:7px}.tprcancelchoice small{display:block;font-size:6.5px;color:#71808d;font-weight:950}.tprcancelchoice b{display:block;font-size:13px;margin-top:2px}
+.freshwindow{margin-top:6px;border:1px solid #e8d49d;border-radius:9px;background:#fff7e4;color:#795600;padding:7px 8px;font-size:8px;font-weight:850;line-height:1.35}
+#quick .bestfam.article-tone-0{border-left:5px solid #d1a61c;background:linear-gradient(95deg,#fff5cf,#fff 68%)}
+#quick .bestfam.article-tone-1{border-left:5px solid #55a975;background:linear-gradient(95deg,#e8f7ec,#fff 68%)}
+#quick .bestfam.article-tone-2{border-left:5px solid #4d98d0;background:linear-gradient(95deg,#e7f2fb,#fff 68%)}
+#quick .bestfam.article-tone-3{border-left:5px solid #cf718b;background:linear-gradient(95deg,#fdeaf0,#fff 68%)}
+#quick .bestfam.article-tone-4{border-left:5px solid #8b73c5;background:linear-gradient(95deg,#f0ebfb,#fff 68%)}
+#quick .bestfam.article-tone-5{border-left:5px solid #4ca0a0;background:linear-gradient(95deg,#e8f7f7,#fff 68%)}
+#quick .bestfam.article-tone-6{border-left:5px solid #cb8749;background:linear-gradient(95deg,#fff0e3,#fff 68%)}
+#quick .bestfam.article-tone-7{border-left:5px solid #707abc;background:linear-gradient(95deg,#eceeff,#fff 68%)}
+</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -972,6 +998,15 @@ function freshnessShortDate(v){
  const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/);
  return m?(Number(m[2])+'/'+Number(m[3])):'—';
 }
+
+function articleTone(value){let h=0;for(const ch of String(value||''))h=(h*31+ch.charCodeAt(0))>>>0;return h%8}
+function familyOhPairHtml(d){
+ const family=String(d?.family||''),name=String(d?.name||''),euom=String(d?.effective_uom||d?.system_uom||''),suom=String(d?.system_uom||euom);
+ const src=String(d?.effective_source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
+ return '<div class="familyohpair">'+
+ '<button type="button" class="familyohbtn" data-family-oh data-family="'+esc(family)+'" data-name="'+esc(name)+'" data-oh="'+esc(d?.effective??'')+'" data-uom="'+esc(euom)+'"><small>EFFECTIVE OH · TAP TO CHANGE</small><b>'+fmt(d?.effective)+' '+esc(euom)+'</b><span>'+(isTrue?'TRUE STOCK OVERRIDE':'CURRENT EFFECTIVE POSITION')+'</span></button>'+
+ '<div class="familysystemoh"><small>SYSTEM OH</small><b>'+fmt(d?.system)+' '+esc(suom)+'</b><span>LATEST SYSTEM POSITION</span></div></div>';
+}
 function renderHeaderFreshness(d){
  const box=$('#headFreshness');if(!box)return;
  const s=d?.sources||{};
@@ -1544,7 +1579,10 @@ function quickFamilyGroups(rows){
      family_oh_uom:r.family_oh_uom||'',
      family_oh_source:r.family_oh_source||'',
      family_oh_status:r.family_oh_status||'',
-     family_oh_is_true_stock:String(r.family_oh_source||'').toUpperCase().startsWith('FAMILY_TRUE_STOCK')
+     family_oh_is_true_stock:String(r.family_oh_source||'').toUpperCase().startsWith('FAMILY_TRUE_STOCK'),
+     family_system_oh:r.family_system_oh??null,
+     family_system_oh_uom:r.family_system_oh_uom||'',
+     family_system_oh_source:r.family_system_oh_source||''
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -1712,7 +1750,7 @@ function quickGroupedHtml(rows){
      '<div class="qfidentity"><div class="qlabel">FAMILY ARTICLE</div><div class="qfnum">'+esc(g.family_article||'—')+(g.family_receipt_verified?'<span class="qreceipt">O</span>':'')+'</div>'+
      '<div class="qfname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="qmeta">'+esc(g.category||'')+(recon?' · '+(recon==='PASS'?'TOTAL SELLING MVT RECONCILED':'TOTAL SELLING MVT HOLD'):'')+'</div></div>'+
      '<div class="qffocus">'+
-       '<button type="button" class="familyohbtn" data-family-oh data-family="'+esc(g.family_article||'')+'" data-name="'+esc(g.family_name||'')+'" data-oh="'+esc(g.family_oh??'')+'" data-uom="'+esc(g.family_oh_uom||'')+'"><small>EFFECTIVE OH</small><b>'+fmt(g.family_oh)+' '+esc(g.family_oh_uom||'')+'</b><span>'+(g.family_oh_is_true_stock?'TRUE STOCK · tap to update':'TAP TO ENTER TRUE STOCK')+'</span></button>'+
+       familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.family_oh,effective_uom:g.family_oh_uom,effective_source:g.family_oh_source,system:g.family_system_oh,system_uom:g.family_system_oh_uom})+
        '<div class="qffocusbox"><div><small>7D SELLING MVT</small><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b></div>'+
        '<div class="qffocusbox receipt"><div><small>7D RECEIPT</small><span>PHYSICAL · DE-DUPED</span></div><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b></div>'+
      '</div></div>';
@@ -1885,8 +1923,8 @@ function stockFlowFamilyHtml(g,idx){
    : '';
  const promoHtml=promo?'<div class="stocksale stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+promoPrice+'</div>':'';
  const overSelling=ratio===null?'—':((ratio-1)*100).toFixed(0)+'%';
- return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
-   '<div class="stockohbar"><button type="button" class="familyohbtn" data-family-oh data-family="'+esc(g.family_article||'')+'" data-name="'+esc(g.family_name||'')+'" data-oh="'+esc(g.effective_oh??'')+'" data-uom="'+esc(g.effective_oh_uom||'')+'"><small>EFFECTIVE OH</small><b>'+fmt(g.effective_oh)+' '+esc(g.effective_oh_uom||'')+'</b><span>'+(g.effective_oh_is_true_stock?'TRUE STOCK · TAP TO UPDATE':'TAP TO ENTER TRUE STOCK')+'</span></button></div>'+
+ return '<section class="bestfam article-tone-'+articleTone(g.family_article||g.family_id)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
+   familyOhPairHtml({family:g.family_article,name:g.family_name,effective:g.effective_oh,effective_uom:g.effective_oh_uom,effective_source:g.effective_oh_source,system:g.system_oh,system_uom:g.system_oh_uom})+
    '<div class="stockflowgrid"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div>'+
    '<div class="stockdiff'+(promo?' promoted':' nosale')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+overSelling+' over selling</span><span class="stockwatch">'+(promo?'RECENT SALE':'NO RECENT SALE')+'</span></div></div>'+
@@ -1922,7 +1960,8 @@ async function loadBestSellers(force=false){
     effective_oh_uom:r.effective_oh_uom||'',
     effective_oh_source:r.effective_oh_source||'',
     effective_oh_status:r.effective_oh_status||'',
-    effective_oh_is_true_stock:!!r.effective_oh_is_true_stock
+    effective_oh_is_true_stock:!!r.effective_oh_is_true_stock,
+    system_oh:r.system_oh,system_oh_uom:r.system_oh_uom||'',system_oh_source:r.system_oh_source||''
   }));
   renderStockFlow();
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
@@ -2571,16 +2610,16 @@ function writePriceIgnores(v){
 function priceIgnoreId(r){return String(r?.upc||'').trim()}
 function priceIsIgnored(r){
   const id=priceIgnoreId(r);if(!id)return false;
-  if(priceIgnoredThisVisit.has(id))return true;
   const map=readPriceIgnores(),ts=Number(map[id]||0);
-  return ts>0&&(Date.now()-ts)<PRICE_IGNORE_MS;
+  if(!(ts>0))return false;
+  if(Date.now()-ts>=PRICE_IGNORE_MS){delete map[id];writePriceIgnores(map);return false}
+  return true;
 }
 function ignorePriceSuggestion(r){
   const id=priceIgnoreId(r);if(!id)return;
-  priceIgnoredThisVisit.add(id);
   const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
   if($('#overlay').classList.contains('on'))closeSheet(true);
-  toast('Ignored for 12 hours');
+  toast('Price suggestion hidden for 12 hours');
   loadPrices({quiet:true});
 }
 function priceReasonMeta(r,stale=false){
