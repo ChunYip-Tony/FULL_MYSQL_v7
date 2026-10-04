@@ -1053,6 +1053,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 
 /* V471 Ordering card cleanup + two-step manual Promotion workflow. */
 #order .order-tools{grid-template-columns:minmax(0,1fr) minmax(190px,1.4fr);gap:8px;align-items:end}
+#order #orderStatus .estimatebar{font-size:9px;line-height:1.28;padding:7px 9px;margin-bottom:6px;border-radius:10px}
 #order .order-summary{display:flex;gap:5px;align-items:stretch;min-width:0}
 #order .order-summary>span{display:grid;place-items:center;min-width:52px;padding:5px 6px;border:1px solid #d7e0e7;border-radius:9px;background:#fff}
 #order .order-summary b{font-size:14px;line-height:1;color:#1d3447}
@@ -1092,7 +1093,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 #order .orderrecvhistory summary span{font-size:7.5px;font-weight:1000;letter-spacing:.02em}
 #order .orderrecvhistory summary b{font-size:8px;color:#526d83}
 #order .orderrecvhistory summary em{font-style:normal;border-radius:999px;background:#edf5fb;padding:4px 7px;font-size:7px;font-weight:1000;color:#0d659f}
-#order .orderrecvhistory[open] summary em{background:#e8eef3;color:#536575}#order .orderrecvhistory[open] summary em::after{content:' LESS'}#order .orderrecvbody{border-top:1px solid #dbe7f0}
+#order .orderrecvhistory[open] summary em{background:#e8eef3;color:#536575;font-size:0}#order .orderrecvhistory[open] summary em::after{content:'HIDE';font-size:7px}#order .orderrecvbody{border-top:1px solid #dbe7f0}
 #order .orderrecvrow{padding:8px 9px}.orderrecvarticle b{font-size:15px!important}#order .orderrecvpack b{font-size:13px}
 #order .pcard-actions{margin-top:0;padding-top:0}
 #order .snooze12{min-height:34px}
@@ -3141,8 +3142,9 @@ function renderOrderRoster(rows,data,h,stale){
   const freshness=r.freshness_adjustment_applied?'<span class="order-freshness">FRESHNESS +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'</span>':'';
   const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
   const shownHist=hist.slice(0,3);
+  const histSummary=shownHist.map(h=>String(h.article_number||'')).filter(Boolean).join(' · ');
   const histHtml=shownHist.length
-    ? '<details class="orderrecvhistory"><summary><span class="orderrecvsummarylabel">RECEIVING ARTICLES</span><b>'+fmt(hist.length,0)+' observed</b><em>VIEW</em></summary><div class="orderrecvbody">'
+    ? '<details class="orderrecvhistory"><summary><span class="orderrecvsummarylabel">RECEIVING</span><b>'+esc(histSummary||fmt(hist.length,0)+' observed')+'</b><em>'+fmt(hist.length,0)+' · VIEW</em></summary><div class="orderrecvbody">'
       +shownHist.map(h=>'<div class="orderrecvrow"><div class="orderrecvarticle"><b>'+esc(h.article_number||'—')+'</b>'+(h.article_name?'<span class="receivingname">'+esc(h.article_name)+'</span>':'')+'<span>Last received '+esc(appDate(h.last_receipt_date))+' · '+fmt(h.receipt_event_count,0)+' receipt event'+(Number(h.receipt_event_count||0)===1?'':'s')+'</span></div><div class="orderrecvpack"><b>'+esc(h.pack_size||'—')+'</b><span>PACK SIZE</span></div></div>').join('')
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap card for full history</div>':'')
       +'</div></details>'
