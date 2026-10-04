@@ -25,7 +25,7 @@ def start_api() -> subprocess.Popen:
         sys.executable,
         "-m",
         "uvicorn",
-        "api_entry:app",
+        "api_entry_stable:app",
         "--host",
         "0.0.0.0",
         "--port",
