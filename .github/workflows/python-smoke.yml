@@ -1127,6 +1127,8 @@ jobs:
           assert "const replacingLoading=wasOpen&&!!body?.firstElementChild?.classList?.contains('loading')" in text
           assert "else if(!replacingLoading)sheetStack.push(stashCurrentSheet())" in text
           assert ".qupcname{white-space:normal!important" in text
+          assert "while(el.scrollWidth>available&&size>8)" not in text
+          assert "el.style.fontSize='';el.style.letterSpacing=''" in text
           assert "const effectiveOh=r.effective_oh??r.oh" in text
           print('yipman-dom-bindings=PASS')
           PY
