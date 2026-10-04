@@ -2401,6 +2401,26 @@ function orderReasonLabel(reason){
  };
  return labels[x]||x.replaceAll('_',' ')||'REVIEW';
 }
+
+const ORDER_IGNORE_KEY='yipman-order-ignore-v449';
+const ORDER_IGNORE_MS=12*60*60*1000;
+let orderIgnoreMemory={};
+function readOrderIgnores(){try{const v=JSON.parse(localStorage.getItem(ORDER_IGNORE_KEY)||'{}');if(v&&typeof v==='object'){orderIgnoreMemory=v;return v}}catch{}return orderIgnoreMemory||{}}
+function writeOrderIgnores(v){orderIgnoreMemory=v||{};try{localStorage.setItem(ORDER_IGNORE_KEY,JSON.stringify(orderIgnoreMemory))}catch{}}
+function orderIgnoreId(r){return String(orderMode||'REGULAR')+':'+String(r?.family_id??r?.family_article??'').trim()}
+function orderIsIgnored(r){
+ const id=orderIgnoreId(r);if(!id)return false;
+ const map=readOrderIgnores(),ts=Number(map[id]||0);
+ if(!(ts>0))return false;
+ if(Date.now()-ts>=ORDER_IGNORE_MS){delete map[id];writeOrderIgnores(map);return false}
+ return true;
+}
+function ignoreOrderSuggestion(r){
+ const id=orderIgnoreId(r);if(!id)return;
+ const map=readOrderIgnores();map[id]=Date.now();writeOrderIgnores(map);
+ toast('Ordering suggestion hidden for 12 hours');
+ renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale);
+}
 function renderOrderRoster(rows,data,h,stale){
  lastOrderRows=Array.isArray(rows)?rows:[];
  lastOrderData=data||{};
@@ -2415,6 +2435,8 @@ function renderOrderRoster(rows,data,h,stale){
  };
  $('#orderSummary').textContent='OBSERVED '+counts.total+' · ORDER '+counts.order+' · 0 ORDER '+counts.zero+' · REVIEW '+counts.review;
  let visible=all.filter(r=>orderFilter==='ALL'||orderState(r)===orderFilter);
+ const ignoredOrderCount=visible.filter(r=>orderState(r)!=='ZERO_ORDER'&&orderIsIgnored(r)).length;
+ visible=visible.filter(r=>orderState(r)==='ZERO_ORDER'||!orderIsIgnored(r));
  const dos=r=>{const v=r?.details?.dos;if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
  const obs=r=>Number(r?.delivery_day_observed_count||0);
  const conf=r=>({HIGH:0,MEDIUM:1,LOW:2,NONE:3}[String(r?.delivery_day_confidence||'NONE').toUpperCase()]??3);
@@ -2429,7 +2451,7 @@ function renderOrderRoster(rows,data,h,stale){
  renderedOrderRows=visible;
  $('#orderStatus').innerHTML=stale
   ? '<div class="estimatebar">BEST AVAILABLE · POS '+esc(h?.pos_data_through||'—')+' · MVT '+esc(h?.movement_data_through||'—')+'. Missing source dates are ignored, not zero-filled; missing MVT days are forecast forward.</div>'
-  : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster';
+  : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster'+(ignoredOrderCount?' · '+ignoredOrderCount+' suggestion'+(ignoredOrderCount===1?'':'s')+' ignored <12h':'');
  $('#orderList').classList.add('futurecards');
  $('#orderListHead').style.display='none';
  $('#orderRows').innerHTML=visible.map((r,i)=>{
@@ -2449,9 +2471,12 @@ function renderOrderRoster(rows,data,h,stale){
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell"><button type="button" class="familyohinline" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+'</b><span>'+esc(r.oh_uom||'')+' · EDIT</span></button></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
- }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('[data-family-oh]'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
+  const ohPair=familyOhPairHtml({family:r.family_article,name:r.family_name,effective:r.effective_oh??r.oh,effective_uom:r.effective_oh_uom||r.oh_uom,effective_source:r.effective_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+  const snooze=state==='ZERO_ORDER'?'':'<div class="pcard-actions"><button class="pignore snooze12" data-order-ignore="'+i+'">IGNORE 12 HOURS</button></div>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell">'+fmtNullable(r.effective_oh??r.oh)+'<span>'+esc(r.effective_oh_uom||r.oh_uom||'')+'</span></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+ohPair+histHtml+snooze+'</article>';
+ }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.'+(ignoredOrderCount?' '+ignoredOrderCount+' ignored suggestion(s) return automatically after 12 hours.':'')+'</div>';
+ document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
+ $('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
  bindFamilyOhEditors();
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
