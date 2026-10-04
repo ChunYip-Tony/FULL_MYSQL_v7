@@ -806,6 +806,9 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #quick .stocksale.stockpromo strong,#quick .stockpromo .promobasis{color:#405568}
 #quick .stockpromo .promolift,#quick .stockpromo .promoprice,#quick .stockdiff.promoted>b{background:#e9edf2}
 #quick .stockpromo .promoprice,#quick .stockpromo .promoprice small,#quick .stockpromo .promoprice b{color:#31485d!important}
+#quick .stocksale.stockpromo strong,#quick .stockpromo .promobasis,#quick .stockpromo .promolift,#quick .stockpromo .promoprice{white-space:normal;overflow-wrap:anywhere;min-width:0}
+#quick .stockpromo .promoprice{flex-wrap:wrap}
+@media(max-width:380px){#quick .stocksale.stockpromo{grid-template-columns:1fr}#quick .stockpromo .promoprice{justify-content:flex-start}}
 #quick .bestrecent{margin-top:4px;padding:4px 6px;background:#fff;border-color:#d8e0e7}
 #quick .bestrecenthead{align-items:center}
 #quick .stockreceiptmeta{display:flex;align-items:center;gap:4px}
