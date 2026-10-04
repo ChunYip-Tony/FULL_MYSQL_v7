@@ -1086,6 +1086,9 @@ jobs:
           assert "function openFamilyTrueStock" in text
           assert "function bindFamilyOhEditors" in text
           assert "SAVE TRUE STOCK & RECALCULATE" in text
+          assert ".qupcname{white-space:normal!important" in text
+          assert "word-break:break-word!important" in text
+          assert "white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important" not in text
           assert "data-family-oh" in text
           assert "function familyOhActionHtml" in text
           assert "EFFECTIVE OH · ENTER TRUE STOCK" in text
