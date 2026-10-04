@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v452';
+const CACHE='yipman-v454';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -144,7 +144,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
   .qaresolutioncard{grid-column:auto}.qareshead p{font-size:9px}.qaresbadge{font-size:9px}.qaresstat small{font-size:7px}.qaresstat b{font-size:16px}.qagroup b{font-size:12px}.qagroup span{font-size:9px}.qagroup button{font-size:9px}.qaresactions button{font-size:10px;padding:10px}.qaitem b{font-size:14px}.qaitem small,.qaitemreason{font-size:10px}.qaflag{font-size:8px}
 }
 .nav{position:absolute;left:10px;right:10px;bottom:calc(9px + env(safe-area-inset-bottom));height:57px;display:grid;grid-template-columns:repeat(4,1fr);background:rgba(255,255,255,.96);border:1px solid var(--line);border-radius:18px;box-shadow:0 9px 24px rgba(18,38,56,.12);backdrop-filter:blur(10px);z-index:10}.nav button{border:0;background:transparent;color:#73808a;font-size:7px;font-weight:850}.nav i{display:block;font-style:normal;font-size:16px;margin-bottom:2px}.nav button.on{color:var(--blue)}
-.overlay{position:absolute;inset:0;background:rgba(15,25,34,.34);display:none;align-items:flex-end;z-index:30}.overlay.on{display:flex}.sheet{width:100%;max-height:68%;overflow:auto;background:#f7f8fa;border-radius:23px 23px 0 0}.shead{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:12px 13px;display:flex;justify-content:space-between;gap:8px;border-radius:23px 23px 0 0}.shead h3{font-size:17px;margin:0}.shead p{font-size:8px;color:var(--muted);margin:2px 0 0}.close{width:34px;height:34px;border:0;border-radius:11px;background:#eef1f3;font-size:17px}.sbody{padding:9px 11px 13px}.dmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.dm{background:#fff;border-radius:12px;padding:9px}.dm b{font-size:14px;display:block}.dm span{font-size:7px;color:var(--muted)}.detail{background:#fff;border-radius:12px;padding:9px;margin-top:6px;font-size:9px;line-height:1.4;color:#53616d}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.actions button{border:0;border-radius:11px;padding:9px;font-size:8px;font-weight:900}.primary{background:var(--blue);color:#fff}.secondary{background:#e6ebef;color:#2f3e49}
+.overlay{position:absolute;inset:0;background:rgba(15,25,34,.34);display:none;align-items:flex-end;z-index:80}.overlay.on{display:flex}.sheet{width:100%;max-height:68%;overflow:auto;background:#f7f8fa;border-radius:23px 23px 0 0}.shead{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:12px 13px;display:flex;justify-content:space-between;gap:8px;border-radius:23px 23px 0 0}.shead h3{font-size:17px;margin:0}.shead p{font-size:8px;color:var(--muted);margin:2px 0 0}.close{width:34px;height:34px;border:0;border-radius:11px;background:#eef1f3;font-size:17px}.sbody{padding:9px 11px 13px}.dmetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.dm{background:#fff;border-radius:12px;padding:9px}.dm b{font-size:14px;display:block}.dm span{font-size:7px;color:var(--muted)}.detail{background:#fff;border-radius:12px;padding:9px;margin-top:6px;font-size:9px;line-height:1.4;color:#53616d}.actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:7px}.actions button{border:0;border-radius:11px;padding:9px;font-size:8px;font-weight:900}.primary{background:var(--blue);color:#fff}.secondary{background:#e6ebef;color:#2f3e49}
 .toast{position:absolute;left:12px;right:12px;bottom:76px;background:#1f2d39;color:#fff;padding:9px 11px;border-radius:13px;font-size:9px;font-weight:850;display:none;z-index:40}.toast.on{display:block}
 .ptr{position:absolute;left:0;right:0;top:0;height:0;overflow:hidden;z-index:50;display:flex;align-items:flex-end;justify-content:center;pointer-events:none}.ptr div{background:#fff;border:1px solid var(--line);box-shadow:var(--shadow);border-radius:999px;padding:6px 10px;margin-bottom:6px;font-size:9px;font-weight:900;color:var(--blue)}
 .loading{padding:18px;text-align:center;color:var(--muted);font-size:9px}
@@ -837,8 +837,10 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 
 
 /* v7.0.450 consolidated mobile workflow */
-#quick .stockflowfilters{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px)}
-#quick .stockflowresultbar{position:sticky;top:35px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 1px}
+#quick .stockflowtoolbar{position:sticky;top:0;z-index:24;background:#f6f7f9;padding:4px 0 5px;border-bottom:1px solid #d9e1e7;box-shadow:0 5px 10px rgba(18,38,56,.05)}
+#quick .stockflowtoolbar .stockflowfilters{position:static;margin:0 0 3px;background:#fff;backdrop-filter:none}
+#quick .stockflowtoolbar .stockflowresultbar{position:static;margin:0;padding:2px 1px;background:#f6f7f9;backdrop-filter:none}
+#quick .stockflowtoolbar .stockfiltergroup>small{display:inline-flex;margin-right:3px;font-size:6.5px;color:#687b8b}
 #order .order-tabs{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:3px 0}
 #order .order-tools{position:sticky;top:45px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
 #price .price-tabs{position:sticky;top:0;z-index:19;background:#e8eef3}
@@ -1090,25 +1092,33 @@ async function refreshAfterFamilyTrueStock(family=''){
  }
 }
 function bindFamilyOhEditors(root=document){
- root.querySelectorAll('[data-family-oh]').forEach(btn=>{
-  if(btn.dataset.trueStockBound==='1')return;
-  btn.dataset.trueStockBound='1';
-  btn.onclick=e=>{
-   e.preventDefault();e.stopPropagation();
-   openFamilyTrueStock({
-    family:btn.dataset.family,
-    name:btn.dataset.name||'',
-    oh:btn.dataset.oh,
-    uom:btn.dataset.uom||''
-   });
-  };
- });
+ root.querySelectorAll('[data-family-oh]').forEach(btn=>btn.dataset.trueStockBound='delegated');
 }
-function openFamilyTrueStock(d){
- const family=String(d?.family||'').trim(),uom=String(d?.uom||'').trim().toUpperCase();
+app.addEventListener('click',e=>{
+ const btn=e.target.closest('[data-family-oh]');if(!btn||!app.contains(btn))return;
+ e.preventDefault();e.stopPropagation();
+ openFamilyTrueStock({family:btn.dataset.family,name:btn.dataset.name||'',oh:btn.dataset.oh,uom:btn.dataset.uom||''});
+},true);
+function applyTrueStockLocally(family,qty,uom){
+ const key=String(family||'').trim();
+ if(bestSellerGroups?.length){
+  bestSellerGroups.forEach(r=>{if(String(r.family_article||r.family_id||'').trim()===key){r.effective_oh=qty;r.effective_oh_uom=uom;r.effective_oh_source='FAMILY_TRUE_STOCK';r.effective_oh_is_true_stock=true;}});
+  stockFlowWriteCache(bestSellerGroups);
+  if(current==='quick'&&!lastQuickQuery)renderStockFlow();
+ }
+}
+async function openFamilyTrueStock(d){
+ const family=String(d?.family||'').trim();
  if(!family)return toast('Family Article unavailable');
- if(!uom)return toast('Effective OH UOM unavailable');
- const currentQty=(d.oh===null||d.oh===undefined||d.oh==='')?'':d.oh;
+ let uom=String(d?.uom||'').trim().toUpperCase(),currentQty=(d.oh===null||d.oh===undefined||d.oh==='')?'':d.oh;
+ sheet(d.name||'True Stock','Family '+esc(family)+' · Effective OH','<div class="loading">Loading latest Effective OH…</div>');
+ try{
+  const pi=await api('/v1/app/v2/pi/'+encodeURIComponent(family),{timeoutMs:10000});
+  const eff=pi?.effective_oh||{},sys=pi?.system_oh||{};
+  uom=String(pi?.required_true_stock_uom||eff.uom||sys.uom||uom||'').trim().toUpperCase();
+  if(eff.quantity!==null&&eff.quantity!==undefined)currentQty=eff.quantity;
+ }catch(e){if(!uom)return sheet('True Stock','Family '+esc(family),'<div class="detail">'+esc(e.message||'Effective OH unavailable')+'</div>')}
+ if(!uom)return sheet('True Stock','Family '+esc(family),'<div class="detail">True Stock UOM is unavailable. Fix the Family inventory UOM before counting.</div>');
  sheet(
   d.name||'True Stock',
   'Family '+esc(family)+' · Effective OH',
@@ -1129,8 +1139,8 @@ function openFamilyTrueStock(d){
     body:JSON.stringify({true_stock:qty,uom,note:($('#familyTrueStockNote').value||'').trim()||null}),
     timeoutMs:30000
    });
-   closeSheet(false);toast('True Stock saved · Effective OH recalculating');
-   await refreshAfterFamilyTrueStock(family);
+   closeSheet(false);applyTrueStockLocally(family,qty,uom);toast('True Stock saved · Effective OH updated');
+   refreshAfterFamilyTrueStock(family).catch(()=>{stockFlowNotice='True Stock saved · latest recalculation pending';if(current==='quick'&&!lastQuickQuery)renderStockFlow()});
   }catch(e){toast(e.message||'Could not save True Stock');btn.disabled=false;btn.textContent='SAVE TRUE STOCK & RECALCULATE'}
  };
 }
@@ -1915,7 +1925,7 @@ function renderStockFlow(){
  const active=(value,current)=>value===current?' on':'';
  box.innerHTML=noticeHtml+
    '<div class="besthead"><div><h3>Stock Flow Watch</h3><span>7D receipts ≥ 150% of 7D selling movement</span></div></div>'+
-   '<div class="stockflowfilters">'+
+   '<div class="stockflowtoolbar"><div class="stockflowfilters">'+
      '<div class="stockfiltergroup delivery"><small>DELIVERY FILTER</small><div class="stockfilterbuttons">'+
        '<button class="stockfilterbtn'+active('ALL',stockFlowDeliveryFilter)+'" data-stock-delivery="ALL">ALL <b>'+dAll+'</b></button>'+
        '<button class="stockfilterbtn deliverytw'+active('TUE_WED',stockFlowDeliveryFilter)+'" data-stock-delivery="TUE_WED">🚚 TUE &amp; WED <b>'+dTueWed+'</b></button>'+
@@ -1928,7 +1938,7 @@ function renderStockFlow(){
        '<button class="stockfilterbtn frozen'+active('FROZEN',stockFlowCategoryFilter)+'" data-stock-category="FROZEN">FROZEN <b>'+cFrozen+'</b></button>'+
      '</div></div>'+
    '</div>'+
-   '<div class="stockflowresultbar"><b>'+rows.length+' ITEM'+(rows.length===1?'':'S')+'</b><label class="stockflowsort">SORT<select id="stockFlowSort"><option value="RATIO">OVER-SELLING % ↓</option><option value="DIFFERENCE">DIFFERENCE ↓</option><option value="RECEIPT">7D RECEIPT ↓</option><option value="SELLING">7D SELLING ↓</option><option value="NAME">NAME A–Z</option></select></label></div>'+
+   '<div class="stockflowresultbar"><b>'+rows.length+' ITEM'+(rows.length===1?'':'S')+'</b><label class="stockflowsort">SORT<select id="stockFlowSort"><option value="RATIO">OVER-SELLING % ↓</option><option value="DIFFERENCE">DIFFERENCE ↓</option><option value="RECEIPT">7D RECEIPT ↓</option><option value="SELLING">7D SELLING ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>'+
    (rows.length?rows.map(stockFlowFamilyHtml).join(''):'<div class="empty stockflowempty">No Stock Flow items match these filters.</div>');
  const sel=$('#stockFlowSort');if(sel){sel.value=stockFlowSort;sel.onchange=e=>{stockFlowSort=e.target.value;renderStockFlow()}}
  $$('[data-stock-delivery]').forEach(b=>b.onclick=()=>{stockFlowDeliveryFilter=b.dataset.stockDelivery||'ALL';renderStockFlow()});
