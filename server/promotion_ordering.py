@@ -442,7 +442,14 @@ def calculate_promotion_order(
     for row in results:
         src=item_by_family.get(int(row["family_id"]))
         row["promotion_list_item"]=src
-        row["current_oh_system"]=row.get("effective_oh_raw")
+        # Preserve the shared Family inventory semantics explicitly for the UI:
+        # Effective OH is the operational stock authority (including saved
+        # Family True Stock); System OH remains the independent system position.
+        row["current_effective_oh"]=row.get("effective_oh_raw")
+        row["current_effective_oh_uom"]=row.get("effective_oh_uom")
+        row["current_effective_oh_source"]=row.get("effective_oh_source")
+        row["current_oh_system"]=row.get("system_oh_raw")
+        row["current_oh_system_uom"]=row.get("system_oh_uom")
         row["current_oh_for_calculation"]=row.get("ordering_oh_used")
         row["coverage_start_date"]=delivery_date
         row["coverage_end_date"]=next_delivery_date-timedelta(days=1)
@@ -464,7 +471,7 @@ def calculate_promotion_order(
     unresolved=sorted(ready_family_ids-returned_family_ids-skipped_family_ids)
 
     return {
-        "contract_version":"YIPMAN_PROMOTION_ORDERING_V1",
+        "contract_version":"YIPMAN_PROMOTION_ORDERING_V2_EFFECTIVE_OH",
         "list":{
             "list_id":promo.get("list_id"),
             "list_name":promo.get("list_name"),
@@ -489,6 +496,8 @@ def calculate_promotion_order(
             "forecast_is_day_by_day":True,
             "promo_days_use_matching_promotion_history":True,
             "non_promo_days_use_regular_history":True,
+            "family_effective_oh_authority":"SHARED_FAMILY_EFFECTIVE_OH_INCLUDING_ACTIVE_TRUE_STOCK",
+            "system_oh_is_separate_reference":True,
             "temporary_oh_is_request_only":True,
             "temporary_oh_persisted":False,
             "regular_order_temporary_oh_enabled":False,
