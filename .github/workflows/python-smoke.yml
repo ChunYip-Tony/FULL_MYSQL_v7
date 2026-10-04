@@ -1397,6 +1397,149 @@ jobs:
           print('mobile-v2-promotion-true-stock=PASS')
           PY
 
+      - name: SELFTEST live Promotion Ordering E2E
+        env:
+          SELFTEST_BASE_URL: https://seal-app-tkkkd.ondigitalocean.app
+        run: |
+          python - <<'PY'
+          import json, os, time, urllib.error, urllib.parse, urllib.request
+          from datetime import date
+
+          base=os.environ['SELFTEST_BASE_URL'].rstrip('/')
+          list_id=None
+
+          def req(method,path,payload=None,expected=(200,)):
+              data=None if payload is None else json.dumps(payload).encode()
+              request=urllib.request.Request(
+                  base+path,
+                  data=data,
+                  method=method,
+                  headers={'Accept':'application/json','Content-Type':'application/json'},
+              )
+              try:
+                  with urllib.request.urlopen(request,timeout=60) as r:
+                      status=r.status
+                      body=r.read().decode()
+              except urllib.error.HTTPError as e:
+                  status=e.code
+                  body=e.read().decode()
+              if status not in expected:
+                  raise AssertionError(f'{method} {path} -> {status}: {body[:1000]}')
+              try:
+                  return status,json.loads(body or '{}')
+              except Exception:
+                  return status,{'raw':body}
+
+          try:
+              # 1) Search must find a usable promotion identity.
+              _,search=req('GET','/v1/yipman/promotion-item-search?q='+urllib.parse.quote('4029551780')+'&limit=10')
+              results=search.get('results') or []
+              assert results, search
+              oyster=next((x for x in results if str(x.get('number') or '')=='4029551780'),results[0])
+              assert str(oyster.get('family_article_number') or '')=='1366580', oyster
+              print('promotion-search=PASS',json.dumps(oyster,default=str))
+
+              # 2) Save a temporary CUSTOM promotion.
+              name=f'SELFTEST_PROMO_{int(time.time())}'
+              create_payload={
+                  'list_name':name,
+                  'source_filename':'SELFTEST_AUTOMATION',
+                  'items':[{
+                      'upc':'4029551780',
+                      'description':'SELFTEST OYSTER IN SHELL',
+                      'promotion_type':'CUSTOM',
+                      'promotion_start_date':'2026-10-06',
+                      'promotion_end_date':'2026-10-12',
+                      'promotion_price':11.99,
+                  }],
+              }
+              _,created=req('POST','/v1/yipman/promotion-lists',create_payload)
+              list_id=int(created['list_id'])
+              assert created.get('ready_count')==1, created
+              assert created.get('review_count')==0, created
+              assert len(created.get('items') or [])==1, created
+              item_id=int(created['items'][0]['item_id'])
+              assert str(created['items'][0].get('family_article_number') or '')=='1366580', created
+              print('promotion-save=PASS',list_id,item_id)
+
+              # 3) Reload saved list: identity and promo price must persist.
+              _,detail=req('GET',f'/v1/yipman/promotion-lists/{list_id}')
+              assert detail.get('list_name')==name, detail
+              assert detail.get('ready_count')==1, detail
+              saved=detail['items'][0]
+              assert str(saved.get('raw_item_code') or '')=='4029551780', saved
+              assert abs(float(saved.get('promotion_price'))-11.99)<0.001, saved
+              print('promotion-reload=PASS')
+
+              # 4) Calculate real promotion order using the production engine.
+              calc_payload={
+                  'list_id':list_id,
+                  'delivery_date':'2026-10-06',
+                  'next_delivery_date':'2026-10-13',
+                  'temporary_oh_overrides':[],
+              }
+              _,calc=req('POST','/v1/yipman/promotion-ordering/calculate',calc_payload)
+              assert calc.get('contract_version')=='YIPMAN_PROMOTION_ORDERING_V2_EFFECTIVE_OH', calc
+              assert calc.get('delivery_date')=='2026-10-06', calc
+              assert calc.get('next_delivery_date')=='2026-10-13', calc
+              rows=calc.get('rows') or []
+              assert rows, calc
+              row=next((x for x in rows if str(x.get('family_article_number') or '')=='1366580'),rows[0])
+              assert str(row.get('family_article_number') or '')=='1366580', row
+              assert row.get('promotion_list_item',{}).get('item_id')==item_id, row
+              assert abs(float(row.get('promotion_list_item',{}).get('promotion_price'))-11.99)<0.001, row
+              assert 'current_effective_oh' in row, row
+              assert 'current_oh_system' in row, row
+              qty=float(row.get('suggested_order_qty') or 0)
+              assert qty>=0, row
+              assert bool(row.get('order_needed'))==(qty>0), row
+              assert str(row.get('coverage_start_date'))=='2026-10-06', row
+              assert str(row.get('coverage_end_date'))=='2026-10-12', row
+              print('promotion-calculate=PASS',json.dumps({
+                  'effective_oh':row.get('current_effective_oh'),
+                  'effective_oh_uom':row.get('current_effective_oh_uom'),
+                  'suggested_order_qty':row.get('suggested_order_qty'),
+                  'suggested_order_uom':row.get('suggested_order_uom'),
+                  'freshness_adjustment_applied':row.get('freshness_adjustment_applied'),
+              },default=str))
+
+              # 5) Bad delivery window must be rejected.
+              bad=dict(calc_payload)
+              bad['next_delivery_date']='2026-10-06'
+              status,bad_body=req('POST','/v1/yipman/promotion-ordering/calculate',bad,expected=(422,))
+              reason=str((bad_body.get('detail') or {}).get('reason') or bad_body)
+              assert 'NEXT_DELIVERY_MUST_BE_AFTER_DELIVERY_DATE' in reason, bad_body
+              print('promotion-invalid-window=PASS')
+
+              # 6) Remove saved item and verify list becomes EMPTY.
+              _,after_remove=req('DELETE',f'/v1/yipman/promotion-lists/{list_id}/items/{item_id}')
+              assert after_remove.get('item_count')==0, after_remove
+              assert after_remove.get('status')=='EMPTY', after_remove
+              assert not (after_remove.get('items') or []), after_remove
+              print('promotion-item-remove=PASS')
+
+              # 7) Empty list must not calculate.
+              status,empty_calc=req('POST','/v1/yipman/promotion-ordering/calculate',calc_payload,expected=(422,))
+              reason=str((empty_calc.get('detail') or {}).get('reason') or empty_calc)
+              assert 'PROMOTION_LIST_HAS_NO_READY_ITEMS' in reason, empty_calc
+              print('promotion-empty-list-block=PASS')
+
+              # 8) Delete saved list and verify 404 after deletion.
+              _,deleted=req('DELETE',f'/v1/yipman/promotion-lists/{list_id}')
+              assert deleted.get('deleted') is True, deleted
+              list_id=None
+              status,_=req('GET',f'/v1/yipman/promotion-lists/{deleted["list_id"]}',expected=(404,))
+              print('promotion-list-delete=PASS')
+              print('PROMOTION_ORDERING_E2E=PASS')
+          finally:
+              if list_id is not None:
+                  try:
+                      req('DELETE',f'/v1/yipman/promotion-lists/{list_id}',expected=(200,404,409,500))
+                      print('SELFTEST cleanup attempted for list',list_id)
+                  except Exception as e:
+                      print('SELFTEST CLEANUP WARNING',list_id,repr(e))
+          PY
+
       - name: Validate live mobile batch progress contract
         run: |
           python - <<'PY'
