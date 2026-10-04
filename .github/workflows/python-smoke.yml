@@ -1177,6 +1177,11 @@ jobs:
           assert "active['active_file_name']" in api
           assert 'CURRENT PROCESSING FILE' in yipman
           assert 'b.active_file_name' in yipman
+          assert 'function dataBatchIsActivelyProcessing' in yipman
+          assert "['API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED','RELEASED']" in yipman
+          assert 'const qaDone=published;' in yipman
+          assert 'dataBatchSignature(activeCandidate)' in yipman
+          assert 'await loadData();' in yipman
           assert "elif str(active.get('processing_status') or '').upper()=='PHASE2C_READY'" in api
           assert "active=None" in api
           assert 'id="dataUploadFiles"' in yipman
