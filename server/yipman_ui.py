@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v456';
+const CACHE='yipman-v457';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -854,9 +854,9 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 .familyohbtn,.familyohinline{touch-action:manipulation;-webkit-tap-highlight-color:rgba(23,105,224,.10);position:relative;z-index:2}
 .familyohbtn:active,.familyohinline:active{transform:scale(.995);filter:brightness(.98)}
 .familyohinlineeditor{min-width:0;border:2px solid #64a9d8;border-radius:10px;background:#eef8ff;padding:7px;box-shadow:0 3px 10px rgba(28,91,132,.10)}
-.familyohpair.editing{grid-template-columns:1fr}
 .familyohpair.editing .familyohinlineeditor{grid-column:1/-1}
-.familyohpair.editing .familysystemoh{display:none}
+.familyohpair.editing .familyohbtn{outline:2px solid rgba(23,105,224,.16)}
+.familyohpair.editing .familysystemoh{display:block}
 .familyohinlineeditor small{display:block;font-size:6.5px;color:#52738b;font-weight:1000;line-height:1.1}
 .familyohinlineeditor .truecurrent{font-size:7px;color:#5d7180;font-weight:850;margin:3px 0 5px}
 .familyohinlineeditor input{width:100%;box-sizing:border-box;border:2px solid #72b7df;border-radius:9px;background:#fff;color:#173247;font-size:20px;font-weight:1000;padding:8px 9px;outline:none}
@@ -1118,15 +1118,21 @@ function familyOhPayload(btn){
  };
 }
 function familyOhTapOpen(e){
- const btn=e.currentTarget;if(!btn||btn.dataset.trueStockEditing==='1')return;
+ const btn=e.currentTarget;if(!btn)return;
+ e.preventDefault();e.stopPropagation();
+ if(btn.dataset.trueStockEditing==='1'){
+  const editor=(btn.closest('.familyohpair')||btn.parentElement)?.querySelector?.('.familyohinlineeditor');
+  const input=editor?.querySelector?.('.trueinput');if(input)input.focus();
+  return;
+ }
  if(e.type==='pointerup'){
   const sx=Number(btn.dataset.tsx||0),sy=Number(btn.dataset.tsy||0);
   if(Math.abs((e.clientX||0)-sx)>10||Math.abs((e.clientY||0)-sy)>10)return;
   familyOhLastPointerOpenAt=Date.now();
- }else if(e.type==='click'&&Date.now()-familyOhLastPointerOpenAt<700){
-  e.preventDefault();e.stopPropagation();return;
+  beginFamilyOhInlineEdit(btn);
+  return;
  }
- e.preventDefault();e.stopPropagation();
+ if(e.type==='click'&&Date.now()-familyOhLastPointerOpenAt<700)return;
  beginFamilyOhInlineEdit(btn);
 }
 function bindFamilyOhEditors(root=document){
@@ -1152,18 +1158,20 @@ function applyTrueStockLocally(family,qty,uom){
  }
 }
 function beginFamilyOhInlineEdit(btn){
- if(!btn||btn.dataset.trueStockEditing==='1')return;
+ if(!btn)return;
  const d=familyOhPayload(btn),family=String(d.family||'').trim();
  if(!family)return toast('Family Article unavailable');
+ const pair=btn.closest('.familyohpair')||btn.parentElement;
+ let existing=pair?.querySelector?.('.familyohinlineeditor');
+ if(existing){
+  const input=existing.querySelector('.trueinput');if(input){input.focus();input.select()}
+  return;
+ }
  btn.dataset.trueStockEditing='1';
- const original=btn.cloneNode(true);
  const editor=document.createElement('div');
  editor.className='familyohinlineeditor';
  editor.dataset.family=family;
- const pair=btn.closest('.familyohpair');if(pair)pair.classList.add('editing');
- editor.addEventListener('click',e=>e.stopPropagation());
- editor.addEventListener('pointerup',e=>e.stopPropagation());
- editor.addEventListener('pointerdown',e=>e.stopPropagation());
+ if(pair)pair.classList.add('editing');
  const current=(d.oh===null||d.oh===undefined||d.oh==='')?'—':fmtNullable(d.oh);
  let resolvedUom=String(d.uom||'').trim().toUpperCase();
  editor.innerHTML='<small>ENTER PHYSICAL TRUE STOCK</small>'+
@@ -1171,7 +1179,11 @@ function beginFamilyOhInlineEdit(btn){
   '<input class="trueinput" type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Type physical count">'+
   '<div class="trueactions"><button type="button" class="truecancel">CANCEL</button><button type="button" class="truesave">SAVE & RECALCULATE</button></div>'+
   '<div class="truestatus">Count field is intentionally blank.</div>';
- btn.replaceWith(editor);
+ editor.addEventListener('click',e=>{e.preventDefault();e.stopPropagation()});
+ editor.addEventListener('pointerdown',e=>e.stopPropagation());
+ editor.addEventListener('pointerup',e=>e.stopPropagation());
+ if(pair)pair.appendChild(editor);else btn.insertAdjacentElement('afterend',editor);
+
  const input=editor.querySelector('.trueinput'),save=editor.querySelector('.truesave'),cancel=editor.querySelector('.truecancel'),status=editor.querySelector('.truestatus');
  const live=api('/v1/app/v2/pi/'+encodeURIComponent(family),{timeoutMs:10000}).then(pi=>{
    const eff=pi?.effective_oh||{},sys=pi?.system_oh||{};
@@ -1180,8 +1192,13 @@ function beginFamilyOhInlineEdit(btn){
    const cur=editor.querySelector('.truecurrent');if(cur)cur.textContent='Current Effective OH · '+liveQty+(resolvedUom?' '+resolvedUom:'');
    return pi;
  }).catch(()=>null);
- const restore=()=>{const parent=editor.parentNode;editor.replaceWith(original);if(pair)pair.classList.remove('editing');bindFamilyOhEditors(parent||document)};
- cancel.onclick=e=>{e.preventDefault();e.stopPropagation();restore()};
+
+ const closeEditor=()=>{
+   btn.dataset.trueStockEditing='0';
+   if(pair)pair.classList.remove('editing');
+   editor.remove();
+ };
+ cancel.onclick=e=>{e.preventDefault();e.stopPropagation();closeEditor()};
  save.onclick=async e=>{
    e.preventDefault();e.stopPropagation();
    const raw=String(input.value||'').trim(),qty=Number(raw);
@@ -1196,15 +1213,20 @@ function beginFamilyOhInlineEdit(btn){
       timeoutMs:30000
     });
     applyTrueStockLocally(family,qty,resolvedUom);
+    btn.dataset.oh=String(qty);btn.dataset.uom=resolvedUom;
+    const value=btn.querySelector('b');if(value)value.textContent=fmtNullable(qty)+' '+resolvedUom;
+    const state=btn.querySelector('span');if(state)state.textContent='TRUE STOCK ACTIVE';
     status.textContent='Saved · Effective OH '+fmtNullable(qty)+' '+resolvedUom+' · recalculating…';
     toast('True Stock saved · Effective OH updated');
-    refreshAfterFamilyTrueStock(family).catch(()=>{status.textContent='Saved · recalculation refresh pending';});
+    setTimeout(closeEditor,450);
+    refreshAfterFamilyTrueStock(family).catch(()=>{});
    }catch(err){
     save.disabled=false;cancel.disabled=false;status.textContent=err.message||'Could not save True Stock';
    }
  };
- setTimeout(()=>{input.focus();input.select()},0);
+ setTimeout(()=>{input.focus()},0);
 }
+
 async function openFamilyTrueStock(d){
  const family=String(d?.family||'').trim();
  if(!family)return toast('Family Article unavailable');
