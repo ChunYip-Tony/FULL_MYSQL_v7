@@ -105,12 +105,12 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
         return {}
 
     ids = list(targets)
-    current_day = business_today()
     completed_day = completed_through_date()
     config_by_id: dict[int, dict[str, Any]] = {}
 
     # Match phase3 semantics: inspect accepted Price List files newest-first,
-    # and for each UPC use the newest file containing that UPC.
+    # and for each UPC use the newest file containing that UPC. The uploaded
+    # snapshot is authoritative immediately; source_since_date is metadata only.
     cur.execute(
         """SELECT file_id,upload_timestamp,report_generated_at
            FROM ingest_file
@@ -135,9 +135,8 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
                 JOIN ingest_file f ON f.file_id=p.file_id
                 WHERE p.file_id=%s
                   AND p.upc_id IN ({ph})
-                  AND p.configured_price>0
-                  AND (p.source_since_date IS NULL OR p.source_since_date<=%s)""",
-            (int(pf["file_id"]), *uid_list, current_day),
+                  AND p.configured_price>0""",
+            (int(pf["file_id"]), *uid_list),
         )
         grouped: dict[int, list[dict[str, Any]]] = {}
         for pr in cur.fetchall():
@@ -2010,6 +2009,8 @@ def cached_ordering_review(
         != str(live_health.get("pos_data_through") or "")
         or str(cached_health.get("movement_data_through") or "")
         != str(live_health.get("movement_data_through") or "")
+        or str(cached_health.get("price_list_file_id") or "")
+        != str(live_health.get("price_list_file_id") or "")
     )
     data_current=bool(cached and cached_expected==expected and not source_changed)
     age=(time.monotonic()-cached_at) if cached is not None and cached_at is not None else None
@@ -6126,6 +6127,8 @@ def backoffice_home_summary(force: bool = False) -> dict[str, Any]:
         != str(live_health.get("pos_data_through") or "")
         or str(cached_health.get("movement_data_through") or "")
         != str(live_health.get("movement_data_through") or "")
+        or str(cached_health.get("price_list_file_id") or "")
+        != str(live_health.get("price_list_file_id") or "")
     )
 
     age = time.monotonic() - _HOME_SUMMARY_CACHE_AT if cached is not None else None
@@ -6198,6 +6201,25 @@ def _pricing_review_data_health(*, allow_stale_estimate: bool = True) -> dict[st
             limit=60,
             up_to=expected_through,
         )
+        # Price List is a point-in-time current-price source.  Only advance the
+        # cache signature after Phase 3 has materialized rows for the accepted
+        # file, so a RAW upload cannot invalidate caches before prices exist.
+        cur.execute(
+            """SELECT f.file_id,
+                      COALESCE(f.upload_timestamp,f.report_generated_at) AS uploaded_at,
+                      MAX(p.snapshot_at) AS snapshot_at
+               FROM ingest_file f
+               JOIN price_list_observation p ON p.file_id=f.file_id
+               WHERE f.source_type='price_list'
+                 AND f.processing_status='INGESTED'
+                 AND f.error_count=0
+                 AND f.duplicate_of_file_id IS NULL
+               GROUP BY f.file_id,f.upload_timestamp,f.report_generated_at
+               ORDER BY COALESCE(f.upload_timestamp,f.report_generated_at) DESC,
+                        f.file_id DESC
+               LIMIT 1"""
+        )
+        price_list_source = cur.fetchone() or {}
         cur.close()
 
     pos_through = pos_days[0]["date"] if pos_days else None
@@ -6239,6 +6261,9 @@ def _pricing_review_data_health(*, allow_stale_estimate: bool = True) -> dict[st
         "stale_calendar_days": stale_days,
         "pos_data_through": pos_through,
         "movement_data_through": mvt_through,
+        "price_list_file_id": price_list_source.get("file_id"),
+        "price_list_uploaded_at": price_list_source.get("uploaded_at"),
+        "price_list_snapshot_at": price_list_source.get("snapshot_at"),
         "missing_required_sources": missing,
         "rule": (
             "BEST_AVAILABLE_INDEPENDENT_POS_MVT_NO_FRESHNESS_GATE"
@@ -8183,6 +8208,7 @@ def current_tpr_review(
         "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
+        "data_health": _pricing_review_data_health(allow_stale_estimate=True),
         "summary": {
             "current_tpr_count": len(out),
             "sold_7d_count": sum(1 for r in out if _d(r.get("qty_7d")) > 0),
@@ -8353,8 +8379,18 @@ def cached_current_tpr_review(
             },
         }
 
+    live_health=_pricing_review_data_health(allow_stale_estimate=True)
+    cached_health=dict((cached.get("data_health") or {}))
+    source_changed=(
+        str(cached_health.get("pos_data_through") or "")
+        != str(live_health.get("pos_data_through") or "")
+        or str(cached_health.get("movement_data_through") or "")
+        != str(live_health.get("movement_data_through") or "")
+        or str(cached_health.get("price_list_file_id") or "")
+        != str(live_health.get("price_list_file_id") or "")
+    )
     age=(time.monotonic()-cached_at) if cached_at is not None else None
-    stale=age is None or age>=_TPR_REVIEW_CACHE_TTL_SECONDS
+    stale=source_changed or age is None or age>=_TPR_REVIEW_CACHE_TTL_SECONDS
     if force or stale:
         _request_tpr_review_refresh(cat,lim,key)
     with _TPR_REVIEW_CACHE_LOCK:
@@ -8362,11 +8398,19 @@ def cached_current_tpr_review(
 
     return {
         **cached,
-        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
-        "analysis_status":"READY_STALE_REFRESHING" if stale else "READY",
-        "cache_status":"STALE_REFRESHING" if stale else "HIT",
+        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V5_PRICE_LIST_SOURCE_AWARE_CACHE",
+        "analysis_status":(
+            "READY_SOURCE_CHANGED_REFRESHING"
+            if source_changed else ("READY_STALE_REFRESHING" if stale else "READY")
+        ),
+        "cache_status":(
+            "SOURCE_CHANGED_REFRESHING"
+            if source_changed else ("STALE_REFRESHING" if stale else "HIT")
+        ),
         "refreshing":refreshing,
         "refresh_error":_TPR_REVIEW_LAST_ERROR.get(key),
+        "current_source_health":live_health,
+        "source_changed_since_analysis":source_changed,
     }
 
 
@@ -8570,6 +8614,8 @@ def cached_pricing_review(
         != str(live_health.get("pos_data_through") or "")
         or str(cached_health.get("movement_data_through") or "")
         != str(live_health.get("movement_data_through") or "")
+        or str(cached_health.get("price_list_file_id") or "")
+        != str(live_health.get("price_list_file_id") or "")
     )
     age=(time.monotonic()-cached_at) if cached_at is not None else None
     stale=(
