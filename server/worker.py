@@ -507,12 +507,15 @@ def _queue_orphaned_phase2c_ready(cur) -> int:
     # Policy:
     # - If there is no active Phase 3 work and no Phase 3 result, allow ONE
     #   current-version PHASE3_RERUN to recover the orphaned Phase2C hand-off.
-    # - Once any current-version PHASE3_RERUN reaches a terminal state, stop
+    # - Once any current-version Phase 3 pipeline attempt
+    #   (POST_RAW_PIPELINE or PHASE3_RERUN) reaches a terminal state, stop
     #   auto-queueing. The batch remains PHASE2C_READY and the user can inspect
     #   the failure then explicitly Resume / Rebuild.
     #
     # Same-version stale-heartbeat recovery is handled separately by
-    # _recover_stale_started() and is already bounded.
+    # _recover_stale_started() and is already bounded. That path creates its
+    # own single replacement, so this orphan detector must not add another
+    # retry after a terminal run.
     cur.execute(
         """SELECT ib.batch_id
            FROM ingest_batch ib
@@ -532,7 +535,7 @@ def _queue_orphaned_phase2c_ready(cur) -> int:
                  FROM pipeline_run prior
                  WHERE prior.batch_id=ib.batch_id
                    AND prior.pipeline_name=%s
-                   AND prior.stage_name='PHASE3_RERUN'
+                   AND prior.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
                    AND prior.code_version=%s
                    AND prior.processing_status IN (
                        'FAILED','FAILED_QA','QA_HOLD','ABORTED','PAUSED','COMPLETED'
