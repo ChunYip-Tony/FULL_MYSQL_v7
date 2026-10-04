@@ -8105,6 +8105,7 @@ def current_tpr_review(
     purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
         "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
+        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
         "summary": {
