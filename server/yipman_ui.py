@@ -2414,7 +2414,7 @@ function openManualPromotion(){
     '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
    '</div>';
   }).join('');
-  $('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
+  $$('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
    selected.delete(String(btn.dataset.manualPromoRemove));renderSelected();
   });
  }
@@ -2473,7 +2473,7 @@ function openManualPromotion(){
       (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
       ' · OH '+esc(effectiveOHText(fam))+'</span></button>';
    }).join('');
-   $('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
+   $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
   }catch(e){
    if(token!==latestSearchToken)return;
    searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message;
