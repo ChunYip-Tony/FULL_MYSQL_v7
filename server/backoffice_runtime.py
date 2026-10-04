@@ -6965,6 +6965,25 @@ def _bulk_tpr_price_list_lifecycle(
             continue
 
         current_price = _positive_price(live.get("price"))
+        # Find the closest configured REG preceding the current continuous TPR.
+        # This is the price to restore when a TPR is cancelled; POS baseline
+        # remains separate evidence and must not be mislabeled as configured REG.
+        prior_regular_price = None
+        prior_regular_date = None
+        seen_current_tpr = False
+        for state in states:
+            ptype = str(state.get("price_type") or "").upper()
+            if not seen_current_tpr:
+                if ptype == "TPR":
+                    seen_current_tpr = True
+                continue
+            if ptype == "TPR":
+                continue
+            if ptype == "REG":
+                prior_regular_price = _positive_price(state.get("configured_price"))
+                prior_regular_date = state.get("file_business_date")
+                break
+
         lifecycle_dates: list[date] = []
         current_step_dates: list[date] = []
         history: list[dict[str, Any]] = []
@@ -7040,6 +7059,8 @@ def _bulk_tpr_price_list_lifecycle(
                 min(current_step_dates) if current_step_dates else None
             ),
             "configured_tpr_price_steps": compressed[-8:],
+            "prior_regular_price": prior_regular_price,
+            "prior_regular_date": prior_regular_date,
         }
     return out
 
@@ -7957,8 +7978,16 @@ def current_tpr_review(
             "current_oh_source": current_oh_source,
             "system_oh": system_oh,
             "system_oh_uom": system_oh_uom,
-            "original_regular_price": baseline_avg_price,
-            "original_regular_price_basis": "CLEAN_PRE_TPR_NON_SALE_NON_TPR_AVG_SOLD_PRICE",
+            "original_regular_price": (
+                _positive_price(pl_life.get("prior_regular_price"))
+                or baseline_avg_price
+            ),
+            "original_regular_price_basis": (
+                "PRIOR_CONFIGURED_REG_BEFORE_CURRENT_TPR"
+                if _positive_price(pl_life.get("prior_regular_price")) is not None
+                else "CLEAN_PRE_TPR_NON_SALE_NON_TPR_AVG_SOLD_PRICE_FALLBACK"
+            ),
+            "original_regular_price_date": pl_life.get("prior_regular_date"),
             "aging_stock_target": aging_stock_target,
             "freshness_window_start_doh": freshness_window_start,
             "freshness_threshold_doh": freshness_threshold,
