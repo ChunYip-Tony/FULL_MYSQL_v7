@@ -119,7 +119,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   root.innerHTML=`
     <header class="yv2-head">
       <div class="yv2-headrow"><div><div class="yv2-brand">Yipman <span>V2</span></div><div class="yv2-version">Easy Read · __VERSION__</div></div><div class="yv2-health" id="yv2Health">Checking data…</div></div>
-      <form class="yv2-search" id="yv2SearchForm"><span>⌕</span><input id="yv2Search" placeholder="UPC / article / English / 中文" autocomplete="off"><button type="button" id="yv2SearchClear">×</button></form>
+      <form class="yv2-search" id="yv2SearchForm"><button type="submit" id="yv2SearchBtn" aria-label="Search" style="border:0;background:transparent;padding:8px 3px;font-size:18px">⌕</button><input id="yv2Search" placeholder="UPC / article / English / 中文" autocomplete="off" enterkeyhint="search"><button type="button" id="yv2SearchClear">×</button></form>
     </header>
     <main class="yv2-main">
       <section class="yv2-page on" id="yv2-lookup"><div class="yv2-title"><h2>Item Lookup</h2><span class="yv2-sub">One item · one screen</span></div><div id="yv2LookupRows"><div class="yv2-empty">Search a UPC, Family Article, Receiving Article, English name, or Chinese name.</div></div></section>
@@ -139,7 +139,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   $('#yv2Modal').onclick=e=>{if(e.target.id==='yv2Modal')closeModal()};
 
   function go(p){
-    V.page=p;root.classList.toggle('lookup-mode',p==='lookup');$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
+    V.page=p;root.classList.toggle('lookup-mode',p==='lookup');$$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
     $('#yv2SearchForm').style.display=p==='lookup'?'flex':'none';
     document.querySelector('#yv2-'+p)?.scrollTo(0,0);
     if(p==='actions'&&!V.actionsLoaded)loadActions();
@@ -149,16 +149,40 @@ YIPMAN_MOBILE_V2_JS = r"""
   $$('.yv2-nav').forEach(b=>b.onclick=()=>go(b.dataset.page));
 
   async function loadHealth(){
+    const box=$('#yv2Health');
+    box.textContent='Checking data…';
+    box.className='yv2-health';
+    box.style.background='';box.style.color='';box.style.borderColor='';
     try{
-      const [h,home]=await Promise.all([api('/v1/backoffice/data-health?days=14',{timeoutMs:10000}),api('/v1/backoffice/home-summary',{timeoutMs:10000})]);
+      const results=await Promise.allSettled([
+        api('/v1/yipman/header-freshness',{timeoutMs:9000}),
+        api('/v1/backoffice/data-health?days=14',{timeoutMs:10000}),
+        api('/v1/backoffice/home-summary',{timeoutMs:10000})
+      ]);
+      const hf=results[0].status==='fulfilled'?results[0].value:{};
+      const h=results[1].status==='fulfilled'?results[1].value:{};
+      const home=results[2].status==='fulfilled'?results[2].value:{};
       const latest=h?.latest||{},ph=home?.pricing?.data_health||home?.ordering?.data_health||{};
-      V.dataThrough=ph.data_through||ph.pos_data_through||latest?.POS?.date||null;
+      const src=hf?.sources||{};
+      const posDate=src?.POS?.date||latest?.POS?.date||ph.pos_data_through||null;
+      const mvtDate=src?.MVT?.date||latest?.MVT?.date||ph.movement_data_through||null;
+      V.dataThrough=ph.data_through||ph.pos_data_through||posDate||mvtDate||null;
       const expected=ph.expected_through||h?.completed_through||null;
-      const stale=!!(V.dataThrough&&expected&&String(V.dataThrough)<String(expected));
-      $('#yv2Health').textContent=V.dataThrough?(stale?('Data thru '+V.dataThrough+' · expected '+expected):('Published thru '+V.dataThrough)):'Data status';
-      $('#yv2Health').className='yv2-health';
-      if(stale){$('#yv2Health').style.background='#fff4d1';$('#yv2Health').style.color='#7d5300';$('#yv2Health').style.borderColor='#d9bb6d'}
-    }catch(e){$('#yv2Health').textContent='Data check';$('#yv2Health').style.background='#fff4d1';$('#yv2Health').style.color='#7d5300'}
+      const staleByDate=!!(V.dataThrough&&expected&&String(V.dataThrough)<String(expected));
+      const staleBySource=['warn','bad'].includes(String(src?.POS?.tone||''))||['warn','bad'].includes(String(src?.MVT?.tone||''));
+      const stale=staleByDate||staleBySource;
+      if(V.dataThrough){
+        box.textContent=stale?('Data thru '+V.dataThrough+(expected?' · expected '+expected:'')):('Published thru '+V.dataThrough);
+      }else if(posDate||mvtDate){
+        box.textContent='POS '+String(posDate||'—')+' · MVT '+String(mvtDate||'—');
+      }else{
+        box.textContent='Data unavailable';
+      }
+      if(stale||!V.dataThrough){box.style.background='#fff4d1';box.style.color='#7d5300';box.style.borderColor='#d9bb6d'}
+    }catch(e){
+      box.textContent='Data unavailable';
+      box.style.background='#fff4d1';box.style.color='#7d5300';box.style.borderColor='#d9bb6d';
+    }
   }
 
   function familyGroups(rows){
@@ -187,7 +211,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       bindStockButtons(box);box.querySelectorAll('[data-upc]').forEach(b=>b.onclick=()=>openUpc(b.dataset.upc));
     }catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
-  $('#yv2SearchForm').onsubmit=e=>{e.preventDefault();searchLookup($('#yv2Search').value);$('#yv2Search').blur()};
+  $('#yv2SearchForm').onsubmit=e=>{e.preventDefault();const q=$('#yv2Search').value.trim();if(q.length<2){toast('Enter at least 2 characters');$('#yv2Search').focus();return}searchLookup(q);$('#yv2Search').blur()};
   let st;$('#yv2Search').oninput=()=>{clearTimeout(st);const q=$('#yv2Search').value.trim();if(q.length>=2)st=setTimeout(()=>searchLookup(q),330)};
   $('#yv2SearchClear').onclick=()=>{$('#yv2Search').value='';$('#yv2LookupRows').innerHTML='<div class="yv2-empty">Search a UPC, Family Article, Receiving Article, English name, or Chinese name.</div>';$('#yv2Search').focus()};
 
