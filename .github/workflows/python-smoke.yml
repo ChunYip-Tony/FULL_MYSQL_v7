@@ -179,7 +179,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v452'" in ui
+          assert "const CACHE='yipman-v454'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -344,7 +344,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v452'" in ui
+          assert "const CACHE='yipman-v454'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'Showing last saved Stock Flow' in ui
           assert 'data-stock-retry' in ui
