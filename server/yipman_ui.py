@@ -14,7 +14,37 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "
+/* V448 Effective OH + sticky controls + 12h suggestion snooze */
+#quick .stockflowfilters{position:sticky;top:0;z-index:18}
+#quick .stockflowresultbar{position:sticky;top:34px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 1px}
+#order .order-tabs{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:3px 0}
+#order .order-tools{position:sticky;top:44px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0;margin-bottom:5px}
+#price .price-tabs{position:sticky;top:0;z-index:18;background:#e8eef3}
+#price #priceSuggestionPane>.filters,#price #currentTprPane>.filters{position:sticky;top:48px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0;margin-bottom:4px}
+#price .price-tools,#price .tpr-tools{position:sticky;top:86px;z-index:16;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 0;margin-bottom:5px}
+.familyohrow{display:grid;grid-template-columns:1.08fr .92fr;gap:5px;margin-top:5px}
+.familyoh{min-width:0;border:1px solid #d7e2ea;border-radius:9px;background:rgba(255,255,255,.78);padding:6px 7px}
+.familyoh.effective{border-color:#a9d2ee;background:#eff8ff;cursor:pointer;position:relative;padding-right:42px}
+.familyoh small{display:block;font-size:6.5px;color:#71808d;font-weight:1000;letter-spacing:.02em}
+.familyoh b{display:block;font-size:14px;line-height:1.05;margin-top:2px}
+.familyoh span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.familyoh .ohedit{position:absolute;right:5px;top:50%;transform:translateY(-50%);border:0;border-radius:7px;background:#dceeff;color:#0869bd;padding:4px 5px;font-size:7px;font-weight:1000}
+.familyoh.true{box-shadow:inset 3px 0 0 #0878d1}
+#quick .bestfam.article-tone-0{--best-border:#d4ab18;--best-bg:#fff5c9;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-1{--best-border:#55ae72;--best-bg:#e4f6e8;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-2{--best-border:#4b98d2;--best-bg:#e6f2fc;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-3{--best-border:#d66e8c;--best-bg:#fde8ef;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-4{--best-border:#8d74cc;--best-bg:#efeafb;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-5{--best-border:#46a3a3;--best-bg:#e5f7f7;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-6{--best-border:#cf8845;--best-bg:#fff0e1;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+#quick .bestfam.article-tone-7{--best-border:#6d79bf;--best-bg:#eaedff;border:1.5px solid var(--best-border);border-left:5px solid var(--best-border);background:linear-gradient(95deg,var(--best-bg),#fff 66%)}
+.snooze12{border:1px solid #efb7bc!important;background:#fde8ea!important;color:#a12632!important}
+.snoozebar{display:flex;align-items:center;justify-content:space-between;gap:7px;margin:5px 0;padding:6px 8px;border:1px dashed #e1b9bd;border-radius:9px;background:#fff7f8;color:#7d4c51;font-size:8px;font-weight:900}
+.tprcancelchoices{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:7px}
+.tprcancelchoice{border:1px solid #d7e0e6;border-radius:9px;background:#fff;padding:7px}.tprcancelchoice small{display:block;font-size:6.5px;color:#71808d;font-weight:950}.tprcancelchoice b{display:block;font-size:13px;margin-top:2px}
+.freshwindow{margin-top:6px;border:1px solid #ecd59a;border-radius:9px;background:#fff7e4;color:#7b5700;padding:7px 8px;font-size:8px;font-weight:850;line-height:1.35}
+</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -42,7 +72,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v444';
+const CACHE='yipman-v448';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1429,6 +1459,50 @@ function quickRole(r){
  if(p==='247')return {label:'RELATED · 247',cls:''};
  return {label:'UPC'+(p?' · '+p:''),cls:''};
 }
+
+function articleTone(value){
+ let h=0;for(const ch of String(value||''))h=(h*31+ch.charCodeAt(0))>>>0;
+ return h%8;
+}
+function effectiveOhDisplay(effective,system,uom,source,editable=true){
+ const euom=String(uom||'').trim(),e=num(effective),s=num(system),src=String(source||'').toUpperCase(),isTrue=src.includes('TRUE');
+ if(e===null&&s===null)return '';
+ return '<div class="familyohrow">'+
+   '<div class="familyoh effective'+(isTrue?' true':'')+'"'+(editable?' data-family-oh-edit="1"':'')+'><small>EFFECTIVE OH · '+(editable?'TAP TO CHANGE':'CURRENT')+'</small><b>'+fmt(e)+' '+esc(euom)+'</b><span>'+(isTrue?'TRUE STOCK OVERRIDE':'SYSTEM OH IN USE')+'</span>'+(editable?'<button type="button" class="ohedit">EDIT</button>':'')+'</div>'+
+   '<div class="familyoh"><small>SYSTEM OH</small><b>'+fmt(s)+' '+esc(euom)+'</b><span>LATEST SYSTEM POSITION</span></div>'+
+ '</div>';
+}
+async function openFamilyTrueStock(ctx){
+ if(!ctx||!ctx.action_upc)return toast('No editable UPC is available for this Family');
+ const unit=String(ctx.uom||'').trim().toUpperCase();
+ if(!unit)return toast('True Stock UOM is unresolved');
+ const currentOh=num(ctx.effective_oh),system=num(ctx.system_oh);
+ sheet(ctx.family_name||'Update True Stock','Family '+esc(ctx.family_article||'—'),
+   '<div class="dmetrics"><div class="dm"><b>'+fmt(currentOh)+' '+esc(unit)+'</b><span>EFFECTIVE OH</span></div><div class="dm"><b>'+fmt(system)+' '+esc(unit)+'</b><span>SYSTEM OH</span></div></div>'+
+   '<div class="detail"><b>Observed True Stock</b><br><input id="globalTrueStockInput" type="number" min="0" step="0.1" inputmode="decimal" value="'+esc(currentOh??'')+'" style="width:100%;font-size:24px;font-weight:900;padding:10px;border:2px solid #c4d9e8;border-radius:12px;margin-top:6px">'+
+   '<br><br><div class="estimatebar">Saving this count makes it the Effective OH everywhere. Ordering, Price Review / TPR, Stock Flow, DOS/DOH and PI are recalculated from the new count. System OH remains visible for comparison. If True Stock is lower, the difference is sent to Pending Dumping.</div>'+
+   '<div class="actions"><button class="secondary" id="globalTrueStockCancel">CANCEL</button><button class="primary" id="globalTrueStockSave">SAVE TRUE STOCK</button></div></div>');
+ $('#globalTrueStockCancel').onclick=()=>closeSheet(true);
+ $('#globalTrueStockSave').onclick=async()=>{
+   const qty=Number($('#globalTrueStockInput').value);
+   if(!Number.isFinite(qty)||qty<0)return toast('Enter valid True Stock');
+   const btn=$('#globalTrueStockSave');btn.disabled=true;btn.textContent='SAVING…';
+   try{
+     await api('/v1/app/quick-check/'+encodeURIComponent(ctx.action_upc)+'/true-stock',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({true_stock:qty,uom:unit}),timeoutMs:30000});
+     closeSheet(false);toast('True Stock saved · recalculating all affected results');
+     bestSellerGroups=null;
+     if(current==='quick'){const q=$('#globalInput')?.value?.trim()||'';if(q)await loadQuick(q);else await loadBestSellers(true)}
+     else if(current==='order')await runActiveOrdering();
+     else if(current==='price')await loadPriceCurrentView();
+   }catch(e){toast(e.message);btn.disabled=false;btn.textContent='SAVE TRUE STOCK'}
+ };
+}
+function bindFamilyOhEditors(){
+ $('[data-family-oh-edit]').forEach(el=>el.onclick=e=>{
+   e.stopPropagation();let raw={};try{raw=JSON.parse(el.dataset.ohContext||'{}')}catch{}
+   openFamilyTrueStock(raw);
+ });
+}
 function quickFamilyGroups(rows){
  const groups=new Map();
  const articleCopy=a=>({
@@ -1472,7 +1546,10 @@ function quickFamilyGroups(rows){
      family_receipt_7d_qty:r.family_receipt_7d_qty??null,
      family_receipt_7d_uom:r.family_receipt_7d_uom||'',
      family_receipt_7d_status:r.family_receipt_7d_status||'',
-     family_receipt_7d_day_count:r.family_receipt_7d_day_count??null
+     family_receipt_7d_day_count:r.family_receipt_7d_day_count??null,
+     effective_oh:r.family_oh??null,effective_oh_uom:r.family_oh_uom||r.family_system_oh_uom||'',
+     effective_oh_source:r.family_oh_source||'',system_oh:r.family_system_oh??null,
+     system_oh_uom:r.family_system_oh_uom||'',action_upc:r.upc||''
    });
    const g=groups.get(key);g.rows.push(r);
    const v=Number(r.velocity_7d);if(Number.isFinite(v))g.max_velocity=Math.max(g.max_velocity,v);
@@ -1645,7 +1722,9 @@ function quickGroupedHtml(rows){
      '</div></div>';
    const receivingHtml=g.receiving.map(a=>quickReceivingRowHtml(a,g.family_id)).join('');
    const sellingHtml=(g.selling||[]).map((a,i)=>quickSellingHtml(a,idx,i)).join('');
-   return '<section class="qfamily tone'+(idx%5)+'">'+familyHead+receivingHtml+sellingHtml+'</section>';
+   const ohCtx={family_article:g.family_article,family_name:g.family_name,action_upc:g.action_upc,uom:g.effective_oh_uom||g.system_oh_uom,effective_oh:g.effective_oh,system_oh:g.system_oh};
+   const ohHtml=effectiveOhDisplay(g.effective_oh,g.system_oh,g.effective_oh_uom||g.system_oh_uom,g.effective_oh_source,!!g.action_upc).replace('data-family-oh-edit="1"','data-family-oh-edit="1" data-oh-context="'+esc(JSON.stringify(ohCtx))+'"');
+   return '<section class="qfamily tone'+(idx%5)+'">'+familyHead+ohHtml+receivingHtml+sellingHtml+'</section>';
  }).join('');
 }
 function fitQuickUpcNames(){
@@ -1658,7 +1737,8 @@ function fitQuickUpcNames(){
  });
 }
 function bindQuickRows(){
- $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
+ bindFamilyOhEditors();
+ $('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
  $$('[data-qhide]').forEach(b=>b.onclick=()=>{const n=$('#'+CSS.escape(b.dataset.qhide));if(!n)return;const on=n.classList.toggle('on');b.textContent=(on?'Hide ':'Show ')+(b.dataset.noun||'inactive')+(on?' ▴':' ▾')});
  bindReceiptLinks();
  requestAnimationFrame(fitQuickUpcNames);
@@ -1785,6 +1865,7 @@ function renderStockFlow(){
    b.textContent=box.classList.contains('open')?'HIDE':'SHOW 2';
  });
  bindReceiptLinks();
+ bindFamilyOhEditors();
 }
 function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
@@ -1810,11 +1891,13 @@ function stockFlowFamilyHtml(g,idx){
    : '';
  const promoHtml=promo?'<div class="stocksale stockpromo"><strong>RECENT SALE · '+esc(promoRange)+'</strong>'+promoExtra+promoPrice+'</div>':'';
  const overSelling=ratio===null?'—':((ratio-1)*100).toFixed(0)+'%';
- return '<section class="bestfam tone'+(idx%5)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
+ const stockCtx={family_article:g.family_article,family_name:g.family_name,action_upc:g.action_upc,uom:g.effective_oh_uom||g.system_oh_uom,effective_oh:g.effective_oh,system_oh:g.system_oh};
+ const stockOh=effectiveOhDisplay(g.effective_oh,g.system_oh,g.effective_oh_uom||g.system_oh_uom,g.effective_oh_source,!!g.effective_oh_editable).replace('data-family-oh-edit="1"','data-family-oh-edit="1" data-oh-context="'+esc(JSON.stringify(stockCtx))+'"');
+ return '<section class="bestfam article-tone-'+articleTone(g.family_article||g.family_id)+'"><div class="besttop"><div><div class="bestlabel">FAMILY ARTICLE</div><div class="bestnum">'+esc(g.family_article||'—')+'</div><div class="bestname">'+esc(g.family_name||'Unmapped Family')+'</div><div class="stocktags">'+categoryTag+observedTag+'</div></div><div class="stockratio"><small>OVER SELLING</small><b>'+overSelling+'</b></div></div>'+
    '<div class="stockflowgrid"><div class="bestmetric"><small>7D SELLING MVT</small><b>'+fmt(g.group_qty_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(g.group_avg_qty_day)+' '+esc(uom)+'</span></div>'+
    '<div class="bestmetric"><small>7D RECEIPT</small><b>'+fmt(g.family_receipt_7d_qty)+' '+esc(receiptUom)+'</b><span>'+(count===null?'—':fmt(count,0))+' RECEIPT DAY'+(count===1?'':'S')+' / 7D</span></div>'+
    '<div class="stockdiff'+(promo?' promoted':' nosale')+'"><small>DIFFERENCE</small><b>+'+fmt(diff)+' '+esc(uom)+'</b><span>'+overSelling+' over selling</span><span class="stockwatch">'+(promo?'RECENT SALE':'NO RECENT SALE')+'</span></div></div>'+
-   promoHtml+
+   stockOh+promoHtml+
    '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span class="stockreceiptmeta">'+costHtml+receiptToggle+'</span></div>'+recent+'</div></section>';
 }
 async function loadBestSellers(force=false){
@@ -1841,7 +1924,11 @@ async function loadBestSellers(force=false){
     latest_receipt_date:r.latest_receipt_date||null,
     latest_receipt_cost:r.latest_receipt_cost,
     latest_receipt_cost_uom:r.latest_receipt_cost_uom||'',
-    latest_receipt_cost_source:r.latest_receipt_cost_source||null
+    latest_receipt_cost_source:r.latest_receipt_cost_source||null,
+    system_oh:r.system_oh,system_oh_uom:r.system_oh_uom||'',system_oh_status:r.system_oh_status||'',
+    effective_oh:r.effective_oh,effective_oh_uom:r.effective_oh_uom||r.system_oh_uom||'',
+    effective_oh_source:r.effective_oh_source||'',effective_oh_status:r.effective_oh_status||'',
+    effective_oh_editable:!!r.effective_oh_editable,action_upc:r.action_upc||''
   }));
   renderStockFlow();
  }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
@@ -1852,7 +1939,7 @@ async function loadQuick(q){
  if(!query){lastQuickQuery='';await loadBestSellers();return}
  const requestId=++quickRequestSeq;lastQuickQuery=query;box.innerHTML='<div class="loading">Searching current Quick Check…</div>';
  try{
-  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&q='+encodeURIComponent(query),{timeoutMs:18000});
+  const d=await api('/v1/backoffice/inventory?category=ALL&limit=120&lightweight=true&include_oh=true&q='+encodeURIComponent(query),{timeoutMs:18000});
   if(requestId!==quickRequestSeq)return;
   const rows=d.rows||[];
   if(!rows.length){box.innerHTML='<div class="empty">No matching items.</div>';return}
