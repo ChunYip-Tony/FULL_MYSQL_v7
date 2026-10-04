@@ -68,7 +68,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v444';
+const CACHE='yipman-v449';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -2420,6 +2420,7 @@ function ignoreOrderSuggestion(r){
  const id=orderIgnoreId(r);if(!id)return;
  const map=readOrderIgnores();map[id]=Date.now();writeOrderIgnores(map);
  toast('Ordering suggestion hidden for 12 hours');
+ setTimeout(()=>{if(current==='order'&&orderMode==='REGULAR')renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)},ORDER_IGNORE_MS+1000);
  renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale);
 }
 function renderOrderRoster(rows,data,h,stale){
@@ -2646,6 +2647,7 @@ function ignorePriceSuggestion(r){
   const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
   if($('#overlay').classList.contains('on'))closeSheet(true);
   toast('Price suggestion hidden for 12 hours');
+  setTimeout(()=>{if(current==='price'&&(priceView==='REG'||priceView==='TPR_SUGGEST'))loadPrices({quiet:true})},PRICE_IGNORE_MS+1000);
   loadPrices({quiet:true});
 }
 function priceReasonMeta(r,stale=false){
@@ -2877,6 +2879,7 @@ function ignoreTprProgress(r){
  const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
  if($('#overlay').classList.contains('on'))closeSheet(true);
  toast('TPR progress suggestion hidden for 12 hours');
+ setTimeout(()=>{if(current==='price'&&priceView==='TPR_PROGRESS')renderCurrentTpr()},PRICE_IGNORE_MS+1000);
  renderCurrentTpr();
 }
 function tprRecommendationMeta(r){
@@ -2954,7 +2957,8 @@ function renderCurrentTpr(){
      :(r.suggested_tpr_price!=null?'<div class="tprsuggest"><span>SUGGESTED TPR PRICE</span><b>'+money(r.suggested_tpr_price)+'</b></div>':'');
    const cancelCode=['CANCEL_TPR','END_TPR'].includes(String(r.recommendation_code||'').toUpperCase());
    const originalReg=num(r.original_regular_price),newReg=num(r.suggested_regular_price);
-   const cancelChoices=cancelCode?'<div class="tprcancelchoices"><div class="tprcancelchoice"><small>CANCEL → PRE-TPR REG BASELINE</small><b>'+money(originalReg)+'</b></div><div class="tprcancelchoice"><small>CANCEL → NEW REG</small><b>'+(newReg===null?'REVIEW':money(newReg))+'</b></div></div>':'';
+   const originalRegExact=String(r.original_regular_price_basis||'').startsWith('PRIOR_CONFIGURED_REG');
+   const cancelChoices=cancelCode?'<div class="tprcancelchoices"><div class="tprcancelchoice"><small>'+(originalRegExact?'CANCEL → ORIGINAL REG':'CANCEL → PRE-TPR REG EST.')+'</small><b>'+money(originalReg)+'</b></div><div class="tprcancelchoice"><small>CANCEL → NEW REG</small><b>'+(newReg===null?'REVIEW':money(newReg))+'</b></div></div>':'';
    const freshWindow=purpose.fresh?'<div class="freshwindow"><b>FRESHNESS WINDOW:</b> Day '+fmt(r.freshness_window_start_doh,0)+' → Day '+fmt(r.freshness_threshold_doh,0)+' inclusive. Goal: clear the aging stock reaching the threshold by the end of the threshold day; newer stock is not forced to zero.'+(num(r.aging_stock_target)!==null?' Aging target '+fmt(r.aging_stock_target)+' '+esc(r.current_oh_uom||'')+'.':'')+'</div>':'';
    const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
    return '<article class="pcard tprcard tone'+(i%5)+'" data-tpr-row="'+i+'">'+
@@ -3009,7 +3013,8 @@ function openCurrentTpr(r){
    ?'<br><b>Suggested new REG</b> '+money(r.suggested_regular_price)
    :(r.suggested_tpr_price!=null?'<br><b>Suggested TPR</b> '+money(r.suggested_tpr_price):'');
  const cancelCode=['CANCEL_TPR','END_TPR'].includes(String(r.recommendation_code||'').toUpperCase());
- const cancelPath=cancelCode?'<br><br><b>After cancelling TPR</b><br>Option A · return to pre-TPR REG baseline '+money(r.original_regular_price)+'<br>Option B · cancel and set a new REG '+(num(r.suggested_regular_price)===null?'after REG review':money(r.suggested_regular_price)):'';
+ const originalRegExact=String(r.original_regular_price_basis||'').startsWith('PRIOR_CONFIGURED_REG');
+ const cancelPath=cancelCode?'<br><br><b>After cancelling TPR</b><br>Option A · '+(originalRegExact?'restore original configured REG ':'use pre-TPR REG estimate ')+money(r.original_regular_price)+'<br>Option B · cancel and set a new REG '+(num(r.suggested_regular_price)===null?'after REG review':money(r.suggested_regular_price)):'';
  const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
  const freshness=purpose.fresh
    ?'<br><br><b>Freshness sell-through window</b><br>Day '+fmt(future.freshness_window_start_doh??r.freshness_window_start_doh,0)+' → Day '+fmt(future.freshness_threshold_doh??r.freshness_threshold_doh,0)+' inclusive · '+fmt(future.freshness_sellthrough_days_available??r.freshness_sellthrough_days_available,0)+' sell-through day(s). Aging stock target '+fmt(future.aging_stock_target??r.aging_stock_target)+' '+esc(r.current_oh_uom||'')+' · required '+fmt(future.required_velocity_to_clear)+'/day · projected aging stock left at threshold '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.current_oh_uom||'')
@@ -3071,6 +3076,7 @@ function ignoreClearanceSuggestion(r){
  const id=clearanceIgnoreId(r);if(!id)return;
  const map=readPriceIgnores();map[id]=Date.now();writePriceIgnores(map);
  toast('Clearance suggestion hidden for 12 hours');
+ setTimeout(()=>{if(current==='price'&&priceView==='CLEARANCE')renderClearanceRows()},PRICE_IGNORE_MS+1000);
  renderClearanceRows();
 }
 function clearanceWarningText(r){
