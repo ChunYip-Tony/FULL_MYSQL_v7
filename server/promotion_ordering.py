@@ -579,8 +579,11 @@ def get_promotion_list(list_id: int) -> dict[str,Any]:
         items=cur.fetchall()
         cur.close()
     return {
-        "contract_version":"YIPMAN_PROMOTION_LIST_V1",
+        "contract_version":"YIPMAN_PROMOTION_LIST_V2_MANUAL_REMOVE",
         **head,
+        "manual_item_removal_allowed":(
+            str(head.get("source_filename") or "").strip().upper()=="MANUAL_SEARCH_ENTRY"
+        ),
         "items":items,
     }
 
@@ -726,6 +729,8 @@ def calculate_promotion_order(
         "list":{
             "list_id":promo.get("list_id"),
             "list_name":promo.get("list_name"),
+            "source_filename":promo.get("source_filename"),
+            "manual_item_removal_allowed":bool(promo.get("manual_item_removal_allowed")),
             "status":promo.get("status"),
             "ready_count":promo.get("ready_count"),
             "review_count":promo.get("review_count"),

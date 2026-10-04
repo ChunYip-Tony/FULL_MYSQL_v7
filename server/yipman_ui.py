@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v462';
+const CACHE='yipman-v463';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1078,12 +1078,12 @@ function freshnessShortDate(v){
 function articleTone(value){let h=0;for(const ch of String(value||''))h=(h*31+ch.charCodeAt(0))>>>0;return h%8}
 // Compatibility wording retained for the established True Stock control contract: TAP TO ENTER TRUE STOCK
 function familyOhActionHtml(d,cls=''){
- const family=String(d?.family||''),name=String(d?.name||''),uom=String(d?.uom||''),src=String(d?.source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
+ const family=String(d?.family||d?.family_id||''),name=String(d?.name||''),uom=String(d?.uom||''),src=String(d?.source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
  return '<button type="button" class="familyohinline '+esc(cls)+'" data-family-oh data-family="'+esc(family)+'" data-name="'+esc(name)+'" data-oh="'+esc(d?.oh??'')+'" data-uom="'+esc(uom)+'">'+
    '<small>EFFECTIVE OH · ENTER TRUE STOCK</small><b>'+fmtNullable(d?.oh)+' '+esc(uom)+'</b><span>'+(isTrue?'TRUE STOCK ACTIVE':'TAP TO COUNT & RECALCULATE')+'</span></button>';
 }
 function familyOhPairHtml(d){
- const family=String(d?.family||''),name=String(d?.name||''),euom=String(d?.effective_uom||d?.system_uom||''),suom=String(d?.system_uom||euom);
+ const family=String(d?.family||d?.family_id||''),name=String(d?.name||''),euom=String(d?.effective_uom||d?.system_uom||''),suom=String(d?.system_uom||euom);
  const src=String(d?.effective_source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
  return '<div class="familyohpair">'+
  '<button type="button" class="familyohbtn" data-family-oh data-family="'+esc(family)+'" data-name="'+esc(name)+'" data-oh="'+esc(d?.effective??'')+'" data-uom="'+esc(euom)+'"><small>EFFECTIVE OH · ENTER TRUE STOCK</small><b>'+fmt(d?.effective)+' '+esc(euom)+'</b><span>'+(isTrue?'TRUE STOCK ACTIVE':'TAP TO COUNT & RECALCULATE')+'</span></button>'+
@@ -1284,7 +1284,7 @@ function beginFamilyOhInlineEdit(btn){
 }
 
 async function openFamilyTrueStock(d){
- const family=String(d?.family||'').trim();
+ const family=String(d?.family||d?.family_id||'').trim();
  if(!family)return toast('Family Article unavailable');
  let uom=String(d?.uom||'').trim().toUpperCase(),currentQty=(d.oh===null||d.oh===undefined||d.oh==='')?'':d.oh;
  sheet(d.name||'True Stock','Family '+esc(family)+' · Effective OH','<div class="loading">Loading latest Effective OH…</div>');
@@ -2571,10 +2571,15 @@ function openManualPromotion(){
     '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
    '</div>';
   }).join('');
-  $$('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
-   selected.delete(String(btn.dataset.manualPromoRemove));renderSelected();
-  });
  }
+ selectedBox.onclick=e=>{
+  const btn=e.target.closest?.('[data-manual-promo-remove]');
+  if(!btn)return;
+  e.preventDefault();e.stopPropagation();
+  selected.delete(String(btn.dataset.manualPromoRemove));
+  renderSelected();
+  searchStatus.textContent='Selected promotion item removed.';
+ };
  async function hydrateFamily(item){
   const familyKey=familyKeyFor(item);
   if(!familyKey)throw new Error('Family Article unavailable for this result');
@@ -2668,29 +2673,33 @@ function openManualPromotion(){
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
-async function removeManualPromotionItem(itemId){
+async function removeManualPromotionItem(itemId,btn=null){
  const id=Number(itemId);
- if(!promoListId||!Number.isFinite(id))return;
- if(String(promoListDetail?.source_filename||'').toUpperCase()!=='MANUAL_SEARCH_ENTRY')return toast('Only manually added promotion items can be removed here');
- if(!window.confirm('Remove this item from the manual promotion?'))return;
+ if(!promoListId||!Number.isFinite(id)){toast('Promotion item unavailable');return}
+ const oldText=btn?.textContent||'REMOVE FROM PROMOTION';
+ if(btn){btn.disabled=true;btn.textContent='REMOVING…'}
  try{
-  await api('/v1/yipman/promotion-lists/'+encodeURIComponent(promoListId)+'/items/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:12000});
+  const updated=await api('/v1/yipman/promotion-lists/'+encodeURIComponent(promoListId)+'/items/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:12000});
   promoTempOH.clear();
+  promoListDetail=updated;
   await loadPromotionLists();
   if($('#promoListSelect'))$('#promoListSelect').value=String(promoListId);
   if(Number(promoListDetail?.ready_count||0)>0){
    await loadPromotionOrder();
   }else{
    $('#promoOrderStatus').textContent='No READY items remain in this manual promotion.';
-   renderPromotionRows({rows:[],delivery_date:orderDate});
+   renderPromotionRows({rows:[],delivery_date:orderDate,list:{manual_item_removal_allowed:true,source_filename:'MANUAL_SEARCH_ENTRY'}});
   }
   toast('Promotion item removed');
- }catch(e){toast('Could not remove promotion item · '+e.message)}
+ }catch(e){
+  if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent=oldText}
+  toast('Could not remove promotion item · '+e.message);
+ }
 }
 
 function renderPromotionRows(data){
  promoLastRows=Array.isArray(data?.rows)?data.rows:[];
- const manualList=String(promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
+ const manualList=Boolean(data?.list?.manual_item_removal_allowed??promoListDetail?.manual_item_removal_allowed)||String(data?.list?.source_filename||promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
  const reviewItems=(promoListDetail?.items||[]).filter(x=>x.mapping_status!=='READY');
  const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b>'+reviewItems.slice(0,5).map(x=>'<div class="promo-review-item"><span>'+esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)+'</span>'+(manualList&&x.item_id?'<button type="button" data-promo-remove-item="'+esc(x.item_id)+'">REMOVE</button>':'')+'</div>').join('')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
  $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
@@ -2706,11 +2715,11 @@ function renderPromotionRows(data){
    : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live order coverage stops at 7 days; later demand needs another delivery.</div>':'');
   const remove=manualList&&p.item_id?'<button class="promo-remove-item" type="button" data-promo-remove-item="'+esc(p.item_id)+'">REMOVE FROM PROMOTION</button>':'';
   return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
-   '<div class="promo-metrics"><div class="promo-metric real-oh">'+familyOhActionHtml({family:r.family_article_number,name:r.family_article_name||p.family_name,oh:effectiveOh,uom:effectiveUom,source:effectiveSource},'promooh')+'</div><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>SCENARIO OH ✎</small><b>'+fmtNullable(calcOh)+' '+esc(r.uom||'')+'</b><span>'+(temp?'TEMPORARY OVERRIDE':'OPTIONAL WHAT-IF')+'</span></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
+   '<div class="promo-metrics"><div class="promo-metric real-oh">'+familyOhActionHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_article_name||p.family_name,oh:effectiveOh,uom:effectiveUom,source:effectiveSource},'promooh')+'</div><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>SCENARIO OH ✎</small><b>'+fmtNullable(calcOh)+' '+esc(r.uom||'')+'</b><span>'+(temp?'TEMPORARY OVERRIDE':'OPTIONAL WHAT-IF')+'</span></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · SCENARIO OH only for this calculation':'')+'</div></div>'+remove+'</div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
  document.querySelectorAll('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
- document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem)});
+ document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem,x)});
  bindFamilyOhEditors();
 }
 async function loadPromotionOrder(){
@@ -3230,7 +3239,7 @@ async function loadPrices(opts={}){
       '</div>'+
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
-      familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
+      familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
       '<div class="pmetrics price-metrics3">'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
@@ -3276,7 +3285,7 @@ function openPrice(r){
  const suggestion=regMode?(r.reg_suggestion_price??r.tested_price):(r.tpr_suggestion_price??r.testing_price);
  const why=regMode?(r.reg_suggestion_reason||r.primary_reason_text||'REG review'):(r.tpr_suggestion_reason||r.primary_reason_text||'TPR review');
  const suggestionLabel=regMode?'SUGGESTED REG':'TPR SUGGESTION PRICE';
- const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+ const ohPair=familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
  sheet(r.name||r.upc,r.upc||(regMode?'REG suggestion':'TPR suggestion'),
  ohPair+'<div class="dmetrics"><div class="dm"><b>'+money(r.current_price)+'</b><span>CURRENT '+esc(r.current_price_type||'')+' · '+esc(gpText(r.current_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(r.tested_price)+'</b><span>PROVED SWEET SPOT · '+esc(gpText(r.tested_price,r.current_cost))+'</span></div><div class="dm"><b>'+money(suggestion)+'</b><span>'+esc(suggestionLabel)+' · '+esc(gpText(suggestion,r.current_cost))+'</span></div></div>'+
  (r.estimate_only?'<div class="estimatebar">BEST AVAILABLE · missing POS/MVT dates do not block this price suggestion.</div>':'')+
@@ -3298,7 +3307,7 @@ function openPrice(r){
  (signals?'<br><br><b>Supporting signals</b><br>'+signals:'')+'</div>'+
  '<div class="actions"><button class="secondary" id="priceTrueStockEdit">EDIT TRUE STOCK</button><button class="secondary snooze12" id="priceIgnore12h">IGNORE 12 HOURS</button></div>');
  const ig=$('#priceIgnore12h');if(ig)ig.onclick=()=>ignorePriceSuggestion(r);
- const ts=$('#priceTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,name:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
+ const ts=$('#priceTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,family_id:r.family_id,name:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
  bindFamilyOhEditors();
 }
 $$('[data-price-filter]').forEach(b=>b.onclick=()=>{
@@ -3411,7 +3420,7 @@ function renderCurrentTpr(){
    const initialText=num(r.aging_stock_initial_target)!==null&&num(r.aging_stock_initial_target)!==num(r.aging_stock_target)?' Initial aging pool '+fmt(r.aging_stock_initial_target)+' '+esc(agingUom)+'.':'';
    const deadlineText=r.freshness_deadline_date?' Aging deadline '+esc(appDate(r.freshness_deadline_date))+'.':'';
    const freshWindow=purpose.fresh?'<div class="freshwindow"><b>FRESHNESS WINDOW:</b> Day '+fmt(r.freshness_window_start_doh,0)+' → Day '+fmt(r.freshness_threshold_doh,0)+' inclusive.'+deadlineText+' Goal: clear the anchored aging stock by the deadline; newer receipts are excluded from the aging target.'+agingText+initialText+'</div>':'';
-   const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+   const ohPair=familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
    return '<article class="pcard tprcard tone'+(i%5)+'" data-tpr-row="'+i+'">'+
      '<div class="ptop"><div class="pidentity"><div class="pupc"><span>UPC#</span><strong>'+esc(r.upc||'—')+'</strong></div><b>'+esc(r.name||r.upc||'Item')+'</b><small>Family '+esc(r.family_article_number||'—')+' · '+esc(r.category||'')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
      '<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>START '+esc(shortDate(r.tpr_start_date))+(String(r.tpr_purpose_source||'').startsWith('USER')?' · USER SET':'')+'</span></div>'+
@@ -3465,7 +3474,7 @@ function openCurrentTpr(r){
  const cancelCode=['CANCEL_TPR','END_TPR'].includes(String(r.recommendation_code||'').toUpperCase());
  const originalRegExact=String(r.original_regular_price_basis||'').startsWith('PRIOR_CONFIGURED_REG');
  const cancelPath=cancelCode?'<br><br><b>After cancelling TPR</b><br>Option A · '+(originalRegExact?'restore original configured REG ':'use pre-TPR REG estimate ')+money(r.original_regular_price)+'<br>Option B · cancel and set a new REG '+(num(r.suggested_regular_price)===null?'after REG review':money(r.suggested_regular_price)):'';
- const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+ const ohPair=familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
  const receiptQty=num(r.today_receipt_qty),hasTodayReceipt=String(r.today_receipt_status||'').toUpperCase()==='PROVISIONAL_TODAY_RECEIPT'&&Number(r.today_receipt_event_count||0)>0;
  const todayReceiptDetail=hasTodayReceipt
    ?'<br><br><b>Today receipt · PROVISIONAL</b><br>'+esc(appDate(r.today_receipt_date))+' · '+(receiptQty===null?'receipt detected':fmt(receiptQty)+' '+esc(r.today_receipt_uom||''))+'<br>Latest accepted same-day MVT only; excluded from completed-day KPI and canonical OH roll-forward until the day closes.'
@@ -3486,7 +3495,7 @@ function openCurrentTpr(r){
    '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether the aging stock reaching the freshness threshold is cleared by the threshold day; newer stock is not forced to zero.</div><div class="actions"><button class="secondary" id="tprTrueStockEdit">EDIT TRUE STOCK</button><button class="secondary snooze12" id="tprIgnore12h">IGNORE 12 HOURS</button></div>'
  );
  $$('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
- const ts=$('#tprTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,name:r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
+ const ts=$('#tprTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,family_id:r.family_id,name:r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
  const ig=$('#tprIgnore12h');if(ig)ig.onclick=()=>ignoreTprProgress(r);
  bindFamilyOhEditors();
 }
@@ -3548,7 +3557,7 @@ function renderClearanceRows(){
      '<div class="ctop"><div><b>'+esc(r.name||r.upc||'Item')+'</b><small>UPC '+esc(r.upc||'—')+' · Family '+esc(r.family_article_number||'—')+' · expires '+esc(appDate(r.expiry_date))+'</small></div><span class="clearance-badge">'+esc(r.action_label||'CLEARANCE')+'</span></div>'+
      '<div class="clearance-metrics">'+
        '<div><small>EXPIRING</small><b>'+fmt(r.clearance_target_quantity)+' '+esc(r.uom_code||'')+'</b></div>'+
-       '<div class="clearance-oh-cell">'+familyOhActionHtml({family:r.family_article_number,name:r.name,oh:r.effective_oh,uom:r.effective_oh_uom||r.uom_code,source:r.effective_oh_source},'clearanceoh')+'</div>'+
+       '<div class="clearance-oh-cell">'+familyOhActionHtml({family:r.family_article_number,family_id:r.family_id,name:r.name,oh:r.effective_oh,uom:r.effective_oh_uom||r.uom_code,source:r.effective_oh_source},'clearanceoh')+'</div>'+
        '<div><small>NEED / DAY</small><b>'+fmt(r.required_daily_velocity)+'</b></div>'+
        '<div><small>7D VEL</small><b>'+fmt(r.current_velocity_7d)+'</b></div>'+
      '</div>'+
@@ -3559,7 +3568,7 @@ function renderClearanceRows(){
    '</article>';
  }).join('')||'<div class="empty">No active clearance plan. Search an item above to add expiring stock.</div>';
  document.querySelectorAll('[data-clearance-detail]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openClearanceDetail(rows[Number(x.dataset.clearanceDetail)])});
- document.querySelectorAll('[data-clearance-stock]').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=rows[Number(b.dataset.clearanceStock)];openFamilyTrueStock({family:r.family_article_number,name:r.name,oh:r.effective_oh,uom:r.effective_oh_uom||r.uom_code})});
+ document.querySelectorAll('[data-clearance-stock]').forEach(b=>b.onclick=e=>{e.stopPropagation();const r=rows[Number(b.dataset.clearanceStock)];openFamilyTrueStock({family:r.family_article_number,family_id:r.family_id,name:r.name,oh:r.effective_oh,uom:r.effective_oh_uom||r.uom_code})});
  document.querySelectorAll('[data-clearance-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();openClearanceSetup({number:rows[Number(b.dataset.clearanceEdit)].upc,name:rows[Number(b.dataset.clearanceEdit)].name,selling_uom:rows[Number(b.dataset.clearanceEdit)].uom_code},rows[Number(b.dataset.clearanceEdit)])});
  document.querySelectorAll('[data-clearance-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreClearanceSuggestion(rows[Number(b.dataset.clearanceIgnore)])});
  bindFamilyOhEditors();
@@ -3627,14 +3636,14 @@ async function openClearanceSetup(item,existing=null){
 }
 function openClearanceDetail(r){
  const stages=Array.isArray(r?.stages)?r.stages:[];
- const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.effective_oh,effective_uom:r.effective_oh_uom||r.uom_code,effective_source:r.effective_oh_source,system:r.system_oh,system_uom:r.system_oh_uom||r.uom_code});
+ const ohPair=familyOhPairHtml({family:r.family_article_number,family_id:r.family_id,name:r.name,effective:r.effective_oh,effective_uom:r.effective_oh_uom||r.uom_code,effective_source:r.effective_oh_source,system:r.system_oh,system_uom:r.system_oh_uom||r.uom_code});
  sheet(r.name||'Clearance',r.upc||'',
    ohPair+'<div class="detail"><b>'+esc(r.action_label||'CLEARANCE')+'</b><br>Expires '+esc(appDate(r.expiry_date))+' · expiring '+fmt(r.clearance_target_quantity)+' '+esc(r.uom_code||'')+
    '<br><br><b>Sell-out requirement</b><br>'+fmt(r.required_daily_velocity)+' '+esc(r.uom_code||'')+'/day required vs '+fmt(r.current_velocity_7d)+'/day current 7D velocity'+
    '<br><br><b>Price plan</b>'+stages.map(s=>'<div class="clearance-stage"><span>'+esc(s.label||'STEP')+'</span><b>'+money(s.suggested_price)+'</b><span>'+esc(appDate(s.start_date))+' → '+esc(appDate(s.end_date))+' · '+((num(s.markdown_pct)!==null)?(num(s.markdown_pct)*100).toFixed(0)+'% markdown':'company controlled')+'</span></div>').join('')+
    '<br><b>Rule</b><br>Automatic clearance steps do not cross current cost. If the item is still behind pace at the cost floor, use manager disposition review rather than an automatic below-cost suggestion.</div>'+
    '<div class="actions"><button id="clearanceClose">CLOSE PLAN</button><button class="primary" id="clearanceDetailStock">UPDATE TRUE STOCK</button></div>');
- $('#clearanceDetailStock').onclick=()=>openFamilyTrueStock({family:r.family_article_number,name:r.name,oh:r.effective_oh,uom:r.effective_oh_uom||r.uom_code});
+ $('#clearanceDetailStock').onclick=()=>openFamilyTrueStock({family:r.family_article_number,family_id:r.family_id,name:r.name,oh:r.effective_oh,uom:r.effective_oh_uom||r.uom_code});
  bindFamilyOhEditors();
  $('#clearanceClose').onclick=async()=>{
    if(!window.confirm('Close this clearance plan?'))return;
