@@ -6322,6 +6322,9 @@ def pricing_review(
         )
         row["current_price_basis"] = "TODAY_PRICE_LIST_VS_LATEST_COMPLETED_DAY_POS_FRESHNESS_GATE"
 
+        row["family_id"] = live.get("family_id")
+        row["family_article_number"] = live.get("main_article_number")
+        row["family_name"] = live.get("family_description")
         row["current_cost"] = current_cost
         row["current_cost_source"] = live.get("cost_source")
         row["cost_date"] = live.get("cost_date")
