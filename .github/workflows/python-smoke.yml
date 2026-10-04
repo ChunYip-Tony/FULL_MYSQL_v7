@@ -1452,14 +1452,18 @@ jobs:
           python - <<'PY'
           import inspect
           import phase3
+          import backoffice_runtime as backoffice
 
           src = inspect.getsource(phase3._current_price)
+          bulk = inspect.getsource(backoffice._bulk_live_current_prices)
           assert "s.temporal_grain='SINGLE_DATE'" in src, src
           assert "s.period_start_date=s.period_end_date" in src, src
           assert "POS_SINGLE_DATE" in src, src
           assert "POS_SOLD_AVG" not in src, src
-          assert "source_since_date<=%s" in src, src
-          assert "business_today()" in src, src
+          assert "source_since_date<=%s" not in src, src
+          assert "source_since_date<=%s" not in bulk, bulk
+          assert "uploaded snapshot is authoritative immediately" in src, src
+          assert "source_since_date is metadata only" in bulk, bulk
           assert "source_since_date<=DATE(p.snapshot_at)" not in src, src
           print('current-price-authority=PASS')
           PY

@@ -2529,7 +2529,6 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
     identity lineage. This prevents an older canonical link from hiding newer
     raw-source evidence after identity repairs or source-format differences.
     """
-    current_day = business_today()
     completed_day = completed_through_date()
 
     def _lineage_pred(id_column: str, ean_column: str) -> tuple[str, tuple[Any, ...], str]:
@@ -2543,6 +2542,8 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
         )
 
     # Price List: newest accepted file containing any row in this UPC lineage.
+    # The uploaded snapshot is authoritative immediately. source_since_date is
+    # lifecycle metadata only and must never suppress a newly uploaded current price.
     cur.execute(
         """SELECT file_id,upload_timestamp,report_generated_at
            FROM ingest_file
@@ -2565,9 +2566,8 @@ def _current_price(cur, upc_id: int, ean: str | None = None) -> dict[str, Any] |
                 JOIN ingest_file f ON f.file_id=p.file_id
                 WHERE p.file_id=%s
                   AND {price_pred}
-                  AND p.configured_price>0
-                  AND (p.source_since_date IS NULL OR p.source_since_date<=%s)""",
-            (file_id, *price_args, current_day),
+                  AND p.configured_price>0""",
+            (file_id, *price_args),
         )
         price_rows=cur.fetchall()
         if not price_rows:

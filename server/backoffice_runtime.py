@@ -105,12 +105,12 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
         return {}
 
     ids = list(targets)
-    current_day = business_today()
     completed_day = completed_through_date()
     config_by_id: dict[int, dict[str, Any]] = {}
 
     # Match phase3 semantics: inspect accepted Price List files newest-first,
-    # and for each UPC use the newest file containing that UPC.
+    # and for each UPC use the newest file containing that UPC. The uploaded
+    # snapshot is authoritative immediately; source_since_date is metadata only.
     cur.execute(
         """SELECT file_id,upload_timestamp,report_generated_at
            FROM ingest_file
@@ -135,9 +135,8 @@ def _bulk_live_current_prices(cur, rows: list[dict[str, Any]]) -> dict[int, dict
                 JOIN ingest_file f ON f.file_id=p.file_id
                 WHERE p.file_id=%s
                   AND p.upc_id IN ({ph})
-                  AND p.configured_price>0
-                  AND (p.source_since_date IS NULL OR p.source_since_date<=%s)""",
-            (int(pf["file_id"]), *uid_list, current_day),
+                  AND p.configured_price>0""",
+            (int(pf["file_id"]), *uid_list),
         )
         grouped: dict[int, list[dict[str, Any]]] = {}
         for pr in cur.fetchall():
