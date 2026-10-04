@@ -46,7 +46,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v464';
+const CACHE='yipman-v465';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -964,7 +964,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
         <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span id="orderCoverageSub">Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
       </div>
       <div id="regularOrderPanel">
-        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="ACTION">ACTION FIRST</option><option value="QTY">ORDER QTY ↓</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
+        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="QTY_URGENT">ORDER QTY ↓ · URGENT</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
         <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
         <div class="list" id="orderList"><div class="lh" id="orderListHead"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
       </div>
@@ -1117,7 +1117,7 @@ let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', dataPublishedBatch=null, historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
-let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
+let orderSort='QTY_URGENT', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
 const stockFlowCacheKey='yipman-stock-flow-v9';
 
@@ -2605,7 +2605,7 @@ function openManualPromotion(){
    searchStatus.textContent=previous
     ? 'Replaced the previous selection for Family '+hydrated.familyKey+' to avoid duplicate Family inventory.'
     : 'Added Family '+hydrated.familyKey+'. Search again to add another Family.';
-   searchInput.focus();searchInput.select();
+   // Keep the mobile keyboard closed after selecting an item. The user can tap the search field again when needed.
   }catch(e){searchStatus.textContent='Unable to select item · '+e.message}
  }
  async function runSearch(){
@@ -2673,7 +2673,7 @@ function openManualPromotion(){
    if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='ADD TO PROMOTION ORDER'}
   }
  };
- setTimeout(()=>searchInput?.focus(),80);
+ // Do not autofocus Manual Promotion search; Android keyboard opens only after an explicit input tap.
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
@@ -2878,6 +2878,13 @@ function ignoreOrderSuggestion(r){
  setTimeout(()=>{if(current==='order'&&orderMode==='REGULAR')renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)},ORDER_IGNORE_MS+1000);
  renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale);
 }
+function orderDeliveryWindowText(r){
+ const days=Array.isArray(r?.delivery_window_days)?r.delivery_window_days:[];
+ if(days.length){
+  return days.map(x=>String(x.weekday||'').slice(0,3).toUpperCase()+' '+fmt(Number(x.observed_count||0),0)).join(' · ')+' · ±1 DAY';
+ }
+ return fmt(r?.delivery_day_observed_count,0)+' observed '+esc(r?.delivery_day||'day');
+}
 function renderOrderRoster(rows,data,h,stale){
  lastOrderRows=Array.isArray(rows)?rows:[];
  lastOrderData=data||{};
@@ -2890,7 +2897,7 @@ function renderOrderRoster(rows,data,h,stale){
   zero:Number(summary.zero_order_count??all.filter(r=>orderState(r)==='ZERO_ORDER').length),
   review:Number(summary.review_count??all.filter(r=>orderState(r)==='REVIEW').length)
  };
- $('#orderSummary').textContent='OBSERVED '+counts.total+' · ORDER '+counts.order+' · 0 ORDER '+counts.zero+' · REVIEW '+counts.review;
+ $('#orderSummary').textContent='OBSERVED ±1 DAY '+counts.total+' · ORDER '+counts.order+' · 0 ORDER '+counts.zero+' · REVIEW '+counts.review;
  let visible=all.filter(r=>orderFilter==='ALL'||orderState(r)===orderFilter);
  const ignoredOrderCount=visible.filter(r=>orderState(r)!=='ZERO_ORDER'&&orderIsIgnored(r)).length;
  visible=visible.filter(r=>orderState(r)==='ZERO_ORDER'||!orderIsIgnored(r));
@@ -2898,7 +2905,7 @@ function renderOrderRoster(rows,data,h,stale){
  const obs=r=>Number(r?.delivery_day_observed_count||0);
  const conf=r=>({HIGH:0,MEDIUM:1,LOW:2,NONE:3}[String(r?.delivery_day_confidence||'NONE').toUpperCase()]??3);
  visible=[...visible].sort((a,b)=>{
-  if(orderSort==='QTY')return (orderQty(b)??-1)-(orderQty(a)??-1)||String(a.family_name||'').localeCompare(String(b.family_name||''));
+  if(orderSort==='QTY_URGENT')return (orderQty(b)??-1)-(orderQty(a)??-1)||(Number(!!b.attention)-Number(!!a.attention))||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='DOS')return (dos(a)??999999)-(dos(b)??999999)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='OBSERVED')return obs(b)-obs(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='NAME')return String(a.family_name||'').localeCompare(String(b.family_name||''));
@@ -2908,7 +2915,7 @@ function renderOrderRoster(rows,data,h,stale){
  renderedOrderRows=visible;
  $('#orderStatus').innerHTML=stale
   ? '<div class="estimatebar">BEST AVAILABLE · POS '+esc(h?.pos_data_through||'—')+' · MVT '+esc(h?.movement_data_through||'—')+'. Missing source dates are ignored, not zero-filled; missing MVT days are forecast forward.</div>'
-  : esc(data?.selected_delivery_weekday||'Selected day')+' · complete observed-delivery roster'+(ignoredOrderCount?' · '+ignoredOrderCount+' suggestion'+(ignoredOrderCount===1?'':'s')+' ignored <12h':'');
+  : esc(data?.selected_delivery_weekday||'Selected day')+' ±1 day · complete observed-delivery roster'+(ignoredOrderCount?' · '+ignoredOrderCount+' suggestion'+(ignoredOrderCount===1?'':'s')+' ignored <12h':'');
  $('#orderList').classList.add('futurecards');
  $('#orderListHead').style.display='none';
  $('#orderRows').innerHTML=visible.map((r,i)=>{
@@ -2920,7 +2927,7 @@ function renderOrderRoster(rows,data,h,stale){
   const stockout=r.pre_delivery_stockout_risk?'<span class="order-risk">STOCKOUT BEFORE DELIVERY</span>':'';
   const lowconf=String(r.delivery_day_confidence||'').toUpperCase()==='LOW'?'<span class="order-lowconf">LOW DELIVERY CONF.</span>':'';
   const freshness=r.freshness_adjustment_applied?'<span class="order-freshness">FRESHNESS +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'</span>':'';
-  const hist=state==='ORDER'&&num(q)>0&&Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
+  const hist=Array.isArray(r.historical_receiving_articles)?r.historical_receiving_articles:[];
   const shownHist=hist.slice(0,3);
   const histHtml=shownHist.length
     ? '<div class="orderrecvhistory"><div class="orderrecvhistoryhead"><span class="orderrecvhistoryicon">◇</span><b>RELATED RECEIVING ARTICLES FOR THIS ITEM</b><span>FAMILY '+esc(r.family_article||'—')+'</span></div>'
@@ -2930,7 +2937,7 @@ function renderOrderRoster(rows,data,h,stale){
     : '';
   const ohPair=familyOhPairHtml({family:r.family_article,name:r.family_name,effective:r.effective_oh??r.oh,effective_uom:r.effective_oh_uom||r.oh_uom,effective_source:r.effective_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
   const snooze=state==='ZERO_ORDER'?'':'<div class="pcard-actions"><button class="pignore snooze12" data-order-ignore="'+i+'">IGNORE 12 HOURS</button></div>';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell ohcell">'+familyOhActionHtml({family:r.family_article,name:r.family_name,oh:r.effective_oh??r.oh,uom:r.effective_oh_uom||r.oh_uom,source:r.effective_oh_source||r.oh_source},'orderoh')+'</div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+ohPair+histHtml+snooze+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+orderDeliveryWindowText(r)+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell ohcell">'+familyOhActionHtml({family:r.family_article,name:r.family_name,oh:r.effective_oh??r.oh,uom:r.effective_oh_uom||r.oh_uom,source:r.effective_oh_source||r.oh_source},'orderoh')+'</div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+ohPair+histHtml+snooze+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.'+(ignoredOrderCount?' '+ignoredOrderCount+' ignored suggestion(s) return automatically after 12 hours.':'')+'</div>';
  document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
  $$('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
@@ -3070,7 +3077,7 @@ function openOrder(r){
  (d.pre_delivery_stockout_risk?'<br><br><b>⚠ Pre-delivery stockout risk</b><br>'+fmtNullable(d.pre_delivery_stockout_qty)+' '+esc(r.oh_uom||'')+' projected short before the selected delivery. This shortage is NOT added to the later order.':'')+
  (d.freshness_coverage_capped?'<br><br><b>⚠ Freshness guard</b><br>Fresh/Live coverage is capped at 7 days. Later demand requires an earlier or split delivery.':'')+
  (d.freshness_adjustment_applied?'<br><br><b>⚠ Current OH freshness adjustment</b><br>Latest valid receipt '+esc(appDate(d.freshness_latest_receipt_date))+' · current DOH '+fmtNullable(d.freshness_current_doh)+' · discard threshold '+fmtNullable(d.freshness_threshold_days)+' days.<br>Projected discard '+fmtNullable(d.freshness_projected_discard_qty)+' '+esc(r.oh_uom||'')+' · existing OH credited '+fmtNullable(d.freshness_existing_oh_credit)+' '+esc(r.oh_uom||'')+' · order increased '+fmtNullable(d.freshness_order_qty_lift)+' '+esc(r.oh_uom||'')+'.':'')+
- '<br><br><b>Delivery evidence</b><br>'+fmt(r.delivery_day_observed_count,0)+' / '+fmt(r.delivery_day_receipt_count,0)+' receipt dates · '+fmt(r.delivery_day_confidence_pct,0)+'% confidence'+
+ '<br><br><b>Delivery roster evidence · selected day ±1</b><br>'+orderDeliveryWindowText(r)+' · '+fmt(r.delivery_window_observed_count??r.delivery_day_observed_count,0)+' matching receipt dates · '+fmt(r.delivery_window_confidence_pct??r.delivery_day_confidence_pct,0)+'% of recent receipt dates'+
  (reasons.length?'<br><br><b>Why</b><br>'+reasons.map(x=>'• '+esc(x.detail||x.title||'')).join('<br>'):'')+'</div>');
  bindFamilyOhEditors();
 }
