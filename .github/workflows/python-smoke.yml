@@ -206,7 +206,10 @@ jobs:
           assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_AGING_ANCHOR_RECEIPT_ASYNC_CACHE' in cached_src
           assert 'YIPMAN_CURRENT_TPR_REVIEW_V6_PRICE_LIST_SOURCE_AWARE_AGING_ANCHOR_CACHE' in cached_src
           assert 'NON_BLOCKING_PERSISTED_STALE_WHILE_REFRESH' in cached_src
-          assert 'today_receipt_qty' in src and 'PROVISIONAL_TODAY_RECEIPT' in src
+          assert 'today_receipt_qty' in src and 'today_receipt_status' in src
+          provisional_src=inspect.getsource(bo._family_provisional_today_receipts_bulk)
+          assert 'PROVISIONAL_TODAY_RECEIPT' in provisional_src
+          assert 'VISIBILITY_ONLY_NOT_COMPLETED_DAY_KPI_OR_OH_ROLLFORWARD' in provisional_src
           assert 'freshness_deadline_date' in src
           assert 'aging_stock_initial_target' in src
           assert 'ANCHORED_OLD_STOCK_CURRENT_OH_MINUS_NEW_COMPLETED_RECEIPTS' in src
