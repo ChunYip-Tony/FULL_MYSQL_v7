@@ -170,6 +170,28 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .promo-shell{background:#fff;border-radius:16px;box-shadow:var(--shadow);padding:13px}.promo-shell h3{font-size:16px;margin:0}.promo-shell p{font-size:9px;color:var(--muted);line-height:1.4}.promo-types{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}.promo-type{border-radius:999px;padding:6px 8px;font-size:8px;font-weight:950}.promo-type.weekly{background:#f0eaff;color:#6b21a8}.promo-type.weekend{background:#fff4d6;color:#8a5b00}
 
 .promo-controls{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:7px;margin-top:9px}.promo-controls select,.promo-date-inputs input{width:100%;border:1px solid var(--line);border-radius:11px;background:#fff;padding:9px;font-size:10px;font-weight:850}.promo-import,.promo-manual{border:0;border-radius:11px;background:#142033;color:#fff;padding:9px 11px;font-size:9px;font-weight:950}.promo-manual{background:#f0b82b;color:#332400}.promo-date-inputs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:8px}.promo-date-inputs label{font-size:7px;color:var(--muted);font-weight:950}.promo-date-inputs input{display:block;margin-top:3px;padding:7px}.manual-promo-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}.manual-promo-fields label{font-size:8px;color:var(--muted);font-weight:950}.manual-promo-fields input,.manual-promo-fields textarea{display:block;width:100%;margin-top:3px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:9px;font-size:11px;font-weight:850}.manual-promo-fields .wide{grid-column:1/-1}.manual-promo-fields textarea{min-height:112px;resize:vertical;line-height:1.45}.promo-freshness{margin-top:7px;border:1px solid #efc48a;background:#fff3df;border-radius:10px;padding:7px 8px;font-size:8px;line-height:1.35;color:#7a4b0a;font-weight:850}
+.manual-promo-search{display:grid;gap:8px}
+.manual-promo-searchbar{display:flex;gap:7px;align-items:center}
+.manual-promo-searchbar input{flex:1;min-width:0;border:2px solid #bdd5e7;border-radius:13px;background:#fff;min-height:48px;padding:0 12px;font-size:16px;font-weight:850;outline:0}
+.manual-promo-searchbar input:focus{border-color:#1672bd;box-shadow:0 0 0 3px rgba(22,114,189,.10)}
+.manual-promo-searchbar button{border:0;border-radius:12px;background:#174f78;color:#fff;padding:12px 13px;font-size:11px;font-weight:950}
+.manual-promo-search-note{font-size:10px;line-height:1.35;color:#637585;font-weight:800}
+.manual-promo-results{display:grid;gap:6px;max-height:260px;overflow:auto}
+.manual-promo-result{width:100%;text-align:left;border:1px solid #d9e4ec;border-radius:13px;background:#f8fbfe;padding:9px 10px;color:#183349}
+.manual-promo-result b{display:block;font-size:16px;line-height:1.12;white-space:normal;overflow-wrap:anywhere}
+.manual-promo-result strong{display:block;font-size:12px;color:#0d609f;margin-top:2px}
+.manual-promo-result span{display:block;font-size:10px;line-height:1.35;color:#667786;margin-top:4px;font-weight:800}
+.manual-promo-selected{display:grid;gap:7px}
+.manual-promo-selected-card{border:1.5px solid #8fc6a7;border-radius:14px;background:#effaf4;padding:9px 10px}
+.manual-promo-selected-top{display:grid;grid-template-columns:minmax(0,1fr) 86px;gap:8px;align-items:start}
+.manual-promo-selected-card h4{font-size:17px;line-height:1.1;margin:0;font-weight:1000;overflow-wrap:anywhere}
+.manual-promo-selected-card .selmeta{font-size:10px;line-height:1.35;color:#526b5f;font-weight:850;margin-top:4px}
+.manual-promo-selected-card label{display:block;font-size:8px;color:#62756c;font-weight:950}
+.manual-promo-selected-card input{width:100%;margin-top:3px;border:1px solid #bfd6ca;border-radius:9px;background:#fff;padding:8px;font-size:16px;font-weight:950}
+.manual-promo-delivery{margin-top:5px;padding-top:6px;border-top:1px solid rgba(55,110,80,.14);font-size:10px;line-height:1.35;color:#53685e;font-weight:850}
+.manual-promo-remove{border:0;background:transparent;color:#b52e38;font-size:10px;font-weight:950;padding:4px 0 0}
+
+.promo-freshness{margin-top:7px;border:1px solid #efc48a;background:#fff3df;border-radius:10px;padding:7px 8px;font-size:8px;line-height:1.35;color:#7a4b0a;font-weight:850}
 .promo-status{font-size:9px;color:var(--muted);font-weight:800;margin:7px 2px}.promo-summary{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.promo-card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px;margin-bottom:8px;box-shadow:var(--shadow)}.promo-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.promo-card-head b{font-size:14px}.promo-card-head small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.promo-badge{border-radius:999px;padding:5px 7px;font-size:7px;font-weight:950;white-space:nowrap}.promo-badge.weekly{background:#f0eaff;color:#6b21a8}.promo-badge.weekend{background:#fff4d6;color:#8a5b00}.promo-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:8px}.promo-metric{background:#f7f9fb;border-radius:9px;padding:7px;text-align:center;min-width:0}.promo-metric[data-promo-oh]{cursor:pointer;border:1px dashed #aebbc6}.promo-metric small{display:block;font-size:6px;color:var(--muted);font-weight:950}.promo-metric b{display:block;font-size:14px;margin-top:2px}.promo-metric span{display:block;font-size:6px;color:var(--muted);font-weight:850;margin-top:2px}.promo-metric.real-oh{padding:3px}.promo-metric.real-oh .familyohinline{text-align:center;border:0;background:transparent;padding:2px}.promo-metric.temp{background:#fff5e9;border:1px solid #f7bc7a;cursor:pointer}.promo-order{margin-top:7px;background:#eaf8ef;border:1px solid #b8e3c6;border-radius:11px;padding:8px}.promo-order small{font-size:7px;color:#397450;font-weight:950}.promo-order b{display:block;font-size:22px;color:#17683c}.promo-break{font-size:8px;color:#436052;margin-top:2px}.promo-review{background:#fff8e1;border:1px solid #efdca2;border-radius:11px;padding:8px;font-size:9px;margin-bottom:7px}
 
 .lh{font-size:9px}.orow .name{font-size:14px}.orow .sub{font-size:9px}.cell{font-size:14px}.cell span{font-size:9px}.rtrace-line{font-size:10px}.rtrace-more{font-size:9px}.receipt-meta{font-size:10px}
@@ -1564,10 +1586,32 @@ async function resetQuickHome({push=true}={}){
 $$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
 const quickNav=$('.nav button[data-go="quick"]');
 if(quickNav)quickNav.onclick=()=>resetQuickHome();
+function stashCurrentSheet(){
+  const body=$('#sheetBody'),frag=document.createDocumentFragment(),sh=$('.sheet');
+  while(body?.firstChild)frag.appendChild(body.firstChild);
+  return {
+    title:$('#sheetTitle')?.textContent||'',
+    sub:$('#sheetSub')?.textContent||'',
+    body:frag,
+    scrollTop:Number(sh?.scrollTop||0),
+  };
+}
+function restorePreviousSheet(){
+  const prev=sheetStack.pop();if(!prev)return false;
+  const body=$('#sheetBody');
+  $('#sheetTitle').textContent=prev.title||'';
+  $('#sheetSub').textContent=prev.sub||'';
+  if(body){body.innerHTML='';body.appendChild(prev.body)}
+  $('#overlay').classList.add('on');
+  requestAnimationFrame(()=>{const sh=$('.sheet');if(sh)sh.scrollTop=Number(prev.scrollTop||0)});
+  return true;
+}
 function sheet(title,sub,html){
   const wasOpen=$('#overlay').classList.contains('on');
-  if(!wasOpen)saveCurrentHistoryPosition();
+  if(!wasOpen){saveCurrentHistoryPosition();sheetStack=[]}
+  else sheetStack.push(stashCurrentSheet());
   $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
+  const sh=$('.sheet');if(sh)sh.scrollTop=0;
   if(historyReady&&!wasOpen){
     const pos=currentPagePosition(current);
     history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
@@ -1576,7 +1620,9 @@ function sheet(title,sub,html){
 }
 function closeSheet(useHistory=true){
   if(!$('#overlay').classList.contains('on'))return;
+  if(useHistory&&sheetStack.length){restorePreviousSheet();return}
   $('#overlay').classList.remove('on');
+  sheetStack=[];
   const had=detailHistory;detailHistory=false;
   if(useHistory&&had){history.back();return}
   if(had&&historyReady){
@@ -1598,6 +1644,15 @@ window.addEventListener('popstate',e=>{
     hideExitConfirm();renderView('quick',{restore:true,reload:false,state:{...pos}});return;
   }
   if($('#overlay').classList.contains('on')){
+    if(sheetStack.length){
+      restorePreviousSheet();
+      if(historyReady){
+        const pos=pagePositions.get(current)||currentPagePosition(current);
+        history.pushState({yipman:true,view:current,detail:true,originScrollTop:pos.scrollTop,originScrollLeft:pos.scrollLeft},'', '#'+current+'/detail');
+        detailHistory=true;
+      }
+      return;
+    }
     $('#overlay').classList.remove('on');detailHistory=false;
     if(st?.yipman&&st.view){
       renderView(st.view,{restore:true,reload:false,state:st});
@@ -2401,81 +2456,178 @@ function openManualPromotion(){
  const endDefault=plusDaysIso(startDefault,6);
  const deliveryDefault=orderDate||startDefault;
  const nextDefault=orderNextDate||plusDaysIso(deliveryDefault,7);
+ const selected=new Map();
+ let searchTimer=null;
+ let latestSearchToken=0;
+
  sheet(
   'Manual Promotion',
-  'One or multiple UPCs · manual promotion and delivery window',
-  '<div class="detail"><b>Manual promotion setup</b><br><span style="color:#71808d">One line per UPC. Format: UPC, SALE price. Example: 24081600000, 8.99</span>'+
-  '<div class="manual-promo-fields">'+
-   '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
-   '<label class="wide">UPCs + SALE PRICE<textarea id="manualPromoItems" placeholder="24081600000, 8.99&#10;24981600000, 8.99"></textarea></label>'+
-   '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
-   '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
-   '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
-   '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
-  '</div>'+
-  '<div class="estimatebar" style="margin-top:10px">Delivery → Next Delivery is the ordering coverage window. Promo Start → End marks the SALE-demand days inside that window. Fresh/Live OH that crosses the freshness threshold is not credited as usable future stock.</div>'+
-  '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">SAVE & RECALCULATE</button></div></div>'
+  'Search item first · then enter promotion details',
+  '<div class="detail manual-promo-search">'+
+   '<div><b>1. Search item</b><div class="manual-promo-search-note">Search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name. Typo-tolerant search is supported.</div></div>'+
+   '<div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="Search salmon, 240816, article…" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div>'+
+   '<div id="manualPromoSearchStatus" class="manual-promo-search-note">Start typing to find an item.</div>'+
+   '<div id="manualPromoSearchResults" class="manual-promo-results"></div>'+
+   '<div><b>2. Selected promotion item(s)</b><div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item selected yet.</div></div></div>'+
+   '<div><b>3. Promotion + delivery window</b></div>'+
+   '<div class="manual-promo-fields">'+
+    '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
+    '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
+    '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
+    '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
+    '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
+   '</div>'+
+   '<div class="estimatebar" style="margin-top:10px">Yipman uses the selected Family True Stock, canonical sales history, promotion history, observed delivery evidence, and Fresh/Live freshness limits. Manual uplift is not required.</div>'+
+   '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">ADD TO PROMOTION ORDER</button></div>'+
+  '</div>'
  );
+
+ const searchInput=$('#manualPromoSearch');
+ const searchStatus=$('#manualPromoSearchStatus');
+ const searchResults=$('#manualPromoSearchResults');
+ const selectedBox=$('#manualPromoSelected');
+
+ function familyKeyFor(item){
+  return String(item?.family_article_number||(String(item?.result_type||'').toUpperCase()==='FAMILY'?item?.number:'')||'').trim();
+ }
+ function relatedDeliverySummary(fam){
+  const rows=Array.isArray(fam?.receiving_ordering_articles)?fam.receiving_ordering_articles:[];
+  if(!rows.length)return 'Delivery article: —';
+  return rows.slice(0,3).map(a=>{
+   const n=a.article_number||a.receiving_article||a.number||'—';
+   const name=a.article_description||a.article_name||a.name||'';
+   const pack=a.pack_size||a.pack||a.receiving_pack_size||'';
+   return String(n)+(name?' · '+name:'')+(pack?' · '+pack:'');
+  }).join(' | ')+(rows.length>3?' · +'+(rows.length-3)+' more':'');
+ }
+ function effectiveOHText(fam){
+  const oh=fam?.current_effective_oh||{};
+  const qty=oh.quantity??oh.current_oh??oh.effective_oh;
+  const uom=oh.uom||oh.uom_code||fam?.family_sales_7d?.uom||'';
+  return qty==null?'—':fmtNullable(qty)+' '+String(uom||'');
+ }
+ function selectedPrice(id){
+  const el=document.querySelector('[data-manual-promo-price="'+CSS.escape(String(id))+'"]');
+  return el?Number(el.value):NaN;
+ }
+ function renderSelected(){
+  const rows=[...selected.values()];
+  if(!rows.length){selectedBox.innerHTML='<div class="empty">No item selected yet.</div>';return}
+  selectedBox.innerHTML=rows.map(x=>{
+   const fam=x.family||{}, item=x.item||{};
+   const fid=String(fam.family_id||item.family_id||x.familyKey||'');
+   const price=item.current_price??'';
+   const q7=item.pos_qty_7d??fam?.family_sales_7d?.sold_quantity;
+   const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
+   return '<div class="manual-promo-selected-card">'+
+    '<div class="manual-promo-selected-top"><div><h4>'+esc(fam.family_article_name||item.family_name||item.name||x.familyKey)+'</h4>'+
+     '<div class="selmeta">Family '+esc(x.familyKey)+' · Selected '+esc(x.code)+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+' · True Stock '+esc(effectiveOHText(fam))+'</div>'+
+    '</div><label>SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
+    '<div class="manual-promo-delivery">'+esc(relatedDeliverySummary(fam))+'</div>'+
+    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
+   '</div>';
+  }).join('');
+  $$('[data-manual-promo-remove]').forEach(btn=>btn.onclick=()=>{
+   selected.delete(String(btn.dataset.manualPromoRemove));renderSelected();
+  });
+ }
+ async function hydrateFamily(item){
+  const familyKey=familyKeyFor(item);
+  if(!familyKey)throw new Error('Family Article unavailable for this result');
+  const fam=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:12000});
+  return {familyKey,fam};
+ }
+ async function chooseResult(entry){
+  try{
+   searchStatus.textContent='Loading Family inventory and delivery details…';
+   const hydrated=entry.family?{familyKey:entry.familyKey,fam:entry.family}:await hydrateFamily(entry.item);
+   const item=entry.item;
+   const fid=String(hydrated.fam?.family_id||item.family_id||hydrated.familyKey);
+   const type=String(item.result_type||'').toUpperCase();
+   const code=type==='UPC'?String(item.number||''):(type==='ARTICLE'?String(item.number||hydrated.familyKey):String(hydrated.familyKey));
+   if(!code)throw new Error('Selectable UPC / Article number unavailable');
+   const previous=selected.get(fid);
+   selected.set(fid,{familyKey:hydrated.familyKey,family:hydrated.fam,item,code});
+   renderSelected();
+   searchStatus.textContent=previous
+    ? 'Replaced the previous selection for Family '+hydrated.familyKey+' to avoid duplicate Family inventory.'
+    : 'Added Family '+hydrated.familyKey+'. Search again to add another Family.';
+   searchInput.focus();searchInput.select();
+  }catch(e){searchStatus.textContent='Unable to select item · '+e.message}
+ }
+ async function runSearch(){
+  const q=String(searchInput.value||'').trim();
+  const token=++latestSearchToken;
+  if(q.length<2){searchResults.innerHTML='';searchStatus.textContent='Enter at least 2 characters.';return}
+  searchStatus.textContent='Searching…';searchResults.innerHTML='<div class="loading">Searching current item master…</div>';
+  try{
+   const d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=12',{timeoutMs:12000});
+   if(token!==latestSearchToken)return;
+   const raw=Array.isArray(d.results)?d.results:[];
+   const base=raw.slice(0,10);
+   const enriched=await Promise.all(base.map(async item=>{
+    const familyKey=familyKeyFor(item);
+    let family=null;
+    if(familyKey){try{family=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:9000})}catch(e){}}
+    return {item,familyKey,family};
+   }));
+   if(token!==latestSearchToken)return;
+   searchStatus.textContent=enriched.length?enriched.length+' result(s) · choose the correct item':'No matching item.';
+   searchResults.innerHTML=enriched.map((x,i)=>{
+    const item=x.item||{}, fam=x.family||{};
+    const familyName=fam.family_article_name||item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
+    const itemName=item.name||familyName||'Item';
+    const q7=item.pos_qty_7d??fam?.family_sales_7d?.sold_quantity;
+    const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
+    return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
+     '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
+     '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
+      ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
+      (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
+      ' · OH '+esc(effectiveOHText(fam))+'</span></button>';
+   }).join('');
+   $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
+  }catch(e){
+   if(token!==latestSearchToken)return;
+   searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message;
+  }
+ }
+ searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,260)};
+ searchInput.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(searchTimer);runSearch()}};
+ $('#manualPromoSearchBtn').onclick=()=>{clearTimeout(searchTimer);runSearch()};
  $('#manualPromoCancel').onclick=()=>closeSheet(true);
  $('#manualPromoSave').onclick=async()=>{
-  const raw=$('#manualPromoItems').value.trim();
+  const rows=[...selected.values()];
   const start=$('#manualPromoStart').value;
   const end=$('#manualPromoEnd').value;
   const delivery=$('#manualPromoDelivery').value;
   const next=$('#manualPromoNext').value;
-  if(!raw){toast('Enter at least one UPC and SALE price');return}
+  if(!rows.length){toast('Select at least one item');return}
   if(!start||!end||!delivery||!next){toast('Complete all promotion and delivery dates');return}
   if(end<start){toast('Promotion end must be after start');return}
   if(next<=delivery){toast('Next delivery must be after delivery date');return}
-  const parsed=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean).map(line=>{
-   const parts=line.split(/[,\t]+/).map(x=>x.trim()).filter(Boolean);
-   const code=parts[0]||'';
-   const price=Number(String(parts[1]||'').replace(/[$,]/g,''));
-   return {code,price};
+  const items=rows.map(x=>{
+   const fid=String(x.family?.family_id||x.item?.family_id||x.familyKey);
+   return {upc:x.code,description:x.family?.family_article_name||x.item?.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:selectedPrice(fid)};
   });
-  if(parsed.some(x=>!x.code||!Number.isFinite(x.price)||x.price<=0)){
-   toast('Use one line per UPC: UPC, SALE price');return
-  }
+  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){toast('Enter a valid SALE price for every selected item');return}
   const name=$('#manualPromoName').value.trim()||('Manual Promotion '+start);
-  $('#manualPromoSave').disabled=true;
-  $('#manualPromoSave').textContent='SAVING…';
+  const save=$('#manualPromoSave');save.disabled=true;save.textContent='SAVING…';
   try{
-   const created=await api('/v1/yipman/promotion-lists',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-     list_name:name,
-     source_filename:'MANUAL_ENTRY',
-     items:parsed.map(x=>({
-      upc:x.code,
-      promotion_type:'CUSTOM',
-      promotion_start_date:start,
-      promotion_end_date:end,
-      promotion_price:x.price
-     }))
-    }),
-    timeoutMs:30000
-   });
-   promoListId=Number(created.list_id);
-   promoTempOH.clear();
-   orderDate=delivery;
-   orderNextDate=next;
-   closeSheet(true);
-   buildDays();updateOrderWindowUI();
-   await loadPromotionLists();
-   $('#promoListSelect').value=String(promoListId);
+   const created=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:name,source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});
+   promoListId=Number(created.list_id);promoTempOH.clear();
+   orderDate=delivery;orderNextDate=next;
+   closeSheet(true);buildDays();updateOrderWindowUI();
+   await loadPromotionLists();$('#promoListSelect').value=String(promoListId);
    if(Number(created.ready_count||0)>0)await loadPromotionOrder();
-   else{
-    $('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';
-    $('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>';
-   }
-   toast('Manual promotion saved');
+   else{$('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';$('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>'}
+   toast('Manual promotion added');
   }catch(err){
    toast('Manual promotion failed · '+err.message);
-   const save=$('#manualPromoSave');
-   if(save){save.disabled=false;save.textContent='SAVE & RECALCULATE'}
+   if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='ADD TO PROMOTION ORDER'}
   }
  };
+ setTimeout(()=>searchInput?.focus(),80);
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
@@ -3547,6 +3699,22 @@ function fmtElapsedSeconds(v){
  const m=Math.floor(sec/60),s=sec%60;if(m<60)return m+'m '+s+'s';
  const h=Math.floor(m/60),mm=m%60;return h+'h '+mm+'m';
 }
+function dataBatchIsActivelyProcessing(b){
+ if(!b?.batch_id)return false;
+ const run=String(b.active_run_status||'').toUpperCase();
+ const st=String(b.processing_status||'').toUpperCase();
+ return ['QUEUED','STARTED','PAUSE_REQUESTED'].includes(run)
+   || ['API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED','RELEASED'].includes(st);
+}
+function dataBatchSignature(b){
+ if(!b?.batch_id)return 'NONE';
+ return [
+   b.batch_id,
+   String(b.processing_status||'').toUpperCase(),
+   String(b.active_run_status||'').toUpperCase(),
+   b.active_pipeline_run_id||''
+ ].join('|');
+}
 function batchLiveState(b){
  const run=String(b?.active_run_status||'').toUpperCase();
  const fresh=b?.active_heartbeat_fresh===true;
@@ -3569,7 +3737,7 @@ function renderLivePipeline(activeBatch,latestPublished){
  const itemHolds=num(b?.quick_check_hold_rows)??num(b?.qa_summary?.phase3?.quick_check_hold_rows)??0;
  const uploaded=st!=='NONE';
  const ingested=/INGEST|PHASE|QUICK|READY|RELEASE/.test(st);
- const qaDone=published||(/PHASE3|QUICK|READY/.test(st)&&!blockingHold);
+ const qaDone=published;
  let qaClass='',qaText='WAIT';
  if(blockingHold){qaClass='bad';qaText='BLOCKED'}
  else if(published&&itemHolds>0){qaClass='warn';qaText='DONE · '+fmt(itemHolds,0)+' ITEM HOLD'}
@@ -3594,6 +3762,12 @@ function renderCurrentBatchPanel(b){
  const issueTotal=b.active_issue_total??b.open_issue_total??b.error_count??b.qa_hold_count??0;
  const ready=b.active_progress_ready,hold=b.active_progress_hold,hist=b.active_progress_historical;
  const item=[b.active_progress_current_upc,b.active_progress_current_name].filter(Boolean).join(' · ');
+ const fileName=String(b.active_file_name||'').trim();
+ const fileMeta=[
+   b.active_source_type?friendlySignal(b.active_source_type):'',
+   b.active_file_status?friendlySignal(b.active_file_status):'',
+   b.active_file_rows!=null?(fmt(b.active_file_rows,0)+' rows'):''
+ ].filter(Boolean).join(' · ');
  const progressLabel=hasPct?(pct.toFixed(pct%1?1:0)+'%'):hasCounts?(fmt(cur,0)+' / '+fmt(tot,0)):String(b.active_progress_kind||'Processing');
  const progressDetail=hasCounts?(fmt(cur,0)+' of '+fmt(tot,0)+' '+esc(b.active_progress_unit||'rows')):(b.active_progress_kind?friendlySignal(b.active_progress_kind):'No numeric progress reported yet');
  const alert=live.key==='stuck'?'<div class="cbwarn"><b>Heartbeat is stale.</b> The run still says STARTED, but the worker is not reporting live progress. Open the batch detail or refresh before deciding to rerun it.</div>':'';
@@ -3603,6 +3777,7 @@ function renderCurrentBatchPanel(b){
   '<div class="cbprogress"><div class="cbprogress-top"><b>'+esc(friendlySignal(stage))+'</b><span>'+esc(progressLabel)+'</span></div><div class="cbbar"><i style="width:'+(hasPct?pct:(hasCounts?Math.max(3,Math.min(100,(cur/tot)*100)):0)).toFixed(1)+'%"></i></div><div class="cbprogress-sub"><span>'+progressDetail+'</span><span>'+((ready!=null||hold!=null)?('Ready '+fmt(ready,0)+' · Hold '+fmt(hold,0)):(hist!=null?('Historical '+fmt(hist,0)):'Run #'+esc(runId)))+'</span></div></div>'+
   '<div class="cbrunmeta"><div><small>RUN</small><b>#'+esc(runId)+'</b></div><div><small>HEARTBEAT</small><b>'+esc(hbAge)+'</b></div><div><small>ELAPSED</small><b>'+esc(elapsed)+'</b></div><div><small>ETA</small><b>'+esc(eta)+'</b></div></div>'+
   '<div class="cbmeta"><div><small>FILES</small><b>'+fmt(b.file_count??b.files_count??b.uploaded_file_count,0)+'</b></div><div><small>OPEN ISSUES</small><b>'+fmt(issueTotal,0)+'</b></div><div><small>RATE</small><b>'+(rate!==null?fmt(rate,1)+'/s':'—')+'</b></div></div>'+
+  (fileName?'<div class="cbcurrentitem"><small>CURRENT PROCESSING FILE</small><b title="'+esc(fileName)+'">'+esc(fileName)+'</b>'+(fileMeta?'<span>'+esc(fileMeta)+'</span>':'')+'</div>':'')+
   (item?'<div class="cbcurrentitem"><small>CURRENT WORK ITEM</small><b>'+esc(item)+'</b></div>':'')+alert+'</div>';
  const el=$('#currentBatch [data-batch]');if(el)el.onclick=()=>openBatch(el.dataset.batch,b);
 }
@@ -3631,14 +3806,85 @@ async function pollDataLive(){
  if(current!=='data')return;
  try{
   const active=await api('/v1/web-upload/active',{timeoutMs:9000});
-  const currentBatch=active.active_batch||null;
+  const activeCandidate=active.active_batch||null;
+  const nextSignature=dataBatchSignature(activeCandidate);
+  if(dataLiveSignature&&nextSignature!==dataLiveSignature){
+    dataLiveSignature=nextSignature;
+    await loadData();
+    return;
+  }
+  dataLiveSignature=nextSignature;
+  const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
   const latestBatch=active.latest_batch||null;
-  renderLivePipeline(currentBatch,latestBatch);
+  renderLivePipeline(currentBatch,dataPublishedBatch||latestBatch);
   renderCurrentBatchPanel(currentBatch);
  }catch(e){
   const live=$('#currentBatch .cblivecheck');if(live)live.textContent='LIVE CHECK FAILED';
  }finally{scheduleDataLivePoll()}
 }
+function dataUploadSelectionSummary(){
+ const input=$('#dataUploadFiles'),box=$('#dataUploadSummary');if(!input||!box)return;
+ const files=[...(input.files||[])];
+ box.textContent=files.length
+  ? files.length+' file(s): '+files.map(x=>x.name).join(' · ')
+  : 'No files selected.';
+}
+async function uploadDataFiles(){
+ const input=$('#dataUploadFiles'),btn=$('#dataUploadBtn'),result=$('#dataUploadResult');
+ const files=[...(input?.files||[])];
+ if(!files.length){toast('Select files first');return}
+ let session=null;
+ if(btn){btn.disabled=true;btn.textContent='CREATING BATCH…'}
+ if(result)result.textContent='Creating upload batch…';
+ try{
+  const label=String($('#dataUploadNote')?.value||'').trim()||('Yipman mobile upload '+new Date().toLocaleString());
+  const created=await api('/v1/web-upload/batches',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({label}),
+    timeoutMs:20000
+  });
+  session=created.session_id||created.batch_key||created.session?.session_id;
+  if(!session)throw new Error('Upload batch session ID was not returned');
+  for(let i=0;i<files.length;i++){
+    if(btn)btn.textContent='UPLOADING '+(i+1)+' / '+files.length;
+    if(result)result.textContent='Current file: '+files[i].name;
+    const fd=new FormData();fd.append('file',files[i]);
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{
+      method:'POST',body:fd,timeoutMs:60000
+    });
+  }
+  if(btn)btn.textContent='STARTING PROCESSING…';
+  if(result)result.textContent='All files received · committing batch…';
+  const committed=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{
+    method:'POST',timeoutMs:30000
+  });
+  if(input)input.value='';
+  const note=$('#dataUploadNote');if(note)note.value='';
+  dataUploadSelectionSummary();
+  if(result)result.textContent='Batch #'+String(committed.batch_id||created.batch_id||'—')+' committed · processing started.';
+  toast('Upload committed · processing started');
+  await loadData();
+ }catch(e){
+  let cleanup='';
+  if(session){
+   try{
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/abort',{method:'POST',timeoutMs:12000});
+    cleanup=' · incomplete batch aborted';
+   }catch(abortErr){
+    cleanup=' · batch cleanup needs review';
+   }
+  }
+  if(result)result.textContent='UPLOAD NOT COMMITTED · '+String(e.message||e)+cleanup;
+  toast('Upload not committed'+cleanup);
+  loadData().catch(()=>{});
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent='UPLOAD & START PROCESSING'}
+ }
+}
+const dataUploadFiles=$('#dataUploadFiles');if(dataUploadFiles)dataUploadFiles.onchange=dataUploadSelectionSummary;
+const dataUploadBtn=$('#dataUploadBtn');if(dataUploadBtn)dataUploadBtn.onclick=uploadDataFiles;
+
 async function loadData(){
  try{
   const [health,active,recent,qa,dash]=await Promise.all([
@@ -3650,13 +3896,24 @@ async function loadData(){
   ]);
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
   const rb=recent.batches||recent.rows||[];
-  const currentBatch=active.active_batch||null;
-  const publishId=dash?.quick_check?.latest_publish_batch_id;
-  const latestPublished=(publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null)||active.latest_batch||rb[0]||null;
+  const activeCandidate=active.active_batch||null;
+  const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
+  dataLiveSignature=dataBatchSignature(activeCandidate);
+  const quick=dash?.quick_check||{},publishId=quick.latest_publish_batch_id;
+  const publishedFromRecent=publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null;
+  const latestPublished=publishedFromRecent||(
+    publishId?{
+      batch_id:publishId,
+      processing_status:Number(quick.qa_hold_rows||0)>0?'QUICK_CHECK_READY_WITH_HOLDS':'QUICK_CHECK_READY',
+      completed_at:quick.latest_published_at||null,
+      quick_check_hold_rows:Number(quick.qa_hold_rows||0)
+    }:(active.latest_batch||rb[0]||null)
+  );
+  dataPublishedBatch=latestPublished;
   renderLivePipeline(currentBatch,latestPublished);
   renderCurrentBatchPanel(currentBatch);
   renderPublishedSnapshot(dash,health,latestPublished);
-  renderQAResolution(qa,latestPublished||currentBatch);
+  renderQAResolution(qa,latestPublished||activeCandidate||currentBatch);
   $('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{
     const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();
     const cls=/^QUICK_CHECK_READY/.test(xs)?' ready':((xs==='PHASE3_QA_HOLD'||xs==='QA_HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':''));
