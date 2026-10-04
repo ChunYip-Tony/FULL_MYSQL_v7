@@ -1119,6 +1119,8 @@ jobs:
           assert 'id="dataFreshness"' in text
           assert 'function renderDataFreshness' in text
           assert "api('/v1/yipman/header-freshness'" in text
+          assert "api('/v1/yipman/header-freshness',{timeoutMs:9000}).catch(()=>null)" in text
+          assert 'Freshness temporarily unavailable.' in text
           assert 'FROZEN RPT' in text
           assert 'LIVE/FRESH RPT' in text
           assert text.index('id="dataUploadFiles"') < text.index('<h3>New Batch Status</h3>') < text.index('id="dataFreshness"') < text.index('id="recentBatches"')
