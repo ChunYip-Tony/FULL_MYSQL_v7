@@ -4765,8 +4765,42 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             })
             qualifying_ids.append(fid)
 
+        # Sort and trim before supplemental enrichment. The mobile home dashboard
+        # never needs live calculations for Families that will not be returned.
+        rows.sort(
+            key=lambda r: (
+                -float(r.get("receipt_over_selling_pct") or 0),
+                -float(r.get("receipt_minus_selling_7d") or 0),
+                str(r.get("family_name") or ""),
+            )
+        )
+        qualified_count = len(rows)
+        rows = rows[:lim]
+        qualifying_ids = [int(row["family_id"]) for row in rows]
+
+        # Fetch serving children once for all returned Families. The previous
+        # read-time OH loop re-read quick_check_current for every Family, which
+        # created an N+1 query pattern and could exceed the mobile timeout.
+        children_by_family: dict[int, list[dict[str, Any]]] = {}
+        all_family_rows: list[dict[str, Any]] = []
+        if qualifying_ids:
+            ph = ",".join(["%s"] * len(qualifying_ids))
+            cur.execute(
+                f"""SELECT *
+                    FROM quick_check_current
+                    WHERE family_id IN ({ph})
+                    ORDER BY family_id,upc_id""",
+                tuple(qualifying_ids),
+            )
+            all_family_rows = [dict(x) for x in cur.fetchall()]
+            for child in all_family_rows:
+                if child.get("family_id") is not None:
+                    children_by_family.setdefault(
+                        int(child["family_id"]), []
+                    ).append(child)
+
         # Promotion evidence is intentionally calculated only for the small set
-        # of Families already qualified for Stock Flow.
+        # of Families already selected for Stock Flow.
         if rows and qualifying_ids:
             sales_days_28 = source_data_days(
                 cur,
@@ -4775,19 +4809,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 up_to=completed_through_date(),
             )
             if sales_days_28:
-                ph = ",".join(["%s"] * len(qualifying_ids))
-                cur.execute(
-                    f"""SELECT *
-                        FROM quick_check_current
-                        WHERE family_id IN ({ph})
-                        ORDER BY family_id,upc_id""",
-                    tuple(qualifying_ids),
-                )
-                all_family_rows = [dict(x) for x in cur.fetchall()]
-                promo_family_rows: dict[int, list[dict[str, Any]]] = {}
-                for row in all_family_rows:
-                    if row.get("family_id") is not None:
-                        promo_family_rows.setdefault(int(row["family_id"]), []).append(row)
+                promo_family_rows = children_by_family
                 promo_daily = _batch_daily_sales_by_price_type(
                     cur,
                     all_family_rows,
@@ -4856,38 +4878,81 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 row["latest_receipt_cost_uom"] = cost_row.get("cost_uom")
                 row["latest_receipt_cost_source"] = cost_row.get("source_type")
 
-        # Every Stock Flow Family card carries the same live Effective OH
-        # authority used by Quick Check / Ordering / PI. This includes active
-        # Family True Stock observations immediately, without waiting for a new
-        # Quick Check publish.
-        for row in rows:
-            fid=int(row["family_id"])
+        # Effective OH on Stock Flow uses the published system position as the
+        # fast baseline. Only Families with an active manual Family True Stock
+        # need a live roll-forward. This keeps True Stock authoritative without
+        # recalculating every Family's inventory tree on every home-page load.
+        active_family_true_stock_ids: set[int] = set()
+        if qualifying_ids:
+            ph = ",".join(["%s"] * len(qualifying_ids))
             cur.execute(
-                "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
-                (fid,),
+                f"""SELECT DISTINCT family_id
+                    FROM manual_true_stock
+                    WHERE family_id IN ({ph})
+                      AND scope_type='FAMILY'
+                      AND override_status='ACTIVE'""",
+                tuple(qualifying_ids),
             )
-            children=cur.fetchall()
-            system=_family_system_oh(cur,children)
-            effective=_family_effective_oh(cur,children)
-            row["system_oh"]=system.get("quantity")
-            row["system_oh_uom"]=system.get("uom")
-            row["system_oh_source"]=system.get("source")
-            row["system_oh_status"]=system.get("status")
-            if effective.get("status")=="READY" and effective.get("quantity") is not None:
-                row["effective_oh"]=effective.get("quantity")
-                row["effective_oh_uom"]=effective.get("uom")
-                row["effective_oh_source"]=effective.get("source")
-                row["effective_oh_status"]="READY"
-                row["effective_oh_is_true_stock"]=str(
+            active_family_true_stock_ids = {
+                int(x["family_id"])
+                for x in cur.fetchall()
+                if x.get("family_id") is not None
+            }
+
+        for row in rows:
+            fid = int(row["family_id"])
+            children = children_by_family.get(fid, [])
+            published = _published_family_oh_fallback(children)
+
+            if published:
+                system = {
+                    "status": "READY",
+                    "quantity": published.get("quantity"),
+                    "uom": published.get("uom"),
+                    "source": "QUICK_CHECK_CURRENT_PUBLISHED_SYSTEM_OH",
+                }
+            else:
+                # Rare compatibility fallback for Families whose serving child
+                # snapshots do not agree on a single published Family OH.
+                system = _family_system_oh(cur, children)
+
+            effective = (
+                _family_effective_oh(cur, children)
+                if fid in active_family_true_stock_ids
+                else system
+            )
+
+            row["system_oh"] = system.get("quantity")
+            row["system_oh_uom"] = system.get("uom")
+            row["system_oh_source"] = system.get("source")
+            row["system_oh_status"] = system.get("status")
+
+            if (
+                effective.get("status") == "READY"
+                and effective.get("quantity") is not None
+            ):
+                row["effective_oh"] = effective.get("quantity")
+                row["effective_oh_uom"] = effective.get("uom")
+                row["effective_oh_source"] = effective.get("source")
+                row["effective_oh_status"] = "READY"
+                row["effective_oh_is_true_stock"] = str(
                     effective.get("source") or ""
                 ).upper().startswith("FAMILY_TRUE_STOCK")
+            elif (
+                system.get("status") == "READY"
+                and system.get("quantity") is not None
+            ):
+                row["effective_oh"] = system.get("quantity")
+                row["effective_oh_uom"] = system.get("uom")
+                row["effective_oh_source"] = system.get("source")
+                row["effective_oh_status"] = "READY"
+                row["effective_oh_is_true_stock"] = False
             else:
-                published=_published_family_oh_fallback(children)
-                row["effective_oh"]=published.get("quantity") if published else None
-                row["effective_oh_uom"]=published.get("uom") if published else effective.get("uom")
-                row["effective_oh_source"]=published.get("source") if published else effective.get("source")
-                row["effective_oh_status"]=published.get("status") if published else effective.get("status")
-                row["effective_oh_is_true_stock"]=False
+                row["effective_oh"] = None
+                row["effective_oh_uom"] = effective.get("uom") or system.get("uom")
+                row["effective_oh_source"] = effective.get("source") or system.get("source")
+                row["effective_oh_status"] = effective.get("status") or system.get("status")
+                row["effective_oh_is_true_stock"] = False
 
         cur.close()
 
@@ -4899,8 +4964,9 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK",
-        "count": len(rows),
+        "contract_version": "YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY",
+        "count": qualified_count,
+        "returned_count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
         "rules": {
@@ -4910,8 +4976,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "default_sort": "RECEIPT_OVER_SELLING_PCT_DESC",
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "latest_receipt_cost": "MOVEMENT_RECEIPT_VALUATION_ON_LATEST_PHYSICAL_RECEIPT_DATE",
-            "effective_oh": "LIVE_FAMILY_EFFECTIVE_OH_WITH_TRUE_STOCK_AUTHORITY",
-            "system_oh": "LATEST_SYSTEM_POSITION_DISPLAYED_BESIDE_EFFECTIVE_OH",
+            "effective_oh": "PUBLISHED_SYSTEM_OH_PLUS_ACTIVE_FAMILY_TRUE_STOCK_OVERLAY",
+            "system_oh": "PUBLISHED_SYSTEM_OH_WITH_LIVE_FALLBACK",
             "friday_warning": "FRIDAY_DOMINANT_AT_LEAST_2_DATES_AND_AT_LEAST_50_PERCENT_SHARE",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
             "movement_source": "PUBLISHED_QUICK_CHECK_CURRENT_FAMILY_7D",

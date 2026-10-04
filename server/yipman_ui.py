@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v451';
+const CACHE='yipman-v452';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -867,6 +867,28 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 #quick .bestfam.article-tone-6{border-left:5px solid #cb8749;background:linear-gradient(95deg,#fff0e3,#fff 68%)}
 #quick .bestfam.article-tone-7{border-left:5px solid #707abc;background:linear-gradient(95deg,#eceeff,#fff 68%)}
 
+
+/* V451 Stock Flow reliability + narrow-mobile layout. */
+#quick{padding-bottom:calc(154px + env(safe-area-inset-bottom))}
+.stockflownotice{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 1px 6px;padding:7px 9px;border:1px solid #d5e2ec;border-radius:10px;background:#eef6fc;color:#36566f;font-size:8px;font-weight:900}
+.stockflownotice span{min-width:0;line-height:1.25}.stockflownotice button,.stockflowerror button{flex:0 0 auto;border:1px solid #9fc4df;border-radius:8px;background:#fff;color:#0d5f9f;padding:5px 8px;font-size:8px;font-weight:1000}
+.stockflowerror{background:#fff;border:1px solid #ead7d7;border-radius:13px;padding:11px;text-align:center;color:#775b5b;font-size:9px;font-weight:850;box-shadow:var(--shadow)}
+.stockflowerror button{display:block;margin:8px auto 0}
+.stockflowskeleton{display:grid;gap:7px}.stockflowskeleton>div{height:112px;border-radius:13px;background:linear-gradient(90deg,#edf1f4 20%,#f8fafb 45%,#edf1f4 70%);background-size:220% 100%;animation:stocksheen 1.15s linear infinite}
+@keyframes stocksheen{to{background-position:-220% 0}}
+#quick .bestfam{width:100%;max-width:100%;min-width:0}
+#quick .familyohpair,#quick .stockflowgrid{width:100%;max-width:100%;min-width:0}
+#quick .familyohpair>* ,#quick .stockflowgrid>*{min-width:0}
+#quick .familyohpair b{font-size:clamp(12px,3.8vw,16px);white-space:nowrap}
+#quick .familyohpair small,#quick .familyohpair span{white-space:normal;overflow-wrap:anywhere}
+#quick .stockflowgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+#quick .stockflowgrid .bestmetric b,#quick .stockflowgrid .stockdiff>b{font-size:clamp(13px,4.1vw,17px);white-space:nowrap}
+#quick .stockflowgrid small,#quick .stockflowgrid span{white-space:normal;overflow-wrap:anywhere}
+@media(max-width:380px){
+  #quick .stockflowgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #quick .stockflowgrid .stockdiff{grid-column:1/-1}
+  #quick .familyohpair{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 </style>
 </head>
 <body>
@@ -1042,17 +1064,17 @@ const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
 const pagePositions=new Map();
-let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
+let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
+const stockFlowCacheKey='yipman-stock-flow-v9';
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
 
 async function refreshAfterFamilyTrueStock(family=''){
  aiBriefLoaded=false;aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
  if(current==='quick'){
-   bestSellerGroups=null;
-   if(lastQuickQuery)await loadQuick(lastQuickQuery);else await loadBestSellers(true);
+   if(lastQuickQuery)await loadQuick(lastQuickQuery);else {stockFlowNotice='Recalculating Family stock…';await loadBestSellers(true);}
  }else if(current==='order'&&orderMode==='REGULAR'){
    await loadOrder(orderDate);
  }else if(current==='order'&&orderMode==='PROMOTION'){
@@ -1882,6 +1904,7 @@ function stockFlowSortedRows(){
 }
 function renderStockFlow(){
  const box=$('#quickRows'),rows=stockFlowSortedRows(),allRows=[...(bestSellerGroups||[])];
+ const noticeHtml=stockFlowNotice?'<div class="stockflownotice"><span>'+esc(stockFlowNotice)+'</span><button type="button" data-stock-retry>RETRY</button></div>':'';
  const dAll=allRows.filter(r=>stockFlowMatchesCategory(r)).length;
  const dTueWed=allRows.filter(r=>stockFlowMatchesCategory(r)&&stockFlowMatchesDelivery(r,'TUE_WED')).length;
  const dThuFri=allRows.filter(r=>stockFlowMatchesCategory(r)&&stockFlowMatchesDelivery(r,'THU_FRI')).length;
@@ -1890,7 +1913,7 @@ function renderStockFlow(){
  const cFresh=allRows.filter(r=>stockFlowMatchesDelivery(r)&&stockFlowMatchesCategory(r,'FRESH')).length;
  const cFrozen=allRows.filter(r=>stockFlowMatchesDelivery(r)&&stockFlowMatchesCategory(r,'FROZEN')).length;
  const active=(value,current)=>value===current?' on':'';
- box.innerHTML=
+ box.innerHTML=noticeHtml+
    '<div class="besthead"><div><h3>Stock Flow Watch</h3><span>7D receipts ≥ 150% of 7D selling movement</span></div></div>'+
    '<div class="stockflowfilters">'+
      '<div class="stockfiltergroup delivery"><small>DELIVERY FILTER</small><div class="stockfilterbuttons">'+
@@ -1918,6 +1941,7 @@ function renderStockFlow(){
  });
  bindReceiptLinks();
  bindFamilyOhEditors();
+ bindStockFlowRetry();
 }
 function stockFlowFamilyHtml(g,idx){
  const uom=g.group_uom||'',receiptUom=g.family_receipt_7d_uom||uom||'',history=(Array.isArray(g.family_receipt_history)?g.family_receipt_history:[]).slice(0,2);
@@ -1951,10 +1975,40 @@ function stockFlowFamilyHtml(g,idx){
    promoHtml+
    '<div class="bestrecent"><div class="bestrecenthead"><span>RECENT RECEIPTS</span><span class="stockreceiptmeta">'+costHtml+receiptToggle+'</span></div>'+recent+'</div></section>';
 }
+function stockFlowReadCache(){
+ try{
+  const raw=localStorage.getItem(stockFlowCacheKey);
+  if(!raw)return null;
+  const data=JSON.parse(raw);
+  return data&&Array.isArray(data.rows)?data:null;
+ }catch{return null}
+}
+function stockFlowWriteCache(rows){
+ try{localStorage.setItem(stockFlowCacheKey,JSON.stringify({saved_at:new Date().toISOString(),rows:rows||[]}))}catch{}
+}
+function stockFlowSkeletonHtml(){
+ return '<div class="stockflowskeleton" aria-label="Loading Stock Flow"><div></div><div></div><div></div></div>';
+}
+function bindStockFlowRetry(){
+ const b=$('[data-stock-retry]');if(b)b.onclick=()=>loadBestSellers(true);
+}
 async function loadBestSellers(force=false){
  const box=$('#quickRows');
  if(bestSellerGroups&&!force){renderStockFlow();return}
- const requestId=++quickRequestSeq;lastQuickQuery='';box.innerHTML='<div class="loading">Loading stock flow watch…</div>';
+ const requestId=++quickRequestSeq;lastQuickQuery='';
+ if(!bestSellerGroups){
+  const cached=stockFlowReadCache();
+  if(cached?.rows?.length){
+   bestSellerGroups=cached.rows;
+   stockFlowNotice='Showing last saved Stock Flow · refreshing latest';
+   renderStockFlow();
+  }else{
+   box.innerHTML=stockFlowSkeletonHtml();
+  }
+ }else{
+  stockFlowNotice='Refreshing latest Stock Flow…';
+  renderStockFlow();
+ }
  try{
   const d=await api('/v1/yipman/stock-flow?limit=100',{timeoutMs:20000});
   if(requestId!==quickRequestSeq||$('#globalInput').value.trim())return;
@@ -1983,8 +2037,21 @@ async function loadBestSellers(force=false){
     effective_oh_is_true_stock:!!r.effective_oh_is_true_stock,
     system_oh:r.system_oh,system_oh_uom:r.system_oh_uom||'',system_oh_source:r.system_oh_source||''
   }));
+  stockFlowNotice='';
+  stockFlowWriteCache(bestSellerGroups);
   renderStockFlow();
- }catch(e){if(requestId===quickRequestSeq)box.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+ }catch(e){
+  if(requestId!==quickRequestSeq)return;
+  if(bestSellerGroups?.length){
+   stockFlowNotice=String(e?.message||'').toLowerCase().includes('timed out')
+     ? 'Latest refresh timed out · showing last saved data'
+     : 'Latest refresh failed · showing last saved data';
+   renderStockFlow();
+  }else{
+   box.innerHTML='<div class="stockflowerror">'+esc(e.message||'Stock Flow unavailable')+'<button type="button" data-stock-retry>RETRY</button></div>';
+   bindStockFlowRetry();
+  }
+ }
 }
 
 async function loadQuick(q){

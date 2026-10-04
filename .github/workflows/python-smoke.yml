@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v451'" in ui
+          assert "const CACHE='yipman-v452'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -289,7 +289,11 @@ jobs:
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
           assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
-          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in src
+          assert 'YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY' in src
+          assert 'qualified_count = len(rows)' in src
+          assert 'children_by_family' in src
+          assert 'active_family_true_stock_ids' in src
+          assert 'SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc' not in src
           assert '(obs.get("price_types") or {}).get("SALE")' in helper
           assert 'TPR is never promotion' in helper
           assert 'promotion_week_extra_qty' in helper
@@ -329,8 +333,12 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v451'" in ui
-          print('stock-flow-observed-delivery-v395=PASS')
+          assert "const CACHE='yipman-v452'" in ui
+          assert 'stockFlowCacheKey' in ui
+          assert 'Showing last saved Stock Flow' in ui
+          assert 'data-stock-retry' in ui
+          assert '#quick{padding-bottom:calc(154px' in ui
+          print('stock-flow-observed-delivery-v451=PASS')
           PY
 
       - name: Validate controlled pricing path, freshness tests, and compact progress UI
@@ -989,7 +997,7 @@ jobs:
           stockflow=inspect.getsource(bo.yipman_best_sellers)
           assert '"effective_oh"' in stockflow
           assert 'FAMILY_TRUE_STOCK' in stockflow
-          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in stockflow
+          assert 'YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY' in stockflow
           assert 'row["family_article_number"] = live.get("main_article_number")' in pricing
           assert 'row["family_name"] = live.get("family_description")' in pricing
           print('family-cost-global-true-stock=PASS')
@@ -1116,7 +1124,7 @@ jobs:
           assert "await loadPromotionOrder()" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v451'" in ui
+          assert "const CACHE='yipman-v452'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
