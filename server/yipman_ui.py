@@ -1085,7 +1085,7 @@ async function loadHeaderFreshness(){
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, historyScrollTimer=null;
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', historyScrollTimer=null;
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
@@ -3555,6 +3555,22 @@ function fmtElapsedSeconds(v){
  const m=Math.floor(sec/60),s=sec%60;if(m<60)return m+'m '+s+'s';
  const h=Math.floor(m/60),mm=m%60;return h+'h '+mm+'m';
 }
+function dataBatchIsActivelyProcessing(b){
+ if(!b?.batch_id)return false;
+ const run=String(b.active_run_status||'').toUpperCase();
+ const st=String(b.processing_status||'').toUpperCase();
+ return ['QUEUED','STARTED','PAUSE_REQUESTED'].includes(run)
+   || ['API_UPLOADING','INGESTED_PENDING_QA','RAW_RELEASED','RELEASED'].includes(st);
+}
+function dataBatchSignature(b){
+ if(!b?.batch_id)return 'NONE';
+ return [
+   b.batch_id,
+   String(b.processing_status||'').toUpperCase(),
+   String(b.active_run_status||'').toUpperCase(),
+   b.active_pipeline_run_id||''
+ ].join('|');
+}
 function batchLiveState(b){
  const run=String(b?.active_run_status||'').toUpperCase();
  const fresh=b?.active_heartbeat_fresh===true;
@@ -3577,7 +3593,7 @@ function renderLivePipeline(activeBatch,latestPublished){
  const itemHolds=num(b?.quick_check_hold_rows)??num(b?.qa_summary?.phase3?.quick_check_hold_rows)??0;
  const uploaded=st!=='NONE';
  const ingested=/INGEST|PHASE|QUICK|READY|RELEASE/.test(st);
- const qaDone=published||(/PHASE3|QUICK|READY/.test(st)&&!blockingHold);
+ const qaDone=published;
  let qaClass='',qaText='WAIT';
  if(blockingHold){qaClass='bad';qaText='BLOCKED'}
  else if(published&&itemHolds>0){qaClass='warn';qaText='DONE · '+fmt(itemHolds,0)+' ITEM HOLD'}
@@ -3646,7 +3662,15 @@ async function pollDataLive(){
  if(current!=='data')return;
  try{
   const active=await api('/v1/web-upload/active',{timeoutMs:9000});
-  const currentBatch=active.active_batch||null;
+  const activeCandidate=active.active_batch||null;
+  const nextSignature=dataBatchSignature(activeCandidate);
+  if(dataLiveSignature&&nextSignature!==dataLiveSignature){
+    dataLiveSignature=nextSignature;
+    await loadData();
+    return;
+  }
+  dataLiveSignature=nextSignature;
+  const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
   const latestBatch=active.latest_batch||null;
   renderLivePipeline(currentBatch,latestBatch);
   renderCurrentBatchPanel(currentBatch);
@@ -3717,13 +3741,15 @@ async function loadData(){
   ]);
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
   const rb=recent.batches||recent.rows||[];
-  const currentBatch=active.active_batch||null;
+  const activeCandidate=active.active_batch||null;
+  const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
+  dataLiveSignature=dataBatchSignature(activeCandidate);
   const publishId=dash?.quick_check?.latest_publish_batch_id;
   const latestPublished=(publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null)||active.latest_batch||rb[0]||null;
   renderLivePipeline(currentBatch,latestPublished);
   renderCurrentBatchPanel(currentBatch);
   renderPublishedSnapshot(dash,health,latestPublished);
-  renderQAResolution(qa,latestPublished||currentBatch);
+  renderQAResolution(qa,latestPublished||activeCandidate||currentBatch);
   $('#recentBatches').innerHTML=rb.slice(0,4).map(x=>{
     const xs=String(x.processing_status||x.phase3_status||'').toUpperCase();
     const cls=/^QUICK_CHECK_READY/.test(xs)?' ready':((xs==='PHASE3_QA_HOLD'||xs==='QA_HOLD')?' hold':(/READY|PUBLISH/.test(xs)?' ready':''));
