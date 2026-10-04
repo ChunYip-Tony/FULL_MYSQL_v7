@@ -18,8 +18,9 @@ YIPMAN_MOBILE_V2_CSS = r"""
   #yv2 .yv2-search{display:flex;align-items:center;gap:7px;margin-top:9px;background:#fff;border:2px solid #c8d0d9;border-radius:14px;padding:0 11px}
   #yv2 .yv2-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:12px 4px;font-size:17px;font-weight:700}
   #yv2 .yv2-search button{border:0;background:transparent;font-size:18px;padding:8px 3px}
-  #yv2 .yv2-main{position:absolute;left:0;right:0;top:76px;bottom:68px;overflow:hidden}
-  #yv2.lookup-mode .yv2-main{top:128px}
+  #yv2 .yv2-main{position:absolute;left:0;right:0;top:66px;bottom:68px;overflow:hidden}
+  #yv2.lookup-mode .yv2-main{top:122px}
+  @media(display-mode:standalone),(display-mode:fullscreen){#yv2 .yv2-main{top:82px}#yv2.lookup-mode .yv2-main{top:138px}}
   #yv2 .yv2-page{display:none;height:100%;overflow-y:auto;overflow-x:hidden;padding:12px 13px 24px;scrollbar-width:none}
   #yv2 .yv2-page::-webkit-scrollbar{display:none}
   #yv2 .yv2-page.on{display:block}
@@ -164,10 +165,16 @@ YIPMAN_MOBILE_V2_JS = r"""
     if(p==='order'&&!V.orderLoaded)initOrder();
     if(p==='performance'&&!V.performanceLoaded)loadPerformance(1);
   }
-  root.addEventListener('click',e=>{
+  let lastNavPointerAt=0;
+  const navDispatch=e=>{
     const nav=e.target.closest?.('[data-page]');
-    if(nav&&root.contains(nav)){e.preventDefault();go(nav.dataset.page);return}
-  },true);
+    if(!nav||!root.contains(nav))return false;
+    if(e.type==='click'&&Date.now()-lastNavPointerAt<700){e.preventDefault();return true}
+    if(e.type==='pointerup')lastNavPointerAt=Date.now();
+    e.preventDefault();go(nav.dataset.page);return true;
+  };
+  root.addEventListener('pointerup',navDispatch,true);
+  root.addEventListener('click',navDispatch,true);
 
   async function loadHealth(){
     const box=$('#yv2Health');
