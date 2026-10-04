@@ -706,6 +706,12 @@ jobs:
           assert "data-order-mode=\"PROMOTION\"" in ui
           assert 'id="promoManualBtn"' in ui
           assert 'Manual Promotion' in ui
+          assert 'id="manualPromoSearch"' in ui
+          assert '/v1/app/v2/search?q=' in ui
+          assert 'MANUAL_SEARCH_ENTRY' in ui
+          assert 'data-manual-promo-result' in ui
+          assert 'data-manual-promo-remove' in ui
+          assert 'Replaced the previous selection for Family' in ui
           assert "promotion_type:'CUSTOM'" in ui
           assert 'freshness_adjustment_applied' in ui
           print('yipman-promotion-ordering=PASS')
