@@ -263,10 +263,10 @@ YIPMAN_MOBILE_V2_JS = r"""
       bindStockButtons(box);box.querySelectorAll('[data-upc]').forEach(b=>b.onclick=()=>openUpc(b.dataset.upc));
     }catch(e){box.innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
-  $('#yv2SearchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('#yv2Search').value.trim();if(q.length<2){toast('Enter at least 2 characters');$('#yv2Search').focus();return}searchLookup(q);$('#yv2Search').blur()});
+  $('#yv2SearchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('#yv2Search').value.trim();if(q.length<2){toast('Enter at least 2 characters');return}searchLookup(q);$('#yv2Search').blur()});
   let st;$('#yv2Search').addEventListener('input',()=>{clearTimeout(st);const q=$('#yv2Search').value.trim();if(q.length>=2)st=setTimeout(()=>searchLookup(q),330)});
   root.addEventListener('click',e=>{
-    if(e.target.closest?.('#yv2SearchClear')){$('#yv2Search').value='';$('#yv2LookupRows').innerHTML='<div class="yv2-empty">Search a UPC, Family Article, Receiving Article, English name, or Chinese name.</div>';$('#yv2Search').focus()}
+    if(e.target.closest?.('#yv2SearchClear')){$('#yv2Search').value='';$('#yv2LookupRows').innerHTML='<div class="yv2-empty">Search a UPC, Family Article, Receiving Article, English name, or Chinese name.</div>'}
   });
 
   async function openUpc(upc){
@@ -323,7 +323,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       if(!uom)throw new Error('True Stock UOM unavailable');
       V.stockContext={family:String(d.family),name:d.name||d.family,uom:String(uom)};
       modal(`<h3>True Stock · ${esc(d.name||d.family)}</h3><p>Family ${esc(d.family)} · Current Effective OH ${fmt(qty)} ${esc(uom)}. Saving becomes immediate OH authority for every OH-dependent page.</p><input class="yv2-input" id="yv2StockQty" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(qty??'')}"><input class="yv2-input" id="yv2StockNote" style="font-size:14px" placeholder="Physical count note (optional)"><div class="yv2-btnrow"><button class="yv2-btn" id="yv2StockCancel">Cancel</button><button class="yv2-btn primary" id="yv2StockSave">Save & Recalculate</button></div>`);
-      setTimeout(()=>$('#yv2StockQty')?.select(),60);
+
     }catch(e){V.stockContext=null;modal('<h3>True Stock unavailable</h3><p>'+esc(e.message)+'</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>')}
   }
   async function saveTrueStock(){
@@ -487,7 +487,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       if(V.promoListId){await loadPromoDetail();updatePromoDeleteButton();await calcPromotion()}else{$('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>';updatePromoDeleteButton()}
       renderPromoSelected();
       bindPromoInlineControls();
-      setTimeout(()=>$('#yv2PromoSearch')?.focus(),50);
+
     }catch(e){$('#yv2OrderRows').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
   function updatePromoDeleteButton(){
@@ -544,7 +544,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       await loadPromotion();
     }catch(e){toast(e.message||'Could not remove promotion item');if(btn){btn.disabled=false;btn.textContent='Remove from promotion'}}
   }
-  function openPromoBuilder(){go('order');V.orderMode='promotion';loadPromotion().then(()=>$('#yv2PromoSearch')?.focus())}
+  function openPromoBuilder(){go('order');V.orderMode='promotion';loadPromotion()}
 
   async function runPromoSearch(){
     const input=$('#yv2PromoSearch'),box=$('#yv2PromoResults'),status=$('#yv2PromoSearchStatus');if(!input||!box)return;
@@ -579,7 +579,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       renderPromoSelected();
       if(status)status.textContent='Added Family '+familyKey+'. Search again to add another Family.';
       toast('Promotion item added');
-      $('#yv2PromoSearch')?.focus();
+
     }catch(e){if(status)status.textContent='Unable to add item · '+(e.message||'error')}
   }
   function renderPromoSelected(){
@@ -617,7 +617,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   }
   $$('#yv2PerfTabs [data-days]').forEach(b=>b.onclick=()=>{$$('#yv2PerfTabs .yv2-tab').forEach(x=>x.classList.toggle('on',x===b));loadPerformance(Number(b.dataset.days))});
 
-  $$('[data-more]').forEach(b=>b.onclick=()=>{const x=b.dataset.more;if(x==='tpr'){go('actions');V.actionFilter='price';renderActions()}else if(x==='data')modal('<h3>Data Status</h3><p>Published through '+esc(V.dataThrough||'—')+'. Detailed batch and QA administration remains on Desktop Back Office.</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>'),$('#yv2ModalClose')&&($('#yv2ModalClose').onclick=closeModal);else if(x==='pi'){go('lookup');$('#yv2Search').focus()}else toast('Use Item Lookup for receipt details')});
+  $$('[data-more]').forEach(b=>b.onclick=()=>{const x=b.dataset.more;if(x==='tpr'){go('actions');V.actionFilter='price';renderActions()}else if(x==='data')modal('<h3>Data Status</h3><p>Published through '+esc(V.dataThrough||'—')+'. Detailed batch and QA administration remains on Desktop Back Office.</p><div class="yv2-btnrow"><button class="yv2-btn" id="yv2ModalClose">Close</button></div>'),$('#yv2ModalClose')&&($('#yv2ModalClose').onclick=closeModal);else if(x==='pi'){go('lookup')}else toast('Use Item Lookup for receipt details')});
   $('#yv2Classic').onclick=()=>{const u=new URL(location.href);u.searchParams.set('classic','1');location.href=u.toString()};
 
   window.__YV2_READY__=true;
