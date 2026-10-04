@@ -313,7 +313,7 @@ jobs:
           assert '"latest_receipt_cost"' in src
           assert 'RECEIPT_OVER_SELLING_PCT_DESC' in src
           assert "$$('[data-stock-category]').forEach" in ui
-          assert "$$('[data-stock-receipts]').forEach" in ui
+          assert "querySelectorAll('[data-stock-receipts]').forEach" in ui
           assert 'AVG PROMO PRICE' in ui
           assert '.stockdiff.promoted>b{display:inline-block;background:#fff34a' in ui
           assert '.stockpromo .promolift{display:inline-block' in ui
