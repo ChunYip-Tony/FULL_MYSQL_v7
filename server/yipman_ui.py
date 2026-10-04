@@ -2495,8 +2495,8 @@ function renderStockFlow(){
    '<div class="stockflowtoolbar"><div class="stockflowfilters">'+
      '<div class="stockfiltergroup delivery"><small>DELIVERY FILTER</small><div class="stockfilterbuttons">'+
        '<button class="stockfilterbtn'+active('ALL',stockFlowDeliveryFilter)+'" data-stock-delivery="ALL">ALL <b>'+dAll+'</b></button>'+
-       '<button class="stockfilterbtn deliverytw'+active('TUE_THU',stockFlowDeliveryFilter)+'" data-stock-delivery="TUE_THU">🚚 TUE–THU <b>'+dTueThu+'</b></button>'+
-       '<button class="stockfilterbtn deliverytf'+active('THU_SAT',stockFlowDeliveryFilter)+'" data-stock-delivery="THU_SAT">🚚 THU–SAT <b>'+dThuSat+'</b></button>'+
+       '<button class="stockfilterbtn deliverytw'+active('TUE_THU',stockFlowDeliveryFilter)+'" data-stock-delivery="TUE_THU">🚚 TUE–THU FRESH <b>'+dTueThu+'</b></button>'+
+       '<button class="stockfilterbtn deliverytf'+active('THU_SAT',stockFlowDeliveryFilter)+'" data-stock-delivery="THU_SAT">🚚 THU–SAT FRZ <b>'+dThuSat+'</b></button>'+
      '</div></div>'+
      '<div class="stockfiltergroup category"><small>CATEGORY FILTER</small><div class="stockfilterbuttons">'+
        '<button class="stockfilterbtn'+active('ALL',stockFlowCategoryFilter)+'" data-stock-category="ALL">ALL <b>'+cAll+'</b></button>'+
