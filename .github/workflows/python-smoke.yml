@@ -288,7 +288,7 @@ jobs:
           assert 'reg_suggestion_actionable' in pricing
           assert 'tpr_suggestion_actionable' in pricing
           assert 'sale_price_locked' in pricing
-          assert 'V4_REG_TPR_SPLIT' in inspect.getsource(bo._pricing_review_cache_key)
+          assert 'V5_FAMILY_IDENTITY_TRUE_STOCK' in inspect.getsource(bo._pricing_review_cache_key)
 
           assert "@app.get('/v1/yipman/clearance')" in api_src
           assert "@app.post('/v1/yipman/clearance')" in api_src
