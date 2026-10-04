@@ -2004,7 +2004,7 @@ def cached_ordering_review(
     expected=str(completed_through_date())
     cached_health=dict((cached or {}).get("data_health") or {})
     cached_expected=str(cached_health.get("expected_through") or "")
-    live_health=_current_tpr_data_health()
+    live_health=_pricing_review_data_health(allow_stale_estimate=True)
     source_changed=bool(cached) and (
         str(cached_health.get("pos_data_through") or "")
         != str(live_health.get("pos_data_through") or "")
@@ -2012,8 +2012,6 @@ def cached_ordering_review(
         != str(live_health.get("movement_data_through") or "")
         or str(cached_health.get("price_list_file_id") or "")
         != str(live_health.get("price_list_file_id") or "")
-        or str(cached_health.get("provisional_today_movement_file_id") or "")
-        != str(live_health.get("provisional_today_movement_file_id") or "")
     )
     data_current=bool(cached and cached_expected==expected and not source_changed)
     age=(time.monotonic()-cached_at) if cached is not None and cached_at is not None else None
@@ -8658,7 +8656,7 @@ def cached_current_tpr_review(
             },
         }
 
-    live_health=_pricing_review_data_health(allow_stale_estimate=True)
+    live_health=_current_tpr_data_health()
     cached_health=dict((cached.get("data_health") or {}))
     source_changed=(
         str(cached_health.get("pos_data_through") or "")
@@ -8667,6 +8665,8 @@ def cached_current_tpr_review(
         != str(live_health.get("movement_data_through") or "")
         or str(cached_health.get("price_list_file_id") or "")
         != str(live_health.get("price_list_file_id") or "")
+        or str(cached_health.get("provisional_today_movement_file_id") or "")
+        != str(live_health.get("provisional_today_movement_file_id") or "")
     )
     age=(time.monotonic()-cached_at) if cached_at is not None else None
     stale=source_changed or age is None or age>=_TPR_REVIEW_CACHE_TTL_SECONDS
