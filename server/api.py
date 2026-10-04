@@ -62,6 +62,7 @@ from promotion_ordering import (
     get_promotion_list as get_yipman_promotion_list,
     search_promotion_items as search_yipman_promotion_items,
     remove_manual_promotion_list_item as remove_yipman_manual_promotion_list_item,
+    delete_manual_promotion_list as delete_yipman_manual_promotion_list,
     calculate_promotion_order as calculate_yipman_promotion_order,
     parse_promotion_upload as parse_yipman_promotion_upload,
 )
@@ -4352,6 +4353,24 @@ def yipman_promotion_list_detail(list_id:int):
         raise HTTPException(404,'Promotion list not found')
     except Exception as exc:
         raise HTTPException(500,f'Yipman promotion list detail failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.delete('/v1/yipman/promotion-lists/{list_id}')
+def yipman_delete_manual_promotion_list(
+    list_id:int,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    public_app_actor(authorization)
+    try:
+        result=delete_yipman_manual_promotion_list(list_id)
+    except KeyError as exc:
+        reason=str(exc).strip("'")
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':reason})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman manual promotion list deletion failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 

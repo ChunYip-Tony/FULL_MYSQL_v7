@@ -1351,6 +1351,21 @@ jobs:
           assert 'data-promo-remove-item' in ui
           assert "/items/'+encodeURIComponent(id)" in ui
 
+          # Whole saved manual promotion deletion is a first-class operation.
+          promo=Path('promotion_ordering.py').read_text(encoding='utf-8')
+          api=Path('api.py').read_text(encoding='utf-8')
+          assert 'def delete_manual_promotion_list(list_id: int)' in promo
+          assert 'ONLY_MANUAL_PROMOTION_LISTS_CAN_BE_DELETED' in promo
+          assert '"DELETE FROM yipman_promotion_list_item WHERE list_id=%s"' in promo
+          assert '"DELETE FROM yipman_promotion_list WHERE list_id=%s"' in promo
+          assert "@app.delete('/v1/yipman/promotion-lists/{list_id}')" in api
+          assert 'delete_yipman_manual_promotion_list(list_id)' in api
+          assert 'id="yv2PromoDeleteList"' in ui
+          assert 'Delete Saved Promotion' in ui
+          assert 'async function deleteSavedPromotion()' in ui
+          assert "method:'DELETE'" in ui
+          assert "Only manually saved promotions can be deleted" in ui
+
           # Every Effective-OH control is directly touch/click bound so dynamic
           # Android/PWA re-renders do not depend on root event delegation.
           assert 'function bindStockButtons(ctx=root)' in ui
