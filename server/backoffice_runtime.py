@@ -8521,6 +8521,12 @@ def current_tpr_review(
             "current_cost": current_cost,
             "current_cost_source": row.get("cost_source"),
             "cost_date": row.get("cost_date"),
+            "company_price_a": row.get("company_price_a"),
+            "company_price_b": row.get("company_price_b"),
+            "company_price_c": row.get("company_price_c"),
+            "company_range_low": company_low,
+            "company_range_high": company_high,
+            "has_company_reference": bool(company_values),
             "current_gp_pct": current_gp_pct,
             "current_oh": current_oh,
             "current_oh_uom": current_oh_uom,
@@ -8740,7 +8746,7 @@ def _current_tpr_data_health() -> dict[str,Any]:
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V6_CURRENT_TPR_FOUR_ACTION_PRICE_CARD|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V7_CURRENT_TPR_COMPANY_REFS|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
