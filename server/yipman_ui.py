@@ -46,7 +46,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v466';
+const CACHE='yipman-v467';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -941,13 +941,60 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
   #quick .stockflowgrid .stockdiff{grid-column:1/-1}
   #quick .familyohpair{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* V467 Ordering UX: simpler, larger mobile controls; source health lives in Data Center only. */
+#order{padding-bottom:calc(118px + env(safe-area-inset-bottom))}
+#order .topline h2{font-size:24px;line-height:1.05}
+#order .topline .hint{font-size:9px}
+#order .order-tabs{gap:8px;margin-bottom:10px}
+#order .order-tab{min-height:46px;border-radius:12px;font-size:13px;font-weight:1000}
+#order .order-date-grid{gap:8px}
+#order .order-date-card{min-height:68px;padding:10px 12px;border-radius:13px;text-align:left}
+#order .order-date-card small{font-size:8px}
+#order .order-date-card b{font-size:17px;line-height:1.15;margin-top:3px}
+#order .order-date-card span{font-size:8px;line-height:1.2;margin-top:3px}
+#order .order-coverage{padding:9px 11px;border-radius:11px}
+#order .order-coverage b{font-size:13px}
+#order .order-coverage span{font-size:8px;line-height:1.3}
+#order .order-tools{gap:8px;margin-top:9px}
+#order .order-summary{font-size:11px;font-weight:1000;line-height:1.25}
+#order .order-controls{gap:6px}
+#order .order-controls label{font-size:8px}
+#order .order-controls select{min-height:38px;font-size:12px;font-weight:900;border-radius:10px}
+#order .orderitemcard{border-radius:14px;margin-bottom:9px}
+#order .orderitemmain{gap:8px}
+#order .orderitemmain .name{font-size:15px;line-height:1.2}
+#order .orderitemmain .sub{font-size:8px;line-height:1.3}
+#order .orderqty{font-size:19px!important;font-weight:1000}
+#order .orderqty span{font-size:8px!important}
+#order .orderrecvhistory{margin-top:8px}
+#order .orderrecvhistoryhead b{font-size:8px}
+#order .orderrecvarticle>b{font-size:15px}
+#order .orderrecvarticle .receivingname{font-size:10px;line-height:1.2}
+#order .orderrecvpack>b{font-size:14px}
+#order .promo-shell{padding:12px;border-radius:14px}
+#order .promo-shell h3{font-size:19px;line-height:1.1}
+#order .promo-shell p{font-size:10px;line-height:1.35;margin-top:5px}
+#order .promo-controls{display:grid;grid-template-columns:minmax(0,1fr) 1fr 1fr;gap:7px;margin-top:10px}
+#order .promo-controls select,#order .promo-controls button{min-height:42px;border-radius:10px;font-size:10px;font-weight:1000;min-width:0}
+#order .promo-manual{background:#1769e0!important;color:#fff!important;border-color:#1769e0!important}
+#order .promo-date-inputs label{font-size:8px}
+#order .promo-date-inputs input{min-height:40px;font-size:12px;border-radius:10px}
+#order .promo-status{font-size:9px;line-height:1.35}
+#order .promo-card{border-radius:14px;margin-top:9px}
+#order .promo-card-head b{font-size:15px;line-height:1.2}
+#order .promo-card-head small{font-size:8px;line-height:1.25}
+#order .promo-order b{font-size:21px}
+#order .promo-remove-item{min-height:38px;font-size:9px;font-weight:1000}
+#order .order-refresh-note{margin-bottom:6px;padding:6px 8px;border-radius:9px;background:#eef6fc;color:#315d7c;font-size:8px;font-weight:1000}
+@media(max-width:390px){#order .promo-controls{grid-template-columns:1fr 1fr}#order .promo-controls select{grid-column:1/-1}}
 </style>
 </head>
 <body>
 <div id="app">
   <div class="ptr" id="ptr"><div id="ptrText">Pull to refresh</div></div>
   <header class="header">
-    <div class="head"><div class="brandblock"><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><div class="headfresh" id="headFreshness" aria-label="Source freshness"><div class="hfitem"><i></i><b>POS</b><span>…</span></div><div class="hfitem"><i></i><b>MVT</b><span>…</span></div><div class="hfitem"><i></i><b>FRZ RPT</b><span>…</span></div><div class="hfitem"><i></i><b>FRESH RPT</b><span>…</span></div><div class="hfitem"><i></i><b>OH</b><span>…</span></div><div class="hfitem"><i></i><b>CHATGPT</b><span>…</span></div></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
+    <div class="head"><div class="brandblock"><div class="brand">Yip<span>man</span></div><span class="ver">FULL MYSQL · __VERSION__</span></div><button class="dbbtn" data-go="data" aria-label="Data Center">▦</button></div>
   </header>
   <main class="workspace">
     <section class="page on" id="quick"><div class="topline"><h2>Quick Check</h2><div class="hint">CURRENT MODULE DATA</div></div><div id="quickRows"><div class="loading">Loading stock flow…</div></div><form class="search quicksearch" id="globalForm"><span>⌕</span><input id="globalInput" placeholder="Search item, UPC, article..." autocomplete="off" enterkeyhint="search"><button class="quickclear" id="quickClear" type="button">CLEAR</button></form></section>
@@ -970,13 +1017,13 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
       </div>
       <div id="promotionOrderPanel" class="hide">
         <div class="promo-shell">
-          <h3>Promotion Order</h3>
-          <p>Weekly items use Thursday → following Thursday. Weekend items use Friday → Sunday. The selected delivery window can contain both promotion and regular-price days.</p>
+          <h3>Promotion Ordering</h3>
+          <p>Add a promotion item, set its SALE dates and delivery dates, then Yipman calculates the order. Saved lists and file import stay available when needed.</p>
           <div class="promo-types"><span class="promo-type weekly">WEEKLY · THU → THU</span><span class="promo-type weekend">WEEKEND · FRI → SUN</span></div>
-          <div class="promo-controls"><select id="promoListSelect"><option value="">Choose promotion list…</option></select><button class="promo-import" id="promoImportBtn">IMPORT</button><button class="promo-manual" id="promoManualBtn">MANUAL</button></div>
+          <div class="promo-controls"><select id="promoListSelect"><option value="">Saved promotion list…</option></select><button class="promo-manual" id="promoManualBtn">+ ADD ITEM</button><button class="promo-import" id="promoImportBtn">IMPORT FILE</button></div>
           <div class="promo-date-inputs"><label>WEEKLY START (THU)<input type="date" id="promoWeeklyStart"></label><label>WEEKEND START (FRI)<input type="date" id="promoWeekendStart"></label></div>
           <input type="file" id="promoFileInput" accept=".csv,.xls,.xlsx,.xlsm" class="hide">
-          <div class="promo-status" id="promoListStatus">Choose a saved list, import a file, or enter one / multiple UPC promotions manually.</div>
+          <div class="promo-status" id="promoListStatus">Fastest: tap + ADD ITEM, search UPC / article / name, set SALE dates, delivery date and next delivery date.</div>
         </div>
         <div class="promo-summary" id="promoSummary"></div>
         <div id="promoOrderStatus" class="promo-status"></div>
@@ -2972,6 +3019,10 @@ async function loadOrder(value){
    const status=String(data.analysis_status||'').toUpperCase();
    const cacheStatus=String(data.cache_status||'').toUpperCase();
    const sourceRefreshing=!!data.source_changed_since_analysis||cacheStatus==='SOURCE_CHANGED_REFRESHING'||status.includes('SOURCE_CHANGED');
+   const hasUsableRows=Array.isArray(data?.rows)&&data.rows.length>0;
+   // V467: stale/best-available roster is operationally useful. Show it now
+   // instead of hiding all rows until the background refresh finishes.
+   if(hasUsableRows&&sourceRefreshing)break;
    if(!sourceRefreshing&&!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(cacheStatus))break;
    $('#orderStatus').textContent='Calculating '+appDate(orderDate)+' · receipt cadence first';
    await new Promise(r=>setTimeout(r,1500));
@@ -2979,7 +3030,8 @@ async function loadOrder(value){
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
   const finalCache=String(data?.cache_status||'').toUpperCase();
   const sourceRefreshing=!!data?.source_changed_since_analysis||finalCache==='SOURCE_CHANGED_REFRESHING'||finalStatus.includes('SOURCE_CHANGED');
-  if(sourceRefreshing||['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(finalCache)){
+  const hasUsableRows=Array.isArray(data?.rows)&&data.rows.length>0;
+  if((sourceRefreshing||['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(finalCache))&&!hasUsableRows){
     orderRetryCount++;
     const delay=Math.min(8000,2500+Math.max(0,orderRetryCount-1)*500);
     const err=data?.refresh_error;
@@ -3025,6 +3077,14 @@ async function loadOrder(value){
   orderRetryCount=0;
   clearTimeout(orderRetryTimer);orderRetryTimer=null;
   renderOrderRoster(rows,data,h,stale);
+  if(sourceRefreshing){
+    $('#orderStatus').insertAdjacentHTML('afterbegin','<div class="order-refresh-note">CURRENT AVAILABLE ROSTER · refreshing latest data</div>');
+    orderRetryTimer=setTimeout(()=>{
+      if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext){
+        loadOrder(requestedDate);
+      }
+    },3500);
+  }
  }catch(e){
   if(requestId!==orderRequestSeq)return;
   $('#orderStatus').textContent='Ordering temporarily unavailable';
