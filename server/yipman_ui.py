@@ -65,7 +65,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v468';
+const CACHE='yipman-v1-v469';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -101,7 +101,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v467';
+const CACHE='yipman-v469';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1041,7 +1041,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 #order .promo-card-head small{font-size:8px;line-height:1.25}
 #order .promo-order b{font-size:21px}
 #order .promo-remove-item{min-height:38px;font-size:9px;font-weight:1000}
-#order .order-refresh-note{margin-bottom:6px;padding:6px 8px;border-radius:9px;background:#eef6fc;color:#315d7c;font-size:8px;font-weight:1000}
+#order .order-refresh-note{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 8px;border-radius:9px;background:#eef6fc;color:#315d7c;font-size:8px;font-weight:1000}#order .order-refresh-note span{min-width:0;line-height:1.25}#order .order-refresh-note button,#order .orderretrybtn{flex:0 0 auto;min-height:34px;border:1px solid #9fc4df;border-radius:8px;background:#fff;color:#0d5f9f;padding:6px 9px;font-size:9px;font-weight:1000}
 @media(max-width:390px){#order .promo-controls{grid-template-columns:1fr 1fr}#order .promo-controls select{grid-column:1/-1}}
 </style>
 </head>
@@ -1219,6 +1219,7 @@ let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='
 let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', dataPublishedBatch=null, historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
+const ORDER_MAX_AUTO_RELOADS=1;
 let orderSort='QTY_URGENT', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
 let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTimer=null, lastTprRows=[], lastTprPayload=null, clearanceRows=[], clearanceSearchSeq=0;
 const stockFlowCacheKey='yipman-stock-flow-v9';
@@ -3068,7 +3069,7 @@ async function loadOrder(value){
  const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+requestedDate+(!isPast&&requestedNext?'&next_delivery_date='+encodeURIComponent(requestedNext):'');
  try{
   let data=null;
-  for(let i=0;i<10;i++){
+  for(let i=0;i<4;i++){
    try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out|failed to fetch|network|aborted/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · retrying best-available ordering data';await new Promise(r=>setTimeout(r,1200));continue}throw e}
    if(requestId!==orderRequestSeq)return;
    const status=String(data.analysis_status||'').toUpperCase();
@@ -3088,15 +3089,22 @@ async function loadOrder(value){
   const hasUsableRows=Array.isArray(data?.rows)&&data.rows.length>0;
   if((sourceRefreshing||['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(finalCache))&&!hasUsableRows){
     orderRetryCount++;
-    const delay=Math.min(8000,2500+Math.max(0,orderRetryCount-1)*500);
     const err=data?.refresh_error;
-    $('#orderStatus').textContent=(err?'Retrying after calculation error · ':'Still calculating · ')+'auto-refreshing '+appDate(requestedDate)+' → '+appDate(requestedNext);
-    $('#orderRows').innerHTML='<div class="loading">Yipman is calculating receipt history, OH and predicted usage. This page will update automatically'+(err?'<br><br>'+esc(err):'')+'.</div>';
-    orderRetryTimer=setTimeout(()=>{
-      if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext){
-        loadOrder(requestedDate);
-      }
-    },delay);
+    if(orderRetryCount<=ORDER_MAX_AUTO_RELOADS){
+      const delay=3000;
+      $('#orderStatus').textContent=(err?'Retrying after calculation error · ':'Still calculating · ')+'one automatic retry';
+      $('#orderRows').innerHTML='<div class="loading">Yipman is calculating receipt history, OH and predicted usage. One automatic retry will run, then this page will stay stable'+(err?'<br><br>'+esc(err):'')+'.</div>';
+      orderRetryTimer=setTimeout(()=>{
+        if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext){
+          loadOrder(requestedDate);
+        }
+      },delay);
+      return;
+    }
+    clearTimeout(orderRetryTimer);orderRetryTimer=null;
+    $('#orderStatus').textContent='Calculation still processing · page held stable';
+    $('#orderRows').innerHTML='<div class="empty">Latest ordering calculation is still processing. This page will not keep reloading.<br><button type="button" id="orderRetryNow" class="orderretrybtn">RETRY NOW</button></div>';
+    const retry=$('#orderRetryNow');if(retry)retry.onclick=()=>{orderRetryCount=0;loadOrder(requestedDate)};
     return;
   }
   if(finalStatus==='REFRESH_FAILED'){
@@ -3133,12 +3141,9 @@ async function loadOrder(value){
   clearTimeout(orderRetryTimer);orderRetryTimer=null;
   renderOrderRoster(rows,data,h,stale);
   if(sourceRefreshing){
-    $('#orderStatus').insertAdjacentHTML('afterbegin','<div class="order-refresh-note">CURRENT AVAILABLE ROSTER · refreshing latest data</div>');
-    orderRetryTimer=setTimeout(()=>{
-      if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext){
-        loadOrder(requestedDate);
-      }
-    },3500);
+    clearTimeout(orderRetryTimer);orderRetryTimer=null;
+    $('#orderStatus').insertAdjacentHTML('afterbegin','<div class="order-refresh-note"><span>CURRENT AVAILABLE ROSTER · latest data is refreshing · page held stable</span><button type="button" id="orderRefreshNow">REFRESH</button></div>');
+    const refreshNow=$('#orderRefreshNow');if(refreshNow)refreshNow.onclick=()=>{orderRetryCount=0;loadOrder(requestedDate)};
   }
  }catch(e){
   if(requestId!==orderRequestSeq)return;
