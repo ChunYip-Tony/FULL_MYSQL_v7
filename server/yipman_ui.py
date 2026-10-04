@@ -1938,7 +1938,7 @@ function renderStockFlow(){
        '<button class="stockfilterbtn frozen'+active('FROZEN',stockFlowCategoryFilter)+'" data-stock-category="FROZEN">FROZEN <b>'+cFrozen+'</b></button>'+
      '</div></div>'+
    '</div>'+
-   '<div class="stockflowresultbar"><b>'+rows.length+' ITEM'+(rows.length===1?'':'S')+'</b><label class="stockflowsort">SORT<select id="stockFlowSort"><option value="RATIO">OVER-SELLING % ↓</option><option value="DIFFERENCE">DIFFERENCE ↓</option><option value="RECEIPT">7D RECEIPT ↓</option><option value="SELLING">7D SELLING ↓</option><option value="NAME">NAME A–Z</option></select></label></div>'+
+   '<div class="stockflowresultbar"><b>'+rows.length+' ITEM'+(rows.length===1?'':'S')+'</b><label class="stockflowsort">SORT<select id="stockFlowSort"><option value="RATIO">OVER-SELLING % ↓</option><option value="DIFFERENCE">DIFFERENCE ↓</option><option value="RECEIPT">7D RECEIPT ↓</option><option value="SELLING">7D SELLING ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>'+
    (rows.length?rows.map(stockFlowFamilyHtml).join(''):'<div class="empty stockflowempty">No Stock Flow items match these filters.</div>');
  const sel=$('#stockFlowSort');if(sel){sel.value=stockFlowSort;sel.onchange=e=>{stockFlowSort=e.target.value;renderStockFlow()}}
  $$('[data-stock-delivery]').forEach(b=>b.onclick=()=>{stockFlowDeliveryFilter=b.dataset.stockDelivery||'ALL';renderStockFlow()});
