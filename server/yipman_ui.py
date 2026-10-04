@@ -2456,8 +2456,8 @@ function stockFlowObservedWeekdays(row){
 function stockFlowMatchesDelivery(row,filter=stockFlowDeliveryFilter){
  if(filter==='ALL')return true;
  const days=stockFlowObservedWeekdays(row);
- if(filter==='TUE_WED')return days.some(x=>x===1||x===2);
- if(filter==='THU_FRI')return days.some(x=>x===3||x===4);
+ if(filter==='TUE_THU')return days.some(x=>x===1||x===2||x===3);
+ if(filter==='THU_SAT')return days.some(x=>x===3||x===4||x===5);
  return true;
 }
 function stockFlowMatchesCategory(row,filter=stockFlowCategoryFilter){
@@ -2483,8 +2483,8 @@ function renderStockFlow(){
  const box=$('#quickRows'),rows=stockFlowSortedRows(),allRows=[...(bestSellerGroups||[])];
  const noticeHtml=stockFlowNotice?'<div class="stockflownotice"><span>'+esc(stockFlowNotice)+'</span><button type="button" data-stock-retry>RETRY</button></div>':'';
  const dAll=allRows.filter(r=>stockFlowMatchesCategory(r)).length;
- const dTueWed=allRows.filter(r=>stockFlowMatchesCategory(r)&&stockFlowMatchesDelivery(r,'TUE_WED')).length;
- const dThuFri=allRows.filter(r=>stockFlowMatchesCategory(r)&&stockFlowMatchesDelivery(r,'THU_FRI')).length;
+ const dTueThu=allRows.filter(r=>stockFlowMatchesCategory(r)&&stockFlowMatchesDelivery(r,'TUE_THU')).length;
+ const dThuSat=allRows.filter(r=>stockFlowMatchesCategory(r)&&stockFlowMatchesDelivery(r,'THU_SAT')).length;
  const cAll=allRows.filter(r=>stockFlowMatchesDelivery(r)).length;
  const cLive=allRows.filter(r=>stockFlowMatchesDelivery(r)&&stockFlowMatchesCategory(r,'LIVE')).length;
  const cFresh=allRows.filter(r=>stockFlowMatchesDelivery(r)&&stockFlowMatchesCategory(r,'FRESH')).length;
@@ -2495,8 +2495,8 @@ function renderStockFlow(){
    '<div class="stockflowtoolbar"><div class="stockflowfilters">'+
      '<div class="stockfiltergroup delivery"><small>DELIVERY FILTER</small><div class="stockfilterbuttons">'+
        '<button class="stockfilterbtn'+active('ALL',stockFlowDeliveryFilter)+'" data-stock-delivery="ALL">ALL <b>'+dAll+'</b></button>'+
-       '<button class="stockfilterbtn deliverytw'+active('TUE_WED',stockFlowDeliveryFilter)+'" data-stock-delivery="TUE_WED">🚚 TUE &amp; WED <b>'+dTueWed+'</b></button>'+
-       '<button class="stockfilterbtn deliverytf'+active('THU_FRI',stockFlowDeliveryFilter)+'" data-stock-delivery="THU_FRI">🚚 THU &amp; FRI <b>'+dThuFri+'</b></button>'+
+       '<button class="stockfilterbtn deliverytw'+active('TUE_THU',stockFlowDeliveryFilter)+'" data-stock-delivery="TUE_THU">🚚 TUE–THU <b>'+dTueThu+'</b></button>'+
+       '<button class="stockfilterbtn deliverytf'+active('THU_SAT',stockFlowDeliveryFilter)+'" data-stock-delivery="THU_SAT">🚚 THU–SAT <b>'+dThuSat+'</b></button>'+
      '</div></div>'+
      '<div class="stockfiltergroup category"><small>CATEGORY FILTER</small><div class="stockfilterbuttons">'+
        '<button class="stockfilterbtn'+active('ALL',stockFlowCategoryFilter)+'" data-stock-category="ALL">ALL <b>'+cAll+'</b></button>'+
