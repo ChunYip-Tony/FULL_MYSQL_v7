@@ -8323,9 +8323,26 @@ def current_tpr_review(
             ),
             "original_regular_price_date": pl_life.get("prior_regular_date"),
             "aging_stock_target": aging_stock_target,
+            "aging_stock_initial_target": aging_stock_initial_target,
+            "aging_stock_uom": aging_stock_uom,
+            "aging_completed_new_receipts": aging_completed_new_receipts,
+            "aging_receipt_adjustment_status": aging_receipt_adjustment_status,
+            "aging_target_basis": aging_target_basis,
+            "freshness_anchor_date": freshness_anchor_date,
+            "freshness_deadline_date": freshness_deadline_date,
             "freshness_window_start_doh": freshness_window_start,
             "freshness_threshold_doh": freshness_threshold,
             "freshness_sellthrough_days_available": freshness_sellthrough_days_available,
+            "today_receipt_date": today_receipt.get("date"),
+            "today_receipt_qty": today_receipt.get("quantity"),
+            "today_receipt_uom": today_receipt.get("uom"),
+            "today_receipt_qty_basis": today_receipt.get("quantity_basis"),
+            "today_receipt_status": today_receipt.get("status"),
+            "today_receipt_provisional": bool(today_receipt.get("provisional")),
+            "today_receipt_event_count": today_receipt.get("event_count"),
+            "today_receipt_articles": today_receipt.get("article_numbers") or [],
+            "today_receipt_source_file_id": today_receipt.get("source_file_id"),
+            "today_receipt_source_filename": today_receipt.get("source_filename"),
             "dos": dos,
             "doh": doh,
             "qty_7d": row.get("pos_qty_7d"),
@@ -8362,7 +8379,12 @@ def current_tpr_review(
                 "freshness_window_start_doh": freshness_window_start,
                 "freshness_days_remaining": freshness_days_remaining,
                 "freshness_sellthrough_days_available": freshness_sellthrough_days_available,
+                "freshness_anchor_date": freshness_anchor_date,
+                "freshness_deadline_date": freshness_deadline_date,
+                "aging_stock_initial_target": aging_stock_initial_target,
                 "aging_stock_target": aging_stock_target,
+                "aging_completed_new_receipts": aging_completed_new_receipts,
+                "aging_target_basis": aging_target_basis,
                 "required_velocity_to_clear": required_velocity_to_clear,
                 "projected_oh_at_freshness_limit": projected_oh_at_freshness_limit,
             },
@@ -8438,8 +8460,8 @@ def current_tpr_review(
     counts = Counter(str(r.get("recommendation_code") or "OBSERVE") for r in out)
     purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
-        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
-        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
+        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V5_AGING_ANCHOR_SAME_DAY_RECEIPT",
+        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
         "data_health": _pricing_review_data_health(allow_stale_estimate=True),
@@ -8460,6 +8482,8 @@ def current_tpr_review(
             "tpr_purposes": "SWEET_SPOT_TEST_OR_FRESHNESS_SELL_THROUGH",
             "sweet_spot_objective": "FIND_SUSTAINABLE_TPR_PRICE_THAT_CAN_BECOME_NEW_REGULAR_PRICE",
             "freshness_objective": "CLEAR_AGING_STOCK_REACHING_THRESHOLD_NOT_ALL_NEWER_STOCK",
+            "freshness_anchor": "LOCK_AGING_TARGET_AND_DEADLINE_AT_FIRST_FRESHNESS_WINDOW_ENTRY;NEW_RECEIPTS_CANNOT_RESET_OR_INCREASE_AGING_TARGET",
+            "same_day_receipt_visibility": "LATEST_ACCEPTED_SAME_DAY_MVT_SHOWN_AS_PROVISIONAL;EXCLUDED_FROM_COMPLETED_DAY_KPI_AND_CANONICAL_OH_ROLLFORWARD",
             "fresh_live_tpr_window": "THRESHOLD_MINUS_2_THROUGH_THRESHOLD_INCLUSIVE;DAY_5_THROUGH_DAY_7_FOR_7_DAY_THRESHOLD",
             "post_tpr_window": "LATEST_3_COMPLETED_CANONICAL_POS_DAYS_SINCE_CONTINUOUS_TPR_START",
             "baseline": "UP_TO_7_CLEAN_PRE_TPR_NON_SALE_NON_TPR_COMPLETED_POS_DAYS",
@@ -8480,7 +8504,7 @@ _TPR_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V4_CURRENT_TPR_AGING_STOCK|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V5_CURRENT_TPR_AGING_ANCHOR_RECEIPT|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
@@ -8599,7 +8623,7 @@ def cached_current_tpr_review(
         if not already_refreshing:
             _request_tpr_review_refresh(cat,lim,key)
         return {
-            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
+            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V6_AGING_ANCHOR_RECEIPT_ASYNC_CACHE",
             "category":cat,
             "analysis_status":"REFRESHING",
             "cache_status":"WARMING",
@@ -8632,7 +8656,7 @@ def cached_current_tpr_review(
 
     return {
         **cached,
-        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V5_PRICE_LIST_SOURCE_AWARE_CACHE",
+        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V6_PRICE_LIST_SOURCE_AWARE_AGING_ANCHOR_CACHE",
         "analysis_status":(
             "READY_SOURCE_CHANGED_REFRESHING"
             if source_changed else ("READY_STALE_REFRESHING" if stale else "READY")
