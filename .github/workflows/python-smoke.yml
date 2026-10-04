@@ -343,6 +343,8 @@ jobs:
           assert '.stockdiff.promoted>b{display:inline-block;background:#fff34a' in ui
           assert '.stockpromo .promolift{display:inline-block' in ui
           assert '.stockpromo .promoprice{display:flex' in ui
+          assert '#quick .stockpromo .promoprice{flex-wrap:wrap}' in ui
+          assert '@media(max-width:380px){#quick .stocksale.stockpromo{grid-template-columns:1fr}' in ui
           assert 'VS NORMAL NON-PROMO WEEK' in ui
           assert "zeroSelling?' nosale':(promo?' promoted':' nosale')" in ui
           assert '.quicksearch{border-width:2.4px}' in ui
@@ -1222,6 +1224,10 @@ jobs:
           assert "'progress_issue_counts'" in active
           assert "active['active_file_name']" in api
           assert 'CURRENT PROCESSING FILE' in yipman
+          assert 'function uploadDataFiles' in yipman
+          assert 'dataUploadBtn.onclick=uploadDataFiles' in yipman
+          assert 'incomplete batch aborted' in yipman
+          assert 'batch cleanup needs review' in yipman
           assert 'b.active_file_name' in yipman
           assert 'function dataBatchIsActivelyProcessing' in yipman
           assert 'dataBatchSignature(activeCandidate)' in yipman
