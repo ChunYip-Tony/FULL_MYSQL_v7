@@ -60,6 +60,8 @@ from promotion_ordering import (
     create_promotion_list as create_yipman_promotion_list,
     list_promotion_lists as list_yipman_promotion_lists,
     get_promotion_list as get_yipman_promotion_list,
+    search_promotion_items as search_yipman_promotion_items,
+    remove_manual_promotion_list_item as remove_yipman_manual_promotion_list_item,
     calculate_promotion_order as calculate_yipman_promotion_order,
     parse_promotion_upload as parse_yipman_promotion_upload,
 )
@@ -4324,6 +4326,15 @@ def backoffice_pricing_accept(
     return json.loads(json.dumps(result,default=j))
 
 
+@app.get('/v1/yipman/promotion-item-search')
+def yipman_promotion_item_search(q:str,limit:int=20):
+    try:
+        result=search_yipman_promotion_items(q,limit)
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman promotion item search failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
 @app.get('/v1/yipman/promotion-lists')
 def yipman_promotion_lists(limit:int=20):
     try:
@@ -4341,6 +4352,25 @@ def yipman_promotion_list_detail(list_id:int):
         raise HTTPException(404,'Promotion list not found')
     except Exception as exc:
         raise HTTPException(500,f'Yipman promotion list detail failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.delete('/v1/yipman/promotion-lists/{list_id}/items/{item_id}')
+def yipman_remove_manual_promotion_list_item(
+    list_id:int,
+    item_id:int,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    public_app_actor(authorization)
+    try:
+        result=remove_yipman_manual_promotion_list_item(list_id,item_id)
+    except KeyError as exc:
+        reason=str(exc).strip("'")
+        raise HTTPException(404,detail={'status':'NOT_FOUND','reason':reason})
+    except ValueError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except Exception as exc:
+        raise HTTPException(500,f'Yipman manual promotion item removal failed: {exc}')
     return json.loads(json.dumps(result,default=j))
 
 

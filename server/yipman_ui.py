@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v461';
+const CACHE='yipman-v462';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -189,7 +189,10 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .manual-promo-selected-card label{display:block;font-size:8px;color:#62756c;font-weight:950}
 .manual-promo-selected-card input{width:100%;margin-top:3px;border:1px solid #bfd6ca;border-radius:9px;background:#fff;padding:8px;font-size:16px;font-weight:950}
 .manual-promo-delivery{margin-top:5px;padding-top:6px;border-top:1px solid rgba(55,110,80,.14);font-size:10px;line-height:1.35;color:#53685e;font-weight:850}
-.manual-promo-remove{border:0;background:transparent;color:#b52e38;font-size:10px;font-weight:950;padding:4px 0 0}
+.manual-promo-remove{margin-top:7px;border:1px solid #efb7bc;border-radius:9px;background:#fff5f6;color:#a12632;font-size:10px;font-weight:1000;padding:7px 10px}
+.promo-remove-item{width:100%;margin-top:7px;border:1px solid #efb7bc;border-radius:9px;background:#fff5f6;color:#a12632;font-size:9px;font-weight:1000;padding:8px 10px}
+.promo-review-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;padding:5px 0;border-top:1px solid rgba(130,100,20,.12)}
+.promo-review-item:first-of-type{border-top:0}.promo-review-item button{border:1px solid #efb7bc;border-radius:8px;background:#fff5f6;color:#a12632;font-size:8px;font-weight:1000;padding:6px 8px}
 
 .promo-freshness{margin-top:7px;border:1px solid #efc48a;background:#fff3df;border-radius:10px;padding:7px 8px;font-size:8px;line-height:1.35;color:#7a4b0a;font-weight:850}
 .promo-status{font-size:9px;color:var(--muted);font-weight:800;margin:7px 2px}.promo-summary{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}.promo-card{background:#fff;border:1px solid var(--line);border-radius:15px;padding:10px;margin-bottom:8px;box-shadow:var(--shadow)}.promo-card-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.promo-card-head b{font-size:14px}.promo-card-head small{display:block;font-size:8px;color:var(--muted);margin-top:2px}.promo-badge{border-radius:999px;padding:5px 7px;font-size:7px;font-weight:950;white-space:nowrap}.promo-badge.weekly{background:#f0eaff;color:#6b21a8}.promo-badge.weekend{background:#fff4d6;color:#8a5b00}.promo-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;margin-top:8px}.promo-metric{background:#f7f9fb;border-radius:9px;padding:7px;text-align:center;min-width:0}.promo-metric[data-promo-oh]{cursor:pointer;border:1px dashed #aebbc6}.promo-metric small{display:block;font-size:6px;color:var(--muted);font-weight:950}.promo-metric b{display:block;font-size:14px;margin-top:2px}.promo-metric span{display:block;font-size:6px;color:var(--muted);font-weight:850;margin-top:2px}.promo-metric.real-oh{padding:3px}.promo-metric.real-oh .familyohinline{text-align:center;border:0;background:transparent;padding:2px}.promo-metric.temp{background:#fff5e9;border:1px solid #f7bc7a;cursor:pointer}.promo-order{margin-top:7px;background:#eaf8ef;border:1px solid #b8e3c6;border-radius:11px;padding:8px}.promo-order small{font-size:7px;color:#397450;font-weight:950}.promo-order b{display:block;font-size:22px;color:#17683c}.promo-break{font-size:8px;color:#436052;margin-top:2px}.promo-review{background:#fff8e1;border:1px solid #efdca2;border-radius:11px;padding:8px;font-size:9px;margin-bottom:7px}
@@ -2600,40 +2603,33 @@ function openManualPromotion(){
   const q=String(searchInput.value||'').trim();
   const token=++latestSearchToken;
   if(q.length<2){searchResults.innerHTML='';searchStatus.textContent='Enter at least 2 characters.';return}
-  searchStatus.textContent='Searching…';searchResults.innerHTML='<div class="loading">Searching current item master…</div>';
+  searchStatus.textContent='Searching…';searchResults.innerHTML='<div class="loading">Searching promotion item index…</div>';
   try{
-   const d=await api('/v1/app/v2/search?q='+encodeURIComponent(q)+'&limit=12',{timeoutMs:12000});
+   // Promotion search avoids the full Quick Check 28D ranking path. Family
+   // inventory/delivery details are fetched only after the user selects a result.
+   const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});
    if(token!==latestSearchToken)return;
    const raw=Array.isArray(d.results)?d.results:[];
-   const base=raw.slice(0,10);
-   const enriched=await Promise.all(base.map(async item=>{
-    const familyKey=familyKeyFor(item);
-    let family=null;
-    if(familyKey){try{family=await api('/v1/app/v2/family/'+encodeURIComponent(familyKey),{timeoutMs:9000})}catch(e){}}
-    return {item,familyKey,family};
-   }));
-   if(token!==latestSearchToken)return;
-   searchStatus.textContent=enriched.length?enriched.length+' result(s) · choose the correct item':'No matching item.';
+   const enriched=raw.slice(0,14).map(item=>({item,familyKey:familyKeyFor(item),family:null}));
+   searchStatus.textContent=enriched.length?enriched.length+' result(s) · tap an item to add it':'No matching item.';
    searchResults.innerHTML=enriched.map((x,i)=>{
-    const item=x.item||{}, fam=x.family||{};
-    const familyName=fam.family_article_name||item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
+    const item=x.item||{}, familyName=item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
     const itemName=item.name||familyName||'Item';
-    const q7=item.pos_qty_7d??fam?.family_sales_7d?.sold_quantity;
-    const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
+    const q7=item.pos_qty_7d, q7u=item.selling_uom||'';
     return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
      '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
      '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
       ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
       (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
-      ' · OH '+esc(effectiveOHText(fam))+'</span></button>';
+      ' · inventory + delivery details load after selection</span></button>';
    }).join('');
    $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
   }catch(e){
    if(token!==latestSearchToken)return;
-   searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message;
+   searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message+' · tap SEARCH to retry.';
   }
  }
- searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,260)};
+ searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,380)};
  searchInput.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(searchTimer);runSearch()}};
  $('#manualPromoSearchBtn').onclick=()=>{clearTimeout(searchTimer);runSearch()};
  $('#manualPromoCancel').onclick=()=>closeSheet(true);
@@ -2672,10 +2668,31 @@ function openManualPromotion(){
 }
 $('#promoManualBtn').onclick=openManualPromotion;
 
+async function removeManualPromotionItem(itemId){
+ const id=Number(itemId);
+ if(!promoListId||!Number.isFinite(id))return;
+ if(String(promoListDetail?.source_filename||'').toUpperCase()!=='MANUAL_SEARCH_ENTRY')return toast('Only manually added promotion items can be removed here');
+ if(!window.confirm('Remove this item from the manual promotion?'))return;
+ try{
+  await api('/v1/yipman/promotion-lists/'+encodeURIComponent(promoListId)+'/items/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:12000});
+  promoTempOH.clear();
+  await loadPromotionLists();
+  if($('#promoListSelect'))$('#promoListSelect').value=String(promoListId);
+  if(Number(promoListDetail?.ready_count||0)>0){
+   await loadPromotionOrder();
+  }else{
+   $('#promoOrderStatus').textContent='No READY items remain in this manual promotion.';
+   renderPromotionRows({rows:[],delivery_date:orderDate});
+  }
+  toast('Promotion item removed');
+ }catch(e){toast('Could not remove promotion item · '+e.message)}
+}
+
 function renderPromotionRows(data){
  promoLastRows=Array.isArray(data?.rows)?data.rows:[];
+ const manualList=String(promoListDetail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
  const reviewItems=(promoListDetail?.items||[]).filter(x=>x.mapping_status!=='READY');
- const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b><br>'+reviewItems.slice(0,5).map(x=>esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)).join('<br>')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
+ const reviewHtml=reviewItems.length?'<div class="promo-review"><b>'+reviewItems.length+' list item(s) need review</b>'+reviewItems.slice(0,5).map(x=>'<div class="promo-review-item"><span>'+esc(x.raw_item_code||x.raw_description||'Item')+' · '+esc(x.validation_error||x.mapping_status)+'</span>'+(manualList&&x.item_id?'<button type="button" data-promo-remove-item="'+esc(x.item_id)+'">REMOVE</button>':'')+'</div>').join('')+(reviewItems.length>5?'<br>+'+(reviewItems.length-5)+' more':'')+'</div>':'';
  $('#promoRows').innerHTML=reviewHtml+promoLastRows.map((r,i)=>{
   const p=r.promotion_list_item||{}, type=String(p.promotion_type||'').toUpperCase();
   const temp=!!r.temporary_oh_override_used;
@@ -2687,11 +2704,13 @@ function renderPromotionRows(data){
   const freshnessHtml=r.freshness_adjustment_applied
    ? '<div class="promo-freshness"><b>⚠ FRESHNESS ADJUSTED</b> · latest receipt '+esc(appDate(r.freshness_latest_receipt_date))+' · DOH '+fmtNullable(r.freshness_current_doh)+' · projected discard '+fmtNullable(r.freshness_projected_discard_qty)+' '+esc(r.uom||'')+' · order +'+fmtNullable(r.freshness_order_qty_lift)+' '+esc(r.uom||'')+'</div>'
    : (r.freshness_coverage_capped?'<div class="promo-freshness"><b>FRESHNESS COVERAGE CAP</b> · Fresh/Live order coverage stops at 7 days; later demand needs another delivery.</div>':'');
+  const remove=manualList&&p.item_id?'<button class="promo-remove-item" type="button" data-promo-remove-item="'+esc(p.item_id)+'">REMOVE FROM PROMOTION</button>':'';
   return '<div class="promo-card"><div class="promo-card-head"><div><b>'+esc(r.family_article_name||p.family_name||r.family_article_number||'Family')+'</b><small>Family '+esc(r.family_article_number||'—')+' · SALE '+money(p.promotion_price)+' · '+appDate(p.promotion_start_date)+' → '+appDate(p.promotion_end_date)+'</small></div><span class="promo-badge '+(type==='WEEKLY'?'weekly':'weekend')+'">'+esc(type||'PROMO')+'</span></div>'+
    '<div class="promo-metrics"><div class="promo-metric real-oh">'+familyOhActionHtml({family:r.family_article_number,name:r.family_article_name||p.family_name,oh:effectiveOh,uom:effectiveUom,source:effectiveSource},'promooh')+'</div><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>SCENARIO OH ✎</small><b>'+fmtNullable(calcOh)+' '+esc(r.uom||'')+'</b><span>'+(temp?'TEMPORARY OVERRIDE':'OPTIONAL WHAT-IF')+'</span></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
-   '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · SCENARIO OH only for this calculation':'')+'</div></div></div>';
+   '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · SCENARIO OH only for this calculation':'')+'</div></div>'+remove+'</div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
  document.querySelectorAll('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
+ document.querySelectorAll('[data-promo-remove-item]').forEach(x=>x.onclick=e=>{e.stopPropagation();removeManualPromotionItem(x.dataset.promoRemoveItem)});
  bindFamilyOhEditors();
 }
 async function loadPromotionOrder(){

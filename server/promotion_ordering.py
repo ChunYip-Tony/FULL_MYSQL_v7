@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import re
+from difflib import SequenceMatcher
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -228,20 +229,217 @@ def _resolve_family(cur, code: str | None) -> dict[str,Any] | None:
         (raw,raw,raw,numeric,numeric,raw,raw,raw),
     )
     row=cur.fetchone()
-    if not row:
-        return None
-    basis=(
-        "FAMILY_ARTICLE"
-        if str(row.get("main_article_number") or "")==raw
-        else "SELLING_ARTICLE"
-        if str(row.get("article_number") or "")==raw
-        else "UPC"
+    if row:
+        basis=(
+            "FAMILY_ARTICLE"
+            if str(row.get("main_article_number") or "")==raw
+            else "SELLING_ARTICLE"
+            if str(row.get("article_number") or "")==raw
+            else "UPC"
+        )
+        return {
+            "family_id":int(row["family_id"]),
+            "family_article_number":str(row.get("main_article_number") or ""),
+            "family_name":row.get("family_description"),
+            "mapping_basis":basis,
+        }
+
+    cur.execute(
+        """SELECT pf.family_id,pf.main_article_number,pf.family_description
+           FROM article a
+           JOIN bridge_article_family baf
+             ON baf.article_id=a.article_id
+            AND baf.mapping_status='CONFIRMED'
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+           JOIN product_family pf ON pf.family_id=baf.family_id
+           WHERE a.article_number=%s
+           ORDER BY pf.family_id
+           LIMIT 1""",
+        (raw,),
     )
+    bridged=cur.fetchone()
+    if not bridged:
+        return None
     return {
-        "family_id":int(row["family_id"]),
-        "family_article_number":str(row.get("main_article_number") or ""),
+        "family_id":int(bridged["family_id"]),
+        "family_article_number":str(bridged.get("main_article_number") or ""),
+        "family_name":bridged.get("family_description"),
+        "mapping_basis":"ARTICLE_FAMILY_BRIDGE",
+    }
+
+
+
+def _promo_search_norm(value: Any) -> str:
+    return re.sub(r"\s+"," ",str(value or "").strip().upper())
+
+
+def _promo_fuzzy_score(query: str, *values: Any) -> int:
+    q=_promo_search_norm(query)
+    if not q:
+        return 0
+    best=0
+    for value in values:
+        text=_promo_search_norm(value)
+        if not text:
+            continue
+        if text==q:
+            best=max(best,1000)
+        elif text.startswith(q):
+            best=max(best,900)
+        elif q in text:
+            best=max(best,820)
+        best=max(best,int(SequenceMatcher(None,q,text).ratio()*700))
+    return best
+
+
+def _promotion_search_row(row: dict[str,Any], score: int, *, result_type: str="UPC") -> dict[str,Any]:
+    if result_type=="ARTICLE":
+        return {
+            "result_type":"ARTICLE",
+            "number":row.get("article_number"),
+            "name":row.get("article_description") or row.get("family_description"),
+            "family_id":row.get("family_id"),
+            "family_article_number":row.get("main_article_number"),
+            "family_name":row.get("family_description"),
+            "selling_uom":None,
+            "readiness":"READY",
+            "current_price":None,
+            "current_price_type":None,
+            "pos_qty_7d":None,
+            "sales_dollars_7d":None,
+            "matched_as":"ARTICLE_FAMILY_BRIDGE",
+            "search_score":score,
+        }
+    return {
+        "result_type":"UPC",
+        "number":row.get("ean_upc"),
+        "article_number":row.get("article_number"),
+        "name":row.get("selling_description") or row.get("family_description"),
+        "family_id":row.get("family_id"),
+        "family_article_number":row.get("main_article_number"),
         "family_name":row.get("family_description"),
-        "mapping_basis":basis,
+        "selling_uom":row.get("selling_uom"),
+        "readiness":row.get("quick_check_status"),
+        "current_price":row.get("current_price"),
+        "current_price_type":row.get("current_price_type"),
+        "pos_qty_7d":row.get("pos_qty_7d"),
+        "sales_dollars_7d":row.get("sales_dollars_7d"),
+        "matched_as":"SELLING_UPC",
+        "search_score":score,
+    }
+
+
+def search_promotion_items(query: str, limit: int=20) -> dict[str,Any]:
+    """Fast Manual Promotion search: identity/name first, light fuzzy fallback."""
+    q=str(query or "").strip()
+    if not q:
+        return {"contract_version":"YIPMAN_PROMOTION_ITEM_SEARCH_V1","query":q,"count":0,"results":[]}
+    n=max(1,min(int(limit or 20),50))
+    upper=_promo_search_norm(q)
+    like=f"%{upper}%"
+    results:list[dict[str,Any]]=[]
+
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        if q.isdigit():
+            cur.execute(
+                """SELECT family_id,main_article_number,family_description,
+                          ean_upc,article_number,selling_description,selling_uom,
+                          quick_check_status,current_price,current_price_type,
+                          pos_qty_7d,sales_dollars_7d
+                   FROM quick_check_current
+                   WHERE ean_upc=%s
+                      OR article_number=%s
+                      OR main_article_number=%s
+                      OR ean_upc LIKE %s
+                      OR article_number LIKE %s
+                      OR main_article_number LIKE %s
+                   ORDER BY COALESCE(pos_qty_7d,0) DESC,selling_description
+                   LIMIT %s""",
+                (q,q,q,q+"%",q+"%",q+"%",max(n*3,30)),
+            )
+        else:
+            cur.execute(
+                """SELECT family_id,main_article_number,family_description,
+                          ean_upc,article_number,selling_description,selling_uom,
+                          quick_check_status,current_price,current_price_type,
+                          pos_qty_7d,sales_dollars_7d
+                   FROM quick_check_current
+                   WHERE UPPER(COALESCE(selling_description,'')) LIKE %s
+                      OR UPPER(COALESCE(family_description,'')) LIKE %s
+                   ORDER BY COALESCE(pos_qty_7d,0) DESC,selling_description
+                   LIMIT %s""",
+                (like,like,max(n*3,30)),
+            )
+        for row in cur.fetchall():
+            score=_promo_fuzzy_score(q,row.get("ean_upc"),row.get("article_number"),row.get("selling_description"),row.get("family_description"))
+            results.append(_promotion_search_row(row,score or 800))
+
+        if q.isdigit():
+            cur.execute(
+                """SELECT DISTINCT pf.family_id,pf.main_article_number,pf.family_description,
+                                  a.article_number,a.article_description
+                   FROM article a
+                   JOIN bridge_article_family baf
+                     ON baf.article_id=a.article_id
+                    AND baf.mapping_status='CONFIRMED'
+                    AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+                   JOIN product_family pf ON pf.family_id=baf.family_id
+                   WHERE a.article_number=%s OR a.article_number LIKE %s
+                   ORDER BY a.article_number,pf.family_id
+                   LIMIT %s""",
+                (q,q+"%",max(n*2,20)),
+            )
+        else:
+            cur.execute(
+                """SELECT DISTINCT pf.family_id,pf.main_article_number,pf.family_description,
+                                  a.article_number,a.article_description
+                   FROM article a
+                   JOIN bridge_article_family baf
+                     ON baf.article_id=a.article_id
+                    AND baf.mapping_status='CONFIRMED'
+                    AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+                   JOIN product_family pf ON pf.family_id=baf.family_id
+                   WHERE UPPER(COALESCE(a.article_description,'')) LIKE %s
+                      OR UPPER(COALESCE(pf.family_description,'')) LIKE %s
+                   ORDER BY a.article_number,pf.family_id
+                   LIMIT %s""",
+                (like,like,max(n*2,20)),
+            )
+        for row in cur.fetchall():
+            score=_promo_fuzzy_score(q,row.get("article_number"),row.get("article_description"),row.get("family_description"))
+            results.append(_promotion_search_row(row,score or 780,result_type="ARTICLE"))
+
+        if not results and not q.isdigit():
+            cur.execute(
+                """SELECT family_id,main_article_number,family_description,
+                          ean_upc,article_number,selling_description,selling_uom,
+                          quick_check_status,current_price,current_price_type,
+                          pos_qty_7d,sales_dollars_7d
+                   FROM quick_check_current
+                   ORDER BY COALESCE(pos_qty_7d,0) DESC
+                   LIMIT 1200"""
+            )
+            for row in cur.fetchall():
+                score=_promo_fuzzy_score(q,row.get("selling_description"),row.get("family_description"))
+                if score>=420:
+                    results.append(_promotion_search_row(row,score))
+        cur.close()
+
+    dedup={}
+    for row in results:
+        key=(str(row.get("result_type") or ""),str(row.get("number") or ""),row.get("family_id"))
+        if key not in dedup or int(row.get("search_score") or 0)>int(dedup[key].get("search_score") or 0):
+            dedup[key]=row
+    ranked=list(dedup.values())
+    ranked.sort(key=lambda x:(-int(x.get("search_score") or 0),-float(x.get("pos_qty_7d") or 0),str(x.get("name") or "")))
+    ranked=ranked[:n]
+    return {
+        "contract_version":"YIPMAN_PROMOTION_ITEM_SEARCH_V1",
+        "query":q,
+        "count":len(ranked),
+        "results":ranked,
+        "search_basis":"DIRECT_IDENTITY_NAME_THEN_LIGHTWEIGHT_FUZZY",
     }
 
 
@@ -385,6 +583,59 @@ def get_promotion_list(list_id: int) -> dict[str,Any]:
         **head,
         "items":items,
     }
+
+
+
+def remove_manual_promotion_list_item(list_id: int, item_id: int) -> dict[str,Any]:
+    """Remove one item from a manually-created promotion list and refresh counts."""
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_tables(cur)
+        conn.commit()
+        cur.execute(
+            "SELECT list_id,source_filename FROM yipman_promotion_list WHERE list_id=%s LIMIT 1",
+            (int(list_id),),
+        )
+        head=cur.fetchone()
+        if not head:
+            cur.close()
+            raise KeyError("PROMOTION_LIST_NOT_FOUND")
+        if str(head.get("source_filename") or "").strip().upper()!="MANUAL_SEARCH_ENTRY":
+            cur.close()
+            raise ValueError("ONLY_MANUAL_PROMOTION_ITEMS_CAN_BE_REMOVED")
+        cur.execute(
+            "SELECT item_id FROM yipman_promotion_list_item WHERE list_id=%s AND item_id=%s LIMIT 1",
+            (int(list_id),int(item_id)),
+        )
+        if not cur.fetchone():
+            cur.close()
+            raise KeyError("PROMOTION_LIST_ITEM_NOT_FOUND")
+        cur.execute(
+            "DELETE FROM yipman_promotion_list_item WHERE list_id=%s AND item_id=%s",
+            (int(list_id),int(item_id)),
+        )
+        cur.execute(
+            """SELECT COUNT(*) AS item_count,
+                      SUM(CASE WHEN mapping_status='READY' THEN 1 ELSE 0 END) AS ready_count,
+                      SUM(CASE WHEN mapping_status<>'READY' THEN 1 ELSE 0 END) AS review_count
+               FROM yipman_promotion_list_item
+               WHERE list_id=%s""",
+            (int(list_id),),
+        )
+        counts=cur.fetchone() or {}
+        item_count=int(counts.get("item_count") or 0)
+        ready=int(counts.get("ready_count") or 0)
+        review=int(counts.get("review_count") or 0)
+        status="EMPTY" if item_count==0 else ("READY" if review==0 else ("READY_WITH_REVIEW" if ready else "REVIEW"))
+        cur.execute(
+            """UPDATE yipman_promotion_list
+               SET status=%s,item_count=%s,ready_count=%s,review_count=%s
+               WHERE list_id=%s""",
+            (status,item_count,ready,review,int(list_id)),
+        )
+        conn.commit()
+        cur.close()
+    return get_promotion_list(int(list_id))
 
 
 def calculate_promotion_order(
