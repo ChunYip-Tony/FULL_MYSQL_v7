@@ -25,7 +25,7 @@ def start_api() -> subprocess.Popen:
         sys.executable,
         "-m",
         "uvicorn",
-        "api_entry_stable:app",
+        "api_entry_v478:app",
         "--host",
         "0.0.0.0",
         "--port",
@@ -104,9 +104,6 @@ def requeue_interrupted_pipeline_runs(reason: str) -> int:
 
 
 def main() -> int:
-    # Start the HTTP service immediately so App Platform can reach /healthz.
-    # Syntax is already checked at image build with compileall; uvicorn itself
-    # provides the authoritative import-time traceback if api:app cannot load.
     api = start_api()
     worker = start_worker()
     stopping = False
@@ -142,10 +139,6 @@ def main() -> int:
 
             time.sleep(1)
     finally:
-        # Stop the worker first so any open Phase 3 transaction is rolled back.
-        # Then persist a QUEUED handoff before the API/container exits. This
-        # prevents a normal deployment restart from stranding the batch in a
-        # misleading STOPPED / manual-Resume state.
         stop_process(worker, "worker")
         requeue_interrupted_pipeline_runs(
             "SERVICE_DEPLOYMENT_SHUTDOWN" if stopping else "SERVICE_PROCESS_EXIT"
