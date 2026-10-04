@@ -1024,7 +1024,7 @@ jobs:
           assert "orderNextDate=plusDaysIso(orderDate,7)" in text
           assert "/v1/yipman/stock-flow?limit=100" in text
           assert "$$('[data-stock-category]').forEach" in text
-          assert "$$('[data-stock-receipts]').forEach" in text
+          assert "querySelectorAll('[data-stock-receipts]').forEach" in text
           assert 'id="headFreshness"' in text
           assert "/v1/yipman/header-freshness" in text
           assert "function renderHeaderFreshness" in text
