@@ -457,7 +457,7 @@ jobs:
           assert 'current_price_gp_pct' in review_src
           assert 'tested_price_gp_pct' in review_src
           assert 'testing_price_gp_pct' in review_src
-          assert 'V4_REG_TPR_SPLIT' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
+          assert 'V5_FAMILY_IDENTITY_TRUE_STOCK' in inspect.getsource(__import__('backoffice_runtime')._pricing_review_cache_key)
 
           assert 'if not has_oh or not history_gate:' in src
           assert 'FRESHNESS_SELL_THROUGH_WATCH_DOH_5_TO_7' in src
@@ -1117,6 +1117,13 @@ jobs:
           assert 'row["family_article_number"] = live.get("main_article_number")' in runtime
           assert 'family_id:r.family_id' in ui
           assert "d?.family||d?.family_id" in ui
+          assert ui.count('family_id:r.family_id') >= 8
+          assert "async function openFamilyTrueStock(d)" in ui
+          assert "const family=String(d?.family||d?.family_id||'').trim();" in ui
+          assert "id=\"priceTrueStockEdit\"" in ui
+          assert "id=\"tprTrueStockEdit\"" in ui
+          assert "data-clearance-stock" in ui
+          assert "clearanceDetailStock" in ui
           print('price-review-family-identity-true-stock=PASS')
           PY
 
