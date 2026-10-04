@@ -8075,14 +8075,22 @@ def current_tpr_review(
         elif tpr_purpose == "FRESHNESS_SELL_THROUGH":
             monitoring_phase = "SELL_THROUGH"
             overdue = (
-                freshness_threshold is not None
-                and doh is not None
-                and doh > freshness_threshold
+                business_today() > freshness_deadline_date
+                if freshness_deadline_date is not None
+                else (
+                    freshness_threshold is not None
+                    and doh is not None
+                    and doh > freshness_threshold
+                )
             )
             extreme_age = (
-                freshness_threshold is not None
-                and doh is not None
-                and doh > freshness_threshold + Decimal("3")
+                business_today() > freshness_deadline_date + timedelta(days=3)
+                if freshness_deadline_date is not None
+                else (
+                    freshness_threshold is not None
+                    and doh is not None
+                    and doh > freshness_threshold + Decimal("3")
+                )
             )
 
             if extreme_age:
