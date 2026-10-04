@@ -1410,6 +1410,161 @@ def _family_receipt_events_bulk(
     return out
 
 
+
+def _receipt_events_summary(events: list[dict[str,Any]]) -> dict[str,Any]:
+    """Summarize one physical-receipt day without changing completed-day semantics."""
+    positive=[
+        x for x in (events or [])
+        if x.get("receipt_quantity") is not None
+        and _d(x.get("receipt_quantity")) > 0
+    ]
+    if not positive:
+        return {
+            "date":None,
+            "quantity":None,
+            "uom":None,
+            "quantity_basis":None,
+            "event_count":0,
+            "article_numbers":[],
+            "events":[],
+        }
+
+    dates=[x.get("posting_date") for x in positive if x.get("posting_date") is not None]
+    base_uoms={
+        str(x.get("base_receipt_uom") or "").strip().upper()
+        for x in positive if x.get("base_receipt_uom")
+    }
+    if (
+        len(base_uoms)==1
+        and all(x.get("base_receipt_quantity") is not None for x in positive)
+    ):
+        qty=sum((_d(x.get("base_receipt_quantity")) for x in positive),Decimal("0"))
+        uom=next(iter(base_uoms))
+        basis="BASE_UOM"
+    else:
+        entry_uoms={
+            str(x.get("receipt_uom") or "").strip().upper()
+            for x in positive if x.get("receipt_uom")
+        }
+        if len(entry_uoms)==1 and all(x.get("receipt_quantity") is not None for x in positive):
+            qty=sum((_d(x.get("receipt_quantity")) for x in positive),Decimal("0"))
+            uom=next(iter(entry_uoms))
+            basis="ENTRY_UOM"
+        else:
+            qty=None
+            uom="MIXED" if positive else None
+            basis="MIXED_OR_UNRESOLVED"
+
+    return {
+        "date":max(dates) if dates else None,
+        "quantity":qty,
+        "uom":uom,
+        "quantity_basis":basis,
+        "event_count":len(positive),
+        "article_numbers":sorted({
+            str(x.get("article_number") or "").strip()
+            for x in positive if str(x.get("article_number") or "").strip()
+        }),
+        "events":positive,
+    }
+
+
+def _latest_provisional_today_movement_day(cur) -> dict[str,Any] | None:
+    """Return the newest accepted MVT snapshot carrying rows for business today.
+
+    This is *visibility evidence only*. It intentionally bypasses the
+    completed-day gate so store users can see a same-day physical receipt while
+    the day is still open. It must not be used for 7D movement, sales velocity,
+    canonical OH roll-forward, or any completed-day KPI.
+    """
+    today=business_today()
+    cur.execute(
+        """SELECT f.file_id,f.batch_id,f.original_filename,f.report_generated_at,
+                  f.upload_timestamp,f.coverage_start_date,f.coverage_end_date
+           FROM ingest_file f
+           JOIN movement_history m ON m.file_id=f.file_id
+           WHERE f.source_type='movement'
+             AND f.processing_status='INGESTED'
+             AND f.error_count=0
+             AND f.duplicate_of_file_id IS NULL
+             AND f.source_row_count>0
+             AND f.date_semantics_status='RESOLVED'
+             AND m.posting_date=%s
+           GROUP BY f.file_id,f.batch_id,f.original_filename,f.report_generated_at,
+                    f.upload_timestamp,f.coverage_start_date,f.coverage_end_date
+           ORDER BY COALESCE(f.report_generated_at,f.upload_timestamp) DESC,
+                    f.file_id DESC
+           LIMIT 1""",
+        (today,),
+    )
+    row=cur.fetchone()
+    if not row:
+        return None
+    return {
+        "date":today,
+        "file_id":int(row["file_id"]),
+        "batch_id":int(row["batch_id"]) if row.get("batch_id") is not None else None,
+        "original_filename":row.get("original_filename"),
+        "report_generated_at":row.get("report_generated_at"),
+        "upload_timestamp":row.get("upload_timestamp"),
+        "coverage_start_date":row.get("coverage_start_date"),
+        "coverage_end_date":row.get("coverage_end_date"),
+        "coverage_kind":"PROVISIONAL_SAME_DAY_ACCEPTED_MVT",
+        "snapshot_completeness":"PROVISIONAL_NOT_COMPLETED_DAY_AUTHORITY",
+    }
+
+
+def _family_provisional_today_receipts_bulk(
+    cur,
+    family_ids: list[int] | set[int] | tuple[int,...],
+) -> dict[str,Any]:
+    """Return same-day receipt visibility without promoting the day to canonical."""
+    ids=sorted({int(x) for x in family_ids if x is not None})
+    day=_latest_provisional_today_movement_day(cur)
+    by_family={fid:{
+        "date":business_today(),
+        "quantity":None,
+        "uom":None,
+        "quantity_basis":None,
+        "event_count":0,
+        "article_numbers":[],
+        "events":[],
+        "status":"NO_ACCEPTED_SAME_DAY_MVT" if day is None else "NO_FAMILY_RECEIPT_IN_LATEST_SAME_DAY_MVT",
+        "provisional":True,
+        "source_file_id":day.get("file_id") if day else None,
+        "source_filename":day.get("original_filename") if day else None,
+        "source_batch_id":day.get("batch_id") if day else None,
+    } for fid in ids}
+    if not ids or day is None:
+        return {"source_day":day,"by_family":by_family}
+
+    events_by_family=_family_receipt_events_bulk(
+        cur,
+        ids,
+        data_day_limit=1,
+        data_days=[day],
+    )
+    for fid in ids:
+        summary=_receipt_events_summary(events_by_family.get(fid) or [])
+        summary.update({
+            "status":(
+                "PROVISIONAL_TODAY_RECEIPT"
+                if int(summary.get("event_count") or 0)>0
+                else "NO_FAMILY_RECEIPT_IN_LATEST_SAME_DAY_MVT"
+            ),
+            "provisional":True,
+            "source_file_id":day.get("file_id"),
+            "source_filename":day.get("original_filename"),
+            "source_batch_id":day.get("batch_id"),
+            "source_upload_timestamp":day.get("upload_timestamp"),
+            "source_report_generated_at":day.get("report_generated_at"),
+            "rule":"VISIBILITY_ONLY_NOT_COMPLETED_DAY_KPI_OR_OH_ROLLFORWARD",
+        })
+        by_family[fid]=summary
+    return {"source_day":day,"by_family":by_family}
+
+
+
 def _delivery_pattern(
     receipt_events: list[dict[str,Any]],
     after_date: date | None = None,
@@ -1602,6 +1757,8 @@ def family_info(family_key: str) -> dict[str,Any]:
         family_sales_28d=_family_sales_series(cur,upcs,28)
 
         events=_family_receipt_events(cur,fid)
+        provisional_today=_family_provisional_today_receipts_bulk(cur,[fid])
+        today_receipt=(provisional_today.get("by_family") or {}).get(fid) or {}
         pattern=_delivery_pattern(events)
         positive_events=[
             x for x in events
@@ -1697,6 +1854,7 @@ def family_info(family_key: str) -> dict[str,Any]:
             "cost_uom":last_cost.get("cost_uom") if last_cost else None,
             "cost_movement_type":last_cost.get("movement_type") if last_cost else None,
         },
+        "today_receipt":today_receipt,
         "next_expected_delivery_date":pattern.get("next_expected_delivery_date"),
         "related_upcs":related,
         "related_upc_sort":["QTY_28_SUPPORTED_DAYS_DESC","READINESS"],
