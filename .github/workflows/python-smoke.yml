@@ -1333,6 +1333,10 @@ jobs:
           assert "if(exitAllowed)return;" in ui
           assert "window.close()" in ui
           assert "yipmanExitUrl()" in ui
+          assert "body class=\"yipman-v1\"" in ui
+          assert "V473 V1 readability scale" in ui
+          assert "body.yipman-v1 #order .orderitemmain" in ui
+          assert "body.yipman-v1 .nav" in ui
           assert "SAVE TRUE STOCK & RECALCULATE" in ui
           assert "/v1/app/v2/pi/'+encodeURIComponent(family)+'/true-stock" in ui
 
