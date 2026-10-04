@@ -178,6 +178,15 @@ USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001 = (
             "Identity only; UOM/cost remain governed by their own evidence hierarchy."
         ),
     },
+    {
+        "ean_upc": "6614",
+        "family_article": "3566140",
+        "source_note": (
+            "USER_APPROVED_BATCH27_IDENTITY_20261003: UPC 6614 is LIVE PACIFIC PENN COVE BLUE MUSSELS. "
+            "Prior canonical Store 1032 UPC Profile history maps UPC 6614 -> Family/Main 3566140. "
+            "Identity only; UOM and cost conversion are governed by their own explicit authorities."
+        ),
+    },
 )
 
 
@@ -197,6 +206,18 @@ USER_CONFIRMED_SELLING_ARTICLE_OVERRIDES_20260930 = (
 
 
 SEED_OVERRIDES = (
+    {
+        "ean_upc": "6614",
+        "article_number": "3566140",
+        "selling_uom_code": "PACK",
+        "base_uom_code": "LB",
+        "base_qty_per_selling_unit": Decimal("2"),
+        "source_note": (
+            "USER_APPROVED_BATCH27_UOM_20261003: UPC 6614 / Family 3566140 LIVE PACIFIC PENN COVE BLUE MUSSELS. "
+            "Prior canonical UPC Profile records Selling UOM 2LB/PACK; canonical representation is "
+            "1 selling PACK = 2 LB."
+        ),
+    },
     {
         "ean_upc": "4816",
         "article_number": "1351311",
@@ -297,6 +318,16 @@ SEED_OVERRIDES = (
 
 
 USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 = (
+    {
+        "ean_upc": "6614",
+        "selling_qty": Decimal("1"),
+        "selling_uom_code": "PACK",
+        "cost_qty": Decimal("2"),
+        "cost_uom_code": "LB",
+        "source_note": (
+            "USER_APPROVED_BATCH27_COST_CONVERSION_20261003: UPC 6614 sells as 1 PACK = 2 LB."
+        ),
+    },
     {
         "ean_upc": "402954957",
         "selling_qty": Decimal("1"),

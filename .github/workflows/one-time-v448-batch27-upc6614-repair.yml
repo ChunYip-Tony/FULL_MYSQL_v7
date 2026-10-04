@@ -1,0 +1,213 @@
+name: One-time Batch 27 UPC 6614 repair
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    if: github.event.head_commit.message == 'Trigger Batch 27 UPC 6614 repair and republish'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for v7.0.448 API and worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          consecutive=0
+          for i in $(seq 1 240); do
+            body="$(curl -fsS --max-time 15 "$base/healthz" || true)"
+            echo "$body"
+            ok="$(BODY="$body" python - <<'PY'
+          import json, os
+          try:
+              p=json.loads(os.environ.get('BODY') or '{}')
+          except Exception:
+              p={}
+          good=(
+              p.get('ok') is True
+              and p.get('version')=='7.0.448-single-service'
+              and p.get('worker_version')=='7.0.448-single-service'
+              and p.get('worker_healthy') is True
+              and p.get('worker_ready') is True
+          )
+          print('1' if good else '0')
+          PY
+          )"
+            if [ "$ok" = "1" ]; then
+              consecutive=$((consecutive+1))
+              [ "$consecutive" -ge 3 ] && exit 0
+            else
+              consecutive=0
+            fi
+            sleep 5
+          done
+          echo "v7.0.448 deployment gate timed out"
+          exit 1
+
+      - name: Wait for pipeline idle
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 240); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/active" -o /tmp/active.json
+            cat /tmp/active.json; echo
+            active="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/active.json',encoding='utf-8'))
+          print('1' if p.get('active_batch') else '0')
+          PY
+          )"
+            [ "$active" = "0" ] && exit 0
+            sleep 5
+          done
+          echo "Pipeline did not become idle"
+          exit 1
+
+      - name: Capture Batch 27 before
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/web-upload/batches/27/qa-summary" -o /tmp/before.json
+          cat /tmp/before.json; echo
+
+      - name: Request Batch 27 Phase 3 rebuild
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          code="$(curl -sS --max-time 60 -o /tmp/rebuild.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/27/rebuild-phase3")"
+          cat /tmp/rebuild.json; echo
+          test "$code" = "200"
+          read -r accepted run_id session_id < <(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/rebuild.json',encoding='utf-8'))
+          ok=(p.get('code_version')=='7.0.448-single-service' and p.get('version_fence_pass') is True)
+          print('1' if ok else '0', p.get('pipeline_run_id') or '', p.get('session_id') or '')
+          PY
+          )
+          test "$accepted" = "1"
+          echo "RUN_ID=$run_id" >> "$GITHUB_ENV"
+          echo "SESSION_ID=$session_id" >> "$GITHUB_ENV"
+
+      - name: Wait for Batch 27 terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          final=""
+          for i in $(seq 1 360); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/$SESSION_ID" -o /tmp/session.json
+            final="$(RUN_ID="$RUN_ID" python - <<'PY'
+          import json, os
+          p=json.load(open('/tmp/session.json',encoding='utf-8'))
+          rid=int(os.environ['RUN_ID'])
+          run=next((r for r in (p.get('api_runs') or []) if int(r.get('pipeline_run_id') or 0)==rid),None)
+          print(str((run or {}).get('processing_status') or 'MISSING'))
+          PY
+          )"
+            echo "run=$RUN_ID status=$final"
+            case "$final" in
+              COMPLETED|QA_HOLD|FAILED|FAILED_QA|ABORTED|PAUSED) break ;;
+            esac
+            sleep 5
+          done
+          case "$final" in COMPLETED|QA_HOLD) ;; *) exit 1 ;; esac
+
+      - name: Verify Batch 27 blocker cleared
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/web-upload/batches/27/qa-summary" -o /tmp/after.json
+          cat /tmp/after.json; echo
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/after.json',encoding='utf-8'))
+          phase=p.get('phase3') or {}
+          guard=p.get('current_active_unmapped_guard') or {}
+          blockers=int(phase.get('blocking_issue_count') or 0)
+          status=str(phase.get('result_status') or '')
+          unmapped=int(guard.get('active_unmapped_count') or 0)
+          upcs=[str(x) for x in (guard.get('active_unmapped_upcs') or [])]
+          assert blockers==0, f'Batch blockers remain: {blockers}'
+          assert status in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}, status
+          assert unmapped==0, f'Active unmapped remain: {unmapped} {upcs}'
+          assert '6614' not in upcs, upcs
+          print('BATCH27_UPC6614_REPAIR=PASS', status)
+          PY
+
+      - name: Verify UPC 6614 serving identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/app/quick-check/6614" -o /tmp/qc6614.json
+          cat /tmp/qc6614.json; echo
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/qc6614.json',encoding='utf-8'))
+          item=p.get('item') or p
+          family=str(item.get('family_article') or item.get('family_source_article') or '')
+          upc=str(item.get('ean_upc') or item.get('upc') or '')
+          uom=str(item.get('selling_uom') or item.get('selling_uom_code') or '').upper()
+          assert upc=='6614', (upc,item)
+          assert family=='3566140', (family,item)
+          assert uom in {'PACK','2LB/PACK'}, (uom,item)
+          print('UPC6614_SERVING_IDENTITY=PASS', family, uom)
+          PY
+
+      - name: Queue ChatGPT analysis republish
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          code="$(curl -sS --max-time 30 -o /tmp/republish.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/27/republish-chatgpt-analysis")"
+          cat /tmp/republish.json; echo
+          test "$code" = "200"
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/republish.json',encoding='utf-8'))
+          assert p.get('status') in {'QUEUED','ALREADY_QUEUED','ALREADY_ACTIVE'}, p
+          assert int(p.get('batch_id') or 0)==27, p
+          print('CHATGPT_REPUBLISH_QUEUED=PASS')
+          PY
+
+      - name: Wait for ChatGPT analysis PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/27/chatgpt-publish-status" -o /tmp/pub.json
+            cat /tmp/pub.json; echo
+            state="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/pub.json',encoding='utf-8'))
+          status=str(p.get('status') or '').upper()
+          result=p.get('publish_result') or {}
+          publish=str(result.get('status') or '').upper()
+          print(status+'|'+publish)
+          PY
+          )"
+            echo "PUBLISH=$state"
+            status="$(printf '%s' "$state" | cut -d'|' -f1)"
+            publish="$(printf '%s' "$state" | cut -d'|' -f2)"
+            if [ "$status" = "COMPLETED" ] && [ "$publish" = "PASS" ]; then
+              echo "BATCH27_CHATGPT_ANALYSIS=PASS"
+              exit 0
+            fi
+            [ "$status" = "FAILED" ] && exit 1
+            sleep 5
+          done
+          echo "ChatGPT analysis publish timed out"
+          exit 1

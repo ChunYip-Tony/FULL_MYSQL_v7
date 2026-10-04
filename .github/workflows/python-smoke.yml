@@ -1337,12 +1337,25 @@ jobs:
               '4029551013':'3405995',
               '4029551952':'3480504',
               '6501700000':'1366620',
+              '6614':'3566140',
           }
           actual={
               str(x.get('ean_upc')):str(x.get('family_article'))
               for x in m.USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001
           }
           assert actual==expected, actual
+
+          seed_6614=[x for x in m.SEED_OVERRIDES if str(x.get('ean_upc'))=='6614']
+          assert len(seed_6614)==1, seed_6614
+          assert seed_6614[0]['article_number']=='3566140'
+          assert seed_6614[0]['selling_uom_code']=='PACK'
+          assert seed_6614[0]['base_uom_code']=='LB'
+          assert str(seed_6614[0]['base_qty_per_selling_unit'])=='2'
+          conv_6614=[x for x in m.USER_CONFIRMED_COST_SELLING_CONVERSIONS_20260926 if str(x.get('ean_upc'))=='6614']
+          assert len(conv_6614)==1, conv_6614
+          assert conv_6614[0]['selling_uom_code']=='PACK'
+          assert str(conv_6614[0]['cost_qty'])=='2'
+          assert conv_6614[0]['cost_uom_code']=='LB'
 
           src=inspect.getsource(a._repair_active_identity)
           assert 'USER_CONFIRMED_ACTIVE_UPC_FAMILY_OVERRIDES_20261001' in src
