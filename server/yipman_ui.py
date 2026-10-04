@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v460';
+const CACHE='yipman-v461';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1134,7 +1134,8 @@ async function refreshAfterFamilyTrueStock(family=''){
    await loadPriceCurrentView();
  }
 }
-let familyOhLastPointerOpenAt=0;
+let familyOhLastPointerOpenAt=0,familyOhDelegatedBound=false;
+const familyOhPointerStarts=new WeakMap();
 function familyOhPayload(btn){
  return {
   family:btn?.dataset?.family||'',
@@ -1143,32 +1144,58 @@ function familyOhPayload(btn){
   uom:btn?.dataset?.uom||''
  };
 }
+function familyOhEventButton(e){
+ const target=e?.target;
+ return target?.closest?.('[data-family-oh]')||(
+  e?.currentTarget?.matches?.('[data-family-oh]')?e.currentTarget:null
+ );
+}
 function familyOhTapOpen(e){
- const btn=e.currentTarget;if(!btn)return;
- e.preventDefault();e.stopPropagation();
- if(btn.dataset.trueStockEditing==='1'){
-  const editor=(btn.closest('.familyohpair')||btn.parentElement)?.querySelector?.('.familyohinlineeditor');
-  const input=editor?.querySelector?.('.trueinput');if(input)input.focus();
-  return;
- }
+ const btn=familyOhEventButton(e);if(!btn)return;
  if(e.type==='pointerup'){
-  const sx=Number(btn.dataset.tsx||0),sy=Number(btn.dataset.tsy||0);
-  if(Math.abs((e.clientX||0)-sx)>10||Math.abs((e.clientY||0)-sy)>10)return;
+  const start=familyOhPointerStarts.get(btn);
+  // Some Android/PWA paths retarget or omit pointerdown. Do not cancel the
+  // native click in that case; click is the reliable fallback.
+  if(!start)return;
+  const moved=Math.abs((e.clientX||0)-start.x)>18||Math.abs((e.clientY||0)-start.y)>18;
+  familyOhPointerStarts.delete(btn);
+  if(moved){btn.dataset.trueStockIgnoreClickUntil=String(Date.now()+700);return}
+  e.preventDefault();e.stopPropagation();
   familyOhLastPointerOpenAt=Date.now();
+  if(btn.dataset.trueStockEditing==='1'){
+   const editor=(btn.closest('.familyohpair')||btn.parentElement)?.querySelector?.('.familyohinlineeditor');
+   const input=editor?.querySelector?.('.trueinput');if(input)input.focus();
+   return;
+  }
   beginFamilyOhInlineEdit(btn);
   return;
  }
- if(e.type==='click'&&Date.now()-familyOhLastPointerOpenAt<700)return;
- beginFamilyOhInlineEdit(btn);
+ if(e.type==='click'){
+  const ignoreUntil=Number(btn.dataset.trueStockIgnoreClickUntil||0);
+  if(Date.now()<ignoreUntil)return;
+  if(Date.now()-familyOhLastPointerOpenAt<700)return;
+  e.preventDefault();e.stopPropagation();
+  if(btn.dataset.trueStockEditing==='1'){
+   const editor=(btn.closest('.familyohpair')||btn.parentElement)?.querySelector?.('.familyohinlineeditor');
+   const input=editor?.querySelector?.('.trueinput');if(input)input.focus();
+   return;
+  }
+  beginFamilyOhInlineEdit(btn);
+ }
 }
 function bindFamilyOhEditors(root=document){
- root.querySelectorAll('[data-family-oh]').forEach(btn=>{
-  if(btn.dataset.trueStockBound==='1')return;
-  btn.dataset.trueStockBound='1';
-  btn.addEventListener('pointerdown',e=>{btn.dataset.tsx=String(e.clientX||0);btn.dataset.tsy=String(e.clientY||0)},{passive:true});
-  btn.addEventListener('pointerup',familyOhTapOpen);
-  btn.addEventListener('click',familyOhTapOpen);
- });
+ // Delegated capture handlers survive every dynamic card re-render and ensure
+ // the True Stock control wins before a parent card can consume the tap.
+ if(!familyOhDelegatedBound){
+  familyOhDelegatedBound=true;
+  document.addEventListener('pointerdown',e=>{
+   const btn=familyOhEventButton(e);if(!btn)return;
+   familyOhPointerStarts.set(btn,{x:e.clientX||0,y:e.clientY||0});
+  },{capture:true,passive:true});
+  document.addEventListener('pointerup',familyOhTapOpen,true);
+  document.addEventListener('click',familyOhTapOpen,true);
+ }
+ root.querySelectorAll('[data-family-oh]').forEach(btn=>{btn.dataset.trueStockBound='1'});
 }
 function applyTrueStockLocally(family,qty,uom){
  const key=String(family||'').trim();
