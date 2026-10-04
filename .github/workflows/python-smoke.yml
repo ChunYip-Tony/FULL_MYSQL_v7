@@ -179,7 +179,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v465'" in ui
+          assert "const CACHE='yipman-v466'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -387,7 +387,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v465'" in ui
+          assert "const CACHE='yipman-v466'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'CACHED STOCK FLOW' in ui
           assert 'data-stock-retry' in ui
@@ -666,6 +666,7 @@ jobs:
           assert 'DAY_BEFORE_SELECTED_DAY_DAY_AFTER' in bo_src
           assert 'ANY_OBSERVED_SELECTED_WEEKDAY_PLUS_MINUS_ONE_WITHIN_180_DAYS' in bo_src
           assert 'zero_order_rows_retained' in bo_src
+          assert 'SUGGESTED_ORDER_QTY_DESC_THEN_URGENT' in bo_src
           assert 'delivery_window_observed_count' in bo_src
           assert 'historical_receiving_articles=_historical_receiving_article_summary' in bo_src
 
@@ -692,7 +693,8 @@ jobs:
           assert 'STOCKOUT BEFORE DELIVERY' in ui
           assert 'Coverage need' in ui
           assert "let orderSort='QTY_URGENT'" in ui
-          assert 'ORDER QTY + URGENT' in ui
+          assert 'ORDER QTY ↓ · URGENT' in ui
+          assert "if(orderSort==='QTY_URGENT')return ((orderQty(b)??-1)-(orderQty(a)??-1))||urgent(b)-urgent(a)" in ui
           assert 'delivery_window_observed_count' in ui
           assert 'selected_delivery_weekday_window' in ui
           assert 'RECEIVING ARTICLES OBSERVED IN ±1 DAY WINDOW' in ui
@@ -1361,7 +1363,7 @@ jobs:
           assert ".overlay{position:absolute" in ui and "z-index:80" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v465'" in ui
+          assert "const CACHE='yipman-v466'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 

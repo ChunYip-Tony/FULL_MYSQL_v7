@@ -46,7 +46,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v465';
+const CACHE='yipman-v466';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -964,7 +964,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
         <div class="order-coverage"><small>COVERAGE WINDOW</small><b id="orderCoverageText">Choose two delivery dates</b><span id="orderCoverageSub">Predict usage from delivery through the day before next delivery using the best available data at viewing time.</span></div>
       </div>
       <div id="regularOrderPanel">
-        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="QTY_URGENT">ORDER QTY + URGENT</option><option value="QTY">ORDER QTY ↓</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
+        <div class="order-tools" id="orderTools"><div class="order-summary" id="orderSummary">Observed roster loading…</div><div class="order-controls"><label>FILTER<select id="orderFilter"><option value="ALL">ALL</option><option value="ORDER">NEED ORDER</option><option value="ZERO_ORDER">0 ORDER</option><option value="REVIEW">REVIEW</option></select></label><label>SORT<select id="orderSort"><option value="QTY_URGENT">ORDER QTY ↓ · URGENT</option><option value="QTY">ORDER QTY ↓</option><option value="ACTION">ACTION FIRST</option><option value="DOS">DOS ↑</option><option value="OBSERVED">OBSERVED ↓</option><option value="NAME">NAME A–Z</option></select></label></div></div>
         <div id="orderStatus" class="hint" style="margin:0 2px 7px"></div>
         <div class="list" id="orderList"><div class="lh" id="orderListHead"><div id="orderCol1">FAMILY / RECEIVING</div><div id="orderCol2">OH</div><div id="orderCol3">ORDER</div></div><div id="orderRows"><div class="loading">Loading observed delivery days…</div></div></div>
       </div>
@@ -2898,7 +2898,7 @@ function renderOrderRoster(rows,data,h,stale){
  const urgent=r=>Number(Boolean(r?.attention||r?.pre_delivery_stockout_risk||r?.freshness_adjustment_applied));
  const rank=r=>orderState(r)==='ORDER'?0:orderState(r)==='REVIEW'?1:2;
  visible=[...visible].sort((a,b)=>{
-  if(orderSort==='QTY_URGENT')return rank(a)-rank(b)||urgent(b)-urgent(a)||((orderQty(b)??-1)-(orderQty(a)??-1))||obs(b)-obs(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
+  if(orderSort==='QTY_URGENT')return ((orderQty(b)??-1)-(orderQty(a)??-1))||urgent(b)-urgent(a)||rank(a)-rank(b)||obs(b)-obs(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='QTY')return (orderQty(b)??-1)-(orderQty(a)??-1)||urgent(b)-urgent(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='DOS')return (dos(a)??999999)-(dos(b)??999999)||String(a.family_name||'').localeCompare(String(b.family_name||''));
   if(orderSort==='OBSERVED')return obs(b)-obs(a)||String(a.family_name||'').localeCompare(String(b.family_name||''));
