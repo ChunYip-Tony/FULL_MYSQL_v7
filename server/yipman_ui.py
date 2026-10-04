@@ -2412,7 +2412,7 @@ function renderOrderRoster(rows,data,h,stale){
     : '';
   return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_day_observed_count,0)+' observed '+esc(r.delivery_day||'day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell"><button type="button" class="familyohinline" data-family-oh data-family="'+esc(r.family_article||'')+'" data-name="'+esc(r.family_name||'')+'" data-oh="'+esc(r.oh??'')+'" data-uom="'+esc(r.oh_uom||'')+'"><b>'+fmtNullable(r.oh)+'</b><span>'+esc(r.oh_uom||'')+' · EDIT</span></button></div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+histHtml+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.</div>';
- $('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('[data-family-oh]'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
+ document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('[data-family-oh]'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
  bindFamilyOhEditors();
 }
 $('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
@@ -2739,12 +2739,12 @@ async function loadPrices(opts={}){
     '</article>';
   }).join('')||'<div class="empty">No '+(regMode?'REG replacement':'TPR suggestion')+' matches this filter.</div>';
 
-  $('[data-price]').forEach(x=>x.onclick=e=>{
+  document.querySelectorAll('[data-price]').forEach(x=>x.onclick=e=>{
     if(e.target.closest('button,details,summary'))return;
     openPrice(rows[Number(x.dataset.price)]);
   });
   bindFamilyOhEditors();
-  $('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
+  document.querySelectorAll('[data-price-detail]').forEach(b=>b.onclick=e=>{e.stopPropagation();openPrice(rows[Number(b.dataset.priceDetail)])});
   $$('[data-price-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignorePriceSuggestion(rows[Number(b.dataset.priceIgnore)])});
   if(sourceChanged)schedulePriceRetry(requestId,2200);
  }catch(e){
