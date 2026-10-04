@@ -42,6 +42,93 @@ def yipman_v1_html(version: str = "") -> str:
     return html
 
 
+
+def yipman_v1_install_html(version: str = "") -> str:
+    v = str(version or "")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17212b">
+<link rel="manifest" href="/app/yipman-v1/manifest.webmanifest">
+<link rel="icon" href="/app/yipman-v1/icon.svg" type="image/svg+xml">
+<title>Install Yipman V1</title>
+<style>
+*{{box-sizing:border-box}}body{{margin:0;background:#eef2f6;color:#17212b;font-family:Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:22px}}
+.card{{width:min(100%,430px);background:#fff;border:1px solid #dbe3ea;border-radius:24px;padding:22px;box-shadow:0 18px 50px rgba(18,38,56,.12)}}
+.brand{{display:flex;align-items:center;gap:13px}}.icon{{width:62px;height:62px;border-radius:18px;background:#0d4f8b;display:grid;place-items:center;color:#fff;font-size:34px;font-weight:1000}}h1{{margin:0;font-size:30px;line-height:1}}.ver{{margin-top:5px;color:#71808d;font-size:12px;font-weight:800}}
+p{{font-size:14px;line-height:1.45;color:#566775}}.install{{width:100%;min-height:56px;border:0;border-radius:15px;background:#1769e0;color:#fff;font-size:16px;font-weight:1000;margin-top:10px}}.install:disabled{{background:#9aa9b7}}
+.open{{display:grid;place-items:center;width:100%;min-height:50px;border:1px solid #cad7e1;border-radius:15px;color:#24465f;text-decoration:none;font-size:14px;font-weight:950;margin-top:9px}}
+.status{{margin-top:12px;padding:10px 11px;border-radius:12px;background:#f2f6f9;color:#5c6e7d;font-size:12px;line-height:1.4;font-weight:800}}
+.steps{{margin-top:12px;border-top:1px solid #e2e8ed;padding-top:12px;font-size:12px;line-height:1.5;color:#667784}}.steps b{{color:#263d50}}
+</style>
+</head>
+<body>
+<div class="card">
+ <div class="brand"><div class="icon">Y</div><div><h1>Yipman V1</h1><div class="ver">FULL MYSQL · {v}</div></div></div>
+ <p>Install the dedicated V1 mobile app. The installed app opens directly to the V1 interface and uses its own PWA scope/cache.</p>
+ <button class="install" id="installBtn" disabled>PREPARING INSTALL…</button>
+ <a class="open" href="/app/yipman-v1/">OPEN V1 WITHOUT INSTALLING</a>
+ <div class="status" id="installStatus">Preparing the V1 installer…</div>
+ <div class="steps"><b>If Android does not show the install prompt:</b> open this page in Chrome, tap the browser menu, then choose <b>Install app</b> or <b>Add to Home screen</b>.</div>
+</div>
+<script>
+let deferredInstall=null;
+const btn=document.getElementById('installBtn'),status=document.getElementById('installStatus');
+const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+function installed(){{btn.disabled=true;btn.textContent='V1 ALREADY INSTALLED';status.textContent='Yipman V1 is already running as an installed app on this device.'}}
+if(standalone)installed();
+window.addEventListener('beforeinstallprompt',e=>{{
+ e.preventDefault();deferredInstall=e;
+ btn.disabled=false;btn.textContent='INSTALL YIPMAN V1';
+ status.textContent='Installer ready. Tap INSTALL YIPMAN V1.';
+}});
+window.addEventListener('appinstalled',()=>{{deferredInstall=null;btn.disabled=true;btn.textContent='INSTALLED';status.textContent='Yipman V1 was installed successfully.'}});
+btn.addEventListener('click',async()=>{{
+ if(!deferredInstall){{status.textContent='The browser install prompt is not available yet. In Chrome, use the browser menu → Install app / Add to Home screen.';return}}
+ btn.disabled=true;await deferredInstall.prompt();const choice=await deferredInstall.userChoice;deferredInstall=null;
+ if(choice?.outcome==='accepted'){{btn.textContent='INSTALLING…';status.textContent='Installation accepted.'}}
+ else{{btn.disabled=false;btn.textContent='INSTALL YIPMAN V1';status.textContent='Installation was cancelled.'}}
+}});
+if('serviceWorker'in navigator){{
+ navigator.serviceWorker.register('/app/yipman-v1/sw.js',{{scope:'/app/yipman-v1/'}}).then(()=>navigator.serviceWorker.ready).then(()=>{{
+   if(!standalone&&!deferredInstall){{status.textContent='V1 is ready to install. If the blue install button does not activate, use Chrome menu → Install app / Add to Home screen.';btn.disabled=false;btn.textContent='INSTALL YIPMAN V1'}}
+ }}).catch(()=>{{status.textContent='Installer setup failed. Open V1 once, then return to this install link.';btn.disabled=false;btn.textContent='RETRY / USE CHROME MENU'}});
+}}
+</script>
+</body>
+</html>"""
+
+
+def yipman_v1_exit_html(version: str = "") -> str:
+    v = str(version or "")
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#17212b">
+<title>Yipman V1 Closed</title>
+<style>
+*{{box-sizing:border-box}}body{{margin:0;background:#17212b;color:#fff;font-family:Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}}
+.box{{width:min(100%,390px)}}h1{{font-size:30px;margin:0}}p{{font-size:14px;line-height:1.5;color:#c4d0da}}button,a{{display:grid;place-items:center;width:100%;min-height:52px;border-radius:14px;margin-top:10px;font-size:14px;font-weight:1000;text-decoration:none}}
+button{{border:0;background:#fff;color:#17212b}}a{{border:1px solid #60778a;color:#dce6ee}}
+.ver{{margin-top:18px;font-size:10px;color:#8498a9}}
+</style>
+</head>
+<body>
+<div class="box"><h1>Yipman V1 closed</h1><p>The operating screen has been exited. On Android, this page will try to close the standalone window. If Android keeps the window open, press Home or swipe the app away.</p><button id="closeNow">CLOSE WINDOW</button><a href="/app/yipman-v1/">REOPEN YIPMAN V1</a><div class="ver">{v}</div></div>
+<script>
+function tryClose(){{try{{window.open('','_self');window.close()}}catch(e){{}}}}
+document.getElementById('closeNow').onclick=tryClose;
+setTimeout(tryClose,80);
+</script>
+</body>
+</html>"""
+
+
+
 def yipman_v1_manifest() -> str:
     return json.dumps({
         "name": "Yipman V1",
@@ -65,7 +152,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v472';
+const CACHE='yipman-v1-v473';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -101,7 +188,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v472';
+const CACHE='yipman-v473';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1860,8 +1947,29 @@ $('#overlay').onclick=e=>{if(e.target===$('#overlay'))closeSheet(true)};
 function showExitConfirm(){$('#exitOverlay').classList.add('on')}
 function hideExitConfirm(){$('#exitOverlay').classList.remove('on')}
 $('#exitCancel').onclick=hideExitConfirm;
-$('#exitConfirm').onclick=()=>{exitAllowed=true;hideExitConfirm();history.go(-2)};
+function yipmanExitUrl(){
+ const v1=location.pathname.startsWith('/app/yipman-v1')||location.pathname.startsWith('/yipman-v1');
+ return v1?'/app/yipman-v1/exit':'/app/yipman';
+}
+function exitYipman(){
+ exitAllowed=true;hideExitConfirm();
+ // A direct close may work for an installed Android standalone window because
+ // this call is still inside the user's confirmed button tap. Browsers that
+ // reject window.close fall through to history/fallback navigation.
+ try{window.close()}catch{}
+ const fallback=()=>{
+  if(document.visibilityState==='visible'){
+   try{location.replace(yipmanExitUrl())}catch{}
+  }
+ };
+ if(history.length>1){
+  try{history.go(-2);setTimeout(fallback,450);return}catch{}
+ }
+ fallback();
+}
+$('#exitConfirm').onclick=exitYipman;
 window.addEventListener('popstate',e=>{
+  if(exitAllowed)return;
   const st=e.state;
   if($('#exitOverlay').classList.contains('on')){
     const pos=pagePositions.get('quick')||{scrollTop:0,scrollLeft:0};
