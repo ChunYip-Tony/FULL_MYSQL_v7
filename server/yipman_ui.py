@@ -2602,32 +2602,28 @@ $('#promoFileInput').onchange=async e=>{
 
 function openManualPromotion(){
  const startDefault=orderDate||iso(new Date());
- const endDefault=plusDaysIso(startDefault,6);
  const deliveryDefault=orderDate||startDefault;
  const nextDefault=orderNextDate||plusDaysIso(deliveryDefault,7);
  const selected=new Map();
+ let promoType='CUSTOM';
  let searchTimer=null;
  let latestSearchToken=0;
 
  sheet(
-  'Manual Promotion',
-  'Search item first · then enter promotion details',
+  'Add Promotion Items',
+  'Search → sale price → dates',
   '<div class="detail manual-promo-search">'+
-   '<div><b>1. Search item</b><div class="manual-promo-search-note">Search UPC, SAP Selling Article, Family Article, Delivery Article, English name, or Chinese name. Typo-tolerant search is supported.</div></div>'+
-   '<div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="Search salmon, 240816, article…" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div>'+
-   '<div id="manualPromoSearchStatus" class="manual-promo-search-note">Start typing to find an item.</div>'+
-   '<div id="manualPromoSearchResults" class="manual-promo-results"></div>'+
-   '<div><b>2. Selected promotion item(s)</b><div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item selected yet.</div></div></div>'+
-   '<div><b>3. Promotion + delivery window</b></div>'+
-   '<div class="manual-promo-fields">'+
-    '<label class="wide">LIST NAME<input id="manualPromoName" value="Manual Promotion '+esc(startDefault)+'"></label>'+
+   '<div class="detailstep"><b>1 · PROMOTION TYPE</b><div class="manual-promo-mode"><button type="button" data-promo-mode="WEEKLY">WEEKLY<br><small>THU → THU</small></button><button type="button" data-promo-mode="WEEKEND">WEEKEND<br><small>FRI → SUN</small></button><button type="button" class="on" data-promo-mode="CUSTOM">CUSTOM<br><small>ANY DATES</small></button></div><div id="manualPromoModeNote" class="manual-promo-search-note">Custom dates are active.</div></div>'+
+   '<div class="detailstep"><b>2 · FIND ITEM</b><div class="manual-promo-searchbar"><input id="manualPromoSearch" placeholder="Search name, UPC, Family or Article #" autocomplete="off"><button id="manualPromoSearchBtn" type="button">SEARCH</button></div><div id="manualPromoSearchStatus" class="manual-promo-search-note">Type at least 2 characters. Tap a result to add it.</div><div id="manualPromoSearchResults" class="manual-promo-results"></div></div>'+
+   '<div class="detailstep"><div class="manual-promo-selected-heading"><b>3 · ITEMS + SALE PRICE</b><span id="manualPromoSelectedCount" class="manual-promo-selected-count">0 selected</span></div><div id="manualPromoSelected" class="manual-promo-selected"><div class="empty">No item selected yet.</div></div></div>'+
+   '<div class="detailstep"><b>4 · PROMOTION + DELIVERY DATES</b><div class="manual-promo-fields compact">'+
     '<label>PROMO START<input type="date" id="manualPromoStart" value="'+esc(startDefault)+'"></label>'+
-    '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(endDefault)+'"></label>'+
-    '<label>DELIVERY DATE<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
+    '<label>PROMO END<input type="date" id="manualPromoEnd" value="'+esc(plusDaysIso(startDefault,6))+'"></label>'+
+    '<label>DELIVERY<input type="date" id="manualPromoDelivery" value="'+esc(deliveryDefault)+'"></label>'+
     '<label>NEXT DELIVERY<input type="date" id="manualPromoNext" value="'+esc(nextDefault)+'"></label>'+
-   '</div>'+
-   '<div class="estimatebar" style="margin-top:10px">Yipman uses the selected Family True Stock, canonical sales history, promotion history, observed delivery evidence, and Fresh/Live freshness limits. Manual uplift is not required.</div>'+
-   '<div class="actions"><button id="manualPromoCancel">CANCEL</button><button class="primary" id="manualPromoSave">ADD TO PROMOTION ORDER</button></div>'+
+    '<label class="optional-name">OPTIONAL LIST NAME<input id="manualPromoName" placeholder="Auto name if blank"></label>'+
+   '</div></div>'+
+   '<div class="manual-promo-savebar"><button id="manualPromoCancel" type="button">CANCEL</button><button class="primary" id="manualPromoSave" type="button">SAVE + CALCULATE ORDER</button></div>'+
   '</div>'
  );
 
@@ -2635,19 +2631,20 @@ function openManualPromotion(){
  const searchStatus=$('#manualPromoSearchStatus');
  const searchResults=$('#manualPromoSearchResults');
  const selectedBox=$('#manualPromoSelected');
+ const selectedCount=$('#manualPromoSelectedCount');
 
  function familyKeyFor(item){
   return String(item?.family_article_number||(String(item?.result_type||'').toUpperCase()==='FAMILY'?item?.number:'')||'').trim();
  }
  function relatedDeliverySummary(fam){
   const rows=Array.isArray(fam?.receiving_ordering_articles)?fam.receiving_ordering_articles:[];
-  if(!rows.length)return 'Delivery article: —';
-  return rows.slice(0,3).map(a=>{
+  if(!rows.length)return 'Receiving Article —';
+  return rows.slice(0,2).map(a=>{
    const n=a.article_number||a.receiving_article||a.number||'—';
    const name=a.article_description||a.article_name||a.name||'';
    const pack=a.pack_size||a.pack||a.receiving_pack_size||'';
    return String(n)+(name?' · '+name:'')+(pack?' · '+pack:'');
-  }).join(' | ')+(rows.length>3?' · +'+(rows.length-3)+' more':'');
+  }).join(' | ')+(rows.length>2?' · +'+(rows.length-2)+' more':'');
  }
  function effectiveOHText(fam){
   const oh=fam?.current_effective_oh||{};
@@ -2659,8 +2656,32 @@ function openManualPromotion(){
   const el=document.querySelector('[data-manual-promo-price="'+CSS.escape(String(id))+'"]');
   return el?Number(el.value):NaN;
  }
+ function nextWeekday(value,targetJsDay){
+  const d=dateLocal(value)||new Date();
+  d.setHours(12,0,0,0);
+  const delta=(targetJsDay-d.getDay()+7)%7;
+  d.setDate(d.getDate()+delta);
+  return iso(d);
+ }
+ function applyPromoDates(){
+  const start=$('#manualPromoStart'),end=$('#manualPromoEnd');
+  if(!start||!end)return;
+  if(promoType==='WEEKLY'){
+   start.value=nextWeekday(start.value||deliveryDefault,4);
+   end.value=plusDaysIso(start.value,7);
+   $('#manualPromoModeNote').textContent='Weekly automatically aligns to Thursday → following Thursday.';
+  }else if(promoType==='WEEKEND'){
+   start.value=nextWeekday(start.value||deliveryDefault,5);
+   end.value=plusDaysIso(start.value,2);
+   $('#manualPromoModeNote').textContent='Weekend automatically aligns to Friday → Sunday.';
+  }else{
+   if(!end.value||end.value<start.value)end.value=plusDaysIso(start.value||startDefault,6);
+   $('#manualPromoModeNote').textContent='Custom dates are active.';
+  }
+ }
  function renderSelected(){
   const rows=[...selected.values()];
+  if(selectedCount)selectedCount.textContent=rows.length+' selected';
   if(!rows.length){selectedBox.innerHTML='<div class="empty">No item selected yet.</div>';return}
   selectedBox.innerHTML=rows.map(x=>{
    const fam=x.family||{}, item=x.item||{};
@@ -2670,10 +2691,11 @@ function openManualPromotion(){
    const q7u=item.selling_uom||fam?.family_sales_7d?.uom||'';
    return '<div class="manual-promo-selected-card">'+
     '<div class="manual-promo-selected-top"><div><h4>'+esc(fam.family_article_name||item.family_name||item.name||x.familyKey)+'</h4>'+
-     '<div class="selmeta">Family '+esc(x.familyKey)+' · Selected '+esc(x.code)+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+' · True Stock '+esc(effectiveOHText(fam))+'</div>'+
-    '</div><label>SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
+     '<div class="selmeta">Family '+esc(x.familyKey)+' · '+esc(x.code)+(q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+'</div>'+
+     '<div class="selmeta">Effective OH '+esc(effectiveOHText(fam))+' · Current price '+(item.current_price!=null?money(item.current_price):'—')+'</div></div>'+
+     '<label class="saleprice">SALE PRICE<input data-manual-promo-price="'+esc(fid)+'" inputmode="decimal" value="'+esc(price)+'" placeholder="0.00"></label></div>'+
     '<div class="manual-promo-delivery">'+esc(relatedDeliverySummary(fam))+'</div>'+
-    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE</button>'+
+    '<button class="manual-promo-remove" type="button" data-manual-promo-remove="'+esc(fid)+'">REMOVE ITEM</button>'+
    '</div>';
   }).join('');
  }
@@ -2683,8 +2705,9 @@ function openManualPromotion(){
   e.preventDefault();e.stopPropagation();
   selected.delete(String(btn.dataset.manualPromoRemove));
   renderSelected();
-  searchStatus.textContent='Selected promotion item removed.';
+  searchStatus.textContent='Item removed.';
  };
+
  async function hydrateFamily(item){
   const familyKey=familyKeyFor(item);
   if(!familyKey)throw new Error('Family Article unavailable for this result');
@@ -2693,52 +2716,56 @@ function openManualPromotion(){
  }
  async function chooseResult(entry){
   try{
-   searchStatus.textContent='Loading Family inventory and delivery details…';
+   searchStatus.textContent='Adding item…';
    const hydrated=entry.family?{familyKey:entry.familyKey,fam:entry.family}:await hydrateFamily(entry.item);
    const item=entry.item;
    const fid=String(hydrated.fam?.family_id||item.family_id||hydrated.familyKey);
    const type=String(item.result_type||'').toUpperCase();
    const code=type==='UPC'?String(item.number||''):(type==='ARTICLE'?String(item.number||hydrated.familyKey):String(hydrated.familyKey));
    if(!code)throw new Error('Selectable UPC / Article number unavailable');
-   const previous=selected.get(fid);
    selected.set(fid,{familyKey:hydrated.familyKey,family:hydrated.fam,item,code});
    renderSelected();
-   searchStatus.textContent=previous
-    ? 'Replaced the previous selection for Family '+hydrated.familyKey+' to avoid duplicate Family inventory.'
-    : 'Added Family '+hydrated.familyKey+'. Search again to add another Family.';
-  }catch(e){searchStatus.textContent='Unable to select item · '+e.message}
+   searchStatus.textContent='Added '+(hydrated.fam?.family_article_name||item.name||hydrated.familyKey)+'. Search again to add another item.';
+   searchInput.value='';searchResults.innerHTML='';
+  }catch(e){searchStatus.textContent='Unable to add item · '+e.message}
  }
+
  async function runSearch(){
   const q=String(searchInput.value||'').trim();
   const token=++latestSearchToken;
   if(q.length<2){searchResults.innerHTML='';searchStatus.textContent='Enter at least 2 characters.';return}
-  searchStatus.textContent='Searching…';searchResults.innerHTML='<div class="loading">Searching promotion item index…</div>';
+  searchStatus.textContent='Searching…';
+  searchResults.innerHTML='<div class="loading">Finding promotion items…</div>';
   try{
-   // Promotion search avoids the full Quick Check 28D ranking path. Family
-   // inventory/delivery details are fetched only after the user selects a result.
-   const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=16',{timeoutMs:8000});
+   const d=await api('/v1/yipman/promotion-item-search?q='+encodeURIComponent(q)+'&limit=14',{timeoutMs:8000});
    if(token!==latestSearchToken)return;
    const raw=Array.isArray(d.results)?d.results:[];
-   const enriched=raw.slice(0,14).map(item=>({item,familyKey:familyKeyFor(item),family:null}));
-   searchStatus.textContent=enriched.length?enriched.length+' result(s) · tap an item to add it':'No matching item.';
+   const enriched=raw.slice(0,12).map(item=>({item,familyKey:familyKeyFor(item),family:null}));
+   searchStatus.textContent=enriched.length?enriched.length+' result(s) · tap to add':'No matching item.';
    searchResults.innerHTML=enriched.map((x,i)=>{
-    const item=x.item||{}, familyName=item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
+    const item=x.item||{},familyName=item.family_name||(String(item.result_type||'').toUpperCase()==='FAMILY'?item.name:'');
     const itemName=item.name||familyName||'Item';
-    const q7=item.pos_qty_7d, q7u=item.selling_uom||'';
-    return '<button class="manual-promo-result" type="button" data-manual-promo-result="'+i+'">'+
-     '<b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong>'+
-     '<span>Family '+esc(x.familyKey||'—')+(familyName?' · '+esc(familyName):'')+
-      ' · Current '+(item.current_price!=null?money(item.current_price):'—')+
-      (q7!=null?' · 7D '+fmtNullable(q7)+' '+esc(q7u):'')+
-      ' · inventory + delivery details load after selection</span></button>';
+    return '<button class="manual-promo-result friendly" type="button" data-manual-promo-result="'+i+'"><div><b>'+esc(itemName)+'</b><strong>'+esc(String(item.result_type||'ITEM'))+' '+esc(item.number||'—')+'</strong><span>Family '+esc(x.familyKey||'—')+(item.current_price!=null?' · Current '+money(item.current_price):'')+'</span></div><em>＋ ADD</em></button>';
    }).join('');
    $$('[data-manual-promo-result]').forEach(btn=>btn.onclick=()=>chooseResult(enriched[Number(btn.dataset.manualPromoResult)]));
   }catch(e){
    if(token!==latestSearchToken)return;
-   searchResults.innerHTML='';searchStatus.textContent='Search unavailable · '+e.message+' · tap SEARCH to retry.';
+   searchResults.innerHTML='';
+   searchStatus.textContent='Search unavailable · '+e.message+' · tap SEARCH to retry.';
   }
  }
- searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,380)};
+
+ $$('[data-promo-mode]').forEach(btn=>btn.onclick=()=>{
+  promoType=String(btn.dataset.promoMode||'CUSTOM');
+  $$('[data-promo-mode]').forEach(x=>x.classList.toggle('on',x===btn));
+  applyPromoDates();
+ });
+ $('#manualPromoStart').onchange=applyPromoDates;
+ $('#manualPromoDelivery').onchange=()=>{
+  const delivery=$('#manualPromoDelivery').value,next=$('#manualPromoNext');
+  if(delivery&&(!next.value||next.value<=delivery))next.value=plusDaysIso(delivery,7);
+ };
+ searchInput.oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(runSearch,420)};
  searchInput.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();clearTimeout(searchTimer);runSearch()}};
  $('#manualPromoSearchBtn').onclick=()=>{clearTimeout(searchTimer);runSearch()};
  $('#manualPromoCancel').onclick=()=>closeSheet(true);
@@ -2748,16 +2775,17 @@ function openManualPromotion(){
   const end=$('#manualPromoEnd').value;
   const delivery=$('#manualPromoDelivery').value;
   const next=$('#manualPromoNext').value;
-  if(!rows.length){toast('Select at least one item');return}
-  if(!start||!end||!delivery||!next){toast('Complete all promotion and delivery dates');return}
+  if(!rows.length){toast('Add at least one promotion item');return}
+  if(!start||!end||!delivery||!next){toast('Complete the four dates');return}
   if(end<start){toast('Promotion end must be after start');return}
   if(next<=delivery){toast('Next delivery must be after delivery date');return}
   const items=rows.map(x=>{
    const fid=String(x.family?.family_id||x.item?.family_id||x.familyKey);
-   return {upc:x.code,description:x.family?.family_article_name||x.item?.name||'',promotion_type:'CUSTOM',promotion_start_date:start,promotion_end_date:end,promotion_price:selectedPrice(fid)};
+   return {upc:x.code,description:x.family?.family_article_name||x.item?.name||'',promotion_type:promoType,promotion_start_date:start,promotion_end_date:end,promotion_price:selectedPrice(fid)};
   });
-  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){toast('Enter a valid SALE price for every selected item');return}
-  const name=$('#manualPromoName').value.trim()||('Manual Promotion '+start);
+  if(items.some(x=>!Number.isFinite(x.promotion_price)||x.promotion_price<=0)){toast('Enter a valid SALE price for every item');return}
+  const enteredName=$('#manualPromoName').value.trim();
+  const name=enteredName||((promoType==='WEEKLY'?'Weekly':promoType==='WEEKEND'?'Weekend':'Custom')+' Promotion '+start);
   const save=$('#manualPromoSave');save.disabled=true;save.textContent='SAVING…';
   try{
    const created=await api('/v1/yipman/promotion-lists',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_name:name,source_filename:'MANUAL_SEARCH_ENTRY',items}),timeoutMs:30000});
@@ -2766,11 +2794,11 @@ function openManualPromotion(){
    closeSheet(true);buildDays();updateOrderWindowUI();
    await loadPromotionLists();$('#promoListSelect').value=String(promoListId);
    if(Number(created.ready_count||0)>0)await loadPromotionOrder();
-   else{$('#promoOrderStatus').textContent='Manual promotion saved but all items require mapping / validation review.';$('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>'}
-   toast('Manual promotion added');
+   else{$('#promoOrderStatus').textContent='Promotion saved. Some items need mapping review.';$('#promoRows').innerHTML='<div class="empty">No READY promotion items yet.</div>'}
+   toast('Promotion saved');
   }catch(err){
-   toast('Manual promotion failed · '+err.message);
-   if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='ADD TO PROMOTION ORDER'}
+   toast('Could not save promotion · '+err.message);
+   if(document.getElementById('manualPromoSave')){save.disabled=false;save.textContent='SAVE + CALCULATE ORDER'}
   }
  };
 }
