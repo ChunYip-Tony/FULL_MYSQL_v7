@@ -4,8 +4,10 @@ import json
 
 try:
     from .yipman_desktop_v369 import YIPMAN_DESKTOP_CSS, YIPMAN_DESKTOP_JS
+    from .yipman_mobile_v2 import YIPMAN_MOBILE_V2_CSS, YIPMAN_MOBILE_V2_JS
 except ImportError:
     from yipman_desktop_v369 import YIPMAN_DESKTOP_CSS, YIPMAN_DESKTOP_JS
+    from yipman_mobile_v2 import YIPMAN_MOBILE_V2_CSS, YIPMAN_MOBILE_V2_JS
 
 
 def yipman_html(version: str = "") -> str:
@@ -14,8 +16,10 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
-    html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
+    mobile_v2_css = YIPMAN_MOBILE_V2_CSS.replace("__VERSION__", v)
+    mobile_v2_js = YIPMAN_MOBILE_V2_JS.replace("__VERSION__", v)
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-mobile-v2-css\">" + mobile_v2_css + "</style><style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
+    html = html.replace("</body>", "<script id=\"yipman-mobile-v2-js\">" + mobile_v2_js + "</script><script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
 
@@ -28,8 +32,8 @@ def yipman_manifest() -> str:
         "scope": "/app/yipman/",
         "display": "standalone",
         "display_override": ["standalone", "minimal-ui"],
-        "background_color": "#f6f7f9",
-        "theme_color": "#0d4f8b",
+        "background_color": "#eef1f4",
+        "theme_color": "#17212b",
         "description": "FULL MYSQL seafood mobile operations",
         "icons": [{
             "src": "/app/yipman/icon.svg",
