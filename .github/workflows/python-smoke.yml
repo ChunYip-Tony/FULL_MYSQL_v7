@@ -179,7 +179,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v467'" in ui
+          assert "const CACHE='yipman-v469'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -387,7 +387,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v467'" in ui
+          assert "const CACHE='yipman-v469'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'CACHED STOCK FLOW' in ui
           assert 'data-stock-retry' in ui
@@ -667,7 +667,11 @@ jobs:
           assert 'ANY_OBSERVED_SELECTED_WEEKDAY_PLUS_MINUS_ONE_WITHIN_180_DAYS' in bo_src
           assert 'zero_order_rows_retained' in bo_src
           assert 'SUGGESTED_ORDER_QTY_DESC_THEN_URGENT' in bo_src
-          assert 'CURRENT AVAILABLE ROSTER · refreshing latest data' in ui
+          assert 'CURRENT AVAILABLE ROSTER · latest data is refreshing · page held stable' in ui
+          assert 'ORDER_MAX_AUTO_RELOADS=1' in ui
+          assert 'One automatic retry will run, then this page will stay stable' in ui
+          assert "id=\"orderRefreshNow\"" in ui
+          assert "},3500);" not in ui
           assert "const hasUsableRows=Array.isArray(data?.rows)&&data.rows.length>0" in ui
           assert "&&!hasUsableRows" in ui
           assert 'id="headFreshness"' not in ui
@@ -1368,7 +1372,7 @@ jobs:
           assert ".overlay{position:absolute" in ui and "z-index:80" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v467'" in ui
+          assert "const CACHE='yipman-v469'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
