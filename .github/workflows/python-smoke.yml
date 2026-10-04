@@ -1195,6 +1195,10 @@ jobs:
           assert "new FormData()" in yipman
           assert "/v1/web-upload/batches/'" in yipman
           assert "'/commit'" in yipman
+          assert "let session=null;" in yipman
+          assert "'/abort'" in yipman
+          assert 'incomplete batch aborted' in yipman
+          assert 'batch cleanup needs review' in yipman
           assert 'function stockFlowCacheNotice' in yipman
           assert "'STALE CACHE'" in yipman
           assert 'cached.saved_at' in yipman
