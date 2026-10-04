@@ -335,7 +335,7 @@ jobs:
           assert 'OVER-SELLING' in ui
           assert "const CACHE='yipman-v453'" in ui
           assert 'stockFlowCacheKey' in ui
-          assert 'Showing last saved Stock Flow' in ui
+          assert 'CACHED STOCK FLOW' in ui
           assert 'data-stock-retry' in ui
           assert '#quick{padding-bottom:calc(154px' in ui
           print('stock-flow-observed-delivery-v451=PASS')
@@ -1113,7 +1113,7 @@ jobs:
           assert "'promooh')" in ui
           # Ordering detail must use the same live Effective OH as the list card.
           assert "const effectiveOh=r.effective_oh??r.oh" in ui
-          assert 'data-oh="'+esc(effectiveOh??\'\')+' in ui
+          assert "data-oh=\"'+esc(effectiveOh??'')+'\"" in ui
 
           # Promotion what-if stock remains separate from persistent Family True Stock.
           assert "SCENARIO OH" in ui
