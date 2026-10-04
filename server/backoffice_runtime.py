@@ -8271,6 +8271,126 @@ def current_tpr_review(
                     recommendation_priority = 40
                     monitoring_phase = "LEARNING"
 
+        # V6 user-facing action contract: every TPR Progress suggestion resolves
+        # to exactly one of four operational decisions:
+        # CONTINUE, CANCEL, LOWER TPR, or RAISE TPR.
+        recommendation_source_code = recommendation_code
+        suggested_regular_price_basis = None
+        prior_configured_reg = _positive_price(pl_life.get("prior_regular_price"))
+        proved_sweet_spot = _positive_price(row.get("sweet_spot_price"))
+        baseline_reg = _positive_price(baseline_avg_price)
+
+        if recommendation_code == "MAKE_REGULAR":
+            recommendation_code = "CANCEL_TPR"
+            recommendation_label = "CANCEL TPR"
+            recommendation_reason = (
+                "The TPR test has proved the current TPR price as a sustainable everyday sweet spot. "
+                "Cancel the temporary TPR and set the suggested new REG price."
+            )
+            suggested_regular_price = current_price
+            suggested_regular_price_basis = "PROVEN_CURRENT_TPR_BECOMES_NEW_REGULAR"
+            recommendation_final = True
+        elif recommendation_code == "MATCH_240":
+            pair_target = _positive_price(
+                related_240.get("current_price") if related_240 else None
+            )
+            suggested_tpr_price = pair_target
+            if (
+                pair_target is not None
+                and current_price is not None
+                and pair_target < current_price
+            ):
+                recommendation_code = "LOWER_TPR_PRICE"
+                recommendation_label = "LOWER TPR"
+                recommendation_reason = (
+                    "249 must match the paired 240 price; lower this TPR to the 240 authority price."
+                )
+            elif (
+                pair_target is not None
+                and current_price is not None
+                and pair_target > current_price
+            ):
+                recommendation_code = "RAISE_TPR_PRICE"
+                recommendation_label = "RAISE TPR"
+                recommendation_reason = (
+                    "249 must match the paired 240 price; raise this TPR to the 240 authority price."
+                )
+            else:
+                recommendation_code = "CONTINUE_TPR"
+                recommendation_label = "CONTINUE"
+                recommendation_reason = (
+                    "The paired 240 price no longer requires a TPR price change."
+                )
+                suggested_tpr_price = None
+                recommendation_final = False
+        elif recommendation_code in {"OBSERVE", "REVIEW_DATA", "URGENT_REVIEW"}:
+            recommendation_code = "CONTINUE_TPR"
+            recommendation_label = "CONTINUE"
+            recommendation_final = False
+            if recommendation_source_code == "OBSERVE":
+                recommendation_reason = (
+                    recommendation_reason
+                    + " Continue the current TPR price unchanged until the next completed-day evidence is available."
+                )
+            else:
+                recommendation_reason = (
+                    recommendation_reason
+                    + " Keep the current TPR price unchanged while the data issue is corrected."
+                )
+
+        # Every cancellation must tell the store what REG price should replace
+        # the temporary TPR. Prefer the configured pre-TPR REG, then proved
+        # sweet spot, then a retail-aligned clean pre-TPR sold-price baseline.
+        if recommendation_code == "CANCEL_TPR" and suggested_regular_price is None:
+            if prior_configured_reg is not None:
+                suggested_regular_price = prior_configured_reg
+                suggested_regular_price_basis = "PRIOR_CONFIGURED_REG_BEFORE_CURRENT_TPR"
+            elif proved_sweet_spot is not None:
+                suggested_regular_price = (
+                    _retail_price_point(
+                        proved_sweet_spot,
+                        min_price=(
+                            current_cost + Decimal("0.01")
+                            if current_cost is not None else None
+                        ),
+                        max_price=company_high,
+                    )
+                    or proved_sweet_spot
+                )
+                suggested_regular_price_basis = "PROVED_HISTORICAL_SWEET_SPOT"
+            elif baseline_reg is not None:
+                suggested_regular_price = (
+                    _retail_price_point(
+                        baseline_reg,
+                        min_price=(
+                            current_cost + Decimal("0.01")
+                            if current_cost is not None else None
+                        ),
+                        max_price=company_high,
+                    )
+                    or baseline_reg
+                )
+                suggested_regular_price_basis = "CLEAN_PRE_TPR_BASELINE_RETAIL_ALIGNED"
+            elif current_price is not None:
+                suggested_regular_price = current_price
+                suggested_regular_price_basis = "CURRENT_TPR_FALLBACK_NO_BETTER_REG_EVIDENCE"
+
+        # Do not tell the user to raise/lower without an actual valid price.
+        # If cost/company constraints leave no valid next step, keep the current
+        # TPR unchanged instead of publishing an incomplete action.
+        if (
+            recommendation_code in {"LOWER_TPR_PRICE", "RAISE_TPR_PRICE"}
+            and suggested_tpr_price is None
+        ):
+            blocked_action = recommendation_label
+            recommendation_code = "CONTINUE_TPR"
+            recommendation_label = "CONTINUE"
+            recommendation_final = False
+            recommendation_reason = (
+                recommendation_reason
+                + f" {blocked_action} has no valid next price within current cost/company bounds, so continue the current TPR unchanged."
+            )
+
         out.append({
             "upc": upc,
             "family_id": row.get("family_id"),
@@ -8431,6 +8551,8 @@ def current_tpr_review(
             "projected_gp_7d": projected_gp_7d,
             "suggested_tpr_price": suggested_tpr_price,
             "suggested_regular_price": suggested_regular_price,
+            "suggested_regular_price_basis": suggested_regular_price_basis,
+            "recommendation_source_code": recommendation_source_code,
             "monitoring_phase": monitoring_phase,
             "related_240_upc": (
                 related_240.get("ean_upc") if related_240 else None
@@ -8460,8 +8582,8 @@ def current_tpr_review(
     counts = Counter(str(r.get("recommendation_code") or "OBSERVE") for r in out)
     purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
-        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V5_AGING_ANCHOR_SAME_DAY_RECEIPT",
-        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
+        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V6_FOUR_ACTION_PRICE_CARD",
+        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V5_AGING_ANCHOR_SAME_DAY_RECEIPT",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
         "data_health": _current_tpr_data_health(),
@@ -8488,7 +8610,7 @@ def current_tpr_review(
             "post_tpr_window": "LATEST_3_COMPLETED_CANONICAL_POS_DAYS_SINCE_CONTINUOUS_TPR_START",
             "baseline": "UP_TO_7_CLEAN_PRE_TPR_NON_SALE_NON_TPR_COMPLETED_POS_DAYS",
             "monitoring": "PREVIOUS_BASELINE_PLUS_CURRENT_TPR_PRICE_STEPS_PLUS_FORWARD_7D_AND_FRESHNESS_CLEARANCE_PROJECTION",
-            "actions": "CONTINUE_TPR_OR_CHANGE_TPR_PRICE_OR_MAKE_REGULAR_OR_CANCEL_TPR",
+            "actions": "USER_FACING_EXACTLY_ONE_OF_CONTINUE_TPR_CANCEL_TPR_LOWER_TPR_PRICE_RAISE_TPR_PRICE",
             "gp_comparison_basis": "CURRENT_COST_NORMALIZED_FOR_BOTH_TPR_AND_BASELINE",
             "hard_safety_priority": "240_249_MISMATCH_THEN_PRICE_AT_OR_BELOW_COST_THEN_NO_STOCK",
         },
@@ -8523,7 +8645,7 @@ def _current_tpr_data_health() -> dict[str,Any]:
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V5_CURRENT_TPR_AGING_ANCHOR_RECEIPT|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V6_CURRENT_TPR_FOUR_ACTION_PRICE_CARD|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
