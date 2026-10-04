@@ -25,7 +25,7 @@ def start_api() -> subprocess.Popen:
         sys.executable,
         "-m",
         "uvicorn",
-        "api_entry_v478:app",
+        "api_entry_v479:app",
         "--host",
         "0.0.0.0",
         "--port",
@@ -57,13 +57,7 @@ def stop_process(proc: subprocess.Popen | None, name: str, timeout: int = 10) ->
 
 
 def requeue_interrupted_pipeline_runs(reason: str) -> int:
-    """Persist a deployment-safe handoff after the worker process has stopped.
-
-    The worker's open Phase 3 transaction is rolled back when its process exits.
-    Requeue only outer pipeline runs that were still active so the replacement
-    container can claim them automatically. Genuine FAILED runs remain manual
-    recovery and are never auto-retried here.
-    """
+    """Persist a deployment-safe handoff after the worker process has stopped."""
     payload = json.dumps(
         {
             "auto_recovery": True,
@@ -78,13 +72,8 @@ def requeue_interrupted_pipeline_runs(reason: str) -> int:
         try:
             cur.execute(
                 """UPDATE pipeline_run
-                   SET processing_status='QUEUED',
-                       completed_at=NULL,
-                       error_count=0,
-                       detail_json=JSON_MERGE_PATCH(
-                           COALESCE(detail_json,JSON_OBJECT()),
-                           %s
-                       )
+                   SET processing_status='QUEUED', completed_at=NULL, error_count=0,
+                       detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
                    WHERE pipeline_name=%s
                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
                      AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
@@ -136,15 +125,11 @@ def main() -> int:
                     time.sleep(0.25)
                 if not stopping:
                     worker = start_worker()
-
             time.sleep(1)
     finally:
         stop_process(worker, "worker")
-        requeue_interrupted_pipeline_runs(
-            "SERVICE_DEPLOYMENT_SHUTDOWN" if stopping else "SERVICE_PROCESS_EXIT"
-        )
+        requeue_interrupted_pipeline_runs("SERVICE_DEPLOYMENT_SHUTDOWN" if stopping else "SERVICE_PROCESS_EXIT")
         stop_process(api, "api")
-
     return 0
 
 
