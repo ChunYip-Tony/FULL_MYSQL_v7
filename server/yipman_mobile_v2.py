@@ -17,7 +17,8 @@ YIPMAN_MOBILE_V2_CSS = r"""
   #yv2 .yv2-search{display:flex;align-items:center;gap:7px;margin-top:9px;background:#fff;border:2px solid #c8d0d9;border-radius:14px;padding:0 11px}
   #yv2 .yv2-search input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:12px 4px;font-size:17px;font-weight:700}
   #yv2 .yv2-search button{border:0;background:transparent;font-size:18px;padding:8px 3px}
-  #yv2 .yv2-main{position:absolute;left:0;right:0;top:104px;bottom:68px;overflow:hidden}
+  #yv2 .yv2-main{position:absolute;left:0;right:0;top:76px;bottom:68px;overflow:hidden}
+  #yv2.lookup-mode .yv2-main{top:128px}
   #yv2 .yv2-page{display:none;height:100%;overflow-y:auto;overflow-x:hidden;padding:12px 13px 24px;scrollbar-width:none}
   #yv2 .yv2-page::-webkit-scrollbar{display:none}
   #yv2 .yv2-page.on{display:block}
@@ -49,7 +50,7 @@ YIPMAN_MOBILE_V2_CSS = r"""
   #yv2 .yv2-tabs{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin:0 0 10px}.yv2-tabs::-webkit-scrollbar{display:none}
   #yv2 .yv2-tab{border:2px solid #cfd6de;background:#fff;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:950;color:#465466;white-space:nowrap}
   #yv2 .yv2-tab.on{background:var(--nav);border-color:var(--nav);color:#fff}
-  #yv2 .yv2-action{border-left:6px solid #94a3b8}.yv2-action.red{border-left-color:#c84a42}.yv2-action.amber{border-left-color:#d39a2c}.yv2-action.blue{border-left-color:#4e83bd}.yv2-action.purple{border-left-color:#8064b6}.yv2-action.green{border-left-color:#3b8a62}
+  #yv2 .yv2-action{border-left:6px solid #94a3b8;color:var(--ink)!important}.yv2-action.red{border-left-color:#c84a42}.yv2-action.amber{border-left-color:#d39a2c}.yv2-action.blue{border-left-color:#4e83bd}.yv2-action.purple{border-left-color:#8064b6}.yv2-action.green{border-left-color:#3b8a62}
   #yv2 .yv2-actiontype{font-size:10px;color:#627084;font-weight:1000;letter-spacing:.05em;text-transform:uppercase}
   #yv2 .yv2-actionname{font-size:19px;font-weight:1000;margin-top:2px}
   #yv2 .yv2-reason{font-size:13px;color:#465466;font-weight:700;line-height:1.45;margin-top:7px}
@@ -104,7 +105,7 @@ YIPMAN_MOBILE_V2_JS = r"""
     promoListId:null,promoSelected:new Map(), promoSearchRows:[], dataThrough:null
   };
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const num=v=>{const n=Number(v);return Number.isFinite(n)?n:null};
+  const num=v=>{if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
   const fmt=(v,d=1)=>{const n=num(v);return n===null?'—':n.toLocaleString(undefined,{maximumFractionDigits:d})};
   const money=v=>{const n=num(v);return n===null?'—':'$'+n.toFixed(2)};
   const iso=d=>{const z=new Date(d);z.setHours(12,0,0,0);return z.toISOString().slice(0,10)};
@@ -114,7 +115,7 @@ YIPMAN_MOBILE_V2_JS = r"""
     const c=new AbortController(),tm=setTimeout(()=>c.abort(),opt.timeoutMs||18000);
     try{const r=await fetch(url,{...opt,signal:c.signal,headers:{Accept:'application/json',...(opt.headers||{})},cache:'no-store'});const t=await r.text();let d={};try{d=t?JSON.parse(t):{}}catch{}if(!r.ok)throw new Error(d?.detail?.reason||d?.detail||t||('HTTP '+r.status));return d}finally{clearTimeout(tm)}
   };
-  const root=document.createElement('div');root.id='yv2';
+  const root=document.createElement('div');root.id='yv2';root.classList.add('lookup-mode');
   root.innerHTML=`
     <header class="yv2-head">
       <div class="yv2-headrow"><div><div class="yv2-brand">Yipman <span>V2</span></div><div class="yv2-version">Easy Read · __VERSION__</div></div><div class="yv2-health" id="yv2Health">Checking data…</div></div>
@@ -125,7 +126,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       <section class="yv2-page" id="yv2-actions"><div class="yv2-title"><h2>Action List</h2><span class="yv2-sub" id="yv2ActionCount">Loading…</span></div><div class="yv2-tabs" id="yv2ActionTabs"><button class="yv2-tab on" data-af="all">All</button><button class="yv2-tab" data-af="price">Price</button><button class="yv2-tab" data-af="stock">Stock</button><button class="yv2-tab" data-af="order">Order</button><button class="yv2-tab" data-af="freshness">Freshness</button></div><div id="yv2Actions"><div class="yv2-loading">Building action list…</div></div></section>
       <section class="yv2-page" id="yv2-order"><div class="yv2-title"><h2>Ordering</h2><span class="yv2-sub" id="yv2OrderStatus">Observed delivery</span></div><div class="yv2-orderhead"><div class="yv2-datebox"><label>Delivery</label><input type="date" id="yv2Delivery"></div><div class="yv2-datebox"><label>Next delivery</label><input type="date" id="yv2NextDelivery"></div></div><div class="yv2-tabs"><button class="yv2-tab on" data-om="regular">Regular</button><button class="yv2-tab" data-om="promotion">Promotion</button></div><div id="yv2OrderRows"><div class="yv2-loading">Loading ordering calendar…</div></div></section>
       <section class="yv2-page" id="yv2-performance"><div class="yv2-title"><h2>Performance</h2><span class="yv2-sub" id="yv2PerfStatus">Completed days only</span></div><div class="yv2-tabs" id="yv2PerfTabs"><button class="yv2-tab on" data-days="1">Yesterday</button><button class="yv2-tab" data-days="7">7D</button><button class="yv2-tab" data-days="14">14D</button><button class="yv2-tab" data-days="28">28D</button></div><div id="yv2Performance"><div class="yv2-loading">Loading performance…</div></div></section>
-      <section class="yv2-page" id="yv2-more"><div class="yv2-title"><h2>More</h2><span class="yv2-sub">Secondary tools</span></div><div class="yv2-moregrid"><button class="yv2-more" data-more="pi"><b>True Stock / PI</b><span>Search Family stock and Pending Dumping.</span></button><button class="yv2-more" data-more="tpr"><b>Current TPR</b><span>All active TPR items and progress.</span></button><button class="yv2-more" data-more="receipt"><b>Receipts</b><span>Use Item Lookup to inspect receipt history.</span></button><button class="yv2-more" data-more="data"><b>Data Status</b><span>Published-through and source freshness.</span></button></div><div class="yv2-card" style="margin-top:10px"><div class="yv2-actiontype">Desktop only</div><div class="yv2-actionname">Administration stays out of mobile</div><div class="yv2-reason">Batch Monitor, Data Pipeline, QA Fixes, Upload Center and detailed mapping repair stay in Back Office.</div><div class="yv2-btnrow"><button class="yv2-btn" id="yv2Classic">Open Classic Mobile</button></div></div></section>
+      <section class="yv2-page" id="yv2-more"><div class="yv2-title"><h2>More</h2><span class="yv2-sub">Secondary tools</span></div><div class="yv2-moregrid"><button class="yv2-more" data-more="pi"><b>True Stock / PI</b><span>Search Family stock and Pending Dumping.</span></button><button class="yv2-more" data-more="tpr"><b>Current TPR</b><span>All active TPR items and progress.</span></button><button class="yv2-more" data-more="receipt"><b>Receipts</b><span>Use Item Lookup to inspect receipt history.</span></button><button class="yv2-more" data-more="data"><b>Data Status</b><span>Published-through and source freshness.</span></button></div><div class="yv2-card" style="margin-top:10px;padding:11px 12px"><div class="yv2-meta"><b style="color:#344054">Desktop Back Office</b> keeps uploads, batches, QA fixes and mapping repair.</div><div class="yv2-btnrow" style="margin-top:7px"><button class="yv2-btn" id="yv2Classic">Classic mobile</button></div></div></section>
     </main>
     <nav class="yv2-bottom"><button class="yv2-nav on" data-page="lookup"><i>⌕</i>Lookup</button><button class="yv2-nav" data-page="actions"><i>✓</i>Actions</button><button class="yv2-nav" data-page="order"><i>▣</i>Order</button><button class="yv2-nav" data-page="performance"><i>▥</i>Performance</button><button class="yv2-nav" data-page="more"><i>•••</i>More</button></nav>
     <div class="yv2-modalback" id="yv2Modal"><div class="yv2-modal"><div id="yv2ModalBody"></div></div></div><div class="yv2-toast" id="yv2Toast"></div>`;
@@ -138,7 +139,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   $('#yv2Modal').onclick=e=>{if(e.target.id==='yv2Modal')closeModal()};
 
   function go(p){
-    V.page=p;$$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
+    V.page=p;root.classList.toggle('lookup-mode',p==='lookup');$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
     $('#yv2SearchForm').style.display=p==='lookup'?'flex':'none';
     document.querySelector('#yv2-'+p)?.scrollTo(0,0);
     if(p==='actions'&&!V.actionsLoaded)loadActions();
@@ -152,8 +153,11 @@ YIPMAN_MOBILE_V2_JS = r"""
       const [h,home]=await Promise.all([api('/v1/backoffice/data-health?days=14',{timeoutMs:10000}),api('/v1/backoffice/home-summary',{timeoutMs:10000})]);
       const latest=h?.latest||{},ph=home?.pricing?.data_health||home?.ordering?.data_health||{};
       V.dataThrough=ph.data_through||ph.pos_data_through||latest?.POS?.date||null;
-      $('#yv2Health').textContent=V.dataThrough?'Published thru '+V.dataThrough:'Data status';
+      const expected=ph.expected_through||h?.completed_through||null;
+      const stale=!!(V.dataThrough&&expected&&String(V.dataThrough)<String(expected));
+      $('#yv2Health').textContent=V.dataThrough?(stale?('Data thru '+V.dataThrough+' · expected '+expected):('Published thru '+V.dataThrough)):'Data status';
       $('#yv2Health').className='yv2-health';
+      if(stale){$('#yv2Health').style.background='#fff4d1';$('#yv2Health').style.color='#7d5300';$('#yv2Health').style.borderColor='#d9bb6d'}
     }catch(e){$('#yv2Health').textContent='Data check';$('#yv2Health').style.background='#fff4d1';$('#yv2Health').style.color='#7d5300'}
   }
 
@@ -255,8 +259,9 @@ YIPMAN_MOBILE_V2_JS = r"""
     }catch(e){$('#yv2Actions').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
   function renderActions(){
-    const rows=V.actions.filter(a=>V.actionFilter==='all'||a.type===V.actionFilter);
-    $('#yv2ActionCount').textContent=V.actions.length+' need attention';
+    const filtered=V.actions.filter(a=>V.actionFilter==='all'||a.type===V.actionFilter);
+    const rows=filtered.slice(0,40);
+    $('#yv2ActionCount').textContent=filtered.length>40?('Top 40 · '+filtered.length+' total'):(filtered.length+' need attention');
     $('#yv2Actions').innerHTML=rows.map((a,i)=>`<article class="yv2-card yv2-action ${esc(a.tone)}"><div class="yv2-topline"><div><div class="yv2-actiontype">${esc(a.type)}</div><div class="yv2-actionname">${esc(a.name)}</div></div><span class="yv2-badge ${esc(a.tone)}">${esc(a.badge)}</span></div><div class="yv2-reason">${a.reason}</div><div class="yv2-btnrow"><button class="yv2-btn primary" data-act-open="${i}">Review</button><button class="yv2-btn ignore" data-act-ignore="${i}">Ignore 12H</button></div></article>`).join('')||'<div class="yv2-empty">No actions in this filter.</div>';
     $$('[data-act-open]').forEach(b=>b.onclick=()=>{const a=rows[Number(b.dataset.actOpen)];if(a.upc){go('lookup');$('#yv2Search').value=a.upc;searchLookup(a.upc)}else if(a.type==='order')go('order')});
     $$('[data-act-ignore]').forEach(b=>b.onclick=()=>ignore(rows[Number(b.dataset.actIgnore)].id));
@@ -334,7 +339,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       const d=await api('/v1/app/v2/performance/range?start_date='+encodeURIComponent(start)+'&end_date='+encodeURIComponent(end)+'&limit=200',{timeoutMs:30000}),s=d.summary||{},items=d.items||[];
       const gpPct=num(s.gp_dollars)!==null&&num(s.sales_dollars)>0?num(s.gp_dollars)/num(s.sales_dollars):null;
       $('#yv2PerfStatus').textContent=d.supported_day_count+' completed day'+(d.supported_day_count===1?'':'s')+' · thru '+end;
-      $('#yv2Performance').innerHTML=`<div class="yv2-kpis"><div class="yv2-kpi"><span>SALES</span><b>${money(s.sales_dollars)}</b></div><div class="yv2-kpi"><span>GP$</span><b>${money(s.gp_dollars)}</b></div><div class="yv2-kpi"><span>GP%</span><b>${gpPct===null?'—':(gpPct*100).toFixed(1)+'%'}</b></div><div class="yv2-kpi"><span>SOLD ITEMS</span><b>${fmt(s.sold_item_count,0)}</b></div></div><div class="yv2-card" style="margin-top:10px"><div class="yv2-actiontype">Top GP$ contributors</div>${items.slice(0,12).map((r,i)=>`<button class="yv2-listrow" data-perf-upc="${esc(r.upc||'')}" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;text-align:left"><div><b>${i+1}. ${esc(r.name||r.upc)}</b><span>${fmt(r.sold_quantity)} ${esc(r.qty_uom||'')} · Sales ${money(r.sales_amount)}</span></div><div><b>${money(r.gp_dollars)}</b><span>${r.gp_pct==null?'GP incomplete':(Number(r.gp_pct)*100).toFixed(1)+'% GP'}</span></div></button>`).join('')}</div>`;
+      $('#yv2Performance').innerHTML=`<div class="yv2-kpis"><div class="yv2-kpi"><span>SALES</span><b>${money(s.sales_dollars)}</b></div><div class="yv2-kpi"><span>GP$</span><b>${money(s.gp_dollars)}</b><small class="yv2-minor">${s.gp_dollars_complete===false?'Incomplete cost coverage':'Historical applicable cost'}</small></div><div class="yv2-kpi"><span>GP%</span><b>${gpPct===null?'—':(gpPct*100).toFixed(1)+'%'}</b><small class="yv2-minor">${s.gp_dollars_complete===false?'Withheld until GP is complete':'Range GP%'}</small></div><div class="yv2-kpi"><span>SOLD ITEMS</span><b>${fmt(s.sold_item_count,0)}</b></div></div><div class="yv2-card" style="margin-top:10px"><div class="yv2-actiontype">Top GP$ contributors</div>${items.slice(0,12).map((r,i)=>`<button class="yv2-listrow" data-perf-upc="${esc(r.upc||'')}" style="width:100%;border-left:0;border-right:0;border-bottom:0;background:transparent;text-align:left"><div><b>${i+1}. ${esc(r.name||r.upc)}</b><span>${fmt(r.sold_quantity)} ${esc(r.qty_uom||'')} · Sales ${money(r.sales_amount)}</span></div><div><b>${money(r.gp_dollars)}</b><span>${r.gp_pct==null?'GP incomplete':(Number(r.gp_pct)*100).toFixed(1)+'% GP'}</span></div></button>`).join('')}</div>`;
       $$('[data-perf-upc]').forEach(b=>b.onclick=()=>{go('lookup');$('#yv2Search').value=b.dataset.perfUpc;searchLookup(b.dataset.perfUpc)});
     }catch(e){$('#yv2Performance').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
