@@ -1725,6 +1725,14 @@ def upc_info(upc: str) -> dict[str,Any]:
         m7=_sales_metric(cur,int(row["upc_id"]),7)
         m28=_sales_metric(cur,int(row["upc_id"]),28)
         effective_oh=_selling_equivalent_effective_oh(cur,row)
+        family_children=[]
+        if row.get("family_id") is not None:
+            cur.execute(
+                "SELECT * FROM quick_check_current WHERE family_id=%s ORDER BY ean_upc",
+                (int(row["family_id"]),),
+            )
+            family_children=cur.fetchall()
+        system_oh=_family_system_oh(cur,family_children) if family_children else {}
         if not effective_oh.get("reason"):
             effective_oh["reason"]=_oh_display_reason(
                 effective_oh.get("status"),
@@ -1733,7 +1741,7 @@ def upc_info(upc: str) -> dict[str,Any]:
             )
         cur.close()
     return {
-        "contract_version":"WEBAPP_V2_UPC_V4",
+        "contract_version":"WEBAPP_V2_UPC_V5_SYSTEM_EFFECTIVE_OH",
         "upc":row.get("ean_upc"),
         "upc_name":row.get("selling_description"),
         "category":row.get("product_class"),
@@ -1755,6 +1763,13 @@ def upc_info(upc: str) -> dict[str,Any]:
         "dos":row.get("dos"),
         "doh":row.get("doh"),
         "effective_oh":effective_oh,
+        "system_oh":{
+            "quantity":system_oh.get("quantity"),
+            "uom":system_oh.get("uom"),
+            "status":system_oh.get("status"),
+            "source":system_oh.get("source"),
+            "reason":system_oh.get("reason"),
+        },
         "qty_7d":m7,
         "qty_28d":m28,
         "actions":["FAMILY_ARTICLE","PRICE","ORDERING"],
@@ -3852,6 +3867,7 @@ def bulk_ordering_suggestions(
                 rows,
                 allow_incomplete_movement_coverage=bool(include_sufficient_stock),
             )
+            family_system_oh=_family_system_oh(cur,rows)
 
             if temp_override is None and (
                 family_oh.get("status")!="READY" or family_oh.get("quantity") is None
@@ -3867,9 +3883,13 @@ def bulk_ordering_suggestions(
                 })
                 continue
 
-            system_raw_oh=(
+            effective_raw_oh=(
                 _d(family_oh.get("quantity"))
                 if family_oh.get("quantity") is not None else None
+            )
+            system_raw_oh=(
+                _d(family_system_oh.get("quantity"))
+                if family_system_oh.get("quantity") is not None else None
             )
             if temp_override is not None:
                 override_uom=str(temp_override.get("uom") or demand_uom).strip().upper()
@@ -4203,12 +4223,29 @@ def bulk_ordering_suggestions(
                 )
             )
 
+            representative_upc=next(
+                (str(x.get("ean_upc") or "").strip() for x in sorted(
+                    rows,
+                    key=lambda x:(
+                        -float(x.get("upc_velocity_7d") or 0),
+                        -float(x.get("pos_qty_7d") or 0),
+                        str(x.get("ean_upc") or ""),
+                    ),
+                ) if str(x.get("ean_upc") or "").strip()),
+                None,
+            )
             suggestions.append({
                 "family_id":fid,
                 "family_article_number":fam_article,
+                "action_upc":representative_upc,
                 "family_article_name":fam.get("family_description"),
                 "category":kind,
-                "effective_oh_raw":system_raw_oh,
+                "effective_oh_raw":effective_raw_oh,
+                "effective_oh_uom":family_oh.get("uom") or demand_uom,
+                "effective_oh_source":family_oh.get("source"),
+                "system_oh_raw":system_raw_oh,
+                "system_oh_uom":family_system_oh.get("uom") or demand_uom,
+                "system_oh_status":family_system_oh.get("status"),
                 "ordering_oh_used":ordering_oh,
                 "temporary_oh_override_used":temporary_oh_used,
                 "temporary_oh_override":(
@@ -4220,7 +4257,7 @@ def bulk_ordering_suggestions(
                     if temporary_oh_used else None
                 ),
                 "negative_oh_treated_as_zero":bool(
-                    system_raw_oh is not None and system_raw_oh<0 and not temporary_oh_used
+                    effective_raw_oh is not None and effective_raw_oh<0 and not temporary_oh_used
                 ),
                 "uom":demand_uom,
                 "qty_7d":qty_7_display,
@@ -4313,7 +4350,7 @@ def bulk_ordering_suggestions(
         cur.close()
 
     return {
-        "contract_version":"WEBAPP_V2_BULK_ORDERING_V7_FRESHNESS_AWARE_OH",
+        "contract_version":"WEBAPP_V2_BULK_ORDERING_V8_SYSTEM_EFFECTIVE_OH",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
