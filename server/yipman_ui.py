@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v444';
+const CACHE='yipman-v450';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -836,7 +836,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 }
 
 
-/* v7.0.449 consolidated mobile workflow */
+/* v7.0.450 consolidated mobile workflow */
 #quick .stockflowfilters{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px)}
 #quick .stockflowresultbar{position:sticky;top:35px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 1px}
 #order .order-tabs{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:3px 0}
