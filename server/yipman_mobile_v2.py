@@ -179,13 +179,14 @@ YIPMAN_MOBILE_V2_JS = r"""
   let lastControlPointerAt=0,promoSearchTimer=null;
   const controlDispatch=e=>{
     const target=e.target;
-    const actionable=target.closest?.('[data-stock-family],#yv2AddPromo,[data-promo-result],[data-promo-remove],[data-promo-remove-item],#yv2PromoCancel,#yv2PromoSave,#yv2StockCancel,#yv2StockSave,#yv2ModalClose');
+    const actionable=target.closest?.('[data-stock-family],#yv2AddPromo,#yv2PromoSearchBtn,[data-promo-result],[data-promo-remove],[data-promo-remove-item],#yv2PromoCancel,#yv2PromoSave,#yv2StockCancel,#yv2StockSave,#yv2ModalClose');
     if(!actionable||!root.contains(actionable))return false;
     if(e.type==='click'&&Date.now()-lastControlPointerAt<650){e.preventDefault();return true}
     if(e.type==='pointerup')lastControlPointerAt=Date.now();
     e.preventDefault();e.stopPropagation();
     if(actionable.matches('[data-stock-family]')){openTrueStock({family:actionable.dataset.stockFamily,name:actionable.dataset.stockName,oh:actionable.dataset.stockOh,uom:actionable.dataset.stockUom});return true}
     if(actionable.id==='yv2AddPromo'){openPromoBuilder();return true}
+    if(actionable.id==='yv2PromoSearchBtn'){runPromoSearch();return true}
     if(actionable.matches('[data-promo-result]')){selectPromo(V.promoSearchRows[Number(actionable.dataset.promoResult)]);return true}
     if(actionable.matches('[data-promo-remove]')){V.promoSelected.delete(actionable.dataset.promoRemove);renderPromoSelected();toast('Promotion item removed');return true}
     if(actionable.matches('[data-promo-remove-item]')){removePersistedPromoItem(actionable.dataset.promoRemoveItem,actionable);return true}
@@ -331,7 +332,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       ]);
       for(const r of p.rows||[]){
         const prefix=String(r.upc||'').replace(/\D/g,'').replace(/^0+/,'').slice(0,3);
-        const stock={family:r.family_article_number,name:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.selling_uom};
+        const stock={family:r.family_article_number,nameStock:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom||r.selling_uom};
         if(r.priority_240_249_mismatch)addAction({id:'pair-'+r.upc,type:'price',tone:'red',badge:'240≠249',name:r.name||r.upc,reason:'249 '+money(r.current_price)+' must match 240 '+money(r.related_240_current_price)+'.',upc:r.upc,...stock,rank:100});
         else if(r.reg_suggestion_actionable)addAction({id:'reg-'+r.upc,type:'price',tone:'blue',badge:'REG',name:r.name||r.upc,reason:'Current '+money(r.current_price)+' · proved sweet spot '+money(r.reg_suggestion_price??r.tested_price)+'. '+(r.reg_suggestion_reason||r.primary_reason_text||''),upc:r.upc,...stock,rank:55});
         else if(r.tpr_suggestion_actionable)addAction({id:'tpr-'+r.upc,type:(String(r.tpr_suggestion_purpose||'').includes('FRESH')?'freshness':'price'),tone:'purple',badge:'TPR',name:r.name||r.upc,reason:'TPR suggestion '+money(r.tpr_suggestion_price??r.testing_price)+' · '+(r.tpr_suggestion_reason||r.primary_reason_text||''),upc:r.upc,...stock,rank:50});
@@ -405,7 +406,7 @@ YIPMAN_MOBILE_V2_JS = r"""
       const d=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_id:Number(V.promoListId),delivery_date:V.delivery,next_delivery_date:V.nextDelivery,temporary_oh_overrides:[]}),timeoutMs:45000});
       const manual=Boolean(detail?.manual_item_removal_allowed)||String(detail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
       const review=(detail?.items||[]).filter(x=>x.mapping_status!=='READY');
-      const reviewHtml=review.map(x=>`<div class="yv2-selected"><button type="button" data-promo-remove-item="${esc(x.item_id||'')}">Remove</button><b>${esc(x.raw_description||x.raw_item_code||'Promotion item')}</b><div class="yv2-meta">${esc(x.mapping_status||'REVIEW')} · ${esc(x.validation_error||'Needs mapping review')}</div></div>`).join('');
+      const reviewHtml=review.map(x=>`<div class="yv2-selected">${manual&&x.item_id?`<button type="button" data-promo-remove-item="${esc(x.item_id)}">Remove</button>`:''}<b>${esc(x.raw_description||x.raw_item_code||'Promotion item')}</b><div class="yv2-meta">${esc(x.mapping_status||'REVIEW')} · ${esc(x.validation_error||'Needs mapping review')}</div></div>`).join('');
       const rowsHtml=(d.rows||[]).map(r=>{
         const p=r.promotion_list_item||{},family=r.family_article_number||r.family_article||p.family_article_number||'',name=r.family_article_name||p.family_name||r.name||r.description||r.upc||'Promotion item';
         const oh=r.current_effective_oh??r.effective_oh_raw??r.effective_oh??r.current_oh,uom=r.current_effective_oh_uom||r.effective_oh_uom||r.oh_uom||r.uom||r.selling_uom||'';
