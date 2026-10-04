@@ -1145,6 +1145,11 @@ jobs:
           assert "await refreshAfterFamilyTrueStock(family)" in ui
           assert "orderMode==='PROMOTION'" in ui
           assert "await loadPromotionOrder()" in ui
+          assert 'function stashCurrentSheet' in ui
+          assert 'function restorePreviousSheet' in ui
+          assert 'sheetStack.push(stashCurrentSheet())' in ui
+          assert 'if(useHistory&&sheetStack.length){restorePreviousSheet();return}' in ui
+          assert "history.pushState({yipman:true,view:current,detail:true" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
           assert "const CACHE='yipman-v453'" in ui
