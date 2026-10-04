@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v459';
+const CACHE='yipman-v460';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -228,7 +228,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qreceivingrow{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.9fr) minmax(0,.9fr);gap:6px;align-items:center;padding:6px 9px;background:var(--grp-recv);border-bottom:1px solid color-mix(in srgb,var(--grp-border) 28%,#fff)}
 .qrecvidentity{min-width:0;display:grid;grid-template-columns:23px minmax(0,1fr);gap:7px;align-items:center}
 .qricon{width:23px;height:23px;border-radius:7px;display:flex;align-items:center;justify-content:center;background:#f47b35;color:#fff;font-size:10px;font-weight:950}
-.qrnum{font-size:13px;font-weight:950;line-height:1.05}.qrname{font-size:9px;font-weight:800;color:#334554;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}.qr7d{display:block;font-size:7px;font-weight:950;color:#17683c;margin-top:2px;white-space:nowrap}
+.qrnum{font-size:13px;font-weight:950;line-height:1.05}.qrname{font-size:9px;font-weight:850;color:#334554;overflow:visible;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;line-height:1.15;margin-top:2px}.qr7d{display:block;font-size:7px;font-weight:950;color:#17683c;margin-top:2px;white-space:nowrap}
 .qdelivery{min-width:0;text-align:right}.qdelivery small{display:block;font-size:6px;color:#667784;font-weight:900;letter-spacing:.03em}.qdelivery b{display:block;font-size:11px;line-height:1.1}.qdelivery span{font-size:8px;color:#435868;font-weight:800}
 .qsap{margin:6px 7px;border:1px solid #d9e2e9;border-left:4px solid var(--grp-border);border-radius:12px;overflow:hidden;background:#fff}
 .qsaphead{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;padding:6px 8px;background:#f3f7fa;border-bottom:1px solid #dfe6eb}
@@ -264,12 +264,12 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .qreceivingrow{gap:4px;padding:4px 7px}
 .qrecvidentity{grid-template-columns:20px minmax(0,1fr);gap:5px}
 .qricon{width:20px;height:20px;border-radius:6px;font-size:9px}
-.qrnum{font-size:12px}.qrname{font-size:8px;margin-top:1px}
+.qrnum{font-size:12px}.qrname{font-size:9px;margin-top:1px;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.15}
 .qdelivery small{font-size:5px}.qdelivery b{font-size:10px}.qdelivery span{font-size:7px}
 .qsap{margin:4px 5px;border-left-width:3px;border-radius:10px}
 .qsaphead{padding:4px 6px;gap:5px}
 .qsaprole{font-size:6px}.qsaptop{gap:4px}.qsapnum{font-size:13px}
-.qsapname{display:none!important}
+.qsapname{display:block!important;font-size:9px!important;font-weight:850;line-height:1.15;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;overflow-wrap:anywhere;margin-top:2px;color:#425665}
 .qsapkpis{gap:7px}.qsapkpi small{font-size:5px}.qsapkpi b{font-size:10px}
 .qupc{padding:5px 7px;gap:5px}
 .qupctop{gap:4px}.qrole{font-size:7px;padding:2px 5px}.qupccode{font-size:9px}
@@ -1555,7 +1555,7 @@ function renderView(id,{restore=false,reload=true,state=null}={}){
     else{p.scrollTop=0;p.scrollLeft=0;pagePositions.set(id,{scrollTop:0,scrollLeft:0})}
   }
   if(id!=='order'){clearTimeout(orderRetryTimer);orderRetryTimer=null}
-  if(id!=='price'){clearTimeout(tprRetryTimer);tprRetryTimer=null}
+  if(id!=='price'){clearTimeout(tprRetryTimer);tprRetryTimer=null;clearTimeout(priceRetryTimer);priceRetryTimer=null}
   if(id!=='data'){clearTimeout(dataLiveTimer);dataLiveTimer=null}
   if(reload){
     if(id==='quick'&&!$('#globalInput').value.trim()&&!bestSellerGroups)loadBestSellers();
@@ -1977,7 +1977,7 @@ function quickSellingHtml(a,idx,seq){
  const diff=comparable&&mvt!==null?Math.abs(mvt-pos7):null;
  const showSap=diff!==null&&diff>1.5;
  if(!showSap&&!rows.length)return '';
- const head=showSap?'<div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div></div>'+
+ const head=showSap?'<div class="qsaphead"><div><div class="qsaprole">SAP SELLING ARTICLE</div><div class="qsaptop"><span class="qsapnum">'+esc(a.article_number||'UNRESOLVED')+'</span></div><div class="qsapname">'+esc(a.article_description||'Selling Article')+'</div></div>'+
    '<div class="qsapmetric"><small>SAP 7D MVT</small><b>'+fmt(a.movement_7d)+' '+esc(uom)+'</b><span>AVG/DAY · '+fmt(a.avg_qty_day)+' '+esc(uom)+'</span></div></div>':'';
  return '<section class="qsap'+(showSap?'':' nohead')+'">'+head+active.map(quickUpcHtml).join('')+hiddenUpcs(inactiveRows,hid)+'</section>';
 }
