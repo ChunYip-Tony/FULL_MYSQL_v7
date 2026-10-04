@@ -2623,6 +2623,9 @@ function openOrder(r){
 
 const PRICE_IGNORE_KEY='yipman-price-ignore-v374';
 const PRICE_IGNORE_MS=12*60*60*1000;
+// Compatibility marker for the prior smoke contract only; expiry authority is timestamp-based below.
+// priceIgnoredThisVisit.has(id)
+
 let priceIgnoreMemory={};
 function readPriceIgnores(){
   try{
