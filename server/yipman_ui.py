@@ -1852,7 +1852,7 @@ function renderStockFlow(){
  const sel=$('#stockFlowSort');if(sel){sel.value=stockFlowSort;sel.onchange=e=>{stockFlowSort=e.target.value;renderStockFlow()}}
  $$('[data-stock-delivery]').forEach(b=>b.onclick=()=>{stockFlowDeliveryFilter=b.dataset.stockDelivery||'ALL';renderStockFlow()});
  $$('[data-stock-category]').forEach(b=>b.onclick=()=>{stockFlowCategoryFilter=b.dataset.stockCategory||'ALL';renderStockFlow()});
- $('[data-stock-receipts]').forEach(b=>b.onclick=e=>{
+ document.querySelectorAll('[data-stock-receipts]').forEach(b=>b.onclick=e=>{
    e.stopPropagation();
    const box=b.closest('.bestrecent');if(!box)return;
    box.classList.toggle('open');
