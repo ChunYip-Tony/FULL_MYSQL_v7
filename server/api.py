@@ -29,7 +29,7 @@ from web_quick_check import quick_check_web_html
 from web_admin import admin_web_html
 from webapp_v2_ui import webapp_v2_html
 from backoffice_ui import backoffice_html
-from yipman_ui import yipman_html, yipman_manifest, yipman_service_worker, yipman_icon_svg
+from yipman_ui import yipman_html, yipman_manifest, yipman_service_worker, yipman_icon_svg, yipman_v1_html, yipman_v1_manifest, yipman_v1_service_worker
 from backoffice_runtime import (
     inventory_review as backoffice_inventory_review,
     ordering_review as backoffice_ordering_review,
@@ -366,6 +366,53 @@ def public_web_app():
             'Expires':'0',
             'X-FULLMYSQL-Version':VERSION,
         },
+    )
+
+
+@app.get('/yipman-v1',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/yipman-v1/',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/yipman-v1',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/yipman-v1/',response_class=HTMLResponse,include_in_schema=False)
+def yipman_v1_web_app():
+    return HTMLResponse(
+        yipman_v1_html(VERSION),
+        headers={
+            'Cache-Control':'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma':'no-cache',
+            'Expires':'0',
+            'X-FULLMYSQL-Version':VERSION,
+            'X-Yipman-Mobile':'V1',
+        },
+    )
+
+
+@app.get('/app/yipman-v1/manifest.webmanifest',include_in_schema=False)
+def yipman_v1_web_manifest():
+    return Response(
+        content=yipman_v1_manifest(),
+        media_type='application/manifest+json',
+        headers={'Cache-Control':'no-cache, must-revalidate'},
+    )
+
+
+@app.get('/app/yipman-v1/sw.js',include_in_schema=False)
+def yipman_v1_web_service_worker():
+    return Response(
+        content=yipman_v1_service_worker(),
+        media_type='application/javascript',
+        headers={
+            'Cache-Control':'no-cache, no-store, must-revalidate',
+            'Service-Worker-Allowed':'/app/yipman-v1/',
+        },
+    )
+
+
+@app.get('/app/yipman-v1/icon.svg',include_in_schema=False)
+def yipman_v1_web_icon():
+    return Response(
+        content=yipman_icon_svg(),
+        media_type='image/svg+xml',
+        headers={'Cache-Control':'public, max-age=86400'},
     )
 
 
