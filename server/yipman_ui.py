@@ -3003,8 +3003,31 @@ function renderOrderRoster(rows,data,h,stale){
  $$('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
  bindFamilyOhEditors();
 }
-$('#orderFilter').onchange=e=>{orderFilter=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
+$('#orderFilter').onchange=e=>{orderFilter=e.target.value;$('[data-order-quick-filter]').forEach(b=>b.classList.toggle('on',b.dataset.orderQuickFilter===orderFilter));renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
 $('#orderSort').onchange=e=>{orderSort=e.target.value;renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)};
+$('[data-order-quick-filter]').forEach(b=>b.onclick=()=>{orderFilter=b.dataset.orderQuickFilter;$('#orderFilter').value=orderFilter;$('[data-order-quick-filter]').forEach(x=>x.classList.toggle('on',x===b));renderOrderRoster(lastOrderRows,lastOrderData,lastOrderData?.data_health||{},lastOrderStale)});
+const orderRefreshBtn=$('#orderRefreshBtn');if(orderRefreshBtn)orderRefreshBtn.onclick=()=>loadOrder(orderDate);
+const ORDER_VIEW_CACHE_PREFIX='yipman-order-view-v467:';
+const ORDER_VIEW_CACHE_MAX_MS=30*60*1000;
+function orderViewCacheKey(delivery,next){return ORDER_VIEW_CACHE_PREFIX+String(delivery||'')+'|'+String(next||'')}
+function readOrderViewCache(delivery,next){
+ try{
+  const x=JSON.parse(localStorage.getItem(orderViewCacheKey(delivery,next))||'null');
+  if(!x||!x.saved_at||!x.data)return null;
+  if(Date.now()-Number(x.saved_at)>ORDER_VIEW_CACHE_MAX_MS)return null;
+  return x;
+ }catch{return null}
+}
+function writeOrderViewCache(delivery,next,data){
+ try{localStorage.setItem(orderViewCacheKey(delivery,next),JSON.stringify({saved_at:Date.now(),data}))}catch{}
+}
+function orderLoadingHtml(message='Building ordering suggestions…',sub='Receipt history, Effective OH and usage are being calculated in the background.'){
+ return '<div class="order-loading-card"><b>'+esc(message)+'</b><span>'+esc(sub)+'</span><div class="order-loading-actions"><button type="button" id="orderLoadingRetry">↻ CHECK NOW</button><button type="button" id="orderLoadingKeep">KEEP THIS PAGE</button></div></div>';
+}
+function bindOrderLoadingActions(){
+ const retry=$('#orderLoadingRetry');if(retry)retry.onclick=()=>loadOrder(orderDate);
+ const keep=$('#orderLoadingKeep');if(keep)keep.onclick=()=>toast('Yipman will update this list automatically');
+}
 async function loadOrder(value){
  clearTimeout(orderRetryTimer);orderRetryTimer=null;
  const requestId=++orderRequestSeq;
@@ -3025,64 +3048,90 @@ async function loadOrder(value){
  $('#orderCol1').textContent='FAMILY / RECEIVING';
  $('#orderCol2').textContent=isPast?'RECEIPT':'OH';
  $('#orderCol3').textContent=isPast?'UOM':'ORDER';
- if(!isPast&&lastOrderWindowKey!==windowKey){
-   $('#orderSummary').textContent='CALCULATING · '+appDate(requestedDate)+' → '+appDate(requestedNext);
+
+ const cachedView=!isPast?readOrderViewCache(requestedDate,requestedNext):null;
+ if(cachedView?.data?.rows?.length){
+  const cd=cachedView.data,ch=cd.data_health||{};
+  lastOrderWindowKey=windowKey;
+  renderOrderRoster(cd.rows||[],cd,ch,true);
+  $('#orderStatus').innerHTML='<div class="estimatebar">SAVED VIEW · showing the last calculated roster while Yipman checks for updates.</div>';
+ }else{
+  if(!isPast&&lastOrderWindowKey!==windowKey)$('#orderSummary').textContent='BUILDING · '+appDate(requestedDate)+' → '+appDate(requestedNext);
+  $('#orderStatus').textContent=(isPast?'Loading delivery history for ':'Preparing ')+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';
+  $('#orderRows').innerHTML=isPast
+   ?'<div class="loading">Checking actual canonical receipts…</div>'
+   :orderLoadingHtml('Building '+appDate(requestedDate)+' suggestions','Receipt cadence is checked first, then Effective OH and expected usage. You can stay on this page.');
+  bindOrderLoadingActions();
  }
- $('#orderStatus').textContent=(isPast?'Loading delivery history for ':'Loading ')+d.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'})+'…';
- $('#orderRows').innerHTML='<div class="loading">'+(isPast?'Checking actual canonical receipts…':'Checking receipt history, OH and sales…')+'</div>';
+
  const url='/v1/yipman/ordering-review?category=ALL&delivery_date='+requestedDate+(!isPast&&requestedNext?'&next_delivery_date='+encodeURIComponent(requestedNext):'');
  try{
-  let data=null;
-  for(let i=0;i<10;i++){
-   try{data=await api(url,{timeoutMs:26000})}catch(e){if(requestId!==orderRequestSeq)return;if(/timed out|failed to fetch|network|aborted/i.test(String(e?.message||''))&&i<9){$('#orderStatus').textContent='Still calculating '+appDate(orderDate)+' · retrying best-available ordering data';await new Promise(r=>setTimeout(r,1200));continue}throw e}
+  let data;
+  try{
+   data=await api(url,{timeoutMs:12000});
+  }catch(e){
    if(requestId!==orderRequestSeq)return;
-   const status=String(data.analysis_status||'').toUpperCase();
-   const cacheStatus=String(data.cache_status||'').toUpperCase();
-   const sourceRefreshing=!!data.source_changed_since_analysis||cacheStatus==='SOURCE_CHANGED_REFRESHING'||status.includes('SOURCE_CHANGED');
-   if(!sourceRefreshing&&!['REFRESHING','WARMING','STALE_DATA_REFRESHING'].includes(status)&&!['WARMING','STALE_DATA_REFRESHING'].includes(cacheStatus))break;
-   $('#orderStatus').textContent='Calculating '+appDate(orderDate)+' · receipt cadence first';
-   await new Promise(r=>setTimeout(r,1500));
+   if(/timed out|failed to fetch|network|aborted/i.test(String(e?.message||''))){
+    orderRetryCount++;
+    $('#orderStatus').textContent='Still calculating · checking again automatically';
+    if(!cachedView?.data?.rows?.length){
+     $('#orderRows').innerHTML=orderLoadingHtml('Still calculating','The request timed out, but the background calculation may still be running. Yipman will check again automatically.');
+     bindOrderLoadingActions();
+    }
+    orderRetryTimer=setTimeout(()=>{
+     if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext)loadOrder(requestedDate);
+    },Math.min(7000,2500+orderRetryCount*500));
+    return;
+   }
+   throw e;
   }
+  if(requestId!==orderRequestSeq)return;
+
   const finalStatus=String(data?.analysis_status||'').toUpperCase(), h=data?.data_health||{};
   const finalCache=String(data?.cache_status||'').toUpperCase();
   const sourceRefreshing=!!data?.source_changed_since_analysis||finalCache==='SOURCE_CHANGED_REFRESHING'||finalStatus.includes('SOURCE_CHANGED');
-  if(sourceRefreshing||['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(finalCache)){
-    orderRetryCount++;
-    const delay=Math.min(8000,2500+Math.max(0,orderRetryCount-1)*500);
-    const err=data?.refresh_error;
-    $('#orderStatus').textContent=(err?'Retrying after calculation error · ':'Still calculating · ')+'auto-refreshing '+appDate(requestedDate)+' → '+appDate(requestedNext);
-    $('#orderRows').innerHTML='<div class="loading">Yipman is calculating receipt history, OH and predicted usage. This page will update automatically'+(err?'<br><br>'+esc(err):'')+'.</div>';
-    orderRetryTimer=setTimeout(()=>{
-      if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext){
-        loadOrder(requestedDate);
-      }
-    },delay);
-    return;
+  const warming=sourceRefreshing||['REFRESHING','WARMING'].includes(finalStatus)||['WARMING','STALE_DATA_REFRESHING'].includes(finalCache);
+  if(warming){
+   orderRetryCount++;
+   const delay=Math.min(7000,2400+Math.max(0,orderRetryCount-1)*500);
+   const err=data?.refresh_error;
+   $('#orderStatus').textContent=(err?'Rebuilding after an error · ':'Calculating in background · ')+appDate(requestedDate)+' → '+appDate(requestedNext);
+   if(!cachedView?.data?.rows?.length){
+    $('#orderRows').innerHTML=orderLoadingHtml(err?'Rebuilding ordering suggestions':'Calculating ordering suggestions',err||'This page updates automatically when the roster is ready.');
+    bindOrderLoadingActions();
+   }
+   orderRetryTimer=setTimeout(()=>{
+    if(current==='order'&&orderMode==='REGULAR'&&orderDate===requestedDate&&orderNextDate===requestedNext)loadOrder(requestedDate);
+   },delay);
+   return;
   }
+
   if(finalStatus==='REFRESH_FAILED'){
-    clearTimeout(orderRetryTimer);orderRetryTimer=null;
-    $('#orderSummary').textContent='CALCULATION FAILED';
-    $('#orderStatus').textContent='Ordering calculation failed';
-    $('#orderRows').innerHTML='<div class="empty">'+esc(data?.refresh_error||'Pull down to retry.')+'</div>';
-    return;
+   $('#orderSummary').textContent='CALCULATION NEEDS RETRY';
+   $('#orderStatus').textContent='Ordering calculation did not finish';
+   if(!cachedView?.data?.rows?.length){
+    $('#orderRows').innerHTML=orderLoadingHtml('Could not finish this calculation',data?.refresh_error||'Tap CHECK NOW to retry.');
+    bindOrderLoadingActions();
+   }
+   return;
   }
   if(finalStatus==='UNAVAILABLE'){
-    const missing=(h.missing_required_sources||[]).join(' + ')||'POS / MVT';
-    $('#orderStatus').textContent='Ordering unavailable';
-    $('#orderRows').innerHTML='<div class="empty">No usable POS or MVT history is available for a best-available estimate.<br>POS '+esc(h.pos_data_through||'—')+' · MVT '+esc(h.movement_data_through||'—')+'<br>'+esc(missing)+'</div>';
-    return;
+   const missing=(h.missing_required_sources||[]).join(' + ')||'POS / MVT';
+   $('#orderStatus').textContent='Ordering unavailable';
+   if(!cachedView?.data?.rows?.length)$('#orderRows').innerHTML='<div class="empty">No usable ordering history is available.<br>'+esc(missing)+'</div>';
+   return;
   }
 
   const rows=data?.rows||[];
   if(data?.history_mode||finalStatus==='HISTORY_READY'){
-    $('#orderList').classList.remove('futurecards');
-    $('#orderListHead').style.display='grid';
-    $('#orderCol2').textContent='RECEIPT';
-    $('#orderCol3').textContent='UOM';
-    $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+appDate(orderDate)+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
-    $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical physical 101/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
-    $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
-    return;
+   $('#orderList').classList.remove('futurecards');
+   $('#orderListHead').style.display='grid';
+   $('#orderCol2').textContent='RECEIPT';
+   $('#orderCol3').textContent='UOM';
+   $('#orderStatus').textContent=(data.selected_delivery_weekday||'Past date')+' '+appDate(orderDate)+' · '+rows.length+' family receipt'+(rows.length===1?'':'s')+(data.movement_date_available?'':' · no canonical MVT snapshot for this date');
+   $('#orderRows').innerHTML=rows.map((r,i)=>'<div class="orow" data-order-history="'+i+'"><div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'</div><div class="sub">Receiving '+esc(r.receiving_article||'—')+' · '+fmt(r.receipt_event_count,0)+' receipt event'+(Number(r.receipt_event_count||0)===1?'':'s')+'</div>'+receiptTraceHtml(r)+'</div><div class="cell">'+fmt(r.receipt_qty)+'<span>ACTUAL</span></div><div class="cell">'+esc(r.receipt_uom||'—')+'<span>'+esc(r.receipt_qty_basis||'')+'</span></div></div>').join('')||'<div class="empty">No positive canonical physical 101/109 receipt was recorded on '+esc(appDate(orderDate))+'.</div>';
+   $$('[data-order-history]').forEach(x=>x.onclick=()=>openOrderHistory(rows[Number(x.dataset.orderHistory)]));
+   return;
   }
 
   $('#orderCol2').textContent='OH';
@@ -3091,11 +3140,15 @@ async function loadOrder(value){
   lastOrderWindowKey=windowKey;
   orderRetryCount=0;
   clearTimeout(orderRetryTimer);orderRetryTimer=null;
+  writeOrderViewCache(requestedDate,requestedNext,data);
   renderOrderRoster(rows,data,h,stale);
  }catch(e){
   if(requestId!==orderRequestSeq)return;
   $('#orderStatus').textContent='Ordering temporarily unavailable';
-  $('#orderRows').innerHTML='<div class="empty">'+esc(e.message)+'<br>Pull down to retry.</div>';
+  if(!cachedView?.data?.rows?.length){
+   $('#orderRows').innerHTML=orderLoadingHtml('Ordering request failed',String(e.message||e)+' · tap CHECK NOW to retry.');
+   bindOrderLoadingActions();
+  }
  }
 }
 function openOrderHistory(r){
