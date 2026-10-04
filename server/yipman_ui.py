@@ -206,7 +206,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v466';
+const CACHE='yipman-v467';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1251,25 +1251,6 @@ function familyOhPairHtml(d){
  return '<div class="familyohpair">'+
  '<button type="button" class="familyohbtn" data-family-oh data-family="'+esc(family)+'" data-name="'+esc(name)+'" data-oh="'+esc(d?.effective??'')+'" data-uom="'+esc(euom)+'"><small>EFFECTIVE OH · ENTER TRUE STOCK</small><b>'+fmt(d?.effective)+' '+esc(euom)+'</b><span>'+(isTrue?'TRUE STOCK ACTIVE':'TAP TO COUNT & RECALCULATE')+'</span></button>'+
  '<div class="familysystemoh"><small>SYSTEM OH</small><b>'+fmt(d?.system)+' '+esc(suom)+'</b><span>LATEST SYSTEM POSITION</span></div></div>';
-}
-function renderHeaderFreshness(d){
- const box=$('#headFreshness');if(!box)return;
- const s=d?.sources||{};
- const order=[['POS','POS'],['MVT','MVT'],['FRZ','FRZ RPT'],['FRESH','FRESH RPT'],['OH','OH'],['CHATGPT','CHATGPT']];
- box.innerHTML=order.map(([key,label])=>{
-   const x=s[key]||{},tone=['good','warn','bad'].includes(String(x.tone||''))?String(x.tone):'';
-   const date=freshnessShortDate(x.date);
-   const state=String(x.state||'—');
-   return '<div class="hfitem '+tone+'" title="'+esc(label+' · '+date+' · '+state)+'"><i></i><b>'+esc(label)+'</b><span>'+esc(date+' · '+state)+'</span></div>';
- }).join('');
-}
-async function loadHeaderFreshness(){
- try{
-   const d=await api('/v1/yipman/header-freshness',{timeoutMs:9000});
-   renderHeaderFreshness(d);
- }catch{
-   const box=$('#headFreshness');if(box)$$('#headFreshness .hfitem').forEach(x=>{x.classList.remove('good','warn');x.classList.add('bad');const s=x.querySelector('span');if(s)s.textContent='— · ERROR'});
- }
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], promoLastData=null, promoFilter='ALL', promoSort='QTY', pullStart=null, pull=0;
