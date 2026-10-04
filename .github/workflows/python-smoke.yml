@@ -1124,6 +1124,8 @@ jobs:
           assert 'function stashCurrentSheet' in text
           assert 'function restorePreviousSheet' in text
           assert 'sheetStack.push(stashCurrentSheet())' in text
+          assert "const replacingLoading=wasOpen&&!!body?.firstElementChild?.classList?.contains('loading')" in text
+          assert "else if(!replacingLoading)sheetStack.push(stashCurrentSheet())" in text
           assert ".qupcname{white-space:normal!important" in text
           assert "const effectiveOh=r.effective_oh??r.oh" in text
           print('yipman-dom-bindings=PASS')
