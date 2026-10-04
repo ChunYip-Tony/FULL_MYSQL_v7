@@ -4968,6 +4968,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
 
     rows.sort(
         key=lambda r: (
+            0 if r.get("no_recent_selling") else 1,
             -float(r.get("receipt_over_selling_pct") or 0),
             -float(r.get("receipt_minus_selling_7d") or 0),
             str(r.get("family_name") or ""),
