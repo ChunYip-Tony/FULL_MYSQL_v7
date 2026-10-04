@@ -7775,39 +7775,127 @@ def current_tpr_review(
             if pclass in {"FRESH", "LIVE"}
             else (Decimal("60") if pclass == "FROZEN" else None)
         )
-        freshness_days_remaining = (
-            max(Decimal("0"), freshness_threshold - doh)
-            if freshness_threshold is not None and doh is not None
-            else None
-        )
         freshness_window_start = (
             max(Decimal("0"), freshness_threshold - Decimal("2"))
             if freshness_threshold is not None else None
         )
-        freshness_in_window = bool(
+        raw_freshness_days_remaining = (
+            max(Decimal("0"), freshness_threshold - doh)
+            if freshness_threshold is not None and doh is not None
+            else None
+        )
+        raw_freshness_in_window = bool(
             freshness_window_start is not None
             and doh is not None
             and doh >= freshness_window_start
             and doh <= freshness_threshold
         )
-        # Inclusive operating window: threshold-2, threshold-1, threshold.
-        # For Fresh/Live Day 7 this is Day 5, Day 6, Day 7 = 3 sell-through days.
-        freshness_sellthrough_days_available = (
-            max(Decimal("1"), freshness_days_remaining + Decimal("1"))
-            if freshness_in_window and freshness_days_remaining is not None
+
+        # Once a Fresh/Live freshness TPR starts, lock the old-stock deadline and
+        # initial aging pool. A later receipt may reset Family DOH, but it must
+        # never erase the older lot's sell-through deadline or enlarge its target.
+        freshness_anchor = (
+            _freshness_tpr_anchor(
+                ean_upc=upc,
+                tpr_start_date=tpr_start_day,
+                family_id=family_id,
+                current_oh=current_oh,
+                current_uom=current_oh_uom,
+                doh=doh,
+                freshness_threshold=freshness_threshold,
+                allow_create=raw_freshness_in_window,
+            )
+            if tpr_purpose == "FRESHNESS_SELL_THROUGH"
             else None
         )
-        # At the moment the freshness TPR window begins, current Family Effective
-        # OH is the aging stock pool to clear by the threshold. Newer receipts are
-        # not automatically forced to zero by this objective.
-        aging_stock_target = (
-            current_oh
-            if tpr_purpose == "FRESHNESS_SELL_THROUGH"
-            and freshness_in_window
+        freshness_anchor_date = _as_date(
+            freshness_anchor.get("anchor_date")
+        ) if freshness_anchor else None
+        freshness_deadline_date = _as_date(
+            freshness_anchor.get("freshness_deadline_date")
+        ) if freshness_anchor else None
+        aging_stock_initial_target = (
+            _d(freshness_anchor.get("initial_aging_qty"))
+            if freshness_anchor and freshness_anchor.get("initial_aging_qty") is not None
+            else None
+        )
+        aging_stock_uom = (
+            str(freshness_anchor.get("aging_uom") or "").strip().upper()
+            if freshness_anchor else str(current_oh_uom or "").strip().upper()
+        )
+
+        if freshness_deadline_date is not None:
+            today=business_today()
+            days_to_deadline=(freshness_deadline_date-today).days
+            freshness_days_remaining=Decimal(max(0,days_to_deadline))
+            freshness_in_window=bool(
+                freshness_anchor_date is not None
+                and today >= freshness_anchor_date
+                and today <= freshness_deadline_date
+            )
+            freshness_sellthrough_days_available=(
+                Decimal(max(1,days_to_deadline+1))
+                if today <= freshness_deadline_date else None
+            )
+        else:
+            freshness_days_remaining=raw_freshness_days_remaining
+            freshness_in_window=raw_freshness_in_window
+            freshness_sellthrough_days_available=(
+                max(Decimal("1"), freshness_days_remaining + Decimal("1"))
+                if freshness_in_window and freshness_days_remaining is not None
+                else None
+            )
+
+        aging_stock_target=None
+        aging_completed_new_receipts=None
+        aging_receipt_adjustment_status="NOT_APPLICABLE"
+        aging_target_basis="NO_AGING_TARGET"
+        if (
+            tpr_purpose == "FRESHNESS_SELL_THROUGH"
             and current_oh is not None
             and current_oh > 0
-            else None
-        )
+        ):
+            if (
+                freshness_anchor_date is not None
+                and aging_stock_initial_target is not None
+                and aging_stock_initial_target > 0
+                and aging_stock_uom
+                and str(current_oh_uom or "").strip().upper()==aging_stock_uom
+            ):
+                completed_new_receipts,receipt_adjustment_status=_receipt_qty_in_uom_since(
+                    completed_receipts_by_family.get(family_id,[]) if family_id is not None else [],
+                    start_date=freshness_anchor_date,
+                    uom=aging_stock_uom,
+                )
+                aging_receipt_adjustment_status=receipt_adjustment_status
+                if (
+                    family_effective_status=="READY"
+                    and completed_new_receipts is not None
+                ):
+                    aging_completed_new_receipts=completed_new_receipts
+                    aging_stock_target=max(
+                        Decimal("0"),
+                        min(
+                            aging_stock_initial_target,
+                            current_oh-completed_new_receipts,
+                        ),
+                    )
+                    aging_target_basis="ANCHORED_OLD_STOCK_CURRENT_OH_MINUS_NEW_COMPLETED_RECEIPTS"
+                else:
+                    aging_stock_target=max(
+                        Decimal("0"),
+                        min(aging_stock_initial_target,current_oh),
+                    )
+                    aging_target_basis="ANCHORED_OLD_STOCK_CAPPED_BY_CURRENT_OH"
+            elif raw_freshness_in_window:
+                aging_stock_target=current_oh
+                aging_stock_initial_target=current_oh
+                aging_stock_uom=str(current_oh_uom or "").strip().upper()
+                aging_target_basis="UNANCHORED_CURRENT_OH_FALLBACK"
+
+        # Same-day provisional receipt is visibility evidence only. It is not
+        # included above because current OH / canonical roll-forward has not yet
+        # accepted the open movement day.
         required_velocity_to_clear = (
             aging_stock_target / freshness_sellthrough_days_available
             if aging_stock_target is not None
