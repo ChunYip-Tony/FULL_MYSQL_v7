@@ -65,7 +65,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v469';
+const CACHE='yipman-v1-v470';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -101,7 +101,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v469';
+const CACHE='yipman-v470';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1043,6 +1043,13 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 #order .promo-remove-item{min-height:38px;font-size:9px;font-weight:1000}
 #order .order-refresh-note{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;padding:7px 8px;border-radius:9px;background:#eef6fc;color:#315d7c;font-size:8px;font-weight:1000}#order .order-refresh-note span{min-width:0;line-height:1.25}#order .order-refresh-note button,#order .orderretrybtn{flex:0 0 auto;min-height:34px;border:1px solid #9fc4df;border-radius:8px;background:#fff;color:#0d5f9f;padding:6px 9px;font-size:9px;font-weight:1000}
 @media(max-width:390px){#order .promo-controls{grid-template-columns:1fr 1fr}#order .promo-controls select{grid-column:1/-1}}
+
+/* V470 Regular Ordering: Effective OH appears once; System OH is reference-only. */
+#order .ordersystemoh{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:center;gap:6px;margin:0 10px 8px;padding:6px 8px;border:1px solid #d9e1e7;border-radius:9px;background:#f6f8fa;color:#536575}
+#order .ordersystemoh small{font-size:7px;font-weight:1000;letter-spacing:.03em;white-space:nowrap}
+#order .ordersystemoh b{font-size:12px;line-height:1;font-weight:1000;color:#263b4e;white-space:nowrap}
+#order .ordersystemoh span{min-width:0;font-size:7px;font-weight:850;line-height:1.2;text-align:right;color:#71808d}
+@media(max-width:380px){#order .ordersystemoh{grid-template-columns:auto auto}#order .ordersystemoh span{grid-column:1/-1;text-align:left}}
 </style>
 </head>
 <body>
@@ -3031,9 +3038,9 @@ function renderOrderRoster(rows,data,h,stale){
       +(hist.length>shownHist.length?'<div class="orderrecvmore">+'+(hist.length-shownHist.length)+' more · tap this item for full history</div>':'')
       +'</div>'
     : '';
-  const ohPair=familyOhPairHtml({family:r.family_article,name:r.family_name,effective:r.effective_oh??r.oh,effective_uom:r.effective_oh_uom||r.oh_uom,effective_source:r.effective_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+  const systemOhHtml='<div class="ordersystemoh"><small>SYSTEM OH</small><b>'+fmtNullable(r.system_oh)+' '+esc(r.system_oh_uom||r.oh_uom||'')+'</b><span>Reference only · Effective OH above is used for ordering</span></div>';
   const snooze=state==='ZERO_ORDER'?'':'<div class="pcard-actions"><button class="pignore snooze12" data-order-ignore="'+i+'">IGNORE 12 HOURS</button></div>';
-  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_window_observed_count??r.delivery_day_observed_count,0)+' observed across '+esc((r.delivery_window_observed_weekdays||[r.delivery_day]).filter(Boolean).join(' / ')||'selected day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell ohcell">'+familyOhActionHtml({family:r.family_article,name:r.family_name,oh:r.effective_oh??r.oh,uom:r.effective_oh_uom||r.oh_uom,source:r.effective_oh_source||r.oh_source},'orderoh')+'</div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>'+ohPair+histHtml+snooze+'</article>';
+  return '<article class="orderitemcard tone'+(i%5)+cls+'" data-order="'+i+'"><div class="orderitemhead"><span>FAMILY ARTICLE</span><span>EFFECTIVE OH</span><span>ORDER</span></div><div class="orderitemmain"><div><div class="familyline"><span>FAMILY ARTICLE</span><b>'+esc(r.family_article||'—')+'</b></div><div class="name">'+esc(r.family_name||r.family_article||'Family')+'<span class="orderstate '+(state==='ORDER'?'order':state==='REVIEW'?'review':'')+'">'+stateLabel+'</span>'+stockout+lowconf+freshness+'</div><div class="sub">'+esc(r.ordering_frequency||'')+' · '+fmt(r.delivery_window_observed_count??r.delivery_day_observed_count,0)+' observed across '+esc((r.delivery_window_observed_weekdays||[r.delivery_day]).filter(Boolean).join(' / ')||'selected day')+(r.roster_reason?' · '+esc(reason):'')+(r.estimate_only?' · ESTIMATE':'')+'</div></div><div class="cell ohcell">'+familyOhActionHtml({family:r.family_article,name:r.family_name,oh:r.effective_oh??r.oh,uom:r.effective_oh_uom||r.oh_uom,source:r.effective_oh_source||r.oh_source},'orderoh')+'</div><div class="cell orderqty">'+orderText+'<span>'+orderSub+'</span></div></div>' +systemOhHtml+histHtml+snooze+'</article>';
  }).join('')||'<div class="empty">No rows match this filter. The complete observed roster has '+counts.total+' families.'+(ignoredOrderCount?' '+ignoredOrderCount+' ignored suggestion(s) return automatically after 12 hours.':'')+'</div>';
  document.querySelectorAll('[data-order]').forEach(x=>x.onclick=e=>{if(e.target.closest('button'))return;openOrder(renderedOrderRows[Number(x.dataset.order)])});
  $$('[data-order-ignore]').forEach(b=>b.onclick=e=>{e.stopPropagation();ignoreOrderSuggestion(renderedOrderRows[Number(b.dataset.orderIgnore)])});
