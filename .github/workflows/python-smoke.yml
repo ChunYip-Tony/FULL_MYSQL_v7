@@ -1190,6 +1190,10 @@ jobs:
           assert 'const qaDone=published;' in yipman
           assert 'dataBatchSignature(activeCandidate)' in yipman
           assert 'await loadData();' in yipman
+          assert 'dataPublishedBatch=null' in yipman
+          assert 'publishedFromRecent' in yipman
+          assert "processing_status:Number(quick.qa_hold_rows||0)>0?'QUICK_CHECK_READY_WITH_HOLDS':'QUICK_CHECK_READY'" in yipman
+          assert 'renderLivePipeline(currentBatch,dataPublishedBatch||latestBatch)' in yipman
           assert "elif str(active.get('processing_status') or '').upper()=='PHASE2C_READY'" in api
           assert "active=None" in api
           assert 'id="dataUploadFiles"' in yipman
