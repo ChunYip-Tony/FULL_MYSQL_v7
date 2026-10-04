@@ -1520,6 +1520,7 @@ def ordering_review(
                     receipt = _last_receipt_base_summary_from_events(events)
                     pattern = _delivery_pattern(events)
                     delivery_day = None
+                    delivery_window = None
 
                 receiving_article = receipt.get("receiving_article") or _fallback_receiving_article(
                     cur, fid, str(s.get("family_article_number") or "") or None
