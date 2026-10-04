@@ -4351,6 +4351,7 @@ def bulk_ordering_suggestions(
 
     return {
         "contract_version":"WEBAPP_V2_BULK_ORDERING_V8_SYSTEM_EFFECTIVE_OH",
+        "contract_lineage":"WEBAPP_V2_BULK_ORDERING_V7_FRESHNESS_AWARE_OH",
         "order_type":kind,
         "category_scope":["FRESH","LIVE"] if kind=="FRESH" else ["FROZEN"],
         "inputs":{
