@@ -122,6 +122,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .cblive{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f6f8fa;border:1px solid #e6ecef;border-radius:10px;padding:7px 8px}.cblive-main{display:flex;align-items:center;gap:6px;min-width:0}.cblive-dot{width:9px;height:9px;border-radius:50%;background:#9aa6af;box-shadow:0 0 0 3px rgba(154,166,175,.12);flex:0 0 auto}.cblive-dot.running{background:#1f9d63;box-shadow:0 0 0 3px rgba(31,157,99,.13)}.cblive-dot.queued{background:#d19a00;box-shadow:0 0 0 3px rgba(209,154,0,.13)}.cblive-dot.stuck{background:#d93025;box-shadow:0 0 0 3px rgba(217,48,37,.13)}.cblive b{font-size:9px;line-height:1.15}.cblive span{font-size:7px;color:var(--muted);font-weight:800;white-space:nowrap}.cblivecheck{font-size:7px!important;color:#788690!important}
 .cbprogress{background:#f8fafb;border:1px solid #e7ecef;border-radius:10px;padding:8px}.cbprogress-top{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}.cbprogress-top b{font-size:11px}.cbprogress-top span{font-size:8px;color:var(--muted);font-weight:850}.cbbar{height:6px;background:#e3e9ed;border-radius:999px;overflow:hidden;margin-top:6px}.cbbar i{display:block;height:100%;background:#1488c6;border-radius:999px;transition:width .25s ease}.cbprogress-sub{display:flex;justify-content:space-between;gap:8px;margin-top:5px;font-size:7px;color:#667581;font-weight:850}.cbprogress-sub span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cbrunmeta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px}.cbrunmeta div{min-width:0;background:#f6f8fa;border-radius:9px;padding:7px}.cbrunmeta small{display:block;font-size:6px;color:var(--muted);font-weight:950}.cbrunmeta b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem{background:#eef7fc;border:1px solid #d3e8f4;border-radius:9px;padding:7px 8px}.cbcurrentitem small{display:block;font-size:6px;color:#567184;font-weight:950}.cbcurrentitem b{display:block;font-size:9px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cbcurrentitem span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px;overflow-wrap:anywhere}.cbwarn{background:#fff3f1;border:1px solid #f2cbc6;border-radius:9px;padding:7px 8px;color:#9d2c23;font-size:8px;font-weight:850;line-height:1.3}
+.mobileupload p{margin:0 0 7px;font-size:8px;color:var(--muted);font-weight:750;line-height:1.3}.duploadpick{display:block;width:100%;border:1px dashed #aabac6;border-radius:10px;background:#f7fafc;padding:9px;font-size:9px;font-weight:850;color:#344754}.duploadpick::file-selector-button{border:0;border-radius:8px;background:#142033;color:#fff;padding:7px 9px;margin-right:8px;font-size:8px;font-weight:950}.duploadnote{width:100%;margin-top:7px;border:1px solid var(--line);border-radius:9px;padding:8px 9px;font-size:10px;font-weight:800;background:#fff}.duploadsummary{margin-top:7px;font-size:8px;color:#667581;font-weight:800;line-height:1.35;overflow-wrap:anywhere}.duploadbtn{width:100%;margin-top:7px;border:0;border-radius:10px;background:#1488c6;color:#fff;padding:10px;font-size:9px;font-weight:1000}.duploadbtn:disabled{opacity:.55}.duploadresult{margin-top:7px;border-radius:9px;background:#f6f8fa;padding:7px 8px;font-size:8px;color:#52616d;font-weight:850;line-height:1.35;overflow-wrap:anywhere}
 .batchrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;min-width:0;padding:9px 0;border-top:1px solid var(--line);align-items:start}.batchrow:first-child{border-top:0}.batchrow>div{min-width:0}.batchrow b{display:block;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.batchrow span{display:block;min-width:0;font-size:8px;color:var(--muted);margin-top:3px;overflow-wrap:anywhere}.batchdate{font-size:8px!important;color:#84909a!important;white-space:nowrap}.batchstate{display:inline-block!important;width:auto;border-radius:999px;padding:3px 6px;background:#f3f6f8;color:#5f6d78!important;font-size:7px!important;font-weight:900;line-height:1.15}.batchstate.hold{background:var(--redbg);color:var(--red)!important}.batchstate.ready{background:var(--greenbg);color:var(--green)!important}
 .qaresolutioncard{grid-column:1/-1}.qareshead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.qareshead h3{margin-bottom:2px}.qareshead p{margin:0;font-size:8px;line-height:1.3;color:var(--muted);font-weight:750}.qaresbadge{flex:0 0 auto;border-radius:999px;padding:5px 8px;background:#eef3f7;color:#51606c;font-size:8px;font-weight:950}.qaresbadge.bad{background:var(--redbg);color:var(--red)}.qaresbadge.ok{background:var(--greenbg);color:var(--green)}
 .qaresstats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:8px}.qaresstat{background:#f6f8fa;border-radius:9px;padding:7px}.qaresstat small{display:block;font-size:6px;color:var(--muted);font-weight:950}.qaresstat b{display:block;font-size:13px;margin-top:2px}
@@ -986,7 +987,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
       </div>
     </section>
 
-<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard mobileupload"><h3>Upload New Files</h3><p>Select one or multiple source files. Files selected together become one immutable batch and processing starts after commit.</p><input class="duploadpick" id="dataUploadFiles" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><input class="duploadnote" id="dataUploadNote" placeholder="Optional batch note"><div class="duploadsummary" id="dataUploadSummary">No files selected.</div><button class="duploadbtn" id="dataUploadBtn" type="button">UPLOAD & START PROCESSING</button><div class="duploadresult" id="dataUploadResult">Source type and business-date coverage will be detected automatically.</div></div><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
 
     <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="ai"><i>✦</i>AI</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
@@ -3534,6 +3535,58 @@ async function pollDataLive(){
   const live=$('#currentBatch .cblivecheck');if(live)live.textContent='LIVE CHECK FAILED';
  }finally{scheduleDataLivePoll()}
 }
+function dataUploadSelectionSummary(){
+ const input=$('#dataUploadFiles'),box=$('#dataUploadSummary');if(!input||!box)return;
+ const files=[...(input.files||[])];
+ box.textContent=files.length
+  ? files.length+' file(s): '+files.map(x=>x.name).join(' · ')
+  : 'No files selected.';
+}
+async function uploadDataFiles(){
+ const input=$('#dataUploadFiles'),btn=$('#dataUploadBtn'),result=$('#dataUploadResult');
+ const files=[...(input?.files||[])];
+ if(!files.length){toast('Select files first');return}
+ if(btn){btn.disabled=true;btn.textContent='CREATING BATCH…'}
+ if(result)result.textContent='Creating upload batch…';
+ try{
+  const label=String($('#dataUploadNote')?.value||'').trim()||('Yipman mobile upload '+new Date().toLocaleString());
+  const created=await api('/v1/web-upload/batches',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({label}),
+    timeoutMs:20000
+  });
+  const session=created.session_id||created.batch_key||created.session?.session_id;
+  if(!session)throw new Error('Upload batch session ID was not returned');
+  for(let i=0;i<files.length;i++){
+    if(btn)btn.textContent='UPLOADING '+(i+1)+' / '+files.length;
+    if(result)result.textContent='Current file: '+files[i].name;
+    const fd=new FormData();fd.append('file',files[i]);
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{
+      method:'POST',body:fd,timeoutMs:60000
+    });
+  }
+  if(btn)btn.textContent='STARTING PROCESSING…';
+  if(result)result.textContent='All files received · committing batch…';
+  const committed=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{
+    method:'POST',timeoutMs:30000
+  });
+  if(input)input.value='';
+  const note=$('#dataUploadNote');if(note)note.value='';
+  dataUploadSelectionSummary();
+  if(result)result.textContent='Batch #'+String(committed.batch_id||created.batch_id||'—')+' committed · processing started.';
+  toast('Upload committed · processing started');
+  await loadData();
+ }catch(e){
+  if(result)result.textContent='UPLOAD NOT COMMITTED · '+String(e.message||e);
+  toast('Upload not committed');
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent='UPLOAD & START PROCESSING'}
+ }
+}
+const dataUploadFiles=$('#dataUploadFiles');if(dataUploadFiles)dataUploadFiles.onchange=dataUploadSelectionSummary;
+const dataUploadBtn=$('#dataUploadBtn');if(dataUploadBtn)dataUploadBtn.onclick=uploadDataFiles;
+
 async function loadData(){
  try{
   const [health,active,recent,qa,dash]=await Promise.all([
