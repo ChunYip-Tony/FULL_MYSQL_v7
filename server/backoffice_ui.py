@@ -5350,7 +5350,7 @@ function setQuickInventoryMode(stockFlow){
  if(sf)sf.style.display=stockFlow?'flex':'none';
  if(inv)inv.style.display=stockFlow?'none':'flex';
  if(head)head.innerHTML=stockFlow
-   ?'<tr><th>Family</th><th>Category / Delivery</th><th>7D Selling MVT</th><th>7D Receipt</th><th>Difference</th><th>Receipt / Selling</th><th>Recent Receipt #1</th><th>Recent Receipt #2</th></tr>'
+   ?'<tr><th>Family</th><th>Effective OH</th><th>Category / Delivery</th><th>7D Selling MVT</th><th>7D Receipt</th><th>Difference</th><th>Receipt / Selling</th><th>Recent Receipt #1</th><th>Recent Receipt #2</th></tr>'
    :'<tr><th>Item</th><th>UPC</th><th>Family</th><th>OH</th><th>7D Qty</th><th>7D Velocity</th><th>Current Price</th><th>Cost</th><th>GP%</th><th>DOS</th><th>Status</th></tr>';
 }
 function stockFlowObservedNums(r){
@@ -5397,19 +5397,21 @@ function renderDesktopStockFlow(){
    const noRecentSale=!r.recent_promotion_event;
    return '<tr class="stockflow-row" data-stock-family="'+esc(r.family_article||r.family_id||'')+'">'+
      '<td><button type="button" class="desktop-item-btn stockflow-family-btn" data-family="'+esc(r.family_article||r.family_id||'')+'"><div class="name">'+esc(r.family_article||'—')+' · '+esc(r.family_name||'Unmapped Family')+'</div><div class="meta">Family Article</div></button></td>'+
+     '<td><button type="button" class="linkbtn stockflow-ohbtn" data-family="'+esc(r.family_article||'')+'" data-uom="'+esc(r.effective_oh_uom||'')+'" data-oh="'+esc(r.effective_oh??'')+'" data-name="'+esc(r.family_name||'')+'"><b>'+fmt(r.effective_oh)+' '+esc(r.effective_oh_uom||'')+'</b></button><div class="meta">'+(r.effective_oh_is_true_stock?'TRUE STOCK · ':'')+'tap to edit</div></td>'+
      '<td><b>'+esc(String(r.category||'').toUpperCase())+'</b><div class="meta">'+(obs?'Observed '+esc(obs):'No observed delivery day')+'</div></td>'+
      '<td><b>'+fmt(r.family_group_movement_7d)+' '+esc(uom)+'</b><div class="meta">Avg/day '+fmt(r.family_group_avg_qty_day)+' '+esc(uom)+'</div></td>'+
      '<td><b>'+fmt(r.family_receipt_7d_qty)+' '+esc(ruom)+'</b><div class="meta">'+fmt(r.family_receipt_7d_day_count,0)+' receipt day / 7D</div></td>'+
      '<td style="'+(noRecentSale?'background:#fff0f2;':'background:#eef7ff;')+'"><b style="font-size:15px;'+(noRecentSale?'color:#b82f45;':'')+'">'+(Number.isFinite(diff)&&diff>=0?'+':'')+fmt(diff)+' '+esc(uom)+'</b><div class="meta">'+(noRecentSale?'NO RECENT SALE':'RECENT SALE')+'</div></td>'+
      '<td><b>'+esc(over)+'</b><div class="meta">receipt vs selling</div></td>'+
      '<td>'+sfRecentCell(hist[0],ruom)+'</td><td>'+sfRecentCell(hist[1],ruom)+'</td></tr>';
- }).join('')||'<tr><td colspan="8" class="empty">No Stock Flow items match the selected filters.</td></tr>';
- $$('.stockflow-family-btn').forEach(b=>{b.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('fullmysql:stockflow-family',{detail:{family:b.dataset.family}}))}});
+ }).join('')||'<tr><td colspan="9" class="empty">No Stock Flow items match the selected filters.</td></tr>';
+ $('.stockflow-family-btn').forEach(b=>{b.onclick=e=>{e.preventDefault();document.dispatchEvent(new CustomEvent('fullmysql:stockflow-family',{detail:{family:b.dataset.family}}))}});
+ $('.stockflow-ohbtn').forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();openOH(b.dataset)});
 }
 async function loadDesktopStockFlow(requestSeq){
  setQuickInventoryMode(true);
  const err=$('#invError');err.innerHTML='';
- $('#invRows').innerHTML='<tr><td colspan="8" class="loading">Loading Stock Flow…</td></tr>';
+ $('#invRows').innerHTML='<tr><td colspan="9" class="loading">Loading Stock Flow…</td></tr>';
  try{
    const d=await api('/v1/yipman/stock-flow?limit=100',{timeoutMs:20000});
    if(requestSeq!==inventoryLoadSeq)return false;
@@ -5524,6 +5526,7 @@ function applyEffectiveOhToLoadedState(family,eff){
   if(!eff||eff.quantity===null||eff.quantity===undefined)return;
   const qty=eff.quantity,uom=eff.uom||'',source=eff.source||'FAMILY_TRUE_STOCK';
   state.inventory.forEach(r=>{if(String(r.family_article||'')===String(family)){r.family_oh=qty;r.family_oh_uom=uom;r.family_oh_source=source;r.family_oh_status='READY'}});
+  state.stockFlow.forEach(r=>{if(String(r.family_article||'')===String(family)){r.effective_oh=qty;r.effective_oh_uom=uom;r.effective_oh_source=source;r.effective_oh_status='READY';r.effective_oh_is_true_stock=true}});
   state.orders.forEach(r=>{if(String(r.family_article||'')===String(family)){r.oh=qty;r.oh_uom=uom;r.oh_source=source}});
   state.prices.forEach(r=>{if(String(r.family_article||r.family_article_number||'')===String(family)){r.current_oh=qty;r.current_oh_uom=uom;r.current_oh_source=source;r.current_oh_is_true_stock=true}});
 }
