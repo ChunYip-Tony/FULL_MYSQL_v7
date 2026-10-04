@@ -653,6 +653,81 @@ def _article_manual_family_pack_context(
     }
 
 
+def _article_manual_family_pack_context_bulk(
+    cur,
+    family_articles: list[str] | set[str] | tuple[str, ...],
+) -> dict[str, dict[str, Any]]:
+    """Resolve newest Article Manual pack evidence for many Families in one query."""
+    mains=sorted({
+        str(x or "").strip()
+        for x in (family_articles or [])
+        if str(x or "").strip()
+    })
+    if not mains:
+        return {}
+    ph=",".join(["%s"]*len(mains))
+    cur.execute(
+        f"""SELECT f.file_id,sh.sheet_name,r.raw_id,
+                   TRIM(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A'))) AS family_article,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.E')) AS col_e,
+                   JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.G')) AS col_g
+            FROM ingest_file f
+            JOIN ingest_sheet sh ON sh.file_id=f.file_id
+            JOIN raw_article_manual r ON r.sheet_id=sh.sheet_id
+            WHERE f.source_type='article_manual'
+              AND f.processing_status='INGESTED'
+              AND LOWER(TRIM(sh.sheet_name)) IN
+                  ('fresh fish','live fish','shrimp','fish ball','frozen fish','frozen pack')
+              AND r.source_row_number>COALESCE(sh.header_row_number,0)
+              AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(r.raw_payload,'$.A'))) IN ({ph})
+            ORDER BY family_article,f.file_id DESC,r.raw_id DESC""",
+        tuple(mains),
+    )
+    grouped: dict[str,list[dict[str,Any]]] = {x:[] for x in mains}
+    for row in cur.fetchall():
+        key=str(row.get("family_article") or "").strip()
+        if key in grouped:
+            grouped[key].append(row)
+
+    out: dict[str,dict[str,Any]] = {}
+    for main in mains:
+        rows=grouped.get(main) or []
+        if not rows:
+            out[main]={
+                "pack_size":None,"pack_size_options":[],
+                "status":"NO_ARTICLE_MANUAL_ROW","source":"ARTICLE_MANUAL","file_id":None,
+            }
+            continue
+        newest_file=int(rows[0]["file_id"])
+        options=[]
+        for row in rows:
+            if int(row.get("file_id") or 0)!=newest_file:
+                continue
+            tab=str(row.get("sheet_name") or "").strip().lower()
+            raw=row.get("col_e") if tab=="frozen pack" else row.get("col_g")
+            value=str(raw or "").strip()
+            if not value or value.upper() in {"N/A","NA","NONE","NULL","NAN","-","—"}:
+                continue
+            if value not in options:
+                options.append(value)
+        if len(options)==1:
+            out[main]={
+                "pack_size":options[0],"pack_size_options":options,
+                "status":"READY","source":"ARTICLE_MANUAL","file_id":newest_file,
+            }
+        elif len(options)>1:
+            out[main]={
+                "pack_size":None,"pack_size_options":options,
+                "status":"MULTIPLE_PACK_SIZES","source":"ARTICLE_MANUAL","file_id":newest_file,
+            }
+        else:
+            out[main]={
+                "pack_size":None,"pack_size_options":[],
+                "status":"PACK_SIZE_MISSING","source":"ARTICLE_MANUAL","file_id":newest_file,
+            }
+    return out
+
+
 def _observed_receipt_pack_size(event: dict[str, Any]) -> str | None:
     """Derive an observed Base-per-Receiving-UOM pack ratio from one receipt.
 
@@ -736,9 +811,12 @@ def _historical_receiving_article_summary(
     family_article: str | None,
     events: list[dict[str, Any]],
     limit: int = 8,
+    *,
+    pack_context: dict[str,Any] | None = None,
+    article_names: dict[str,str] | None = None,
 ) -> list[dict[str, Any]]:
     """Summarize historically used Receiving Articles for an ordering Family."""
-    pack=_article_manual_family_pack_context(cur,family_article)
+    pack=pack_context if pack_context is not None else _article_manual_family_pack_context(cur,family_article)
     grouped: dict[str,dict[str,Any]] = {}
 
     for event in events or []:
@@ -776,7 +854,7 @@ def _historical_receiving_article_summary(
             slot["observed_pack_size"]=observed
             slot["observed_pack_date"]=posting_date
 
-    article_names=_article_description_map(cur,set(grouped))
+    article_names=article_names if article_names is not None else _article_description_map(cur,set(grouped))
     out=[]
     for slot in grouped.values():
         if pack.get("status")=="READY" and pack.get("pack_size"):
@@ -1421,6 +1499,8 @@ def ordering_review(
 
             # Delivery-date mode must filter on receipt cadence before running
             # expensive 28D family demand / OH / baseline calculations.
+            pack_context_by_family_article: dict[str,dict[str,Any]] = {}
+            receipt_article_names: dict[str,str] = {}
             if delivery_date is not None:
                 eligible_family_ids=[]
                 candidate_families=_ordering_candidate_families(cur,kind)
@@ -1431,6 +1511,23 @@ def ordering_review(
                     cur,
                     [int(x["family_id"]) for x in candidate_families],
                     data_days=receipt_days,
+                )
+                pack_context_by_family_article=_article_manual_family_pack_context_bulk(
+                    cur,
+                    {
+                        str(x.get("main_article_number") or "").strip()
+                        for x in candidate_families
+                        if str(x.get("main_article_number") or "").strip()
+                    },
+                )
+                receipt_article_names=_article_description_map(
+                    cur,
+                    {
+                        str(ev.get("article_number") or "").strip()
+                        for events in event_map.values()
+                        for ev in events
+                        if str(ev.get("article_number") or "").strip()
+                    },
                 )
                 for fam in candidate_families:
                     fid=int(fam["family_id"])
@@ -1539,17 +1636,16 @@ def ordering_review(
                         )
                     )
                 ]
+                family_article_key=str(s.get("family_article_number") or "").strip()
                 historical_receiving_articles=_historical_receiving_article_summary(
                     cur,
-                    str(s.get("family_article_number") or "") or None,
+                    family_article_key or None,
                     delivery_window_events,
                     limit=20,
+                    pack_context=pack_context_by_family_article.get(family_article_key),
+                    article_names=receipt_article_names,
                 )
-                receiving_names=_article_description_map(
-                    cur,
-                    [receiving_article] if receiving_article else [],
-                )
-                receiving_article_name=receiving_names.get(str(receiving_article or "").strip())
+                receiving_article_name=receipt_article_names.get(str(receiving_article or "").strip())
                 row = {
                     "family_id": fid,
                     "family_name": s.get("family_article_name"),
@@ -1707,10 +1803,7 @@ def ordering_review(
                         fid,
                         str(fam.get("main_article_number") or "") or None,
                     )
-                    receiving_article_name=_article_description_map(
-                        cur,
-                        [receiving_article] if receiving_article else [],
-                    ).get(str(receiving_article or "").strip())
+                    receiving_article_name=receipt_article_names.get(str(receiving_article or "").strip())
                     delivery_window_weekdays=set(
                         int(x) for x in (delivery_window.get("weekday_numbers") or [])
                     )
@@ -1719,11 +1812,14 @@ def ordering_review(
                         if x.get("posting_date") is not None
                         and int(x["posting_date"].weekday()) in delivery_window_weekdays
                     ]
+                    family_article_key=str(fam.get("main_article_number") or "").strip()
                     historical_receiving_articles=_historical_receiving_article_summary(
                         cur,
-                        str(fam.get("main_article_number") or "") or None,
+                        family_article_key or None,
                         delivery_window_events,
                         limit=20,
+                        pack_context=pack_context_by_family_article.get(family_article_key),
+                        article_names=receipt_article_names,
                     )
                     roster_uom=(
                         calc.get("demand_uom")
@@ -1843,7 +1939,7 @@ def ordering_review(
     else:
         analysis_status="UNAVAILABLE"
     return {
-        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V20_DELIVERY_PLUS_MINUS_ONE_ROSTER",
+        "contract_version": "BACKOFFICE_ORDERING_REVIEW_V21_DELIVERY_ROSTER_BULK_RECEIVING_CONTEXT",
         "category": cat,
         "selected_delivery_date": delivery_date,
         "selected_next_delivery_date": next_delivery_date,
@@ -1895,7 +1991,7 @@ def ordering_review(
             "regular_forecast_method":"HISTORICAL_WEEKDAY_AVERAGE_WHEN_2PLUS_OBSERVATIONS",
             "pre_delivery_shortage_is_not_added_to_future_order":True,
             "fresh_live_coverage_cap_days":7,
-            "cache_schema":"V20_DELIVERY_PLUS_MINUS_ONE_ROSTER",
+            "cache_schema":"V21_DELIVERY_ROSTER_BULK_RECEIVING_CONTEXT",
         },
     }
 
@@ -1922,7 +2018,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V20_DELIVERY_PLUS_MINUS_ONE_ROSTER|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V21_DELIVERY_ROSTER_BULK_RECEIVING_CONTEXT|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
