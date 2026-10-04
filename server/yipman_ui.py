@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v458';
+const CACHE='yipman-v459';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -114,7 +114,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 #data{overflow-x:hidden}#data .topline{min-width:0;margin-bottom:9px}#data .topline h2,#data .hint{min-width:0}
 .datagrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px;width:100%;min-width:0;max-width:100%}
 .dcard{min-width:0;max-width:100%;overflow:hidden;background:#fff;border:1px solid #e6ebef;border-radius:18px;padding:12px;box-shadow:0 7px 20px rgba(18,38,56,.07)}
-.dcard h3{min-width:0;font-size:12px;margin:0 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dcard h3{min-width:0;font-size:12px;margin:0 0 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.datafresh{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.dfitem{min-width:0;border:1px solid #dfe6eb;border-radius:10px;background:#f6f8fa;padding:8px}.dfitem small{display:block;font-size:6.5px;color:#71808d;font-weight:1000;white-space:normal}.dfitem b{display:block;font-size:12px;line-height:1.05;margin-top:3px}.dfitem span{display:block;font-size:7px;font-weight:900;margin-top:3px;color:#61717e}.dfitem.good{background:#edf8f1;border-color:#bfe1ca}.dfitem.good span{color:#24734a}.dfitem.warn{background:#fff8e6;border-color:#ead798}.dfitem.warn span{color:#806100}.dfitem.bad{background:#fff0ef;border-color:#e7c3bf}.dfitem.bad span{color:#a13b31}
 .pipe{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;min-width:0}.stage{min-width:0;padding:8px 3px;text-align:center;background:#f3f6f8;border-radius:10px;border-top:4px solid #8d99a3;overflow:hidden}.stage b{display:block;min-width:0;font-size:7px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.stage span{display:block;min-width:0;font-size:7px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}.stage.ok{border-top-color:var(--green)}.stage.warn{border-top-color:#d19a00}.stage.bad{border-top-color:var(--red)}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;min-width:0}.c{min-width:0;text-align:center;font-size:8px;color:#5f6d78;font-weight:850}.dot{width:13px;height:13px;border-radius:50%;background:var(--green);margin:4px auto 0}.dot.warn{background:#d19a00}.dot.bad{background:var(--red)}
 .currentbatch{display:grid;gap:8px}.cbtop{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.cbid b{display:block;font-size:18px;line-height:1.05}.cbid span{display:block;font-size:9px;color:var(--muted);margin-top:3px}.cbstatus{flex:0 0 auto;max-width:58%;border-radius:999px;padding:5px 8px;font-size:8px;font-weight:950;line-height:1.15;text-align:center;white-space:normal}.cbstatus.red{background:var(--redbg);color:var(--red)}.cbstatus.amber{background:var(--amberbg);color:var(--amber)}.cbstatus.green{background:var(--greenbg);color:var(--green)}
@@ -1031,7 +1031,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
       </div>
     </section>
 
-<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard mobileupload"><h3>Upload new file</h3><p>Select one or more source files. Yipman creates one batch, uploads every file, then starts processing only after all files are received.</p><input class="duploadpick" id="dataUploadFiles" type="file" multiple accept=".csv,.xls,.xlsx,.xlsm,.txt"><input class="duploadnote" id="dataUploadNote" placeholder="Optional batch note"><div class="duploadsummary" id="dataUploadSummary">No files selected.</div><button class="duploadbtn" id="dataUploadBtn" type="button">UPLOAD & START PROCESSING</button><div class="duploadresult" id="dataUploadResult">No upload started.</div></div><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard"><h3>Current Processing</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div></div></section>
+<section class="page" id="data"><div class="topline"><h2>Data Center</h2><div class="hint">LIVE OPERATIONS</div></div><div class="datagrid"><div class="dcard mobileupload"><h3>Upload new file</h3><p>Select one or more source files. Yipman creates one batch, uploads every file, then starts processing only after all files are received.</p><input class="duploadpick" id="dataUploadFiles" type="file" multiple accept=".csv,.xls,.xlsx,.xlsm,.txt,.tsv"><input class="duploadnote" id="dataUploadNote" placeholder="Optional batch note"><div class="duploadsummary" id="dataUploadSummary">No files selected.</div><button class="duploadbtn" id="dataUploadBtn" type="button">UPLOAD & START PROCESSING</button><div class="duploadresult" id="dataUploadResult">No upload started.</div></div><div class="dcard"><h3>New Batch Status</h3><div id="currentBatch"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Source Freshness</h3><div id="dataFreshness" class="datafresh"><div class="loading">Loading freshness…</div></div></div><div class="dcard"><h3>Recent Batches</h3><div id="recentBatches"><div class="loading">Loading…</div></div></div><div class="dcard"><h3>Processing Pipeline</h3><div class="pipe" id="pipe"><div class="stage"><b>UPLOAD</b><span>—</span></div><div class="stage"><b>INGEST</b><span>—</span></div><div class="stage"><b>QA</b><span>—</span></div><div class="stage"><b>PUBLISH</b><span>—</span></div></div></div><div class="dcard"><h3>14-Day Completeness</h3><div class="cal" id="calendar"></div></div><div class="dcard"><h3>Published Snapshot</h3><div id="publishedSnapshot"><div class="loading">Loading published data…</div></div></div><div class="dcard qaresolutioncard"><div class="qareshead"><div><h3>QA Resolution</h3><p>Fix confirmed item / UOM / conversion issues here.</p></div><span id="qaResolutionBadge" class="qaresbadge">—</span></div><div id="qaResolution"><div class="loading">Loading QA…</div></div></div></div></section>
 
     <nav class="nav"><button class="on" data-go="quick"><i>⌕</i>QUICK</button><button data-go="order"><i>▤</i>ORDER</button><button data-go="price"><i>$</i>PRICE</button><button data-go="ai"><i>✦</i>AI</button></nav>
     <div class="overlay" id="overlay"><div class="sheet"><div class="shead"><div><h3 id="sheetTitle">Detail</h3><p id="sheetSub"></p></div><button class="close" id="closeSheet">×</button></div><div class="sbody" id="sheetBody"></div></div></div>
@@ -2001,13 +2001,7 @@ function quickGroupedHtml(rows){
  }).join('');
 }
 function fitQuickUpcNames(){
- $$('.qupcname').forEach(el=>{
-   el.style.fontSize='';el.style.letterSpacing='';
-   let size=parseFloat(getComputedStyle(el).fontSize)||16;
-   const available=el.clientWidth;if(!available)return;
-   while(el.scrollWidth>available&&size>8){size-=0.5;el.style.fontSize=size+'px'}
-   if(el.scrollWidth>available)el.style.letterSpacing='-.45px';
- });
+ $$('.qupcname').forEach(el=>{el.style.fontSize='';el.style.letterSpacing=''});
 }
 function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
@@ -3905,15 +3899,32 @@ async function uploadDataFiles(){
 const dataUploadFiles=$('#dataUploadFiles');if(dataUploadFiles)dataUploadFiles.onchange=dataUploadSelectionSummary;
 const dataUploadBtn=$('#dataUploadBtn');if(dataUploadBtn)dataUploadBtn.onclick=uploadDataFiles;
 
+function renderDataFreshness(d){
+ const box=$('#dataFreshness');if(!box)return;
+ const sources=d?.sources||{};
+ const order=[['FRZ','FROZEN RPT'],['FRESH','LIVE/FRESH RPT'],['OH','OH']];
+ box.innerHTML=order.map(([key,label])=>{
+  const x=sources[key]||{},tone=['good','warn','bad'].includes(String(x.tone||''))?String(x.tone):'';
+  const date=freshnessShortDate(x.date),state=String(x.state||'MISSING');
+  return '<div class="dfitem '+tone+'" title="'+esc((x.file||label)+' · '+date+' · '+state)+'"><small>'+esc(label)+'</small><b>'+esc(date)+'</b><span>'+esc(state)+'</span></div>';
+ }).join('');
+}
 async function loadData(){
  try{
-  const [health,active,recent,qa,dash]=await Promise.all([
+  const [health,active,recent,qa,dash,freshness]=await Promise.all([
    api('/v1/backoffice/data-health?days=14',{timeoutMs:12000}),
    api('/v1/web-upload/active',{timeoutMs:12000}),
    api('/v1/web-upload/recent?limit=4',{timeoutMs:12000}),
    api('/v1/backoffice/qa-review?limit=300',{timeoutMs:22000}),
-   api('/v1/app/dashboard',{timeoutMs:12000})
+   api('/v1/app/dashboard',{timeoutMs:12000}),
+   api('/v1/yipman/header-freshness',{timeoutMs:9000}).catch(()=>null)
   ]);
+  if(freshness){
+   renderDataFreshness(freshness);
+   renderHeaderFreshness(freshness);
+  }else{
+   const df=$('#dataFreshness');if(df)df.innerHTML='<div class="empty">Freshness temporarily unavailable.</div>';
+  }
   $('#calendar').innerHTML=(health.rows||[]).slice(0,14).reverse().map(r=>'<div class="c">'+esc(String(r.date||'').slice(8,10))+'<div class="dot '+(r.overall_status==='MISSING'?'bad':r.overall_status==='COMPLETE'?'':'warn')+'"></div></div>').join('');
   const rb=recent.batches||recent.rows||[];
   const activeCandidate=active.active_batch||null;
@@ -3942,6 +3953,7 @@ async function loadData(){
   scheduleDataLivePoll();
  }catch(e){
   $('#currentBatch').innerHTML='<div class="empty">'+esc(e.message)+'</div>';
+  const df=$('#dataFreshness');if(df)df.innerHTML='<div class="empty">Freshness unavailable.</div>';
   $('#publishedSnapshot').innerHTML='<div class="empty">Published snapshot unavailable.</div>';
   $('#qaResolution').innerHTML='<div class="empty">QA review unavailable.</div>';
   scheduleDataLivePoll()
