@@ -418,11 +418,12 @@ YIPMAN_MOBILE_V2_JS = r"""
     el.addEventListener('touchend',fire,{passive:false});
   }
   function bindPromoInlineControls(){
-    const form=$('#yv2PromoSearchForm'),input=$('#yv2PromoSearch'),search=$('#yv2PromoSearchBtn'),save=$('#yv2PromoSave');
+    const form=$('#yv2PromoSearchForm'),input=$('#yv2PromoSearch'),search=$('#yv2PromoSearchBtn'),save=$('#yv2PromoSave'),delList=$('#yv2PromoDeleteList');
     if(form&&form.dataset.yv2SubmitBound!=='1'){form.dataset.yv2SubmitBound='1';form.addEventListener('submit',e=>{e.preventDefault();runPromoSearch()})}
     if(input&&input.dataset.yv2InputBound!=='1'){input.dataset.yv2InputBound='1';input.addEventListener('input',()=>{clearTimeout(promoSearchTimer);const q=input.value.trim();if(q.length>=2)promoSearchTimer=setTimeout(runPromoSearch,350)})}
     directPress(search,()=>runPromoSearch());
     directPress(save,()=>savePromo());
+    directPress(delList,()=>deleteSavedPromotion());
   }
   function bindPromoSearchResults(){
     $$('#yv2PromoResults [data-promo-result]').forEach(btn=>directPress(btn,()=>selectPromo(V.promoSearchRows[Number(btn.dataset.promoResult)])));
@@ -473,16 +474,45 @@ YIPMAN_MOBILE_V2_JS = r"""
           <div class="yv2-line"></div>
           <div class="yv2-actiontype">Saved promotion list</div>
           <select class="yv2-select" id="yv2PromoList"><option value="">Choose promotion list…</option>${rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready</option>').join('')}</select>
+          <div class="yv2-btnrow" id="yv2PromoDeleteRow" style="display:none"><button class="yv2-btn ignore" type="button" id="yv2PromoDeleteList">Delete Saved Promotion</button></div>
           <div id="yv2PromoCalc" style="margin-top:9px"></div>
         </div>`;
       $('#yv2PromoList').value=String(V.promoListId||'');
-      $('#yv2PromoList').addEventListener('change',async e=>{V.promoListId=e.target.value?Number(e.target.value):null;V.promoListDetail=null;if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>'});
-      if(V.promoListId){await loadPromoDetail();await calcPromotion()}else $('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>';
+      $('#yv2PromoList').addEventListener('change',async e=>{V.promoListId=e.target.value?Number(e.target.value):null;V.promoListDetail=null;if(V.promoListId){await loadPromoDetail();updatePromoDeleteButton();await calcPromotion()}else{$('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>';updatePromoDeleteButton()}});
+      if(V.promoListId){await loadPromoDetail();updatePromoDeleteButton();await calcPromotion()}else{$('#yv2PromoCalc').innerHTML='<div class="yv2-empty">No saved promotion selected.</div>';updatePromoDeleteButton()}
       renderPromoSelected();
       bindPromoInlineControls();
       setTimeout(()=>$('#yv2PromoSearch')?.focus(),50);
     }catch(e){$('#yv2OrderRows').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
+  function updatePromoDeleteButton(){
+    const row=$('#yv2PromoDeleteRow'),btn=$('#yv2PromoDeleteList');
+    if(!row||!btn)return;
+    const d=V.promoListDetail||{};
+    const manual=Boolean(d.manual_item_removal_allowed)||String(d.source_filename||'').trim().toUpperCase()==='MANUAL_SEARCH_ENTRY';
+    row.style.display=V.promoListId&&manual?'flex':'none';
+    btn.disabled=!V.promoListId||!manual;
+  }
+  async function deleteSavedPromotion(){
+    const id=Number(V.promoListId),d=V.promoListDetail||{};
+    if(!Number.isFinite(id))return toast('Choose a saved promotion first');
+    const manual=Boolean(d.manual_item_removal_allowed)||String(d.source_filename||'').trim().toUpperCase()==='MANUAL_SEARCH_ENTRY';
+    if(!manual)return toast('Only manually saved promotions can be deleted');
+    const name=String(d.list_name||('Promotion '+id));
+    if(!window.confirm('Delete saved promotion "'+name+'"? This removes the entire promotion list and all of its saved items.'))return;
+    const btn=$('#yv2PromoDeleteList');
+    if(btn){btn.disabled=true;btn.textContent='Deleting…'}
+    try{
+      await api('/v1/yipman/promotion-lists/'+encodeURIComponent(id),{method:'DELETE',timeoutMs:15000});
+      V.promoListId=null;V.promoListDetail=null;V.promoSelected=new Map();
+      toast('Saved promotion deleted');
+      await loadPromotion();
+    }catch(e){
+      toast(e.message||'Could not delete saved promotion');
+      if(btn){btn.disabled=false;btn.textContent='Delete Saved Promotion'}
+    }
+  }
+
   async function calcPromotion(){
     const box=$('#yv2PromoCalc');if(!box||!V.promoListId)return;box.innerHTML='<div class="yv2-loading">Calculating promotion order…</div>';
     try{
