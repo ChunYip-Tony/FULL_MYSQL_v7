@@ -139,7 +139,7 @@ YIPMAN_MOBILE_V2_JS = r"""
   $('#yv2Modal').onclick=e=>{if(e.target.id==='yv2Modal')closeModal()};
 
   function go(p){
-    V.page=p;root.classList.toggle('lookup-mode',p==='lookup');$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
+    V.page=p;root.classList.toggle('lookup-mode',p==='lookup');$$('.yv2-page').forEach(x=>x.classList.toggle('on',x.id==='yv2-'+p));$$('.yv2-nav').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
     $('#yv2SearchForm').style.display=p==='lookup'?'flex':'none';
     document.querySelector('#yv2-'+p)?.scrollTo(0,0);
     if(p==='actions'&&!V.actionsLoaded)loadActions();
