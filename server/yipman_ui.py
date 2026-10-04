@@ -902,7 +902,7 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 .snooze12{border:1px solid #edb9bd!important;background:#fdebed!important;color:#a52831!important}
 .snoozebar{margin:5px 0;padding:6px 8px;border:1px dashed #deb6ba;border-radius:9px;background:#fff7f8;color:#7c4d51;font-size:8px;font-weight:900}
 .tprcancelchoices{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}.tprcancelchoice{border:1px solid #d5dee5;border-radius:9px;background:#fff;padding:7px}.tprcancelchoice small{display:block;font-size:6.5px;color:#71808d;font-weight:950}.tprcancelchoice b{display:block;font-size:13px;margin-top:2px}
-.freshwindow{margin-top:6px;border:1px solid #e8d49d;border-radius:9px;background:#fff7e4;color:#795600;padding:7px 8px;font-size:8px;font-weight:850;line-height:1.35}
+.freshwindow{margin-top:6px;border:1px solid #e8d49d;border-radius:9px;background:#fff7e4;color:#795600;padding:7px 8px;font-size:8px;font-weight:850;line-height:1.35}.tprtodayreceipt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;margin-top:6px;border:1px solid #a9d8c7;border-radius:10px;background:#ecfaf4;padding:7px 8px;color:#185f49}.tprtodayreceipt small{display:block;font-size:6.5px;font-weight:1000;letter-spacing:.03em}.tprtodayreceipt b{display:block;font-size:15px;line-height:1.05;margin-top:2px}.tprtodayreceipt span{display:block;font-size:7px;font-weight:850;margin-top:2px;line-height:1.25}.tprtodayreceipt em{font-style:normal;border-radius:999px;background:#d6f2e7;padding:4px 7px;font-size:7px;font-weight:1000;white-space:nowrap}
 #quick .bestfam.article-tone-0{border-left:5px solid #d1a61c;background:linear-gradient(95deg,#fff5cf,#fff 68%)}
 #quick .bestfam.article-tone-1{border-left:5px solid #55a975;background:linear-gradient(95deg,#e8f7ec,#fff 68%)}
 #quick .bestfam.article-tone-2{border-left:5px solid #4d98d0;background:linear-gradient(95deg,#e7f2fb,#fff 68%)}
@@ -3358,12 +3358,18 @@ function renderCurrentTpr(){
    const originalReg=num(r.original_regular_price),newReg=num(r.suggested_regular_price);
    const originalRegExact=String(r.original_regular_price_basis||'').startsWith('PRIOR_CONFIGURED_REG');
    const cancelChoices=cancelCode?'<div class="tprcancelchoices"><div class="tprcancelchoice"><small>'+(originalRegExact?'CANCEL → ORIGINAL REG':'CANCEL → PRE-TPR REG EST.')+'</small><b>'+money(originalReg)+'</b></div><div class="tprcancelchoice"><small>CANCEL → NEW REG</small><b>'+(newReg===null?'REVIEW':money(newReg))+'</b></div></div>':'';
-   const freshWindow=purpose.fresh?'<div class="freshwindow"><b>FRESHNESS WINDOW:</b> Day '+fmt(r.freshness_window_start_doh,0)+' → Day '+fmt(r.freshness_threshold_doh,0)+' inclusive. Goal: clear the aging stock reaching the threshold by the end of the threshold day; newer stock is not forced to zero.'+(num(r.aging_stock_target)!==null?' Aging target '+fmt(r.aging_stock_target)+' '+esc(r.current_oh_uom||'')+'.':'')+'</div>':'';
+   const receiptQty=num(r.today_receipt_qty),receiptEvents=num(r.today_receipt_event_count),hasTodayReceipt=String(r.today_receipt_status||'').toUpperCase()==='PROVISIONAL_TODAY_RECEIPT'&&Number(receiptEvents||0)>0;
+   const todayReceipt=hasTodayReceipt?'<div class="tprtodayreceipt"><div><small>TODAY RECEIPT · '+esc(appDate(r.today_receipt_date))+'</small><b>'+(receiptQty===null?'RECEIPT DETECTED':fmt(receiptQty)+' '+esc(r.today_receipt_uom||''))+'</b><span>Latest accepted same-day MVT · not included in completed-day KPI or aging target until MVT close'+(r.today_receipt_source_filename?' · '+esc(r.today_receipt_source_filename):'')+'</span></div><em>PROVISIONAL</em></div>':'';
+   const agingUom=r.aging_stock_uom||r.current_oh_uom||'';
+   const agingText=num(r.aging_stock_target)!==null?' Aging remaining '+fmt(r.aging_stock_target)+' '+esc(agingUom)+'.':'';
+   const initialText=num(r.aging_stock_initial_target)!==null&&num(r.aging_stock_initial_target)!==num(r.aging_stock_target)?' Initial aging pool '+fmt(r.aging_stock_initial_target)+' '+esc(agingUom)+'.':'';
+   const deadlineText=r.freshness_deadline_date?' Aging deadline '+esc(appDate(r.freshness_deadline_date))+'.':'';
+   const freshWindow=purpose.fresh?'<div class="freshwindow"><b>FRESHNESS WINDOW:</b> Day '+fmt(r.freshness_window_start_doh,0)+' → Day '+fmt(r.freshness_threshold_doh,0)+' inclusive.'+deadlineText+' Goal: clear the anchored aging stock by the deadline; newer receipts are excluded from the aging target.'+agingText+initialText+'</div>':'';
    const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
    return '<article class="pcard tprcard tone'+(i%5)+'" data-tpr-row="'+i+'">'+
      '<div class="ptop"><div class="pidentity"><div class="pupc"><span>UPC#</span><strong>'+esc(r.upc||'—')+'</strong></div><b>'+esc(r.name||r.upc||'Item')+'</b><small>Family '+esc(r.family_article_number||'—')+' · '+esc(r.category||'')+'</small></div><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span></div>'+
      '<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>START '+esc(shortDate(r.tpr_start_date))+(String(r.tpr_purpose_source||'').startsWith('USER')?' · USER SET':'')+'</span></div>'+
-     ohPair+cancelChoices+freshWindow+
+     ohPair+todayReceipt+cancelChoices+freshWindow+
      '<div class="preasoncall '+(meta.cls==='urgent'?'red':meta.cls==='continue'?'green':'amber')+'"><span class="preasonmark">!</span><div><strong>TPR decision:</strong> '+esc(r.recommendation_reason||'Review current TPR performance')+'</div><span class="preasonchev">›</span></div>'+
      '<div class="pricepath">'+
        '<div class="pp current"><small>CURRENT TPR</small><b>'+money(r.current_tpr_price)+'</b><span>'+esc(gpText(r.current_tpr_price,r.current_cost))+'</span></div>'+
@@ -3380,7 +3386,7 @@ function renderCurrentTpr(){
        '<div class="pm"><small>3D VEL LIFT</small><b class="tprlift '+lift.cls+'">'+esc(lift.text)+'</b></div>'+
        '<div class="pm"><small>GP$/D LIFT</small><b class="tprlift '+gpLift.cls+'">'+esc(gpLift.text)+'</b></div>'+
      '</div>'+
-     '<div class="pcost"><span>GP% · DOH / DOS</span><b>'+((gp===null)?'—':(gp*100).toFixed(1)+'%')+' · '+fmt(r.doh)+' / '+fmt(r.dos)+'</b></div>'+
+     '<div class="pcost"><span>GP% · FAMILY DOH / DOS</span><b>'+((gp===null)?'—':(gp*100).toFixed(1)+'%')+' · '+fmt(r.doh)+' / '+fmt(r.dos)+'</b></div>'+
      '<div class="tprwindow">Continuous TPR since '+esc(shortDate(r.tpr_start_date))+' · current price step '+esc(shortDate(r.current_tpr_price_step_start_date))+' · evidence '+fmt(post,0)+' day'+(post===1?'':'s')+' · clean baseline '+fmt(base,0)+' day'+(base===1?'':'s')+'</div>'+
      '<div class="pcard-actions"><button class="pdetail" data-tpr-detail="'+i+'">DETAIL</button><button class="pdetail" data-tpr-action="'+i+'">'+esc(meta.label)+'</button><button class="pignore snooze12" data-tpr-ignore="'+i+'">IGNORE 12 HOURS</button></div>'+
    '</article>';
@@ -3414,8 +3420,12 @@ function openCurrentTpr(r){
  const originalRegExact=String(r.original_regular_price_basis||'').startsWith('PRIOR_CONFIGURED_REG');
  const cancelPath=cancelCode?'<br><br><b>After cancelling TPR</b><br>Option A · '+(originalRegExact?'restore original configured REG ':'use pre-TPR REG estimate ')+money(r.original_regular_price)+'<br>Option B · cancel and set a new REG '+(num(r.suggested_regular_price)===null?'after REG review':money(r.suggested_regular_price)):'';
  const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
+ const receiptQty=num(r.today_receipt_qty),hasTodayReceipt=String(r.today_receipt_status||'').toUpperCase()==='PROVISIONAL_TODAY_RECEIPT'&&Number(r.today_receipt_event_count||0)>0;
+ const todayReceiptDetail=hasTodayReceipt
+   ?'<br><br><b>Today receipt · PROVISIONAL</b><br>'+esc(appDate(r.today_receipt_date))+' · '+(receiptQty===null?'receipt detected':fmt(receiptQty)+' '+esc(r.today_receipt_uom||''))+'<br>Latest accepted same-day MVT only; excluded from completed-day KPI and canonical OH roll-forward until the day closes.'
+   :'';
  const freshness=purpose.fresh
-   ?'<br><br><b>Freshness sell-through window</b><br>Day '+fmt(future.freshness_window_start_doh??r.freshness_window_start_doh,0)+' → Day '+fmt(future.freshness_threshold_doh??r.freshness_threshold_doh,0)+' inclusive · '+fmt(future.freshness_sellthrough_days_available??r.freshness_sellthrough_days_available,0)+' sell-through day(s). Aging stock target '+fmt(future.aging_stock_target??r.aging_stock_target)+' '+esc(r.current_oh_uom||'')+' · required '+fmt(future.required_velocity_to_clear)+'/day · projected aging stock left at threshold '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.current_oh_uom||'')
+   ?'<br><br><b>Freshness sell-through window</b><br>Day '+fmt(future.freshness_window_start_doh??r.freshness_window_start_doh,0)+' → Day '+fmt(future.freshness_threshold_doh??r.freshness_threshold_doh,0)+' inclusive'+(r.freshness_deadline_date?' · aging deadline '+esc(appDate(r.freshness_deadline_date)):'')+' · '+fmt(future.freshness_sellthrough_days_available??r.freshness_sellthrough_days_available,0)+' sell-through day(s). Aging remaining '+fmt(future.aging_stock_target??r.aging_stock_target)+' '+esc(r.aging_stock_uom||r.current_oh_uom||'')+(num(r.aging_stock_initial_target)!==null?' from initial '+fmt(r.aging_stock_initial_target)+' '+esc(r.aging_stock_uom||r.current_oh_uom||''):'')+' · required '+fmt(future.required_velocity_to_clear)+'/day · projected aging stock left at deadline '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.aging_stock_uom||r.current_oh_uom||'')
    :'';
  sheet(r.name||r.upc,r.upc||'Current TPR review',
    ohPair+'<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>SINCE '+esc(shortDate(r.tpr_start_date))+'</span></div>'+
@@ -3425,7 +3435,7 @@ function openCurrentTpr(r){
    '<br><br><b>Continuous TPR lifecycle</b><br>Started '+esc(r.tpr_start_date||'—')+' · basis '+esc(r.tpr_start_basis||'—')+'<br>Current price step since '+esc(r.current_tpr_price_step_start_date||'—')+
    '<br><br><b>Current response vs clean pre-TPR baseline</b><br>TPR velocity '+fmt(r.tpr_velocity_3d)+'/day · baseline '+fmt(r.baseline_velocity)+'/day · lift '+esc(lift.text)+
    '<br>TPR GP$/day '+money(r.tpr_gp_per_day_3d)+' · baseline normalized GP$/day '+money(r.baseline_gp_per_day_current_cost)+' · lift '+esc(gpLift.text)+
-   '<br><br><b>Inventory</b><br>Effective OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · System OH '+fmt(r.system_oh)+' '+esc(r.system_oh_uom||r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
+   '<br><br><b>Inventory</b><br>Effective OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · System OH '+fmt(r.system_oh)+' '+esc(r.system_oh_uom||r.current_oh_uom||'')+' · Family DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+todayReceiptDetail+freshness+
    '<br><br><b>Observed TPR price behavior</b>'+tprPriceStepsHtml(r)+
    '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether the aging stock reaching the freshness threshold is cleared by the threshold day; newer stock is not forced to zero.</div><div class="actions"><button class="secondary" id="tprTrueStockEdit">EDIT TRUE STOCK</button><button class="secondary snooze12" id="tprIgnore12h">IGNORE 12 HOURS</button></div>'
  );
