@@ -726,6 +726,7 @@ def calculate_promotion_order(
         "list":{
             "list_id":promo.get("list_id"),
             "list_name":promo.get("list_name"),
+            "source_filename":promo.get("source_filename"),
             "status":promo.get("status"),
             "ready_count":promo.get("ready_count"),
             "review_count":promo.get("review_count"),
