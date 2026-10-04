@@ -394,7 +394,7 @@ body{overflow:hidden}button,input{font:inherit;color:inherit}button{cursor:point
 .bestmetrics{display:grid;grid-template-columns:1.35fr 1fr;gap:4px;margin-top:5px}.bestmetric{background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.13);border-radius:8px;padding:4px 6px}.bestmetric small{display:block;font-size:6px;color:#6e7c87;font-weight:950}.bestmetric b{display:block;font-size:22px;line-height:1;font-weight:1000;margin-top:2px}.bestmetric span{display:block;font-size:7px;color:#7e8a93;font-weight:850;margin-top:2px}
 .bestrecent{margin-top:4px;background:rgba(255,255,255,.62);border:1px solid rgba(90,100,110,.12);border-radius:8px;padding:4px 6px}.bestrecenthead{display:flex;justify-content:space-between;gap:6px;font-size:7px;color:#6d7a85;font-weight:950}.bestreceipt{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:3px;font-size:9px;font-weight:900}.bestreceipt b{font-size:10px}.bestreceipt.receiptlink{width:100%;padding:2px 0;border:0;background:transparent;text-align:left;color:inherit}.receiptlink{cursor:pointer}.receiptlink:active{opacity:.62}.qdelivery.receiptlink{border:0;background:transparent;padding:2px 0 2px 4px;font:inherit;color:inherit}
 .qsap.nohead{border-left-width:1px;margin-top:3px}.qsap.nohead .qupc:first-child{border-top:0}
-.qupcname{white-space:nowrap!important;overflow:hidden!important;text-overflow:clip!important;word-break:normal!important}
+.qupcname{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:break-word!important;overflow-wrap:anywhere}
 @media(max-width:430px){.bestname{font-size:17px}.bestmetric b{font-size:21px}.quicksearch{left:8px;right:8px}}
 
 
@@ -1866,13 +1866,7 @@ function quickGroupedHtml(rows){
  }).join('');
 }
 function fitQuickUpcNames(){
- $$('.qupcname').forEach(el=>{
-   el.style.fontSize='';el.style.letterSpacing='';
-   let size=parseFloat(getComputedStyle(el).fontSize)||16;
-   const available=el.clientWidth;if(!available)return;
-   while(el.scrollWidth>available&&size>8){size-=0.5;el.style.fontSize=size+'px'}
-   if(el.scrollWidth>available)el.style.letterSpacing='-.45px';
- });
+ $$('.qupcname').forEach(el=>{el.style.fontSize='';el.style.letterSpacing=''});
 }
 function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
