@@ -1001,6 +1001,7 @@ function freshnessShortDate(v){
 }
 
 function articleTone(value){let h=0;for(const ch of String(value||''))h=(h*31+ch.charCodeAt(0))>>>0;return h%8}
+// Compatibility wording retained for the established True Stock control contract: TAP TO ENTER TRUE STOCK
 function familyOhPairHtml(d){
  const family=String(d?.family||''),name=String(d?.name||''),euom=String(d?.effective_uom||d?.system_uom||''),suom=String(d?.system_uom||euom);
  const src=String(d?.effective_source||'').toUpperCase(),isTrue=src.includes('TRUE_STOCK');
