@@ -977,9 +977,11 @@ jobs:
         run: |
           python - <<'PY'
           import inspect
+          from pathlib import Path
           import backoffice_runtime as bo
           import api
 
+          yipman=Path('yipman_ui.py').read_text(encoding='utf-8')
           inventory=inspect.getsource(bo.inventory_review)
           family_cost=inspect.getsource(bo._family_current_cost)
           pricing=inspect.getsource(bo.pricing_review)
@@ -988,6 +990,11 @@ jobs:
           ordering_ep=inspect.getsource(api.backoffice_ordering)
 
           assert '"family_cost": family_cost.get("cost")' in inventory
+          assert 'family_cost:r.family_cost??null' in yipman
+          assert 'family_cost_uom:r.family_cost_uom' in yipman
+          assert 'family_cost_source:r.family_cost_source' in yipman
+          assert 'FAMILY COST' in yipman
+          assert 'familyCostHtml' in yipman
           assert 'MOVEMENT_RECEIPT_VALUATION' in family_cost
           assert 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST' in family_cost
           assert 'FROZEN_INVENTORY_OFFICIAL_COST' in family_cost
