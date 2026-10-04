@@ -168,7 +168,7 @@ jobs:
 
           ui=Path('yipman_ui.py').read_text(encoding='utf-8')
           desktop=Path('yipman_desktop_v369.py').read_text(encoding='utf-8')
-          assert "const CACHE='yipman-v452'" in ui
+          assert "const CACHE='yipman-v453'" in ui
           assert 'LATEST DATA · REFRESHING SUGGESTIONS' in ui
           assert "current_source_health||priceData?.current_source_health" in ui
           assert "cacheStatus==='SOURCE_CHANGED_REFRESHING'" in ui
@@ -333,7 +333,7 @@ jobs:
           assert '.stockdiff.nosale{background:#ffe9e9' in ui
           assert 'NO RECENT SALE' in ui
           assert 'OVER-SELLING' in ui
-          assert "const CACHE='yipman-v452'" in ui
+          assert "const CACHE='yipman-v453'" in ui
           assert 'stockFlowCacheKey' in ui
           assert 'Showing last saved Stock Flow' in ui
           assert 'data-stock-retry' in ui
@@ -1111,6 +1111,9 @@ jobs:
           assert "'tproh')" in ui
           assert "'clearanceoh')" in ui
           assert "'promooh')" in ui
+          # Ordering detail must use the same live Effective OH as the list card.
+          assert "const effectiveOh=r.effective_oh??r.oh" in ui
+          assert 'data-oh="'+esc(effectiveOh??\'\')+' in ui
 
           # Promotion what-if stock remains separate from persistent Family True Stock.
           assert "SCENARIO OH" in ui
@@ -1124,7 +1127,7 @@ jobs:
           assert "await loadPromotionOrder()" in ui
 
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v452'" in ui
+          assert "const CACHE='yipman-v453'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
@@ -1136,6 +1139,8 @@ jobs:
           import phase3, worker, v7_ingest
 
           ui=Path('backoffice_ui.py').read_text(encoding='utf-8')
+          yipman=Path('yipman_ui.py').read_text(encoding='utf-8')
+          api=Path('api.py').read_text(encoding='utf-8')
           p3=inspect.getsource(phase3.rebuild_quick_check)
           touch=inspect.getsource(worker._touch_run)
           active=inspect.getsource(v7_ingest.find_active_batch)
@@ -1149,6 +1154,12 @@ jobs:
           assert "payload[key]=None" in touch
           assert "'active_files'" in active
           assert "'progress_issue_counts'" in active
+          assert "active['active_file_name']" in api
+          assert 'CURRENT PROCESSING FILE' in yipman
+          assert 'b.active_file_name' in yipman
+          assert 'function stockFlowCacheNotice' in yipman
+          assert "'STALE CACHE'" in yipman
+          assert 'cached.saved_at' in yipman
           assert 'function batchPhaseStripHtml' in ui
           assert 'function mobileBatchIssueRowsHtml' in ui
           assert 'm-batch-progress-main' in ui
