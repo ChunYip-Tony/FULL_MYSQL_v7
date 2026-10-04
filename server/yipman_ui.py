@@ -14,33 +14,7 @@ def yipman_html(version: str = "") -> str:
     desktop_boot = "<script>window.__YIPMAN_DESKTOP_ACTIVE__=window.matchMedia('(min-width:760px)').matches;document.documentElement.classList.toggle('yipman-desktop',window.__YIPMAN_DESKTOP_ACTIVE__);</script>"
     desktop_css = YIPMAN_DESKTOP_CSS.replace("__VERSION__", v)
     desktop_js = YIPMAN_DESKTOP_JS.replace("__VERSION__", v)
-    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "
-/* v7.0.449 consolidated mobile workflow */
-#quick .stockflowfilters{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px)}
-#quick .stockflowresultbar{position:sticky;top:35px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 1px}
-#order .order-tabs{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:3px 0}
-#order .order-tools{position:sticky;top:45px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
-#price .price-tabs{position:sticky;top:0;z-index:19;background:#e8eef3}
-#price #priceSuggestionPane>.filters,#price #currentTprPane>.filters{position:sticky;top:49px;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
-#price .price-tools,#price .tpr-tools{position:sticky;top:88px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 0}
-.familyohpair{display:grid;grid-template-columns:1.08fr .92fr;gap:4px;margin-top:5px}
-.familyohpair .familyohbtn,.familysystemoh{min-width:0;border:1px solid #d7e1e8;border-radius:9px;padding:6px 7px;background:rgba(255,255,255,.82);text-align:left}
-.familyohpair .familyohbtn{background:#eef8ff;border-color:#acd1eb}
-.familyohpair small{display:block;font-size:6.5px;color:#71808d;font-weight:1000}.familyohpair b{display:block;font-size:14px;line-height:1.05;margin-top:2px}.familyohpair span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px}
-.familyohpair .familysystemoh{background:#f7f9fb}
-.snooze12{border:1px solid #edb9bd!important;background:#fdebed!important;color:#a52831!important}
-.snoozebar{margin:5px 0;padding:6px 8px;border:1px dashed #deb6ba;border-radius:9px;background:#fff7f8;color:#7c4d51;font-size:8px;font-weight:900}
-.tprcancelchoices{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}.tprcancelchoice{border:1px solid #d5dee5;border-radius:9px;background:#fff;padding:7px}.tprcancelchoice small{display:block;font-size:6.5px;color:#71808d;font-weight:950}.tprcancelchoice b{display:block;font-size:13px;margin-top:2px}
-.freshwindow{margin-top:6px;border:1px solid #e8d49d;border-radius:9px;background:#fff7e4;color:#795600;padding:7px 8px;font-size:8px;font-weight:850;line-height:1.35}
-#quick .bestfam.article-tone-0{border-left:5px solid #d1a61c;background:linear-gradient(95deg,#fff5cf,#fff 68%)}
-#quick .bestfam.article-tone-1{border-left:5px solid #55a975;background:linear-gradient(95deg,#e8f7ec,#fff 68%)}
-#quick .bestfam.article-tone-2{border-left:5px solid #4d98d0;background:linear-gradient(95deg,#e7f2fb,#fff 68%)}
-#quick .bestfam.article-tone-3{border-left:5px solid #cf718b;background:linear-gradient(95deg,#fdeaf0,#fff 68%)}
-#quick .bestfam.article-tone-4{border-left:5px solid #8b73c5;background:linear-gradient(95deg,#f0ebfb,#fff 68%)}
-#quick .bestfam.article-tone-5{border-left:5px solid #4ca0a0;background:linear-gradient(95deg,#e8f7f7,#fff 68%)}
-#quick .bestfam.article-tone-6{border-left:5px solid #cb8749;background:linear-gradient(95deg,#fff0e3,#fff 68%)}
-#quick .bestfam.article-tone-7{border-left:5px solid #707abc;background:linear-gradient(95deg,#eceeff,#fff 68%)}
-</style></head>")
+    html = html.replace("</head>", desktop_boot + "<style id=\"yipman-desktop-v372-css\">" + desktop_css + "</style></head>")
     html = html.replace("</body>", "<script id=\"yipman-desktop-v372-js\">" + desktop_js + "</script></body>")
     return html
 
@@ -860,6 +834,33 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
  html:not(.yipman-desktop) .hfitem b{font-size:6.8px}
  html:not(.yipman-desktop) .hfitem span{font-size:6.3px}
 }
+
+
+/* v7.0.449 consolidated mobile workflow */
+#quick .stockflowfilters{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px)}
+#quick .stockflowresultbar{position:sticky;top:35px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 1px}
+#order .order-tabs{position:sticky;top:0;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:3px 0}
+#order .order-tools{position:sticky;top:45px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
+#price .price-tabs{position:sticky;top:0;z-index:19;background:#e8eef3}
+#price #priceSuggestionPane>.filters,#price #currentTprPane>.filters{position:sticky;top:49px;z-index:18;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:5px 0}
+#price .price-tools,#price .tpr-tools{position:sticky;top:88px;z-index:17;background:rgba(246,247,249,.97);backdrop-filter:blur(10px);padding:4px 0}
+.familyohpair{display:grid;grid-template-columns:1.08fr .92fr;gap:4px;margin-top:5px}
+.familyohpair .familyohbtn,.familysystemoh{min-width:0;border:1px solid #d7e1e8;border-radius:9px;padding:6px 7px;background:rgba(255,255,255,.82);text-align:left}
+.familyohpair .familyohbtn{background:#eef8ff;border-color:#acd1eb}
+.familyohpair small{display:block;font-size:6.5px;color:#71808d;font-weight:1000}.familyohpair b{display:block;font-size:14px;line-height:1.05;margin-top:2px}.familyohpair span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px}
+.familyohpair .familysystemoh{background:#f7f9fb}
+.snooze12{border:1px solid #edb9bd!important;background:#fdebed!important;color:#a52831!important}
+.snoozebar{margin:5px 0;padding:6px 8px;border:1px dashed #deb6ba;border-radius:9px;background:#fff7f8;color:#7c4d51;font-size:8px;font-weight:900}
+.tprcancelchoices{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:6px}.tprcancelchoice{border:1px solid #d5dee5;border-radius:9px;background:#fff;padding:7px}.tprcancelchoice small{display:block;font-size:6.5px;color:#71808d;font-weight:950}.tprcancelchoice b{display:block;font-size:13px;margin-top:2px}
+.freshwindow{margin-top:6px;border:1px solid #e8d49d;border-radius:9px;background:#fff7e4;color:#795600;padding:7px 8px;font-size:8px;font-weight:850;line-height:1.35}
+#quick .bestfam.article-tone-0{border-left:5px solid #d1a61c;background:linear-gradient(95deg,#fff5cf,#fff 68%)}
+#quick .bestfam.article-tone-1{border-left:5px solid #55a975;background:linear-gradient(95deg,#e8f7ec,#fff 68%)}
+#quick .bestfam.article-tone-2{border-left:5px solid #4d98d0;background:linear-gradient(95deg,#e7f2fb,#fff 68%)}
+#quick .bestfam.article-tone-3{border-left:5px solid #cf718b;background:linear-gradient(95deg,#fdeaf0,#fff 68%)}
+#quick .bestfam.article-tone-4{border-left:5px solid #8b73c5;background:linear-gradient(95deg,#f0ebfb,#fff 68%)}
+#quick .bestfam.article-tone-5{border-left:5px solid #4ca0a0;background:linear-gradient(95deg,#e8f7f7,#fff 68%)}
+#quick .bestfam.article-tone-6{border-left:5px solid #cb8749;background:linear-gradient(95deg,#fff0e3,#fff 68%)}
+#quick .bestfam.article-tone-7{border-left:5px solid #707abc;background:linear-gradient(95deg,#eceeff,#fff 68%)}
 
 </style>
 </head>
