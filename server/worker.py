@@ -501,15 +501,18 @@ def _supersede_incompatible_queued(cur) -> int:
 
 def _queue_orphaned_phase2c_ready(cur) -> int:
     # A deployment can terminate the worker after Phase 2C committed but before
-    # Phase 3 publishes a result. Any PHASE2C_READY batch with no Phase 3 result
-    # and no currently active pipeline work must converge automatically.
+    # Phase 3 publishes a result. Auto-recovery is useful for that orphan case,
+    # but a genuine Phase 3 failure must NOT create a retry loop.
     #
-    # The previous rule refused to queue when ANY prior PHASE3_RERUN existed for
-    # the current code version. That could strand a batch forever after a
-    # terminal/aborted recovery attempt. Allow a new recovery unless there have
-    # already been 3 terminal current-version recovery attempts, which prevents
-    # an infinite failure loop while still making ordinary upload completion
-    # automatic.
+    # Policy:
+    # - If there is no active Phase 3 work and no Phase 3 result, allow ONE
+    #   current-version PHASE3_RERUN to recover the orphaned Phase2C hand-off.
+    # - Once any current-version PHASE3_RERUN reaches a terminal state, stop
+    #   auto-queueing. The batch remains PHASE2C_READY and the user can inspect
+    #   the failure then explicitly Resume / Rebuild.
+    #
+    # Same-version stale-heartbeat recovery is handled separately by
+    # _recover_stale_started() and is already bounded.
     cur.execute(
         """SELECT ib.batch_id
            FROM ingest_batch ib
@@ -524,15 +527,17 @@ def _queue_orphaned_phase2c_ready(cur) -> int:
                    AND active.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
                    AND active.processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')
              )
-             AND (
-                 SELECT COUNT(*)
+             AND NOT EXISTS (
+                 SELECT 1
                  FROM pipeline_run prior
                  WHERE prior.batch_id=ib.batch_id
                    AND prior.pipeline_name=%s
                    AND prior.stage_name='PHASE3_RERUN'
                    AND prior.code_version=%s
-                   AND prior.processing_status IN ('FAILED','FAILED_QA','QA_HOLD','ABORTED','PAUSED','COMPLETED')
-             ) < 3
+                   AND prior.processing_status IN (
+                       'FAILED','FAILED_QA','QA_HOLD','ABORTED','PAUSED','COMPLETED'
+                   )
+             )
            ORDER BY ib.batch_id""",
         (API_PIPELINE,API_PIPELINE,API_VERSION),
     )
