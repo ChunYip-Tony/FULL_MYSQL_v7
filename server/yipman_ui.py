@@ -1085,7 +1085,7 @@ async function loadHeaderFreshness(){
 }
 const app=$('#app'), pages=$$('.page'), nav=$$('.nav button');
 let current='quick', priceFilter='UPC_240', priceReasonFilter='ALL', priceSort='URGENCY', orderDate=null, orderNextDate=null, orderSelectMode='DELIVERY', orderObservedWeekdays=new Map(), orderCalendarLoaded=false, orderInitPromise=null, orderMode='REGULAR', promoListsLoaded=false, promoListId=null, promoListDetail=null, promoTempOH=new Map(), promoLastRows=[], pullStart=null, pull=0;
-let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', historyScrollTimer=null, sheetStack=[];
+let historyReady=false, detailHistory=false, exitAllowed=false, dataQaIssues=[], dataQaBatchId=null, dataLiveTimer=null, dataLiveSignature='', dataPublishedBatch=null, historyScrollTimer=null, sheetStack=[];
 const pagePositions=new Map();
 let quickSearchTimer=null, quickRequestSeq=0, lastQuickQuery='', bestSellerGroups=null, stockFlowSort='RATIO', stockFlowDeliveryFilter='ALL', stockFlowCategoryFilter='ALL', stockFlowNotice='', stockFlowCacheSavedAt=null, orderRequestSeq=0, orderRetryTimer=null, orderRetryCount=0, orderRetryWindowKey='', priceRequestSeq=0, priceRetryTimer=null, priceIgnoredThisVisit=new Set();
 let orderSort='ACTION', orderFilter='ALL', lastOrderRows=[], lastOrderData=null, lastOrderStale=false, renderedOrderRows=[], lastOrderWindowKey='';
@@ -3699,7 +3699,7 @@ async function pollDataLive(){
   dataLiveSignature=nextSignature;
   const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
   const latestBatch=active.latest_batch||null;
-  renderLivePipeline(currentBatch,latestBatch);
+  renderLivePipeline(currentBatch,dataPublishedBatch||latestBatch);
   renderCurrentBatchPanel(currentBatch);
  }catch(e){
   const live=$('#currentBatch .cblivecheck');if(live)live.textContent='LIVE CHECK FAILED';
@@ -3782,8 +3782,17 @@ async function loadData(){
   const activeCandidate=active.active_batch||null;
   const currentBatch=dataBatchIsActivelyProcessing(activeCandidate)?activeCandidate:null;
   dataLiveSignature=dataBatchSignature(activeCandidate);
-  const publishId=dash?.quick_check?.latest_publish_batch_id;
-  const latestPublished=(publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null)||active.latest_batch||rb[0]||null;
+  const quick=dash?.quick_check||{},publishId=quick.latest_publish_batch_id;
+  const publishedFromRecent=publishId?rb.find(x=>String(x.batch_id)===String(publishId)):null;
+  const latestPublished=publishedFromRecent||(
+    publishId?{
+      batch_id:publishId,
+      processing_status:Number(quick.qa_hold_rows||0)>0?'QUICK_CHECK_READY_WITH_HOLDS':'QUICK_CHECK_READY',
+      completed_at:quick.latest_published_at||null,
+      quick_check_hold_rows:Number(quick.qa_hold_rows||0)
+    }:(active.latest_batch||rb[0]||null)
+  );
+  dataPublishedBatch=latestPublished;
   renderLivePipeline(currentBatch,latestPublished);
   renderCurrentBatchPanel(currentBatch);
   renderPublishedSnapshot(dash,health,latestPublished);
