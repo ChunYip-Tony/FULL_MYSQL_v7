@@ -3007,22 +3007,28 @@ function openCurrentTpr(r){
  const actionPrice=r.suggested_regular_price!=null
    ?'<br><b>Suggested new REG</b> '+money(r.suggested_regular_price)
    :(r.suggested_tpr_price!=null?'<br><b>Suggested TPR</b> '+money(r.suggested_tpr_price):'');
+ const cancelCode=['CANCEL_TPR','END_TPR'].includes(String(r.recommendation_code||'').toUpperCase());
+ const cancelPath=cancelCode?'<br><br><b>After cancelling TPR</b><br>Option A · return to pre-TPR REG baseline '+money(r.original_regular_price)+'<br>Option B · cancel and set a new REG '+(num(r.suggested_regular_price)===null?'after REG review':money(r.suggested_regular_price)):'';
+ const ohPair=familyOhPairHtml({family:r.family_article_number,name:r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom});
  const freshness=purpose.fresh
-   ?'<br><br><b>Freshness projection</b><br>Time remaining '+fmt(future.freshness_days_remaining)+' day(s) · required '+fmt(future.required_velocity_to_clear)+'/day · projected clear '+fmt(future.projected_days_to_clear_oh)+' day(s) · projected OH at limit '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.current_oh_uom||'')
+   ?'<br><br><b>Freshness sell-through window</b><br>Day '+fmt(future.freshness_window_start_doh??r.freshness_window_start_doh,0)+' → Day '+fmt(future.freshness_threshold_doh??r.freshness_threshold_doh,0)+' inclusive · '+fmt(future.freshness_sellthrough_days_available??r.freshness_sellthrough_days_available,0)+' sell-through day(s). Aging stock target '+fmt(future.aging_stock_target??r.aging_stock_target)+' '+esc(r.current_oh_uom||'')+' · required '+fmt(future.required_velocity_to_clear)+'/day · projected aging stock left at threshold '+fmt(future.projected_oh_at_freshness_limit)+' '+esc(r.current_oh_uom||'')
    :'';
  sheet(r.name||r.upc,r.upc||'Current TPR review',
-   '<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>SINCE '+esc(shortDate(r.tpr_start_date))+'</span></div>'+
+   ohPair+'<div class="tprpurpose '+purpose.cls+'"><span>'+esc(purpose.label)+'</span><span>SINCE '+esc(shortDate(r.tpr_start_date))+'</span></div>'+
    '<div class="tprpurposepick"><button data-tpr-purpose="SWEET_SPOT_TEST" class="'+(!purpose.fresh?'on':'')+'">FIND NEW REGULAR<br>SWEET SPOT</button><button data-tpr-purpose="FRESHNESS_SELL_THROUGH" class="'+(purpose.fresh?'on':'')+'">FRESHNESS<br>SELL-THROUGH</button></div>'+
    '<div class="tprtimeline"><div><small>BEFORE TPR</small><b>'+fmt(prev.velocity)+'/day</b><span>'+money(prev.avg_price)+' avg · GP$/d '+money(prev.gp_per_day_current_cost)+'</span></div><div><small>CURRENT TPR</small><b>'+fmt(now.velocity)+'/day</b><span>'+money(r.current_tpr_price)+' · GP$/d '+money(now.gp_per_day)+'</span></div><div><small>PROJECTED 7D</small><b>'+fmt(future.projected_qty_7d)+' '+esc(r.selling_uom||'')+'</b><span>GP$ '+money(future.projected_gp_7d)+'</span></div></div>'+
-   '<div class="detail"><b>Recommendation</b><br><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span><br>'+esc(r.recommendation_reason||'Review current TPR performance')+actionPrice+
+   '<div class="detail"><b>Recommendation</b><br><span class="pbadge '+meta.cls+'">'+esc(meta.label)+'</span><br>'+esc(r.recommendation_reason||'Review current TPR performance')+actionPrice+cancelPath+
    '<br><br><b>Continuous TPR lifecycle</b><br>Started '+esc(r.tpr_start_date||'—')+' · basis '+esc(r.tpr_start_basis||'—')+'<br>Current price step since '+esc(r.current_tpr_price_step_start_date||'—')+
    '<br><br><b>Current response vs clean pre-TPR baseline</b><br>TPR velocity '+fmt(r.tpr_velocity_3d)+'/day · baseline '+fmt(r.baseline_velocity)+'/day · lift '+esc(lift.text)+
    '<br>TPR GP$/day '+money(r.tpr_gp_per_day_3d)+' · baseline normalized GP$/day '+money(r.baseline_gp_per_day_current_cost)+' · lift '+esc(gpLift.text)+
-   '<br><br><b>Inventory</b><br>OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
+   '<br><br><b>Inventory</b><br>Effective OH '+fmt(r.current_oh)+' '+esc(r.current_oh_uom||'')+' · System OH '+fmt(r.system_oh)+' '+esc(r.system_oh_uom||r.current_oh_uom||'')+' · DOH '+fmt(r.doh)+' · DOS '+fmt(r.dos)+freshness+
    '<br><br><b>Observed TPR price behavior</b>'+tprPriceStepsHtml(r)+
-   '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether current velocity will clear effective OH before the freshness threshold.</div>'
+   '<br><br><b>Decision model</b><br>Sweet-spot TPRs are judged on whether the price can become a sustainable new regular price. Freshness TPRs are judged on whether the aging stock reaching the freshness threshold is cleared by the threshold day; newer stock is not forced to zero.</div><div class="actions"><button class="secondary" id="tprTrueStockEdit">EDIT TRUE STOCK</button><button class="secondary snooze12" id="tprIgnore12h">IGNORE 12 HOURS</button></div>'
  );
- $$('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
+ $('[data-tpr-purpose]').forEach(b=>b.onclick=()=>setTprPurpose(r,b.dataset.tprPurpose));
+ const ts=$('#tprTrueStockEdit');if(ts)ts.onclick=()=>openFamilyTrueStock({family:r.family_article_number,name:r.name,oh:r.current_oh,uom:r.current_oh_uom||r.system_oh_uom});
+ const ig=$('#tprIgnore12h');if(ig)ig.onclick=()=>ignoreTprProgress(r);
+ bindFamilyOhEditors();
 }
 async function loadCurrentTpr(opts={}){
  const requestId=++tprRequestSeq;
