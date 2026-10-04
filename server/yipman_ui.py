@@ -2292,7 +2292,7 @@ function renderPromotionRows(data){
    '<div class="promo-metrics"><div class="promo-metric real-oh">'+familyOhActionHtml({family:r.family_article_number,name:r.family_article_name||p.family_name,oh:effectiveOh,uom:effectiveUom,source:effectiveSource},'promooh')+'</div><div class="promo-metric '+(temp?'temp':'')+'" data-promo-oh="'+i+'"><small>SCENARIO OH ✎</small><b>'+fmtNullable(calcOh)+' '+esc(r.uom||'')+'</b><span>'+(temp?'TEMPORARY OVERRIDE':'OPTIONAL WHAT-IF')+'</span></div><div class="promo-metric"><small>EST OH @ DELIVERY</small><b>'+fmtNullable(r.projected_oh_at_delivery)+' '+esc(r.uom||'')+'</b></div><div class="promo-metric"><small>COVERAGE NEED</small><b>'+fmtNullable(totalNeed)+' '+esc(r.uom||'')+'</b></div></div>'+freshnessHtml+
    '<div class="promo-order"><small>SUGGESTED '+esc(appDate(data.delivery_date))+' ORDER</small><b>'+fmtNullable(r.suggested_order_qty)+' '+esc(r.suggested_order_uom||r.uom||'')+'</b><div class="promo-break">Promo need '+fmtNullable(promoNeed)+' · Regular need '+fmtNullable(regNeed)+(temp?' · SCENARIO OH only for this calculation':'')+'</div></div></div>';
  }).join('')||reviewHtml||'<div class="empty">No calculable promotion items.</div>';
- $('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
+ document.querySelectorAll('[data-promo-oh]').forEach(x=>x.onclick=()=>openPromoTempOH(promoLastRows[Number(x.dataset.promoOh)]));
  bindFamilyOhEditors();
 }
 async function loadPromotionOrder(){
