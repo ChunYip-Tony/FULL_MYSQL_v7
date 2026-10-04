@@ -42,7 +42,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v454';
+const CACHE='yipman-v455';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -851,6 +851,20 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
 .familyohpair .familyohbtn{background:#eef8ff;border-color:#acd1eb}
 .familyohpair small{display:block;font-size:6.5px;color:#71808d;font-weight:1000}.familyohpair b{display:block;font-size:14px;line-height:1.05;margin-top:2px}.familyohpair span{display:block;font-size:7px;color:#71808d;font-weight:850;margin-top:2px}
 .familyohpair .familysystemoh{background:#f7f9fb}
+.familyohbtn,.familyohinline{touch-action:manipulation;-webkit-tap-highlight-color:rgba(23,105,224,.10);position:relative;z-index:2}
+.familyohbtn:active,.familyohinline:active{transform:scale(.995);filter:brightness(.98)}
+.familyohinlineeditor{min-width:0;border:2px solid #64a9d8;border-radius:10px;background:#eef8ff;padding:7px;box-shadow:0 3px 10px rgba(28,91,132,.10)}
+.familyohinlineeditor small{display:block;font-size:6.5px;color:#52738b;font-weight:1000;line-height:1.1}
+.familyohinlineeditor .truecurrent{font-size:7px;color:#5d7180;font-weight:850;margin:3px 0 5px}
+.familyohinlineeditor input{width:100%;box-sizing:border-box;border:2px solid #72b7df;border-radius:9px;background:#fff;color:#173247;font-size:20px;font-weight:1000;padding:8px 9px;outline:none}
+.familyohinlineeditor input:focus{border-color:#1769e0;box-shadow:0 0 0 2px rgba(23,105,224,.12)}
+.familyohinlineeditor .trueactions{display:grid;grid-template-columns:.8fr 1.2fr;gap:5px;margin-top:6px}
+.familyohinlineeditor .trueactions button{border:0;border-radius:8px;padding:7px 6px;font-size:7px;font-weight:1000}
+.familyohinlineeditor .truecancel{background:#e7edf2;color:#40515f}
+.familyohinlineeditor .truesave{background:#1769e0;color:#fff}
+.familyohinlineeditor .truesave:disabled{opacity:.55}
+.familyohinlineeditor .truestatus{font-size:7px;font-weight:900;color:#287b5b;margin-top:5px}
+#price .pmetrics.price-metrics3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .familyohinline{width:100%;min-width:0;border:1px solid #9ccce8;border-radius:9px;background:#eef8ff;color:#173247;padding:5px 6px;text-align:right;cursor:pointer;font:inherit}
 .familyohinline small{display:block;font-size:6px;line-height:1.05;color:#52738b;font-weight:1000;white-space:normal}.familyohinline b{display:block;font-size:13px;line-height:1.05;margin-top:2px}.familyohinline span{display:block;font-size:6.5px;color:#287b5b;font-weight:900;margin-top:2px;white-space:normal}
 #order .ohcell{padding:6px 0!important}.ohcell .familyohinline{padding:5px 4px}
@@ -1091,21 +1105,98 @@ async function refreshAfterFamilyTrueStock(family=''){
    await loadPriceCurrentView();
  }
 }
-function bindFamilyOhEditors(root=document){
- root.querySelectorAll('[data-family-oh]').forEach(btn=>btn.dataset.trueStockBound='delegated');
+let familyOhLastPointerOpenAt=0;
+function familyOhPayload(btn){
+ return {
+  family:btn?.dataset?.family||'',
+  name:btn?.dataset?.name||'',
+  oh:btn?.dataset?.oh,
+  uom:btn?.dataset?.uom||''
+ };
 }
-app.addEventListener('click',e=>{
- const btn=e.target.closest('[data-family-oh]');if(!btn||!app.contains(btn))return;
+function familyOhTapOpen(e){
+ const btn=e.currentTarget;if(!btn||btn.dataset.trueStockEditing==='1')return;
+ if(e.type==='pointerup'){
+  const sx=Number(btn.dataset.tsx||0),sy=Number(btn.dataset.tsy||0);
+  if(Math.abs((e.clientX||0)-sx)>10||Math.abs((e.clientY||0)-sy)>10)return;
+  familyOhLastPointerOpenAt=Date.now();
+ }else if(e.type==='click'&&Date.now()-familyOhLastPointerOpenAt<700){
+  e.preventDefault();e.stopPropagation();return;
+ }
  e.preventDefault();e.stopPropagation();
- openFamilyTrueStock({family:btn.dataset.family,name:btn.dataset.name||'',oh:btn.dataset.oh,uom:btn.dataset.uom||''});
-},true);
+ beginFamilyOhInlineEdit(btn);
+}
+function bindFamilyOhEditors(root=document){
+ root.querySelectorAll('[data-family-oh]').forEach(btn=>{
+  if(btn.dataset.trueStockBound==='1')return;
+  btn.dataset.trueStockBound='1';
+  btn.addEventListener('pointerdown',e=>{btn.dataset.tsx=String(e.clientX||0);btn.dataset.tsy=String(e.clientY||0)},{passive:true});
+  btn.addEventListener('pointerup',familyOhTapOpen);
+  btn.addEventListener('click',familyOhTapOpen);
+ });
+}
 function applyTrueStockLocally(family,qty,uom){
  const key=String(family||'').trim();
  if(bestSellerGroups?.length){
   bestSellerGroups.forEach(r=>{if(String(r.family_article||r.family_id||'').trim()===key){r.effective_oh=qty;r.effective_oh_uom=uom;r.effective_oh_source='FAMILY_TRUE_STOCK';r.effective_oh_is_true_stock=true;}});
   stockFlowWriteCache(bestSellerGroups);
-  if(current==='quick'&&!lastQuickQuery)renderStockFlow();
  }
+ if(lastTprRows?.length){
+  lastTprRows.forEach(r=>{if(String(r.family_article_number||'').trim()===key){r.current_oh=qty;r.current_oh_uom=uom;r.current_oh_source='FAMILY_TRUE_STOCK';}});
+ }
+ if(lastOrderRows?.length){
+  lastOrderRows.forEach(r=>{if(String(r.family_article||'').trim()===key){r.effective_oh=qty;r.effective_oh_uom=uom;r.effective_oh_source='FAMILY_TRUE_STOCK';}});
+ }
+}
+function beginFamilyOhInlineEdit(btn){
+ if(!btn||btn.dataset.trueStockEditing==='1')return;
+ const d=familyOhPayload(btn),family=String(d.family||'').trim();
+ if(!family)return toast('Family Article unavailable');
+ btn.dataset.trueStockEditing='1';
+ const original=btn.cloneNode(true);
+ const editor=document.createElement('div');
+ editor.className='familyohinlineeditor';
+ editor.dataset.family=family;
+ const current=(d.oh===null||d.oh===undefined||d.oh==='')?'—':fmtNullable(d.oh);
+ let resolvedUom=String(d.uom||'').trim().toUpperCase();
+ editor.innerHTML='<small>ENTER PHYSICAL TRUE STOCK</small>'+
+  '<div class="truecurrent">Current Effective OH · '+esc(current)+' '+esc(resolvedUom)+'</div>'+
+  '<input class="trueinput" type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Type physical count">'+
+  '<div class="trueactions"><button type="button" class="truecancel">CANCEL</button><button type="button" class="truesave">SAVE & RECALCULATE</button></div>'+
+  '<div class="truestatus">Count field is intentionally blank.</div>';
+ btn.replaceWith(editor);
+ const input=editor.querySelector('.trueinput'),save=editor.querySelector('.truesave'),cancel=editor.querySelector('.truecancel'),status=editor.querySelector('.truestatus');
+ const live=api('/v1/app/v2/pi/'+encodeURIComponent(family),{timeoutMs:10000}).then(pi=>{
+   const eff=pi?.effective_oh||{},sys=pi?.system_oh||{};
+   resolvedUom=String(pi?.required_true_stock_uom||eff.uom||sys.uom||resolvedUom||'').trim().toUpperCase();
+   const liveQty=eff.quantity!==null&&eff.quantity!==undefined?fmtNullable(eff.quantity):current;
+   const cur=editor.querySelector('.truecurrent');if(cur)cur.textContent='Current Effective OH · '+liveQty+(resolvedUom?' '+resolvedUom:'');
+   return pi;
+ }).catch(()=>null);
+ const restore=()=>{editor.replaceWith(original);bindFamilyOhEditors(original.parentNode||document)};
+ cancel.onclick=e=>{e.preventDefault();e.stopPropagation();restore()};
+ save.onclick=async e=>{
+   e.preventDefault();e.stopPropagation();
+   const raw=String(input.value||'').trim(),qty=Number(raw);
+   if(!raw||!Number.isFinite(qty)||qty<0){input.focus();status.textContent='Enter a valid physical True Stock count.';return}
+   save.disabled=true;cancel.disabled=true;status.textContent='Saving True Stock…';
+   await live;
+   if(!resolvedUom){save.disabled=false;cancel.disabled=false;status.textContent='UOM unavailable. Cannot safely save this count.';return}
+   try{
+    await api('/v1/app/v2/pi/'+encodeURIComponent(family)+'/true-stock',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({true_stock:qty,uom:resolvedUom,note:'Yipman inline physical count'}),
+      timeoutMs:30000
+    });
+    applyTrueStockLocally(family,qty,resolvedUom);
+    status.textContent='Saved · Effective OH '+fmtNullable(qty)+' '+resolvedUom+' · recalculating…';
+    toast('True Stock saved · Effective OH updated');
+    refreshAfterFamilyTrueStock(family).catch(()=>{status.textContent='Saved · recalculation refresh pending';});
+   }catch(err){
+    save.disabled=false;cancel.disabled=false;status.textContent=err.message||'Could not save True Stock';
+   }
+ };
+ setTimeout(()=>{input.focus();input.select()},0);
 }
 async function openFamilyTrueStock(d){
  const family=String(d?.family||'').trim();
@@ -2889,8 +2980,7 @@ async function loadPrices(opts={}){
       (upcPrefix(r)==='249'&&r.related_240_current_price!=null?'<div class="pairauthority"><div><small>240 MAIN PRICE · AUTHORITY</small><b>'+money(r.related_240_current_price)+'</b><span>'+esc(r.related_240_upc||'240')+' · 249 must match 240</span></div><div class="pairarrow">→</div><div><small>249 CURRENT</small><b>'+money(r.current_price)+'</b><span>'+(num(r.current_price)===num(r.related_240_current_price)?'MATCHED':'MISMATCH · SET TO '+money(r.related_240_current_price))+'</span></div></div>':'')+
       '<div class="pcost"><span>CURRENT COST'+(r.current_cost_source?' · '+esc(r.current_cost_source):'')+(r.cost_date?' · '+esc(r.cost_date):'')+'</span><b>'+money(r.current_cost)+(r.selling_uom?' / '+esc(r.selling_uom):'')+'</b></div>'+
       familyOhPairHtml({family:r.family_article_number,name:r.family_name||r.name,effective:r.current_oh,effective_uom:r.current_oh_uom,effective_source:r.current_oh_source,system:r.system_oh,system_uom:r.system_oh_uom})+
-      '<div class="pmetrics">'+
-        '<div class="pm ohpm">'+familyOhActionHtml({family:r.family_article_number,name:r.family_name||r.name,oh:r.current_oh,uom:r.current_oh_uom,source:r.current_oh_source},'priceoh')+'</div>'+
+      '<div class="pmetrics price-metrics3">'+
         '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.qty_uom||'')+'</b></div>'+
         '<div class="pm"><small>7D VEL</small><b>'+fmt(r.velocity_7d)+'/day</b></div>'+
         '<div class="pm"><small>'+(gap!==null?'TESTED GAP':'DOH')+'</small><b>'+(gap!==null?money(gap):fmt(r.doh))+'</b></div>'+
@@ -3080,8 +3170,7 @@ function renderCurrentTpr(){
        '<div><small>NOW</small><b>'+fmt(now.velocity)+'/day</b><span>GP$/d '+money(now.gp_per_day)+'</span></div>'+
        '<div><small>PROJECTED</small><b>'+esc(future.main)+'</b><span>'+esc(future.sub)+'</span></div>'+
      '</div>'+
-     '<div class="pmetrics">'+
-       '<div class="pm ohpm">'+familyOhActionHtml({family:r.family_article_number,name:r.name,oh:r.current_oh,uom:r.current_oh_uom,source:r.current_oh_source},'tproh')+'</div>'+
+     '<div class="pmetrics price-metrics3">'+
        '<div class="pm"><small>7D QTY</small><b>'+fmt(r.qty_7d)+' '+esc(r.selling_uom||'')+'</b></div>'+
        '<div class="pm"><small>3D VEL LIFT</small><b class="tprlift '+lift.cls+'">'+esc(lift.text)+'</b></div>'+
        '<div class="pm"><small>GP$/D LIFT</small><b class="tprlift '+gpLift.cls+'">'+esc(gpLift.text)+'</b></div>'+
