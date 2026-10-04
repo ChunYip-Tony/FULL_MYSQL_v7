@@ -23,6 +23,61 @@ def yipman_html(version: str = "") -> str:
     return html
 
 
+def yipman_v1_html(version: str = "") -> str:
+    """Dedicated Classic/V1 mobile shell. Never inject Mobile V2 assets."""
+    v = str(version or "")
+    html = YIPMAN_HTML.replace("__VERSION__", v)
+    html = html.replace(
+        'href="/app/yipman/manifest.webmanifest"',
+        'href="/app/yipman-v1/manifest.webmanifest"',
+    )
+    html = html.replace(
+        'href="/app/yipman/icon.svg"',
+        'href="/app/yipman-v1/icon.svg"',
+    )
+    html = html.replace(
+        "navigator.serviceWorker.register('/app/yipman/sw.js',{scope:'/app/yipman/'})",
+        "navigator.serviceWorker.register('/app/yipman-v1/sw.js',{scope:'/app/yipman-v1/'})",
+    )
+    return html
+
+
+def yipman_v1_manifest() -> str:
+    return json.dumps({
+        "name": "Yipman V1",
+        "short_name": "Yipman V1",
+        "id": "/app/yipman-v1/",
+        "start_url": "/app/yipman-v1/",
+        "scope": "/app/yipman-v1/",
+        "display": "standalone",
+        "display_override": ["standalone", "minimal-ui"],
+        "background_color": "#eef1f4",
+        "theme_color": "#17212b",
+        "description": "FULL MYSQL seafood mobile operations · Classic V1",
+        "icons": [{
+            "src": "/app/yipman-v1/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable",
+        }],
+    }, separators=(",", ":"))
+
+
+def yipman_v1_service_worker() -> str:
+    return r"""
+const CACHE='yipman-v1-v468';
+const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
+self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
+self.addEventListener('fetch',e=>{
+  if(e.request.method!=='GET')return;
+  const u=new URL(e.request.url);
+  if(u.pathname.startsWith('/v1/'))return;
+  e.respondWith(fetch(e.request).then(r=>{const copy=r.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match('/app/yipman-v1/'))));
+});
+"""
+
+
 def yipman_manifest() -> str:
     return json.dumps({
         "name": "Yipman",
