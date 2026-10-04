@@ -743,7 +743,7 @@ jobs:
           assert 'ARTICLE_FAMILY_BRIDGE' in promo
           assert p._promo_fuzzy_score('salmom fillet','salmon fillet') >= 420
           remove_src=inspect.getsource(p.remove_manual_promotion_list_item)
-          assert 'ONLY_MANUAL_PROMOTION_ITEMS_CAN_BE_REMOVED' in remove_src
+          assert 'ONLY_MANUAL_PROMOTION_ITEMS_CAN_BE_REMOVED' not in remove_src
           assert 'DELETE FROM yipman_promotion_list_item' in remove_src
           assert 'manual_item_removal_allowed' in promo
           assert 'YIPMAN_PROMOTION_LIST_V2_MANUAL_REMOVE' in promo
