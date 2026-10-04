@@ -1182,6 +1182,29 @@ jobs:
           print('mobile-batch-live-progress=PASS')
           PY
 
+      - name: Validate bounded Phase 3 auto recovery
+        run: |
+          python - <<'PY'
+          import inspect
+          import worker
+
+          orphan=inspect.getsource(worker._queue_orphaned_phase2c_ready)
+          stale=inspect.getsource(worker._recover_stale_started)
+
+          # A real terminal Phase 3 attempt must stop automatic rerun chaining.
+          assert "prior.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')" in orphan
+          assert "AND NOT EXISTS" in orphan
+          assert "prior.processing_status IN (" in orphan
+          assert ") < 3" not in orphan
+          assert "The batch remains PHASE2C_READY" in orphan
+
+          # Heartbeat-stale recovery is separately bounded to one replacement.
+          assert worker.SAME_VERSION_STALE_RECOVERY_LIMIT <= 1
+          assert "WORKER_HEARTBEAT_STALE_NEW_RUN" in stale
+          assert "auto_recovery_exhausted" in stale
+          print('bounded-phase3-auto-recovery=PASS')
+          PY
+
       - name: Validate Backoffice pricing and inventory contracts
         run: |
           python - <<'PY'
