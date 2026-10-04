@@ -2001,13 +2001,7 @@ function quickGroupedHtml(rows){
  }).join('');
 }
 function fitQuickUpcNames(){
- $$('.qupcname').forEach(el=>{
-   el.style.fontSize='';el.style.letterSpacing='';
-   let size=parseFloat(getComputedStyle(el).fontSize)||16;
-   const available=el.clientWidth;if(!available)return;
-   while(el.scrollWidth>available&&size>8){size-=0.5;el.style.fontSize=size+'px'}
-   if(el.scrollWidth>available)el.style.letterSpacing='-.45px';
- });
+ $('.qupcname').forEach(el=>{el.style.fontSize='';el.style.letterSpacing=''});
 }
 function bindQuickRows(){
  $$('[data-upc]').forEach(x=>x.onclick=()=>openUpc(x.dataset.upc));
