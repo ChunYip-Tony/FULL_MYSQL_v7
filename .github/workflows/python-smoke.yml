@@ -1129,13 +1129,26 @@ jobs:
           assert 'row["current_effective_oh"]=row.get("effective_oh_raw")' in promo
           assert 'row["current_oh_system"]=row.get("system_oh_raw")' in promo
 
-          # Saving a count refreshes the current module, including Promotion Ordering.
-          assert "await refreshAfterFamilyTrueStock(family)" in ui
+          # Dynamic cards use delegated click handling, hydrate latest PI state,
+          # and separate a successful commit from any later refresh failure.
+          assert "app.addEventListener('click',e=>" in ui
+          assert "e.target.closest('[data-family-oh]')" in ui
+          assert "/v1/app/v2/pi/'+encodeURIComponent(family)" in ui
+          assert "applyTrueStockLocally(family,qty,uom)" in ui
+          assert "refreshAfterFamilyTrueStock(family).catch" in ui
           assert "orderMode==='PROMOTION'" in ui
           assert "await loadPromotionOrder()" in ui
 
+          # Stock Flow filters + sort are one opaque sticky toolbar; card content
+          # cannot leak between two independent sticky layers.
+          assert "stockflowtoolbar" in ui
+          assert "#quick .stockflowtoolbar{position:sticky" in ui
+          assert "#quick .stockflowfilters{position:sticky" not in ui
+          assert "#quick .stockflowresultbar{position:sticky" not in ui
+          assert ".overlay{position:absolute" in ui and "z-index:80" in ui
+
           # PWA must not serve the previous shell after this UI contract change.
-          assert "const CACHE='yipman-v452'" in ui
+          assert "const CACHE='yipman-v454'" in ui
           print('universal-effective-oh-true-stock=PASS')
           PY
 
