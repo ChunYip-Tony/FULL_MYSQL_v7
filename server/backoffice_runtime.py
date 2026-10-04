@@ -32,6 +32,7 @@ from webapp_v2_runtime import (
     _family_system_oh,
     _family_receipt_events,
     _family_receipt_events_bulk,
+    _family_provisional_today_receipts_bulk,
     _ordering_candidate_families,
     _gp_day_price_suggestion_from_batch,
     _performance_cost_for_day,
@@ -6952,6 +6953,123 @@ def _ensure_tpr_purpose_table(cur) -> None:
     )
 
 
+def _ensure_freshness_tpr_anchor_table(cur) -> None:
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS yipman_freshness_tpr_anchor (
+             ean_upc VARCHAR(32) NOT NULL,
+             tpr_start_date DATE NOT NULL,
+             family_id BIGINT NULL,
+             anchor_date DATE NOT NULL,
+             freshness_deadline_date DATE NOT NULL,
+             initial_aging_qty DECIMAL(18,4) NULL,
+             aging_uom VARCHAR(16) NULL,
+             created_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+             updated_at TIMESTAMP(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6)
+               ON UPDATE CURRENT_TIMESTAMP(6),
+             PRIMARY KEY (ean_upc,tpr_start_date),
+             KEY idx_yipman_fresh_anchor_family (family_id,anchor_date)
+           )"""
+    )
+
+
+def _freshness_tpr_anchor(
+    *,
+    ean_upc: str,
+    tpr_start_date: date | None,
+    family_id: int | None,
+    current_oh: Decimal | None,
+    current_uom: str | None,
+    doh: Decimal | None,
+    freshness_threshold: Decimal | None,
+    allow_create: bool,
+) -> dict[str,Any] | None:
+    """Persist the aging-lot deadline/target so a newer receipt cannot reset it."""
+    upc=str(ean_upc or "").strip()
+    if not upc or tpr_start_date is None:
+        return None
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        _ensure_freshness_tpr_anchor_table(cur)
+        conn.commit()
+        cur.execute(
+            """SELECT ean_upc,tpr_start_date,family_id,anchor_date,
+                      freshness_deadline_date,initial_aging_qty,aging_uom
+               FROM yipman_freshness_tpr_anchor
+               WHERE ean_upc=%s AND tpr_start_date=%s
+               LIMIT 1""",
+            (upc,tpr_start_date),
+        )
+        row=cur.fetchone()
+        if row or not allow_create:
+            cur.close()
+            return dict(row) if row else None
+
+        uom=str(current_uom or "").strip().upper()
+        if (
+            family_id is None
+            or current_oh is None or current_oh <= 0
+            or not uom
+            or doh is None
+            or freshness_threshold is None
+            or doh > freshness_threshold
+        ):
+            cur.close()
+            return None
+        days_left=max(0,int((freshness_threshold-doh).to_integral_value(rounding=ROUND_HALF_UP)))
+        anchor_date=business_today()
+        deadline=anchor_date+timedelta(days=days_left)
+        cur.execute(
+            """INSERT IGNORE INTO yipman_freshness_tpr_anchor
+                 (ean_upc,tpr_start_date,family_id,anchor_date,
+                  freshness_deadline_date,initial_aging_qty,aging_uom)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (
+                upc,tpr_start_date,int(family_id),anchor_date,deadline,
+                current_oh,uom,
+            ),
+        )
+        conn.commit()
+        cur.execute(
+            """SELECT ean_upc,tpr_start_date,family_id,anchor_date,
+                      freshness_deadline_date,initial_aging_qty,aging_uom
+               FROM yipman_freshness_tpr_anchor
+               WHERE ean_upc=%s AND tpr_start_date=%s
+               LIMIT 1""",
+            (upc,tpr_start_date),
+        )
+        row=cur.fetchone()
+        cur.close()
+        return dict(row) if row else None
+
+
+def _receipt_qty_in_uom_since(
+    events: list[dict[str,Any]],
+    *,
+    start_date: date,
+    uom: str,
+) -> tuple[Decimal | None,str]:
+    """Sum completed physical receipts after an aging anchor in one comparable UOM."""
+    target=str(uom or "").strip().upper()
+    if not target:
+        return None,"AGING_UOM_MISSING"
+    total=Decimal("0")
+    seen=0
+    for event in events or []:
+        d=event.get("posting_date")
+        if d is None or d < start_date:
+            continue
+        b_uom=str(event.get("base_receipt_uom") or "").strip().upper()
+        e_uom=str(event.get("receipt_uom") or "").strip().upper()
+        if b_uom==target and event.get("base_receipt_quantity") is not None:
+            total+=_d(event.get("base_receipt_quantity"));seen+=1
+        elif e_uom==target and event.get("receipt_quantity") is not None:
+            total+=_d(event.get("receipt_quantity"));seen+=1
+        else:
+            return None,"RECEIPT_UOM_NOT_COMPARABLE"
+    return total,("READY" if seen else "READY_ZERO_NEW_RECEIPTS")
+
+
+
 def _bulk_tpr_price_list_lifecycle(
     cur,
     rows: list[dict[str, Any]],
@@ -7437,6 +7555,19 @@ def current_tpr_review(
                 "effective":_family_effective_oh(cur,children),
             }
 
+        # Completed receipt history is used only to separate newer stock from
+        # the anchored aging lot. Same-day accepted MVT is exposed separately
+        # as provisional visibility and never enters completed-day math.
+        completed_receipts_by_family=_family_receipt_events_bulk(
+            cur,tpr_family_ids,data_day_limit=180
+        )
+        provisional_receipt_payload=_family_provisional_today_receipts_bulk(
+            cur,tpr_family_ids
+        )
+        provisional_receipts_by_family=(
+            provisional_receipt_payload.get("by_family") or {}
+        )
+
         _ensure_tpr_purpose_table(cur)
         conn.commit()
         cur.execute(
@@ -7478,6 +7609,12 @@ def current_tpr_review(
         current_oh_uom=family_effective.get("uom") or row.get("current_oh_uom")
         system_oh_uom=family_system.get("uom") or current_oh_uom
         current_oh_source=family_effective.get("source") or "QUICK_CHECK_CURRENT_PUBLISHED"
+        family_effective_status=str(family_effective.get("status") or "")
+        family_id=int(row["family_id"]) if row.get("family_id") is not None else None
+        today_receipt=(
+            provisional_receipts_by_family.get(family_id,{})
+            if family_id is not None else {}
+        )
         doh = _d(row.get("doh")) if row.get("doh") is not None else None
         dos = _d(row.get("dos")) if row.get("dos") is not None else None
         by_day = daily.get(uid, {})
@@ -7638,39 +7775,127 @@ def current_tpr_review(
             if pclass in {"FRESH", "LIVE"}
             else (Decimal("60") if pclass == "FROZEN" else None)
         )
-        freshness_days_remaining = (
-            max(Decimal("0"), freshness_threshold - doh)
-            if freshness_threshold is not None and doh is not None
-            else None
-        )
         freshness_window_start = (
             max(Decimal("0"), freshness_threshold - Decimal("2"))
             if freshness_threshold is not None else None
         )
-        freshness_in_window = bool(
+        raw_freshness_days_remaining = (
+            max(Decimal("0"), freshness_threshold - doh)
+            if freshness_threshold is not None and doh is not None
+            else None
+        )
+        raw_freshness_in_window = bool(
             freshness_window_start is not None
             and doh is not None
             and doh >= freshness_window_start
             and doh <= freshness_threshold
         )
-        # Inclusive operating window: threshold-2, threshold-1, threshold.
-        # For Fresh/Live Day 7 this is Day 5, Day 6, Day 7 = 3 sell-through days.
-        freshness_sellthrough_days_available = (
-            max(Decimal("1"), freshness_days_remaining + Decimal("1"))
-            if freshness_in_window and freshness_days_remaining is not None
+
+        # Once a Fresh/Live freshness TPR starts, lock the old-stock deadline and
+        # initial aging pool. A later receipt may reset Family DOH, but it must
+        # never erase the older lot's sell-through deadline or enlarge its target.
+        freshness_anchor = (
+            _freshness_tpr_anchor(
+                ean_upc=upc,
+                tpr_start_date=tpr_start_day,
+                family_id=family_id,
+                current_oh=current_oh,
+                current_uom=current_oh_uom,
+                doh=doh,
+                freshness_threshold=freshness_threshold,
+                allow_create=raw_freshness_in_window,
+            )
+            if tpr_purpose == "FRESHNESS_SELL_THROUGH"
             else None
         )
-        # At the moment the freshness TPR window begins, current Family Effective
-        # OH is the aging stock pool to clear by the threshold. Newer receipts are
-        # not automatically forced to zero by this objective.
-        aging_stock_target = (
-            current_oh
-            if tpr_purpose == "FRESHNESS_SELL_THROUGH"
-            and freshness_in_window
+        freshness_anchor_date = _as_date(
+            freshness_anchor.get("anchor_date")
+        ) if freshness_anchor else None
+        freshness_deadline_date = _as_date(
+            freshness_anchor.get("freshness_deadline_date")
+        ) if freshness_anchor else None
+        aging_stock_initial_target = (
+            _d(freshness_anchor.get("initial_aging_qty"))
+            if freshness_anchor and freshness_anchor.get("initial_aging_qty") is not None
+            else None
+        )
+        aging_stock_uom = (
+            str(freshness_anchor.get("aging_uom") or "").strip().upper()
+            if freshness_anchor else str(current_oh_uom or "").strip().upper()
+        )
+
+        if freshness_deadline_date is not None:
+            today=business_today()
+            days_to_deadline=(freshness_deadline_date-today).days
+            freshness_days_remaining=Decimal(max(0,days_to_deadline))
+            freshness_in_window=bool(
+                freshness_anchor_date is not None
+                and today >= freshness_anchor_date
+                and today <= freshness_deadline_date
+            )
+            freshness_sellthrough_days_available=(
+                Decimal(max(1,days_to_deadline+1))
+                if today <= freshness_deadline_date else None
+            )
+        else:
+            freshness_days_remaining=raw_freshness_days_remaining
+            freshness_in_window=raw_freshness_in_window
+            freshness_sellthrough_days_available=(
+                max(Decimal("1"), freshness_days_remaining + Decimal("1"))
+                if freshness_in_window and freshness_days_remaining is not None
+                else None
+            )
+
+        aging_stock_target=None
+        aging_completed_new_receipts=None
+        aging_receipt_adjustment_status="NOT_APPLICABLE"
+        aging_target_basis="NO_AGING_TARGET"
+        if (
+            tpr_purpose == "FRESHNESS_SELL_THROUGH"
             and current_oh is not None
             and current_oh > 0
-            else None
-        )
+        ):
+            if (
+                freshness_anchor_date is not None
+                and aging_stock_initial_target is not None
+                and aging_stock_initial_target > 0
+                and aging_stock_uom
+                and str(current_oh_uom or "").strip().upper()==aging_stock_uom
+            ):
+                completed_new_receipts,receipt_adjustment_status=_receipt_qty_in_uom_since(
+                    completed_receipts_by_family.get(family_id,[]) if family_id is not None else [],
+                    start_date=freshness_anchor_date,
+                    uom=aging_stock_uom,
+                )
+                aging_receipt_adjustment_status=receipt_adjustment_status
+                if (
+                    family_effective_status=="READY"
+                    and completed_new_receipts is not None
+                ):
+                    aging_completed_new_receipts=completed_new_receipts
+                    aging_stock_target=max(
+                        Decimal("0"),
+                        min(
+                            aging_stock_initial_target,
+                            current_oh-completed_new_receipts,
+                        ),
+                    )
+                    aging_target_basis="ANCHORED_OLD_STOCK_CURRENT_OH_MINUS_NEW_COMPLETED_RECEIPTS"
+                else:
+                    aging_stock_target=max(
+                        Decimal("0"),
+                        min(aging_stock_initial_target,current_oh),
+                    )
+                    aging_target_basis="ANCHORED_OLD_STOCK_CAPPED_BY_CURRENT_OH"
+            elif raw_freshness_in_window:
+                aging_stock_target=current_oh
+                aging_stock_initial_target=current_oh
+                aging_stock_uom=str(current_oh_uom or "").strip().upper()
+                aging_target_basis="UNANCHORED_CURRENT_OH_FALLBACK"
+
+        # Same-day provisional receipt is visibility evidence only. It is not
+        # included above because current OH / canonical roll-forward has not yet
+        # accepted the open movement day.
         required_velocity_to_clear = (
             aging_stock_target / freshness_sellthrough_days_available
             if aging_stock_target is not None
@@ -7850,14 +8075,22 @@ def current_tpr_review(
         elif tpr_purpose == "FRESHNESS_SELL_THROUGH":
             monitoring_phase = "SELL_THROUGH"
             overdue = (
-                freshness_threshold is not None
-                and doh is not None
-                and doh > freshness_threshold
+                business_today() > freshness_deadline_date
+                if freshness_deadline_date is not None
+                else (
+                    freshness_threshold is not None
+                    and doh is not None
+                    and doh > freshness_threshold
+                )
             )
             extreme_age = (
-                freshness_threshold is not None
-                and doh is not None
-                and doh > freshness_threshold + Decimal("3")
+                business_today() > freshness_deadline_date + timedelta(days=3)
+                if freshness_deadline_date is not None
+                else (
+                    freshness_threshold is not None
+                    and doh is not None
+                    and doh > freshness_threshold + Decimal("3")
+                )
             )
 
             if extreme_age:
@@ -8090,9 +8323,26 @@ def current_tpr_review(
             ),
             "original_regular_price_date": pl_life.get("prior_regular_date"),
             "aging_stock_target": aging_stock_target,
+            "aging_stock_initial_target": aging_stock_initial_target,
+            "aging_stock_uom": aging_stock_uom,
+            "aging_completed_new_receipts": aging_completed_new_receipts,
+            "aging_receipt_adjustment_status": aging_receipt_adjustment_status,
+            "aging_target_basis": aging_target_basis,
+            "freshness_anchor_date": freshness_anchor_date,
+            "freshness_deadline_date": freshness_deadline_date,
             "freshness_window_start_doh": freshness_window_start,
             "freshness_threshold_doh": freshness_threshold,
             "freshness_sellthrough_days_available": freshness_sellthrough_days_available,
+            "today_receipt_date": today_receipt.get("date"),
+            "today_receipt_qty": today_receipt.get("quantity"),
+            "today_receipt_uom": today_receipt.get("uom"),
+            "today_receipt_qty_basis": today_receipt.get("quantity_basis"),
+            "today_receipt_status": today_receipt.get("status"),
+            "today_receipt_provisional": bool(today_receipt.get("provisional")),
+            "today_receipt_event_count": today_receipt.get("event_count"),
+            "today_receipt_articles": today_receipt.get("article_numbers") or [],
+            "today_receipt_source_file_id": today_receipt.get("source_file_id"),
+            "today_receipt_source_filename": today_receipt.get("source_filename"),
             "dos": dos,
             "doh": doh,
             "qty_7d": row.get("pos_qty_7d"),
@@ -8129,7 +8379,12 @@ def current_tpr_review(
                 "freshness_window_start_doh": freshness_window_start,
                 "freshness_days_remaining": freshness_days_remaining,
                 "freshness_sellthrough_days_available": freshness_sellthrough_days_available,
+                "freshness_anchor_date": freshness_anchor_date,
+                "freshness_deadline_date": freshness_deadline_date,
+                "aging_stock_initial_target": aging_stock_initial_target,
                 "aging_stock_target": aging_stock_target,
+                "aging_completed_new_receipts": aging_completed_new_receipts,
+                "aging_target_basis": aging_target_basis,
                 "required_velocity_to_clear": required_velocity_to_clear,
                 "projected_oh_at_freshness_limit": projected_oh_at_freshness_limit,
             },
@@ -8205,11 +8460,11 @@ def current_tpr_review(
     counts = Counter(str(r.get("recommendation_code") or "OBSERVE") for r in out)
     purposes = Counter(str(r.get("tpr_purpose") or "") for r in out)
     return {
-        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
-        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V3_LIFECYCLE",
+        "contract_version": "YIPMAN_CURRENT_TPR_REVIEW_V5_AGING_ANCHOR_SAME_DAY_RECEIPT",
+        "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
-        "data_health": _pricing_review_data_health(allow_stale_estimate=True),
+        "data_health": _current_tpr_data_health(),
         "summary": {
             "current_tpr_count": len(out),
             "sold_7d_count": sum(1 for r in out if _d(r.get("qty_7d")) > 0),
@@ -8227,6 +8482,8 @@ def current_tpr_review(
             "tpr_purposes": "SWEET_SPOT_TEST_OR_FRESHNESS_SELL_THROUGH",
             "sweet_spot_objective": "FIND_SUSTAINABLE_TPR_PRICE_THAT_CAN_BECOME_NEW_REGULAR_PRICE",
             "freshness_objective": "CLEAR_AGING_STOCK_REACHING_THRESHOLD_NOT_ALL_NEWER_STOCK",
+            "freshness_anchor": "LOCK_AGING_TARGET_AND_DEADLINE_AT_FIRST_FRESHNESS_WINDOW_ENTRY;NEW_RECEIPTS_CANNOT_RESET_OR_INCREASE_AGING_TARGET",
+            "same_day_receipt_visibility": "LATEST_ACCEPTED_SAME_DAY_MVT_SHOWN_AS_PROVISIONAL;EXCLUDED_FROM_COMPLETED_DAY_KPI_AND_CANONICAL_OH_ROLLFORWARD",
             "fresh_live_tpr_window": "THRESHOLD_MINUS_2_THROUGH_THRESHOLD_INCLUSIVE;DAY_5_THROUGH_DAY_7_FOR_7_DAY_THRESHOLD",
             "post_tpr_window": "LATEST_3_COMPLETED_CANONICAL_POS_DAYS_SINCE_CONTINUOUS_TPR_START",
             "baseline": "UP_TO_7_CLEAN_PRE_TPR_NON_SALE_NON_TPR_COMPLETED_POS_DAYS",
@@ -8246,8 +8503,27 @@ _TPR_REVIEW_LAST_ERROR: dict[str,str]={}
 _TPR_REVIEW_CACHE_TTL_SECONDS=120.0
 
 
+def _current_tpr_data_health() -> dict[str,Any]:
+    """Price/POS health plus same-day MVT identity for immediate receipt refresh."""
+    health=dict(_pricing_review_data_health(allow_stale_estimate=True))
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            payload=_family_provisional_today_receipts_bulk(cur,[])
+            day=payload.get("source_day") or {}
+            cur.close()
+        health["provisional_today_movement_file_id"]=day.get("file_id")
+        health["provisional_today_movement_date"]=day.get("date")
+        health["provisional_today_movement_filename"]=day.get("original_filename")
+    except Exception:
+        health["provisional_today_movement_file_id"]=None
+        health["provisional_today_movement_date"]=None
+        health["provisional_today_movement_filename"]=None
+    return health
+
+
 def _tpr_review_cache_key(category: str, limit: int) -> str:
-    return f"V4_CURRENT_TPR_AGING_STOCK|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
+    return f"V5_CURRENT_TPR_AGING_ANCHOR_RECEIPT|{str(category or 'ALL').upper()}|{max(1,min(int(limit or 1000),2000))}"
 
 
 def _ensure_tpr_review_cache_table(cur) -> None:
@@ -8366,7 +8642,7 @@ def cached_current_tpr_review(
         if not already_refreshing:
             _request_tpr_review_refresh(cat,lim,key)
         return {
-            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V4_LIFECYCLE_ASYNC_CACHE",
+            "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V6_AGING_ANCHOR_RECEIPT_ASYNC_CACHE",
             "category":cat,
             "analysis_status":"REFRESHING",
             "cache_status":"WARMING",
@@ -8380,7 +8656,7 @@ def cached_current_tpr_review(
             },
         }
 
-    live_health=_pricing_review_data_health(allow_stale_estimate=True)
+    live_health=_current_tpr_data_health()
     cached_health=dict((cached.get("data_health") or {}))
     source_changed=(
         str(cached_health.get("pos_data_through") or "")
@@ -8389,6 +8665,8 @@ def cached_current_tpr_review(
         != str(live_health.get("movement_data_through") or "")
         or str(cached_health.get("price_list_file_id") or "")
         != str(live_health.get("price_list_file_id") or "")
+        or str(cached_health.get("provisional_today_movement_file_id") or "")
+        != str(live_health.get("provisional_today_movement_file_id") or "")
     )
     age=(time.monotonic()-cached_at) if cached_at is not None else None
     stale=source_changed or age is None or age>=_TPR_REVIEW_CACHE_TTL_SECONDS
@@ -8399,7 +8677,7 @@ def cached_current_tpr_review(
 
     return {
         **cached,
-        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V5_PRICE_LIST_SOURCE_AWARE_CACHE",
+        "contract_version":"YIPMAN_CURRENT_TPR_REVIEW_V6_PRICE_LIST_SOURCE_AWARE_AGING_ANCHOR_CACHE",
         "analysis_status":(
             "READY_SOURCE_CHANGED_REFRESHING"
             if source_changed else ("READY_STALE_REFRESHING" if stale else "READY")
