@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import api_entry as _prev
+import api_entry_stable as _prev
 
 app = _prev.app
 
