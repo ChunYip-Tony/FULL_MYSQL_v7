@@ -1491,11 +1491,17 @@ def ordering_review(
                     "family_id": fid,
                     "family_name": s.get("family_article_name"),
                     "family_article": s.get("family_article_number"),
+                    "action_upc": s.get("action_upc"),
                     "receiving_article": receiving_article,
                     "receiving_article_name": receiving_article_name,
                     "historical_receiving_articles": historical_receiving_articles,
                     "oh": s.get("ordering_oh_used"),
                     "oh_uom": s.get("uom"),
+                    "effective_oh": s.get("effective_oh_raw"),
+                    "effective_oh_uom": s.get("effective_oh_uom") or s.get("uom"),
+                    "effective_oh_source": s.get("effective_oh_source"),
+                    "system_oh": s.get("system_oh_raw"),
+                    "system_oh_uom": s.get("system_oh_uom") or s.get("uom"),
                     "last_receipt_date": receipt.get("date"),
                     "last_receipt_qty_base": receipt.get("quantity"),
                     "last_receipt_base_uom": receipt.get("base_uom"),
@@ -1546,6 +1552,10 @@ def ordering_review(
                         "velocity_7d": s.get("velocity_7d"),
                         "dos": s.get("dos"),
                         "effective_oh_raw": s.get("effective_oh_raw"),
+                        "effective_oh_uom": s.get("effective_oh_uom"),
+                        "effective_oh_source": s.get("effective_oh_source"),
+                        "system_oh_raw": s.get("system_oh_raw"),
+                        "system_oh_uom": s.get("system_oh_uom"),
                         "ordering_oh_used": s.get("ordering_oh_used"),
                         "forecast_total_usage":s.get("forecast_total_usage"),
                         "forecast_usage_before_delivery":s.get("forecast_usage_before_delivery"),
@@ -4857,7 +4867,12 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 (fid,),
             )
             children=cur.fetchall()
+            system=_family_system_oh(cur,children)
             effective=_family_effective_oh(cur,children)
+            row["system_oh"]=system.get("quantity")
+            row["system_oh_uom"]=system.get("uom")
+            row["system_oh_source"]=system.get("source")
+            row["system_oh_status"]=system.get("status")
             if effective.get("status")=="READY" and effective.get("quantity") is not None:
                 row["effective_oh"]=effective.get("quantity")
                 row["effective_oh_uom"]=effective.get("uom")
@@ -4896,6 +4911,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "receipt_history": "LAST_2_CANONICAL_PHYSICAL_RECEIPTS",
             "latest_receipt_cost": "MOVEMENT_RECEIPT_VALUATION_ON_LATEST_PHYSICAL_RECEIPT_DATE",
             "effective_oh": "LIVE_FAMILY_EFFECTIVE_OH_WITH_TRUE_STOCK_AUTHORITY",
+            "system_oh": "LATEST_SYSTEM_POSITION_DISPLAYED_BESIDE_EFFECTIVE_OH",
             "friday_warning": "FRIDAY_DOMINANT_AT_LEAST_2_DATES_AND_AT_LEAST_50_PERCENT_SHARE",
             "receipt_total": "DE_DUPED_7D_PHYSICAL_RECEIPT",
             "movement_source": "PUBLISHED_QUICK_CHECK_CURRENT_FAMILY_7D",
@@ -6270,6 +6286,7 @@ def pricing_review(
             })
             delivery_pattern_by_family: dict[int,dict[str,Any]] = {}
             family_effective_oh_by_id: dict[int,dict[str,Any]] = {}
+            family_system_oh_by_id: dict[int,dict[str,Any]] = {}
             if family_ids:
                 receipt_days=source_data_days(
                     cur,
@@ -6294,6 +6311,7 @@ def pricing_review(
                     )
                     family_children=cur.fetchall()
                     family_effective_oh_by_id[fid]=_family_effective_oh(cur,family_children)
+                    family_system_oh_by_id[fid]=_family_system_oh(cur,family_children)
             cur.close()
 
     for row in rows:
@@ -6334,6 +6352,13 @@ def pricing_review(
             family_effective_oh_by_id.get(int(family_id),{})
             if family_id is not None else {}
         )
+        family_system_oh=(
+            family_system_oh_by_id.get(int(family_id),{})
+            if family_id is not None else {}
+        )
+        row["system_oh"]=family_system_oh.get("quantity")
+        row["system_oh_uom"]=family_system_oh.get("uom")
+        row["system_oh_status"]=family_system_oh.get("status")
         if (
             family_effective_oh.get("status")=="READY"
             and family_effective_oh.get("quantity") is not None
