@@ -1086,7 +1086,7 @@ jobs:
           assert "tproh" in text
           assert "clearanceoh" in text
           assert "promooh" in text
-          assert "await refreshAfterFamilyTrueStock(family)" in text
+          assert "refreshAfterFamilyTrueStock(family).catch" in text
           assert "orderMode==='PROMOTION'" in text
           assert "EFFECTIVE OH · EDIT TRUE STOCK" in text
           assert "include_oh=true" in text
