@@ -65,7 +65,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v471';
+const CACHE='yipman-v1-v472';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -101,7 +101,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v471';
+const CACHE='yipman-v472';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1123,6 +1123,17 @@ html:not(.yipman-desktop) #quick .bestreceipt b{font-size:10.2px}
  #order .orderqty b{font-size:19px}
  .manual-promo-fields{gap:6px}
 }
+
+/* V472 True Stock editor: always open as a dedicated sheet, never inline inside an OH cell. */
+#overlay .sheet .truestocksheet{display:grid;gap:12px}
+#overlay .sheet .truestockcurrent{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 11px;border:1px solid #dbe4ea;border-radius:12px;background:#f7f9fb}
+#overlay .sheet .truestockcurrent small{display:block;font-size:8px;color:#71808d;font-weight:1000}
+#overlay .sheet .truestockcurrent b{font-size:22px;line-height:1;color:#173247;white-space:nowrap}
+#overlay .sheet .truestockfield label{display:block;font-size:9px;color:#50616e;font-weight:1000}
+#overlay .sheet .truestockfield input{display:block;width:100%;margin-top:5px;min-height:56px;border:2px solid #8dc9b0;border-radius:13px;background:#fff;padding:10px 12px;font-size:26px;font-weight:1000;outline:0}
+#overlay .sheet .truestockhint{padding:9px 10px;border-radius:10px;background:#eef7f2;color:#356149;font-size:9px;line-height:1.35;font-weight:850}
+#overlay .sheet .truestockactions{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
+#overlay .sheet .truestockactions button{min-height:48px;border-radius:11px;font-size:10px;font-weight:1000}
 </style>
 </head>
 <body>
@@ -1352,12 +1363,7 @@ function familyOhTapOpen(e){
   if(moved){btn.dataset.trueStockIgnoreClickUntil=String(Date.now()+700);return}
   e.preventDefault();e.stopPropagation();
   familyOhLastPointerOpenAt=Date.now();
-  if(btn.dataset.trueStockEditing==='1'){
-   const editor=(btn.closest('.familyohpair')||btn.parentElement)?.querySelector?.('.familyohinlineeditor');
-   const input=editor?.querySelector?.('.trueinput');if(input)input.focus();
-   return;
-  }
-  beginFamilyOhInlineEdit(btn);
+  openFamilyTrueStock(familyOhPayload(btn));
   return;
  }
  if(e.type==='click'){
@@ -1365,12 +1371,7 @@ function familyOhTapOpen(e){
   if(Date.now()<ignoreUntil)return;
   if(Date.now()-familyOhLastPointerOpenAt<700)return;
   e.preventDefault();e.stopPropagation();
-  if(btn.dataset.trueStockEditing==='1'){
-   const editor=(btn.closest('.familyohpair')||btn.parentElement)?.querySelector?.('.familyohinlineeditor');
-   const input=editor?.querySelector?.('.trueinput');if(input)input.focus();
-   return;
-  }
-  beginFamilyOhInlineEdit(btn);
+  openFamilyTrueStock(familyOhPayload(btn));
  }
 }
 function bindFamilyOhEditors(root=document){
@@ -1484,12 +1485,14 @@ async function openFamilyTrueStock(d){
  if(!uom)return sheet('True Stock','Family '+esc(family),'<div class="detail">True Stock UOM is unavailable. Fix the Family inventory UOM before counting.</div>');
  sheet(
   d.name||'True Stock',
-  'Family '+esc(family)+' · Effective OH',
-  '<div class="detail"><b>Current Effective OH</b><br>'+fmtNullable(currentQty)+' '+esc(uom)+
-  '<br><br><b>Enter Physical True Stock</b><br><input id="familyTrueStockInput" type="number" min="0" step="0.01" inputmode="decimal" value="'+esc(currentQty)+'" style="width:100%;font-size:26px;font-weight:1000;padding:11px;border:2px solid #9dcfbd;border-radius:12px">'+
-  '<br><br><label style="display:block;font-size:9px;font-weight:900;color:#65737e">NOTE</label><input id="familyTrueStockNote" placeholder="Physical count / optional note" style="width:100%;padding:10px;border:1px solid #d8e1e6;border-radius:10px;margin-top:4px">'+
-  '<div class="estimatebar" style="margin-top:10px"><b>Immediate authority:</b> saving this count makes it the Family Effective OH for Quick Check, Stock Flow, Ordering, Price Review and other OH-dependent calculations. If lower than System OH, the PI / Pending Dumping workflow is updated.</div>'+
-  '<div class="actions"><button class="secondary" id="familyTrueStockCancel">CANCEL</button><button class="primary" id="familyTrueStockSave">SAVE TRUE STOCK & RECALCULATE</button></div></div>'
+  'Family '+esc(family)+' · physical count',
+  '<div class="truestocksheet">'+
+   '<div class="truestockcurrent"><div><small>CURRENT EFFECTIVE OH</small><b>'+fmtNullable(currentQty)+' '+esc(uom)+'</b></div><span>Reference</span></div>'+
+   '<div class="truestockfield"><label>ENTER PHYSICAL TRUE STOCK</label><input id="familyTrueStockInput" type="number" min="0" step="0.01" inputmode="decimal" autocomplete="off" placeholder="Enter count"></div>'+
+   '<div class="truestockfield"><label>NOTE · OPTIONAL</label><input id="familyTrueStockNote" autocomplete="off" placeholder="Physical count / note"></div>'+
+   '<div class="truestockhint">Saving this count immediately becomes the Family Effective OH and recalculates Ordering, Quick Check and Price Review. If it is below System OH, Pending Dumping is updated.</div>'+
+   '<div class="truestockactions"><button class="secondary" id="familyTrueStockCancel">CANCEL</button><button class="primary" id="familyTrueStockSave">SAVE & RECALCULATE</button></div>'+
+  '</div>'
  );
  $('#familyTrueStockCancel').onclick=()=>closeSheet(true);
  $('#familyTrueStockSave').onclick=async()=>{
