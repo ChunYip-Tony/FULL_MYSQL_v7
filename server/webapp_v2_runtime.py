@@ -4223,9 +4223,21 @@ def bulk_ordering_suggestions(
                 )
             )
 
+            representative_upc=next(
+                (str(x.get("ean_upc") or "").strip() for x in sorted(
+                    rows,
+                    key=lambda x: (
+                        -float(x.get("upc_velocity_7d") or 0),
+                        -float(x.get("pos_qty_7d") or 0),
+                        str(x.get("ean_upc") or ""),
+                    ),
+                ) if str(x.get("ean_upc") or "").strip()),
+                None,
+            )
             suggestions.append({
                 "family_id":fid,
                 "family_article_number":fam_article,
+                "action_upc":representative_upc,
                 "family_article_name":fam.get("family_description"),
                 "category":kind,
                 "effective_oh_raw":effective_raw_oh,
