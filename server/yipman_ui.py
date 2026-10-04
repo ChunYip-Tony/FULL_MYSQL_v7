@@ -2902,7 +2902,7 @@ function renderOrderRoster(rows,data,h,stale){
  const ignoredOrderCount=visible.filter(r=>orderState(r)!=='ZERO_ORDER'&&orderIsIgnored(r)).length;
  visible=visible.filter(r=>orderState(r)==='ZERO_ORDER'||!orderIsIgnored(r));
  const dos=r=>{const v=r?.details?.dos;if(v===null||v===undefined||v==='')return null;const n=Number(v);return Number.isFinite(n)?n:null};
- const obs=r=>Number(r?.delivery_day_observed_count||0);
+ const obs=r=>Number(r?.delivery_window_observed_count??r?.delivery_day_observed_count??0);
  const conf=r=>({HIGH:0,MEDIUM:1,LOW:2,NONE:3}[String(r?.delivery_day_confidence||'NONE').toUpperCase()]??3);
  visible=[...visible].sort((a,b)=>{
   if(orderSort==='QTY_URGENT')return (orderQty(b)??-1)-(orderQty(a)??-1)||(Number(!!b.attention)-Number(!!a.attention))||String(a.family_name||'').localeCompare(String(b.family_name||''));
