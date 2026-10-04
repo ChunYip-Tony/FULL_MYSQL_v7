@@ -2004,7 +2004,7 @@ def cached_ordering_review(
     expected=str(completed_through_date())
     cached_health=dict((cached or {}).get("data_health") or {})
     cached_expected=str(cached_health.get("expected_through") or "")
-    live_health=_pricing_review_data_health(allow_stale_estimate=True)
+    live_health=_current_tpr_data_health()
     source_changed=bool(cached) and (
         str(cached_health.get("pos_data_through") or "")
         != str(live_health.get("pos_data_through") or "")
@@ -2012,6 +2012,8 @@ def cached_ordering_review(
         != str(live_health.get("movement_data_through") or "")
         or str(cached_health.get("price_list_file_id") or "")
         != str(live_health.get("price_list_file_id") or "")
+        or str(cached_health.get("provisional_today_movement_file_id") or "")
+        != str(live_health.get("provisional_today_movement_file_id") or "")
     )
     data_current=bool(cached and cached_expected==expected and not source_changed)
     age=(time.monotonic()-cached_at) if cached is not None and cached_at is not None else None
@@ -8464,7 +8466,7 @@ def current_tpr_review(
         "contract_lineage": "YIPMAN_CURRENT_TPR_REVIEW_V4_AGING_STOCK_WINDOW",
         "category": cat,
         "data_day_definition": "LATEST_COMPLETED_CANONICAL_POS_DATA_DAYS",
-        "data_health": _pricing_review_data_health(allow_stale_estimate=True),
+        "data_health": _current_tpr_data_health(),
         "summary": {
             "current_tpr_count": len(out),
             "sold_7d_count": sum(1 for r in out if _d(r.get("qty_7d")) > 0),
@@ -8501,6 +8503,25 @@ _TPR_REVIEW_CACHE_AT: dict[str,float]={}
 _TPR_REVIEW_REFRESHING: set[str]=set()
 _TPR_REVIEW_LAST_ERROR: dict[str,str]={}
 _TPR_REVIEW_CACHE_TTL_SECONDS=120.0
+
+
+def _current_tpr_data_health() -> dict[str,Any]:
+    """Price/POS health plus same-day MVT identity for immediate receipt refresh."""
+    health=dict(_pricing_review_data_health(allow_stale_estimate=True))
+    try:
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True)
+            payload=_family_provisional_today_receipts_bulk(cur,[])
+            day=payload.get("source_day") or {}
+            cur.close()
+        health["provisional_today_movement_file_id"]=day.get("file_id")
+        health["provisional_today_movement_date"]=day.get("date")
+        health["provisional_today_movement_filename"]=day.get("original_filename")
+    except Exception:
+        health["provisional_today_movement_file_id"]=None
+        health["provisional_today_movement_date"]=None
+        health["provisional_today_movement_filename"]=None
+    return health
 
 
 def _tpr_review_cache_key(category: str, limit: int) -> str:
