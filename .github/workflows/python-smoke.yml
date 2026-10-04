@@ -288,7 +288,7 @@ jobs:
           assert 'WHERE family_id IN ({ph})' in src
           assert 'row["recent_promotion_event"] = _recent_family_sale_event_from_batch' in src
           assert 'PRICE_TYPE_SALE_ONLY' in src
-          assert 'promo_family_rows.setdefault(int(row["family_id"]), []).append(row)' in src
+          assert 'promo_family_rows = children_by_family' in src
           assert 'YIPMAN_STOCK_FLOW_V9_FAST_OH_OVERLAY' in src
           assert 'qualified_count = len(rows)' in src
           assert 'children_by_family' in src
