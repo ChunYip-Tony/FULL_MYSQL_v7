@@ -4846,6 +4846,88 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                 row["latest_receipt_cost_uom"] = cost_row.get("cost_uom")
                 row["latest_receipt_cost_source"] = cost_row.get("source_type")
 
+        # Stock Flow is an operational inventory view, so publish the same
+        # Family-level System OH / Effective OH authority used by Quick Check.
+        # True Stock is the immediate override; System OH remains visible for
+        # comparison and PI/dumping discrepancy review.
+        if rows:
+            stock_family_ids = sorted({
+                int(row["family_id"])
+                for row in rows
+                if row.get("family_id") is not None
+            })
+            stock_ph = ",".join(["%s"] * len(stock_family_ids))
+            cur.execute(
+                f"""SELECT *
+                    FROM quick_check_current
+                    WHERE family_id IN ({stock_ph})
+                    ORDER BY family_id,
+                             COALESCE(upc_velocity_7d,0) DESC,
+                             COALESCE(pos_qty_7d,0) DESC,
+                             ean_upc""",
+                tuple(stock_family_ids),
+            )
+            stock_children: dict[int,list[dict[str,Any]]] = {}
+            for child in cur.fetchall():
+                if child.get("family_id") is None:
+                    continue
+                stock_children.setdefault(int(child["family_id"]),[]).append(dict(child))
+
+            for row in rows:
+                fid = int(row["family_id"])
+                children = stock_children.get(fid,[])
+                system_position = _family_system_oh(cur,children) if children else {}
+                effective_position = _family_effective_oh(cur,children) if children else {}
+
+                if (
+                    effective_position.get("status") != "READY"
+                    or effective_position.get("quantity") is None
+                ):
+                    published = _published_family_oh_fallback(children)
+                    if published:
+                        published["live_status"] = effective_position.get("status")
+                        published["live_reason"] = effective_position.get("reason")
+                        effective_position = published
+
+                representative = next(
+                    (
+                        x for x in children
+                        if str(x.get("ean_upc") or "").strip()
+                    ),
+                    {},
+                )
+                system_qty = system_position.get("quantity")
+                system_uom = system_position.get("uom")
+                effective_qty = effective_position.get("quantity")
+                effective_uom = effective_position.get("uom") or system_uom
+                effective_source = str(
+                    effective_position.get("source")
+                    or effective_position.get("effective_oh_source")
+                    or ""
+                ).upper()
+                if effective_source not in {"TRUE_STOCK","SYSTEM_OH"}:
+                    effective_source = (
+                        "TRUE_STOCK"
+                        if effective_position.get("true_stock_id") is not None
+                        else "SYSTEM_OH"
+                    )
+
+                row.update({
+                    "system_oh": system_qty,
+                    "system_oh_uom": system_uom,
+                    "system_oh_status": system_position.get("status"),
+                    "effective_oh": effective_qty,
+                    "effective_oh_uom": effective_uom,
+                    "effective_oh_status": effective_position.get("status"),
+                    "effective_oh_source": effective_source,
+                    "true_stock_required_uom": system_uom or effective_uom,
+                    "action_upc": representative.get("ean_upc"),
+                    "effective_oh_editable": bool(
+                        representative.get("ean_upc")
+                        and (system_uom or effective_uom)
+                    ),
+                })
+
         cur.close()
 
     rows.sort(
@@ -4856,7 +4938,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         )
     )
     return {
-        "contract_version": "YIPMAN_STOCK_FLOW_V7_OVERSALE_FRIDAY_COST",
+        "contract_version": "YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH",
         "count": len(rows),
         "movement_day_count_7d": day_count,
         "rows": rows[:lim],
@@ -4876,6 +4958,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
             "promotion_definition": "PRICE_TYPE_SALE_ONLY",
             "tpr_is_promotion": False,
             "observed_delivery_days": "CANONICAL_PHYSICAL_RECEIPTS_LATEST_180_COMPLETED_MVT_DAYS",
+            "inventory_display": "EFFECTIVE_OH_WITH_SYSTEM_OH_SIDE_BY_SIDE",
+            "effective_oh_authority": "ACTIVE_TRUE_STOCK_OVERRIDES_SYSTEM_OH_UNTIL_NEW_OH_OR_NEW_TRUE_STOCK",
         },
     }
 
