@@ -3722,6 +3722,7 @@ async function uploadDataFiles(){
  const input=$('#dataUploadFiles'),btn=$('#dataUploadBtn'),result=$('#dataUploadResult');
  const files=[...(input?.files||[])];
  if(!files.length){toast('Select files first');return}
+ let session=null;
  if(btn){btn.disabled=true;btn.textContent='CREATING BATCH…'}
  if(result)result.textContent='Creating upload batch…';
  try{
@@ -3732,7 +3733,7 @@ async function uploadDataFiles(){
     body:JSON.stringify({label}),
     timeoutMs:20000
   });
-  const session=created.session_id||created.batch_key||created.session?.session_id;
+  session=created.session_id||created.batch_key||created.session?.session_id;
   if(!session)throw new Error('Upload batch session ID was not returned');
   for(let i=0;i<files.length;i++){
     if(btn)btn.textContent='UPLOADING '+(i+1)+' / '+files.length;
@@ -3754,8 +3755,18 @@ async function uploadDataFiles(){
   toast('Upload committed · processing started');
   await loadData();
  }catch(e){
-  if(result)result.textContent='UPLOAD NOT COMMITTED · '+String(e.message||e);
-  toast('Upload not committed');
+  let cleanup='';
+  if(session){
+   try{
+    await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/abort',{method:'POST',timeoutMs:12000});
+    cleanup=' · incomplete batch aborted';
+   }catch(abortErr){
+    cleanup=' · batch cleanup needs review';
+   }
+  }
+  if(result)result.textContent='UPLOAD NOT COMMITTED · '+String(e.message||e)+cleanup;
+  toast('Upload not committed'+cleanup);
+  loadData().catch(()=>{});
  }finally{
   if(btn){btn.disabled=false;btn.textContent='UPLOAD & START PROCESSING'}
  }
