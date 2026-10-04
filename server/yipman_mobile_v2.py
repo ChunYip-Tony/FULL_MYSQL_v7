@@ -88,7 +88,12 @@ YIPMAN_MOBILE_V2_CSS = r"""
   #yv2 .yv2-formgrid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:9px}.yv2-formgrid label{font-size:9px;color:#667085;font-weight:950}.yv2-formgrid input{display:block;width:100%;margin-top:3px;border:1.8px solid #cfd6de;border-radius:10px;padding:9px;font-size:13px;font-weight:850}
   #yv2 .yv2-promosearch{display:flex;gap:6px;margin-top:9px}.yv2-promosearch input{flex:1;min-width:0;border:2px solid #cfd6de;border-radius:11px;padding:10px;font-size:15px;font-weight:800}
   #yv2 .yv2-promoresult{width:100%;text-align:left;border:1.8px solid #d5dce3;background:#fafbfc;border-radius:11px;padding:9px;margin-top:6px}.yv2-promoresult b{display:block;font-size:15px}.yv2-promoresult span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
-  #yv2 .yv2-selected{border:1.8px solid #a8cdb8;background:#edf7f1;border-radius:11px;padding:9px;margin-top:7px}.yv2-selected b{font-size:14px}.yv2-selected button{float:right;border:1px solid #d9aaa5;background:#fff0ee;color:#a82820;border-radius:8px;font-size:10px;font-weight:950;padding:5px 7px}
+  #yv2 .yv2-selected{border:1.8px solid #a8cdb8;background:#edf7f1;border-radius:11px;padding:9px;margin-top:7px}.yv2-selected b{font-size:14px}.yv2-selected button{border:1px solid #d9aaa5;background:#fff0ee;color:#a82820;border-radius:8px;font-size:10px;font-weight:950;padding:6px 8px}
+  #yv2 .yv2-promo-name-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  #yv2 .yv2-promo-name-row>div{min-width:0;flex:1}
+  #yv2 .yv2-promo-delete-small{flex:0 0 auto!important;min-height:34px!important;padding:6px 10px!important;font-size:11px!important;border-color:#d9aaa5!important;background:#fff0ee!important;color:#a82820!important}
+  #yv2 .yv2-saved-promo-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;padding:9px 10px;border:1.8px solid #d4dae1;background:#fafbfc;border-radius:11px}
+  #yv2 .yv2-saved-promo-head b{font-size:14px;line-height:1.25;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #yv2 .yv2-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:78px;z-index:10002;background:#17212b;color:#fff;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:900;opacity:0;pointer-events:none;transition:.18s;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}.yv2-toast.on{opacity:1}
   #yv2 .yv2-line{height:1px;background:#d7dde4;margin:11px 0}
   #yv2 .yv2-link{color:#1358a8;text-decoration:none;font-weight:900}
@@ -474,7 +479,7 @@ YIPMAN_MOBILE_V2_JS = r"""
           <div class="yv2-line"></div>
           <div class="yv2-actiontype">Saved promotion list</div>
           <select class="yv2-select" id="yv2PromoList"><option value="">Choose promotion list…</option>${rows.map(x=>'<option value="'+esc(x.list_id)+'">'+esc(x.list_name)+' · '+fmt(x.ready_count,0)+' ready</option>').join('')}</select>
-          <div class="yv2-btnrow" id="yv2PromoDeleteRow" style="display:none"><button class="yv2-btn ignore" type="button" id="yv2PromoDeleteList">Delete Saved Promotion</button></div>
+          <div class="yv2-saved-promo-head" id="yv2PromoDeleteRow" style="display:none"><b id="yv2PromoSelectedName">Saved Promotion</b><button class="yv2-btn yv2-promo-delete-small" type="button" id="yv2PromoDeleteList">Delete</button></div>
           <div id="yv2PromoCalc" style="margin-top:9px"></div>
         </div>`;
       $('#yv2PromoList').value=String(V.promoListId||'');
@@ -486,12 +491,13 @@ YIPMAN_MOBILE_V2_JS = r"""
     }catch(e){$('#yv2OrderRows').innerHTML='<div class="yv2-empty">'+esc(e.message)+'</div>'}
   }
   function updatePromoDeleteButton(){
-    const row=$('#yv2PromoDeleteRow'),btn=$('#yv2PromoDeleteList');
+    const row=$('#yv2PromoDeleteRow'),btn=$('#yv2PromoDeleteList'),name=$('#yv2PromoSelectedName');
     if(!row||!btn)return;
     const d=V.promoListDetail||{};
     const manual=Boolean(d.manual_item_removal_allowed)||String(d.source_filename||'').trim().toUpperCase()==='MANUAL_SEARCH_ENTRY';
     row.style.display=V.promoListId&&manual?'flex':'none';
     btn.disabled=!V.promoListId||!manual;
+    if(name)name.textContent=d.list_name||('Promotion '+String(V.promoListId||''));
   }
   async function deleteSavedPromotion(){
     const id=Number(V.promoListId),d=V.promoListDetail||{};
@@ -520,12 +526,12 @@ YIPMAN_MOBILE_V2_JS = r"""
       const d=await api('/v1/yipman/promotion-ordering/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({list_id:Number(V.promoListId),delivery_date:V.delivery,next_delivery_date:V.nextDelivery,temporary_oh_overrides:[]}),timeoutMs:45000});
       const manual=Boolean(detail?.manual_item_removal_allowed)||String(detail?.source_filename||'').toUpperCase()==='MANUAL_SEARCH_ENTRY';
       const review=(detail?.items||[]).filter(x=>x.mapping_status!=='READY');
-      const reviewHtml=review.map(x=>`<div class="yv2-selected">${manual&&x.item_id?`<button type="button" data-promo-remove-item="${esc(x.item_id)}">Remove</button>`:''}<b>${esc(x.raw_description||x.raw_item_code||'Promotion item')}</b><div class="yv2-meta">${esc(x.mapping_status||'REVIEW')} · ${esc(x.validation_error||'Needs mapping review')}</div></div>`).join('');
+      const reviewHtml=review.map(x=>`<div class="yv2-selected"><div class="yv2-promo-name-row"><div><b>${esc(x.raw_description||x.raw_item_code||'Promotion item')}</b><div class="yv2-meta">${esc(x.mapping_status||'REVIEW')} · ${esc(x.validation_error||'Needs mapping review')}</div></div>${manual&&x.item_id?`<button type="button" class="yv2-promo-delete-small" data-promo-remove-item="${esc(x.item_id)}">Remove</button>`:''}</div></div>`).join('');
       const rowsHtml=(d.rows||[]).map(r=>{
         const p=r.promotion_list_item||{},family=r.family_article_number||r.family_article||p.family_article_number||'',name=r.family_article_name||p.family_name||r.name||r.description||r.upc||'Promotion item';
         const oh=r.current_effective_oh??r.effective_oh_raw??r.effective_oh??r.current_oh,uom=r.current_effective_oh_uom||r.effective_oh_uom||r.oh_uom||r.uom||r.selling_uom||'';
-        const remove=manual&&p.item_id?`<button class="yv2-btn ignore" type="button" data-promo-remove-item="${esc(p.item_id)}">Remove from promotion</button>`:'';
-        return `<div class="yv2-card" style="margin-bottom:8px"><div class="yv2-topline"><div><div class="yv2-actionname">${esc(name)}</div><div class="yv2-meta">UPC ${esc(r.upc||p.upc||p.raw_item_code||'—')} · Family ${esc(family||'—')}</div></div><span class="yv2-badge ${r.freshness_adjustment_applied?'amber':'green'}">${r.freshness_adjustment_applied?'FRESHNESS':'PROMO'}</span></div><div class="yv2-grid2"><button class="yv2-metric edit" data-stock-family="${esc(family)}" data-stock-name="${esc(name)}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button><div class="yv2-metric"><div class="yv2-label">Promo price</div><div class="yv2-value">${money(p.promotion_price??r.promotion_price)}</div></div></div><div class="yv2-orderqty"><div class="yv2-label">Suggested promo order</div><b>${fmt(r.suggested_order_qty??r.suggested_delivery_qty)} ${esc(r.suggested_order_uom||r.suggested_delivery_uom||r.uom||r.selling_uom||'')}</b></div>${remove?'<div class="yv2-btnrow">'+remove+'</div>':''}</div>`;
+        const remove=manual&&p.item_id?`<button class="yv2-btn yv2-promo-delete-small" type="button" data-promo-remove-item="${esc(p.item_id)}">Remove</button>`:'';
+        return `<div class="yv2-card" style="margin-bottom:8px"><div class="yv2-promo-name-row"><div><div class="yv2-actionname">${esc(name)}</div><div class="yv2-meta">UPC ${esc(r.upc||p.upc||p.raw_item_code||'—')} · Family ${esc(family||'—')}</div></div>${remove}</div><div class="yv2-grid2"><button class="yv2-metric edit" data-stock-family="${esc(family)}" data-stock-name="${esc(name)}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button><div class="yv2-metric"><div class="yv2-label">Promo price</div><div class="yv2-value">${money(p.promotion_price??r.promotion_price)}</div></div></div><div class="yv2-orderqty"><div class="yv2-label">Suggested promo order</div><b>${fmt(r.suggested_order_qty??r.suggested_delivery_qty)} ${esc(r.suggested_order_uom||r.suggested_delivery_uom||r.uom||r.selling_uom||'')}</b></div></div>`;
       }).join('');
       box.innerHTML=(manual&&reviewHtml?'<div class="yv2-meta" style="margin:5px 0 7px"><b>Manual promotion items needing review</b></div>'+reviewHtml:'')+rowsHtml||'<div class="yv2-empty">No calculable promotion items.</div>';
       bindStockButtons(box);
@@ -583,7 +589,7 @@ YIPMAN_MOBILE_V2_JS = r"""
     const box=$('#yv2PromoSelected');if(!box)return;
     box.innerHTML=[...V.promoSelected.entries()].map(([k,r])=>{
       const fam=r.family||{},eff=fam.current_effective_oh||fam.effective_oh||{},oh=eff.quantity??eff.current_oh??eff.effective_oh,uom=eff.uom||eff.uom_code||fam?.family_sales_7d?.uom||r.selling_uom||'';
-      return `<div class="yv2-selected"><button type="button" data-promo-remove="${esc(k)}">Remove</button><b>${esc(fam.family_article_name||r.family_name||r.name||r.number)}</b><div class="yv2-meta">Family ${esc(r.familyKey||'—')} · Selected ${esc(r.code||r.number||'—')}</div>${r.familyKey?`<button type="button" class="yv2-metric edit" style="width:100%;margin-top:7px" data-stock-family="${esc(r.familyKey)}" data-stock-name="${esc(fam.family_article_name||r.name||'')}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button>`:''}<input class="yv2-input" style="font-size:16px" data-promo-price="${esc(k)}" value="${esc(r.price??'')}" placeholder="SALE price"></div>`;
+      return `<div class="yv2-selected"><div class="yv2-promo-name-row"><div><b>${esc(fam.family_article_name||r.family_name||r.name||r.number)}</b><div class="yv2-meta">Family ${esc(r.familyKey||'—')} · Selected ${esc(r.code||r.number||'—')}</div></div><button type="button" class="yv2-promo-delete-small" data-promo-remove="${esc(k)}">Remove</button></div>${r.familyKey?`<button type="button" class="yv2-metric edit" style="width:100%;margin-top:7px" data-stock-family="${esc(r.familyKey)}" data-stock-name="${esc(fam.family_article_name||r.name||'')}" data-stock-oh="${esc(oh??'')}" data-stock-uom="${esc(uom)}"><div class="yv2-label">Effective OH · tap to enter True Stock</div><div class="yv2-value">${fmt(oh)} ${esc(uom)}</div></button>`:''}<input class="yv2-input" style="font-size:16px" data-promo-price="${esc(k)}" value="${esc(r.price??'')}" placeholder="SALE price"></div>`;
     }).join('')||'<div class="yv2-meta" style="margin-top:8px">No promotion items selected yet.</div>';
     bindStockButtons(box);
     bindPromoSelectedRemove();
