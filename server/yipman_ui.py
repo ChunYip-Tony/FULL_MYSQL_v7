@@ -1611,9 +1611,11 @@ function restorePreviousSheet(){
 }
 function sheet(title,sub,html){
   const wasOpen=$('#overlay').classList.contains('on');
+  const body=$('#sheetBody');
+  const replacingLoading=wasOpen&&!!body?.firstElementChild?.classList?.contains('loading')&&body.children.length===1;
   if(!wasOpen){saveCurrentHistoryPosition();sheetStack=[]}
-  else sheetStack.push(stashCurrentSheet());
-  $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';$('#sheetBody').innerHTML=html;$('#overlay').classList.add('on');
+  else if(!replacingLoading)sheetStack.push(stashCurrentSheet());
+  $('#sheetTitle').textContent=title;$('#sheetSub').textContent=sub||'';body.innerHTML=html;$('#overlay').classList.add('on');
   const sh=$('.sheet');if(sh)sh.scrollTop=0;
   if(historyReady&&!wasOpen){
     const pos=currentPagePosition(current);
