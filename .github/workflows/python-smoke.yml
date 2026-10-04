@@ -980,6 +980,12 @@ jobs:
           assert "'effective_oh':" in submit
           assert 'force:bool=False' in ordering_ep
           assert 'if parsed_delivery is not None and force' in ordering_ep
+          stockflow=inspect.getsource(bo.yipman_best_sellers)
+          assert '"effective_oh"' in stockflow
+          assert 'FAMILY_TRUE_STOCK' in stockflow
+          assert 'YIPMAN_STOCK_FLOW_V8_EFFECTIVE_OH_TRUE_STOCK' in stockflow
+          assert 'row["family_article_number"] = live.get("main_article_number")' in pricing
+          assert 'row["family_name"] = live.get("family_description")' in pricing
           print('family-cost-global-true-stock=PASS')
           PY
 
@@ -1043,6 +1049,15 @@ jobs:
           assert "data-ai-question=" not in text
           assert "receipt_minus_selling_7d" in text
           assert "next_delivery_date=" in text
+          assert "function openFamilyTrueStock" in text
+          assert "function bindFamilyOhEditors" in text
+          assert "SAVE TRUE STOCK & RECALCULATE" in text
+          assert "data-family-oh" in text
+          assert "EFFECTIVE OH · EDIT TRUE STOCK" in text
+          assert "include_oh=true" in text
+          assert "stockohbar" in text
+          assert "effective_oh:r.effective_oh" in text
+          assert "TAP TO ENTER TRUE STOCK" in text
           print('yipman-dom-bindings=PASS')
           PY
 
