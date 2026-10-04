@@ -78,8 +78,23 @@ p{{font-size:14px;line-height:1.45;color:#566775}}.install{{width:100%;min-heigh
 let deferredInstall=null;
 const btn=document.getElementById('installBtn'),status=document.getElementById('installStatus');
 const standalone=window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
-function installed(){{btn.disabled=true;btn.textContent='V1 ALREADY INSTALLED';status.textContent='Yipman V1 is already running as an installed app on this device.'}}
-if(standalone)installed();
+const ua=navigator.userAgent||'';
+const android=/Android/i.test(ua);
+const chrome=/Chrome\/\d+/i.test(ua)&&!/SamsungBrowser|EdgA|OPR|wv\)/i.test(ua);
+const chromeIntent='intent://'+location.host+location.pathname.replace(/^\//,'')+'#Intent;scheme=https;package=com.android.chrome;end';
+function installed(){{btn.disabled=true;btn.textContent='V1 ALREADY INSTALLED';status.textContent='Yipman V1 is already installed / running as a standalone app.'}}
+function fallbackMode(){{
+ if(standalone)return installed();
+ btn.disabled=false;
+ if(android&&!chrome){{
+   btn.textContent='OPEN IN CHROME TO INSTALL';
+   status.textContent='This in-app browser cannot show Android’s PWA install prompt. Tap the blue button to open this installer in Chrome.';
+ }}else{{
+   btn.textContent='SHOW INSTALL STEPS';
+   status.textContent='Chrome has not offered the install prompt yet. Tap the blue button for the exact install step.';
+ }}
+}}
+if(standalone)installed();else fallbackMode();
 window.addEventListener('beforeinstallprompt',e=>{{
  e.preventDefault();deferredInstall=e;
  btn.disabled=false;btn.textContent='INSTALL YIPMAN V1';
@@ -87,15 +102,23 @@ window.addEventListener('beforeinstallprompt',e=>{{
 }});
 window.addEventListener('appinstalled',()=>{{deferredInstall=null;btn.disabled=true;btn.textContent='INSTALLED';status.textContent='Yipman V1 was installed successfully.'}});
 btn.addEventListener('click',async()=>{{
- if(!deferredInstall){{status.textContent='The browser install prompt is not available yet. In Chrome, use the browser menu → Install app / Add to Home screen.';return}}
- btn.disabled=true;await deferredInstall.prompt();const choice=await deferredInstall.userChoice;deferredInstall=null;
- if(choice?.outcome==='accepted'){{btn.textContent='INSTALLING…';status.textContent='Installation accepted.'}}
- else{{btn.disabled=false;btn.textContent='INSTALL YIPMAN V1';status.textContent='Installation was cancelled.'}}
+ if(deferredInstall){{
+   btn.disabled=true;await deferredInstall.prompt();const choice=await deferredInstall.userChoice;deferredInstall=null;
+   if(choice?.outcome==='accepted'){{btn.textContent='INSTALLING…';status.textContent='Installation accepted.'}}
+   else fallbackMode();
+   return;
+ }}
+ if(android&&!chrome){{
+   status.textContent='Opening this Yipman V1 installer in Chrome…';
+   location.href=chromeIntent;
+   return;
+ }}
+ status.innerHTML='In Chrome: tap <b>⋮</b> at the top right → <b>Install app</b> or <b>Add to Home screen</b>.';
 }});
 if('serviceWorker'in navigator){{
  navigator.serviceWorker.register('/app/yipman-v1/sw.js',{{scope:'/app/yipman-v1/'}}).then(()=>navigator.serviceWorker.ready).then(()=>{{
-   if(!standalone&&!deferredInstall){{status.textContent='V1 is ready to install. If the blue install button does not activate, use Chrome menu → Install app / Add to Home screen.';btn.disabled=false;btn.textContent='INSTALL YIPMAN V1'}}
- }}).catch(()=>{{status.textContent='Installer setup failed. Open V1 once, then return to this install link.';btn.disabled=false;btn.textContent='RETRY / USE CHROME MENU'}});
+   if(!standalone&&!deferredInstall)fallbackMode();
+ }}).catch(()=>{{status.textContent='Installer setup failed. Open V1 once, then return to this install link.';btn.disabled=false;btn.textContent='OPEN V1 FIRST'}});
 }}
 </script>
 </body>
@@ -153,7 +176,7 @@ def yipman_v1_manifest() -> str:
 
 def yipman_v1_service_worker() -> str:
     return r"""
-const CACHE='yipman-v1-v473';
+const CACHE='yipman-v1-v474';
 const SHELL=['/app/yipman-v1/','/app/yipman-v1/manifest.webmanifest','/app/yipman-v1/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('yipman-v1-')&&k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -189,7 +212,7 @@ def yipman_manifest() -> str:
 
 def yipman_service_worker() -> str:
     return r"""
-const CACHE='yipman-v473';
+const CACHE='yipman-v474';
 const SHELL=['/app/yipman','/app/yipman/manifest.webmanifest','/app/yipman/icon.svg'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});
@@ -1275,6 +1298,133 @@ body.yipman-v1 .actions button{min-height:48px;font-size:11px}
  body.yipman-v1 #order .orderitemmain{grid-template-columns:minmax(0,1fr) 92px 76px;gap:6px}
  body.yipman-v1 #order .orderqty b{font-size:22px}
  body.yipman-v1 #order .orderohcompact b{font-size:16px}
+}
+
+/* V474 · V1 larger pages and touch targets, scoped only to dedicated V1. */
+body.yipman-v1{font-size:16px;overflow-x:hidden}
+body.yipman-v1 .header{padding:12px 15px 13px}
+body.yipman-v1 .brand{font-size:36px;line-height:1}
+body.yipman-v1 .ver{font-size:14.5px;line-height:1.15;margin-top:5px}
+body.yipman-v1 .dbbtn{width:55px;height:55px;border-radius:17px;font-size:28px}
+body.yipman-v1 .workspace,body.yipman-v1 .page{max-width:100%;overflow-x:hidden}
+body.yipman-v1 .page{padding-left:15px;padding-right:15px;padding-bottom:calc(108px + env(safe-area-inset-bottom))}
+body.yipman-v1 .topline h2{font-size:30px;line-height:1.05}
+body.yipman-v1 .hint{font-size:14px;line-height:1.3}
+body.yipman-v1 .empty,body.yipman-v1 .loading{font-size:14px;line-height:1.4}
+
+body.yipman-v1 #quick .bestfam{padding:11px 12px;margin-bottom:9px;border-radius:16px}
+body.yipman-v1 #quick .bestnum{font-size:20px}
+body.yipman-v1 #quick .bestname{font-size:23px;line-height:1.08}
+body.yipman-v1 #quick .stockflowtoolbar{gap:7px}
+body.yipman-v1 #quick .stockfilterbtn{min-height:34px;padding:7px 10px;font-size:9px}
+body.yipman-v1 #quick .stockfilterbtn b{font-size:8px}
+body.yipman-v1 #quick .stockflowgrid .bestmetric{padding:7px 8px}
+body.yipman-v1 #quick .stockflowgrid .bestmetric small{font-size:8px}
+body.yipman-v1 #quick .stockflowgrid .bestmetric b,
+body.yipman-v1 #quick .stockflowgrid .stockdiff>b{font-size:20px}
+body.yipman-v1 #quick .stockflowgrid .bestmetric span{font-size:8px}
+body.yipman-v1 .quicksearch{min-height:70px}
+body.yipman-v1 .quicksearch input{font-size:20px}
+body.yipman-v1 .qfamily .qfnum{font-size:22px}
+body.yipman-v1 .qfamily .qfname{font-size:23px}
+body.yipman-v1 .qmeta{font-size:10px}
+body.yipman-v1 .qrecvnum{font-size:19px}
+body.yipman-v1 .qrecvname{font-size:14px}
+body.yipman-v1 .qupcname{font-size:17px!important}
+body.yipman-v1 .qupcmetrics b{font-size:16px!important}
+body.yipman-v1 .qupcmetrics span,body.yipman-v1 .qready{font-size:10px}
+
+body.yipman-v1 #order .order-tab{min-height:60px!important;font-size:17px!important}
+body.yipman-v1 #order .order-date-card{min-height:80px;padding:12px 13px}
+body.yipman-v1 #order .order-date-card small{font-size:9px}
+body.yipman-v1 #order .order-date-card b{font-size:20px}
+body.yipman-v1 #order .order-date-card span{font-size:9px}
+body.yipman-v1 #order .order-coverage b{font-size:20px}
+body.yipman-v1 #order .order-coverage span{font-size:10px}
+body.yipman-v1 #order .order-summary>span{min-width:68px;padding:9px}
+body.yipman-v1 #order .order-summary b{font-size:20px}
+body.yipman-v1 #order .order-summary small{font-size:8px}
+body.yipman-v1 #order .order-controls label{font-size:10px}
+body.yipman-v1 #order .order-controls select{min-height:50px;font-size:14px}
+body.yipman-v1 #order #orderStatus .estimatebar{font-size:11px;line-height:1.35;padding:10px 11px}
+body.yipman-v1 #order .orderitemmain{grid-template-columns:minmax(0,1fr) 108px 92px;gap:8px;padding:12px}
+body.yipman-v1 #order .familyline b{font-size:21px}
+body.yipman-v1 #order .familyline span{font-size:8px}
+body.yipman-v1 #order .orderitemmain .name{font-size:20px}
+body.yipman-v1 #order .orderitemmain .sub{font-size:10.5px}
+body.yipman-v1 #order .orderohcompact{min-height:90px}
+body.yipman-v1 #order .orderohcompact small{font-size:8px}
+body.yipman-v1 #order .orderohcompact b{font-size:20px}
+body.yipman-v1 #order .orderohcompact span{font-size:8.5px}
+body.yipman-v1 #order .orderqty small{font-size:7.5px}
+body.yipman-v1 #order .orderqty b{font-size:27px}
+body.yipman-v1 #order .orderqty span{font-size:10px}
+body.yipman-v1 #order .ordersystemoh small{font-size:8px}
+body.yipman-v1 #order .ordersystemoh b{font-size:13px}
+body.yipman-v1 #order .orderrecvhistory summary{padding:10px}
+body.yipman-v1 #order .orderrecvhistory summary span{font-size:9px}
+body.yipman-v1 #order .orderrecvhistory summary b{font-size:10px}
+body.yipman-v1 #order .orderrecvrow{padding:10px}
+body.yipman-v1 #order .orderrecvarticle b{font-size:17px!important}
+body.yipman-v1 #order .orderrecvarticle span{font-size:10px}
+body.yipman-v1 #order .orderrecvpack b{font-size:15px}
+body.yipman-v1 #order .snooze12{min-height:48px;font-size:12px}
+body.yipman-v1 #order .promo-shell h3{font-size:22px}
+body.yipman-v1 #order .promo-shell p{font-size:12px}
+body.yipman-v1 #order .promo-controls select,body.yipman-v1 #order .promo-controls button{min-height:50px;font-size:12px}
+body.yipman-v1 #order .promo-date-inputs input{min-height:46px;font-size:14px}
+body.yipman-v1 #order .promo-card-head b{font-size:18px}
+body.yipman-v1 #order .promo-card-head small{font-size:10px}
+body.yipman-v1 #order .promo-metric b{font-size:17px}
+body.yipman-v1 #order .promo-order b{font-size:25px}
+
+body.yipman-v1 #price .price-tab{min-height:52px;font-size:11px}
+body.yipman-v1 #price .filters .pill{font-size:13px;padding:10px 13px}
+body.yipman-v1 #price .pcard{padding:14px;border-radius:18px}
+body.yipman-v1 #price .ptop b{font-size:21px!important}
+body.yipman-v1 #price .ptop small{font-size:13px!important}
+body.yipman-v1 #price .pbadge{font-size:11px}
+body.yipman-v1 #price .pp small{font-size:10px}
+body.yipman-v1 #price .pp b{font-size:27px}
+body.yipman-v1 #price .why,body.yipman-v1 #price .preason{font-size:12px;line-height:1.4}
+body.yipman-v1 #price .pcard-actions button{min-height:48px;font-size:11px}
+
+body.yipman-v1 #ai .aiheadcopy h2{font-size:30px}
+body.yipman-v1 #ai .aiheadcopy p{font-size:12px}
+body.yipman-v1 #ai .aibubble{font-size:15px;padding:14px 15px}
+body.yipman-v1 #ai .aibubble b{font-size:16px}
+body.yipman-v1 #ai .aicomposer input{min-height:58px;font-size:18px}
+body.yipman-v1 #ai .aicomposer button{min-height:58px}
+
+body.yipman-v1 #data .dcard{padding:13px;border-radius:15px}
+body.yipman-v1 #data .dcard h3{font-size:18px}
+body.yipman-v1 #data .dcard p{font-size:12px;line-height:1.4}
+body.yipman-v1 #data .dfitem small{font-size:8px}
+body.yipman-v1 #data .dfitem b{font-size:15px}
+body.yipman-v1 #data .dfitem span{font-size:9px}
+body.yipman-v1 #data .batchrow b{font-size:14px}
+body.yipman-v1 #data .batchrow span{font-size:10px}
+
+body.yipman-v1 .nav{height:76px;left:13px;right:13px;border-radius:23px}
+body.yipman-v1 .nav button{font-size:11px}
+body.yipman-v1 .nav i{font-size:27px}
+body.yipman-v1 .sheet{max-height:87%;border-radius:25px 25px 0 0}
+body.yipman-v1 .shead{padding:15px 16px}
+body.yipman-v1 .shead h3{font-size:26px}
+body.yipman-v1 .shead p{font-size:12px}
+body.yipman-v1 .sbody{padding:13px 15px 20px}
+body.yipman-v1 .detail{font-size:13px}
+body.yipman-v1 .actions button{min-height:54px;font-size:12px}
+body.yipman-v1 #overlay .truestockcurrent b{font-size:25px}
+body.yipman-v1 #overlay .truestockfield label{font-size:10px}
+body.yipman-v1 #overlay .truestockfield input{min-height:62px;font-size:29px}
+body.yipman-v1 #overlay .truestockhint{font-size:11px}
+body.yipman-v1 #overlay .truestockactions button{min-height:54px;font-size:12px}
+@media(max-width:390px){
+ body.yipman-v1 #order .orderitemmain{grid-template-columns:minmax(0,1fr) 96px 80px;gap:6px}
+ body.yipman-v1 #order .orderqty b{font-size:24px}
+ body.yipman-v1 #order .orderohcompact b{font-size:18px}
+ body.yipman-v1 #quick .stockfilterbtn{padding:6px 8px;font-size:8px}
 }
 </style>
 </head>
