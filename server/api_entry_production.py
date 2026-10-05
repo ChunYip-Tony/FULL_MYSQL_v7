@@ -49,81 +49,117 @@ _QA_BUTTON_STYLE = '''
 <style id="ydQaButtonV487">
 @media (min-width:760px){
   #ydesk #ydQaHardLinkV485{
-    min-width:104px!important;background:#ffffff!important;color:#102842!important;
+    min-width:118px!important;background:#ffffff!important;color:#102842!important;
     border:2px solid #82bfff!important;border-radius:11px!important;
     box-shadow:0 2px 8px rgba(0,18,42,.22)!important;text-decoration:none!important;
     cursor:pointer!important;position:relative!important;
     transition:background .12s ease,border-color .12s ease,transform .12s ease,box-shadow .12s ease!important;
+    font-size:11px!important;line-height:1.25!important;
   }
   #ydesk #ydQaHardLinkV485:hover,#ydesk #ydQaHardLinkV485:focus-visible{
     background:#eaf5ff!important;border-color:#2f91ff!important;
     box-shadow:0 4px 12px rgba(0,18,42,.28)!important;transform:translateY(-1px)!important;outline:none!important;
   }
   #ydesk #ydQaHardLinkV485:after{
-    content:'OPEN';position:absolute;top:5px;right:6px;padding:1px 4px;border-radius:999px;
-    background:#0b72f4;color:#fff;font-size:7px;line-height:1.3;font-weight:950;letter-spacing:.25px;
+    content:'OPEN';position:absolute;top:5px;right:6px;padding:2px 5px;border-radius:999px;
+    background:#0b72f4;color:#fff;font-size:8px;line-height:1.25;font-weight:950;letter-spacing:.25px;
   }
-  #ydesk #ydQaHardLinkV485 b{color:#102842!important;font-size:17px!important}
+  #ydesk #ydQaHardLinkV485 b{color:#102842!important;font-size:20px!important}
 }
 </style>
 '''
 
 _DESKTOP_READABILITY_STYLE = '''
-<style id="ydReadabilityV488">
+<style id="ydReadabilityV490">
 @media (min-width:760px){
-  #ydesk .app{grid-template-columns:248px minmax(0,1fr)!important}
-  #ydesk .side{padding:18px 14px!important}
-  #ydesk .brand h1{font-size:30px!important}
-  #ydesk .brand small{font-size:11px!important}
-  #ydesk .navbtn{font-size:15px!important;padding:12px 12px!important;gap:11px!important}
-  #ydesk .navbtn .ico{font-size:18px!important;width:23px!important}
-  #ydesk .fresh h4{font-size:12px!important}
-  #ydesk .frow{font-size:11px!important}
-  #ydesk .version{font-size:10px!important;line-height:1.35!important}
-  #ydesk .topbar{height:68px!important;padding:0 20px!important;gap:14px!important}
-  #ydesk .gsearch{height:44px!important;width:min(760px,50vw)!important}
-  #ydesk .gsearch input{font-size:15px!important}
-  #ydesk .kbd{font-size:10px!important}
-  #ydesk .live{font-size:10px!important;padding:5px 9px!important}
-  #ydesk .topstats{gap:9px!important}
-  #ydesk .topstat{font-size:9.5px!important;min-width:84px!important;padding:7px 10px!important}
-  #ydesk .topstat b{font-size:17px!important}
-  #ydesk .avatar{width:38px!important;height:38px!important;font-size:11px!important}
-  #ydesk .work{padding:21px 22px 34px!important}
-  #ydesk .pagehead h2{font-size:34px!important}
-  #ydesk .pagehead p{font-size:13px!important}
-  #ydesk .btn{font-size:12px!important;padding:8px 11px!important}
-  #ydesk .input,#ydesk .select{height:38px!important;font-size:13px!important}
-  #ydesk .cardhead{padding:12px 14px!important}
-  #ydesk .cardhead h3{font-size:14px!important}
-  #ydesk .cardbody{padding:13px 14px!important}
-  #ydesk .badge{font-size:10.5px!important;padding:5px 8px!important}
-  #ydesk .small{font-size:12px!important}
-  #ydesk .tiny{font-size:10.5px!important;line-height:1.35!important}
-  #ydesk .kpi{padding:10px 11px!important}
-  #ydesk .kpi label{font-size:9.5px!important}
-  #ydesk .kpi strong{font-size:21px!important}
-  #ydesk .kpi small{font-size:10.5px!important}
-  #ydesk .tab,#ydesk .qf{font-size:11.5px!important;padding:8px 10px!important}
-  #ydesk th{font-size:9.5px!important;padding:9px 9px!important}
-  #ydesk td{font-size:11.5px!important;padding:9px 9px!important}
-  #ydesk .stockflow-head h3{font-size:19px!important}
-  #ydesk .stockflow-head p{font-size:10.5px!important}
-  #ydesk .stockflow-count{font-size:11.5px!important}
-  #ydesk .sfid b{font-size:14.5px!important}
-  #ydesk .sfid strong{font-size:16px!important}
-  #ydesk .sfmetric b,#ydesk .sfdiff b{font-size:20px!important}
-  #ydesk .fname .id{font-size:11.5px!important}
-  #ydesk .fname .desc{font-size:15.5px!important}
-  #ydesk .fm label{font-size:8.5px!important}
-  #ydesk .fm strong{font-size:17px!important}
-  #ydesk .recvhead,#ydesk .sap{font-size:10.5px!important}
-  #ydesk .upcrow{font-size:11.5px!important}
-  #ydesk .priceTable .priceItem b{font-size:12.5px!important}
-  #ydesk .sectiontitle{font-size:12px!important}
-  #ydesk .note{font-size:11.5px!important;line-height:1.45!important}
-  #ydesk .kv{font-size:11.5px!important}
-  #ydesk .split{grid-template-columns:minmax(0,1.35fr) minmax(360px,.65fr)!important}
+  #ydesk{font-size:14px!important;line-height:1.38!important}
+  #ydesk .app{grid-template-columns:268px minmax(0,1fr)!important}
+  #ydesk .side{padding:20px 15px!important}
+  #ydesk .brand h1{font-size:34px!important;line-height:1.05!important}
+  #ydesk .brand small{font-size:13px!important;line-height:1.35!important}
+  #ydesk .navbtn{font-size:17px!important;padding:13px 13px!important;gap:12px!important;line-height:1.25!important}
+  #ydesk .navbtn .ico{font-size:20px!important;width:25px!important}
+  #ydesk .fresh h4{font-size:14px!important}
+  #ydesk .frow{font-size:13px!important;line-height:1.4!important}
+  #ydesk .version{font-size:12px!important;line-height:1.4!important}
+
+  #ydesk .topbar{height:74px!important;padding:0 22px!important;gap:15px!important}
+  #ydesk .gsearch{height:48px!important;width:min(820px,49vw)!important;border-radius:14px!important}
+  #ydesk .gsearch input{font-size:17px!important}
+  #ydesk .kbd{font-size:12px!important;padding:3px 6px!important}
+  #ydesk .live{font-size:12px!important;padding:6px 10px!important}
+  #ydesk .topstats{gap:10px!important}
+  #ydesk .topstat{font-size:11px!important;min-width:94px!important;padding:8px 11px!important;line-height:1.25!important}
+  #ydesk .topstat b{font-size:20px!important;line-height:1.15!important}
+  #ydesk .avatar{width:42px!important;height:42px!important;font-size:13px!important}
+
+  #ydesk .work{padding:24px 24px 38px!important}
+  #ydesk .mod{font-size:14px!important}
+  #ydesk .pagehead h2{font-size:38px!important;line-height:1.05!important}
+  #ydesk .pagehead p{font-size:15px!important;line-height:1.4!important}
+  #ydesk .actions{gap:9px!important}
+  #ydesk .btn{font-size:14px!important;padding:10px 13px!important;min-height:38px!important;line-height:1.2!important}
+  #ydesk .input,#ydesk .select{height:42px!important;font-size:15px!important;padding-left:11px!important;padding-right:11px!important}
+
+  #ydesk .card{font-size:14px!important}
+  #ydesk .cardhead{padding:14px 15px!important}
+  #ydesk .cardhead h3{font-size:17px!important;line-height:1.25!important}
+  #ydesk .cardbody{padding:15px 16px!important}
+  #ydesk .badge{font-size:12px!important;padding:6px 9px!important;line-height:1.2!important}
+  #ydesk .small{font-size:13px!important;line-height:1.4!important}
+  #ydesk .tiny{font-size:12px!important;line-height:1.42!important}
+
+  #ydesk .kpi{padding:12px 12px!important;min-height:76px!important}
+  #ydesk .kpi label{font-size:11px!important;line-height:1.3!important;letter-spacing:.25px!important}
+  #ydesk .kpi strong{font-size:24px!important;line-height:1.15!important}
+  #ydesk .kpi small{font-size:12px!important;line-height:1.35!important}
+
+  #ydesk .tab,#ydesk .qf{font-size:13.5px!important;padding:9px 12px!important;min-height:38px!important}
+  #ydesk th{font-size:11px!important;padding:10px 10px!important;line-height:1.3!important}
+  #ydesk td{font-size:13px!important;padding:10px 10px!important;line-height:1.4!important}
+  #ydesk .priceTable th,#ydesk .priceTable td{white-space:normal!important}
+
+  #ydesk .stockflow-head{padding:13px 14px!important}
+  #ydesk .stockflow-head h3{font-size:22px!important}
+  #ydesk .stockflow-head p{font-size:12px!important;line-height:1.4!important}
+  #ydesk .stockflow-count{font-size:13px!important}
+  #ydesk .sfrow{padding:12px 13px!important;gap:10px!important}
+  #ydesk .sfid small,#ydesk .sfmetric small,#ydesk .sfdiff small{font-size:9px!important}
+  #ydesk .sfid b{font-size:16px!important}
+  #ydesk .sfid strong{font-size:18px!important;line-height:1.2!important}
+  #ydesk .sftag{font-size:9px!important;padding:4px 7px!important}
+  #ydesk .sfmetric b,#ydesk .sfdiff b{font-size:22px!important}
+  #ydesk .sfmetric span,#ydesk .sfdiff span{font-size:10px!important}
+  #ydesk .sfrecent,#ydesk .recent{font-size:10px!important;line-height:1.5!important}
+  #ydesk .sfrecent b,#ydesk .recent b{font-size:12px!important}
+  #ydesk .sfempty{font-size:13px!important}
+
+  #ydesk .fhead{padding:11px 11px!important;gap:9px!important}
+  #ydesk .fname .id{font-size:13px!important}
+  #ydesk .fname .desc{font-size:18px!important;line-height:1.22!important}
+  #ydesk .fm label{font-size:10px!important;line-height:1.3!important}
+  #ydesk .fm strong{font-size:19px!important;line-height:1.2!important}
+  #ydesk .recvhead,#ydesk .sap{font-size:12.5px!important;line-height:1.4!important;padding-top:9px!important;padding-bottom:9px!important}
+  #ydesk .pairhead{font-size:12.5px!important;line-height:1.4!important}
+  #ydesk .upcrow{font-size:13px!important;line-height:1.4!important;padding-top:9px!important;padding-bottom:9px!important}
+  #ydesk .prefix{font-size:10px!important;padding:4px 7px!important}
+
+  #ydesk .priceTable .priceItem b{font-size:14.5px!important;line-height:1.3!important}
+  #ydesk .stackcell,#ydesk .line{font-size:13px!important;line-height:1.4!important}
+  #ydesk .reasonTag{font-size:11px!important;line-height:1.25!important;padding:5px 7px!important}
+  #ydesk .sectiontitle{font-size:14px!important;line-height:1.3!important;margin-top:14px!important}
+  #ydesk .note{font-size:13px!important;line-height:1.5!important;padding:11px 12px!important}
+  #ydesk .kv{font-size:13px!important;line-height:1.45!important}
+  #ydesk .kv span{padding-top:3px!important;padding-bottom:3px!important}
+  #ydesk .qtitle h3{font-size:20px!important;line-height:1.2!important}
+  #ydesk .qtitle p{font-size:13px!important;line-height:1.4!important}
+  #ydesk .infobox h4{font-size:15px!important}
+  #ydesk .event{font-size:12.5px!important;line-height:1.4!important}
+  #ydesk .loading,#ydesk .error{font-size:14px!important;line-height:1.45!important}
+  #ydesk .datebox label{font-size:12px!important}
+  #ydesk .datebox strong{font-size:15px!important}
+
+  #ydesk .split{grid-template-columns:minmax(0,1.38fr) minmax(390px,.62fr)!important;gap:12px!important}
 }
 </style>
 '''
@@ -166,7 +202,7 @@ def _decorate_desktop(html: str) -> str:
     html = inject_qa_hard_link(html)
     if 'ydQaButtonV487' not in html:
         html = html.replace('</head>', _QA_BUTTON_STYLE + '</head>', 1)
-    if 'ydReadabilityV488' not in html:
+    if 'ydReadabilityV490' not in html:
         html = html.replace('</head>', _DESKTOP_READABILITY_STYLE + '</head>', 1)
     if 'ydUpcRoleV488' not in html:
         html = html.replace('</body>', _UPC_ROLE_SCRIPT + '</body>', 1)
