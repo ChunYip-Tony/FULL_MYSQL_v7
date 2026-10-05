@@ -1,1 +1,1 @@
-VERSION='7.0.484-qa-holds-resilient'
+VERSION='7.0.485-qa-holds-hard-link'
