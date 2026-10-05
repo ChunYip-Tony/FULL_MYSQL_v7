@@ -14,6 +14,7 @@ new production app identity or deployment entrypoint.
 import api as _api
 import api_entry_v481 as _current
 from yipman_qa_nav_v483 import inject_qa_nav_fix
+from yipman_qa_page_v485 import inject_qa_hard_link, register_qa_page
 
 app = _current.app
 
@@ -37,11 +38,17 @@ def _official_mobile_v1_html(version: str = "") -> str:
 def _official_backoffice_html(version: str = "") -> str:
     html = _base_backoffice_html(version)
     html = html.replace("<title>Yipman</title>", "<title>Yipman Back Office</title>", 1)
-    return inject_qa_nav_fix(html)
+    html = inject_qa_nav_fix(html)
+    # v485 makes QA Holds a real browser hyperlink. This is deliberately
+    # independent of optional overlay/event-handler JavaScript.
+    return inject_qa_hard_link(html)
 
 
 _api.yipman_v1_html = _official_mobile_v1_html
 _api.backoffice_html = _official_backoffice_html
+
+# Dedicated server-rendered fallback target for the QA Holds hyperlink.
+register_qa_page(app, version=_api.VERSION, qa_loader=_api.backoffice_qa_review)
 
 # Expose channel metadata for diagnostics without introducing another UI route.
 app.state.yipman_product_channels = {
