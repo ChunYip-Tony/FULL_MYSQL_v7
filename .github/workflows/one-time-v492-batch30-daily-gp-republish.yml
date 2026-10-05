@@ -1,0 +1,104 @@
+name: One-time Batch 30 v7.0.492 daily GP republish
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  republish:
+    if: startsWith(github.event.head_commit.message, 'Trigger Batch 30 ChatGPT republish v7.0.492')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Wait for v7.0.492 production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            if curl -fsS --max-time 20 "$base/healthz" -o /tmp/health.json; then
+              cat /tmp/health.json; echo
+              if python - <<'PY'
+          import json,sys
+          h=json.load(open('/tmp/health.json',encoding='utf-8'))
+          version=str(h.get('version') or h.get('api_version') or h.get('code_version') or '')
+          ok=(h.get('ok') is True and '7.0.492' in version)
+          print('DEPLOY_VERSION',version,'READY',ok)
+          sys.exit(0 if ok else 1)
+          PY
+              then
+                exit 0
+              fi
+            fi
+            sleep 5
+          done
+          echo "V492_DEPLOYMENT_NOT_READY"
+          exit 1
+
+      - name: Verify Batch 30 publishability
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          curl -fsS --max-time 60 "$base/v1/web-upload/batches/30/qa-summary" -o /tmp/qa.json
+          cat /tmp/qa.json; echo
+          python - <<'PY'
+          import json
+          q=json.load(open('/tmp/qa.json',encoding='utf-8'))
+          p=q.get('phase3') or {}
+          status=str(p.get('result_status') or '').upper()
+          assert status in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}, status
+          assert int(p.get('blocking_issue_count') or 0)==0, p
+          print('BATCH30_PUBLISHABLE=PASS', status)
+          PY
+
+      - name: Queue Batch 30 ChatGPT analysis republish
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          code="$(curl -sS --max-time 30 -o /tmp/republish.json -w '%{http_code}' -X POST "$base/v1/web-upload/batches/30/republish-chatgpt-analysis")"
+          cat /tmp/republish.json; echo
+          test "$code" = "200"
+          python - <<'PY'
+          import json
+          p=json.load(open('/tmp/republish.json',encoding='utf-8'))
+          assert p.get('status') in {'QUEUED','ALREADY_QUEUED','ALREADY_ACTIVE'}, p
+          assert int(p.get('batch_id') or 0)==30, p
+          print('CHATGPT_REPUBLISH_QUEUED=PASS')
+          PY
+
+      - name: Wait for Batch 30 ChatGPT analysis PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://seal-app-tkkkd.ondigitalocean.app"
+          for i in $(seq 1 180); do
+            curl -fsS --max-time 30 "$base/v1/web-upload/batches/30/chatgpt-publish-status" -o /tmp/pub.json
+            cat /tmp/pub.json; echo
+            result="$(python - <<'PY'
+          import json
+          p=json.load(open('/tmp/pub.json',encoding='utf-8'))
+          status=str(p.get('status') or '').upper()
+          publish=str((p.get('publish_result') or {}).get('status') or '').upper()
+          print(status+'|'+publish)
+          PY
+          )"
+            status="$(printf '%s' "$result" | cut -d'|' -f1)"
+            publish="$(printf '%s' "$result" | cut -d'|' -f2)"
+            if [ "$status" = "COMPLETED" ] && [ "$publish" = "PASS" ]; then
+              echo "BATCH30_CHATGPT_ANALYSIS=PASS"
+              exit 0
+            fi
+            if [ "$status" = "FAILED" ]; then
+              echo "BATCH30_CHATGPT_ANALYSIS=FAILED"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "BATCH30_CHATGPT_ANALYSIS=TIMEOUT"
+          exit 1
