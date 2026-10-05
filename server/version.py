@@ -1,1 +1,1 @@
-VERSION='7.0.491-evidence-backed-qa-repair'
+VERSION='7.0.492-daily-gp-uom-cache-fix'
