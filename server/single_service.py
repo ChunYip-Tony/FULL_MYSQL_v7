@@ -25,7 +25,7 @@ def start_api() -> subprocess.Popen:
         sys.executable,
         "-m",
         "uvicorn",
-        "api_entry_production:app",
+        "production_bootstrap:app",
         "--host",
         "0.0.0.0",
         "--port",
@@ -40,7 +40,7 @@ def start_api() -> subprocess.Popen:
 def start_worker() -> subprocess.Popen:
     # v482 keeps the stable worker implementation but patches Phase 2C ->
     # Phase 3 orphan convergence so stale Phase 3 result rows cannot strand a
-    # PHASE2C_READY batch.
+    # PHASE2C_READY batch. Later worker patches are applied inside worker_v482.
     cmd = [sys.executable, "worker_v482.py"]
     log("starting background worker: " + " ".join(cmd))
     return subprocess.Popen(cmd, cwd=BASE)
