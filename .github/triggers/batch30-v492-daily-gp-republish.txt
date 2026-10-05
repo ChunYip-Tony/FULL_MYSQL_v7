@@ -1,0 +1,2 @@
+Batch 30 v7.0.492 daily GP UOM cache repair republish trigger.
+Created after the workflow itself was present on main so GitHub Actions can execute it on a subsequent push.
