@@ -1,1 +1,1 @@
-VERSION='7.0.488-price-freshness-7d-ui-scale'
+VERSION='7.0.489-price-freshness-7d-final'
