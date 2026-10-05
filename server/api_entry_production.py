@@ -11,12 +11,25 @@ launcher must import this module so future internal releases do not create a
 new production app identity or deployment entrypoint.
 """
 
+from decimal import Decimal
 import api as _api
 import api_entry_v481 as _current
+import yipman_price_policy_v488 as _pricing_policy
 from yipman_qa_page_v485 import inject_qa_hard_link, register_qa_page
-from yipman_price_policy_v488 import apply_pricing_review_policy, apply_current_tpr_policy
 
 app = _current.app
+
+# source_data_days is newest-first by design. The pricing policy evaluates a
+# chronological 7-day price-step cycle, so give that policy an oldest-first
+# view without changing the canonical helper for the rest of the application.
+_policy_source_data_days = _pricing_policy.source_data_days
+
+def _policy_days_chronological(*args, **kwargs):
+    return sorted(_policy_source_data_days(*args, **kwargs), key=lambda x: x.get("date"))
+
+_pricing_policy.source_data_days = _policy_days_chronological
+apply_pricing_review_policy = _pricing_policy.apply_pricing_review_policy
+apply_current_tpr_policy = _pricing_policy.apply_current_tpr_policy
 
 # Capture the actual renderers used by both desktop URLs. /yipman calls
 # api.yipman_html directly, while /app/backoffice calls api.backoffice_html.
@@ -36,24 +49,15 @@ _QA_BUTTON_STYLE = '''
 <style id="ydQaButtonV487">
 @media (min-width:760px){
   #ydesk #ydQaHardLinkV485{
-    min-width:104px!important;
-    background:#ffffff!important;
-    color:#102842!important;
-    border:2px solid #82bfff!important;
-    border-radius:11px!important;
-    box-shadow:0 2px 8px rgba(0,18,42,.22)!important;
-    text-decoration:none!important;
-    cursor:pointer!important;
-    position:relative!important;
+    min-width:104px!important;background:#ffffff!important;color:#102842!important;
+    border:2px solid #82bfff!important;border-radius:11px!important;
+    box-shadow:0 2px 8px rgba(0,18,42,.22)!important;text-decoration:none!important;
+    cursor:pointer!important;position:relative!important;
     transition:background .12s ease,border-color .12s ease,transform .12s ease,box-shadow .12s ease!important;
   }
-  #ydesk #ydQaHardLinkV485:hover,
-  #ydesk #ydQaHardLinkV485:focus-visible{
-    background:#eaf5ff!important;
-    border-color:#2f91ff!important;
-    box-shadow:0 4px 12px rgba(0,18,42,.28)!important;
-    transform:translateY(-1px)!important;
-    outline:none!important;
+  #ydesk #ydQaHardLinkV485:hover,#ydesk #ydQaHardLinkV485:focus-visible{
+    background:#eaf5ff!important;border-color:#2f91ff!important;
+    box-shadow:0 4px 12px rgba(0,18,42,.28)!important;transform:translateY(-1px)!important;outline:none!important;
   }
   #ydesk #ydQaHardLinkV485:after{
     content:'OPEN';position:absolute;top:5px;right:6px;padding:1px 4px;border-radius:999px;
@@ -131,19 +135,15 @@ _UPC_ROLE_SCRIPT = r'''
   function pfx(v){return String(v||'').replace(/^0+/,'').slice(0,3)}
   function rr(v){const p=pfx(v);return Object.prototype.hasOwnProperty.call(rank,p)?rank[p]:9}
   function reorderPair(pair){
-    const rows=[...pair.querySelectorAll(':scope > .upcrow')];
-    if(rows.length<2)return;
+    const rows=[...pair.querySelectorAll(':scope > .upcrow')];if(rows.length<2)return;
     const sorted=rows.slice().sort((a,b)=>rr(a.dataset.upc)-rr(b.dataset.upc));
-    if(rows.every((x,i)=>x===sorted[i]))return;
-    sorted.forEach(x=>pair.appendChild(x));
+    if(rows.every((x,i)=>x===sorted[i]))return;sorted.forEach(x=>pair.appendChild(x));
   }
   function reorderDetail(tbody){
-    const rows=[...tbody.querySelectorAll(':scope > tr')];
-    if(rows.length<2)return;
+    const rows=[...tbody.querySelectorAll(':scope > tr')];if(rows.length<2)return;
     const upc=r=>((r.cells&&r.cells[0])?r.cells[0].textContent:'');
     const sorted=rows.slice().sort((a,b)=>rr(upc(a))-rr(upc(b)));
-    if(rows.every((x,i)=>x===sorted[i]))return;
-    sorted.forEach(x=>tbody.appendChild(x));
+    if(rows.every((x,i)=>x===sorted[i]))return;sorted.forEach(x=>tbody.appendChild(x));
   }
   function apply(){
     document.querySelectorAll('#ydesk .pair').forEach(reorderPair);
@@ -186,7 +186,6 @@ def _official_yipman_html(version: str = "") -> str:
 
 def _official_backoffice_html(version: str = "") -> str:
     html = _base_backoffice_html(version)
-    html = html.replace("<title>Yipman</title>,", "<title>Yipman Back Office</title>", 1) if False else html
     html = html.replace("<title>Yipman</title>", "<title>Yipman Back Office</title>", 1)
     return _decorate_desktop(html)
 
@@ -199,22 +198,46 @@ def _preserve_original_order(original: dict, patched: dict) -> dict:
     return patched
 
 
-def _pricing_review_v488(*args, **kwargs):
+def _finalize_price_action_fields(payload: dict) -> dict:
+    for row in payload.get('rows') or []:
+        final_price = row.get('final_tpr_price_suggestion')
+        decision = str(row.get('final_tpr_decision') or '')
+        if decision == 'START_TPR' and final_price is not None:
+            row['testing_price'] = final_price
+            row['tpr_suggestion_price'] = final_price
+            row['candidate_price'] = final_price
+            row['suggested_price'] = final_price
+            row['tpr_suggestion_actionable'] = True
+            row['actionable'] = True
+            row['review_status'] = 'ACTIONABLE'
+            cost = row.get('current_cost')
+            try:
+                p = Decimal(str(final_price)); c = Decimal(str(cost))
+                if p > 0:
+                    row['testing_price_gp_pct'] = (p-c)/p
+            except Exception:
+                pass
+    return payload
+
+
+def _pricing_review_v489(*args, **kwargs):
     original = _base_pricing_review(*args, **kwargs)
-    return _preserve_original_order(original, apply_pricing_review_policy(original))
+    patched = _finalize_price_action_fields(apply_pricing_review_policy(original))
+    return _preserve_original_order(original, patched)
 
 
-def _cached_pricing_review_v488(*args, **kwargs):
+def _cached_pricing_review_v489(*args, **kwargs):
     original = _base_cached_pricing_review(*args, **kwargs)
-    return _preserve_original_order(original, apply_pricing_review_policy(original))
+    patched = _finalize_price_action_fields(apply_pricing_review_policy(original))
+    return _preserve_original_order(original, patched)
 
 
-def _current_tpr_review_v488(*args, **kwargs):
+def _current_tpr_review_v489(*args, **kwargs):
     original = _base_current_tpr_review(*args, **kwargs)
     return _preserve_original_order(original, apply_current_tpr_policy(original))
 
 
-def _cached_current_tpr_review_v488(*args, **kwargs):
+def _cached_current_tpr_review_v489(*args, **kwargs):
     original = _base_cached_current_tpr_review(*args, **kwargs)
     return _preserve_original_order(original, apply_current_tpr_policy(original))
 
@@ -222,10 +245,10 @@ def _cached_current_tpr_review_v488(*args, **kwargs):
 _api.yipman_v1_html = _official_mobile_v1_html
 _api.yipman_html = _official_yipman_html
 _api.backoffice_html = _official_backoffice_html
-_api.backoffice_pricing_review = _pricing_review_v488
-_api.backoffice_cached_pricing_review = _cached_pricing_review_v488
-_api.backoffice_current_tpr_review = _current_tpr_review_v488
-_api.backoffice_cached_current_tpr_review = _cached_current_tpr_review_v488
+_api.backoffice_pricing_review = _pricing_review_v489
+_api.backoffice_cached_pricing_review = _cached_pricing_review_v489
+_api.backoffice_current_tpr_review = _current_tpr_review_v489
+_api.backoffice_cached_current_tpr_review = _cached_current_tpr_review_v489
 
 # Dedicated server-rendered target for the QA Holds hyperlink.
 register_qa_page(app, version=_api.VERSION, qa_loader=_api.backoffice_qa_review)
