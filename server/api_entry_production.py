@@ -13,6 +13,7 @@ new production app identity or deployment entrypoint.
 
 import api as _api
 import api_entry_v481 as _current
+from yipman_qa_nav_v483 import inject_qa_nav_fix
 
 app = _current.app
 
@@ -35,7 +36,8 @@ def _official_mobile_v1_html(version: str = "") -> str:
 
 def _official_backoffice_html(version: str = "") -> str:
     html = _base_backoffice_html(version)
-    return html.replace("<title>Yipman</title>", "<title>Yipman Back Office</title>", 1)
+    html = html.replace("<title>Yipman</title>", "<title>Yipman Back Office</title>", 1)
+    return inject_qa_nav_fix(html)
 
 
 _api.yipman_v1_html = _official_mobile_v1_html
