@@ -7,7 +7,7 @@ The desktop Data Center previously mixed two scopes:
 - Top QA Holds came from the global QA review queue.
 
 That could render an impossible-looking state such as "Open Issues 0" while an
-unrelated historical QA hold was listed directly underneath.  This layer keeps
+unrelated historical QA hold was listed directly underneath. This layer keeps
 Current Processing strictly scoped to the current/latest batch and gives
 INGESTED_PENDING_QA an explicit waiting state.
 """
@@ -29,7 +29,7 @@ _PATCH = r'''
   if(!window.matchMedia('(min-width:760px)').matches)return;
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>Number.isFinite(Number(v))?Number(v):0;
-  let timer=null,busy=false,lastSig='';
+  let busy=false,refreshTimer=null;
 
   function dataVisible(){
     const el=document.querySelector('#yd-data');
@@ -38,22 +38,27 @@ _PATCH = r'''
   function processingCard(){
     return [...document.querySelectorAll('#yd-data .card')].find(c=>c.querySelector('.cardhead h3')?.textContent.trim()==='2. Current Processing')||null;
   }
+  function liveIssueMap(b){
+    const v=b?.active_progress_issue_counts;
+    if(!v||typeof v!=='object'||Array.isArray(v)||!Object.keys(v).length)return null;
+    return v;
+  }
   function issueRows(b){
-    const live=(b&&b.active_progress_issue_counts&&typeof b.active_progress_issue_counts==='object'&&!Array.isArray(b.active_progress_issue_counts))?b.active_progress_issue_counts:null;
-    if(live){
-      return Object.entries(live).map(([issue_code,issue_count])=>({issue_code,issue_count:num(issue_count)})).filter(x=>x.issue_count>0).sort((a,z)=>z.issue_count-a.issue_count||a.issue_code.localeCompare(z.issue_code));
-    }
-    const arr=Array.isArray(b?.active_issue_counts)?b.active_issue_counts:[];
-    return arr.map(x=>({issue_code:x.issue_code||x.code||x.issue_summary||'UNKNOWN',issue_count:num(x.issue_count??x.count)})).filter(x=>x.issue_count>0).sort((a,z)=>z.issue_count-a.issue_count||String(a.issue_code).localeCompare(String(z.issue_code)));
+    const live=liveIssueMap(b);
+    const rows=live
+      ? Object.entries(live).map(([issue_code,issue_count])=>({issue_code,issue_count:num(issue_count)}))
+      : (Array.isArray(b?.active_issue_counts)?b.active_issue_counts.map(x=>({issue_code:x.issue_code||x.code||x.issue_summary||'UNKNOWN',issue_count:num(x.issue_count??x.count)})):[]);
+    return rows.filter(x=>x.issue_count>0).sort((a,z)=>z.issue_count-a.issue_count||String(a.issue_code).localeCompare(String(z.issue_code)));
   }
   function activeIssueTotal(b,rows){
-    if(b?.active_progress_issue_counts&&typeof b.active_progress_issue_counts==='object'&&!Array.isArray(b.active_progress_issue_counts)) return Object.values(b.active_progress_issue_counts).reduce((n,v)=>n+num(v),0);
+    const live=liveIssueMap(b);
+    if(live)return Object.values(live).reduce((n,v)=>n+num(v),0);
     if(b?.active_issue_total!=null)return num(b.active_issue_total);
     if(b?.open_issue_total!=null)return num(b.open_issue_total);
     if(b?.error_count!=null)return num(b.error_count);
     return rows.reduce((n,x)=>n+x.issue_count,0);
   }
-  function patchCard(b){
+  function patchCard(b,sig){
     const card=processingCard();if(!card)return;
     const raw=String(b?.processing_status||'NONE').toUpperCase();
     const rows=issueRows(b),total=activeIssueTotal(b,rows);
@@ -79,7 +84,8 @@ _PATCH = r'''
     if(raw==='INGESTED_PENDING_QA'&&stages.length>=5){
       stages[0].classList.add('done');
       stages[1].classList.add('done');
-      stages[2].classList.add('done');
+      stages[2].classList.remove('done','hold','dc481-waiting');
+      stages[2].textContent='PHASE 2C';
       stages[3].classList.remove('done','hold');
       stages[3].classList.add('dc481-waiting');
       stages[3].textContent='PHASE 3 QA · WAITING';
@@ -87,8 +93,8 @@ _PATCH = r'''
       stages[4].textContent='PUBLISH';
     }
 
-    const title=[...card.querySelectorAll('.sectiontitle')].find(x=>x.textContent.trim()==='Top QA Holds');
-    const table=title?.nextElementSibling?.querySelector('table');
+    const title=[...card.querySelectorAll('.sectiontitle')].find(x=>x.textContent.trim()==='Top QA Holds'||x.textContent.trim()==='Top Current-Batch QA Holds');
+    const table=title?.nextElementSibling?.matches('.dc481-scope-note')?title.nextElementSibling.nextElementSibling?.querySelector('table'):title?.nextElementSibling?.querySelector('table');
     if(table){
       const th=table.querySelectorAll('thead th');
       if(th.length>=3){th[0].textContent='Issue';th[1].textContent='Count';th[2].textContent='Scope'}
@@ -103,6 +109,7 @@ _PATCH = r'''
       note.innerHTML='<b>Scope:</b> Batch '+esc(batch)+'. Historical/global QA items are not mixed into Current Processing.';
       title.textContent='Top Current-Batch QA Holds';
     }
+    card.dataset.dc481Sig=sig;
   }
   async function refresh(){
     if(busy||!dataVisible())return;
@@ -113,14 +120,22 @@ _PATCH = r'''
       const a=await r.json();
       const b=a.active_batch||a.latest_batch||{};
       const sig=JSON.stringify([b.batch_id,b.processing_status,b.active_issue_total,b.open_issue_total,b.error_count,b.active_progress_issue_counts,b.active_issue_counts]);
-      if(sig!==lastSig||processingCard()){lastSig=sig;patchCard(b)}
+      const card=processingCard();
+      if(card&&card.dataset.dc481Sig!==sig)patchCard(b,sig);
     }catch(_e){}finally{busy=false}
   }
-  const mo=new MutationObserver(()=>{if(dataVisible())setTimeout(refresh,40)});
-  mo.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
-  document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh')setTimeout(refresh,250)},true);
-  timer=setInterval(refresh,4000);
-  setTimeout(refresh,500);
+  function scheduleRefresh(delay=80){
+    clearTimeout(refreshTimer);
+    refreshTimer=setTimeout(refresh,delay);
+  }
+  const root=document.querySelector('#yd-data');
+  if(root){
+    const mo=new MutationObserver(()=>{if(dataVisible())scheduleRefresh()});
+    mo.observe(root,{subtree:true,childList:true});
+  }
+  document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh')scheduleRefresh(250)},true);
+  setInterval(refresh,4000);
+  scheduleRefresh(500);
 })();
 </script>
 '''
