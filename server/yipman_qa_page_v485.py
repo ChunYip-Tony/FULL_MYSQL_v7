@@ -132,6 +132,19 @@ def _repair_result_html(version: str, result: dict[str, Any]) -> str:
 
 
 def register_qa_page(app, *, version: str, qa_loader, repair_runner=None, admin_authorizer=None) -> None:
+    # The stable production entrypoint already calls register_qa_page(). Load the
+    # protected repair dependencies lazily so that existing registration gains
+    # the repair control without creating another production entrypoint.
+    if repair_runner is None:
+        try:
+            from qa_evidence_repair_v491 import run_evidence_backed_qa_repair
+            import api as _api
+            repair_runner = run_evidence_backed_qa_repair
+            if admin_authorizer is None:
+                admin_authorizer = _api.admin_device_from_request
+        except Exception:
+            repair_runner = None
+
     existing = {(getattr(route, 'path', None), tuple(getattr(route, 'methods', set()) or set())) for route in app.routes}
 
     if not any(path == '/app/backoffice/qa' and 'GET' in methods for path, methods in existing):
