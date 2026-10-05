@@ -12,7 +12,7 @@ new production app identity or deployment entrypoint.
 """
 
 import api as _api
-import api_entry_v479 as _current
+import api_entry_v481 as _current
 
 app = _current.app
 
