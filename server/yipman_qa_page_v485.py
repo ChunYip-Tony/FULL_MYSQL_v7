@@ -86,7 +86,7 @@ def _qa_page_html(version: str, qa_payload: dict) -> str:
         rows.append(
             '<tr>'
             f'<td><span class="sev {sev_class}">{escape(sev)}</span><b>{issue}</b><div class="muted">{summary}</div></td>'
-            f'<td><b>{entity}</b><div class="muted">{item}</div>{family}</td>'
+            f'<td><b>{entity}</b><div class="muted item">{item}</div>{family}</td>'
             f'<td><b>{_num(oh)} {escape(str(oh_uom))}</b><div class="muted">7D velocity {_num(vel)} {escape(str(uom or ""))}/day</div></td>'
             f'<td>{state}</td>'
             f'<td><span class="review">{review}</span></td>'
@@ -98,14 +98,26 @@ def _qa_page_html(version: str, qa_payload: dict) -> str:
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Yipman QA Fixes</title>
 <style>
-*{{box-sizing:border-box}}body{{margin:0;background:#f3f7fb;color:#10233d;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif}}
-.top{{position:sticky;top:0;z-index:5;height:64px;padding:0 24px;display:flex;align-items:center;gap:14px;background:#133552;color:#fff;box-shadow:0 2px 12px rgba(0,20,40,.14)}}
-.brand{{font-size:25px;font-weight:900}}.brand span{{color:#2b8cff}}.back{{margin-left:auto;color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.3);border-radius:9px;padding:9px 12px;font-size:12px;font-weight:800}}
-.wrap{{padding:22px;max-width:1500px;margin:auto}}h1{{margin:0;font-size:30px}}.sub{{margin:5px 0 16px;color:#6b7d92;font-size:12px}}.summary{{display:flex;gap:10px;margin:0 0 12px}}.kpi{{background:#fff;border:1px solid #dbe5ef;border-radius:10px;padding:10px 13px;min-width:140px}}.kpi small{{display:block;color:#718197;font-size:9px;text-transform:uppercase;font-weight:900}}.kpi b{{font-size:21px}}
-.card{{background:#fff;border:1px solid #dbe5ef;border-radius:12px;overflow:hidden;box-shadow:0 6px 22px rgba(20,45,70,.05)}}.tablewrap{{overflow:auto;max-height:calc(100vh - 220px)}}table{{width:100%;border-collapse:collapse;table-layout:fixed}}th{{position:sticky;top:0;background:#f8fbfe;border-bottom:1px solid #dce6ef;padding:10px;text-align:left;font-size:9px;text-transform:uppercase;color:#718197}}td{{padding:11px 10px;border-bottom:1px solid #edf2f6;vertical-align:top;font-size:11px;overflow-wrap:anywhere}}th:nth-child(1){{width:31%}}th:nth-child(2){{width:24%}}th:nth-child(3){{width:14%}}th:nth-child(4){{width:21%}}th:nth-child(5){{width:10%}}
-.sev{{display:inline-flex;margin-right:7px;border-radius:999px;padding:3px 7px;font-size:8px;font-weight:900}}.sev.bad{{background:#ffe8ec;color:#b93148}}.sev.warn{{background:#fff2d5;color:#8d6100}}.sev.info{{background:#e9f3ff;color:#1764b8}}.muted{{color:#718197;font-size:9px;margin-top:4px;line-height:1.35}}.review{{display:inline-flex;border-radius:999px;padding:4px 7px;background:#fff2d5;color:#8d6100;font-size:8px;font-weight:900}}.empty{{padding:36px;text-align:center;color:#718197}}.ver{{font-size:9px;color:#92a3b6}}
+*{{box-sizing:border-box}}
+body{{margin:0;background:#f3f7fb;color:#10233d;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;font-size:15px;line-height:1.45}}
+.top{{position:sticky;top:0;z-index:5;min-height:76px;padding:10px 26px;display:flex;align-items:center;gap:16px;background:#133552;color:#fff;box-shadow:0 2px 12px rgba(0,20,40,.14)}}
+.brand{{font-size:32px;font-weight:900;line-height:1}}.brand span{{color:#2b8cff}}
+.top b{{font-size:16px}}.back{{margin-left:auto;color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.38);border-radius:10px;padding:11px 15px;font-size:14px;font-weight:850;background:rgba(255,255,255,.07)}}.back:hover{{background:rgba(255,255,255,.14)}}
+.wrap{{padding:26px;max-width:1680px;margin:auto}}h1{{margin:0;font-size:36px;line-height:1.1}}.sub{{margin:7px 0 18px;color:#5f7288;font-size:14px;line-height:1.45}}
+.summary{{display:flex;gap:12px;margin:0 0 15px;flex-wrap:wrap}}.kpi{{background:#fff;border:1px solid #dbe5ef;border-radius:11px;padding:12px 15px;min-width:170px}}.kpi small{{display:block;color:#718197;font-size:11px;text-transform:uppercase;font-weight:900;letter-spacing:.25px}}.kpi b{{font-size:26px;line-height:1.15}}
+.card{{background:#fff;border:1px solid #dbe5ef;border-radius:12px;overflow:hidden;box-shadow:0 6px 22px rgba(20,45,70,.05)}}.tablewrap{{overflow:auto;max-height:calc(100vh - 248px)}}table{{width:100%;border-collapse:collapse;table-layout:fixed}}
+th{{position:sticky;top:0;background:#f8fbfe;border-bottom:1px solid #dce6ef;padding:12px 11px;text-align:left;font-size:11px;text-transform:uppercase;color:#65788e;line-height:1.3;letter-spacing:.25px}}
+td{{padding:14px 11px;border-bottom:1px solid #edf2f6;vertical-align:top;font-size:14px;line-height:1.48;overflow-wrap:anywhere;word-break:normal}}
+th:nth-child(1){{width:31%}}th:nth-child(2){{width:24%}}th:nth-child(3){{width:14%}}th:nth-child(4){{width:21%}}th:nth-child(5){{width:10%}}
+td b{{font-size:14.5px;line-height:1.4}}
+.sev{{display:inline-flex;margin-right:8px;border-radius:999px;padding:4px 8px;font-size:10px;font-weight:900;vertical-align:1px}}.sev.bad{{background:#ffe8ec;color:#b93148}}.sev.warn{{background:#fff2d5;color:#8d6100}}.sev.info{{background:#e9f3ff;color:#1764b8}}
+.muted{{color:#67798d;font-size:12px;margin-top:5px;line-height:1.45}}.muted.item{{font-size:12.5px;color:#52677d}}
+.review{{display:inline-flex;border-radius:999px;padding:6px 9px;background:#fff2d5;color:#8d6100;font-size:10.5px;font-weight:900;line-height:1.2}}.empty{{padding:42px;text-align:center;color:#718197;font-size:15px}}.ver{{font-size:11px;color:#b5c4d2;margin-top:2px}}
+@media (max-width:1000px){{
+  body{{font-size:14px}}.wrap{{padding:16px}}h1{{font-size:31px}}.tablewrap{{max-height:none}}table{{table-layout:auto;min-width:920px}}td{{font-size:13px}}.muted{{font-size:11.5px}}
+}}
 </style></head><body>
-<div class="top"><div class="brand">Yip<span>man</span></div><div><b>QA Fixes</b><div class="ver">v{escape(version)}</div></div><a class="back" href="/app/backoffice#data">← Back to Data Center</a></div>
+<div class="top"><div class="brand">Yip<span>man</span></div><div><b>QA Fixes</b><div class="ver">v{escape(version)}</div></div><a class="back" href="/yipman#data">← Back to Data Center</a></div>
 <main class="wrap"><h1>QA Fixes</h1><div class="sub">Live open QA review. Raw source rows are not changed from this page.</div>
 <div class="summary"><div class="kpi"><small>Open QA issues</small><b>{len(issues)}</b></div><div class="kpi"><small>High / Critical</small><b>{sum(1 for x in issues if str(x.get('severity') or '').upper() in {'HIGH','CRITICAL'})}</b></div><div class="kpi"><small>User-fixable</small><b>{sum(1 for x in issues if x.get('can_fix'))}</b></div></div>
 <div class="card"><div class="tablewrap"><table><thead><tr><th>Issue</th><th>Entity / Item</th><th>Activity</th><th>Current State</th><th>Review</th></tr></thead><tbody>{body}</tbody></table></div></div></main></body></html>'''
@@ -127,7 +139,7 @@ def register_qa_page(app, *, version: str, qa_loader) -> None:
             )
         except Exception as exc:
             return HTMLResponse(
-                '<h1>QA Fixes unavailable</h1><p>' + escape(str(exc)) + '</p><p><a href="/app/backoffice#data">Back to Data Center</a></p>',
+                '<h1>QA Fixes unavailable</h1><p>' + escape(str(exc)) + '</p><p><a href="/yipman#data">Back to Data Center</a></p>',
                 status_code=500,
                 headers={'Cache-Control': 'no-store'},
             )
