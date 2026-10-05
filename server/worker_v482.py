@@ -5,9 +5,10 @@ from datetime import datetime, timezone
 
 import worker as _worker
 from v7_ingest import API_PIPELINE, API_VERSION
+from chatgpt_daily_gp_v492 import apply_chatgpt_daily_gp_v492
 
 
-"""v7.0.482 worker convergence patch.
+"""v7.0.482 worker convergence patch + v7.0.492 ChatGPT daily GP fix.
 
 A batch whose authoritative ingest_batch status is PHASE2C_READY still requires
 Phase 3, regardless of whether an older/stale phase3_batch_result row exists.
@@ -15,9 +16,18 @@ The prior orphan-recovery query required phase3_batch_result to be absent. That
 could strand a batch after Phase 2C was rerun/reset while a previous Phase 3
 result row remained.
 
-This wrapper patches only the orphan recovery selector and otherwise delegates
-to the stable worker implementation.
+v7.0.492 additionally patches the ChatGPT Sheet publisher so family-level cost
+authority is converted independently for each selling UPC UOM. This prevents a
+sibling LB/CASE/PACK conversion from being reused across the whole family when
+daily COGS/GP is calculated.
 """
+
+
+# worker.py imports publish_chatgpt_snapshot by value, but that function resolves
+# helper globals from chatgpt_sheet_bridge at runtime. Applying this patch here
+# therefore repairs async CHATGPT_SHEET_PUBLISH jobs without changing the stable
+# worker implementation or production API entrypoint.
+apply_chatgpt_daily_gp_v492()
 
 
 def _queue_orphaned_phase2c_ready(cur) -> int:
