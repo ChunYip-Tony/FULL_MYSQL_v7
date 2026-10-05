@@ -1,0 +1,5 @@
+Force DigitalOcean to deploy the fully converged v7.0.493 main revision.
+Expected production evidence after worker startup recovery:
+- MYSQL_SOURCE_STATUS Daily_GP_Cost_Resolver = PER_UPC_V493
+- 4029551780 daily cost = 10.40000004 per PACK, not 52.0000002
+- 75339325301 daily cost = 10.2 per PACK, not 5.1
