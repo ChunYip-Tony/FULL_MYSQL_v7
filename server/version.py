@@ -1,1 +1,1 @@
-VERSION='7.0.493-daily-gp-per-upc-direct-publisher'
+VERSION='7.0.494-qa-admin-session-flow'
