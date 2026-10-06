@@ -1,1 +1,1 @@
-VERSION='7.0.497-data-center-ui-upgrade'
+VERSION='7.0.498-frozen-date-ui-polish'
