@@ -1,1 +1,1 @@
-VERSION='7.0.495-data-center-active-latest-fix'
+VERSION='7.0.496-frozen-freshness-display-fix'
