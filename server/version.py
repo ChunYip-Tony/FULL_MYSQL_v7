@@ -1,1 +1,1 @@
-VERSION='7.0.499-qa-no-inline-admin-prompt'
+VERSION='7.0.500-qa-review-no-admin-overlay'
