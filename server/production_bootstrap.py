@@ -2,12 +2,13 @@ from __future__ import annotations
 
 """Production API bootstrap.
 
-Keeps api_entry_production as the stable product assembly, then installs small
-runtime route repairs that must apply after the stable app has registered its
-routes.
+The stable product assembly already registers the QA review route. Do not
+install the legacy v494 inline admin-login overlay; QA review should open
+cleanly from Yipman Back Office without asking the store user for a second
+Admin ID/password.
+
+Server-side authorization for protected QA write actions remains owned by the
+canonical QA repair route.
 """
 
 from api_entry_production import app
-from qa_auth_flow_v494 import install_qa_auth_flow_v494
-
-install_qa_auth_flow_v494(app)
