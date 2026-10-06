@@ -1,41 +1,39 @@
 from __future__ import annotations
 
-"""Yipman / Back Office Data Center status consistency patch.
+"""Desktop Data Center / freshness consistency patch.
 
-Key rules:
-- "Current Processing" must show ONLY an actually active batch. Never fall back
-  to the latest completed batch.
-- The latest completed/terminal batch belongs in upload history / latest-server
-  status, not in Current Processing.
-- Browser refresh must not erase the most recent server-side upload result.
-- Current file identity and live run telemetry should be shown when available.
-- QA rows shown under Current Processing must be scoped to that active batch.
+This patch keeps Current Processing scoped to a real active batch, preserves
+latest server upload evidence after a browser refresh, and renders Live/Fresh
+and Frozen freshness independently. The old combined L/F/F expression used
+LIVE_FRESH || FROZEN; because LIVE_FRESH is always an object, an empty
+LIVE_FRESH date masked a valid Frozen date.
 """
 
-_MARKER = 'data-center-v495-js'
+_MARKER = 'data-center-v496-js'
 
 _PATCH = r'''
-<style id="data-center-v495-css">
+<style id="data-center-v496-css">
 @media (min-width:760px){
-  #ydesk #yd-data .dc495-waiting{background:#fff4d8!important;color:#956000!important}
-  #ydesk #yd-data .dc495-ok{background:#e9f8ef!important;color:#147b49!important}
-  #ydesk #yd-data .dc495-idle{background:#edf2f6!important;color:#5d6d7d!important}
-  #ydesk #yd-data .dc495-danger{background:#ffe9ed!important;color:#b82f45!important}
-  #ydesk #yd-data .dc495-scope-note{margin:6px 0 8px;padding:8px 10px;border:1px solid #dbe7f2;border-radius:8px;background:#f7fbff;color:#5d7188;font-size:11px;line-height:1.4}
-  #ydesk #yd-data .dc495-empty{padding:12px 9px!important;color:#6b7d92!important;text-align:center!important;font-size:11px!important}
-  #ydesk #yd-data .dc495-count{font-weight:900;color:#223b56}
-  #ydesk #yd-data .dc495-file{margin:9px 0 0;padding:9px 10px;border:1px solid #dbe5ef;border-radius:9px;background:#fbfdff;font-size:11px;line-height:1.45;color:#536981;overflow-wrap:anywhere}
-  #ydesk #yd-data .dc495-file b{color:#183653}
-  #ydesk #yd-data .dc495-latest{margin-top:7px;padding:8px 10px;border-radius:8px;background:#f1f6fb;border:1px solid #dce8f2;color:#536981;font-size:11px;line-height:1.4}
-  #ydesk #yd-data .dc495-latest strong{color:#173653}
+  #ydesk #yd-data .dc496-waiting{background:#fff4d8!important;color:#956000!important}
+  #ydesk #yd-data .dc496-ok{background:#e9f8ef!important;color:#147b49!important}
+  #ydesk #yd-data .dc496-idle{background:#edf2f6!important;color:#5d6d7d!important}
+  #ydesk #yd-data .dc496-danger{background:#ffe9ed!important;color:#b82f45!important}
+  #ydesk #yd-data .dc496-scope-note{margin:6px 0 8px;padding:8px 10px;border:1px solid #dbe7f2;border-radius:8px;background:#f7fbff;color:#5d7188;font-size:11px;line-height:1.4}
+  #ydesk #yd-data .dc496-empty{padding:12px 9px!important;color:#6b7d92!important;text-align:center!important;font-size:11px!important}
+  #ydesk #yd-data .dc496-count{font-weight:900;color:#223b56}
+  #ydesk #yd-data .dc496-file{margin:9px 0 0;padding:9px 10px;border:1px solid #dbe5ef;border-radius:9px;background:#fbfdff;font-size:11px;line-height:1.45;color:#536981;overflow-wrap:anywhere}
+  #ydesk #yd-data .dc496-file b{color:#183653}
+  #ydesk #yd-data .dc496-latest{margin-top:7px;padding:8px 10px;border-radius:8px;background:#f1f6fb;border:1px solid #dce8f2;color:#536981;font-size:11px;line-height:1.4;overflow-wrap:anywhere}
+  #ydesk #yd-data .dc496-latest strong{color:#173653}
+  #ydesk .fresh .frow b{font-variant-numeric:tabular-nums}
 }
 </style>
-<script id="data-center-v495-js">
+<script id="data-center-v496-js">
 (()=>{
   if(!window.matchMedia('(min-width:760px)').matches)return;
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const num=v=>Number.isFinite(Number(v))?Number(v):0;
-  let busy=false,refreshTimer=null;
+  let busy=false,refreshTimer=null,freshBusy=false;
 
   function dataVisible(){const el=document.querySelector('#yd-data');return !!el&&el.classList.contains('active')}
   function processingCard(){return [...document.querySelectorAll('#yd-data .card')].find(c=>c.querySelector('.cardhead h3')?.textContent.trim()==='2. Current Processing')||null}
@@ -59,13 +57,22 @@ _PATCH = r'''
     const row=rows.find(x=>Number(x?.batch_id||0)===bid)||null;
     return Array.isArray(row?.files)?row.files:[];
   }
+  function fileEvidenceHtml(files){
+    return files.slice(0,4).map(f=>{
+      const name=esc(f?.original_filename||'Unknown file');
+      const st=esc(f?.source_type||'unclassified');
+      const start=f?.coverage_start_date||null,end=f?.coverage_end_date||null;
+      const cov=start||end?(' · source date '+esc(end||start)+(start&&end&&start!==end?(' ('+esc(start)+'–'+esc(end)+')') : '')):'';
+      return '<span>'+name+' · <b>'+st+'</b>'+cov+'</span>';
+    }).join('<br>');
+  }
   function setKpi(card,label,value){[...card.querySelectorAll('.kpi')].forEach(k=>{if(k.querySelector('label')?.textContent.trim()===label&&k.querySelector('strong'))k.querySelector('strong').textContent=value})}
-  function resetStages(card){[...card.querySelectorAll('.pipeline .stage')].forEach(s=>s.classList.remove('done','hold','dc495-waiting'))}
+  function resetStages(card){[...card.querySelectorAll('.pipeline .stage')].forEach(s=>s.classList.remove('done','hold','dc496-waiting'))}
   function markStages(card,raw){
     const s=[...card.querySelectorAll('.pipeline .stage')];if(s.length<5)return;resetStages(card);
     if(raw==='API_UPLOADING'){s[0].classList.add('done');return}
-    if(/INGESTED_PENDING_QA|RAW_RELEASED|RELEASED/.test(raw)){s[0].classList.add('done');s[1].classList.add('done');s[2].classList.add('dc495-waiting');return}
-    if(raw==='PHASE2C_READY'){s[0].classList.add('done');s[1].classList.add('done');s[2].classList.add('done');s[3].classList.add('dc495-waiting');return}
+    if(/INGESTED_PENDING_QA|RAW_RELEASED|RELEASED/.test(raw)){s[0].classList.add('done');s[1].classList.add('done');s[2].classList.add('dc496-waiting');return}
+    if(raw==='PHASE2C_READY'){s[0].classList.add('done');s[1].classList.add('done');s[2].classList.add('done');s[3].classList.add('dc496-waiting');return}
     if(/PHASE3/.test(raw)){s[0].classList.add('done');s[1].classList.add('done');s[2].classList.add('done');raw.includes('HOLD')?s[3].classList.add('hold'):s[3].classList.add('done');return}
     if(/QUICK_CHECK_READY|COMPLETE|PUBLISHED/.test(raw)){s.forEach(x=>x.classList.add('done'))}
   }
@@ -76,19 +83,19 @@ _PATCH = r'''
     const batch=b?.batch_id?('#'+b.batch_id):'None';
     const badge=card.querySelector('.cardhead .badge');
     if(badge){
-      badge.classList.remove('dc495-waiting','dc495-ok','dc495-idle','dc495-danger','blue','green','amber','red','gray');
-      if(!b){badge.textContent='NO ACTIVE PROCESSING';badge.classList.add('dc495-idle');badge.title='No active ingest or pipeline run'}
-      else if(raw==='INGESTED_PENDING_QA'){badge.textContent='WAITING FOR QA';badge.classList.add('dc495-waiting');badge.title=raw}
-      else if(/API_ABORTED|FAILED|ERROR/.test(raw)){badge.textContent=raw;badge.classList.add('dc495-danger');badge.title=raw}
-      else if(terminal(raw)){badge.textContent=raw;badge.classList.add('dc495-ok');badge.title=raw}
+      badge.classList.remove('dc496-waiting','dc496-ok','dc496-idle','dc496-danger','blue','green','amber','red','gray');
+      if(!b){badge.textContent='NO ACTIVE PROCESSING';badge.classList.add('dc496-idle');badge.title='No active ingest or pipeline run'}
+      else if(raw==='INGESTED_PENDING_QA'){badge.textContent='WAITING FOR QA';badge.classList.add('dc496-waiting');badge.title=raw}
+      else if(/API_ABORTED|FAILED|ERROR/.test(raw)){badge.textContent=raw;badge.classList.add('dc496-danger');badge.title=raw}
+      else if(terminal(raw)){badge.textContent=raw;badge.classList.add('dc496-ok');badge.title=raw}
       else{badge.textContent=raw;badge.classList.add('blue');badge.title=raw}
     }
     setKpi(card,'Batch',batch);setKpi(card,'Run',b?.active_pipeline_run_id?('#'+b.active_pipeline_run_id):'#—');setKpi(card,'Open Issues',String(total));
     if(b)markStages(card,raw);else resetStages(card);
 
-    let file=card.querySelector('.dc495-file');
+    let file=card.querySelector('.dc496-file');
     if(b){
-      if(!file){file=document.createElement('div');file.className='dc495-file';const pipe=card.querySelector('.pipeline');pipe?.insertAdjacentElement('afterend',file)}
+      if(!file){file=document.createElement('div');file.className='dc496-file';card.querySelector('.pipeline')?.insertAdjacentElement('afterend',file)}
       const fileName=b.active_file_name||'Waiting for file identity';
       const fileStatus=b.active_file_status||b.active_stage_name||raw;
       const source=b.active_source_type?(' · '+b.active_source_type):'';
@@ -96,22 +103,22 @@ _PATCH = r'''
     }else if(file){file.remove()}
 
     const title=[...card.querySelectorAll('.sectiontitle')].find(x=>['Top QA Holds','Top Current-Batch QA Holds'].includes(x.textContent.trim()));
-    const table=title?.nextElementSibling?.matches('.dc495-scope-note')?title.nextElementSibling.nextElementSibling?.querySelector('table'):title?.nextElementSibling?.querySelector('table');
+    const table=title?.nextElementSibling?.matches('.dc496-scope-note')?title.nextElementSibling.nextElementSibling?.querySelector('table'):title?.nextElementSibling?.querySelector('table');
     if(title&&table){
       const th=table.querySelectorAll('thead th');if(th.length>=3){th[0].textContent='Issue';th[1].textContent='Count';th[2].textContent='Scope'}
       const body=table.querySelector('tbody');
-      if(body)body.innerHTML=!b?'<tr><td colspan="3" class="dc495-empty">No active batch. Current Processing is idle.</td></tr>':(rows.length?rows.slice(0,12).map(x=>'<tr><td>'+esc(x.issue_code)+'</td><td class="dc495-count">'+esc(x.issue_count)+'</td><td>Current batch</td></tr>').join(''):'<tr><td colspan="3" class="dc495-empty">No current-batch QA holds reported.</td></tr>');
-      let note=card.querySelector('.dc495-scope-note');if(!note){note=document.createElement('div');note.className='dc495-scope-note';title.insertAdjacentElement('afterend',note)}
+      if(body)body.innerHTML=!b?'<tr><td colspan="3" class="dc496-empty">No active batch. Current Processing is idle.</td></tr>':(rows.length?rows.slice(0,12).map(x=>'<tr><td>'+esc(x.issue_code)+'</td><td class="dc496-count">'+esc(x.issue_count)+'</td><td>Current batch</td></tr>').join(''):'<tr><td colspan="3" class="dc496-empty">No current-batch QA holds reported.</td></tr>');
+      let note=card.querySelector('.dc496-scope-note');if(!note){note=document.createElement('div');note.className='dc496-scope-note';title.insertAdjacentElement('afterend',note)}
       note.innerHTML=b?('<b>Scope:</b> Batch '+esc(batch)+'. Historical/global QA items are not mixed into Current Processing.'):'<b>Scope:</b> No active batch. Historical/global QA items are intentionally excluded here.';
       title.textContent='Top Current-Batch QA Holds';
     }
 
-    let latestBox=card.querySelector('.dc495-latest');if(!latestBox){latestBox=document.createElement('div');latestBox.className='dc495-latest';card.querySelector('.cardbody')?.appendChild(latestBox)}
+    let latestBox=card.querySelector('.dc496-latest');if(!latestBox){latestBox=document.createElement('div');latestBox.className='dc496-latest';card.querySelector('.cardbody')?.appendChild(latestBox)}
     if(latest?.batch_id){
-      const files=recentFiles(recent,latest),names=files.slice(0,3).map(f=>f.original_filename).filter(Boolean);
-      latestBox.innerHTML='<strong>Latest server batch:</strong> #'+esc(latest.batch_id)+' · '+esc(latest.processing_status||'—')+(names.length?'<br><span>'+names.map(esc).join(' · ')+'</span>':'');
+      const files=recentFiles(recent,latest);
+      latestBox.innerHTML='<strong>Latest server batch:</strong> #'+esc(latest.batch_id)+' · '+esc(latest.processing_status||'—')+(files.length?'<br>'+fileEvidenceHtml(files):'');
     }else latestBox.innerHTML='<strong>Latest server batch:</strong> —';
-    card.dataset.dc495Sig=sig;
+    card.dataset.dc496Sig=sig;
   }
   function patchUploadResult(active,latest,recent){
     const out=document.querySelector('#ydUploadResult');if(!out)return;
@@ -119,9 +126,19 @@ _PATCH = r'''
     if(!/No upload in this session\.?/i.test(text))return;
     if(active?.batch_id){out.innerHTML='<b>Server processing · Batch #'+esc(active.batch_id)+'</b><br>'+esc(active.active_file_name||active.processing_status||'Active');return}
     if(latest?.batch_id){
-      const files=recentFiles(recent,latest),names=files.slice(0,4).map(f=>f.original_filename).filter(Boolean);
-      out.innerHTML='<b>Latest server upload · Batch #'+esc(latest.batch_id)+'</b><br>'+esc(latest.processing_status||'—')+(names.length?'<br>'+names.map(esc).join('<br>'):'');
+      const files=recentFiles(recent,latest);
+      out.innerHTML='<b>Latest server upload · Batch #'+esc(latest.batch_id)+'</b><br>'+esc(latest.processing_status||'—')+(files.length?'<br>'+fileEvidenceHtml(files):'');
     }
+  }
+  function renderFreshness(dh){
+    const box=document.querySelector('#ydFresh');if(!box)return;
+    const latest=dh?.latest||{};
+    const entries=[['POS',latest.POS],['MVT',latest.MVT],['Price',latest.PRICE],['OH',latest.OH],['Live/Fresh',latest.LIVE_FRESH],['Frozen',latest.FROZEN]];
+    box.innerHTML=entries.map(([label,item])=>'<div class="frow"><span>'+esc(label)+'</span><b>'+(item?.date?esc(item.date):'—')+' <i class="fdot '+(item?.date?'':'warn')+'"></i></b></div>').join('');
+  }
+  async function refreshFreshness(){
+    if(freshBusy||!document.querySelector('#ydFresh'))return;freshBusy=true;
+    try{const r=await fetch('/v1/backoffice/data-health?days=14',{cache:'no-store',credentials:'same-origin'});if(r.ok)renderFreshness(await r.json())}catch(_e){}finally{freshBusy=false}
   }
   async function refresh(){
     if(busy||!dataVisible())return;busy=true;
@@ -131,14 +148,15 @@ _PATCH = r'''
       const a=await ar.json(),recent=rr.ok?await rr.json():{};
       const active=a.active_batch||null,latest=a.latest_batch||null;
       const sig=JSON.stringify([active?.batch_id,active?.processing_status,active?.active_pipeline_run_id,active?.active_file_name,active?.active_file_status,active?.active_issue_total,active?.active_progress_issue_counts,latest?.batch_id,latest?.processing_status]);
-      const card=processingCard();if(card&&card.dataset.dc495Sig!==sig)patchCard(active,latest,recent,sig);else if(card)patchUploadResult(active,latest,recent);
+      const card=processingCard();if(card&&card.dataset.dc496Sig!==sig)patchCard(active,latest,recent,sig);
       patchUploadResult(active,latest,recent);
     }catch(_e){}finally{busy=false}
   }
   function scheduleRefresh(delay=80){clearTimeout(refreshTimer);refreshTimer=setTimeout(refresh,delay)}
   const root=document.querySelector('#yd-data');if(root){new MutationObserver(()=>{if(dataVisible())scheduleRefresh()}).observe(root,{subtree:true,childList:true})}
-  document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh'||e.target?.id==='ydUpload')scheduleRefresh(500)},true);
-  setInterval(refresh,3000);scheduleRefresh(450);
+  document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh'||e.target?.id==='ydUpload'){scheduleRefresh(500);setTimeout(refreshFreshness,650)}},true);
+  setInterval(refresh,3000);setInterval(refreshFreshness,15000);
+  scheduleRefresh(450);setTimeout(refreshFreshness,500);
 })();
 </script>
 '''
