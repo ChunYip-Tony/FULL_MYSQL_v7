@@ -1,1 +1,1 @@
-VERSION='7.0.494-qa-admin-session-flow'
+VERSION='7.0.495-data-center-active-latest-fix'
