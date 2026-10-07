@@ -13,6 +13,7 @@ from yipman_mobile_v1_price_polish import polish_price_html
 from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
 from yipman_mobile_v1_order_detail import polish_order_detail_html
+from yipman_mobile_v1_family_detail import polish_family_detail_html
 from yipman_mobile_v1_ordering_context import polish_ordering_context_html
 from yipman_mobile_v1_loading_hotfix import polish_loading_html
 from yipman_mobile_v1_navigation import polish_navigation_html
@@ -44,6 +45,7 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_identity_html(html)
         html = polish_interactions_html(html)
         html = polish_order_detail_html(html)
+        html = polish_family_detail_html(html)
         html = polish_ordering_context_html(html)
         html = polish_loading_html(html)
         html = polish_pwa_html(html)
@@ -54,7 +56,7 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback",
             },
         )
 
@@ -199,6 +201,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "quick_search_fast_enriched": True,
         "card_detail": True,
         "order_family_detail": True,
+        "family_detail_fallback": True,
         "true_stock_inline": True,
         "standalone_pwa": True,
         "native_back_stack": True,
