@@ -9,6 +9,8 @@ Stock sheets, date controls, filters, metrics, and status text without changing
 business logic or card hierarchy.
 """
 
+from yipman_mobile_v1_identity_compact import polish_identity_compact_html
+
 _STYLE = r'''
 <style id="yipmanV1ReadableTypography">
 /* Core page / navigation */
@@ -76,6 +78,6 @@ button{line-height:1.2}
 
 
 def polish_typography_html(html: str) -> str:
-    if 'yipmanV1ReadableTypography' in html:
-        return html
-    return html.replace('</head>', _STYLE + '</head>', 1)
+    if 'yipmanV1ReadableTypography' not in html:
+        html = html.replace('</head>', _STYLE + '</head>', 1)
+    return polish_identity_compact_html(html)
