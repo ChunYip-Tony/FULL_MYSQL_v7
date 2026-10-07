@@ -5,6 +5,7 @@ from __future__ import annotations
 import api as _api
 from fastapi.responses import HTMLResponse
 from yipman_mobile_v1_consolidated_rc import _decorate_html
+from yipman_mobile_v1_rc_polish import polish_rc_html
 
 _INSTALLED = False
 
@@ -20,13 +21,14 @@ def install_mobile_v1_rc_route(app) -> None:
 
     def rc_page():
         html = _decorate_html(base_renderer(version), version)
+        html = polish_rc_html(html, version)
         return HTMLResponse(
             html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "consolidated",
+                "X-YipMan-Mobile-V1-RC": "consolidated-polish-1",
             },
         )
 
@@ -50,5 +52,6 @@ def install_mobile_v1_rc_route(app) -> None:
         "enabled": True,
         "path": "/app/yipman-v1-rc/",
         "production_v1_unchanged": True,
+        "polish": "1",
     }
     _INSTALLED = True
