@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, Response
 from yipman_mobile_v1_exact_shell import yipman_mobile_v1_exact_html
 from yipman_mobile_v1_price_guard import guard_price_html
 from yipman_mobile_v1_price_polish import polish_price_html
+from yipman_mobile_v1_price_upc_only import polish_price_upc_only_html
 from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
 from yipman_mobile_v1_order_detail import polish_order_detail_html
@@ -41,6 +42,7 @@ def install_mobile_v1_rc_route(app) -> None:
         html = yipman_mobile_v1_exact_html(version)
         html = guard_price_html(html)
         html = polish_price_html(html)
+        html = polish_price_upc_only_html(html)
         html = polish_quick_search_html(html)
         html = polish_identity_html(html)
         html = polish_interactions_html(html)
@@ -56,7 +58,7 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters",
             },
         )
 
@@ -198,6 +200,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "shell": "exact-mock",
         "price_guard": True,
         "price_polish": True,
+        "price_upc_only_filters": True,
         "quick_search_fast_enriched": True,
         "card_detail": True,
         "order_family_detail": True,
