@@ -2,6 +2,9 @@ from __future__ import annotations
 
 """Non-disruptive preview route for the exact-mock YipMan Mobile V1 RC."""
 
+import json
+from datetime import date
+
 import api as _api
 from fastapi.responses import HTMLResponse, Response
 from yipman_mobile_v1_exact_shell import yipman_mobile_v1_exact_html
@@ -10,6 +13,7 @@ from yipman_mobile_v1_price_polish import polish_price_html
 from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
 from yipman_mobile_v1_order_detail import polish_order_detail_html
+from yipman_mobile_v1_ordering_context import polish_ordering_context_html
 from yipman_mobile_v1_navigation import polish_navigation_html
 from yipman_mobile_v1_identity_guard import polish_identity_html
 from yipman_mobile_v1_pwa import (
@@ -39,6 +43,7 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_identity_html(html)
         html = polish_interactions_html(html)
         html = polish_order_detail_html(html)
+        html = polish_ordering_context_html(html)
         html = polish_pwa_html(html)
         html = polish_navigation_html(html)
         return HTMLResponse(
@@ -47,9 +52,52 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context",
             },
         )
+
+    def rc_ordering_review_live(
+        category: str = "ALL",
+        delivery_date: str | None = None,
+        next_delivery_date: str | None = None,
+    ):
+        """RC-only uncached ordering review for the user's current viewing moment."""
+        try:
+            parsed_delivery = date.fromisoformat(delivery_date) if delivery_date else None
+            parsed_next = date.fromisoformat(next_delivery_date) if next_delivery_date else None
+            result = _api.backoffice_ordering_review(
+                category=category,
+                delivery_date=parsed_delivery,
+                next_delivery_date=parsed_next,
+                best_available_delivery_evidence=True,
+            )
+            if isinstance(result, dict):
+                result = dict(result)
+                result["viewing_moment_live"] = True
+                result["calculation_basis"] = "CURRENT_EFFECTIVE_OH_AT_REQUEST_WITH_EXISTING_ORDERING_RULES"
+            return Response(
+                json.dumps(result, default=_api.j),
+                media_type="application/json",
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+        except ValueError as exc:
+            return Response(
+                json.dumps({"status": "INVALID", "reason": str(exc)}),
+                status_code=422,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
+        except Exception as exc:
+            return Response(
+                json.dumps({"status": "ERROR", "reason": str(exc)}),
+                status_code=500,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
 
     def rc_manifest():
         return Response(
@@ -93,6 +141,13 @@ def install_mobile_v1_rc_route(app) -> None:
         response_class=HTMLResponse,
         include_in_schema=False,
         name="yipman_mobile_v1_exact_mock_rc_noslash",
+    )
+    app.add_api_route(
+        "/app/yipman-v1-rc/api/ordering-review-live",
+        rc_ordering_review_live,
+        methods=["GET"],
+        include_in_schema=False,
+        name="yipman_mobile_v1_rc_ordering_review_live",
     )
     app.add_api_route(
         "/app/yipman-v1-rc/manifest.webmanifest",
@@ -146,6 +201,9 @@ def install_mobile_v1_rc_route(app) -> None:
         "standalone_pwa": True,
         "native_back_stack": True,
         "upc_identity_guard": True,
+        "ordering_viewing_moment_live": True,
+        "ordering_date_controls": True,
+        "weekday_date_labels": True,
         "install_path": "/app/yipman-v1-rc/install",
     }
     _INSTALLED = True
