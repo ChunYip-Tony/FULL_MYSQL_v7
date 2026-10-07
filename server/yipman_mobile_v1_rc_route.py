@@ -10,6 +10,7 @@ from yipman_mobile_v1_price_polish import polish_price_html
 from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
 from yipman_mobile_v1_order_detail import polish_order_detail_html
+from yipman_mobile_v1_navigation import polish_navigation_html
 from yipman_mobile_v1_pwa import (
     install_html as pwa_install_html,
     polish_pwa_html,
@@ -37,13 +38,14 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_interactions_html(html)
         html = polish_order_detail_html(html)
         html = polish_pwa_html(html)
+        html = polish_navigation_html(html)
         return HTMLResponse(
             html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack",
             },
         )
 
@@ -140,6 +142,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "order_family_detail": True,
         "true_stock_inline": True,
         "standalone_pwa": True,
+        "native_back_stack": True,
         "install_path": "/app/yipman-v1-rc/install",
     }
     _INSTALLED = True
