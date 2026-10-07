@@ -18,6 +18,8 @@ from yipman_mobile_v1_order_detail import polish_order_detail_html
 from yipman_mobile_v1_family_detail import polish_family_detail_html
 from yipman_mobile_v1_ordering_context import polish_ordering_context_html
 from yipman_mobile_v1_loading_hotfix import polish_loading_html
+from yipman_mobile_v1_ordering_reliability import polish_ordering_reliability_html
+from yipman_mobile_v1_typography import polish_typography_html
 from yipman_mobile_v1_navigation import polish_navigation_html
 from yipman_mobile_v1_identity_guard import polish_identity_html
 from yipman_mobile_v1_pwa import (
@@ -52,6 +54,8 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_family_detail_html(html)
         html = polish_ordering_context_html(html)
         html = polish_loading_html(html)
+        html = polish_ordering_reliability_html(html)
+        html = polish_typography_html(html)
         html = polish_pwa_html(html)
         html = polish_navigation_html(html)
         return HTMLResponse(
@@ -60,7 +64,7 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography",
             },
         )
 
@@ -215,6 +219,8 @@ def install_mobile_v1_rc_route(app) -> None:
         "ordering_viewing_moment_live": True,
         "ordering_date_controls": True,
         "weekday_date_labels": True,
+        "ordering_timeout_fallback": True,
+        "readable_typography": True,
         "nonblocking_startup_ordering": True,
         "install_path": "/app/yipman-v1-rc/install",
     }
