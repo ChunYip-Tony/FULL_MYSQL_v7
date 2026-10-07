@@ -39,25 +39,45 @@ _SCRIPT = r'''
 <script id="yipmanV1PriceMockPolishScript">
 (function(){
   'use strict';
+  let decorating=false;
+  let queued=false;
+
   function decoratePriceCards(){
-    const cards=[...document.querySelectorAll('#price .direct-card')];
-    for(const card of cards){
-      const currentEl=[...card.querySelectorAll('.stat')].find(x=>/CURRENT/i.test(x.textContent||''))?.querySelector('span');
-      const actionEl=card.querySelector('.action-value');
-      if(!currentEl||!actionEl) continue;
-      const current=Number((currentEl.textContent||'').replace(/[^0-9.\-]/g,''));
-      const match=(actionEl.textContent||'').match(/\$([0-9]+(?:\.[0-9]+)?)/);
-      const suggested=match?Number(match[1]):NaN;
-      const type=(card.querySelector('.pill')?.textContent||'').trim().toUpperCase();
-      if(Number.isFinite(current)&&Number.isFinite(suggested)&&Math.abs(current-suggested)<0.25){
-        if(type==='TPR') actionEl.textContent='KEEP TPR $'+suggested.toFixed(2);
-        else if(type==='REG') actionEl.textContent='KEEP REG $'+suggested.toFixed(2);
+    if(decorating) return;
+    decorating=true;
+    try{
+      const cards=[...document.querySelectorAll('#price .direct-card')];
+      for(const card of cards){
+        const currentEl=[...card.querySelectorAll('.stat')].find(x=>/CURRENT/i.test(x.textContent||''))?.querySelector('span');
+        const actionEl=card.querySelector('.action-value');
+        if(!currentEl||!actionEl) continue;
+        const current=Number((currentEl.textContent||'').replace(/[^0-9.\-]/g,''));
+        const match=(actionEl.textContent||'').match(/\$([0-9]+(?:\.[0-9]+)?)/);
+        const suggested=match?Number(match[1]):NaN;
+        const type=(card.querySelector('.pill')?.textContent||'').trim().toUpperCase();
+        if(!Number.isFinite(current)||!Number.isFinite(suggested)||Math.abs(current-suggested)>=0.25) continue;
+        let desired='';
+        if(type==='TPR') desired='KEEP TPR $'+suggested.toFixed(2);
+        else if(type==='REG') desired='KEEP REG $'+suggested.toFixed(2);
+        if(desired && actionEl.textContent!==desired) actionEl.textContent=desired;
       }
+    }finally{
+      decorating=false;
     }
   }
+
+  function scheduleDecorate(){
+    if(queued) return;
+    queued=true;
+    requestAnimationFrame(function(){
+      queued=false;
+      decoratePriceCards();
+    });
+  }
+
   const q=document.getElementById('priceQueue');
   if(q){
-    const mo=new MutationObserver(decoratePriceCards);
+    const mo=new MutationObserver(scheduleDecorate);
     mo.observe(q,{childList:true,subtree:true});
     decoratePriceCards();
   }
