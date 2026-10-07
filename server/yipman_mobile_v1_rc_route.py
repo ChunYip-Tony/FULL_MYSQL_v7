@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse
 from yipman_mobile_v1_exact_shell import yipman_mobile_v1_exact_html
 from yipman_mobile_v1_price_polish import polish_price_html
 from yipman_mobile_v1_interactions import polish_interactions_html
+from yipman_mobile_v1_zero_price_guard import guard_zero_price_html
 
 _INSTALLED = False
 
@@ -23,13 +24,14 @@ def install_mobile_v1_rc_route(app) -> None:
         html = yipman_mobile_v1_exact_html(version)
         html = polish_price_html(html)
         html = polish_interactions_html(html)
+        html = guard_zero_price_html(html)
         return HTMLResponse(
             html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-price-polish-interactions",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-price-polish-interactions-zero-price-guard",
             },
         )
 
@@ -57,5 +59,6 @@ def install_mobile_v1_rc_route(app) -> None:
         "price_polish": True,
         "card_detail": True,
         "true_stock_inline": True,
+        "zero_price_guard": True,
     }
     _INSTALLED = True
