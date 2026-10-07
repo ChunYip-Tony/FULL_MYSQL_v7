@@ -37,14 +37,6 @@ def polish_oh_safety_html(html: str) -> str:
         "const qty=(eff?.quantity===null||eff?.quantity===undefined||eff?.quantity==='')?domOh.qty:(Number.isFinite(Number(eff.quantity))?Number(eff.quantity):domOh.qty);",
     )
 
-    # Preserve zero as a real value only when a quantity is explicitly present.
-    # These replacements cover common local helper variants used by injected
-    # mobile modules without changing business calculations.
-    html = html.replace(
-        "const x=Number(v);return Number.isFinite(x)?x:null",
-        "if(v===null||v===undefined||v==='')return null;const x=Number(v);return Number.isFinite(x)?x:null",
-    )
-
     return html.replace(
         "</head>",
         f'<meta name="{marker}" content="1">\n</head>',
