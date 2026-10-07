@@ -5,6 +5,7 @@ from __future__ import annotations
 import api as _api
 from fastapi.responses import HTMLResponse
 from yipman_mobile_v1_exact_shell import yipman_mobile_v1_exact_html
+from yipman_mobile_v1_price_polish import polish_price_html
 
 _INSTALLED = False
 
@@ -18,13 +19,15 @@ def install_mobile_v1_rc_route(app) -> None:
     version = str(getattr(_api, "VERSION", ""))
 
     def rc_page():
+        html = yipman_mobile_v1_exact_html(version)
+        html = polish_price_html(html)
         return HTMLResponse(
-            yipman_mobile_v1_exact_html(version),
+            html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-price-polish",
             },
         )
 
@@ -49,5 +52,6 @@ def install_mobile_v1_rc_route(app) -> None:
         "path": "/app/yipman-v1-rc/",
         "production_v1_unchanged": True,
         "shell": "exact-mock",
+        "price_polish": True,
     }
     _INSTALLED = True
