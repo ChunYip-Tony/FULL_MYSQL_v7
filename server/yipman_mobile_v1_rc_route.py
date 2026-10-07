@@ -9,6 +9,7 @@ from yipman_mobile_v1_price_guard import guard_price_html
 from yipman_mobile_v1_price_polish import polish_price_html
 from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
+from yipman_mobile_v1_order_detail import polish_order_detail_html
 
 _INSTALLED = False
 
@@ -27,13 +28,14 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_price_html(html)
         html = polish_quick_search_html(html)
         html = polish_interactions_html(html)
+        html = polish_order_detail_html(html)
         return HTMLResponse(
             html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-price-guard-polish-fast-search-interactions",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-price-guard-polish-fast-search-interactions-order-family-detail",
             },
         )
 
@@ -62,6 +64,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "price_polish": True,
         "quick_search_fast_enriched": True,
         "card_detail": True,
+        "order_family_detail": True,
         "true_stock_inline": True,
     }
     _INSTALLED = True
