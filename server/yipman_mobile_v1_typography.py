@@ -10,6 +10,7 @@ business logic or card hierarchy.
 """
 
 from yipman_mobile_v1_identity_compact import polish_identity_compact_html
+from yipman_mobile_v1_oh_safety import polish_oh_safety_html
 
 _STYLE = r'''
 <style id="yipmanV1ReadableTypography">
@@ -80,4 +81,5 @@ button{line-height:1.2}
 def polish_typography_html(html: str) -> str:
     if 'yipmanV1ReadableTypography' not in html:
         html = html.replace('</head>', _STYLE + '</head>', 1)
-    return polish_identity_compact_html(html)
+    html = polish_identity_compact_html(html)
+    return polish_oh_safety_html(html)
