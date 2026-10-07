@@ -11,6 +11,7 @@ from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
 from yipman_mobile_v1_order_detail import polish_order_detail_html
 from yipman_mobile_v1_navigation import polish_navigation_html
+from yipman_mobile_v1_identity_guard import polish_identity_html
 from yipman_mobile_v1_pwa import (
     install_html as pwa_install_html,
     polish_pwa_html,
@@ -32,6 +33,7 @@ def install_mobile_v1_rc_route(app) -> None:
 
     def rc_page():
         html = yipman_mobile_v1_exact_html(version)
+        html = polish_identity_html(html)
         html = guard_price_html(html)
         html = polish_price_html(html)
         html = polish_quick_search_html(html)
@@ -45,7 +47,7 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-canonical-identity",
             },
         )
 
@@ -143,6 +145,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "true_stock_inline": True,
         "standalone_pwa": True,
         "native_back_stack": True,
+        "canonical_identity_guard": True,
         "install_path": "/app/yipman-v1-rc/install",
     }
     _INSTALLED = True
