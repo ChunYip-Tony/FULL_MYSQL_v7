@@ -18,8 +18,10 @@ from qa_review_only_v501 import install_qa_review_only_v501
 from yipman_mobile_v1_rc_route import install_mobile_v1_rc_route
 from yipman_app_ready_api import install_app_ready_api, request_app_ready_rebuild
 from yipman_app_ready_ingest_hook import install_app_ready_ingest_hook
+from yipman_mobile_v1_app_ready_fastpath import install_app_ready_fastpath
 
 install_qa_review_only_v501(app)
 install_mobile_v1_rc_route(app)
+install_app_ready_fastpath(app)
 install_app_ready_api(app)
 install_app_ready_ingest_hook(app, _api, request_app_ready_rebuild)
