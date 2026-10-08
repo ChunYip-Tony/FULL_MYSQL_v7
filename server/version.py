@@ -1,1 +1,1 @@
-VERSION='7.0.501-qa-review-only-no-admin-failure'
+VERSION='7.0.502-live-batch-progress-monitor'
