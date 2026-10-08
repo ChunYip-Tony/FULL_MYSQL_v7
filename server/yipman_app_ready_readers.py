@@ -2,13 +2,12 @@ from __future__ import annotations
 
 """Snapshot-first readers for latency-sensitive Yipman views.
 
-A complete App Ready snapshot is preferred.  If the requested key is outside
+A complete App Ready snapshot is preferred. If the requested key is outside
 its precomputed horizon/window, callers fall back to the existing live engine.
-This preserves correctness while removing heavy recalculation from normal app
-opens after an upload has already been published and analyzed.
 """
 
 from copy import deepcopy
+from datetime import date, timedelta
 from typing import Any
 from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS
 
@@ -39,8 +38,16 @@ def stock_flow_snapshot(days: int, limit: int | None = None) -> Any | None:
     return out
 
 
-def regular_ordering_snapshot(delivery_date: str | None) -> Any | None:
+def regular_ordering_snapshot(delivery_date: str | None, next_delivery_date: str | None = None) -> Any | None:
     if not delivery_date:
+        return None
+    # The precompute builder stores the standard D -> D+7 coverage window.
+    # A manager-entered custom next-delivery date must use the live engine.
+    try:
+        expected_next = (date.fromisoformat(str(delivery_date)) + timedelta(days=7)).isoformat()
+    except ValueError:
+        return None
+    if next_delivery_date and str(next_delivery_date) != expected_next:
         return None
     section = _section("ordering_regular")
     if not isinstance(section, dict):
