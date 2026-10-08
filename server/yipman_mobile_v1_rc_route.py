@@ -23,6 +23,7 @@ from yipman_mobile_v1_typography import polish_typography_html
 from yipman_mobile_v1_navigation import polish_navigation_html
 from yipman_mobile_v1_identity_guard import polish_identity_html
 from yipman_mobile_v1_receipt_history import family_receipt_history
+from yipman_mobile_v1_force_order_detail import polish_force_order_detail_html
 from yipman_mobile_v1_pwa import (
     install_html as pwa_install_html,
     polish_pwa_html,
@@ -59,13 +60,16 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_typography_html(html)
         html = polish_pwa_html(html)
         html = polish_navigation_html(html)
+        # Must be last: this layer inspects the final rendered detail shell and
+        # force-converts Family ORDER actions even if an earlier decorator missed.
+        html = polish_force_order_detail_html(html)
         return HTMLResponse(
             html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history-force-family-order-detail",
             },
         )
 
@@ -247,6 +251,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "quick_search_fast_enriched": True,
         "card_detail": True,
         "order_family_detail": True,
+        "force_family_order_detail": True,
         "family_detail_fallback": True,
         "true_stock_inline": True,
         "standalone_pwa": True,
