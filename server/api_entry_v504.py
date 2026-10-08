@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-"""V504 production composition: promote consolidated Mobile V1 renderer.
-
-There remains one official mobile product route: /app/yipman-v1/.
-The existing RC API endpoints remain internal implementation endpoints because
-they already expose the live ordering/Stock Flow contracts consumed by this
-renderer; they are not a second mobile product channel.
-"""
+"""V504 production composition: consolidated official Mobile V1 renderer."""
 
 import api_entry_v494 as _previous
 import api as _api
@@ -33,6 +27,7 @@ from yipman_mobile_v1_stock_flow_actions import polish_stock_flow_actions_html
 from yipman_mobile_v1_family_mvt_fix import polish_family_mvt_fix_html
 from yipman_mobile_v1_decision_compact import polish_decision_compact_html
 from yipman_mobile_v1_all_decision_evidence import polish_all_decision_evidence_html
+from yipman_mobile_v1_app_ready_client import polish_app_ready_client_html
 from yipman_mobile_v1_pwa import polish_pwa_html
 
 app = _previous.app
@@ -47,7 +42,7 @@ _POLISHERS = (
     polish_stock_flow_actions_html,
     polish_pwa_html, polish_navigation_html, polish_family_mvt_fix_html,
     polish_decision_compact_html, polish_order_evidence_bridge_html,
-    polish_all_decision_evidence_html,
+    polish_all_decision_evidence_html, polish_app_ready_client_html,
 )
 
 
@@ -70,4 +65,5 @@ app.state.yipman_mobile_v1_release = {
     "price_lifecycle": ["REG", "TPR_SUGGESTIONS", "TPR_PROGRESS", "CLEARANCE"],
     "quick_check": "UPC_ORDERING_AND_PRICE_REVIEW",
     "primary_decision_evidence": True,
+    "app_ready_snapshot_first": True,
 }
