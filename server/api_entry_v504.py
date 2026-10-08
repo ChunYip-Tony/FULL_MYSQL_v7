@@ -18,6 +18,7 @@ from yipman_mobile_v1_price_progress import polish_price_progress_html
 from yipman_mobile_v1_interactions import polish_interactions_html
 from yipman_mobile_v1_quick_search_polish import polish_quick_search_html
 from yipman_mobile_v1_order_detail import polish_order_detail_html
+from yipman_mobile_v1_order_evidence_bridge import polish_order_evidence_bridge_html
 from yipman_mobile_v1_family_detail import polish_family_detail_html
 from yipman_mobile_v1_ordering_context import polish_ordering_context_html
 from yipman_mobile_v1_loading_hotfix import polish_loading_html
@@ -41,7 +42,8 @@ _POLISHERS = (
     polish_ordering_context_html, polish_loading_html, polish_ordering_reliability_html,
     polish_typography_html, polish_stock_flow_home_html, polish_stock_flow_compact_html,
     polish_pwa_html, polish_navigation_html, polish_family_mvt_fix_html,
-    polish_decision_compact_html, polish_all_decision_evidence_html,
+    polish_decision_compact_html, polish_order_evidence_bridge_html,
+    polish_all_decision_evidence_html,
 )
 
 
