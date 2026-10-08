@@ -1,41 +1,34 @@
 from __future__ import annotations
 
-"""Keep Ordering state independent from the Stock Flow-only Home.
+"""Keep Ordering refresh independent from the Stock Flow-only Home.
 
-The legacy shell historically rebuilt the Home urgent queue whenever Ordering rows
-were refreshed. Home is now Stock Flow-only, so Ordering must update only Ordering
-state/rendering. This late composition patch deliberately overrides only the shared
-paintOrderRows helper and leaves action-detail generation available to explicit
-ordering/Quick Check flows.
+The reliability layer still contains legacy behavior that rebuilds the old urgent
+queue whenever ordering rows refresh. Home is now Stock Flow-only. Patch the
+composed HTML at render time, inside the original lexical scope, rather than adding
+a browser-side wrapper that could miss module/let state.
 """
 
-_SCRIPT = r'''
-<script id="yipmanV1OrderingHomeDecoupleScript">
-(()=>{'use strict';
-  function install(){
-    if(typeof window.paintOrderRows!=='function' || window.paintOrderRows.__stockFlowHomeSafe)return;
-    const safe=function(rows){
-      window.orderRows=Array.isArray(rows)?rows:[];
-      if(document.getElementById('regularResults') && typeof window.renderOrdering==='function'){
-        window.renderOrdering();
-      }
-      // Intentionally do not rebuild `urgent` or call renderUrgent(). Home owns its
-      // Stock Flow list; Ordering owns orderRows. This prevents an ordering refresh,
-      // date change, or True Stock recalculation from mutating the Home panel.
-    };
-    safe.__stockFlowHomeSafe=true;
-    window.paintOrderRows=safe;
-  }
-  install();
-  document.addEventListener('DOMContentLoaded',install,{once:true});
-  setTimeout(install,0);
-})();
-</script>
-'''
+_OLD = """function paintOrderRows(rows){
+  orderRows=Array.isArray(rows)?rows:[];
+  if(document.getElementById('regularResults'))renderOrdering();
+  urgent=[...urgent.filter(x=>x.type!=='order'),...buildUrgentOrder(orderRows)].filter(x=>!isIgnored(x.key)).sort((a,b)=>b.score-a.score);
+  renderUrgent();
+}"""
+
+_NEW = """function paintOrderRows(rows){
+  orderRows=Array.isArray(rows)?rows:[];
+  if(document.getElementById('regularResults'))renderOrdering();
+  // Home is Stock Flow-only. Ordering refresh must not mutate the legacy urgent queue.
+}"""
 
 
 def polish_ordering_home_decouple_html(html: str) -> str:
-    marker = "yipmanV1OrderingHomeDecoupleScript"
+    marker = "yipmanV1OrderingHomeDecoupled"
     if marker in html:
         return html
-    return html.replace("</body>", _SCRIPT + "\n</body>", 1)
+    if _OLD not in html:
+        # Fail closed: do not claim the decoupling marker when the expected contract
+        # is absent. This keeps composition drift visible during source/self tests.
+        return html
+    html = html.replace(_OLD, _NEW, 1)
+    return html.replace("</head>", f'<meta name="{marker}" content="1">\n</head>', 1)
