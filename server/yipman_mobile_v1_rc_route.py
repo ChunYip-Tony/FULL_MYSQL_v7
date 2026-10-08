@@ -24,6 +24,9 @@ from yipman_mobile_v1_navigation import polish_navigation_html
 from yipman_mobile_v1_identity_guard import polish_identity_html
 from yipman_mobile_v1_receipt_history import family_receipt_history
 from yipman_mobile_v1_force_order_detail import polish_force_order_detail_html
+from yipman_mobile_v1_stock_flow import stock_flow_review
+from yipman_mobile_v1_stock_flow_home import polish_stock_flow_home_html
+from yipman_mobile_v1_family_mvt_fix import polish_family_mvt_fix_html
 from yipman_mobile_v1_pwa import (
     install_html as pwa_install_html,
     polish_pwa_html,
@@ -58,18 +61,18 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_loading_html(html)
         html = polish_ordering_reliability_html(html)
         html = polish_typography_html(html)
+        html = polish_stock_flow_home_html(html)
         html = polish_pwa_html(html)
         html = polish_navigation_html(html)
-        # Must be last: this layer inspects the final rendered detail shell and
-        # force-converts Family ORDER actions even if an earlier decorator missed.
         html = polish_force_order_detail_html(html)
+        html = polish_family_mvt_fix_html(html)
         return HTMLResponse(
             html,
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history-force-family-order-detail",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history-force-family-order-detail-stock-flow-home-family-mvt-fix",
             },
         )
 
@@ -144,12 +147,36 @@ def install_mobile_v1_rc_route(app) -> None:
                 headers={"Cache-Control": "no-store"},
             )
 
+    def rc_stock_flow(days: int = 7, limit: int = 80):
+        """Family selling-MVT vs physical-receipt comparison for Quick home."""
+        try:
+            result = stock_flow_review(days=days, limit=limit)
+            return Response(
+                json.dumps(result, default=_api.j),
+                media_type="application/json",
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+        except ValueError as exc:
+            return Response(
+                json.dumps({"status": "INVALID", "reason": str(exc)}),
+                status_code=422,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
+        except Exception as exc:
+            return Response(
+                json.dumps({"status": "ERROR", "reason": str(exc)}),
+                status_code=500,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
+
     def rc_manifest():
-        return Response(
-            pwa_manifest(),
-            media_type="application/manifest+json",
-            headers={"Cache-Control": "no-cache"},
-        )
+        return Response(pwa_manifest(), media_type="application/manifest+json", headers={"Cache-Control": "no-cache"})
 
     def rc_sw():
         return Response(
@@ -159,11 +186,7 @@ def install_mobile_v1_rc_route(app) -> None:
         )
 
     def rc_icon():
-        return Response(
-            pwa_icon_svg(),
-            media_type="image/svg+xml",
-            headers={"Cache-Control": "public, max-age=3600"},
-        )
+        return Response(pwa_icon_svg(), media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=3600"})
 
     def rc_install():
         return HTMLResponse(
@@ -200,6 +223,13 @@ def install_mobile_v1_rc_route(app) -> None:
         methods=["GET"],
         include_in_schema=False,
         name="yipman_mobile_v1_rc_family_receipt_history",
+    )
+    app.add_api_route(
+        "/app/yipman-v1-rc/api/stock-flow",
+        rc_stock_flow,
+        methods=["GET"],
+        include_in_schema=False,
+        name="yipman_mobile_v1_rc_stock_flow",
     )
     app.add_api_route(
         "/app/yipman-v1-rc/manifest.webmanifest",
@@ -253,6 +283,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "order_family_detail": True,
         "force_family_order_detail": True,
         "family_detail_fallback": True,
+        "family_7d_mvt_fix": True,
         "true_stock_inline": True,
         "standalone_pwa": True,
         "native_back_stack": True,
@@ -264,6 +295,8 @@ def install_mobile_v1_rc_route(app) -> None:
         "readable_typography": True,
         "nonblocking_startup_ordering": True,
         "receipt_history_detail": True,
+        "stock_flow_home": True,
+        "stock_flow_windows": [7, 14, 28],
         "install_path": "/app/yipman-v1-rc/install",
     }
     _INSTALLED = True
