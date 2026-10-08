@@ -22,6 +22,7 @@ from yipman_mobile_v1_ordering_reliability import polish_ordering_reliability_ht
 from yipman_mobile_v1_typography import polish_typography_html
 from yipman_mobile_v1_navigation import polish_navigation_html
 from yipman_mobile_v1_identity_guard import polish_identity_html
+from yipman_mobile_v1_receipt_history import family_receipt_history
 from yipman_mobile_v1_pwa import (
     install_html as pwa_install_html,
     polish_pwa_html,
@@ -64,7 +65,7 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history",
             },
         )
 
@@ -100,6 +101,34 @@ def install_mobile_v1_rc_route(app) -> None:
             return Response(
                 json.dumps({"status": "INVALID", "reason": str(exc)}),
                 status_code=422,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
+        except Exception as exc:
+            return Response(
+                json.dumps({"status": "ERROR", "reason": str(exc)}),
+                status_code=500,
+                media_type="application/json",
+                headers={"Cache-Control": "no-store"},
+            )
+
+    def rc_family_receipt_history(family: str, limit_days: int = 12):
+        """Recent canonical Family receipt days for expandable mobile detail."""
+        try:
+            result = family_receipt_history(family, limit_days=limit_days)
+            return Response(
+                json.dumps(result, default=_api.j),
+                media_type="application/json",
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+        except KeyError as exc:
+            return Response(
+                json.dumps({"status": "NOT_FOUND", "reason": str(exc)}),
+                status_code=404,
                 media_type="application/json",
                 headers={"Cache-Control": "no-store"},
             )
@@ -162,6 +191,13 @@ def install_mobile_v1_rc_route(app) -> None:
         name="yipman_mobile_v1_rc_ordering_review_live",
     )
     app.add_api_route(
+        "/app/yipman-v1-rc/api/family-receipts",
+        rc_family_receipt_history,
+        methods=["GET"],
+        include_in_schema=False,
+        name="yipman_mobile_v1_rc_family_receipt_history",
+    )
+    app.add_api_route(
         "/app/yipman-v1-rc/manifest.webmanifest",
         rc_manifest,
         methods=["GET"],
@@ -222,6 +258,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "ordering_timeout_fallback": True,
         "readable_typography": True,
         "nonblocking_startup_ordering": True,
+        "receipt_history_detail": True,
         "install_path": "/app/yipman-v1-rc/install",
     }
     _INSTALLED = True
