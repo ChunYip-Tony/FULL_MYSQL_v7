@@ -12,6 +12,7 @@ business logic or card hierarchy.
 from yipman_mobile_v1_identity_compact import polish_identity_compact_html
 from yipman_mobile_v1_oh_safety import polish_oh_safety_html
 from yipman_mobile_v1_ordering_display_compact import polish_ordering_display_compact_html
+from yipman_mobile_v1_order_detail_retry import polish_order_detail_retry_html
 
 _STYLE = r'''
 <style id="yipmanV1ReadableTypography">
@@ -84,4 +85,5 @@ def polish_typography_html(html: str) -> str:
         html = html.replace('</head>', _STYLE + '</head>', 1)
     html = polish_identity_compact_html(html)
     html = polish_ordering_display_compact_html(html)
+    html = polish_order_detail_retry_html(html)
     return polish_oh_safety_html(html)
