@@ -3,7 +3,9 @@ from __future__ import annotations
 """V504 production composition: promote consolidated Mobile V1 renderer.
 
 There remains one official mobile product route: /app/yipman-v1/.
-The RC route is retained only as a diagnostic alias/preview surface.
+The existing RC API endpoints remain internal implementation endpoints because
+they already expose the live ordering/Stock Flow contracts consumed by this
+renderer; they are not a second mobile product channel.
 """
 
 import api_entry_v494 as _previous
@@ -47,14 +49,10 @@ def _official_mobile_v1_v504(version: str = "") -> str:
     html = yipman_mobile_v1_exact_html(version)
     for polish in _POLISHERS:
         html = polish(html)
-    html = html.replace("/app/yipman-v1-rc/api/ordering-review-live", "/v1/yipman/ordering-review", 1)
-    html = html.replace("/app/yipman-v1-rc/api/stock-flow", "/app/yipman-v1/api/stock-flow")
-    html = html.replace("/app/yipman-v1-rc/api/family-receipts", "/app/yipman-v1/api/family-receipts")
+    html = html.replace("<title>Yipman</title>", "<title>Yipman Mobile V1</title>", 1)
     return html
 
 
-# Official route resolves api.yipman_v1_html dynamically, so this promotes the
-# consolidated renderer without creating another public product channel.
 _api.yipman_v1_html = _official_mobile_v1_v504
 
 app.state.yipman_mobile_v1_release = {
