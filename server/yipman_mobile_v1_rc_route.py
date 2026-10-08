@@ -45,16 +45,11 @@ def install_mobile_v1_rc_route(app)->None:
  def rc_ordering_review_live(category:str="ALL",delivery_date:str|None=None,next_delivery_date:str|None=None):
   try:
    pd=date.fromisoformat(delivery_date) if delivery_date else None;pn=date.fromisoformat(next_delivery_date) if next_delivery_date else None
-   # Normal app opens use the already-computed authoritative delivery snapshot.
-   # Requests outside the precomputed 14-day horizon fall through to the same
-   # live engine used before App Ready.
-   result=regular_ordering_snapshot(delivery_date) if str(category or "ALL").upper()=="ALL" else None
+   result=regular_ordering_snapshot(delivery_date,next_delivery_date) if str(category or "ALL").upper()=="ALL" else None
    if result is None:
     result=_api.backoffice_ordering_review(category=category,delivery_date=pd,next_delivery_date=pn,best_available_delivery_evidence=True)
-    if isinstance(result,dict):
-     result=dict(result);result["viewing_moment_live"]=True;result["app_ready_snapshot"]=False;result["calculation_basis"]="CURRENT_EFFECTIVE_OH_AT_REQUEST_WITH_EXISTING_ORDERING_RULES"
-   elif isinstance(result,dict):
-    result=dict(result);result["viewing_moment_live"]=False
+    if isinstance(result,dict):result=dict(result);result["viewing_moment_live"]=True;result["app_ready_snapshot"]=False;result["calculation_basis"]="CURRENT_EFFECTIVE_OH_AT_REQUEST_WITH_EXISTING_ORDERING_RULES"
+   elif isinstance(result,dict):result=dict(result);result["viewing_moment_live"]=False
    return Response(json.dumps(result,default=_api.j),media_type="application/json",headers={"Cache-Control":"no-store, no-cache, must-revalidate, max-age=0","X-YipMan-Data-Path":"APP_READY" if isinstance(result,dict) and result.get("app_ready_snapshot") else "LIVE_FALLBACK"})
   except ValueError as exc:return Response(json.dumps({"status":"INVALID","reason":str(exc)}),status_code=422,media_type="application/json",headers={"Cache-Control":"no-store"})
   except Exception as exc:return Response(json.dumps({"status":"ERROR","reason":str(exc)}),status_code=500,media_type="application/json",headers={"Cache-Control":"no-store"})
