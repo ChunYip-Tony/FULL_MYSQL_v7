@@ -26,6 +26,7 @@ from yipman_mobile_v1_receipt_history import family_receipt_history
 from yipman_mobile_v1_force_order_detail import polish_force_order_detail_html
 from yipman_mobile_v1_stock_flow import stock_flow_review
 from yipman_mobile_v1_stock_flow_home import polish_stock_flow_home_html
+from yipman_mobile_v1_stock_flow_compact import polish_stock_flow_compact_html
 from yipman_mobile_v1_family_mvt_fix import polish_family_mvt_fix_html
 from yipman_mobile_v1_pwa import (
     install_html as pwa_install_html,
@@ -62,6 +63,7 @@ def install_mobile_v1_rc_route(app) -> None:
         html = polish_ordering_reliability_html(html)
         html = polish_typography_html(html)
         html = polish_stock_flow_home_html(html)
+        html = polish_stock_flow_compact_html(html)
         html = polish_pwa_html(html)
         html = polish_navigation_html(html)
         html = polish_force_order_detail_html(html)
@@ -72,7 +74,7 @@ def install_mobile_v1_rc_route(app) -> None:
                 "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
                 "Pragma": "no-cache",
                 "Expires": "0",
-                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history-force-family-order-detail-stock-flow-home-family-mvt-fix",
+                "X-YipMan-Mobile-V1-RC": "exact-mock-shell-standalone-pwa-native-back-stack-upc-identity-guard-live-ordering-context-nonblocking-startup-family-detail-fallback-price-upc-only-filters-price-lifecycle-progress-ordering-reliable-weekdays-readable-typography-receipt-history-force-family-order-detail-stock-flow-home-stock-flow-compact-family-mvt-fix",
             },
         )
 
@@ -296,6 +298,7 @@ def install_mobile_v1_rc_route(app) -> None:
         "nonblocking_startup_ordering": True,
         "receipt_history_detail": True,
         "stock_flow_home": True,
+        "stock_flow_compact": True,
         "stock_flow_windows": [7, 14, 28],
         "install_path": "/app/yipman-v1-rc/install",
     }
