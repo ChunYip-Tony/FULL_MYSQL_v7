@@ -27,6 +27,7 @@ from yipman_mobile_v1_stock_flow_actions import polish_stock_flow_actions_html
 from yipman_mobile_v1_family_mvt_fix import polish_family_mvt_fix_html
 from yipman_mobile_v1_decision_compact import polish_decision_compact_html
 from yipman_mobile_v1_all_decision_evidence import polish_all_decision_evidence_html
+from yipman_mobile_v1_decision_snapshot import polish_decision_snapshot_html
 from yipman_mobile_v1_app_ready_client import polish_app_ready_client_html
 from yipman_mobile_v1_pwa import polish_pwa_html
 
@@ -42,7 +43,8 @@ _POLISHERS = (
     polish_stock_flow_actions_html,
     polish_pwa_html, polish_navigation_html, polish_family_mvt_fix_html,
     polish_decision_compact_html, polish_order_evidence_bridge_html,
-    polish_all_decision_evidence_html, polish_app_ready_client_html,
+    polish_decision_snapshot_html, polish_all_decision_evidence_html,
+    polish_app_ready_client_html,
 )
 
 
@@ -66,4 +68,5 @@ app.state.yipman_mobile_v1_release = {
     "quick_check": "UPC_ORDERING_AND_PRICE_REVIEW",
     "primary_decision_evidence": True,
     "app_ready_snapshot_first": True,
+    "decision_snapshot_hydration": True,
 }
