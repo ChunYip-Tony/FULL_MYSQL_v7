@@ -2,6 +2,8 @@ from __future__ import annotations
 
 """Fill Family 7D MVT in Mobile V1 Family detail from canonical 251-252 evidence."""
 
+from yipman_mobile_v1_family_enrichment import polish_family_enrichment_html
+
 _SCRIPT = r'''
 <script id="yipmanV1FamilyMvtFixScript">
 (()=>{
@@ -28,6 +30,6 @@ _SCRIPT = r'''
 
 
 def polish_family_mvt_fix_html(html: str) -> str:
-    if 'yipmanV1FamilyMvtFixScript' in html:
-        return html
-    return html.replace('</body>', _SCRIPT + '\n</body>', 1)
+    if 'yipmanV1FamilyMvtFixScript' not in html:
+        html = html.replace('</body>', _SCRIPT + '\n</body>', 1)
+    return polish_family_enrichment_html(html)
