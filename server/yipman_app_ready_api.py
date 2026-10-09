@@ -91,9 +91,12 @@ def hydrate_durable_app_ready() -> bool:
         APP_READY_SNAPSHOTS.hydrate(snap)
         return True
     except Exception:
-        # First deployment may not have the tables yet or DB may be transiently
-        # unavailable. Startup rebuild remains the healing path.
         return False
+
+
+def _refresh_shared_pointer() -> None:
+    from yipman_app_ready_readers import refresh_hot_cache_if_stale
+    refresh_hot_cache_if_stale()
 
 
 def install_app_ready_api(app) -> None:
@@ -102,24 +105,26 @@ def install_app_ready_api(app) -> None:
 
     @app.on_event("startup")
     def _build_app_ready_on_startup():
-        # Critical UX: restore the prior complete generation synchronously so
-        # readers do not enter a NO_SNAPSHOT window after process restart.
         hydrated = hydrate_durable_app_ready()
         app.state.yipman_app_ready_durable_hydrated = hydrated
         request_app_ready_rebuild(source_batch_id="STARTUP")
 
     @app.get("/api/yipman/app-ready/status")
     def yipman_app_ready_status():
+        _refresh_shared_pointer()
         worker_running, queued_source = _coordinator_status()
         out = APP_READY_SNAPSHOTS.status()
         out["rebuild_worker_running"] = worker_running
         out["rebuild_queued"] = queued_source is not None
         out["queued_source"] = queued_source
         out["durable_hydrated"] = bool(getattr(app.state, "yipman_app_ready_durable_hydrated", False))
+        from yipman_app_ready_readers import pointer_refresh_status
+        out.update(pointer_refresh_status())
         return out
 
     @app.get("/api/yipman/app-ready/snapshot")
     def yipman_app_ready_snapshot():
+        _refresh_shared_pointer()
         snap = APP_READY_SNAPSHOTS.active()
         if snap is None:
             raise HTTPException(status_code=503, detail="APP_READY_SNAPSHOT_NOT_AVAILABLE")
@@ -129,6 +134,7 @@ def install_app_ready_api(app) -> None:
     def yipman_app_ready_section(section: str):
         if section not in SNAPSHOT_SECTIONS:
             raise HTTPException(status_code=404, detail="UNKNOWN_APP_READY_SECTION")
+        _refresh_shared_pointer()
         snap = APP_READY_SNAPSHOTS.active()
         if snap is None:
             raise HTTPException(status_code=503, detail="APP_READY_SNAPSHOT_NOT_AVAILABLE")
