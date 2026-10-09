@@ -10,13 +10,20 @@ import uuid
 
 from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS
 
-_FAMILY_KEYS = ("family_id", "family", "family_article", "main_article_number")
 _OH_KEYS = ("effective_oh", "current_oh", "ordering_oh_used", "actual_position")
 
 
+def _norm(value: Any) -> str:
+    return str(value or "").strip()
+
+
 def _same_family(row: dict[str, Any], family_id: str, main_article: str) -> bool:
-    targets = {x for x in (family_id, main_article) if x}
-    return bool(targets) and any(str(row.get(k) or "").strip() in targets for k in _FAMILY_KEYS)
+    """Match identity within its own domain; never compare Family ID to Article ID."""
+    fid = _norm(family_id)
+    article = _norm(main_article)
+    row_family_ids = {_norm(row.get("family_id")), _norm(row.get("family"))} - {""}
+    row_articles = {_norm(row.get("main_article_number")), _norm(row.get("family_article"))} - {""}
+    return bool((fid and fid in row_family_ids) or (article and article in row_articles))
 
 
 def _patch_row(row: dict[str, Any], family_id: str, main_article: str, qty: Any, uom: str | None, source: str) -> bool:
