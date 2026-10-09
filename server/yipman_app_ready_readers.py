@@ -2,17 +2,64 @@ from __future__ import annotations
 
 """Snapshot-first readers for latency-sensitive Yipman views.
 
-A complete App Ready snapshot is preferred. If the requested key is outside
-its precomputed horizon/window, callers fall back to the existing live engine.
+A complete App Ready snapshot is preferred. Existing workers periodically check
+the durable ACTIVE pointer so a generation built by another worker becomes
+visible without restart or heavy business recomputation on the read path.
 """
 
 from copy import deepcopy
 from datetime import date, timedelta
+import threading
+import time
 from typing import Any
-from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS
+from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS, SnapshotBuild
+
+_POINTER_TTL_SECONDS = 2.0
+_POINTER_LOCK = threading.Lock()
+_POINTER_CHECKED_AT = 0.0
+_POINTER_LAST_ERROR: str | None = None
+
+
+def refresh_hot_cache_if_stale(*, force: bool = False) -> bool:
+    """Hydrate only when durable ACTIVE differs from this worker's hot cache."""
+    global _POINTER_CHECKED_AT, _POINTER_LAST_ERROR
+    now = time.monotonic()
+    if not force and now - _POINTER_CHECKED_AT < _POINTER_TTL_SECONDS:
+        return False
+    with _POINTER_LOCK:
+        now = time.monotonic()
+        if not force and now - _POINTER_CHECKED_AT < _POINTER_TTL_SECONDS:
+            return False
+        _POINTER_CHECKED_AT = now
+        try:
+            from yipman_app_ready_persistence import active_build_id, load_active_snapshot
+            durable_id = active_build_id()
+            local = APP_READY_SNAPSHOTS.active()
+            if not durable_id or (local is not None and local.build_id == durable_id):
+                _POINTER_LAST_ERROR = None
+                return False
+            snap = load_active_snapshot(SnapshotBuild)
+            if snap is None or snap.build_id != durable_id:
+                return False
+            APP_READY_SNAPSHOTS.hydrate(snap)
+            _POINTER_LAST_ERROR = None
+            return True
+        except Exception as exc:
+            # A read-model synchronization failure must not make the app fail.
+            # Keep serving the last complete local generation and retry later.
+            _POINTER_LAST_ERROR = f"{type(exc).__name__}: {exc}"
+            return False
+
+
+def pointer_refresh_status() -> dict[str, Any]:
+    return {
+        "pointer_check_ttl_seconds": _POINTER_TTL_SECONDS,
+        "pointer_last_error": _POINTER_LAST_ERROR,
+    }
 
 
 def _active():
+    refresh_hot_cache_if_stale()
     return APP_READY_SNAPSHOTS.active()
 
 
@@ -26,7 +73,7 @@ def _section(name: str) -> Any | None:
 def _mark(payload: Any, *, basis: str | None = None) -> Any:
     out = deepcopy(payload)
     if isinstance(out, dict):
-        snap = _active()
+        snap = APP_READY_SNAPSHOTS.active()
         out["app_ready_snapshot"] = True
         out["app_ready_build_id"] = snap.build_id if snap else None
         out["data_through"] = out.get("data_through") or (snap.data_through if snap else None)
