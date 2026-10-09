@@ -6,7 +6,7 @@ from data_health_snapshot_date_v498 import apply_snapshot_date_patch
 from yipman_data_center_v481 import inject_data_center_fix
 from yipman_data_center_ui_v497 import inject_data_center_ui
 from yipman_data_center_ui_v498 import inject_data_center_ui_v498
-from yipman_data_center_monitor_v499 import inject_data_center_monitor_v499
+from yipman_data_center_monitor_v500 import inject_data_center_monitor_v500
 
 app = _prev.app
 
@@ -22,7 +22,7 @@ _base_yipman_html = _api.yipman_html
 
 
 def _decorate(html: str) -> str:
-    return inject_data_center_monitor_v499(
+    return inject_data_center_monitor_v500(
         inject_data_center_ui_v498(
             inject_data_center_ui(
                 inject_data_center_fix(html)
