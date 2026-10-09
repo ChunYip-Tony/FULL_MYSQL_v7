@@ -86,6 +86,23 @@ def persist_complete_snapshot(snapshot) -> None:
             cur.close()
 
 
+def active_build_id() -> str | None:
+    """Return only the shared ACTIVE build id; cheap enough for TTL polling."""
+    with db_conn() as conn:
+        ensure_schema(conn)
+        conn.commit()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute(
+                """SELECT build_id FROM yipman_app_ready_pointer
+                   WHERE pointer_name='ACTIVE' LIMIT 1"""
+            )
+            row = cur.fetchone()
+        finally:
+            cur.close()
+    return str(row["build_id"]) if row and row.get("build_id") else None
+
+
 def load_active_snapshot(snapshot_cls):
     """Load the shared active generation; return None before first durable build."""
     with db_conn() as conn:
