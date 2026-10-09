@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-"""Data Center v499: operational progress monitor.
+"""Data Center v499 operational processing monitor.
 
-Adds a compact, evidence-based processing monitor without inventing row-level
-telemetry. When the active endpoint exposes row/speed/worker/checkpoint fields
-they are shown; otherwise the UI explicitly falls back to pipeline-stage
-progress.
+The monitor uses server-reported telemetry when available. It never invents
+row counts, throughput, worker state, checkpoints or ETA; missing telemetry is
+shown as unavailable and progress falls back to clearly labelled pipeline
+stage progress.
 """
 
 _MARKER = "ydDataCenterMonitorV499"
@@ -13,14 +13,14 @@ _MARKER = "ydDataCenterMonitorV499"
 _PATCH = r'''
 <style id="ydDataCenterMonitorV499">
 @media (min-width:760px){
-  #ydesk #yd-data .dc499-statusline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 7px}
+  #ydesk #yd-data .dc499-monitor{margin:9px 0 0;padding:10px;border:1px solid #dbe5ef;border-radius:10px;background:#fbfdff}
+  #ydesk #yd-data .dc499-statusline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:7px}
   #ydesk #yd-data .dc499-statuscopy{min-width:0}
   #ydesk #yd-data .dc499-statuscopy b{display:block;font-size:13px;color:#183653;line-height:1.25}
   #ydesk #yd-data .dc499-statuscopy span{display:block;margin-top:2px;font-size:10px;color:#718197;line-height:1.3}
   #ydesk #yd-data .dc499-pct{font-size:18px;font-weight:950;color:#173653;white-space:nowrap;font-variant-numeric:tabular-nums}
   #ydesk #yd-data .dc499-track{height:9px;border-radius:999px;background:#e8eef4;overflow:hidden;box-shadow:inset 0 1px 2px rgba(20,44,70,.08)}
-  #ydesk #yd-data .dc499-fill{height:100%;width:0;border-radius:999px;background:#0b72f4;transition:width .22s ease}
-  #ydesk #yd-data .dc499-monitor{margin:9px 0 0;padding:10px;border:1px solid #dbe5ef;border-radius:10px;background:#fbfdff}
+  #ydesk #yd-data .dc499-fill{height:100%;border-radius:999px;background:#0b72f4;transition:width .22s ease}
   #ydesk #yd-data .dc499-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:9px}
   #ydesk #yd-data .dc499-metric{min-width:0;padding:8px 9px;border:1px solid #e3eaf1;border-radius:8px;background:#fff}
   #ydesk #yd-data .dc499-metric label{display:block;font-size:8px;font-weight:900;letter-spacing:.28px;text-transform:uppercase;color:#74859a;line-height:1.25}
@@ -45,16 +45,16 @@ _PATCH = r'''
   if(!window.matchMedia('(min-width:760px)').matches)return;
   const $=(s,r=document)=>r.querySelector(s);
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const n=v=>{const x=Number(v);return Number.isFinite(x)?x:null};
-  const first=(o,keys)=>{for(const k of keys){if(o&&o[k]!=null&&o[k]!=='' )return o[k]}return null};
-  const firstNum=(o,keys)=>{const v=first(o,keys),x=n(v);return x};
-  const fmt=v=>{const x=n(v);return x==null?'—':Math.round(x).toLocaleString()};
-  const when=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'})};
-  let busy=false,lastSig='';
+  const num=v=>{const x=Number(v);return Number.isFinite(x)?x:null};
+  const first=(o,keys)=>{for(const k of keys){if(o&&o[k]!=null&&o[k]!=='')return o[k]}return null};
+  const firstNum=(o,keys)=>num(first(o,keys));
+  const fmt=v=>{const x=num(v);return x==null?'—':Math.round(x).toLocaleString()};
+  const clock=v=>{if(!v)return '—';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit',second:'2-digit'})};
+  let busy=false,healthBusy=false;
 
   function visible(){const x=$('#yd-data');return !!x&&x.classList.contains('active')}
-  function card(){return [...document.querySelectorAll('#yd-data .card')].find(x=>$('.cardhead h3',x)?.textContent.trim()==='2. Current Processing')||null}
-  function status(raw){
+  function processingCard(){return [...document.querySelectorAll('#yd-data .card')].find(x=>$('.cardhead h3',x)?.textContent.trim()==='2. Current Processing')||null}
+  function state(raw){
     raw=String(raw||'NONE').toUpperCase();
     if(raw==='NONE')return {text:'IDLE',cls:'dc499-idle',stage:'No active processing',done:0};
     if(/ABORT|FAIL|ERROR/.test(raw))return {text:'FAILED',cls:'dc499-failed',stage:raw.replaceAll('_',' '),done:0};
@@ -69,11 +69,6 @@ _PATCH = r'''
     if(/PHASE2/.test(raw))return {text:'RUNNING · PHASE 2C',cls:'dc499-running',stage:'Phase 2C normalization',done:2};
     return {text:raw.replaceAll('_',' '),cls:'dc499-running',stage:raw.replaceAll('_',' '),done:1};
   }
-  function currentFileLabel(b,s){
-    const source=String(first(b,['active_source_type','source_type'])||'').toLowerCase();
-    const sourceText=source?(' · '+source):'';
-    return esc(s.stage)+esc(sourceText);
-  }
   function telemetry(b,s){
     const processed=firstNum(b,['active_processed_rows','processed_rows','rows_processed','active_rows_processed','progress_rows']);
     const total=firstNum(b,['active_total_rows','total_rows','rows_total','active_row_total','source_row_count']);
@@ -86,63 +81,64 @@ _PATCH = r'''
     const heartbeat=first(b,['active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at']);
     const checkpoint=first(b,['active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint']);
     const checkpointAt=first(b,['active_checkpoint_at','checkpoint_at','updated_at','active_updated_at']);
-    let pct=null,mode='Pipeline stage progress';
-    if(processed!=null&&total!=null&&total>0){pct=Math.max(0,Math.min(100,Math.round(processed/total*100)));mode='Row progress reported by server'}
-    else pct=Math.round((s.done/5)*100);
+    const rowBased=processed!=null&&total!=null&&total>0;
+    const pct=rowBased?Math.max(0,Math.min(100,Math.round(processed/total*100))):Math.round((s.done/5)*100);
     let etaText='—';
-    if(eta!=null&&eta!==''){
-      const x=n(eta);etaText=x==null?String(eta):(x<60?Math.round(x)+' sec':Math.floor(x/60)+'m '+Math.round(x%60)+'s');
-    }
-    return {processed,total,passed,rejected,speed,etaText,worker,workerStatus,heartbeat,checkpoint,checkpointAt,pct,mode};
+    if(eta!=null&&eta!==''){const x=num(eta);etaText=x==null?String(eta):(x<60?Math.round(x)+' sec':Math.floor(x/60)+'m '+Math.round(x%60)+'s')}
+    return {processed,total,passed,rejected,speed,etaText,worker,workerStatus,heartbeat,checkpoint,checkpointAt,rowBased,pct};
   }
-  function metric(label,value,sub){return '<div class="dc499-metric"><label>'+esc(label)+'</label><strong>'+esc(value)+'</strong>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>'}
+  function metric(label,value,sub=''){return '<div class="dc499-metric"><label>'+esc(label)+'</label><strong>'+esc(value)+'</strong>'+(sub?'<small>'+esc(sub)+'</small>':'')+'</div>'}
   function render(b){
-    const c=card();if(!c)return;
-    const raw=String(b?.processing_status||'NONE').toUpperCase(),s=status(raw),t=telemetry(b||{},s);
+    const c=processingCard();if(!c)return;
+    const raw=String(b?.processing_status||'NONE').toUpperCase(),s=state(raw),t=telemetry(b||{},s);
     const badge=$('.cardhead .badge',c);
     if(badge){badge.classList.remove('blue','green','amber','red','gray','dc496-waiting','dc496-ok','dc496-idle','dc496-danger','dc499-ready','dc499-running','dc499-publishing','dc499-done','dc499-failed','dc499-idle');badge.textContent=s.text;badge.classList.add(s.cls);badge.title=raw}
     const f=$('.dc496-file',c);
-    if(f&&b){const name=first(b,['active_file_name','file_name'])||'Waiting for file identity';f.innerHTML='<b>Current file:</b> '+esc(name)+'<br><span>'+currentFileLabel(b,s)+'</span>'}
+    if(f&&b){const name=first(b,['active_file_name','file_name'])||'Waiting for file identity',source=String(first(b,['active_source_type','source_type'])||'').toLowerCase();f.innerHTML='<b>Current file:</b> '+esc(name)+'<br><span>'+esc(s.stage)+(source?' · '+esc(source):'')+'</span>'}
     let m=$('.dc499-monitor',c);
     if(!m){m=document.createElement('div');m.className='dc499-monitor';(f||$('.pipeline',c))?.insertAdjacentElement('afterend',m)}
     if(!m)return;
     if(!b){m.innerHTML='<div class="dc499-statusline"><div class="dc499-statuscopy"><b>No active batch</b><span>Waiting for the next upload or pipeline run.</span></div><div class="dc499-pct">0/5</div></div><div class="dc499-track"><div class="dc499-fill" style="width:0%"></div></div>';return}
-    const rowText=t.processed!=null&&t.total!=null?fmt(t.processed)+' / '+fmt(t.total)+' rows':s.done+' / 5 stages';
+    const rowText=t.rowBased?(fmt(t.processed)+' / '+fmt(t.total)+' rows'):(s.done+' / 5 stages');
+    const mode=t.rowBased?'Row progress reported by server':'Pipeline stage progress';
+    const remaining=t.rowBased?Math.max(0,t.total-t.processed):null;
     const workerText=t.worker||t.workerStatus||'Not reported';
-    const workerSub=[t.workerStatus,t.heartbeat?('heartbeat '+when(t.heartbeat)):null].filter(Boolean).join(' · ');
+    const workerSub=[t.workerStatus,t.heartbeat?('heartbeat '+clock(t.heartbeat)):null].filter(Boolean).join(' · ');
     const checkpointText=t.checkpoint||'Not reported';
-    const checkpointSub=t.checkpointAt?('updated '+when(t.checkpointAt)):'';
-    const remaining=t.total!=null&&t.processed!=null?Math.max(0,t.total-t.processed):null;
-    m.innerHTML='<div class="dc499-statusline"><div class="dc499-statuscopy"><b>'+esc(s.stage)+'</b><span>'+esc(t.mode)+' · '+esc(rowText)+'</span></div><div class="dc499-pct">'+esc(t.pct)+'%</div></div><div class="dc499-track"><div class="dc499-fill" style="width:'+esc(t.pct)+'%"></div></div><div class="dc499-grid">'+
-      metric('Processed',t.processed==null?'—':fmt(t.processed),t.total!=null?'of '+fmt(t.total):'server row telemetry not available')+
+    const checkpointSub=t.checkpointAt?('updated '+clock(t.checkpointAt)):'';
+    m.innerHTML='<div class="dc499-statusline"><div class="dc499-statuscopy"><b>'+esc(s.stage)+'</b><span>'+esc(mode)+' · '+esc(rowText)+'</span></div><div class="dc499-pct">'+esc(t.pct)+'%</div></div><div class="dc499-track"><div class="dc499-fill" style="width:'+esc(t.pct)+'%"></div></div><div class="dc499-grid">'+
+      metric('Processed',t.processed==null?'—':fmt(t.processed),t.total!=null?'of '+fmt(t.total):'row telemetry not reported')+
       metric('Remaining',remaining==null?'—':fmt(remaining),t.passed!=null?'passed '+fmt(t.passed):'')+
       metric('Rejected',t.rejected==null?'—':fmt(t.rejected),t.rejected==null?'not reported by server':'')+
       metric('Speed / ETA',t.speed==null?'—':fmt(t.speed)+' rows/s','ETA '+t.etaText)+
       metric('Worker',workerText,workerSub)+
       metric('Checkpoint',checkpointText,checkpointSub)+
-      '</div><div class="dc499-source">Metrics marked “—” are intentionally not estimated. They appear automatically when the active-processing endpoint reports them.</div>';
+      '</div><div class="dc499-source">“—” means the server does not currently report that telemetry. No row count, worker state, speed or ETA is estimated.</div>';
   }
   function uploadNote(b){
     const up=$('#yd-data .upload');if(!up)return;
     let x=$('.dc499-upload-note',up);if(!x){x=document.createElement('div');x.className='dc499-upload-note';up.appendChild(x)}
-    x.innerHTML=b?.batch_id?('<b>Batch #'+esc(b.batch_id)+' is active.</b> New files selected here are committed as a separate immutable batch.'):('<b>No active processing.</b> The next upload will create a new immutable batch.');
+    x.innerHTML=b?.batch_id?('<b>Batch #'+esc(b.batch_id)+' is active.</b> Files selected here create a separate immutable upload batch.'):('<b>No active processing.</b> The next upload creates a new immutable batch.');
   }
   async function refresh(){
     if(busy||!visible())return;busy=true;
-    try{const r=await fetch('/v1/web-upload/active',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;const a=await r.json(),b=a.active_batch||null;const sig=JSON.stringify(b);if(sig!==lastSig){lastSig=sig;render(b);uploadNote(b)}}catch(_e){}finally{busy=false}
+    try{const r=await fetch('/v1/web-upload/active',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;const a=await r.json(),b=a.active_batch||null;render(b);uploadNote(b)}catch(_e){}finally{busy=false}
   }
-  function dataBadge(dh){
+  function renderDataBadge(dh){
     const live=$('#ydesk .topbar .live');if(!live)return;
     const latest=dh?.latest||{},missing=[];
     [['POS','POS'],['MVT','MVT'],['PRICE','Price'],['OH','OH'],['LIVE_FRESH','Live/Fresh'],['FROZEN','Frozen']].forEach(([k,label])=>{if(!latest[k]?.date)missing.push(label)});
     live.classList.remove('dc499-gap','dc499-ok');
-    if(missing.length){live.textContent='SOURCE GAP';live.classList.add('dc499-gap');live.title='Missing source snapshot/date: '+missing.join(', ')}
+    if(missing.length){live.textContent='SOURCE GAP';live.classList.add('dc499-gap');live.title='Missing source date: '+missing.join(', ')}
     else{live.textContent='LIVE DATA';live.classList.add('dc499-ok');live.title='All Data Center source categories have a reported date'}
   }
-  async function refreshHealth(){try{const r=await fetch('/v1/backoffice/data-health?days=14',{cache:'no-store',credentials:'same-origin'});if(r.ok)dataBadge(await r.json())}catch(_e){}}
-  const root=$('#yd-data');if(root)new MutationObserver(()=>{if(visible()){setTimeout(refresh,50);setTimeout(refreshHealth,90)}}).observe(root,{childList:true,subtree:true});
-  document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh'||e.target?.id==='ydUpload'){setTimeout(refresh,450);setTimeout(refreshHealth,550)}},true);
-  setInterval(refresh,3000);setInterval(refreshHealth,15000);setTimeout(refresh,650);setTimeout(refreshHealth,750);
+  async function refreshHealth(){
+    if(healthBusy)return;healthBusy=true;
+    try{const r=await fetch('/v1/backoffice/data-health?days=14',{cache:'no-store',credentials:'same-origin'});if(r.ok)renderDataBadge(await r.json())}catch(_e){}finally{healthBusy=false}
+  }
+  const root=$('#yd-data');if(root)new MutationObserver(()=>{if(visible()){setTimeout(refresh,120);setTimeout(refreshHealth,160)}}).observe(root,{childList:true,subtree:true});
+  document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh'||e.target?.id==='ydUpload'){setTimeout(refresh,500);setTimeout(refreshHealth,600)}},true);
+  setInterval(refresh,3000);setInterval(refreshHealth,15000);setTimeout(refresh,800);setTimeout(refreshHealth,900);
 })();
 </script>
 '''
