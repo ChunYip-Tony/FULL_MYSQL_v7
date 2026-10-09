@@ -52,6 +52,46 @@ def _walk(value: Any, family_id: str, main_article: str, qty: Any, uom: str | No
     return count
 
 
+def _digits(value: Any) -> str:
+    return "".join(c for c in str(value or "") if c.isdigit()).lstrip("0")
+
+
+def _decision_keys(row: dict[str, Any]) -> set[str]:
+    family = str(row.get("family") or row.get("family_article") or row.get("family_id") or row.get("main_article_number") or "").strip()
+    upc = _digits(row.get("upc") or row.get("ean_upc") or row.get("ean"))
+    action = str(row.get("action_type") or row.get("suggestion_type") or row.get("price_suggestion_type") or row.get("recommendation_type") or row.get("target_price_type") or row.get("price_type") or "").strip().upper().replace("-", "_").replace(" ", "_")
+    keys = set()
+    if upc:
+        keys.add("UPC:" + upc)
+        if action: keys.add("UPC:" + upc + ":" + action)
+    if family:
+        keys.add("FAMILY:" + family)
+        if action: keys.add("FAMILY:" + family + ":" + action)
+    return keys
+
+
+def _rebuild_decision_index(section: Any) -> None:
+    """Repoint by_key to the patched rows rather than stale deep-copied objects."""
+    if not isinstance(section, dict) or "by_key" not in section:
+        return
+    by_key: dict[str, Any] = {}
+
+    def visit(value: Any) -> None:
+        if isinstance(value, dict):
+            if value is section.get("by_key"):
+                return
+            for key in _decision_keys(value):
+                by_key.setdefault(key, value)
+            for child_key, child in value.items():
+                if child_key != "by_key": visit(child)
+        elif isinstance(value, list):
+            for child in value: visit(child)
+
+    for key, value in section.items():
+        if key != "by_key": visit(value)
+    section["by_key"] = by_key
+
+
 def apply_true_stock_family_overlay(result: dict[str, Any]) -> dict[str, Any]:
     active = APP_READY_SNAPSHOTS.active()
     if active is None: return {"status": "NO_ACTIVE_SNAPSHOT", "patched_rows": 0}
@@ -67,6 +107,7 @@ def apply_true_stock_family_overlay(result: dict[str, Any]) -> dict[str, Any]:
     sections = deepcopy(active.sections)
     patched = _walk(sections, family_id, main_article, qty, uom, source)
     if patched == 0: return {"status": "FAMILY_NOT_IN_ACTIVE_SNAPSHOT", "patched_rows": 0}
+    _rebuild_decision_index(sections.get("decision_intelligence"))
     now = datetime.now(timezone.utc).isoformat()
     candidate = replace(active, build_id=str(uuid.uuid4()), source_batch_id=f"INVENTORY_INCREMENTAL:{source}:{family_id or main_article}", started_at=now, completed_at=now, sections=sections, error=None, build_ms=0.0)
     candidate.stage = "APP_READY"
