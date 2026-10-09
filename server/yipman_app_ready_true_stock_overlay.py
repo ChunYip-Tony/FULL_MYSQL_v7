@@ -6,6 +6,7 @@ from typing import Any
 import uuid
 from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS
 _OH_KEYS=("effective_oh","current_oh","ordering_oh_used","actual_position")
+_STALE_DECISION_KEYS=("recommendation_code","recommendation","suggested_order_qty","suggested_delivery_qty","suggested_price","suggested_reg_price","testing_price","target_price")
 def _norm(value:Any)->str:return str(value or "").strip()
 def _same_family(row:dict[str,Any],family_id:str,main_article:str)->bool:
     fid=_norm(family_id);article=_norm(main_article);row_family_ids={_norm(row.get("family_id")),_norm(row.get("family"))}-{""};row_articles={_norm(row.get("main_article_number")),_norm(row.get("family_article"))}-{""};return bool((fid and fid in row_family_ids) or (article and article in row_articles))
@@ -18,6 +19,12 @@ def _patch_row(row,family_id,main_article,qty,uom,source):
     if "oh_source" in row:row["oh_source"]=source
     if "effective_oh_source" in row:row["effective_oh_source"]=source
     if any(k in row for k in ("recommendation_code","operational_decision_code","suggested_order_qty","suggested_price")):
+        # Inventory changed, so any recommendation derived from the old OH is unsafe.
+        # Keep the old values only in an audit envelope; operational fields fail closed.
+        stale={k:row.get(k) for k in _STALE_DECISION_KEYS if k in row and row.get(k) is not None}
+        if stale:row["pre_true_stock_decision_audit"]=stale
+        for key in _STALE_DECISION_KEYS:
+            if key in row:row[key]=None
         row["decision_evidence_ready"]=False;missing=list(row.get("decision_missing_evidence")) if isinstance(row.get("decision_missing_evidence"),list) else [];marker="INVENTORY_FAMILY_RECALC_PENDING"
         if marker not in missing:missing.append(marker)
         row["decision_missing_evidence"]=missing;row["operational_decision_code"]="DATA_NEEDED";row["operational_decision_label"]="DATA NEEDED"
