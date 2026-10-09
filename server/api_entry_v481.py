@@ -9,6 +9,7 @@ from yipman_data_center_ui_v498 import inject_data_center_ui_v498
 from yipman_data_center_monitor_v500 import inject_data_center_monitor_v500
 from yipman_data_center_focus_v501 import inject_data_center_focus_v501
 from yipman_data_center_focus_v502 import inject_data_center_focus_v502
+from yipman_data_center_focus_v503 import inject_data_center_focus_v503
 
 app = _prev.app
 
@@ -24,12 +25,14 @@ _base_yipman_html = _api.yipman_html
 
 
 def _decorate(html: str) -> str:
-    return inject_data_center_focus_v502(
-        inject_data_center_focus_v501(
-            inject_data_center_monitor_v500(
-                inject_data_center_ui_v498(
-                    inject_data_center_ui(
-                        inject_data_center_fix(html)
+    return inject_data_center_focus_v503(
+        inject_data_center_focus_v502(
+            inject_data_center_focus_v501(
+                inject_data_center_monitor_v500(
+                    inject_data_center_ui_v498(
+                        inject_data_center_ui(
+                            inject_data_center_fix(html)
+                        )
                     )
                 )
             )
