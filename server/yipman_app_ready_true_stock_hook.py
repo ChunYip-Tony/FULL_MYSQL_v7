@@ -1,10 +1,5 @@
 from __future__ import annotations
-"""Refresh App Ready intelligence after authoritative True Stock mutations.
-
-The physical-count mutation is authoritative. Refresh plumbing is strictly
-post-commit/best-effort: a cache/read-model failure must never turn a committed
-True Stock write into an HTTP failure that invites duplicate submission.
-"""
+"""Refresh App Ready intelligence after authoritative True Stock mutations."""
 from typing import Any,Callable
 
 def _family_hint(args:tuple[Any,...],kwargs:dict[str,Any],result:Any)->str|None:
@@ -31,23 +26,19 @@ def install_app_ready_true_stock_hook(app,api_module,request_rebuild:Callable[..
                         try:invalidate()
                         except Exception:pass
                     except Exception:pass
-                # Positive True Stock commits carry enough family identity and
-                # quantity to update the active App Ready read model immediately.
-                # Do not launch the former global snapshot rebuild.
                 overlay_applied=False
-                if fn_name in ('submit_true_stock','submit_negative_stock_true_stock','v2_submit_family_true_stock') and isinstance(result,dict):
+                if isinstance(result,dict):
                     try:
                         from yipman_app_ready_true_stock_overlay import apply_true_stock_family_overlay
                         overlay=apply_true_stock_family_overlay(result)
                         overlay_applied=overlay.get('status')=='APP_READY'
-                        if isinstance(result,dict):result['app_ready_incremental_refresh']=overlay
+                        result['app_ready_incremental_refresh']=overlay
                     except Exception as exc:
-                        if isinstance(result,dict):result['app_ready_incremental_refresh']={'status':'FAILED','error':type(exc).__name__}
-                # Cancellation cannot safely infer the restored System OH from
-                # the mutation response, so retain the healing rebuild only for
-                # that exceptional path until its scoped calculator is added.
-                if fn_name=='cancel_true_stock' or not overlay_applied:
-                    try:request_rebuild(source_batch_id='TRUE_STOCK:'+fn_name+':'+(family or 'UNKNOWN'))
+                        result['app_ready_incremental_refresh']={'status':'FAILED','error':type(exc).__name__}
+                # Global rebuild is now fallback-only. Normal submit and cancel
+                # paths both publish a family-scoped durable generation.
+                if not overlay_applied:
+                    try:request_rebuild(source_batch_id='TRUE_STOCK_FALLBACK:'+fn_name+':'+(family or 'UNKNOWN'))
                     except Exception:pass
                 return result
             wrapped._yipman_app_ready_wrapped=True;wrapped._yipman_app_ready_base=fn
