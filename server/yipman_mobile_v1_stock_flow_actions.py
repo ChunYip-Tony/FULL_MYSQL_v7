@@ -4,7 +4,9 @@ from __future__ import annotations
 
 Stock Flow answers which Families need attention. The next tap should take the
 manager to the workflow that resolves that signal, rather than forcing a trip
-through the bottom navigation or a second manual search.
+through the bottom navigation or a second manual search. Programmatic Quick
+Check navigation must not focus the search field because mobile keyboards are
+only allowed to appear after the user explicitly taps an input.
 """
 
 _STYLE = r'''<style id="yipmanV1StockFlowActionsStyle">
@@ -23,7 +25,10 @@ _SCRIPT = r'''<script id="yipmanV1StockFlowActionsScript">
     const name=familyName(card);openPage('quick');
     const input=document.getElementById('quickSearch');
     if(!input)return;
-    input.value=name;input.dispatchEvent(new Event('input',{bubbles:true}));input.focus();
+    input.value=name;input.dispatchEvent(new Event('input',{bubbles:true}));
+    // Do not call input.focus() here. This navigation was initiated by an
+    // action button, not by tapping the search field; forcing focus opens the
+    // mobile keyboard and violates the app's explicit-input keyboard rule.
   }
   function enhance(){
     document.querySelectorAll('#urgentList .v1-flow-card').forEach(card=>{
