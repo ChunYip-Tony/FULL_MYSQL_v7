@@ -626,7 +626,9 @@ def admin_logout(response:Response):
 
 
 @app.get('/healthz')
-def healthz():
+async def healthz():
+    # This probe must not queue behind slow synchronous database reads.
+    from runtime_health import runtime_health
     worker_path=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
     worker_payload={}
     if worker_path.exists():
@@ -656,6 +658,7 @@ def healthz():
     )
     return {
         'ok':True,
+        'runtime':runtime_health(),
         'version':VERSION,
         'worker_version':worker_version or None,
         'worker_state':worker_state or None,

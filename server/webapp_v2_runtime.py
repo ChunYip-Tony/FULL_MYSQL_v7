@@ -5241,6 +5241,21 @@ def _batch_daily_sales_by_price_type(
         for key,ids in numeric_candidates.items()
         if len(ids)==1
     }
+    # Limit SQL grouping and fetched rows to the serving UPCs. Resolution below
+    # still decides ambiguous aliases and always prefers canonical UPC lineage.
+    if not serving_ids:
+        return {}
+    ph=lambda values: ",".join(["%s"]*len(values))
+    scope_parts=[f"upc_id IN ({ph(serving_ids)})"]
+    scope_args=list(sorted(serving_ids))
+    if exact_map:
+        scope_parts.append(f"TRIM(ean_upc) IN ({ph(exact_map)})")
+        scope_args.extend(sorted(exact_map))
+    if numeric_map:
+        normalized="COALESCE(NULLIF(TRIM(LEADING '0' FROM REGEXP_REPLACE(COALESCE(ean_upc,''),'[^0-9]','')),''),'0')"
+        scope_parts.append(f"{normalized} IN ({ph(numeric_map)})")
+        scope_args.extend(sorted(numeric_map))
+    scope_pred="("+" OR ".join(scope_parts)+")"
     valid_days={x["date"] for x in data_days}
     out: dict[int,dict[date,dict[str,Any]]] = {}
 
@@ -5302,10 +5317,10 @@ def _batch_daily_sales_by_price_type(
                        COALESCE(SUM(sales_amount),0) AS sales_amount,
                        COALESCE(SUM(sold_quantity),0) AS sold_quantity
                 FROM sales_period_observation
-                WHERE temporal_grain='SINGLE_DATE'
+                WHERE {scope_pred} AND temporal_grain='SINGLE_DATE'
                   AND ({' OR '.join(clauses)})
                 GROUP BY period_end_date,upc_id,ean_upc,UPPER(TRIM(price_type))""",
-            tuple(args),
+            (*scope_args,*args),
         )
         for obs in cur.fetchall():
             absorb(obs)
@@ -5323,9 +5338,9 @@ def _batch_daily_sales_by_price_type(
                        COALESCE(SUM(sales_amount),0) AS sales_amount,
                        COALESCE(SUM(sold_quantity),0) AS sold_quantity
                 FROM pos_daily_backfill_observation
-                WHERE {' OR '.join(clauses)}
+                WHERE {scope_pred} AND ({' OR '.join(clauses)})
                 GROUP BY business_date,upc_id,ean_upc,UPPER(TRIM(price_type))""",
-            tuple(args),
+            (*scope_args,*args),
         )
         for obs in cur.fetchall():
             absorb(obs)

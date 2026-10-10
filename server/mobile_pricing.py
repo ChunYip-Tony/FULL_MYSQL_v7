@@ -9,6 +9,7 @@ from collections import OrderedDict
 import threading
 import json
 import time
+from read_singleflight import ReadSingleFlight, ReadBusy
 from fastapi import APIRouter, HTTPException
 from fastapi.encoders import jsonable_encoder
 
@@ -288,6 +289,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
 
 _cache = OrderedDict()
 _lock = threading.Lock()
+_reads = ReadSingleFlight(max_running=2, wait_seconds=20)
 
 @router.get('/v1/app/mobile-pricing')
 def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: str='', cursor: int=0, limit: int=12, overrides: str=''):
@@ -306,16 +308,24 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         cached = _cache.get(key)
         if cached and time.monotonic() - cached[0] < 120:
             return cached[1]
-    try:
+    def produce():
+        with _lock:
+            cached = _cache.get(key)
+            if cached and time.monotonic() - cached[0] < 120:
+                return cached[1]
         result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit, custom))
+        with _lock:
+            _cache[key] = (time.monotonic(), result)
+            _cache.move_to_end(key)
+            while len(_cache) > 64:
+                _cache.popitem(last=False)
+        return result
+    try:
+        return _reads.run(key, produce)
+    except ReadBusy as exc:
+        raise HTTPException(503, str(exc), headers={'Retry-After': '5'}) from exc
     except Exception as exc:
         import traceback
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         # Bounded code location only: never expose SQL, credentials or row data.
         raise HTTPException(500, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
-    with _lock:
-        _cache[key] = (time.monotonic(), result)
-        _cache.move_to_end(key)
-        while len(_cache) > 64:
-            _cache.popitem(last=False)
-    return result
