@@ -1,0 +1,17 @@
+name: mobile-inventory-catalog
+on:
+  push:
+    paths: ['server/mobile_inventory_catalog.py', 'server/test_mobile_inventory_catalog.py', 'server/yipman_mobile_v1_rc_route.py', '.github/workflows/mobile-inventory-catalog.yml']
+  pull_request:
+    paths: ['server/mobile_inventory_catalog.py', 'server/test_mobile_inventory_catalog.py', 'server/yipman_mobile_v1_rc_route.py', '.github/workflows/mobile-inventory-catalog.yml']
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify complete catalog pagination and identity searches
+        working-directory: server
+        run: python -m unittest -v test_mobile_inventory_catalog

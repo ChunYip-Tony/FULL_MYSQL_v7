@@ -24,6 +24,7 @@ from yipman_mobile_v1_identity_guard import polish_identity_html
 from yipman_mobile_v1_receipt_history import family_receipt_history
 from yipman_mobile_v1_force_order_detail import polish_force_order_detail_html
 from yipman_mobile_v1_stock_flow import stock_flow_review
+from mobile_inventory_catalog import inventory_catalog
 from yipman_mobile_v1_stock_flow_home import polish_stock_flow_home_html
 from yipman_mobile_v1_stock_flow_compact import polish_stock_flow_compact_html
 from yipman_mobile_v1_family_mvt_fix import polish_family_mvt_fix_html
@@ -66,11 +67,15 @@ def install_mobile_v1_rc_route(app)->None:
    return Response(json.dumps(result,default=_api.j),media_type="application/json",headers={"Cache-Control":"no-store","X-YipMan-Data-Path":"APP_READY" if isinstance(result,dict) and result.get("app_ready_snapshot") else "LIVE_FALLBACK"})
   except ValueError as exc:return Response(json.dumps({"status":"INVALID","reason":str(exc)}),status_code=422,media_type="application/json",headers={"Cache-Control":"no-store"})
   except Exception as exc:return Response(json.dumps({"status":"ERROR","reason":str(exc)}),status_code=500,media_type="application/json",headers={"Cache-Control":"no-store"})
+ def rc_inventory_catalog(q:str="",cursor:int=0,limit:int=30):
+  try:return Response(json.dumps(inventory_catalog(query=q,cursor=cursor,limit=limit),default=_api.j),media_type="application/json",headers={"Cache-Control":"no-store"})
+  except ValueError as exc:return Response(json.dumps({"status":"INVALID","reason":str(exc)}),status_code=422,media_type="application/json",headers={"Cache-Control":"no-store"})
+  except Exception:return Response(json.dumps({"status":"ERROR","reason":"Inventory catalog unavailable"}),status_code=503,media_type="application/json",headers={"Cache-Control":"no-store"})
  def rc_manifest():return Response(pwa_manifest(),media_type="application/manifest+json",headers={"Cache-Control":"no-cache"})
  def rc_sw():return Response(pwa_service_worker(),media_type="application/javascript",headers={"Cache-Control":"no-cache","Service-Worker-Allowed":"/app/yipman-v1-rc/"})
  def rc_icon():return Response(pwa_icon_svg(),media_type="image/svg+xml",headers={"Cache-Control":"public, max-age=3600"})
  def rc_install():return HTMLResponse(pwa_install_html(version),headers={"Cache-Control":"no-store"})
- routes=[("/app/yipman-v1-rc/",rc_page,"yipman_mobile_v1_exact_mock_rc"),("/app/yipman-v1-rc",rc_page,"yipman_mobile_v1_exact_mock_rc_noslash"),("/app/yipman-v1-rc/api/ordering-review-live",rc_ordering_review_live,"yipman_mobile_v1_rc_ordering_review_live"),("/app/yipman-v1-rc/api/family-receipts",rc_family_receipt_history,"yipman_mobile_v1_rc_family_receipt_history"),("/app/yipman-v1-rc/api/stock-flow",rc_stock_flow,"yipman_mobile_v1_rc_stock_flow"),("/app/yipman-v1-rc/manifest.webmanifest",rc_manifest,"yipman_mobile_v1_rc_manifest"),("/app/yipman-v1-rc/sw.js",rc_sw,"yipman_mobile_v1_rc_service_worker"),("/app/yipman-v1-rc/icon.svg",rc_icon,"yipman_mobile_v1_rc_icon"),("/app/yipman-v1-rc/install",rc_install,"yipman_mobile_v1_rc_install"),("/app/yipman-v1-rc/install/",rc_install,"yipman_mobile_v1_rc_install_slash")]
+ routes=[("/app/yipman-v1-rc/api/inventory-catalog",rc_inventory_catalog,"yipman_mobile_v1_inventory_catalog"),("/app/yipman-v1-rc/",rc_page,"yipman_mobile_v1_exact_mock_rc"),("/app/yipman-v1-rc",rc_page,"yipman_mobile_v1_exact_mock_rc_noslash"),("/app/yipman-v1-rc/api/ordering-review-live",rc_ordering_review_live,"yipman_mobile_v1_rc_ordering_review_live"),("/app/yipman-v1-rc/api/family-receipts",rc_family_receipt_history,"yipman_mobile_v1_rc_family_receipt_history"),("/app/yipman-v1-rc/api/stock-flow",rc_stock_flow,"yipman_mobile_v1_rc_stock_flow"),("/app/yipman-v1-rc/manifest.webmanifest",rc_manifest,"yipman_mobile_v1_rc_manifest"),("/app/yipman-v1-rc/sw.js",rc_sw,"yipman_mobile_v1_rc_service_worker"),("/app/yipman-v1-rc/icon.svg",rc_icon,"yipman_mobile_v1_rc_icon"),("/app/yipman-v1-rc/install",rc_install,"yipman_mobile_v1_rc_install"),("/app/yipman-v1-rc/install/",rc_install,"yipman_mobile_v1_rc_install_slash")]
  for path,fn,name in routes:app.add_api_route(path,fn,methods=["GET"],include_in_schema=False,name=name)
  app.state.yipman_mobile_v1_consolidated_rc={"enabled":True,"path":"/app/yipman-v1-rc/","production_v1_unchanged":False,"app_ready_fast_read":True,"live_fallback":True,"compact_ordering":True,"primary_decision_details":True,"all_primary_decisions_have_explanation_evidence":True,"decision_evidence_missing_is_explicit":True,"install_path":"/app/yipman-v1-rc/install"}
  _INSTALLED=True
