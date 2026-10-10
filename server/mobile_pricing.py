@@ -7,6 +7,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from collections import OrderedDict
 import threading
+import json
 import time
 from fastapi import APIRouter, HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -148,23 +149,70 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
     result['valid'] = True
     return result
 
-def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12):
+
+_category_cache = (0, {})
+def category_index(cur, rows, today):
+    """Same receipt-weekday rules and confirmed exceptions as the mobile stock model."""
+    global _category_cache
+    if time.monotonic() - _category_cache[0] < 300:
+        return _category_cache[1]
+    from webapp_v2_runtime import _family_receipt_events_bulk
+    fids = {int(r['family_id']) for r in rows if r.get('family_id')}
+    receipts = _family_receipt_events_bulk(cur, fids, data_day_limit=90)
+    result = {}
+    for row in rows:
+        fid = int(row['family_id'])
+        if fid in result:
+            continue
+        name = ' '.join(str(row.get('family_description') or '').upper().split())
+        dates = sorted({r['posting_date'] for r in receipts.get(fid, [])
+            if r.get('receipt_quantity') is not None and r['receipt_quantity'] > 0
+            and 0 <= (today-r['posting_date']).days <= 84})
+        weekdays = {d.weekday() for d in dates}
+        if name in {'ATLANTIC SALMON STEAK','FRESH BIG MOUTH BASS'}:
+            category = 'FRESH'
+        elif str(row.get('product_class') or '').upper() == 'LIVE' or name.startswith('LIVE '):
+            category = 'LIVE'
+        elif weekdays and weekdays <= {1, 2}:
+            category = 'FROZEN'
+        elif weekdays and weekdays <= {4, 5}:
+            category = 'FRESH'
+        else:
+            category = 'UNKNOWN'
+        # Preserve receipt dates/quantities so Quick Check does not fan out into
+        # a separate receipt request for every card on the price list.
+        grouped = {}
+        for r in receipts.get(fid, []):
+            unit = r.get('base_receipt_uom') or r.get('receipt_uom')
+            qty = r.get('base_receipt_quantity') if r.get('base_receipt_quantity') is not None else r.get('receipt_quantity')
+            if qty is not None and qty > 0 and unit:
+                k = (r['posting_date'], unit)
+                grouped[k] = grouped.get(k, Decimal(0)) + qty
+        result[fid] = {'category': category, 'receipts': [{'date': d, 'uom': u, 'quantity': q} for (d,u),q in sorted(grouped.items())]}
+    _category_cache = (time.monotonic(), result)
+    return result
+
+def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None):
     from db import db_conn
     from business_clock import business_today, completed_through_date
     from data_coverage import source_data_days
-    from webapp_v2_runtime import _batch_daily_sales_by_price_type, _performance_range_cost_rows
+    from webapp_v2_runtime import _batch_daily_sales_by_price_type, _performance_range_cost_rows, _ordering_family_movement_metrics
     today = business_today()
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         try:
             cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
             all_rows = cur.fetchall()
+            categories = {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()}
+            for fid, cat in (overrides or {}).items():
+                if int(fid) in categories:
+                    categories[int(fid)]['category'] = cat
             groups = OrderedDict()
             for r in all_rows:
                 groups.setdefault(group_key(r), []).append(r)
             selected = []
             for key, members in groups.items():
-                cat = str(members[0].get('product_class') or 'UNKNOWN').upper()
+                cat = categories.get(int(members[0]['family_id']), {}).get('category', 'UNKNOWN')
                 if category != 'ALL' and cat != category:
                     continue
                 if prefix != 'ALL' and not any(str(r.get('ean_upc') or '').lstrip('0').startswith(tuple(prefix.split('+'))) for r in members):
@@ -174,14 +222,20 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                 if q and not any(q.lower() in ' '.join(str(r.get(k) or '') for k in ('ean_upc','selling_description','article_number','family_description','main_article_number')).lower() for r in members):
                     continue
                 selected.append((key, members))
+            selected.sort(key=lambda g: (-sum(float(r.get('pos_qty_7d') or 0) for r in g[1]), -int(any(r.get('quick_check_status') == 'READY' for r in g[1])), g[0]))
             total = len(selected)
             page = selected[cursor:cursor+limit]
             rows = [r for _, members in page for r in members]
-            days = sorted(source_data_days(cur, 'sales_by_price_type', limit=28, up_to=completed_through_date()), key=lambda d:d['date'])
+            days = sorted(source_data_days(cur, 'sales_by_price_type', limit=90, up_to=completed_through_date()), key=lambda d:d['date'])
             through = days[-1]['date'] if days else None
             daily = _batch_daily_sales_by_price_type(cur, rows, days)
             costs = _performance_range_cost_rows(cur, rows, today)
             snapshots = price_snapshots(cur, rows)
+            movement_days = sorted(source_data_days(cur, 'movement', limit=7, up_to=completed_through_date()), key=lambda d:d['date'])
+            movements = {}
+            for fid in {int(r['family_id']) for r in rows}:
+                metrics = _ordering_family_movement_metrics(cur, fid, movement_days)
+                movements[fid] = {**metrics, 'through': movement_days[-1]['date'] if movement_days else None}
             items = []
             for key, members in page:
                 records = []
@@ -202,7 +256,8 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                 items.append({'id': key, 'familyId': str(first['family_id']),
                     'article': str(first.get('main_article_number') or ''),
                     'name': first.get('family_description') or first.get('selling_description'),
-                    'category': str(first.get('product_class') or 'UNKNOWN').upper(), 'members': records})
+                    'category': categories[int(first['family_id'])]['category'], 'members': records,
+                    'receipts': categories[int(first['family_id'])]['receipts'], 'movement': movements[int(first['family_id'])]})
             return {'contract': 'MOBILE_PRICING_V1', 'today': today, 'through': through,
                 'checkedAt': datetime.now(timezone.utc).isoformat(), 'days': [d['date'] for d in days],
                 'items': items, 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
@@ -214,17 +269,23 @@ _cache = OrderedDict()
 _lock = threading.Lock()
 
 @router.get('/v1/app/mobile-pricing')
-def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: str='', cursor: int=0, limit: int=12):
+def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: str='', cursor: int=0, limit: int=12, overrides: str=''):
     category, prefix, q = category.upper(), prefix.upper(), q.strip()[:80]
     if category not in {'ALL','LIVE','FRESH','FROZEN','UNKNOWN'} or prefix not in {'ALL','240+249','245','247'} or cursor < 0 or (family and not family.isdigit()):
         raise HTTPException(422, 'Invalid pricing filter')
+    try:
+        custom = json.loads(overrides) if overrides else {}
+        if not isinstance(custom, dict) or len(custom)>300 or any(not str(k).isdigit() or v not in {'LIVE','FRESH','FROZEN'} for k,v in custom.items()):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise HTTPException(422, 'Invalid category corrections')
     limit = max(1, min(limit, 24))
-    key = (category, prefix, q, family, cursor, limit)
+    key = (category, prefix, q, family, cursor, limit, json.dumps(custom,sort_keys=True))
     with _lock:
         cached = _cache.get(key)
         if cached and time.monotonic() - cached[0] < 120:
             return cached[1]
-    result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit))
+    result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit, custom))
     with _lock:
         _cache[key] = (time.monotonic(), result)
         _cache.move_to_end(key)
