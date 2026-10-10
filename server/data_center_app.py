@@ -64,10 +64,10 @@ footer{border-top:1px solid #245535;padding-top:6px;color:#91bd9b}
 /* Use the available workstation width and keep long history inside its panel. */
 main{max-width:none;padding:8px 12px 10px}header{padding:6px 12px}.panel{margin-bottom:8px}.grid{gap:8px}
 .load-status{margin-bottom:7px;padding:4px 0;gap:5px 16px}.fresh{margin-bottom:8px}.tile{padding:6px 9px}
-#recent{max-height:clamp(132px,calc(100dvh - 570px),226px)}footer{font-size:10px;padding-top:5px}
+#recent th:first-child,#recent td:first-child{min-width:52px;white-space:nowrap}#recent{max-height:clamp(132px,calc(100dvh - 570px),226px)}footer{font-size:10px;padding-top:5px}
 @media(min-width:1500px){
  .grid{grid-template-columns:minmax(540px,1.45fr) minmax(300px,.8fr) minmax(340px,1fr);gap:8px 10px}
- .grid>div{display:contents}.monitor-panel{grid-column:1;grid-row:1/span 2}.upload-panel{grid-column:2;grid-row:1}.coverage-panel{grid-column:2;grid-row:2}.recent-panel{grid-column:3;grid-row:1/span 2}
+ .grid>div:first-child{display:contents}.grid>div:last-child{display:flex;flex-direction:column;gap:8px;grid-column:2;grid-row:1}.monitor-panel{grid-column:1;grid-row:1}.recent-panel{grid-column:3;grid-row:1}
  .panel{margin-bottom:0}.grid #recent{max-height:clamp(270px,calc(100dvh - 215px),650px)}
  #recent td,#recent th{padding:6px;font-size:12px}#recent td:nth-child(3){min-width:85px}.recent-files{font-size:12px}
  .upload-controls input[type=file]{flex-basis:100%;font-size:12px}.drop button.primary{padding:6px 8px;min-height:32px}
