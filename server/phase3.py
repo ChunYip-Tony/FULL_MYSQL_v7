@@ -1883,17 +1883,19 @@ def relink_history(cur, progress=None) -> None:
                    WHERE d.ean_upc IS NOT NULL
                      AND (d.upc_id IS NULL OR d.upc_id<>u.upc_id)""")
 
-    checkpoint('POS_HYBRID')
+    checkpoint('POS_MANUAL_INDEX')
     # Second pass: rebuild Seafood POS identity with the same hybrid resolver.
     # RAW barcode / 249 product code is authoritative first; Article Manual
     # verifies or fills unresolved identity. Description remains last-resort.
     article_manual_index = article_manual_pos_alias_index(cur)
-    cur.execute(
-        """SELECT DISTINCT ean_upc,description
-           FROM sales_period_observation
-           WHERE ean_upc IS NOT NULL"""
-    )
-    for row in cur.fetchall():
+    from history_pages import iter_history_identities
+    def page_progress(stage):
+        def report_page(done):
+            if progress:
+                progress('PHASE3_RELINK_' + stage, progress_kind='HISTORY_IDENTITIES',
+                         progress_unit='identities', progress_current=done)
+        return report_page
+    for row in iter_history_identities(cur, 'sales_period_observation', page_progress('POS_HYBRID')):
         ean=row['ean_upc']
         description=row.get('description')
         upc_id=_find_pos_upc_id(cur,ean,description,article_manual_index)
@@ -1908,8 +1910,7 @@ def relink_history(cur, progress=None) -> None:
             )
 
     for table in ('price_list_observation','inventory_observation','company_price_observation'):
-        cur.execute(f"SELECT DISTINCT ean_upc FROM {table} WHERE ean_upc IS NOT NULL")
-        for row in cur.fetchall():
+        for row in iter_history_identities(cur, table, page_progress(table.upper())):
             ean = row['ean_upc']
             upc_id = _find_upc_id(cur, ean)
             if upc_id is not None:
@@ -1924,12 +1925,7 @@ def relink_history(cur, progress=None) -> None:
     # Department POS lineage must use the same RAW-first hybrid identity as
     # sales history. Restrict the special resolver to Seafood POS rows; other
     # department observations keep ordinary barcode lineage.
-    cur.execute(
-        """SELECT DISTINCT ean_upc,department_code,source_type
-           FROM upc_department_observation
-           WHERE ean_upc IS NOT NULL"""
-    )
-    for row in cur.fetchall():
+    for row in iter_history_identities(cur, 'upc_department_observation', page_progress('DEPARTMENT')):
         ean = row['ean_upc']
         if (
             str(row.get('department_code') or '') == SEAFOOD_DEPT_CODE

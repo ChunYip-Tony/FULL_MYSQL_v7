@@ -63,6 +63,8 @@ def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=No
         for key,path in (
             ('worker_cgroup_memory_bytes','/sys/fs/cgroup/memory.current'),
             ('worker_cgroup_memory_limit','/sys/fs/cgroup/memory.max'),
+            ('worker_cgroup_v1_memory_bytes','/sys/fs/cgroup/memory/memory.usage_in_bytes'),
+            ('worker_cgroup_v1_memory_limit','/sys/fs/cgroup/memory/memory.limit_in_bytes'),
         ):
             if Path(path).exists():
                 payload[key]=Path(path).read_text().strip()
