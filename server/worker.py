@@ -6,6 +6,7 @@ from db import db_conn, test_database
 from ingest import audit_batch, release_batch
 from normalize import normalize_batch, audit_phase2c
 from phase3 import process_phase3, audit_phase3
+from phase3_runtime import connection_diagnostics
 from v7_ingest import API_PIPELINE, API_VERSION
 from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, enqueue_chatgpt_publish
 
@@ -86,11 +87,17 @@ def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=No
                 payload[key]=None
     if progress_payload:
         for key,value in progress_payload.items():
-            if key.startswith('progress_'):
+            if key.startswith('progress_') or key == 'db_connection_id':
                 payload[key]=value
+    with _RUNTIME_LOCK:
+        db_id = (_RUNTIME_STATE.get('db_connection_id')
+                 if _RUNTIME_STATE.get('run_id') == run_id else None)
     with db_conn() as conn:
-        cur=conn.cursor()
+        cur=conn.cursor(dictionary=True)
         try:
+            cur.execute('SET SESSION innodb_lock_wait_timeout=5')
+            if db_id:
+                payload.update(connection_diagnostics(cur, db_id))
             cur.execute(
                 """UPDATE pipeline_run
                    SET detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
@@ -906,6 +913,9 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
 
     def progress(stage:str, payload:dict|None=None):
         last_progress_stage['value']=stage
+        if payload and payload.get('db_connection_id'):
+            with _RUNTIME_LOCK:
+                _RUNTIME_STATE['db_connection_id']=int(payload['db_connection_id'])
         _assert_run_claim_valid(run_id)
         if _run_pause_requested(run_id):
             _write_runtime_health('PAUSING',run_id,stage)
@@ -992,6 +1002,8 @@ def process(run_id:int,batch_id:int,stage_name:str='POST_RAW_PIPELINE'):
     finally:
         stop_event.set()
         heartbeat.join(timeout=2)
+        with _RUNTIME_LOCK:
+            _RUNTIME_STATE.pop('db_connection_id',None)
         _write_runtime_health('IDLE')
 
 def _pending_pipeline_work() -> bool:

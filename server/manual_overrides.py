@@ -579,6 +579,22 @@ def seed_confirmed_overrides(cur) -> int:
     ensure_override_table(cur)
     changed = 0
     for row in SEED_OVERRIDES:
+        # Replaying identical seeds used to take exclusive locks for the whole
+        # Phase 3 transaction, even though none of the authority values changed.
+        # Keep the same authority semantics while avoiding those no-op writes.
+        cur.execute(
+            """SELECT article_number,selling_uom_code,base_uom_code,
+                      base_qty_per_selling_unit,override_status,source_note
+               FROM manual_upc_override WHERE ean_upc=%s""",
+            (row['ean_upc'],),
+        )
+        existing = cur.fetchone()
+        if existing and existing.get('override_status') == 'CONFIRMED' and all(
+            existing.get(key) == row.get(key)
+            for key in ('article_number','selling_uom_code','base_uom_code',
+                        'base_qty_per_selling_unit','source_note')
+        ):
+            continue
         cur.execute(
             """
             INSERT INTO manual_upc_override

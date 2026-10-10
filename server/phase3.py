@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from db import db_conn
+from phase3_runtime import phase3_lease
 from data_coverage import source_data_days, coverage_summary
 from business_clock import BUSINESS_TIMEZONE, business_today, completed_through_date
 from manual_overrides import (
@@ -3463,9 +3464,13 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             progress(stage, payload)
 
     report('PHASE3_CONNECT')
-    with db_conn() as conn:
+    with db_conn() as conn, phase3_lease(conn):
         cur = conn.cursor(dictionary=True)
         try:
+            cur.execute('SELECT CONNECTION_ID() AS connection_id')
+            connection_id = int(cur.fetchone()['connection_id'])
+            conn.commit()
+            report('PHASE3_CONNECTION_READY', db_connection_id=connection_id)
             # Manual authority tables are bootstrap schema. Ensure them before the
             # Phase 3 business transaction because MySQL DDL implicitly commits
             # and would invalidate the later Quick Check SAVEPOINT.
@@ -3490,7 +3495,9 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             # Seed/apply user authority before automatic repair so confirmed identities are available
             # to history processing. Reapply the same authority again immediately before publish;
             # automatic repair is never allowed to be the last writer.
+            report('PHASE3_MANUAL_UPC_AUTHORITY')
             override_result_pre = apply_manual_upc_overrides(cur)
+            report('PHASE3_MANUAL_REMAINING_AUTHORITY')
             retirement_result_pre = apply_manual_upc_retirements(cur)
             cost_conversion_result = apply_manual_cost_conversions(cur)
             family_cost_result = apply_manual_family_costs(cur)
