@@ -312,7 +312,7 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         import traceback
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         # Bounded code location only: never expose SQL, credentials or row data.
-        raise HTTPException(503, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
+        raise HTTPException(500, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
     with _lock:
         _cache[key] = (time.monotonic(), result)
         _cache.move_to_end(key)
