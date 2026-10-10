@@ -12,6 +12,8 @@ fastapi.HTTPException=Exception
 enc=types.ModuleType('fastapi.encoders'); enc.jsonable_encoder=lambda x:x
 sys.modules['fastapi']=fastapi; sys.modules['fastapi.encoders']=enc
 from mobile_pricing import cost_for_day, day_evidence, group_key
+import mobile_pricing as module
+from unittest.mock import patch
 DAY=date(2026,10,8)
 ROW={'upc_id':1,'family_id':5,'ean_upc':'24012300000','selling_uom':'LB','base_uom':'LB','base_qty_per_selling_unit':1}
 def obs(source,value,unit='LB',day=DAY):return {'business_date':day,'source_type':source,'cost_value':value,'cost_uom':unit}
@@ -21,6 +23,21 @@ def sales(q,s,types=None):return {'sold_quantity':q,'sales_amount':s,'price_type
 class EvidenceTests(unittest.TestCase):
     def evidence(self,o=None,config=CONFIG,costs=COSTS):
         return day_evidence(ROW,DAY,o,config,costs,cost_for_day(ROW,costs,DAY))
+    def test_cold_start_empty_cache_is_not_valid(self):
+        coverage=types.ModuleType('data_coverage');coverage.source_data_days=lambda *a,**kw:[]
+        clock=types.ModuleType('business_clock');clock.completed_through_date=lambda:DAY
+        semantics=types.ModuleType('receipt_semantics');semantics.physical_receipt_stage_rows=lambda rows:(rows,'TEST')
+        row={**ROW,'family_description':'ATLANTIC SALMON STEAK'}
+        with patch.dict(sys.modules,{'data_coverage':coverage,'business_clock':clock,'receipt_semantics':semantics}), patch.object(module.time,'monotonic',return_value=100), patch.object(module,'_category_cache',(0,{})):
+            result=module.category_index(None,[row],DAY)
+            self.assertEqual(result[5]['category'],'FRESH')
+    def test_new_family_invalidates_complete_category_index(self):
+        coverage=types.ModuleType('data_coverage');coverage.source_data_days=lambda *a,**kw:[]
+        clock=types.ModuleType('business_clock');clock.completed_through_date=lambda:DAY
+        semantics=types.ModuleType('receipt_semantics');semantics.physical_receipt_stage_rows=lambda rows:(rows,'TEST')
+        row={**ROW,'family_id':6,'family_description':'LIVE LOBSTER'}
+        with patch.dict(sys.modules,{'data_coverage':coverage,'business_clock':clock,'receipt_semantics':semantics}), patch.object(module.time,'monotonic',return_value=101), patch.object(module,'_category_cache',(100,{5:{'category':'FRESH'}})):
+            self.assertEqual(module.category_index(None,[row],DAY)[6]['category'],'LIVE')
     def test_cost_authority_and_conversion(self):
         sources=[obs('ON_HAND_EXPLICIT_COST_FALLBACK',2),obs('LIVE_FRESH_SUGGESTION_OFFICIAL_COST',4),obs('MOVEMENT_RECEIPT_VALUATION',6)]
         self.assertEqual(cost_for_day(ROW,sources,DAY)['value'],6)

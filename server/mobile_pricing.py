@@ -154,7 +154,7 @@ _category_cache = (0, {})
 def category_index(cur, rows, today):
     """Same receipt-weekday rules and confirmed exceptions as the mobile stock model."""
     global _category_cache
-    if time.monotonic() - _category_cache[0] < 300:
+    if _category_cache[0] > 0 and time.monotonic() - _category_cache[0] < 300 and all(int(r['family_id']) in _category_cache[1] for r in rows):
         return _category_cache[1]
     from data_coverage import source_data_days
     from business_clock import completed_through_date
