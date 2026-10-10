@@ -76,10 +76,10 @@ _PATCH=r'''
   function saveHist(id,h){try{localStorage.setItem(storageKey(id),JSON.stringify(h))}catch(_e){}}
   function addEvent(h,label,detail){h.events.unshift({t:now(),label,detail});h.events=h.events.slice(0,12)}
   function observe(b){
-    if(!b?.batch_id)return null;const id=b.batch_id,h=loadHist(id),raw=String(b.processing_status||'NONE').toUpperCase(),run=String(b.active_pipeline_run_id||''),processed=first(b,['active_processed_rows','processed_rows','rows_processed','active_rows_processed','progress_rows']),checkpoint=first(b,['active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint']),file=first(b,['active_file_name','file_name']);
+    if(!b?.batch_id)return null;const id=b.batch_id,h=loadHist(id),raw=String(b.processing_status||'NONE').toUpperCase(),run=String(b.active_pipeline_run_id||''),processed=first(b,['active_processed_rows','processed_rows','rows_processed','active_rows_processed','progress_rows']),checkpoint=first(b,['active_phase3_stage','active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint']),file=first(b,['active_file_name','file_name']);
     const sig=JSON.stringify([raw,run,processed,checkpoint,file]);
     if(sig!==h.lastSig){
-      if(h.lastSig!=null){h.lastChangeAt=now();addEvent(h,'Progress changed',raw+(run?' · Run #'+run:''))}else{h.lastChangeAt=now();addEvent(h,'Observed batch',raw)}
+      if(h.lastSig!=null){h.lastChangeAt=now();addEvent(h,'Progress changed',(checkpoint||raw)+(run?' · Run #'+run:''))}else{h.lastChangeAt=now();addEvent(h,'Observed batch',raw)}
       h.lastSig=sig;
       if(run&&h.runs[h.runs.length-1]!==run){h.runs.push(run);h.runs=h.runs.slice(-10);if(h.runs.length>1)addEvent(h,'Run changed','Run #'+run)}
       if(raw&&h.statuses[h.statuses.length-1]!==raw){h.statuses.push(raw);h.statuses=h.statuses.slice(-20);addEvent(h,'Stage changed',raw.replaceAll('_',' '))}
@@ -87,7 +87,7 @@ _PATCH=r'''
     saveHist(id,h);return h;
   }
   function serverActivityAt(b){
-    const v=first(b,['active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at','active_checkpoint_at','checkpoint_at','updated_at','active_updated_at','processing_updated_at']);
+    const v=first(b,['active_heartbeat_at','active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at','active_checkpoint_at','checkpoint_at','updated_at','active_updated_at','processing_updated_at']);
     const d=v?new Date(v):null;return d&&!Number.isNaN(d.getTime())?d.getTime():null;
   }
   function classify(b,h){
@@ -101,6 +101,8 @@ _PATCH=r'''
     const statuses=h?.statuses||[],runs=h?.runs||[];
     const visits=statuses.filter(x=>x===raw).length;
     const repeated=runs.length>=3||visits>=3;
+    if(b.active_pipeline_run_id&&b.active_heartbeat_fresh===true)return {kind:'working',label:'WORKING',why:'Worker heartbeat is fresh · '+String(b.active_phase3_stage||b.active_run_status||'running').replaceAll('_',' '),age};
+    if(b.active_pipeline_run_id&&b.active_run_stale===true)return {kind:'stuck',label:'STALE HEARTBEAT',why:'Active run heartbeat is stale; waiting for bounded worker recovery.',age};
     if(repeated)return {kind:'repeating',label:'REPEATING',why:runs.length>=3?('Same batch observed across '+runs.length+' run IDs.'):(raw.replaceAll('_',' ')+' was re-entered '+visits+' times.') ,age};
     if(waiting)return {kind:'waiting',label:'WAITING',why:raw==='PHASE2C_READY'?'Phase 2C is complete and the batch is waiting for Phase 3 QA.':'The current state is a waiting/hold state.',age};
     if(age>180000)return {kind:'stuck',label:'STUCK',why:'No observed stage, row, checkpoint, run, or server activity change for '+fmtAge(age)+'.',age};
@@ -114,9 +116,9 @@ _PATCH=r'''
     const activityAt=serverActivityAt(b)||h?.lastChangeAt||h?.firstSeenAt||null;
     const stageAge=h?.statuses?.length?fmtAge(now()-(h.lastChangeAt||h.firstSeenAt)):fmtAge(now()-(h?.firstSeenAt||now()));
     const file=first(b,['active_file_name','file_name'])||'—',run=b?.active_pipeline_run_id?('#'+b.active_pipeline_run_id):'—';
-    const worker=first(b,['active_worker_name','worker_name','active_worker_id','worker_id','active_worker_status','worker_status'])||'Not reported';
-    const heartbeat=first(b,['active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at']);
-    const checkpoint=first(b,['active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint'])||'Not reported';
+    const worker=first(b,['active_worker','active_worker_name','worker_name','active_worker_id','worker_id','active_worker_status','worker_status'])||'Not reported';
+    const heartbeat=first(b,['active_heartbeat_at','active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at']);
+    const checkpoint=first(b,['active_phase3_stage','active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint'])||'Not reported';
     const runs=h?.runs||[],statuses=h?.statuses||[];
     hero.innerHTML='<div><h4>Batch '+(b?.batch_id?'#'+esc(b.batch_id):'—')+' · '+esc(raw.replaceAll('_',' '))+'</h4><p>'+esc(health.why)+'</p></div><span class="dc501-health '+esc(health.kind)+'">'+esc(health.label)+'</span>';
     let kv=$('.dc501-kv',c);if(!kv){kv=document.createElement('div');kv.className='dc501-kv';hero.insertAdjacentElement('afterend',kv)}
@@ -140,7 +142,6 @@ _PATCH=r'''
   async function poll(){
     if(pollBusy||!$('#yd-data')?.classList.contains('active'))return;pollBusy=true;try{const r=await fetch('/v1/web-upload/active',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;const a=await r.json(),b=a.active_batch||null,h=observe(b);renderCurrent(b,h);bindUploadList();collapseSecondary()}catch(_e){}finally{pollBusy=false}}
   function boot(){bindUploadList();collapseSecondary();poll()}
-  const root=$('#yd-data');if(root)new MutationObserver(()=>setTimeout(boot,80)).observe(root,{childList:true,subtree:true});
   document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh'||e.target?.id==='ydUpload')setTimeout(poll,450)},true);
   setInterval(poll,3000);setTimeout(boot,900);
 })();
@@ -151,3 +152,4 @@ _PATCH=r'''
 def inject_data_center_focus_v501(html:str)->str:
     if _MARKER in html:return html
     return html.replace('</body>',_PATCH+'</body>',1)
+

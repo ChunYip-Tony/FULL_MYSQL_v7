@@ -1743,7 +1743,11 @@ def _record_product_identity_guard_issues(
         evaluated += 1
     return evaluated
 
-def relink_history(cur) -> None:
+def relink_history(cur, progress=None) -> None:
+    def checkpoint(name):
+        if progress:
+            progress('PHASE3_RELINK_' + name)
+    checkpoint('SALES_EXACT')
     # Late-arriving identity evidence must repair prior history links without rewriting RAW.
     # Raw EAN/UPC is the sales lineage key. Repair both NULL and stale/wrong
     # derived upc_id links so service/fried UPCs cannot remain attached to an
@@ -1751,15 +1755,18 @@ def relink_history(cur) -> None:
     cur.execute("""UPDATE sales_period_observation s JOIN selling_upc u ON u.ean_upc=s.ean_upc
                    SET s.upc_id=u.upc_id
                    WHERE s.upc_id IS NULL OR s.upc_id<>u.upc_id""")
+    checkpoint('PRICES_EXACT')
     cur.execute("""UPDATE price_list_observation p JOIN selling_upc u ON u.ean_upc=p.ean_upc
                    SET p.upc_id=u.upc_id
                    WHERE p.upc_id IS NULL OR p.upc_id<>u.upc_id""")
+    checkpoint('MOVEMENT_FAMILY')
     cur.execute("""UPDATE movement_history m JOIN article a ON a.article_number=m.article_number
                    LEFT JOIN bridge_article_family baf ON baf.article_id=a.article_id AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
                      AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
                    SET m.article_id=a.article_id, m.family_id=COALESCE(m.family_id,baf.family_id)
                    WHERE m.article_id IS NULL OR m.family_id IS NULL""")
 
+    checkpoint('MOVEMENT_STRUCTURAL')
     # Late SAP selling Articles such as 1549569 can be authoritative 251/252
     # evidence even when their SUB Article->Family bridge was absent at ingest.
     # Relink only deterministic 1540/1545/1549 Article forms whose exact
@@ -1785,6 +1792,7 @@ def relink_history(cur) -> None:
             (article_id, family_id, article_number),
         )
 
+    checkpoint('MOVEMENT_MIRRORS')
     # Rebuild missing derived 251/252 family-movement mirrors after late
     # relinking. Respect the same explicit operational-UOM override used during
     # normal movement ingest; otherwise preserve SAP Base quantity/UOM.
@@ -1846,6 +1854,7 @@ def relink_history(cur) -> None:
                 movement_uom,
             ),
         )
+    checkpoint('INVENTORY')
     # Article-based OH rows can be ingested before late product-family repair.
     # Relink them from their exact article number without changing RAW source values.
     cur.execute(
@@ -1874,6 +1883,7 @@ def relink_history(cur) -> None:
                    WHERE d.ean_upc IS NOT NULL
                      AND (d.upc_id IS NULL OR d.upc_id<>u.upc_id)""")
 
+    checkpoint('POS_HYBRID')
     # Second pass: rebuild Seafood POS identity with the same hybrid resolver.
     # RAW barcode / 249 product code is authoritative first; Article Manual
     # verifies or fills unresolved identity. Description remains last-resort.
@@ -3595,7 +3605,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             active_28d_uom_repair = repair_active_28d_uom(cur, batch_id)
             report('PHASE3_IDENTITY_UOM_REPAIR_READY')
 
-            relink_history(cur)
+            relink_history(cur, progress=report)
             pos_backfill_relinked = relink_pos_backfill(cur)
 
             # v7.0.42: normalize historical/current company cost UOM semantics

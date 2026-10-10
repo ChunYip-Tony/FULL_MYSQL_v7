@@ -72,16 +72,17 @@ _PATCH = r'''
   function render(b){
     const c=card();if(!c)return;
     const raw=String(b?.processing_status||'NONE').toUpperCase(),s=st(raw);
+    if(b?.active_pipeline_run_id&&b?.active_run_status==='STARTED'){s.text=b.active_run_stale?'STALE · PHASE 3':'RUNNING · PHASE 3';s.stage=String(b.active_phase3_stage||'Phase 3').replaceAll('_',' ');s.cls=b.active_run_stale?'dc500-fail':'dc500-running';}
     const processed=firstNum(b,['active_processed_rows','processed_rows','rows_processed','active_rows_processed','progress_rows']);
     const total=firstNum(b,['active_total_rows','total_rows','rows_total','active_row_total','source_row_count']);
     const passed=firstNum(b,['active_passed_rows','passed_rows','rows_passed']);
     const rejected=firstNum(b,['active_rejected_rows','rejected_rows','rows_rejected','error_rows']);
     const speed=firstNum(b,['active_rows_per_second','rows_per_second','processing_rate','rate_rows_per_sec']);
     const eta=first(b,['active_eta_seconds','eta_seconds','processing_eta_seconds','eta']);
-    const worker=first(b,['active_worker_name','worker_name','active_worker_id','worker_id']);
+    const worker=first(b,['active_worker','active_worker_name','worker_name','active_worker_id','worker_id']);
     const workerStatus=first(b,['active_worker_status','worker_status']);
-    const heartbeat=first(b,['active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at']);
-    const checkpoint=first(b,['active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint']);
+    const heartbeat=first(b,['active_heartbeat_at','active_worker_heartbeat_at','worker_heartbeat_at','heartbeat_at']);
+    const checkpoint=first(b,['active_phase3_stage','active_checkpoint_name','checkpoint_name','active_checkpoint','checkpoint']);
     const checkpointAt=first(b,['active_checkpoint_at','checkpoint_at','updated_at','active_updated_at']);
     const validRows=s.rowStage&&processed!=null&&total!=null&&total>0;
     const pct=validRows?Math.max(0,Math.min(100,Math.round(processed/total*100))):Math.round((s.done/5)*100);
@@ -111,7 +112,6 @@ _PATCH = r'''
   async function refresh(){if(busy||!visible())return;busy=true;try{const r=await fetch('/v1/web-upload/active',{cache:'no-store',credentials:'same-origin'});if(!r.ok)return;const a=await r.json(),b=a.active_batch||null;render(b);uploadNote(b)}catch(_e){}finally{busy=false}}
   function dataBadge(dh){const live=$('#ydesk .topbar .live');if(!live)return;const latest=dh?.latest||{},missing=[];[['POS','POS'],['MVT','MVT'],['PRICE','Price'],['OH','OH'],['LIVE_FRESH','Live/Fresh'],['FROZEN','Frozen']].forEach(([k,label])=>{if(!latest[k]?.date)missing.push(label)});live.classList.remove('dc499-gap','dc499-ok','dc500-gap','dc500-ok');if(missing.length){live.textContent='SOURCE GAP';live.classList.add('dc500-gap');live.title='Missing source date: '+missing.join(', ')}else{live.textContent='LIVE DATA';live.classList.add('dc500-ok');live.title='All Data Center source categories have a reported date'}}
   async function health(){if(healthBusy)return;healthBusy=true;try{const r=await fetch('/v1/backoffice/data-health?days=14',{cache:'no-store',credentials:'same-origin'});if(r.ok)dataBadge(await r.json())}catch(_e){}finally{healthBusy=false}}
-  const root=$('#yd-data');if(root)new MutationObserver(()=>{if(visible()){setTimeout(refresh,120);setTimeout(health,160)}}).observe(root,{childList:true,subtree:true});
   document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh'||e.target?.id==='ydUpload'){setTimeout(refresh,500);setTimeout(health,600)}},true);
   setInterval(refresh,3000);setInterval(health,15000);setTimeout(refresh,800);setTimeout(health,900);
 })();
@@ -123,3 +123,4 @@ def inject_data_center_monitor_v500(html: str) -> str:
     if _MARKER in html:
         return html
     return html.replace('</body>', _PATCH + '</body>', 1)
+

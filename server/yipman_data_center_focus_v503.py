@@ -86,7 +86,6 @@ _PATCH=r'''
     }catch(_e){}finally{probeBusy=false}
   }
   window.addEventListener('yd-dc503-refresh',()=>setTimeout(probe,250));
-  const root=$('#yd-data');if(root)new MutationObserver(()=>setTimeout(probe,120)).observe(root,{childList:true,subtree:true});
   document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh')setTimeout(probe,350)},true);
   setInterval(probe,3000);setTimeout(probe,1100);
 })();

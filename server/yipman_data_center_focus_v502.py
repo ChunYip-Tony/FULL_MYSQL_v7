@@ -109,7 +109,6 @@ _PATCH=r'''
       }else if(note){note.remove()}
     }catch(_e){}finally{busy=false}
   }
-  const root=$('#yd-data');if(root)new MutationObserver(()=>setTimeout(diagnose,100)).observe(root,{childList:true,subtree:true});
   document.addEventListener('click',e=>{if(e.target?.id==='ydDataRefresh')setTimeout(diagnose,400)},true);
   setInterval(diagnose,3000);setTimeout(diagnose,900);
 })();
@@ -121,3 +120,4 @@ def inject_data_center_focus_v502(html: str) -> str:
     if _MARKER in html:
         return html
     return html.replace('</body>', _PATCH + '</body>', 1)
+
