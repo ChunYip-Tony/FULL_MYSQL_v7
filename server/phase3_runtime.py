@@ -4,6 +4,42 @@ from contextlib import contextmanager
 PHASE3_LOCK = 'fullmysql_phase3_transaction'
 
 
+def clear_terminal_phase3_owner(cur, pipeline_name):
+    """Cancel only a revoked run's proven Phase 3 connection, never another job.
+
+    A lost worker can leave its SQL transaction alive while the run lease has
+    already expired. Retrying then only blocks behind that same transaction.
+    The named-lock owner and persisted connection ID must agree, and the run
+    must be terminal, before its connection can be cancelled and rolled back.
+    Return True only when no Phase 3 owner exists (safe to claim more work).
+    """
+    cur.execute('SELECT IS_USED_LOCK(%s) AS owner', (PHASE3_LOCK,))
+    owner = (cur.fetchone() or {}).get('owner')
+    if owner is None:
+        return True
+    owner = int(owner)
+    cur.execute('''SELECT pipeline_run_id,processing_status
+                   FROM pipeline_run
+                   WHERE pipeline_name=%s
+                     AND stage_name IN ('PHASE3_RERUN','POST_RAW_PIPELINE')
+                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.db_connection_id'))=%s
+                   ORDER BY pipeline_run_id DESC LIMIT 1''', (pipeline_name,str(owner)))
+    run = cur.fetchone() or {}
+    if run.get('processing_status') not in {'FAILED','ABORTED','PAUSED','FAILED_QA'}:
+        return False
+    # Recheck ownership immediately before cancellation. No broad process-list
+    # scan and no killing a connection merely because it is slow or idle.
+    cur.execute('SELECT IS_USED_LOCK(%s) AS owner', (PHASE3_LOCK,))
+    if (cur.fetchone() or {}).get('owner') != owner:
+        return False
+    cur.execute('KILL CONNECTION ' + str(owner))
+    print('Cancelled revoked Phase 3 connection',
+          {'pipeline_run_id':run['pipeline_run_id'],'connection_id':owner},flush=True)
+    # The server may still be rolling the transaction back. Wait for a later
+    # poll to observe the named lock released rather than queueing retries now.
+    return False
+
+
 @contextmanager
 def phase3_lease(conn):
     # The claim lock only protects queue selection. This lock remains on the

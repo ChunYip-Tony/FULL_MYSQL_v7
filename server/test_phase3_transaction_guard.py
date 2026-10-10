@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import patch
 from decimal import Decimal
 import manual_overrides as overrides
-from phase3_runtime import phase3_lease, connection_diagnostics
+from phase3_runtime import phase3_lease, connection_diagnostics, clear_terminal_phase3_owner
 
 
 class Cursor:
@@ -28,6 +28,32 @@ class Connection:
 
 
 class TransactionGuardTests(unittest.TestCase):
+    def test_cleanup_cancels_only_terminal_matching_owner(self):
+        class Owner(Cursor):
+            def __init__(self, status):
+                super().__init__(); self.status = status
+            def fetchone(self):
+                if 'IS_USED_LOCK' in self.calls[-1][0]: return {'owner':42}
+                return {'pipeline_run_id':100,'processing_status':self.status} if self.status else {}
+        for status in ('STARTED','QUEUED','COMPLETED',None):
+            cur=Owner(status)
+            self.assertFalse(clear_terminal_phase3_owner(cur,'FULLMYSQL_SECURE_API'))
+            self.assertFalse(any(q.startswith('KILL') for q,_ in cur.calls))
+        cur=Owner('FAILED')
+        self.assertFalse(clear_terminal_phase3_owner(cur,'FULLMYSQL_SECURE_API'))
+        self.assertEqual(cur.calls[-1],('KILL CONNECTION 42',()))
+        self.assertEqual(cur.calls[1][1],('FULLMYSQL_SECURE_API','42'))
+
+    def test_cleanup_requires_rechecked_owner(self):
+        class Changed(Cursor):
+            def fetchone(self):
+                if len(self.calls)==1:return {'owner':42}
+                if len(self.calls)==2:return {'pipeline_run_id':100,'processing_status':'FAILED'}
+                return {'owner':43}
+        cur=Changed()
+        self.assertFalse(clear_terminal_phase3_owner(cur,'FULLMYSQL_SECURE_API'))
+        self.assertFalse(any(q.startswith('KILL') for q,_ in cur.calls))
+
     def test_lease_released_on_business_failure(self):
         cur = Cursor()
         with self.assertRaisesRegex(ValueError, 'business failure'):

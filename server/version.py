@@ -1,1 +1,1 @@
-VERSION='7.0.508-phase3-transaction-guard'
+VERSION='7.0.509-phase3-revoked-connection'

@@ -1,12 +1,12 @@
 from __future__ import annotations
-import json, os, socket, threading, time, traceback
+import json, os, socket, threading, time, traceback, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from db import db_conn, test_database
 from ingest import audit_batch, release_batch
 from normalize import normalize_batch, audit_phase2c
 from phase3 import process_phase3, audit_phase3
-from phase3_runtime import connection_diagnostics
+from phase3_runtime import connection_diagnostics, clear_terminal_phase3_owner
 from v7_ingest import API_PIPELINE, API_VERSION
 from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, enqueue_chatgpt_publish
 
@@ -19,6 +19,7 @@ HEARTBEAT_RETRY_SECONDS=max(1,min(5,int(os.environ.get('FULLMYSQL_HEARTBEAT_RETR
 SAME_VERSION_STALE_RECOVERY_LIMIT=max(0,min(3,int(os.environ.get('FULLMYSQL_SAME_VERSION_STALE_RECOVERY_LIMIT','1'))))
 BRIDGE_STAGE='CHATGPT_SHEET_PUBLISH'
 WORKER=f"{socket.gethostname()}:{os.getpid()}"
+WORKER_INSTANCE=uuid.uuid4().hex
 RUNTIME_HEALTH_PATH=Path(os.environ.get('FULLMYSQL_WORKER_HEALTH_PATH','/tmp/fullmysql_worker_health.json'))
 _RUNTIME_LOCK=threading.Lock()
 _RUNTIME_STATE={'state':'STARTING','run_id':None,'stage':None}
@@ -54,6 +55,7 @@ def _run_pause_requested(run_id:int) -> bool:
 def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=None) -> None:
     payload={
         'worker':WORKER,
+        'worker_instance':WORKER_INSTANCE,
         'heartbeat_at':datetime.utcnow().isoformat()+'Z',
         'heartbeat_epoch':int(time.time()),
     }
@@ -169,6 +171,7 @@ def _write_runtime_health(state:str|None=None, run_id:int|None=None, stage:str|N
         current=dict(_RUNTIME_STATE)
     payload={
         'worker':WORKER,
+        'worker_instance':WORKER_INSTANCE,
         'pid':os.getpid(),
         'state':current.get('state'),
         'run_id':current.get('run_id'),
@@ -608,6 +611,9 @@ def claim_job():
 
             _recover_stale_started(cur)
             _supersede_incompatible_queued(cur)
+            conn.commit()
+            if not clear_terminal_phase3_owner(cur, API_PIPELINE):
+                return None
             _queue_orphaned_phase2c_ready(cur)
             conn.commit()
 

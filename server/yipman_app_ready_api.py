@@ -63,6 +63,8 @@ def request_app_ready_rebuild(*, source_batch_id=None) -> bool:
         current = source
         try:
             while True:
+                from pipeline_priority import wait_for_pipeline_idle
+                wait_for_pipeline_idle()
                 build_app_ready_snapshot(app_ready_builders(), source_batch_id=current, data_through=completed_through_date().isoformat())
                 with _COORDINATOR_LOCK:
                     if _PENDING_SOURCE is None:
@@ -142,3 +144,4 @@ def install_app_ready_api(app) -> None:
 
     app.state.yipman_app_ready_api_installed = True
     app.state.request_yipman_app_ready_rebuild = request_app_ready_rebuild
+

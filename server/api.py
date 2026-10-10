@@ -77,18 +77,22 @@ app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_ur
 
 @app.on_event("startup")
 def _warm_mobile_home_summary_cache():
+    from pipeline_priority import wait_for_pipeline_idle
+    def after_pipeline(target):
+        wait_for_pipeline_idle()
+        target()
     threading.Thread(
-        target=warm_backoffice_home_summary,
+        target=lambda: after_pipeline(warm_backoffice_home_summary),
         name="home-summary-warmup",
         daemon=True,
     ).start()
     threading.Thread(
-        target=lambda: backoffice_cached_pricing_review(category="ALL",limit=1000),
+        target=lambda: after_pipeline(lambda: backoffice_cached_pricing_review(category="ALL",limit=1000)),
         name="pricing-review-warmup",
         daemon=True,
     ).start()
     threading.Thread(
-        target=lambda: backoffice_cached_current_tpr_review(category="ALL",limit=1000),
+        target=lambda: after_pipeline(lambda: backoffice_cached_current_tpr_review(category="ALL",limit=1000)),
         name="current-tpr-review-warmup",
         daemon=True,
     ).start()
@@ -617,6 +621,11 @@ def healthz():
         'worker_healthy':worker_healthy,
         'worker_ready':worker_ready,
         'worker_heartbeat_age_seconds':worker_age,
+        'worker':worker_payload.get('worker'),
+        'worker_instance':worker_payload.get('worker_instance'),
+        'worker_run_id':worker_payload.get('run_id'),
+        'worker_stage':worker_payload.get('stage'),
+        'worker_heartbeat_db_failures':worker_payload.get('heartbeat_db_failures',0),
     }
 
 @app.get('/v1/worker-health')
