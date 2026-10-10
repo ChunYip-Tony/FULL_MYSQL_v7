@@ -1030,6 +1030,35 @@ def _pending_pipeline_work() -> bool:
             cur.close()
 
 
+def _startup_bridge_already_verified(cur, batch_id:int) -> bool:
+    """Only reuse a verified publish newer than every current serving row.
+
+    Checking the latest attempt also avoids hiding a later partial/failed
+    publish behind an older PASS. Explicit post-Phase-3 publishes are unaffected.
+    """
+    cur.execute(
+        """SELECT processing_status,completed_at,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.publish_result.status')) AS publish_status,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.publish_result.readback.pass')) AS readback_pass,
+                  (SELECT MAX(published_at) FROM quick_check_current
+                   WHERE publish_batch_id=%s) AS snapshot_updated_at
+           FROM pipeline_run
+           WHERE batch_id=%s AND pipeline_name=%s
+             AND stage_name='CHATGPT_SHEET_PUBLISH'
+           ORDER BY pipeline_run_id DESC LIMIT 1""",
+        (batch_id,batch_id,API_PIPELINE),
+    )
+    row=cur.fetchone() or {}
+    return bool(
+        row.get('processing_status')=='COMPLETED'
+        and row.get('publish_status')=='PASS'
+        and str(row.get('readback_pass')).lower()=='true'
+        and row.get('completed_at') is not None
+        and row.get('snapshot_updated_at') is not None
+        and row['completed_at'] >= row['snapshot_updated_at']
+    )
+
+
 def _recover_chatgpt_bridge_on_startup() -> None:
     """Best-effort recovery for an interrupted ChatGPT Sheet publish.
 
@@ -1051,6 +1080,13 @@ def _recover_chatgpt_bridge_on_startup() -> None:
                        FROM quick_check_current"""
                 )
                 serving=cur.fetchone() or {}
+                if (int(serving.get('c') or 0)>0
+                    and int(serving.get('min_batch') or 0)>0
+                    and serving.get('min_batch')==serving.get('max_batch')
+                    and _startup_bridge_already_verified(cur,int(serving['max_batch']))):
+                    print('ChatGPT bridge startup recovery skipped: current snapshot already verified',
+                          serving['max_batch'],flush=True)
+                    return
             finally:
                 cur.close()
         if int(serving.get('c') or 0) <= 0:
