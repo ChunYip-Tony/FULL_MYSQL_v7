@@ -2,17 +2,60 @@
 DATA_CENTER_HTML = r'''<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yipman · Data Center</title>
 <style>
-:root{--ink:#172c42;--muted:#64778b;--line:#dce5eb;--blue:#0969da;--teal:#087c72;--red:#b3263c}*{box-sizing:border-box}body{margin:0;background:#f3f6f8;color:var(--ink);font:15px/1.5 system-ui,sans-serif}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer;border:1px solid var(--line);background:white;border-radius:9px;padding:10px 16px;color:var(--ink);font-weight:650}button:disabled{opacity:.5;cursor:not-allowed}button.primary{background:var(--blue);border-color:var(--blue);color:white}a{color:var(--blue)}header{background:#102b43;color:white;padding:22px max(24px,calc((100vw - 1380px)/2));display:flex;justify-content:space-between;align-items:center;gap:20px}header strong{font-size:25px}header small{display:block;color:#b4c9d8}main{max-width:1428px;margin:auto;padding:28px 24px 60px}h1{font-size:32px;margin:0}h2{font-size:21px;margin:0 0 16px}h3{font-size:17px;margin:0 0 8px}p{margin:6px 0 16px}.muted{color:var(--muted)}.bar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}.grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr);gap:20px;align-items:start}.panel{background:white;border:1px solid var(--line);border-radius:16px;padding:24px;margin-bottom:20px;min-width:0}.fresh{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin:22px 0}.tile{background:white;border:1px solid var(--line);border-radius:12px;padding:14px}.tile span,.metric span{display:block;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}.tile b{display:block;font-size:18px;margin-top:5px}.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.metric{background:#f5f8fa;border-radius:10px;padding:12px;overflow-wrap:anywhere}.metric b{display:block;margin-top:6px;font-size:17px}.badge{display:inline-block;border-radius:25px;padding:6px 12px;font-size:13px;font-weight:750;background:#eaf0f5}.bad{background:#fff0f2;color:var(--red)}.good{background:#e5f5ef;color:#116649}.warn{background:#fff5dc;color:#815800}.notice{border:1px solid var(--line);background:#f6f9fc;padding:14px;border-radius:10px;margin:12px 0;overflow-wrap:anywhere}.notice.bad{border-color:#f3bfc7;background:#fff3f4;color:var(--red)}.drop{border:2px dashed #bccfdf;border-radius:12px;padding:22px;background:#fafcfe}input[type=file]{width:100%;margin:12px 0}input[type=text]{padding:10px;border:1px solid var(--line);border-radius:8px;width:100%;margin:8px 0 14px}table{width:100%;border-collapse:collapse;text-align:left}th{font-size:12px;color:var(--muted);text-transform:uppercase}td,th{padding:12px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}td{font-size:14px}details{margin-top:16px}summary{cursor:pointer;font-weight:650}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f9;padding:14px;border-radius:10px;font-size:12px;max-height:420px;overflow:auto}.scroll{overflow:auto}.files{overflow-wrap:anywhere}.steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:18px}.steps span{font-size:12px;border-radius:6px;padding:7px 10px;background:#eef2f5}.steps .done{background:#e5f5ef;color:#116649}.steps .hold{background:#fff5dc;color:#815800}#sync{font-size:12px}footer{font-size:12px;color:var(--muted);margin-top:24px}.linkbtn{border:0;background:none;padding:0;color:var(--blue);text-decoration:underline}.empty{padding:20px;color:var(--muted)}@media(max-width:950px){.grid{grid-template-columns:1fr}.fresh{grid-template-columns:repeat(3,1fr)}}@media(max-width:520px){main{padding:18px 12px}.panel{padding:18px}.metrics{grid-template-columns:repeat(2,1fr)}.fresh{grid-template-columns:repeat(2,1fr)}header{padding:16px}.bar{align-items:flex-start}h1{font-size:27px}}
+:root{--ink:#172c42;--muted:#64778b;--line:#dce5eb;--blue:#0969da;--teal:#087c72;--red:#b3263c}
+*{box-sizing:border-box}
+body{margin:0;background:#f3f6f8;color:var(--ink);font:14px/1.4 system-ui,sans-serif}
+button,input{font:inherit}button,a{touch-action:manipulation}
+button{cursor:pointer;border:1px solid var(--line);background:white;border-radius:7px;padding:7px 11px;color:var(--ink);font-weight:650}
+button:disabled{opacity:.5;cursor:not-allowed}button.primary{background:var(--blue);border-color:var(--blue);color:white}a{color:var(--blue)}
+header{background:#102b43;color:white;padding:10px max(18px,calc((100vw - 1544px)/2));display:flex;justify-content:space-between;align-items:center;gap:14px}
+header strong{font-size:21px}header small{display:block;color:#b4c9d8;font-size:11px}
+main{max-width:1580px;margin:auto;padding:14px 18px 28px}
+h1{font-size:25px;margin:0}h2{font-size:17px;margin:0 0 9px}h3{font-size:15px;margin:0}
+p{margin:4px 0 9px}.muted{color:var(--muted)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.bar h2{margin:0}
+.pagebar p{margin:2px 0 4px;font-size:12px}.pagebar{margin-bottom:10px}
+.grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:12px;align-items:start}
+.panel{background:white;border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px;min-width:0}
+.fresh{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:0;margin:0 0 12px;background:white;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.tile{padding:9px 12px;min-width:0;border-right:1px solid var(--line)}.tile:last-child{border-right:0}
+.tile span,.metric span{display:block;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.tile b{display:block;font-size:15px;margin-top:2px;white-space:nowrap}.tile small{font-size:11px}
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0}
+.metric{background:#f5f8fa;border-radius:6px;padding:8px;overflow-wrap:anywhere;min-width:0}
+.metric b{display:block;margin-top:3px;font-size:13px;font-weight:650;line-height:1.35;font-variant-numeric:tabular-nums}
+#health .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}#health p{font-size:12px;margin-bottom:0;overflow-wrap:anywhere}
+.badge{display:inline-block;border-radius:20px;padding:4px 9px;font-size:12px;font-weight:750;background:#eaf0f5}
+.bad{background:#fff0f2;color:var(--red)}.good{background:#e5f5ef;color:#116649}.warn{background:#fff5dc;color:#815800}
+.notice{border:1px solid var(--line);background:#f6f9fc;padding:9px 10px;border-radius:7px;margin:9px 0;overflow-wrap:anywhere;font-size:12px}
+.notice.bad{border-color:#f3bfc7;background:#fff3f4;color:var(--red)}
+.drop{border:1px dashed #bccfdf;border-radius:8px;padding:12px;background:#fafcfe}
+input[type=file]{width:100%;margin:8px 0;font-size:12px}input[type=file]::file-selector-button{padding:6px 8px;margin-right:8px;border:1px solid var(--line);border-radius:5px;background:white;color:var(--ink);cursor:pointer}
+input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:6px;width:100%;margin:5px 0 9px}
+.drop label{font-size:12px}.upload-panel>p{font-size:12px}.upload-panel>p:last-child{margin-bottom:0}
+table{width:100%;border-collapse:collapse;text-align:left}th{font-size:10px;color:var(--muted);text-transform:uppercase;background:#f8fafb;position:sticky;top:0;z-index:1}
+td,th{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}td{font-size:12px;line-height:1.4}
+details{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}summary{cursor:pointer;font-weight:650;font-size:12px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f9;padding:10px;border-radius:7px;font-size:11px;max-height:320px;overflow:auto}
+.scroll{overflow:auto;overscroll-behavior:contain}#recent{max-height:270px}#coverage{max-height:288px}#monitor details .scroll{max-height:300px}
+.files{overflow-wrap:anywhere;font-size:12px}.steps{display:flex;gap:4px;flex-wrap:wrap;margin-top:10px}
+.steps span{font-size:11px;border-radius:5px;padding:4px 7px;background:#eef2f5}.steps .done{background:#e5f5ef;color:#116649}.steps .hold{background:#fff5dc;color:#815800}
+#sync{font-size:11px}footer{font-size:11px;color:var(--muted);margin-top:10px}
+.linkbtn{border:0;background:none;padding:0;color:var(--blue);text-decoration:underline}.empty{padding:12px;color:var(--muted)}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+@media(max-width:1050px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.fresh{grid-template-columns:repeat(3,minmax(0,1fr))}.tile:nth-child(3n){border-right:0}.tile:nth-child(-n+3){border-bottom:1px solid var(--line)}.metrics{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:520px){main{padding:10px}.panel{padding:12px}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.fresh{grid-template-columns:repeat(2,minmax(0,1fr))}.tile:nth-child(3n){border-right:1px solid var(--line)}.tile:nth-child(2n){border-right:0}.tile:nth-child(-n+4){border-bottom:1px solid var(--line)}header{padding:10px 12px;gap:10px}.bar{align-items:flex-start}h1{font-size:23px}.tile{padding:8px 10px}button{min-height:36px}.linkbtn{min-height:28px}#monitor>.bar{flex-wrap:wrap}td,th{padding:7px 6px}}
 </style></head><body>
 <header><div><strong>Yipman</strong><small>DATA CENTER · Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
-<main><div class="bar"><div><h1>Data Center</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><button id="refresh">Refresh</button></div>
+<main><div class="bar pagebar"><div><h1>Data Center</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><button id="refresh">Refresh</button></div>
 <div id="globalError" role="alert"></div><div id="freshness" class="fresh"></div>
 <div class="grid"><div><section class="panel"><div class="bar"><h2>Batch monitor</h2><button id="follow" hidden>Follow current batch</button></div><div id="monitor" aria-live="polite">Loading current batch…</div></section>
 <section class="panel"><h2>Recent batches</h2><p class="muted">Select a batch to inspect its complete run history.</p><div id="recent" class="scroll">Loading…</div></section></div>
-<div><section class="panel"><h2>Upload new files</h2><p class="muted">Files selected together form one immutable batch.</p><div class="drop"><label for="files"><b>Select source files</b></label><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><label for="note" class="muted">Batch note (optional)</label><input id="note" type="text" placeholder="For example: October 9 movement"><button id="upload" class="primary">Upload &amp; start processing</button></div><div id="uploadStatus" role="status" class="notice">No files uploaded in this session.</div><p class="muted">To recover an existing batch, use its monitor. Uploading again creates a separate batch.</p></section>
+<div><section class="panel upload-panel"><h2>Upload new files</h2><p class="muted">Files selected together form one immutable batch.</p><div class="drop"><label for="files"><b>Select source files</b></label><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><label for="note" class="muted">Batch note (optional)</label><input id="note" type="text" placeholder="For example: October 9 movement"><button id="upload" class="primary">Upload &amp; start processing</button></div><div id="uploadStatus" role="status" class="notice">Existing batches keep their stored files. Upload only new files.</div><p class="muted">Existing batch? No re-upload needed. Recover it from the monitor.</p></section>
 <section class="panel"><h2>Service health</h2><div id="health">Loading…</div></section></div></div>
 <section class="panel"><h2>14-day completeness</h2><p class="muted">Completed days require canonical POS and MVT. Snapshot sources are not required daily.</p><div id="coverage" class="scroll">Loading…</div></section>
-<footer>Data Center DC-1 · Live server evidence · Times shown in your browser’s local time. A healthy worker does not by itself confirm publication.</footer></main>
+<footer>Data Center DC-2 · Compact layout · Live server evidence · Times shown in your browser’s local time. A healthy worker does not by itself confirm publication.</footer></main>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
