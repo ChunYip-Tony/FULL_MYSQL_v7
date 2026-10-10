@@ -480,11 +480,18 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                    ORDER BY file_id DESC"""
             )
             snap_by_source_date: dict[tuple[str,date], dict[str,Any]] = {}
+            latest_snapshots: dict[str, dict[str,Any]] = {}
             for row in cur.fetchall():
                 d = _health_file_date(row)
-                if d is None or d < start or d > today:
+                if d is None or d > today:
                     continue
-                key = (str(row.get('source_type') or ''), d)
+                source_type = str(row.get('source_type') or '')
+                previous = latest_snapshots.get(source_type)
+                if previous is None or d > previous['date']:
+                    latest_snapshots[source_type] = {'date':d, 'file':row.get('original_filename')}
+                if d < start:
+                    continue
+                key = (source_type, d)
                 if key not in snap_by_source_date:
                     snap_by_source_date[key] = dict(row)
 
@@ -582,25 +589,18 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                     'sources':sources,
                 })
 
-            latest: dict[str,Any] = {}
-            for label, source_type in labels.items():
-                dates = [d for (st,d) in snap_by_source_date if st == source_type]
-                last = max(dates) if dates else None
+            # Latest source dates are independent of the calendar's display window.
+            # Reuse the rows already read; no extra database query is needed.
+            latest: dict[str,Any] = {
+                label: latest_snapshots.get(source_type, {'date':None, 'file':None})
+                for label, source_type in labels.items()
+            }
+            for label, observations in (('POS',pos_days),('MVT',mvt_days)):
+                last = max(observations, key=lambda row: row['date']) if observations else None
                 latest[label] = {
-                    'date':last,
-                    'file':(
-                        snap_by_source_date[(source_type,last)].get('original_filename')
-                        if last else None
-                    ),
+                    'date':last['date'] if last else None,
+                    'file':last.get('original_filename') if last else None,
                 }
-            latest['POS'] = {
-                'date':max(pos_by_date) if pos_by_date else None,
-                'file':pos_by_date[max(pos_by_date)].get('original_filename') if pos_by_date else None,
-            }
-            latest['MVT'] = {
-                'date':max(mvt_by_date) if mvt_by_date else None,
-                'file':mvt_by_date[max(mvt_by_date)].get('original_filename') if mvt_by_date else None,
-            }
 
             missing_required_days = [
                 {
