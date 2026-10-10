@@ -1908,6 +1908,9 @@ _ORDERING_REVIEW_CACHE_AT: dict[str,float] = {}
 _ORDERING_REVIEW_REFRESHING: set[str] = set()
 _ORDERING_REVIEW_LAST_ERROR: dict[str,str] = {}
 _ORDERING_REVIEW_CACHE_TTL_SECONDS = 120.0
+# Startup requests fourteen delivery dates. Queue those expensive analyses
+# instead of allocating fourteen simultaneous store-wide query graphs.
+_ORDERING_REVIEW_REFRESH_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="ordering-review")
 
 
 def _ordering_review_cache_key(
@@ -2015,12 +2018,15 @@ def _request_ordering_review_refresh(
         if cache_key in _ORDERING_REVIEW_REFRESHING:
             return
         _ORDERING_REVIEW_REFRESHING.add(cache_key)
-    threading.Thread(
-        target=_ordering_review_refresh_worker,
-        args=(category,delivery_date,next_delivery_date,cache_key,best_available_delivery_evidence),
-        name=f"ordering-review-{delivery_date.isoformat()}",
-        daemon=True,
-    ).start()
+    try:
+        _ORDERING_REVIEW_REFRESH_EXECUTOR.submit(
+            _ordering_review_refresh_worker,
+            category,delivery_date,next_delivery_date,cache_key,best_available_delivery_evidence,
+        )
+    except Exception:
+        with _ORDERING_REVIEW_CACHE_LOCK:
+            _ORDERING_REVIEW_REFRESHING.discard(cache_key)
+        raise
 
 
 def cached_ordering_review(
