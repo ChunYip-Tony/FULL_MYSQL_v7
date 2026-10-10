@@ -1,5 +1,7 @@
 """Lifecycle tests using an isolated SQL database, never production inventory."""
 import ast
+from datetime import date
+from decimal import Decimal
 import importlib.util
 import json
 from pathlib import Path
@@ -12,9 +14,21 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).parent
 tree = ast.parse((ROOT/'quick_check_app.py').read_text())
-names = {'_latest_on_hand_file_id', 'expire_true_stock_for_new_oh', '_refresh_expired_true_stock'}
+names = {'_latest_on_hand_file_id', 'expire_true_stock_for_new_oh', '_refresh_expired_true_stock', '_actual_position'}
 quick = types.ModuleType('quick_check_app')
 quick._table_exists = lambda cur, name: True
+quick.Any = object
+coverage = types.ModuleType('data_coverage')
+coverage.source_data_days = lambda *args, **kwargs: []
+clock = types.ModuleType('business_clock')
+clock.movement_expected_through_date = lambda: date(2026, 10, 4)
+overrides = types.ModuleType('manual_overrides')
+overrides.confirmed_operational_uom_basis = lambda *args: None
+position_spec = importlib.util.spec_from_file_location('stock_position_test_target', ROOT/'inventory_position.py')
+position = importlib.util.module_from_spec(position_spec)
+with patch.dict(sys.modules, {'data_coverage': coverage, 'business_clock': clock, 'manual_overrides': overrides}):
+    position_spec.loader.exec_module(position)
+quick.rollforward_position = position.rollforward_position
 exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names], type_ignores=[]), 'stock-lifecycle', 'exec'), quick.__dict__)
 db_stub = types.ModuleType('db')
 db_stub.db_conn = lambda: None
@@ -62,6 +76,7 @@ class StockRecordTests(unittest.TestCase):
             CREATE TABLE dumping_discrepancy_queue(discrepancy_id INTEGER PRIMARY KEY,source_true_stock_id INTEGER,queue_status TEXT,resolved_at TEXT,resolved_by TEXT,resolution_note TEXT);
             CREATE TABLE true_stock_record_clearance(true_stock_id INTEGER PRIMARY KEY,cleared_at TEXT DEFAULT CURRENT_TIMESTAMP,cleared_by TEXT,clear_note TEXT);
             CREATE TABLE pipeline_run(pipeline_run_id INTEGER PRIMARY KEY,batch_id INTEGER,processing_status TEXT,completed_at TEXT,detail_json TEXT,pipeline_name TEXT,stage_name TEXT);
+            CREATE TABLE movement_history(file_id INTEGER,posting_date TEXT,movement_type TEXT,base_uom_code TEXT,entry_uom_code TEXT,base_quantity NUMERIC,entry_quantity NUMERIC,article_id INTEGER,family_id INTEGER);
             INSERT INTO ingest_file VALUES(1,'oh-old.xls','2026-09-28 10:00:00',NULL,'2026-09-28','on_hand','INGESTED',0,NULL,1);
             INSERT INTO inventory_observation VALUES(1,'ON_HAND');
             INSERT INTO product_family VALUES(1,'Seafood item');
@@ -70,6 +85,8 @@ class StockRecordTests(unittest.TestCase):
             INSERT INTO manual_true_stock VALUES(3,1,'1361679','FAMILY',NULL,NULL,60,'LB',50,-10,'ACTIVE','2026-10-04 12:00:00',NULL,'TEST',NULL,NULL,1);
             INSERT INTO dumping_discrepancy_queue VALUES(1,1,'PENDING',NULL,NULL,NULL);
             INSERT INTO dumping_discrepancy_queue VALUES(2,2,'PENDING',NULL,NULL,NULL);
+            ALTER TABLE manual_true_stock ADD COLUMN article_id INTEGER;
+            ALTER TABLE manual_true_stock ADD COLUMN upc_id INTEGER;
         ''')
         self.raw.commit()
         self.patch_db = patch.object(records, 'db_conn', lambda: Connection(self.raw))
@@ -102,7 +119,7 @@ class StockRecordTests(unittest.TestCase):
         records.clear_stock_record(3, 'TEST')
         self.raw.execute("INSERT INTO ingest_file VALUES(2,'oh-new.xls','2026-10-10 08:00:00',NULL,'2026-10-10','on_hand','INGESTED',0,NULL,2)")
         self.raw.execute("INSERT INTO inventory_observation VALUES(2,'ON_HAND')")
-        self.raw.execute("INSERT INTO manual_true_stock VALUES(4,1,'1361680','FAMILY',NULL,NULL,25,'LB',30,5,'ACTIVE','2026-10-10 09:00:00',NULL,'TEST',NULL,NULL,1)")
+        self.raw.execute("INSERT INTO manual_true_stock VALUES(4,1,'1361680','FAMILY',NULL,NULL,25,'LB',30,5,'ACTIVE','2026-10-10 09:00:00',NULL,'TEST',NULL,NULL,1,NULL,NULL)")
         self.raw.commit()
         result = records.list_stock_records()
         self.assertEqual([r['true_stock_id'] for r in result['rows']], [4])
@@ -141,6 +158,58 @@ class StockRecordTests(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError): records.clear_stock_record(1, 'TEST')
         self.assertEqual(self.raw.execute('SELECT queue_status FROM dumping_discrepancy_queue WHERE discrepancy_id=1').fetchone()[0], 'PENDING')
         self.assertEqual(records.list_stock_records()['counts']['pending'],3)
+
+    def test_effective_stock_rolls_forward_canonical_mvt_and_refreshes(self):
+        # Same-day rows and rows for a noncanonical duplicate file are excluded.
+        self.raw.executemany('INSERT INTO movement_history VALUES(?,?,?,?,?,?,?,?,?)', [
+            (5,'2026-10-04','101','LB','LB',1000,1000,10,1),
+            (5,'2026-10-05','101','LB','LB',20,20,10,1),
+            (5,'2026-10-05','251','LB','LB',-7,-7,10,1),
+            (5,'2026-10-05','103','LB','LB',200,200,10,1),
+            (99,'2026-10-05','101','LB','LB',999,999,10,1),
+            (5,'2026-10-05','101','LB','LB',500,500,99,99),
+        ])
+        self.raw.commit()
+        days = [{'date':date(2026,10,5),'file_id':5}]
+        with patch.object(position, 'source_data_days', return_value=days), patch.object(position, 'movement_expected_through_date', return_value=date(2026,10,5)):
+            result = {r['true_stock_id']:r for r in records.list_stock_records()['rows']}
+            self.assertEqual(result[1]['true_stock_quantity'], 0)
+            self.assertEqual(result[1]['effective_stock']['quantity'], Decimal('13'))
+            self.assertEqual(result[2]['effective_stock']['quantity'], Decimal('53'))
+            self.assertEqual(result[1]['effective_stock']['movement_delta'], Decimal('13'))
+            self.assertEqual(result[1]['effective_stock']['movement_through_date'], date(2026,10,5))
+            # A cleared review still uses the active anchor in History.
+            records.clear_stock_record(1, 'TEST')
+            cleared = records.list_stock_records(view='history')['rows'][0]
+            self.assertEqual(cleared['effective_stock']['quantity'], Decimal('13'))
+            self.raw.execute("INSERT INTO movement_history VALUES(5,'2026-10-05','551','LB','LB',-15,-15,10,1)")
+            self.raw.commit()
+            updated = records.list_stock_records(view='history')['rows'][0]
+            self.assertEqual(updated['effective_stock']['quantity'], Decimal('-2'))
+            self.assertEqual(updated['true_stock_quantity'], 0)
+
+    def test_effective_stock_blocks_gaps_uom_mismatch_and_upc_scope(self):
+        days = [{'date':date(2026,10,5),'file_id':5}]
+        with patch.object(position, 'source_data_days', return_value=days), patch.object(position, 'movement_expected_through_date', return_value=date(2026,10,6)):
+            p = records.list_stock_records()['rows'][0]['effective_stock']
+            self.assertIsNone(p['quantity'])
+            self.assertIn('MOVEMENT_DAILY_COVERAGE_GAP', p['blockers'])
+        self.raw.execute("INSERT INTO movement_history VALUES(5,'2026-10-05','101','EA','EA',10,10,10,1)")
+        self.raw.execute("UPDATE manual_true_stock SET scope_type='UPC',upc_id=10 WHERE true_stock_id=1")
+        self.raw.commit()
+        with patch.object(position, 'source_data_days', return_value=days), patch.object(position, 'movement_expected_through_date', return_value=date(2026,10,5)):
+            rows = {r['true_stock_id']:r for r in records.list_stock_records()['rows']}
+            self.assertIsNone(rows[1]['effective_stock']['quantity'])
+            self.assertIn('UPC_SCOPE_HAS_NO_EXACT_MOVEMENT_KEY', rows[1]['effective_stock']['blockers'])
+            self.assertIsNone(rows[2]['effective_stock']['quantity'])
+            self.assertIn('MOVEMENT_UOM_MISMATCH', rows[2]['effective_stock']['blockers'])
+
+    def test_replaced_counts_are_not_reported_as_current_stock(self):
+        self.raw.execute("UPDATE manual_true_stock SET override_status='SUPERSEDED_BY_OH_UPLOAD' WHERE true_stock_id=1")
+        self.raw.commit()
+        row = records.list_stock_records(view='history')['rows'][0]
+        self.assertEqual(row['true_stock_quantity'], 0)
+        self.assertIsNone(row['effective_stock'])
 
 
 if __name__ == '__main__': unittest.main()

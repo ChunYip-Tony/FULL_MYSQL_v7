@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from db import db_conn
-from quick_check_app import _table_exists, _refresh_expired_true_stock
+from quick_check_app import _table_exists, _refresh_expired_true_stock, _actual_position
 
 _schema_ready = False
 _schema_lock = threading.Lock()
@@ -88,7 +88,7 @@ def list_stock_records(view='pending', limit=100, before=None, query='', kind='a
                 where += ' AND m.true_stock_id<%s'
                 params.append(int(before))
             cur.execute(f"""SELECT m.true_stock_id,m.family_id,m.main_article_number,
-                pf.family_description AS item_name,m.scope_type,m.article_number,m.ean_upc,
+                pf.family_description AS item_name,m.scope_type,m.article_id,m.upc_id,m.article_number,m.ean_upc,
                 m.true_stock_quantity,m.uom_code,m.system_oh_quantity,m.discrepancy_quantity,
                 m.override_status,m.submitted_at,m.count_note,m.submitted_by,
                 m.superseded_at,m.superseded_by_oh_file_id,
@@ -104,6 +104,12 @@ def list_stock_records(view='pending', limit=100, before=None, query='', kind='a
                 row['dumping_quantity'] = max(Decimal('0'), Decimal(str(row.get('discrepancy_quantity') or 0)))
                 row['can_clear'] = row['record_status'] in {'PENDING_DUMPING', 'RECORDED'}
                 row['cleared_at'] = row.get('cleared_at') or (row.get('resolved_at') if row.get('queue_status') == 'RESOLVED' else None)
+                # Use the same canonical-MVT rollforward as Quick Check and item
+                # cards. Cleared review tasks retain their ACTIVE stock anchor;
+                # replaced/cancelled anchors must never look like current stock.
+                row['effective_stock'] = (
+                    _actual_position(cur, row) if row['override_status'] == 'ACTIVE' else None
+                )
             conn.commit()
             return {'rows': rows, 'counts': counts, 'total': total, 'latest_oh': latest_oh,
                     'next_before': rows[-1]['true_stock_id'] if len(fetched)>limit else None,
