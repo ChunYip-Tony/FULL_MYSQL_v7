@@ -659,14 +659,8 @@ def article_manual_pos_alias_index(cur) -> dict[str, Any]:
         sheet_key = _article_manual_sheet_key(sheet.get("sheet_name"))
         if sheet_key not in ARTICLE_MANUAL_POS_TABS:
             continue
-        cur.execute(
-            """SELECT raw_payload
-               FROM raw_article_manual
-               WHERE sheet_id=%s
-               ORDER BY source_row_number""",
-            (int(sheet["sheet_id"]),),
-        )
-        for raw_row in cur.fetchall():
+        from raw_pages import iter_raw_rows
+        for raw_row in iter_raw_rows(cur, 'raw_article_manual', int(sheet['sheet_id'])):
             payload = raw_row.get("raw_payload")
             if isinstance(payload, (bytes, bytearray)):
                 payload = payload.decode("utf-8", errors="replace")
@@ -1068,3 +1062,4 @@ def diagnose_coverage_backfill(batch_id: int) -> dict[str, Any]:
             }
         finally:
             cur.close()
+

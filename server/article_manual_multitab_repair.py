@@ -214,14 +214,8 @@ def _load_roster(cur, preferred_batch_id: int | None = None) -> tuple[list[dict[
                 continue
             stats['sheets_scanned'] += 1
 
-            cur.execute(
-                """SELECT raw_id,source_row_number,raw_payload
-                   FROM raw_article_manual
-                   WHERE sheet_id=%s AND source_row_number>%s
-                   ORDER BY source_row_number""",
-                (sh['sheet_id'], sh['header_row_number']),
-            )
-            for rr in cur.fetchall():
+            from raw_pages import iter_raw_rows
+            for rr in iter_raw_rows(cur, 'raw_article_manual', sh['sheet_id'], sh['header_row_number']):
                 payload = _json_obj(rr['raw_payload'])
                 raw_upc = _get(payload, colmap, 'upc')
                 source_upc = _digits_identifier(raw_upc)
@@ -676,3 +670,4 @@ def alias_relation_self_test() -> dict[str, Any]:
         '75539372208->753393722089': None,
     }
     return {'pass': tests == expected, 'observed': tests, 'expected': expected}
+

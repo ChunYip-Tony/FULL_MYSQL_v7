@@ -575,7 +575,7 @@ def _printed_timestamp(rows: list[dict[str, Any]]) -> datetime | None:
     return None
 
 
-def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
+def _process_sales(cur, batch_id: int, f: dict[str, Any], *, article_manual_index=None) -> int:
     start = f.get('header_period_start_date') or f.get('coverage_start_date')
     end = f.get('header_period_end_date') or f.get('coverage_end_date')
     if not start or not end:
@@ -587,11 +587,12 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any]) -> int:
     inserted = 0
     # Build once per POS file. RAW UPC / 249 product code resolves first;
     # Article Manual verifies or fills identity and never contributes quantity.
-    article_manual_index = article_manual_pos_alias_index(cur)
+    if article_manual_index is None:
+        article_manual_index = article_manual_pos_alias_index(cur)
     cur.execute('SELECT sheet_id FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
-        cur.execute("SELECT raw_id,source_row_number,raw_payload FROM raw_sales_by_price_type WHERE sheet_id=%s ORDER BY source_row_number", (sh['sheet_id'],))
-        rows = cur.fetchall()
+        from raw_pages import iter_raw_rows
+        rows = iter_raw_rows(cur, 'raw_sales_by_price_type', sh['sheet_id'])
         current_dept = None
         for rr in rows:
             p = _j(rr['raw_payload'])
@@ -705,11 +706,14 @@ def _backfill_recent_pos_history(
     rows_processed=0
     source_batches:set[int]=set()
     file_ids:list[int]=[]
+    # This loop changes observations only, so manual identity authority is
+    # stable for all files in the same transaction. Avoid rescanning per file.
+    article_manual_index = article_manual_pos_alias_index(cur) if files else {}
     for row in files:
         source_batch_id=int(row['batch_id'])
         source_batches.add(source_batch_id)
         file_ids.append(int(row['file_id']))
-        rows_processed += _process_sales(cur, source_batch_id, row)
+        rows_processed += _process_sales(cur, source_batch_id, row, article_manual_index=article_manual_index)
 
     return {
         'lookback_days': days,
@@ -3572,18 +3576,22 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             #  - recognizes conservative POS-shortened barcode aliases
             #  - consumes explicit UM on roster tabs such as Frozen pack
             #  - never accepts one-digit substitutions as automatic identity
+            report('PHASE3_MULTITAB_MANUAL_REPAIR')
             multitab_manual_repair = repair_article_manual_multitab(cur, batch_id)
+            report('PHASE3_CROSS_TAB_SIGNATURE_REPAIR')
             cross_tab_signature_repair = repair_cross_tab_signature(cur, batch_id)
 
             # Evidence-only product-master repair:
             #  - active sold UPC identity from exact authoritative evidence
             #  - exact UPC-specific Selling UOM evidence
             #  - late family/cost mirror backfill
+            report('PHASE3_ACTIVE_PRODUCT_REPAIR')
             active_master_repair = repair_active_product_master(cur, batch_id)
 
             # v7.0.16: UOM repair is CURRENT-ACTIVE ONLY.
             # A target UPC must have positive POS sales in the latest up-to-28
             # valid completed POS data days. Historical-only UPCs are untouched.
+            report('PHASE3_ACTIVE_28D_UOM_REPAIR')
             active_28d_uom_repair = repair_active_28d_uom(cur, batch_id)
             report('PHASE3_IDENTITY_UOM_REPAIR_READY')
 
@@ -3593,6 +3601,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             # v7.0.42: normalize historical/current company cost UOM semantics
             # before current-active cost repair. Frozen uses item BUN; Live/Fresh
             # uses the source-level LB rule; TX Seafood ABC is retired.
+            report('PHASE3_COMPANY_COST_UOM_REPAIR')
             company_cost_uom_repair = repair_company_cost_uom_observations(cur)
 
             # v7.0.19: cost repair/audit is CURRENT-ACTIVE ONLY.
@@ -3601,6 +3610,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             #   2) explicit official Live/Fresh/Frozen report cost
             #   3) explicit OH cost + explicit supported cost UOM
             # Historical-only UPCs are not targeted.
+            report('PHASE3_CURRENT_ACTIVE_COST_REPAIR')
             current_active_cost_repair = repair_current_active_cost(cur, batch_id)
             report('PHASE3_COST_REPAIR_READY')
 
@@ -3831,3 +3841,4 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+

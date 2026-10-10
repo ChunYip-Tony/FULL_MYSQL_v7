@@ -56,6 +56,18 @@ def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=No
         'heartbeat_at':datetime.utcnow().isoformat()+'Z',
         'heartbeat_epoch':int(time.time()),
     }
+    # Linux/container memory evidence survives a worker restart in run detail.
+    try:
+        import resource
+        payload['worker_peak_rss_kib']=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        for key,path in (
+            ('worker_cgroup_memory_bytes','/sys/fs/cgroup/memory.current'),
+            ('worker_cgroup_memory_limit','/sys/fs/cgroup/memory.max'),
+        ):
+            if Path(path).exists():
+                payload[key]=Path(path).read_text().strip()
+    except (OSError,ImportError):
+        pass
     if stage:
         payload['phase3_stage']=stage
         # Row-count data belongs to the stage that emitted it. Clear it when a
@@ -695,7 +707,7 @@ def finish(run_id:int,status:str,detail:dict,error_count:int=0):
                SET processing_status=%s,
                    completed_at=CURRENT_TIMESTAMP(6),
                    error_count=%s,
-                   detail_json=%s
+                   detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),CAST(%s AS JSON))
                WHERE pipeline_run_id=%s
                  AND code_version=%s
                  AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
@@ -1092,3 +1104,4 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+

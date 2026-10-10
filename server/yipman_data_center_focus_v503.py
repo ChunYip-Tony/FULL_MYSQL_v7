@@ -81,10 +81,8 @@ _PATCH=r'''
       const raw=String(b.processing_status||'').toUpperCase(),run=b.active_pipeline_run_id||null;
       if(raw!=='PHASE2C_READY'||run){removeRecovery();return}
       const age=histAge(b.batch_id),box=ensureRecovery(b.batch_id,age);if(!box)return;
-      if(age>=45000&&!sessionStorage.getItem(retryKey(b.batch_id))){
-        sessionStorage.setItem(retryKey(b.batch_id),'attempting');
-        await resume(b.batch_id,box,true);
-      }
+      // Polling is read-only. Worker owns automatic recovery; reloading a
+      // page must not reset the retry budget and create another run.
     }catch(_e){}finally{probeBusy=false}
   }
   window.addEventListener('yd-dc503-refresh',()=>setTimeout(probe,250));
@@ -100,3 +98,4 @@ def inject_data_center_focus_v503(html: str) -> str:
     if _MARKER in html:
         return html
     return html.replace('</body>', _PATCH + '</body>', 1)
+

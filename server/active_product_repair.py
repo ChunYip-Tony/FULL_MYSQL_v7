@@ -483,14 +483,8 @@ def _article_manual_candidates(cur, target_keys: set[str]) -> dict[str, list[dic
         if 'upc' not in colmap or ('article' not in colmap and 'main_article' not in colmap):
             continue
 
-        cur.execute(
-            """SELECT raw_id,source_row_number,raw_payload
-               FROM raw_article_manual
-               WHERE sheet_id=%s AND source_row_number>%s
-               ORDER BY source_row_number""",
-            (sh['sheet_id'], sh['header_row_number']),
-        )
-        for rr in cur.fetchall():
+        from raw_pages import iter_raw_rows
+        for rr in iter_raw_rows(cur, 'raw_article_manual', sh['sheet_id'], sh['header_row_number']):
             payload = _json_obj(rr['raw_payload'])
             ean = _numeric_identifier(_get(payload, colmap, 'upc'))
             key = _numeric_key(ean)
@@ -1125,3 +1119,4 @@ def repair_active_product_master(cur, batch_id: int) -> dict[str, Any]:
         'uom': uom,
         'cost_backfill': cost,
     }
+

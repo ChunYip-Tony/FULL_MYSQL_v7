@@ -2014,6 +2014,22 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
             )
             run_number=int((cur.fetchone() or {}).get('next_run') or 1)
 
+            # Match the worker's persistent per-version recovery budget. Old
+            # browser tabs must not reset it with repeated resume requests.
+            cur.execute(
+                """SELECT COUNT(*) AS attempts FROM pipeline_run
+                   WHERE batch_id=%s AND pipeline_name=%s
+                     AND stage_name='PHASE3_RERUN' AND code_version=%s
+                     AND processing_status IN
+                         ('FAILED','FAILED_QA','QA_HOLD','ABORTED','PAUSED','COMPLETED')""",
+                (bid,API_PIPELINE,VERSION),
+            )
+            if int((cur.fetchone() or {}).get('attempts') or 0)>=3:
+                raise HTTPException(409,detail={
+                    'status':'BLOCKED','reason':'PHASE3_RECOVERY_EXHAUSTED',
+                    'batch_id':bid,'code_version':VERSION,
+                })
+
             cur.execute(
                 """INSERT INTO pipeline_run
                    (batch_id,pipeline_name,stage_name,run_number,
@@ -5330,3 +5346,4 @@ def quick_check(upc:str,authorization: Annotated[str|None,Header()]=None):
             raise HTTPException(404,'Quick Check UPC not found')
         cur.close()
     return json.loads(json.dumps(row,default=j))
+
