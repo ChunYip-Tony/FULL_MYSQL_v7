@@ -187,7 +187,7 @@ YIPMAN_DESKTOP_JS = r"""
   search.addEventListener('input',e=>{clearTimeout(D.quickSearchTimer);const q=e.target.value.trim();D.quickSearchQuery=q;D.quickSearchTimer=setTimeout(()=>{if(q.length===0||q.length>=2){if(D.mod!=='quick')openMod('quick');else loadQuick(q)}},500)});
   document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();search.focus();search.select()}});
  }
- function openMod(m){D.mod=m;$$('.mod','#ydesk').forEach(x=>x.classList.toggle('active',x.id==='yd-'+m));$$('.navbtn','#ydesk').forEach(x=>x.classList.toggle('active',x.dataset.m===m));if(m==='quick')loadQuick($('#ydSearch').value.trim());if(m==='order')loadOrder();if(m==='price')loadPrice();if(m==='performance')loadPerformance();if(m==='pi')loadPI();if(m==='data')loadData();history.replaceState({yipdesktop:true,view:m},'', '#'+m);window.scrollTo({top:0})}
+ function openMod(m){if(m==='data'){location.assign('/app/data-center');return}D.mod=m;$$('.mod','#ydesk').forEach(x=>x.classList.toggle('active',x.id==='yd-'+m));$$('.navbtn','#ydesk').forEach(x=>x.classList.toggle('active',x.dataset.m===m));if(m==='quick')loadQuick($('#ydSearch').value.trim());if(m==='order')loadOrder();if(m==='price')loadPrice();if(m==='performance')loadPerformance();if(m==='pi')loadPI();if(m==='data')loadData();history.replaceState({yipdesktop:true,view:m},'', '#'+m);window.scrollTo({top:0})}
  function topStatus(){
    api('/v1/backoffice/data-health?days=14').then(dh=>{
      const latest=dh.latest||{};
@@ -666,3 +666,4 @@ async function loadPerformance(){const root=$('#yd-performance');if(!root.datase
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
 """
+

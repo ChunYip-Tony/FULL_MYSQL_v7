@@ -353,6 +353,13 @@ def _browser_upload_guard(request: Request) -> None:
 def _web_upload_filename_ok(filename: str) -> bool:
     return Path(str(filename or '')).suffix.lower() in WEB_UPLOAD_EXTENSIONS
 
+@app.get('/app/data-center',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/data-center/',response_class=HTMLResponse,include_in_schema=False)
+def standalone_data_center():
+    from data_center_app import DATA_CENTER_HTML
+    return HTMLResponse(DATA_CENTER_HTML,headers={'Cache-Control':'no-store'})
+
+
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/quick-check',response_class=HTMLResponse,include_in_schema=False)
