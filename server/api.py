@@ -74,6 +74,8 @@ from clearance import (
 )
 from version import VERSION
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
+from mobile_pricing import router as mobile_pricing_router
+app.include_router(mobile_pricing_router)
 
 @app.on_event("startup")
 def _warm_mobile_home_summary_cache():
