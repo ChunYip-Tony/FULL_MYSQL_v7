@@ -2,13 +2,22 @@ from __future__ import annotations
 
 """Durable shared persistence for complete App Ready generations."""
 import json
-from dataclasses import asdict
+from dataclasses import fields, is_dataclass
 from typing import Any
 from db import db_conn
 
 def _json_default(value: Any):
+    if is_dataclass(value) and not isinstance(value,type):
+        return {field.name:getattr(value,field.name) for field in fields(value)}
     if hasattr(value,"isoformat"): return value.isoformat()
     return str(value)
+
+def snapshot_json(snapshot)->str:
+    # asdict recursively copies the complete graph, duplicating the shared
+    # ordering/pricing sections and decision indexes before JSON encoding.
+    # Let the encoder traverse the original graph instead. This preserves the
+    # durable JSON contract without a second, potentially huge object graph.
+    return json.dumps(snapshot,default=_json_default,separators=(",",":"))
 
 def ensure_schema(conn)->None:
     cur=conn.cursor()
@@ -20,7 +29,7 @@ def _insert_generation(cur,snapshot,payload):
     cur.execute("""INSERT INTO yipman_app_ready_generation (build_id,source_batch_id,data_through,completed_at,build_ms,snapshot_json) VALUES (%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE source_batch_id=VALUES(source_batch_id),data_through=VALUES(data_through),completed_at=VALUES(completed_at),build_ms=VALUES(build_ms),snapshot_json=VALUES(snapshot_json)""",(snapshot.build_id,snapshot.source_batch_id,snapshot.data_through,snapshot.completed_at,int(round(snapshot.build_ms or 0)),payload))
 
 def persist_complete_snapshot(snapshot)->None:
-    payload=json.dumps(asdict(snapshot),default=_json_default,separators=(",",":"))
+    payload=snapshot_json(snapshot)
     with db_conn() as conn:
         ensure_schema(conn);cur=conn.cursor()
         try:
@@ -31,7 +40,7 @@ def persist_complete_snapshot(snapshot)->None:
 
 def persist_complete_snapshot_if_active(snapshot,expected_active_build_id:str)->bool:
     """Activate snapshot only if ACTIVE still equals the generation it was derived from."""
-    payload=json.dumps(asdict(snapshot),default=_json_default,separators=(",",":"))
+    payload=snapshot_json(snapshot)
     with db_conn() as conn:
         ensure_schema(conn);cur=conn.cursor(dictionary=True)
         try:
