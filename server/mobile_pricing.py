@@ -202,7 +202,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
         cur = conn.cursor(dictionary=True)
         try:
             cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
-            all_rows = cur.fetchall()
+            all_rows = [r for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None]
             categories = {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()}
             for fid, cat in (overrides or {}).items():
                 if int(fid) in categories:
@@ -285,7 +285,13 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         cached = _cache.get(key)
         if cached and time.monotonic() - cached[0] < 120:
             return cached[1]
-    result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit, custom))
+    try:
+        result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit, custom))
+    except Exception as exc:
+        import traceback
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        # Bounded code location only: never expose SQL, credentials or row data.
+        raise HTTPException(503, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
     with _lock:
         _cache[key] = (time.monotonic(), result)
         _cache.move_to_end(key)
