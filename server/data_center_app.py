@@ -96,6 +96,7 @@ main{max-width:none;padding:8px 12px 10px}header{padding:6px 12px}.panel{margin-
  .grid #recent{flex:1;min-height:0;max-height:none}
  #monitor{height:100%;display:flex;flex-direction:column}#monitor>*{flex:none}
  #monitor>.qa-holds[open]{flex:1;min-height:240px;display:flex;flex-direction:column}
+ .qa-holds[open]::details-content{display:contents}
  .qa-holds>summary,.qa-reasons,.qa-holds-body>p{flex:none}
  .qa-holds-body{flex:1;min-height:0;display:flex;flex-direction:column}
  .grid #monitor .qa-holds .scroll{flex:1;min-height:70px;max-height:none}
