@@ -106,6 +106,74 @@ main{max-width:none;padding:8px 12px 10px}header{padding:6px 12px}.panel{margin-
 
 .page-actions a{border:1px solid #36744a;padding:8px 10px;text-decoration:none;font-size:14px;white-space:nowrap}
 .publication-panel{flex:none}.publication-panel h2{font-size:16px}.publish-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.publish-time{font-size:12px;color:var(--muted);margin:4px 0 8px}.publish-dates{display:grid;grid-template-columns:1fr 1fr;gap:7px}.publish-dates span{font-size:12px;color:var(--muted);display:block}.publish-dates b{font-size:17px}.publish-counts{font-size:13px;color:var(--muted);margin-top:7px}.publish-files{font-size:13px;color:#b1ffc2;overflow-wrap:anywhere}.publish-files div{padding:5px 0;border-top:1px solid var(--line)}.publication-panel details{margin-top:7px;padding-top:6px}.publication-panel summary{font-size:13px}.publish-empty{font-size:14px;color:var(--muted)}.coverage-day-detail .day-files{grid-template-columns:58px minmax(0,1fr);gap:7px 9px}.coverage-day-detail .day-files b{white-space:nowrap;overflow-wrap:normal;color:#b1ffc2;font-size:12px}.coverage-day-detail>summary{font-size:13px;line-height:1.5}.coverage-day-detail .day-files span{font-size:13px;line-height:1.5}
+
+/* DC-10: fit the CSS viewing window, including OS/browser display scaling. */
+header>div,main>.grid>div{min-width:0}
+header{flex-wrap:wrap}
+header small{overflow-wrap:anywhere}
+#monitor>.metrics{grid-template-columns:repeat(6,minmax(0,1fr))}
+.metric>b{overflow-wrap:normal;word-break:normal}
+#recent table{width:100%;table-layout:fixed}
+#recent th:first-child,#recent td:first-child{min-width:0;width:14%}
+#recent th:nth-child(2){width:43%}
+#recent th:nth-child(3){width:28%}
+#recent th:nth-child(4){width:15%}
+#recent th,#recent td{min-width:0;overflow-wrap:anywhere}
+#recent td:nth-child(3){min-width:0}
+@media(min-width:801px){
+ body{height:100dvh;display:flex;flex-direction:column;overflow:hidden;font-size:clamp(12px,.85vw,15px)}
+ header{flex:none;padding:5px 10px;gap:4px 10px;min-height:36px}
+ header strong{font-size:clamp(16px,1.2vw,21px)}
+ header small{font-size:12px}
+ main{width:100%;flex:1;min-height:0;display:flex;flex-direction:column;padding:6px 10px}
+ main>.pagebar,main>#globalError,main>.load-status,main>.fresh,main>footer{flex:none}
+ .pagebar{flex-wrap:wrap;gap:4px 8px}
+ .pagebar>div:first-child{gap:8px}
+ h1,.batch-title h2{font-size:clamp(17px,1.25vw,21px)}
+ h2{font-size:clamp(15px,1vw,18px)}
+ .panel{padding:9px}
+ .fresh{margin-bottom:6px}.tile{padding:5px 7px}
+ .tile b{font-size:clamp(13px,1vw,17px)}
+ .tile>span,.tile small,.metric>span{font-size:11px}
+ .metric{padding:6px}.metric>b{font-size:clamp(15px,1.1vw,20px)}
+ .files,td,.activity-head,.activity-lines,.panel>p{font-size:13px}
+ .load-status,#sync,.badge,.steps span,summary,.page-actions button,.page-actions a{font-size:12px}
+ .page-actions button,.page-actions a{min-height:30px;padding:5px 8px}
+ main>.grid{flex:1;min-height:0;align-items:stretch;overflow:hidden}
+ .grid>div:first-child{min-height:0;overflow:auto;overscroll-behavior:contain}
+ .grid>div:last-child{min-height:0;overflow:auto;overscroll-behavior:contain}
+ .monitor-panel,.recent-panel{min-height:0}
+ .recent-panel{display:flex;flex-direction:column}
+ .grid #recent{flex:1;min-height:0;max-height:45dvh}
+ .coverage-panel{min-height:0}
+ #monitor{height:auto}
+ #monitor>.qa-holds[open]{min-height:0}
+ .calendar-day{padding:4px 1px}.calendar-day b{font-size:14px}
+ footer{margin-top:4px;font-size:10px}
+}
+@media(min-width:1100px){
+ .grid{grid-template-columns:minmax(0,1.5fr) minmax(0,.9fr) minmax(0,1.1fr);gap:8px}
+ .grid>div:first-child{display:contents}
+ .grid>div:last-child{display:flex;flex-direction:column;gap:8px;grid-column:2;grid-row:1}
+ .monitor-panel{grid-column:1;grid-row:1;height:100%;overflow:auto}
+ .recent-panel{grid-column:3;grid-row:1;height:100%;overflow:hidden}
+ .panel{margin-bottom:0}
+ .grid #recent{max-height:none;overflow:auto}
+ #recent td,#recent th,.recent-files{font-size:12px;padding:5px}
+ .publication-panel h2,.coverage-heading h2{font-size:15px}
+ .publish-dates b{font-size:15px}
+}
+@media(min-width:801px) and (max-width:1099px){
+ .grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr)}
+ .fresh{grid-template-columns:repeat(3,minmax(0,1fr))}
+ #monitor>.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .activity.terminal{gap:5px}
+}
+@media(max-width:800px){
+ header{height:auto}.pagebar{flex-wrap:wrap}
+ #monitor>.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+
 </style></head><body>
 <header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>YipMan Work DataCenter</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
 <main><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><a href="/app/stock-records">Stock Records</a><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
@@ -115,7 +183,7 @@ main{max-width:none;padding:8px 12px 10px}header{padding:6px 12px}.panel{margin-
 <div><section class="panel upload-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload files</h2><div class="drop"><label for="files"><b>Select source files</b></label><div class="upload-controls"><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><button id="upload" class="primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload &amp; process</button></div><details><summary>Batch note (optional)</summary><label for="note" hidden>Batch note</label><input id="note" type="text" placeholder="For example: October 9 movement"></details></div><div id="uploadStatus" role="status" class="notice"></div><p class="muted">Existing files are saved. No re-upload needed.</p></section>
 <section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
 <section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div></div>
-<footer>YipMan Work DataCenter DC-9 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
+<footer>YipMan Work DataCenter DC-10 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
