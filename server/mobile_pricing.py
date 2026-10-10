@@ -156,18 +156,47 @@ def category_index(cur, rows, today):
     global _category_cache
     if time.monotonic() - _category_cache[0] < 300:
         return _category_cache[1]
-    from webapp_v2_runtime import _family_receipt_events_bulk
+    from data_coverage import source_data_days
+    from business_clock import completed_through_date
+    from receipt_semantics import physical_receipt_stage_rows
     fids = {int(r['family_id']) for r in rows if r.get('family_id')}
-    receipts = _family_receipt_events_bulk(cur, fids, data_day_limit=90)
+    # Category classification needs dates, not every raw receipt payload in
+    # the whole store. Aggregate only the physical receipt evidence columns.
+    days = source_data_days(cur, 'movement', limit=90, up_to=completed_through_date())
+    canonical = {d['date']:int(d['file_id']) for d in days}
+    dates_by_family = {}
+    if canonical and fids:
+        file_ids = sorted(set(canonical.values()))
+        ph = lambda xs: ','.join(['%s'] * len(xs))
+        cur.execute(f"""SELECT family_id,posting_date,file_id,article_id,purchase_order,
+                article_document,movement_type,entry_uom_code,base_uom_code,
+                SUM(entry_quantity) AS entry_quantity,SUM(base_quantity) AS base_quantity
+            FROM movement_history WHERE family_id IN ({ph(fids)})
+              AND file_id IN ({ph(file_ids)}) AND movement_type IN ('101','102','109','110')
+            GROUP BY family_id,posting_date,file_id,article_id,purchase_order,
+                article_document,movement_type,entry_uom_code,base_uom_code""", (*fids,*file_ids))
+        receipt_groups = {}
+        for r in cur.fetchall():
+            if canonical.get(r['posting_date']) != int(r['file_id']):
+                continue
+            k = (int(r['family_id']),r['posting_date'],r['article_id'],r['purchase_order'],r['article_document'])
+            receipt_groups.setdefault(k,[]).append(r)
+        for key, values in receipt_groups.items():
+            chosen,_ = physical_receipt_stage_rows(values)
+            units = {r.get('base_uom_code') for r in chosen if r.get('base_quantity') is not None}
+            if len(units)==1 and sum((num(r.get('base_quantity')) or Decimal(0) for r in chosen),Decimal(0))>0:
+                dates_by_family.setdefault(key[0],set()).add(key[1])
+            else:
+                units = {r.get('entry_uom_code') for r in chosen if r.get('entry_quantity') is not None}
+                if len(units)==1 and sum((num(r.get('entry_quantity')) or Decimal(0) for r in chosen),Decimal(0))>0:
+                    dates_by_family.setdefault(key[0],set()).add(key[1])
     result = {}
     for row in rows:
         fid = int(row['family_id'])
         if fid in result:
             continue
         name = ' '.join(str(row.get('family_description') or '').upper().split())
-        dates = sorted({r['posting_date'] for r in receipts.get(fid, [])
-            if r.get('receipt_quantity') is not None and r['receipt_quantity'] > 0
-            and 0 <= (today-r['posting_date']).days <= 84})
+        dates = sorted(d for d in dates_by_family.get(fid,set()) if 0 <= (today-d).days <= 84)
         weekdays = {d.weekday() for d in dates}
         if name in {'ATLANTIC SALMON STEAK','FRESH BIG MOUTH BASS'}:
             category = 'FRESH'
@@ -179,16 +208,7 @@ def category_index(cur, rows, today):
             category = 'FRESH'
         else:
             category = 'UNKNOWN'
-        # Preserve receipt dates/quantities so Quick Check does not fan out into
-        # a separate receipt request for every card on the price list.
-        grouped = {}
-        for r in receipts.get(fid, []):
-            unit = r.get('base_receipt_uom') or r.get('receipt_uom')
-            qty = r.get('base_receipt_quantity') if r.get('base_receipt_quantity') is not None else r.get('receipt_quantity')
-            if qty is not None and qty > 0 and unit:
-                k = (r['posting_date'], unit)
-                grouped[k] = grouped.get(k, Decimal(0)) + qty
-        result[fid] = {'category': category, 'receipts': [{'date': d, 'uom': u, 'quantity': q} for (d,u),q in sorted(grouped.items())]}
+        result[fid] = {'category': category}
     _category_cache = (time.monotonic(), result)
     return result
 
@@ -196,7 +216,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
     from db import db_conn
     from business_clock import business_today, completed_through_date
     from data_coverage import source_data_days
-    from webapp_v2_runtime import _batch_daily_sales_by_price_type, _performance_range_cost_rows, _ordering_family_movement_metrics
+    from webapp_v2_runtime import _batch_daily_sales_by_price_type, _performance_range_cost_rows, _ordering_family_movement_metrics, _family_receipt_events_bulk
     today = business_today()
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
@@ -232,6 +252,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             costs = _performance_range_cost_rows(cur, rows, today)
             snapshots = price_snapshots(cur, rows)
             movement_days = sorted(source_data_days(cur, 'movement', limit=7, up_to=completed_through_date()), key=lambda d:d['date'])
+            receipt_context = _family_receipt_events_bulk(cur, {int(r['family_id']) for r in rows}, data_day_limit=90)
             movements = {}
             for fid in {int(r['family_id']) for r in rows}:
                 metrics = _ordering_family_movement_metrics(cur, fid, movement_days)
@@ -257,7 +278,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                     'article': str(first.get('main_article_number') or ''),
                     'name': first.get('family_description') or first.get('selling_description'),
                     'category': categories[int(first['family_id'])]['category'], 'members': records,
-                    'receipts': categories[int(first['family_id'])]['receipts'], 'movement': movements[int(first['family_id'])]})
+                    'receipts': [{'date':r['posting_date'], 'quantity':r.get('base_receipt_quantity') if r.get('base_receipt_quantity') is not None else r.get('receipt_quantity'), 'uom':r.get('base_receipt_uom') or r.get('receipt_uom')} for r in receipt_context.get(int(first['family_id']),[])], 'movement': movements[int(first['family_id'])]})
             return {'contract': 'MOBILE_PRICING_V1', 'today': today, 'through': through,
                 'checkedAt': datetime.now(timezone.utc).isoformat(), 'days': [d['date'] for d in days],
                 'items': items, 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
