@@ -273,7 +273,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                     records.append({'upc': str(row['ean_upc']), 'name': row.get('selling_description'),
                         'article': str(row.get('article_number') or ''), 'uom': row.get('selling_uom'),
                         'status': row.get('quick_check_status'), 'blocking_reason': row.get('blocking_reason'),
-                        'current': current, 'cost': cost, 'days': series})
+                        'current': current, 'priceHistory': history, 'cost': cost, 'days': series})
                 first = members[0]
                 items.append({'id': key, 'familyId': str(first['family_id']),
                     'article': str(first.get('main_article_number') or ''),
