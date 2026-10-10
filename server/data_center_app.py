@@ -1,6 +1,6 @@
 """Standalone Data Center. Uses existing guarded upload and QA endpoints."""
 DATA_CENTER_HTML = r'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Yipman · Data Center</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YipMan Work DataCenter</title>
 <style>
 :root{--ink:#172f46;--muted:#60778a;--line:#dce6ec;--blue:#136de0;--teal:#087b72;--red:#b3263c;--good:#087052;--warn:#8a5b06;--shadow:0 2px 8px #18374e05,0 10px 28px #18374e04}
 *{box-sizing:border-box}body{margin:0;background:#eef3f6;color:var(--ink);font:14px/1.4 Inter,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
@@ -22,14 +22,14 @@ table{width:100%;border-collapse:collapse;text-align:left;font-variant-numeric:t
 
 .fresh-warning{grid-column:1/-1;border-top:1px solid #ecdbb7;background:#fff8e9;color:#815c19;padding:5px 10px;font-size:11px;display:flex;align-items:center;gap:6px}.fresh-warning:before{content:'!';font-weight:800}.tile[data-tone=warning]>span:before{background:#ca942d}
 </style></head><body>
-<header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>Yipman</strong><span class="brand-divider" aria-hidden="true"></span><small>DATA CENTER · Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
-<main><div class="bar pagebar"><div><h1>Data Center</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
+<header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>YipMan Work DataCenter</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
+<main><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
 <div id="globalError" role="alert"></div><div id="freshness" class="fresh"></div>
 <div class="grid"><div><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
 <section class="panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Recent batches</h2><div id="recent" class="scroll">Loading…</div></section></div>
 <div><section class="panel upload-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload files</h2><div class="drop"><label for="files"><b>Select source files</b></label><div class="upload-controls"><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><button id="upload" class="primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload &amp; process</button></div><details><summary>Batch note (optional)</summary><label for="note" hidden>Batch note</label><input id="note" type="text" placeholder="For example: October 9 movement"></details></div><div id="uploadStatus" role="status" class="notice"></div><p class="muted">Existing files are saved. No re-upload needed.</p></section>
 <section class="panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><p class="muted">Completed days · canonical POS and MVT.</p><div id="coverage" class="scroll">Loading…</div></section></div></div>
-<footer>Data Center DC-5 · Times shown in your local time · Published status requires verification.</footer></main>
+<footer>YipMan Work DataCenter DC-5 · Times shown in your local time · Published status requires verification.</footer></main>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
