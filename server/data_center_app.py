@@ -103,15 +103,19 @@ main{max-width:none;padding:8px 12px 10px}header{padding:6px 12px}.panel{margin-
  .coverage-panel .coverage-table{max-height:none}
  .calendar-day{padding:7px 1px}.calendar-day b{font-size:17px}
 }
+
+.page-actions a{border:1px solid #36744a;padding:8px 10px;text-decoration:none;font-size:14px;white-space:nowrap}
+.publication-panel{flex:none}.publication-panel h2{font-size:16px}.publish-top{display:flex;align-items:center;justify-content:space-between;gap:8px}.publish-time{font-size:12px;color:var(--muted);margin:4px 0 8px}.publish-dates{display:grid;grid-template-columns:1fr 1fr;gap:7px}.publish-dates span{font-size:12px;color:var(--muted);display:block}.publish-dates b{font-size:17px}.publish-counts{font-size:13px;color:var(--muted);margin-top:7px}.publish-files{font-size:13px;color:#b1ffc2;overflow-wrap:anywhere}.publish-files div{padding:5px 0;border-top:1px solid var(--line)}.publication-panel details{margin-top:7px;padding-top:6px}.publication-panel summary{font-size:13px}.publish-empty{font-size:14px;color:var(--muted)}.coverage-day-detail .day-files{grid-template-columns:58px minmax(0,1fr);gap:7px 9px}.coverage-day-detail .day-files b{white-space:nowrap;overflow-wrap:normal;color:#b1ffc2;font-size:12px}.coverage-day-detail>summary{font-size:13px;line-height:1.5}.coverage-day-detail .day-files span{font-size:13px;line-height:1.5}
 </style></head><body>
 <header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>YipMan Work DataCenter</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
-<main><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
+<main><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><a href="/app/stock-records">Stock Records</a><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
 <div id="globalError" role="alert"></div><div id="loadStatus" class="load-status" role="status" aria-label="Panel update status"></div><div id="freshness" class="fresh"></div>
 <div class="grid"><div><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
 <section class="panel recent-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Recent batches</h2><div id="recent" class="scroll">Loading…</div></section></div>
 <div><section class="panel upload-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload files</h2><div class="drop"><label for="files"><b>Select source files</b></label><div class="upload-controls"><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><button id="upload" class="primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload &amp; process</button></div><details><summary>Batch note (optional)</summary><label for="note" hidden>Batch note</label><input id="note" type="text" placeholder="For example: October 9 movement"></details></div><div id="uploadStatus" role="status" class="notice"></div><p class="muted">Existing files are saved. No re-upload needed.</p></section>
+<section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
 <section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div></div>
-<footer>YipMan Work DataCenter DC-8.2 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
+<footer>YipMan Work DataCenter DC-9 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -122,11 +126,11 @@ const parse=v=>{if(v&&typeof v==='object')return v;try{return JSON.parse(v||'{}'
 const time=v=>{if(!v)return 'Not reported';const s=String(v);const d=new Date(/Z$|[+-]\d\d:\d\d$/.test(s)?s:s+'Z');return isNaN(d)?s:d.toLocaleString()};
 let selected=null,busy=false,uploading=false,resuming=false,lastSnapshot=null;
 const observations=new Map(),holdExpansion=new Map();
-let activityState=null,freshnessCache=null,coverageData=null,coverageMode='calendar',coverageDate=null,coverageSelectionMade=false;
+let activityState=null,freshnessCache=null,coverageData=null,coverageMode='calendar',coverageDate=null,coverageSelectionMade=false,coverageDetailOpen=false,publicationData=null;
 const workstation=()=>typeof matchMedia==='function'&&matchMedia('(min-width:1500px) and (min-height:760px)').matches;
 const requestCache=new Map(),panelState=new Map();
 let currentHealth=null,activeData=null,recentData=null,requestedBatchId=null,inspectSequence=0;
-const panelLabels={health:'Worker',monitor:'Batch',recent:'History',coverage:'Source dates'};
+const panelLabels={health:'Worker',monitor:'Batch',recent:'History',coverage:'Source dates',publication:'Published'};
 function renderLoadStatus(){
  const entries=[...panelState.entries()];
  $('loadStatus').innerHTML=Object.keys(panelLabels).map(k=>{const p=panelState.get(k)||{};const label=p.pending?(p.checkedAt?'Updating':'Loading'):p.error?'Delayed':p.saved?'Saved reference':p.checkedAt?'Ready':'Waiting';return '<span class="load-chip" data-state="'+(p.error?'error':p.pending?'pending':p.saved?'saved':p.checkedAt?'ready':'pending')+'" title="'+esc(p.error||(p.checkedAt?'Last checked '+new Date(p.checkedAt).toLocaleTimeString():''))+'"><i aria-hidden="true"></i><b>'+panelLabels[k]+'</b> '+label+(p.elapsed&&!p.pending&&!p.error?' · '+(p.elapsed/1000).toFixed(1)+'s':'')+'</span>'}).join('');
@@ -149,6 +153,7 @@ function panelFailure(name,e){
  if(name==='health'){$('health').innerHTML='<b>Worker</b><span class="badge warn">Unconfirmed</span>';if(activityState){activityState.health=null;renderActivity();}return;}
  if(name==='coverage'&&coverageData){$('freshness').innerHTML=freshnessView(null,coverageData,freshnessCache);return;}
  if(name==='recent'&&recentData)return;
+ if(name==='publication'&&publicationData){renderPublication(publicationData,true);return;}
  if(name==='monitor'&&lastSnapshot)return;
  $(name).innerHTML='<div class="panel-empty"><b>'+panelLabels[name]+' update delayed</b><span>Retrying automatically. Use Refresh to check now.</span></div>';
 }
@@ -246,12 +251,13 @@ function renderCoverage(){
  const dateLabel=date=>date.slice(5).replace(/^0/,'').replace('-','/');
  const days=rows.map(x=>{const pos=x.sources?.POS?.status||'Unknown',mvt=x.sources?.MVT?.status||'Unknown';return '<button class="calendar-day" data-date="'+esc(x.date)+'" data-tone="'+statusTone(x.overall_status)+'" aria-pressed="'+(coverageDate===x.date)+'" aria-label="'+esc(x.date+' '+x.weekday+'; POS '+pos+'; MVT '+mvt)+'"><small>'+esc(x.weekday||'')+'</small><b>'+esc(dateLabel(x.date))+'</b><span class="day-sources"><span data-tone="'+statusTone(pos)+'">P</span><span data-tone="'+statusTone(mvt)+'">M</span></span></button>'}).join('');
  const selectedDay=rows.find(x=>x.date===coverageDate);
- const detail=selectedDay?'<div class="coverage-day-detail"><strong>'+esc(selectedDay.date+' · '+selectedDay.weekday)+'</strong> <span class="status-text" data-tone="'+statusTone(selectedDay.overall_status)+'">'+esc(stageLabel(selectedDay.overall_status))+'</span><div class="day-files">'+['POS','MVT','PRICE','OH'].map(k=>'<b>'+esc(k)+'</b><span>'+esc(selectedDay.sources?.[k]?.file||selectedDay.sources?.[k]?.status||'Unknown')+'</span>').join('')+'</div></div>':'';
+ const detail=selectedDay?'<details class="coverage-day-detail"'+(coverageDetailOpen?' open':'')+'><summary>Files for <strong>'+esc(selectedDay.date+' · '+selectedDay.weekday)+'</strong> <span class="status-text" data-tone="'+statusTone(selectedDay.overall_status)+'">'+esc(stageLabel(selectedDay.overall_status))+'</span></summary><div class="day-files">'+['POS','MVT','PRICE','OH'].map(k=>'<b>'+esc(k)+'</b><span>'+esc(selectedDay.sources?.[k]?.file||(selectedDay.sources?.[k]?.status==='NONE'?'No file for this date':selectedDay.sources?.[k]?.status)||'Unknown')+'</span>').join('')+'</div></details>':'';
  const cell=(x,k)=>{const value=x.sources?.[k]?.status||'—';return '<span class="coverage-state" data-tone="'+statusTone(value)+'">'+esc(value)+'</span>'};
  const table='<div class="scroll coverage-table"'+(coverageMode==='table'?'':' hidden')+'><table><thead><tr><th>Date</th><th>Day status</th><th>POS</th><th>MVT</th><th>Price</th><th>OH</th></tr></thead><tbody>'+rows.slice().reverse().map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.overall_status)+'</td><td>'+cell(x,'POS')+'</td><td>'+cell(x,'MVT')+'</td><td>'+cell(x,'PRICE')+'</td><td>'+cell(x,'OH')+'</td></tr>').join('')+'</tbody></table></div>';
  $('coverage').innerHTML='<div class="coverage-overview"><span><b>'+complete+' / '+due.length+'</b> due days complete</span><span>Daily POS · MVT</span></div><div class="coverage-calendar"'+(coverageMode==='calendar'?'':' hidden')+'><div class="calendar-grid">'+days+'</div><div class="calendar-legend"><span>Complete</span><span>Missing</span><span>Not due</span><b>P</b> POS <b>M</b> MVT</div>'+detail+'</div>'+table;
+ const dayDetail=$('coverage').querySelector?.('.coverage-day-detail');if(dayDetail)dayDetail.ontoggle=()=>{coverageDetailOpen=dayDetail.open};
  $('calendarView').setAttribute('aria-pressed',String(coverageMode==='calendar'));$('tableView').setAttribute('aria-pressed',String(coverageMode==='table'));
- document.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>{coverageSelectionMade=true;coverageDate=coverageDate===button.dataset.date?null:button.dataset.date;renderCoverage();});
+ document.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>{coverageSelectionMade=true;coverageDate=coverageDate===button.dataset.date?null:button.dataset.date;coverageDetailOpen=!!coverageDate;renderCoverage();});
 }
 
 async function inspect(id,force=false){
@@ -280,6 +286,13 @@ setActivity(id,r,pipeline,detail,health,checkedAt);
 if($('resume'))$('resume').onclick=async()=>{if(resuming)return;resuming=true;$('resume').disabled=true;try{const result=await api('/v1/web-upload/batches/'+id+'/resume-phase3',{method:'POST',headers:{'Content-Type':'application/json'}});$('actionStatus').textContent='Server response: '+JSON.stringify(result)}catch(e){$('actionStatus').textContent=e.message}finally{resuming=false;refresh(true)}};
 const diagnostics=$('monitor').querySelector?.('[data-detail=diagnostics]');if(diagnostics)diagnostics.ontoggle=()=>{if(diagnostics.open){$('fullDiagnostics').hidden=false;$('fullDiagnostics').textContent=JSON.stringify(d,null,2)}};
 $('download').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(lastSnapshot,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='yipman-batch-'+id+'-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+}
+function renderPublication(data,stale=false){
+ const p=data.published;
+ if(!p?.verified){$('publication').innerHTML='<div class="publish-empty">No verified publish found.</div>';return;}
+ const attempt=data.latest_attempt,newer=attempt&&attempt.publish_run_id>p.publish_run_id&&!attempt.verified;
+ $('publication').innerHTML='<div class="publish-top"><button class="linkbtn" id="viewPublishedBatch">Batch #'+esc(p.batch_id)+'</button><span class="badge good">PASS · verified</span></div><div class="publish-time">Published '+esc(time(p.completed_at))+' · Run #'+esc(p.publish_run_id)+'</div><div class="publish-dates"><div><span>Published POS through</span><b>'+esc(p.pos_through?.slice(0,10))+'</b></div><div><span>Published MVT through</span><b>'+esc(p.mvt_through?.slice(0,10))+'</b></div></div><div class="publish-counts">'+esc(p.ready_rows??'—')+' ready · '+esc(p.held_rows??'—')+' QA holds excluded</div><details><summary>Published batch files · '+(p.files||[]).length+'</summary><div class="publish-files">'+(p.files||[]).map(f=>'<div>'+esc(f.original_filename)+'</div>').join('')+'</div></details>'+(newer?'<div class="notice">Newer publish #'+esc(attempt.publish_run_id)+': '+esc(stageLabel(attempt.status))+'. Showing last verified result.</div>':'')+(stale?'<div class="notice">Publish check delayed. Showing last verified result.</div>':'');
+ $('viewPublishedBatch').onclick=()=>{selected=Number(p.batch_id);$('follow').hidden=false;inspect(selected,true);renderRecent();};
 }
 function freshnessFromCoverage(coverage){
  if(!coverage?.latest)return {sources:{}};
@@ -311,6 +324,7 @@ async function refresh(force=false){
  }
  tasks.push(loadPanel('health','/healthz',10000,(h,checkedAt)=>{currentHealth={...h,checkedAt};$('version').textContent='API '+h.version;$('health').innerHTML='<b>Worker</b><span class="badge '+(h.worker_healthy?'good':'warn')+'">'+esc(h.worker_state||'Unknown')+'</span>';if(activityState){activityState.health=currentHealth;renderActivity();}}));
  tasks.push(loadPanel('recent','/v1/web-upload/recent?limit=12',60000,(data,checkedAt)=>{recentData=data;rememberReference('recent',data,checkedAt);renderRecent();}));
+ tasks.push(loadPanel('publication','/v1/app/data-center/latest-publish',60000,(data)=>{publicationData=data;renderPublication(data);}));
  tasks.push(loadPanel('coverage','/v1/backoffice/data-health?days=14',60000,(data,checkedAt)=>{acceptCoverage(data,checkedAt);rememberReference('coverage',data,checkedAt);}));
  const activeTask=(async()=>{
   try{const previous=activeData;activeData=await cachedRead('/v1/web-upload/active',10000,force);renderRecent();const id=selected||activeData.active_batch?.batch_id||activeData.latest_batch?.batch_id;const changed=!!activeData.active_batch&&(!previous?.active_batch||previous.active_batch.active_pipeline_run_id!==activeData.active_batch.active_pipeline_run_id||previous.active_batch.processing_status!==activeData.active_batch.processing_status);if(changed&&id===activeData.active_batch.batch_id){lastSnapshot=null;activityState=null;}if(id)await inspect(id,force||changed);else{$('monitor').innerHTML='<div class="panel-empty"><b>No batches yet</b><span>Upload source files to begin.</span></div>';panelUpdate('monitor',{pending:false,error:null,checkedAt:Date.now()});}}

@@ -364,6 +364,45 @@ def standalone_data_center():
     return HTMLResponse(DATA_CENTER_HTML,headers={'Cache-Control':'no-store'})
 
 
+@app.get('/app/stock-records',response_class=HTMLResponse,include_in_schema=False)
+@app.get('/app/stock-records/',response_class=HTMLResponse,include_in_schema=False)
+def standalone_stock_records():
+    from stock_records_app import STOCK_RECORDS_HTML
+    return HTMLResponse(STOCK_RECORDS_HTML,headers={'Cache-Control':'no-store'})
+
+
+@app.get('/v1/app/stock-records')
+def app_stock_records(response:Response,view:str='pending',limit:int=100,before:int|None=None,q:str='',kind:str='all'):
+    from data_center_records import list_stock_records
+    response.headers['Cache-Control']='no-store'
+    try:
+        return json.loads(json.dumps(list_stock_records(view,limit,before,q,kind),default=j))
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+
+
+@app.post('/v1/app/stock-records/{true_stock_id}/clear')
+def app_stock_record_clear(true_stock_id:int,request:Request,body:DumpingResolveRequest,authorization:Annotated[str|None,Header()]=None):
+    from data_center_records import clear_stock_record
+    _browser_upload_guard(request)
+    if body.confirm!='CLEAR_STOCK_RECORD':
+        raise HTTPException(400,'confirm must be CLEAR_STOCK_RECORD')
+    actor=public_app_actor(authorization)
+    try:
+        return json.loads(json.dumps(clear_stock_record(true_stock_id,actor,body.note),default=j))
+    except KeyError:
+        raise HTTPException(404,'Stock record not found')
+    except ValueError as exc:
+        raise HTTPException(409,str(exc))
+
+
+@app.get('/v1/app/data-center/latest-publish')
+def app_latest_verified_publish(response:Response):
+    from data_center_records import latest_verified_publish
+    response.headers['Cache-Control']='no-store'
+    return json.loads(json.dumps(latest_verified_publish(API_PIPELINE),default=j))
+
+
 @app.get('/',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/quick-check',response_class=HTMLResponse,include_in_schema=False)
@@ -5362,4 +5401,5 @@ def quick_check(upc:str,authorization: Annotated[str|None,Header()]=None):
             raise HTTPException(404,'Quick Check UPC not found')
         cur.close()
     return json.loads(json.dumps(row,default=j))
+
 

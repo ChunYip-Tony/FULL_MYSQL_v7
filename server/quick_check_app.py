@@ -388,9 +388,14 @@ def ensure_true_stock_tables(cur) -> None:
 
 def _latest_on_hand_file_id(cur) -> int | None:
     cur.execute(
-        """SELECT MAX(file_id) AS file_id
-           FROM ingest_file
-           WHERE source_type='on_hand'"""
+        """SELECT MAX(f.file_id) AS file_id
+           FROM ingest_file f
+           WHERE f.source_type='on_hand'
+             AND f.processing_status='INGESTED'
+             AND COALESCE(f.error_count,0)=0
+             AND f.duplicate_of_file_id IS NULL
+             AND EXISTS (SELECT 1 FROM inventory_observation o
+                         WHERE o.file_id=f.file_id AND o.source_type='ON_HAND')"""
     )
     row = cur.fetchone() or {}
     return int(row["file_id"]) if row.get("file_id") is not None else None
@@ -406,10 +411,12 @@ def expire_true_stock_for_new_oh(cur, new_oh_file_id: int) -> dict[str, int]:
         return {"true_stock_expired": 0, "dumping_rows_superseded": 0}
 
     cur.execute(
-        """SELECT true_stock_id,family_id
-           FROM manual_true_stock
-           WHERE override_status='ACTIVE'
-             AND (anchor_on_hand_file_id IS NULL OR anchor_on_hand_file_id<%s)""",
+        """SELECT m.true_stock_id,m.family_id
+           FROM manual_true_stock m
+           JOIN ingest_file f ON f.file_id=%s
+           WHERE m.override_status='ACTIVE'
+             AND (m.anchor_on_hand_file_id IS NULL OR m.anchor_on_hand_file_id<f.file_id)
+             AND m.submitted_at<=f.upload_timestamp""",
         (int(new_oh_file_id),),
     )
     rows = cur.fetchall()
@@ -4464,3 +4471,4 @@ def pending_dumping_discrepancies() -> list[dict[str, Any]]:
         conn.commit()
         cur.close()
         return rows
+

@@ -1243,9 +1243,6 @@ def _family_main_article_id(cur, family_id: int | None) -> int | None:
 
 
 def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
-    # Any newer ON_HAND file ends the prior manual True Stock authority window.
-    # This only updates the manual layer when that feature has already been initialized.
-    expire_true_stock_for_new_oh(cur, int(f['file_id']))
     inserted = 0
     cur.execute('SELECT sheet_id,header_row_number FROM ingest_sheet WHERE file_id=%s ORDER BY sheet_index', (f['file_id'],))
     for sh in cur.fetchall():
@@ -1331,6 +1328,9 @@ def _process_on_hand(cur, batch_id: int, f: dict[str, Any]) -> int:
                  family_id, ean, upc_id, qty, uom),
             )
             inserted += 1
+    # Only a usable OH import replaces earlier counts; a failed/empty upload does not.
+    if inserted:
+        expire_true_stock_for_new_oh(cur, int(f['file_id']))
     return inserted
 
 
