@@ -1,6 +1,7 @@
 """Shared read-only inventory card sales evidence for desktop and mobile."""
 from __future__ import annotations
 from datetime import date, datetime, timezone
+from calendar import monthrange
 from decimal import Decimal, InvalidOperation
 from collections import OrderedDict
 import threading
@@ -21,9 +22,34 @@ def date_text(value):
     return value.isoformat() if isinstance(value, date) else str(value or '')[:10]
 
 
+def recent_start(today):
+    d=date.fromisoformat(date_text(today))
+    month=d.year*12+d.month-1-3
+    year, month0=divmod(month,12)
+    return date(year,month0+1,min(d.day,monthrange(year,month0+1)[1])).isoformat()
+
+def recent_reference(member, price_type, start, today):
+    rows={}
+    for day in member.get('days',[]):
+        dt=date_text(day['date'])
+        if not start <= dt < today: continue
+        types=day.get('typeSales',[])
+        found=next((r for r in types if r.get('type')==price_type),None)
+        if found is None and day.get('type')==price_type and (day.get('valid') or day.get('reason')=='COST_OR_UNIT_UNVERIFIED'):
+            found=day
+        if found is not None and number(found.get('qty')) is not None and number(found['qty'])>=0 and number(found.get('sales')) is not None and number(found['sales'])>=0:
+            rows[dt]=found
+    values=list(rows.values())
+    qty=sum((number(r['qty']) for r in values),Decimal(0))
+    sales=sum((number(r['sales']) for r in values),Decimal(0))
+    gp=[number(r.get('gp')) for r in values]
+    valid=bool(values) and bool(member.get('uom'))
+    return {'quantity':qty if valid else None,'average':qty/len(values) if valid else None,'price':sales/qty if valid and qty>0 else None,'gpDay':sum(gp,Decimal(0))/len(values) if valid and all(g is not None for g in gp) else None,'days':len(values) if valid else 0,'start':start,'through':max(rows) if rows else None}
+
 def summarize(page, movements):
     today = date_text(page['today'])
     dates = sorted({date_text(d) for d in page.get('days', []) if date_text(d) < today})
+    start=recent_start(today)
     members = {}
     for item in page.get('items', []):
         for member in item.get('members', []):
@@ -41,10 +67,13 @@ def summarize(page, movements):
     out = []
     for member in members.values():
         types = {d['type'] for d in member.get('days', []) if d.get('valid') and d.get('type') and number(d.get('qty')) is not None and number(d['qty']) > 0 and date_text(d['date']) < today}
+        types.update(r['type'] for d in member.get('days',[]) if start<=date_text(d['date'])<today for r in d.get('typeSales',[]) if number(r.get('qty')) is not None and number(r['qty'])>0)
+        types.update(d['type'] for d in member.get('days',[]) if start<=date_text(d['date'])<today and d.get('type') and d.get('reason')=='COST_OR_UNIT_UNVERIFIED' and number(d.get('qty')) is not None and number(d['qty'])>0)
+        types={t for t in types if any(start<=date_text(d['date'])<today and ((d.get('type')==t and (d.get('valid') or d.get('reason')=='COST_OR_UNIT_UNVERIFIED') and number(d.get('qty')) is not None and number(d['qty'])>0) or any(r.get('type')==t and number(r.get('qty')) is not None and number(r['qty'])>0 for r in d.get('typeSales',[]))) for d in member.get('days',[]))}
         if not types:
             continue
-        out.append({'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
-    return {'through': max(dates) if dates else None, 'movement': movements, 'members': out}
+        out.append({'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14), 'recent': recent_reference(member,t,start,today)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
+    return {'historyStart':start,'historyMonths':3,'through': max(dates) if dates else None, 'movement': movements, 'members': out}
 
 
 def build_summary(family):
@@ -55,7 +84,7 @@ def build_summary(family):
     from webapp_v2_runtime import _ordering_family_movement_metrics
     # Internal builder reads a complete family in one bounded request; it never
     # changes the public mobile-pricing endpoint's pagination contract.
-    page = build_page(family=family, limit=10000)
+    page = build_page(family=family, limit=10000, history_days=100)
     family_ids = {int(i['familyId']) for i in page['items']}
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
@@ -127,8 +156,8 @@ DESKTOP_SCRIPT = r'''
  const fmt=x=>x==null?'—':Number(x).toLocaleString(undefined,{maximumFractionDigits:2});
  function pump(){while(running<2&&queue.length){const work=queue.shift();running++;work().finally(()=>{running--;pump()})}}
  function read(family){const old=cache.get(family);if(old&&Date.now()-old.at<300000)return Promise.resolve(old.data);if(pending.has(family))return pending.get(family);const p=new Promise((resolve,reject)=>{queue.push(async()=>{try{const r=await fetch('/v1/app/inventory-sales?family='+encodeURIComponent(family),{cache:'no-store',signal:AbortSignal.timeout(45000)});const d=await r.json();if(!r.ok||!d.sales)throw Error(d.detail||'Sales history unavailable');cache.set(family,{at:Date.now(),data:d.sales});resolve(d.sales)}catch(e){reject(e)}finally{pending.delete(family)}});pump()});pending.set(family,p);return p}
- function avg(v,u){return '<b>'+fmt(v.average)+' '+esc(u)+'/day</b><br>'+(v.price==null?'—':'$'+Number(v.price).toFixed(2)+' / '+esc(u))+'<br><b>GP$/day '+(v.gpDay==null?'—':'$'+Number(v.gpDay).toFixed(2))+'</b><br><small>'+v.days+' valid days</small>'}
- function paint(node,d,upc){const rows=upc?d.members.filter(m=>m.upc===upc):d.members;node.innerHTML='<div class="mvt-summary">'+[['7D',d.movement.seven],['14D',d.movement.fourteen]].map(([label,m])=>'<div>'+label+' avg selling MVT<br><b>'+fmt(m.average)+' '+esc(m.uom||'—')+'/day</b><br><small>'+esc(m.through||'Not verified')+' · '+m.days+' valid days</small></div>').join('')+'</div>'+rows.map(m=>'<div class="sales-upc">'+esc(m.name)+' · UPC '+esc(m.upc)+'</div><table><thead><tr><th>Price type</th><th>7D avg/day · avg sold price</th><th>14D avg/day · avg sold price</th></tr></thead><tbody>'+m.types.map(t=>'<tr><th>'+esc(t.type)+'</th><td>'+avg(t.seven,m.uom)+'</td><td>'+avg(t.fourteen,m.uom)+'</td></tr>').join('')+'</tbody></table>').join('')+'<details><summary>Sales source & dates</summary><small>POS through '+esc(d.through||'—')+'. MVT 251 − 252 is the family total. Price-type rows use UPC POS only. Avg/day = quantity ÷ valid days at that price type, including verified zero-sales days. Avg sold price = sales ÷ quantity. Avg GP$/day = sum of daily historical GP$ ÷ valid days at that type; missing cost leaves GP$ unverified. Missing or mixed-price days excluded.</small></details>';node.dataset.loaded='1'}
+ function avg(v,u){if(!v)return '—';return '<small>POS qty</small><br><b>'+fmt(v.quantity)+' '+esc(u)+'</b><br><small>Avg/day</small><br><b>'+fmt(v.average)+' '+esc(u)+'/day</b><br><small>Avg price</small><br><b>'+(v.price==null?'—':'$'+Number(v.price).toFixed(2))+' / '+esc(u)+'</b><br><small>GP$/day</small><br><b>'+(v.gpDay==null?'—':'$'+Number(v.gpDay).toFixed(2))+' / day</b><br><small>'+v.days+' valid days</small>'}
+ function paint(node,d,upc){const rows=upc?d.members.filter(m=>m.upc===upc):d.members;node.innerHTML='<div class="mvt-summary">'+[['7D',d.movement.seven],['14D',d.movement.fourteen]].map(([label,m])=>'<div>'+label+' Family MVT · avg/day<br><b>'+fmt(m.average)+' '+esc(m.uom||'—')+'/day</b><br><small>'+esc(m.through||'Not verified')+' · '+m.days+' valid days</small></div>').join('')+'<small>3M POS: '+esc(d.historyStart)+' – '+esc(d.through)+'</small>'+rows.map(m=>'<div class="sales-upc">'+esc(m.name)+' · UPC '+esc(m.upc)+'</div><table><thead><tr><th>Price type</th><th>7D POS</th><th>14D POS</th><th>3M POS</th></tr></thead><tbody>'+m.types.map(t=>'<tr><th>'+esc(t.type)+'</th><td>'+avg(t.seven,m.uom)+'</td><td>'+avg(t.fourteen,m.uom)+'</td><td>'+avg(t.recent,m.uom)+'</td></tr>').join('')+'</tbody></table>').join('')+'<details><summary>Sales source & dates</summary><small>MVT 251 − 252 is the family total. Price-type rows use UPC POS only. Avg/day = quantity ÷ valid days at that price type, including verified zero-sales days. Avg sold price = sales ÷ quantity. GP$/day uses historical cost. 7D/14D exclude missing and mixed-price days; 3M includes verified actual type quantities on mixed-price days. Missing cost leaves GP$ unverified.</small></details>';node.dataset.loaded='1'}
  const observe=new IntersectionObserver(entries=>entries.forEach(e=>{if(!e.isIntersecting)return;const n=e.target;if(n.dataset.loading||n.dataset.loaded)return;n.dataset.loading='1';read(n.dataset.family).then(d=>{if(n.isConnected)paint(n,d,n.dataset.upc)}).catch(()=>{if(n.isConnected)n.innerHTML='<small>Sales history unavailable.</small> <button type="button">Retry</button>';const b=n.querySelector('button');if(b)b.onclick=e=>{e.stopPropagation();delete n.dataset.loading;observe.unobserve(n);observe.observe(n)}}).finally(()=>delete n.dataset.loading)}),{rootMargin:'80px'});
  function attach(){
   document.querySelectorAll('#yd-pi .pirow[data-family]').forEach(row=>{if(row.querySelector('.inventory-sales-card'))return;const n=document.createElement('div');n.className='inventory-sales-card';n.dataset.family=row.dataset.family;n.textContent='Loading sales history…';n.onclick=e=>e.stopPropagation();row.appendChild(n);observe.observe(n)});

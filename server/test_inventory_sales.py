@@ -1,6 +1,6 @@
 import unittest
 from datetime import date
-from inventory_sales import summarize, DESKTOP_SCRIPT
+from inventory_sales import summarize, DESKTOP_SCRIPT, recent_start
 
 class SalesTests(unittest.TestCase):
     def test_price_weight_and_exposure_days(self):
@@ -26,6 +26,28 @@ class SalesTests(unittest.TestCase):
         self.assertIsNone(value['gpDay'])
         self.assertEqual(value['average'],5)
         self.assertIn('GP$/day',DESKTOP_SCRIPT)
+
+    def test_three_month_reference_is_additional_and_keeps_actual_type_pos(self):
+        self.assertEqual(recent_start('2026-05-31'),'2026-02-28')
+        member={'upc':'001','uom':'LB','days':[
+            {'date':'2026-07-10','qty':999,'sales':9999,'gp':999,'type':'REG','valid':True},
+            {'date':'2026-07-11','qty':20,'sales':100,'gp':40,'type':'REG','valid':True},
+            {'date':'2026-10-08','qty':0,'sales':0,'gp':0,'type':'REG','valid':True},
+            {'date':'2026-10-09','qty':30,'sales':150,'gp':None,'type':'REG','valid':False,'reason':'COST_OR_UNIT_UNVERIFIED'},
+            {'date':'2026-10-10','qty':10,'sales':50,'valid':False,'reason':'MIXED_PRICE_DAY','typeSales':[
+                {'type':'REG','qty':4,'sales':24,'gp':12},{'type':'TPR','qty':6,'sales':26,'gp':8}]},
+            {'date':'2026-10-11','qty':999,'sales':9999,'gp':999,'type':'REG','valid':True}]}
+        result=summarize({'today':'2026-10-11','days':['2026-10-08','2026-10-09','2026-10-10'],'items':[{'members':[member]}]}, {})
+        reg,tpr=result['members'][0]['types']
+        self.assertEqual(reg['recent']['quantity'],54)
+        self.assertEqual(reg['recent']['days'],4)
+        self.assertEqual(reg['recent']['average'],13.5)
+        self.assertIsNone(reg['recent']['gpDay'])
+        self.assertEqual(tpr['recent']['quantity'],6)
+        self.assertEqual(tpr['recent']['gpDay'],8)
+        self.assertEqual(reg['seven']['days'],1)
+        self.assertIsNone(tpr['seven']['average'])
+        self.assertIn('3M POS',DESKTOP_SCRIPT)
 
     def test_both_inventory_surfaces(self):
         self.assertIn('#yd-pi .pirow[data-family]', DESKTOP_SCRIPT)

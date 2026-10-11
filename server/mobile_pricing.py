@@ -117,6 +117,12 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
         'gp': None, 'normalized_gp': None, 'valid': False, 'reason': None,
         'cost': cost, 'zero_sale': False}
     types = observation.get('price_types') or {} if observation else {}
+    # Retain actual per-type POS for reference even when a day has mixed prices.
+    result['typeSales'] = []
+    for pt, values in types.items():
+        q, s = num(values.get('sold_quantity')), num(values.get('sales_amount'))
+        if pt in PRIORITY and q is not None and s is not None and q > 0 and s > 0:
+            result['typeSales'].append({'type':pt,'qty':q,'sales':s,'gp':s-q*cost['value'] if cost else None})
     if observation:
         qty, sales = num(observation.get('sold_quantity')), num(observation.get('sales_amount'))
         result.update(qty=qty, sales=sales)
@@ -219,7 +225,7 @@ def category_index(cur, rows, today):
     _category_cache = (time.monotonic(), result)
     return result
 
-def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None):
+def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90):
     from db import db_conn
     from business_clock import business_today, completed_through_date
     from data_coverage import source_data_days
@@ -253,7 +259,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             total = len(selected)
             page = selected[cursor:cursor+limit]
             rows = [r for _, members in page for r in members]
-            days = sorted(source_data_days(cur, 'sales_by_price_type', limit=90, up_to=completed_through_date()), key=lambda d:d['date'])
+            days = sorted(source_data_days(cur, 'sales_by_price_type', limit=history_days, up_to=completed_through_date()), key=lambda d:d['date'])
             through = days[-1]['date'] if days else None
             daily = _batch_daily_sales_by_price_type(cur, rows, days)
             costs = _performance_range_cost_rows(cur, rows, today)
