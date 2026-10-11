@@ -545,7 +545,10 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                    OR article_number LIKE %s
                    OR main_article_number LIKE %s
                    OR ean_upc LIKE %s
-                ORDER BY relevance_score DESC,
+                ORDER BY CASE WHEN sales_days_7d > 0 AND pos_qty_7d >= 0
+                           AND NULLIF(TRIM(selling_uom),'') IS NOT NULL
+                           THEN pos_qty_7d / sales_days_7d ELSE NULL END DESC,
+                         relevance_score DESC,
                          CASE quick_check_status
                            WHEN 'READY' THEN 1
                            WHEN 'QA_HOLD' THEN 2
@@ -590,7 +593,10 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                 FROM quick_check_current
                 WHERE UPPER(COALESCE(selling_description,'')) LIKE %s
                    OR UPPER(COALESCE(family_description,'')) LIKE %s
-                ORDER BY relevance_score DESC,
+                ORDER BY CASE WHEN sales_days_7d > 0 AND pos_qty_7d >= 0
+                           AND NULLIF(TRIM(selling_uom),'') IS NOT NULL
+                           THEN pos_qty_7d / sales_days_7d ELSE NULL END DESC,
+                         relevance_score DESC,
                          CASE quick_check_status
                            WHEN 'READY' THEN 1
                            WHEN 'QA_HOLD' THEN 2
