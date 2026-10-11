@@ -55,6 +55,11 @@ def family_receipt_history(family_key: str, limit_days: int = 12) -> dict[str, A
 
         fid = int(family["family_id"])
         events = _family_receipt_events(cur, fid, 180)
+        codes=sorted({str(e.get('article_number') or '').strip() for e in events if str(e.get('article_number') or '').strip()})
+        names={}
+        if codes:
+            cur.execute("SELECT article_number,article_description FROM article WHERE article_number IN ("+','.join(['%s']*len(codes))+")",tuple(codes))
+            names={str(row['article_number']).strip():str(row.get('article_description') or '').strip() for row in cur.fetchall()}
         cur.close()
 
     positive = [
@@ -112,6 +117,7 @@ def family_receipt_history(family_key: str, limit_days: int = 12) -> dict[str, A
                 "events": [
                     {
                         "article_number": x.get("article_number"),
+                        "article_name": names.get(str(x.get("article_number") or '').strip()) or None,
                         "receipt_quantity": x.get("receipt_quantity"),
                         "receipt_uom": x.get("receipt_uom"),
                         "base_receipt_quantity": x.get("base_receipt_quantity"),
