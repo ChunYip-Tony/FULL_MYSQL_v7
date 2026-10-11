@@ -176,7 +176,17 @@ header small{overflow-wrap:anywhere}
 
 </style></head><body>
 <header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>YipMan Work DataCenter</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
-<main><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><a href="/app/stock-records">Stock Records</a><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
+<nav class="dc-functions" aria-label="Data Center functions">
+ <button id="dataFunction" type="button" aria-pressed="true" aria-controls="dataWorkspace">Data &amp; Uploads</button>
+ <button id="priceFunction" type="button" aria-pressed="false" aria-controls="priceWorkspace">Price Review</button>
+ <a href="/app/stock-records">Stock Records</a>
+</nav>
+<section id="priceWorkspace" hidden aria-label="Price Review">
+ <div class="price-module-bar"><h1>Price Review</h1><a href="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" target="_blank" rel="noopener">Open full window ↗</a></div>
+ <p id="priceModuleStatus" role="status">Opening Price Review…</p>
+ <iframe id="priceReviewFrame" title="YipMan Work Price Review" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+</section>
+<main id="dataWorkspace"><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><a href="/app/stock-records">Stock Records</a><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
 <div id="globalError" role="alert"></div><div id="loadStatus" class="load-status" role="status" aria-label="Panel update status"></div><div id="freshness" class="fresh"></div>
 <div class="grid"><div><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
 <section class="panel recent-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Recent batches</h2><div id="recent" class="scroll">Loading…</div></section></div>
@@ -184,6 +194,47 @@ header small{overflow-wrap:anywhere}
 <section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
 <section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div></div>
 <footer>YipMan Work DataCenter DC-10 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
+<style>
+[hidden]{display:none!important}
+.dc-functions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
+.dc-functions button,.dc-functions a{min-height:36px;padding:7px 12px;font-size:15px}
+.dc-functions button[aria-pressed=true]{background:var(--ink);color:#020a05;border-color:var(--ink)}
+.dc-functions a{margin-left:auto}
+#priceWorkspace{width:100%;padding:0 12px;flex:1;min-height:0;display:flex;flex-direction:column}
+.price-module-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0;flex:none}
+.price-module-bar a{font-size:14px;padding:6px;border:1px solid var(--line)}
+#priceModuleStatus{color:var(--muted);font-size:14px;margin-bottom:8px;flex:none}
+#priceReviewFrame{display:block;width:100%;height:calc(100dvh - 170px);min-height:320px;flex:1;border:1px solid var(--line);background:#000}
+body.price-review-active{height:100dvh;display:flex;flex-direction:column}
+body.price-review-active #priceReviewFrame{height:auto;min-height:0}
+@media(max-width:520px){#priceWorkspace{padding:0 6px}.dc-functions{padding:6px;gap:5px}.dc-functions button,.dc-functions a{font-size:13px;padding:6px 8px}.price-module-bar h1{font-size:19px}}
+</style>
+<script id="dc-shared-price-review">
+(()=>{
+ const data=document.getElementById('dataWorkspace'),price=document.getElementById('priceWorkspace');
+ const dataButton=document.getElementById('dataFunction'),priceButton=document.getElementById('priceFunction');
+ const frame=document.getElementById('priceReviewFrame'),status=document.getElementById('priceModuleStatus');
+ let ready=false,timer;
+ function selectPrice(open){
+  data.hidden=open;price.hidden=!open;document.body.classList.toggle('price-review-active',open);
+  dataButton.setAttribute('aria-pressed',String(!open));priceButton.setAttribute('aria-pressed',String(open));
+  if(open&&!frame.hasAttribute('src')){
+   frame.src=frame.dataset.src;
+   timer=setTimeout(()=>{if(!ready)status.textContent='Price Review is taking longer to open. Use Open full window if your browser blocks the embedded view.';},15000);
+  }
+  if(!open)window.dispatchEvent(new Event('dc:data-workspace-active'));
+ }
+ function navigate(open){const hash=open?'#price-review':'#data';if(location.hash!==hash)history.pushState(null,'',hash);selectPrice(open);}
+ dataButton.onclick=()=>navigate(false);priceButton.onclick=()=>navigate(true);
+ window.addEventListener('popstate',()=>selectPrice(location.hash==='#price-review'));
+ window.addEventListener('hashchange',()=>selectPrice(location.hash==='#price-review'));
+ window.addEventListener('message',event=>{
+  if(event.origin!=='https://seafood-stock-watch.bronzedove3.chatgpt.site'||event.source!==frame.contentWindow||event.data?.type!=='yipman:price-review-ready')return;
+  ready=true;clearTimeout(timer);status.hidden=true;
+ });
+ selectPrice(location.hash==='#price-review');
+})();
+</script>
 <script>
 (()=>{'use strict';
 const $=id=>document.getElementById(id), esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -408,8 +459,10 @@ function restoreReferences(){
 $('calendarView').onclick=()=>{coverageMode='calendar';renderCoverage()};$('tableView').onclick=()=>{coverageMode='table';renderCoverage()};
 $('refresh').onclick=()=>refresh(true);$('follow').onclick=()=>{selected=null;$('follow').hidden=true;refresh(true)};
 $('upload').onclick=async()=>{if(uploading)return;const files=[...$('files').files];if(!files.length){$('uploadStatus').textContent='Select at least one source file.';return}uploading=true;$('upload').disabled=true;$('files').disabled=true;let created=null;try{created=await api('/v1/web-upload/batches',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({label:$('note').value.trim()||'Data Center '+new Date().toLocaleString()})});const session=created.session_id||created.batch_key||created.session?.session_id;if(!session)throw Error('No upload session returned. Inspect recent batches before trying again.');for(let i=0;i<files.length;i++){const fd=new FormData();fd.append('file',files[i]);$('uploadStatus').textContent='Uploading '+(i+1)+' / '+files.length+': '+files[i].name;await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/files',{method:'POST',body:fd})}$('uploadStatus').textContent='Committing batch…';const done=await api('/v1/web-upload/batches/'+encodeURIComponent(session)+'/commit',{method:'POST'});selected=done.batch_id||created.batch_id||null;$('follow').hidden=!selected;$('uploadStatus').textContent='Batch #'+(selected||'—')+' committed. Processing and QA are tracked in the monitor.';$('files').value=''}catch(e){$('uploadStatus').textContent='Upload stopped: '+e.message+(created?' Batch/session was created. Inspect recent batches before uploading again.':' No successful creation response received; check recent batches before retrying.')}finally{uploading=false;$('files').disabled=false;$('upload').disabled=!!created&&!!$('files').files.length;refresh(true)}};
-restoreReferences();refresh();setInterval(()=>{if(!document.hidden)refresh()},15000);
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh()});
-setInterval(()=>{if(!document.hidden)renderActivity()},1000);
+restoreReferences();if(!document.getElementById('dataWorkspace').hidden)refresh();setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').hidden)refresh()},15000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').hidden)refresh()});
+window.addEventListener('dc:data-workspace-active',()=>refresh());
+setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').hidden)renderActivity()},1000);
 })();
 </script></body></html>'''
+
