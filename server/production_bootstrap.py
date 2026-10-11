@@ -32,3 +32,6 @@ install_app_ready_true_stock_hook(app, _api, request_app_ready_rebuild)
 # Shared inventory card evidence; both existing desktop URLs retain their identity.
 from inventory_sales import install_inventory_sales
 install_inventory_sales(app, _api)
+
+from inventory_family_catalog import install_family_catalog
+install_family_catalog(app)
