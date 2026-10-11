@@ -1,0 +1,138 @@
+"""Shared read-only inventory card sales evidence for desktop and mobile."""
+from __future__ import annotations
+from datetime import date, datetime, timezone
+from decimal import Decimal, InvalidOperation
+from collections import OrderedDict
+import threading
+import time
+
+
+def number(value):
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        value = Decimal(str(value))
+        return value if value.is_finite() else None
+    except (ValueError, InvalidOperation):
+        return None
+
+
+def date_text(value):
+    return value.isoformat() if isinstance(value, date) else str(value or '')[:10]
+
+
+def summarize(page, movements):
+    today = date_text(page['today'])
+    dates = sorted({date_text(d) for d in page.get('days', []) if date_text(d) < today})
+    members = {}
+    for item in page.get('items', []):
+        for member in item.get('members', []):
+            members[member['upc']] = member
+    def average(member, price_type, window):
+        selected = set(dates[-window:])
+        rows = {date_text(d['date']): d for d in member.get('days', []) if date_text(d['date']) in selected}
+        rows = [d for d in rows.values() if d.get('valid') and d.get('type') == price_type and number(d.get('qty')) is not None and number(d['qty']) >= 0 and number(d.get('sales')) is not None and number(d['sales']) >= 0]
+        quantity = sum((number(d['qty']) for d in rows), Decimal(0))
+        sales = sum((number(d['sales']) for d in rows), Decimal(0))
+        unit = member.get('uom')
+        return {'average': quantity / len(rows) if rows and unit else None, 'price': sales / quantity if quantity > 0 and unit else None, 'quantity': quantity, 'days': len(rows) if unit else 0, 'start': min(selected) if selected else None, 'through': max(selected) if selected else None}
+    out = []
+    for member in members.values():
+        types = {d['type'] for d in member.get('days', []) if d.get('valid') and d.get('type') and number(d.get('qty')) is not None and number(d['qty']) > 0 and date_text(d['date']) < today}
+        if not types:
+            continue
+        out.append({'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
+    return {'through': max(dates) if dates else None, 'movement': movements, 'members': out}
+
+
+def build_summary(family):
+    from mobile_pricing import build_page
+    from db import db_conn
+    from business_clock import completed_through_date
+    from data_coverage import source_data_days
+    from webapp_v2_runtime import _ordering_family_movement_metrics
+    # Internal builder reads a complete family in one bounded request; it never
+    # changes the public mobile-pricing endpoint's pagination contract.
+    page = build_page(family=family, limit=10000)
+    family_ids = {int(i['familyId']) for i in page['items']}
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        try:
+            if not family_ids:
+                cur.execute('SELECT family_id FROM product_family WHERE main_article_number=%s OR family_id=%s LIMIT 1', (family, int(family)))
+                row = cur.fetchone()
+                if row:
+                    family_ids.add(int(row['family_id']))
+            if len(family_ids) != 1:
+                raise ValueError('Family identity unavailable or ambiguous.')
+            fid = next(iter(family_ids))
+            movement = {}
+            for name, count in [('seven', 7), ('fourteen', 14)]:
+                days = sorted(source_data_days(cur, 'movement', limit=count, up_to=completed_through_date()), key=lambda d: d['date'])
+                metrics = _ordering_family_movement_metrics(cur, fid, days)
+                valid = metrics.get('status') == 'READY' and number(metrics.get('quantity')) is not None and number(metrics['quantity']) >= 0 and metrics.get('uom') and days
+                movement[name] = {'average': number(metrics['quantity']) / len(days) if valid else None, 'price': None, 'quantity': metrics.get('quantity') if valid else 0, 'days': len(days) if valid else 0, 'uom': metrics.get('uom') or '', 'start': date_text(days[0]['date']) if days else None, 'through': date_text(days[-1]['date']) if days else None}
+        finally:
+            cur.close()
+    return summarize(page, movement)
+
+
+_cache = OrderedDict()
+_lock = threading.Lock()
+
+
+def install_inventory_sales(app, api):
+    from fastapi import HTTPException
+    from fastapi.encoders import jsonable_encoder
+    from read_singleflight import ReadSingleFlight, ReadBusy
+    reads = ReadSingleFlight(max_running=2, wait_seconds=20)
+    @app.get('/v1/app/inventory-sales')
+    def inventory_sales(family: str):
+        if not family.isdigit() or len(family) > 18:
+            raise HTTPException(422, 'Invalid family article.')
+        def produce():
+            with _lock:
+                cached = _cache.get(family)
+                if cached and time.monotonic() - cached[0] < 300:
+                    return cached[1]
+            result = jsonable_encoder({'sales': build_summary(family), 'checkedAt': datetime.now(timezone.utc).isoformat(), 'source': 'FULL MYSQL', 'basis': 'FAMILY_MVT_AND_SEPARATE_UPC_POS'})
+            with _lock:
+                _cache[family] = (time.monotonic(), result)
+                while len(_cache) > 300:
+                    _cache.popitem(last=False)
+            return result
+        try:
+            return reads.run(family, produce)
+        except ReadBusy:
+            raise HTTPException(503, 'Sales history busy. Retry shortly.')
+    for name in ('backoffice_html', 'yipman_html'):
+        original = getattr(api, name)
+        def render(*args, _original=original, **kwargs):
+            html = _original(*args, **kwargs)
+            return html if 'inventorySalesDesktop' in html else html.replace('</body>', DESKTOP_SCRIPT + '</body>', 1)
+        setattr(api, name, render)
+
+
+DESKTOP_SCRIPT = r'''
+<style id="inventorySalesDesktop">
+#ydesk .inventory-sales-card{grid-column:1/-1;width:100%;min-width:0;margin:6px 0;padding:8px;border-top:1px solid currentColor;font-size:14px}
+.inventory-sales-card .mvt-summary{display:flex;gap:24px;flex-wrap:wrap}.inventory-sales-card table{width:100%;font-size:13px;border-collapse:collapse}.inventory-sales-card th,.inventory-sales-card td{padding:5px;text-align:left;border-bottom:1px solid #55715d}.inventory-sales-card small{font-size:11px}.inventory-sales-card details{margin-top:6px}.inventory-sales-card .sales-upc{margin-top:8px;font-weight:bold}
+</style>
+<script>
+(()=>{
+ const cache=new Map(),pending=new Map(),queue=[];let running=0;
+ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const fmt=x=>x==null?'—':Number(x).toLocaleString(undefined,{maximumFractionDigits:2});
+ function pump(){while(running<2&&queue.length){const work=queue.shift();running++;work().finally(()=>{running--;pump()})}}
+ function read(family){const old=cache.get(family);if(old&&Date.now()-old.at<300000)return Promise.resolve(old.data);if(pending.has(family))return pending.get(family);const p=new Promise((resolve,reject)=>{queue.push(async()=>{try{const r=await fetch('/v1/app/inventory-sales?family='+encodeURIComponent(family),{cache:'no-store',signal:AbortSignal.timeout(45000)});const d=await r.json();if(!r.ok||!d.sales)throw Error(d.detail||'Sales history unavailable');cache.set(family,{at:Date.now(),data:d.sales});resolve(d.sales)}catch(e){reject(e)}finally{pending.delete(family)}});pump()});pending.set(family,p);return p}
+ function avg(v,u){return '<b>'+fmt(v.average)+' '+esc(u)+'/day</b><br>'+(v.price==null?'—':'$'+Number(v.price).toFixed(2)+' / '+esc(u))+'<br><small>'+v.days+' valid days</small>'}
+ function paint(node,d,upc){const rows=upc?d.members.filter(m=>m.upc===upc):d.members;node.innerHTML='<div class="mvt-summary">'+[['7D',d.movement.seven],['14D',d.movement.fourteen]].map(([label,m])=>'<div>'+label+' avg selling MVT<br><b>'+fmt(m.average)+' '+esc(m.uom||'—')+'/day</b><br><small>'+esc(m.through||'Not verified')+' · '+m.days+' valid days</small></div>').join('')+'</div>'+rows.map(m=>'<div class="sales-upc">'+esc(m.name)+' · UPC '+esc(m.upc)+'</div><table><thead><tr><th>Price type</th><th>7D avg/day · avg sold price</th><th>14D avg/day · avg sold price</th></tr></thead><tbody>'+m.types.map(t=>'<tr><th>'+esc(t.type)+'</th><td>'+avg(t.seven,m.uom)+'</td><td>'+avg(t.fourteen,m.uom)+'</td></tr>').join('')+'</tbody></table>').join('')+'<details><summary>Sales source & dates</summary><small>POS through '+esc(d.through||'—')+'. MVT 251 − 252 is the family total. Price-type rows use UPC POS only. Avg/day = quantity ÷ valid days at that price type, including verified zero-sales days. Avg sold price = sales ÷ quantity. Missing or mixed-price days excluded.</small></details>';node.dataset.loaded='1'}
+ const observe=new IntersectionObserver(entries=>entries.forEach(e=>{if(!e.isIntersecting)return;const n=e.target;if(n.dataset.loading||n.dataset.loaded)return;n.dataset.loading='1';read(n.dataset.family).then(d=>{if(n.isConnected)paint(n,d,n.dataset.upc)}).catch(()=>{if(n.isConnected)n.innerHTML='<small>Sales history unavailable.</small> <button type="button">Retry</button>';const b=n.querySelector('button');if(b)b.onclick=e=>{e.stopPropagation();delete n.dataset.loading;observe.unobserve(n);observe.observe(n)}}).finally(()=>delete n.dataset.loading)}),{rootMargin:'80px'});
+ function attach(){
+  document.querySelectorAll('#yd-pi .pirow[data-family]').forEach(row=>{if(row.querySelector('.inventory-sales-card'))return;const n=document.createElement('div');n.className='inventory-sales-card';n.dataset.family=row.dataset.family;n.textContent='Loading sales history…';n.onclick=e=>e.stopPropagation();row.appendChild(n);observe.observe(n)});
+  document.querySelectorAll('#invRows tr').forEach(row=>{if(row.dataset.inventorySalesAttached||row.classList.contains('inventory-sales-extra'))return;const family=row.querySelector('[data-family]')?.dataset.family,upc=row.querySelector('[data-upc]')?.dataset.upc;if(!family||!upc)return;row.dataset.inventorySalesAttached='1';const extra=document.createElement('tr');extra.className='inventory-sales-extra';const td=document.createElement('td');td.colSpan=row.children.length;const n=document.createElement('div');n.className='inventory-sales-card';n.dataset.family=family;n.dataset.upc=upc;n.textContent='Loading sales history…';td.appendChild(n);extra.appendChild(td);row.after(extra);observe.observe(n)});
+ }
+ let scheduled=false;new MutationObserver(()=>{if(scheduled)return;scheduled=true;requestAnimationFrame(()=>{scheduled=false;attach()})}).observe(document.body,{childList:true,subtree:true});attach();
+})();
+</script>
+'''

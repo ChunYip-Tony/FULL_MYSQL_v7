@@ -27,3 +27,8 @@ install_app_ready_fastpath(app)
 install_app_ready_api(app)
 install_app_ready_ingest_hook(app, _api, request_app_ready_rebuild)
 install_app_ready_true_stock_hook(app, _api, request_app_ready_rebuild)
+
+
+# Shared inventory card evidence; both existing desktop URLs retain their identity.
+from inventory_sales import install_inventory_sales
+install_inventory_sales(app, _api)
