@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from health_watchdog import APIWatchdog, api_responds
 from db import db_conn
 from v7_ingest import API_PIPELINE, API_VERSION
 
@@ -99,6 +100,7 @@ def main() -> int:
     api = start_api()
     worker = start_worker()
     stopping = False
+    watchdog = APIWatchdog(time.monotonic())
 
     def shutdown(signum, _frame):
         nonlocal stopping
@@ -115,6 +117,18 @@ def main() -> int:
             if api_rc is not None:
                 log(f"API exited with code {api_rc}; container will restart")
                 return api_rc or 1
+
+            if watchdog.due(time.monotonic()):
+                healthy = api_responds(os.environ.get("PORT", "8080"))
+                if watchdog.observe(time.monotonic(), healthy):
+                    log("API health unresponsive after 4 checks; restarting API only, worker continues")
+                    stop_process(api, "unresponsive api")
+                    if stopping:
+                        break
+                    api = start_api()
+                    watchdog.reset(time.monotonic())
+                elif not healthy:
+                    log(f"API health check failed ({watchdog.failures}/4)")
 
             worker_rc = worker.poll()
             if worker_rc is not None:
@@ -138,3 +152,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
