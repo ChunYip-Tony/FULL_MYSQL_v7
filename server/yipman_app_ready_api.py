@@ -3,6 +3,9 @@ from __future__ import annotations
 """Fast-read API and lossless coalescing rebuild coordinator for App Ready snapshots."""
 
 import threading
+import logging
+
+_LOG = logging.getLogger(__name__)
 from fastapi import HTTPException
 from business_clock import completed_through_date
 from yipman_app_ready_builders import app_ready_builders
@@ -107,9 +110,25 @@ def install_app_ready_api(app) -> None:
 
     @app.on_event("startup")
     def _build_app_ready_on_startup():
-        hydrated = hydrate_durable_app_ready()
-        app.state.yipman_app_ready_durable_hydrated = hydrated
-        request_app_ready_rebuild(source_batch_id="STARTUP")
+        # A slow durable read must never prevent Uvicorn from accepting health
+        # probes. Hydrate first in one background task, then queue the rebuild,
+        # so a late hydration cannot overwrite a newly completed generation.
+        app.state.yipman_app_ready_durable_hydrated = False
+        app.state.yipman_app_ready_startup_loading = True
+
+        def load_then_rebuild():
+            try:
+                hydrated = hydrate_durable_app_ready()
+                app.state.yipman_app_ready_durable_hydrated = hydrated
+                request_app_ready_rebuild(source_batch_id="STARTUP")
+            except Exception:
+                _LOG.exception("App Ready background startup failed")
+            finally:
+                app.state.yipman_app_ready_startup_loading = False
+
+        threading.Thread(
+            target=load_then_rebuild, name="app-ready-startup", daemon=True,
+        ).start()
 
     @app.get("/api/yipman/app-ready/status")
     def yipman_app_ready_status():
@@ -120,6 +139,7 @@ def install_app_ready_api(app) -> None:
         out["rebuild_queued"] = queued_source is not None
         out["queued_source"] = queued_source
         out["durable_hydrated"] = bool(getattr(app.state, "yipman_app_ready_durable_hydrated", False))
+        out["startup_loading"] = bool(getattr(app.state, "yipman_app_ready_startup_loading", False))
         from yipman_app_ready_readers import pointer_refresh_status
         out.update(pointer_refresh_status())
         return out
