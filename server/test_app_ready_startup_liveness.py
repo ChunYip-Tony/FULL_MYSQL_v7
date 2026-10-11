@@ -1,15 +1,8 @@
 """Regression tests: a blocked durable snapshot read cannot block API startup."""
 import asyncio
-import sys
 import threading
 import time
-import types
 import unittest
-
-# Builders are not exercised here; keep this liveness test database-free.
-builders = types.ModuleType("yipman_app_ready_builders")
-builders.app_ready_builders = lambda: {}
-sys.modules.setdefault("yipman_app_ready_builders", builders)
 
 from fastapi import FastAPI
 import yipman_app_ready_api as subject
