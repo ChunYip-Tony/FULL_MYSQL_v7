@@ -104,8 +104,14 @@ def price_snapshots(cur, rows):
 
 def day_evidence(row, day, observation, snapshots, costs, current_cost):
     configured = next((p for p in reversed(snapshots) if p['date'] < day), None)
-    # Intraday uploads do not prove a whole day of exposure or zero sales.
-    on_day_upload = any(p['date'] == day for p in snapshots)
+    # A repeated identical ticket is not an intraday price change. Completed
+    # canonical POS coverage establishes zero sales even if today's routine
+    # price-list upload repeats the ticket already in effect before the day.
+    on_day = [p for p in snapshots if p['date'] == day]
+    stable_exposure = bool(configured) and all(
+        p['type'] == configured['type'] and num(p['price']) == num(configured['price'])
+        for p in on_day)
+
     cost = cost_for_day(row, costs, day)
     result = {'date': day, 'qty': None, 'sales': None, 'price': None, 'type': None,
         'gp': None, 'normalized_gp': None, 'valid': False, 'reason': None,
@@ -131,12 +137,12 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
             if configured and configured['type'] == pt and abs(configured['price'] - price) <= Decimal('.02'):
                 price = configured['price']
             result.update(price=price.quantize(Decimal('.01')), type=pt)
-        elif configured and not on_day_upload:
+        elif stable_exposure:
             result.update(price=configured['price'], type=configured['type'], zero_sale=True)
         else:
             result['reason'] = 'PRICE_EXPOSURE_UNVERIFIED'
             return result
-    elif configured and not on_day_upload:
+    elif stable_exposure:
         result.update(qty=Decimal(0), sales=Decimal(0), price=configured['price'], type=configured['type'], zero_sale=True)
     else:
         result['reason'] = 'PRICE_EXPOSURE_UNVERIFIED'
@@ -329,3 +335,4 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         # Bounded code location only: never expose SQL, credentials or row data.
         raise HTTPException(500, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
+
