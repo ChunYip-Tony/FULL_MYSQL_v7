@@ -361,14 +361,14 @@ def _web_upload_filename_ok(filename: str) -> bool:
 
 @app.get('/app/data-center',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/data-center/',response_class=HTMLResponse,include_in_schema=False)
-def standalone_data_center():
+async def standalone_data_center():
     from data_center_app import DATA_CENTER_HTML
     return HTMLResponse(DATA_CENTER_HTML,headers={'Cache-Control':'no-store'})
 
 
 @app.get('/app/stock-records',response_class=HTMLResponse,include_in_schema=False)
 @app.get('/app/stock-records/',response_class=HTMLResponse,include_in_schema=False)
-def standalone_stock_records():
+async def standalone_stock_records():
     from stock_records_app import STOCK_RECORDS_HTML
     return HTMLResponse(STOCK_RECORDS_HTML,headers={'Cache-Control':'no-store'})
 
