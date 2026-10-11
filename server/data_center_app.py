@@ -178,10 +178,15 @@ header small{overflow-wrap:anywhere}
 <header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>YipMan Work DataCenter</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
 <nav class="dc-functions" aria-label="Data Center functions">
  <button id="dataFunction" type="button" aria-pressed="true" aria-controls="dataWorkspace">Data &amp; Uploads</button>
+ <button id="inventoryFunction" type="button" aria-pressed="false" aria-controls="inventoryWorkspace">Inventory</button>
  <button id="priceFunction" type="button" aria-pressed="false" aria-controls="priceWorkspace">Price Review</button>
  <a id="priceFullWindow" hidden href="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" target="_blank" rel="noopener">Open full window ↗</a>
  <a href="/app/stock-records">Stock Records</a>
 </nav>
+<section id="inventoryWorkspace" hidden aria-label="Inventory">
+ <p id="inventoryModuleStatus" role="status">Opening Inventory…</p>
+ <iframe id="inventoryFrame" title="YipMan Work Inventory" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/inventory" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+</section>
 <section id="priceWorkspace" hidden aria-label="Price Review">
  <p id="priceModuleStatus" role="status">Opening Price Review…</p>
  <iframe id="priceReviewFrame" title="YipMan Work Price Review" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" referrerpolicy="strict-origin-when-cross-origin"></iframe>
@@ -198,14 +203,14 @@ header small{overflow-wrap:anywhere}
 .dc-functions button,.dc-functions a{min-height:36px;padding:7px 12px;font-size:15px}
 .dc-functions button[aria-pressed=true]{background:var(--ink);color:#020a05;border-color:var(--ink)}
 .dc-functions a{margin-left:auto}
-#priceWorkspace{width:100%;padding:0 12px;flex:1;min-height:0;display:flex;flex-direction:column}
+#priceWorkspace,#inventoryWorkspace{width:100%;padding:0 12px;flex:1;min-height:0;display:flex;flex-direction:column}
 .price-module-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:8px 0;flex:none}
 .price-module-bar a{font-size:14px;padding:6px;border:1px solid var(--line)}
 #priceModuleStatus{color:var(--muted);font-size:14px;margin-bottom:8px;flex:none}
-#priceReviewFrame{display:block;width:100%;height:calc(100dvh - 170px);min-height:320px;flex:1;border:1px solid var(--line);background:#000}
+#priceReviewFrame,#inventoryFrame{display:block;width:100%;height:calc(100dvh - 170px);min-height:320px;flex:1;border:1px solid var(--line);background:#000}
 body.price-review-active{height:100dvh;display:flex;flex-direction:column}
-body.price-review-active #priceReviewFrame{height:auto;min-height:0}
-@media(max-width:520px){#priceWorkspace{padding:0 6px}.dc-functions{padding:6px;gap:5px}.dc-functions button,.dc-functions a{font-size:13px;padding:6px 8px}.price-module-bar h1{font-size:19px}}
+body.price-review-active #priceReviewFrame,body.price-review-active #inventoryFrame{height:auto;min-height:0}
+@media(max-width:520px){#priceWorkspace,#inventoryWorkspace{padding:0 6px}.dc-functions{padding:6px;gap:5px}.dc-functions button,.dc-functions a{font-size:13px;padding:6px 8px}.price-module-bar h1{font-size:19px}}
 
 /* DC-11: readable operations dashboard with useful content in every column. */
 :root{--muted:#a2c7ac;--line:#295a3a}
@@ -293,35 +298,28 @@ header #version{font-size:11px;max-width:320px;overflow:hidden;text-overflow:ell
 .dc-functions{padding:4px 10px;gap:6px}
 .dc-functions button,.dc-functions a{min-height:30px;padding:4px 10px;font-size:13px}
 .dc-functions #priceFullWindow{margin-left:auto}.dc-functions #priceFullWindow:not([hidden])+a{margin-left:0}
-#priceWorkspace{padding:4px 8px 0}
+#priceWorkspace,#inventoryWorkspace{padding:4px 8px 0}
 #priceModuleStatus{font-size:12px;margin:3px 0}
-#priceReviewFrame{height:calc(100dvh - 76px)}
-@media(max-width:520px){header strong{font-size:15px}.dc-functions{padding:4px 6px}.dc-functions button,.dc-functions a{font-size:12px;padding:4px 6px}#priceWorkspace{padding:3px 4px 0}}
+#priceReviewFrame,#inventoryFrame{height:calc(100dvh - 76px)}
+@media(max-width:520px){header strong{font-size:15px}.dc-functions{padding:4px 6px}.dc-functions button,.dc-functions a{font-size:12px;padding:4px 6px}#priceWorkspace,#inventoryWorkspace{padding:3px 4px 0}}
 </style>
 <script id="dc-shared-price-review">
 (()=>{
- const data=document.getElementById('dataWorkspace'),price=document.getElementById('priceWorkspace');
- const dataButton=document.getElementById('dataFunction'),priceButton=document.getElementById('priceFunction');
- const frame=document.getElementById('priceReviewFrame'),status=document.getElementById('priceModuleStatus');
- let ready=false,timer;
- function selectPrice(open){
-  data.hidden=open;price.hidden=!open;document.getElementById('priceFullWindow').hidden=!open;document.body.classList.toggle('price-review-active',open);
-  dataButton.setAttribute('aria-pressed',String(!open));priceButton.setAttribute('aria-pressed',String(open));
-  if(open&&!frame.hasAttribute('src')){
-   frame.src=frame.dataset.src;
-   timer=setTimeout(()=>{if(!ready)status.textContent='Price Review is taking longer to open. Use Open full window if your browser blocks the embedded view.';},15000);
-  }
-  if(!open)window.dispatchEvent(new Event('dc:data-workspace-active'));
+ const views={data:{workspace:'dataWorkspace',button:'dataFunction'},inventory:{workspace:'inventoryWorkspace',button:'inventoryFunction',frame:'inventoryFrame',status:'inventoryModuleStatus',ready:'yipman:inventory-ready',path:'/inventory'},'price-review':{workspace:'priceWorkspace',button:'priceFunction',frame:'priceReviewFrame',status:'priceModuleStatus',ready:'yipman:price-review-ready',path:'/price-review'}};
+ const ready=new Set(),timers={};
+ function selected(){return views[location.hash.slice(1)]?location.hash.slice(1):'data';}
+ function select(name){
+  for(const [key,v] of Object.entries(views)){document.getElementById(v.workspace).hidden=key!==name;document.getElementById(v.button).setAttribute('aria-pressed',String(key===name));}
+  const link=document.getElementById('priceFullWindow');link.hidden=name==='data';if(name!=='data')link.href='https://seafood-stock-watch.bronzedove3.chatgpt.site'+views[name].path;
+  document.body.classList.toggle('price-review-active',name!=='data');
+  const v=views[name],frame=v.frame&&document.getElementById(v.frame);
+  if(frame&&!frame.hasAttribute('src')){frame.src=frame.dataset.src;timers[name]=setTimeout(()=>{if(!ready.has(name))document.getElementById(v.status).textContent=(name==='inventory'?'Inventory':'Price Review')+' is taking longer to open. Use Open full window if your browser blocks the embedded view.';},15000);}
+  if(name==='data')window.dispatchEvent(new Event('dc:data-workspace-active'));
  }
- function navigate(open){const hash=open?'#price-review':'#data';if(location.hash!==hash)history.pushState(null,'',hash);selectPrice(open);}
- dataButton.onclick=()=>navigate(false);priceButton.onclick=()=>navigate(true);
- window.addEventListener('popstate',()=>selectPrice(location.hash==='#price-review'));
- window.addEventListener('hashchange',()=>selectPrice(location.hash==='#price-review'));
- window.addEventListener('message',event=>{
-  if(event.origin!=='https://seafood-stock-watch.bronzedove3.chatgpt.site'||event.source!==frame.contentWindow||event.data?.type!=='yipman:price-review-ready')return;
-  ready=true;clearTimeout(timer);status.hidden=true;
- });
- selectPrice(location.hash==='#price-review');
+ for(const [key,v] of Object.entries(views))document.getElementById(v.button).onclick=()=>{if(location.hash!=='#'+key)history.pushState(null,'','#'+key);select(key);};
+ window.addEventListener('popstate',()=>select(selected()));window.addEventListener('hashchange',()=>select(selected()));
+ window.addEventListener('message',event=>{if(event.origin!=='https://seafood-stock-watch.bronzedove3.chatgpt.site')return;for(const [key,v] of Object.entries(views)){if(v.frame&&event.source===document.getElementById(v.frame).contentWindow&&event.data?.type===v.ready){ready.add(key);clearTimeout(timers[key]);document.getElementById(v.status).hidden=true;}}});
+ select(selected());
 })();
 </script>
 <script>
@@ -554,5 +552,6 @@ window.addEventListener('dc:data-workspace-active',()=>refresh());
 setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').hidden)renderActivity()},1000);
 })();
 </script></body></html>'''
+
 
 
