@@ -5408,3 +5408,9 @@ def quick_check(upc:str,authorization: Annotated[str|None,Header()]=None):
     return json.loads(json.dumps(row,default=j))
 
 
+
+
+# Independent AI ordering app: authenticated read-only tools; reuse runtime key.
+import sys as _order_assistant_sys
+from order_assistant_api import register as _register_order_assistant
+_register_order_assistant(app, _order_assistant_sys.modules[__name__])
