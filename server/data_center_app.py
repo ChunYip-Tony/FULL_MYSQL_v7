@@ -179,21 +179,19 @@ header small{overflow-wrap:anywhere}
 <nav class="dc-functions" aria-label="Data Center functions">
  <button id="dataFunction" type="button" aria-pressed="true" aria-controls="dataWorkspace">Data &amp; Uploads</button>
  <button id="priceFunction" type="button" aria-pressed="false" aria-controls="priceWorkspace">Price Review</button>
+ <a id="priceFullWindow" hidden href="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" target="_blank" rel="noopener">Open full window ↗</a>
  <a href="/app/stock-records">Stock Records</a>
 </nav>
 <section id="priceWorkspace" hidden aria-label="Price Review">
- <div class="price-module-bar"><h1>Price Review</h1><a href="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" target="_blank" rel="noopener">Open full window ↗</a></div>
  <p id="priceModuleStatus" role="status">Opening Price Review…</p>
  <iframe id="priceReviewFrame" title="YipMan Work Price Review" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 </section>
-<main id="dataWorkspace"><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><a href="/app/stock-records">Stock Records</a><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
+<main id="dataWorkspace"><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
 <div id="globalError" role="alert"></div><div id="loadStatus" class="load-status" role="status" aria-label="Panel update status"></div><div id="freshness" class="fresh"></div>
-<div class="grid"><div><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
-<section class="panel recent-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Recent batches</h2><div id="recent" class="scroll">Loading…</div></section></div>
-<div><section class="panel upload-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload files</h2><div class="drop"><label for="files"><b>Select source files</b></label><div class="upload-controls"><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><button id="upload" class="primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload &amp; process</button></div><details><summary>Batch note (optional)</summary><label for="note" hidden>Batch note</label><input id="note" type="text" placeholder="For example: October 9 movement"></details></div><div id="uploadStatus" role="status" class="notice"></div><p class="muted">Existing files are saved. No re-upload needed.</p></section>
-<section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
-<section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div></div>
-<footer>YipMan Work DataCenter DC-10 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
+<div class="grid"><div class="monitor-column"><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
+<section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div><div class="tools-column"><section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
+<section class="panel upload-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload files</h2><div class="drop"><label for="files"><b>Select source files</b></label><div class="upload-controls"><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><button id="upload" class="primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload &amp; process</button></div><details><summary>Batch note (optional)</summary><label for="note" hidden>Batch note</label><input id="note" type="text" placeholder="For example: October 9 movement"></details></div><div id="uploadStatus" role="status" class="notice"></div><p class="muted">Existing files are saved. No re-upload needed.</p></section></div><div class="history-column"><section class="panel recent-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Recent batches</h2><div id="recent" class="scroll">Loading…</div></section></div></div>
+<footer>YipMan Work DataCenter DC-11 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
 <style>
 [hidden]{display:none!important}
 .dc-functions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
@@ -208,6 +206,97 @@ header small{overflow-wrap:anywhere}
 body.price-review-active{height:100dvh;display:flex;flex-direction:column}
 body.price-review-active #priceReviewFrame{height:auto;min-height:0}
 @media(max-width:520px){#priceWorkspace{padding:0 6px}.dc-functions{padding:6px;gap:5px}.dc-functions button,.dc-functions a{font-size:13px;padding:6px 8px}.price-module-bar h1{font-size:19px}}
+
+/* DC-11: readable operations dashboard with useful content in every column. */
+:root{--muted:#a2c7ac;--line:#295a3a}
+body{background:#030c07}
+header{background:#07180d}
+.dc-functions{background:#041108}
+.dc-functions button{min-height:40px;font-weight:700}
+.dc-functions button[aria-pressed=true]{box-shadow:inset 0 -3px 0 #b1ffc2}
+.panel{padding:14px;border-top:2px solid #36744a;border-bottom:2px solid #36744a;background:#06140b}
+.panel>h2,.coverage-heading{padding-bottom:10px;border-bottom:1px solid var(--line);margin-bottom:12px}
+h2{font-size:17px;letter-spacing:.4px}
+.monitor-panel{border-top:3px solid var(--good)}
+.publication-panel{border-top:3px solid var(--blue)}
+.batch-title h2{font-size:24px}
+.files{margin:8px 0 12px;color:#c0e6c9;font-size:14px}
+#runBadge{max-width:55%;font-size:12px;text-align:right}
+.pipeline-rail{gap:6px;margin:12px 0}
+.pipeline-step{padding:8px;font-size:12px}
+.activity{padding:12px;background:#0a2615;margin:12px 0}
+.activity-head{font-size:15px;align-items:flex-start}
+.activity-lines{font-size:12px;color:#b1d9bd;gap:5px 12px;margin-top:8px}
+.stage-progress-text{color:#b1ffc2;font-weight:700}
+.progress-heading{display:flex;align-items:center;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--muted)}
+.progress-heading>b{font-size:30px;line-height:1;color:var(--good);font-variant-numeric:tabular-nums}
+.progress-heading small{font-size:15px;margin-left:2px}
+.stage-meter{height:7px;margin-top:8px}
+#monitor>.metrics{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0}
+#monitor>.metrics>.metric{padding:9px 10px;min-height:65px}
+#monitor>.metrics>.metric:nth-child(4){border-left:0}
+#monitor>.metrics>.metric:nth-child(n+4){border-top:1px solid var(--line)}
+.metric>span{font-size:11px}.metric>b{font-size:21px}
+#currentCheckpoint{font-size:15px;line-height:1.3}
+.publish-dates{gap:10px;margin-top:12px}
+.publish-dates>div{border-left:2px solid #36744a;padding-left:8px}
+.publish-dates b{font-size:20px;color:#b1ffc2}
+.publish-time,.publish-counts{font-size:12px;line-height:1.6}
+.publish-counts{padding:8px;background:#0a2615;color:#b1ffc2}
+.publication-panel h2{font-size:17px;color:var(--blue)}
+.upload-panel .primary{width:100%;min-height:40px;justify-content:center;font-size:15px}
+.upload-controls input[type=file]{font-size:13px;padding:4px 0}
+.drop{padding:10px;background:#041108}
+.upload-panel>p:last-child{font-size:12px;line-height:1.5}
+.tile{grid-template-columns:1fr;padding:8px 12px;gap:3px}
+.tile b{font-size:18px}.tile small{font-size:11px}.tile>span{font-size:11px}
+.load-status{gap:6px 16px}.load-chip{font-size:11px}
+.calendar-day{padding:7px 3px;min-height:64px}.calendar-day b{font-size:16px}
+.coverage-heading h2{font-size:17px}.coverage-overview{font-size:13px}
+summary{min-height:32px;display:list-item;align-content:center;font-size:13px}
+#recent th{font-size:11px;padding:10px 7px}
+#recent td{font-size:13px;padding:12px 7px;line-height:1.5}
+#recent .recent-files{font-size:12px;color:#b1d9bd;gap:4px}
+#recent .status-text{font-size:12px;padding:4px 6px}
+#recent tr[aria-selected=true]{background:#10321c}
+#recent tr[aria-selected=true] td:first-child{border-left:3px solid var(--good)}
+#recent td:first-child .linkbtn{font-size:15px;min-height:32px}
+@media(min-width:1100px){
+ main>.grid{grid-template-columns:minmax(0,1.4fr) minmax(0,.85fr) minmax(0,1.05fr);gap:12px}
+ main>.grid>.monitor-column,main>.grid>.tools-column,main>.grid>.history-column{display:flex;flex-direction:column;gap:12px;grid-column:auto;grid-row:auto;min-height:0;overflow:auto}
+ .grid .monitor-panel{height:auto;overflow:visible;flex:none;grid-column:auto;grid-row:auto}
+ .grid .coverage-panel{flex:none;overflow:visible}
+ .grid .recent-panel{height:100%;flex:1;grid-column:auto;grid-row:auto;overflow:hidden}
+ #monitor{height:auto;display:block}.panel{margin-bottom:0}
+}
+@media(min-width:801px) and (max-width:1099px){
+ body{overflow:auto;height:auto;min-height:100dvh}
+ main>.grid{overflow:visible;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);align-items:start}
+ .grid>.history-column{grid-column:1/-1}
+ .grid .monitor-panel,.grid .recent-panel{height:auto}
+ .grid #recent{max-height:320px}
+}
+@media(max-width:800px){
+ .grid{display:flex;flex-direction:column;gap:0}
+ .grid>div{width:100%}.panel{margin-bottom:12px;padding:12px}
+ .tile{padding:7px}.tile b{font-size:15px}
+ .batch-title h2{font-size:22px}.publish-dates b{font-size:18px}
+ #monitor>.metrics>.metric{padding:8px;min-height:60px}
+ .metric>b{font-size:19px}.calendar-day b{font-size:14px}
+ .activity-head small{font-size:11px}.progress-heading>b{font-size:26px}
+}
+
+/* Compact shell: one title and one navigation row above the shared view. */
+header{min-height:34px;padding:3px 10px}
+header strong{font-size:17px}header .brand-mark{width:24px;height:24px;font-size:18px}
+header #version{font-size:11px;max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dc-functions{padding:4px 10px;gap:6px}
+.dc-functions button,.dc-functions a{min-height:30px;padding:4px 10px;font-size:13px}
+.dc-functions #priceFullWindow{margin-left:auto}.dc-functions #priceFullWindow:not([hidden])+a{margin-left:0}
+#priceWorkspace{padding:4px 8px 0}
+#priceModuleStatus{font-size:12px;margin:3px 0}
+#priceReviewFrame{height:calc(100dvh - 76px)}
+@media(max-width:520px){header strong{font-size:15px}.dc-functions{padding:4px 6px}.dc-functions button,.dc-functions a{font-size:12px;padding:4px 6px}#priceWorkspace{padding:3px 4px 0}}
 </style>
 <script id="dc-shared-price-review">
 (()=>{
@@ -216,7 +305,7 @@ body.price-review-active #priceReviewFrame{height:auto;min-height:0}
  const frame=document.getElementById('priceReviewFrame'),status=document.getElementById('priceModuleStatus');
  let ready=false,timer;
  function selectPrice(open){
-  data.hidden=open;price.hidden=!open;document.body.classList.toggle('price-review-active',open);
+  data.hidden=open;price.hidden=!open;document.getElementById('priceFullWindow').hidden=!open;document.body.classList.toggle('price-review-active',open);
   dataButton.setAttribute('aria-pressed',String(!open));priceButton.setAttribute('aria-pressed',String(open));
   if(open&&!frame.hasAttribute('src')){
    frame.src=frame.dataset.src;
@@ -335,7 +424,7 @@ function setActivity(id,run,pipeline,detail,health,checkedAt=Date.now()){
 function renderActivity(){
  const box=$('liveness');if(!box||!activityState)return;const v=activityView(activityState);
  const terminal=activityState.run?.processing_status==='COMPLETED';const d=activityState.detail,h=activityState.health,owns=h?.worker_run_id===activityState.run?.pipeline_run_id&&h?.worker_instance===d.worker_instance;const showMeter=v.live&&Number.isFinite(d.progress_pct)&&d.progress_total>0&&(!owns||h.worker_stage===d.phase3_stage);const pct=showMeter?Math.max(0,Math.min(100,d.progress_pct)):null;
- const html='<div class="activity '+v.tone+(terminal?' terminal':'')+'"><div class="activity-head"><span class="pulse '+(v.live?'live':'')+'" aria-hidden="true"></span><strong>'+esc(v.label)+'</strong><small>Checked '+esc(v.snapshotAge)+' ago</small></div><div class="activity-lines">'+(!terminal?'<span><b>Run heartbeat</b> '+esc(v.runAge)+(v.runAge==='Stopped'||v.runAge==='Not reported'?'':' ago')+'</span>':'')+'<span><b>Worker</b> '+esc(v.workerLabel)+'</span>'+(!terminal?'<span>'+esc(v.progress)+'</span>':'')+(v.eta?'<span>'+esc(v.eta)+'</span>':'')+'</div>'+(v.tone!=='good'?'<div class="activity-note">'+esc(v.note)+'</div>':'')+(v.retry&&!terminal?'<div class="retry"><strong>'+esc(v.retry)+'</strong></div>':'')+(pct!==null?'<div class="stage-meter" role="progressbar" aria-label="Current stage progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><span style="width:'+pct+'%"></span></div>':'')+'</div>';
+ const html='<div class="activity '+v.tone+(terminal?' terminal':'')+'"><div class="activity-head"><span class="pulse '+(v.live?'live':'')+'" aria-hidden="true"></span><strong>'+esc(v.label)+'</strong><small>Checked '+esc(v.snapshotAge)+' ago</small></div><div class="activity-lines">'+(!terminal?'<span><b>Run heartbeat</b> '+esc(v.runAge)+(v.runAge==='Stopped'||v.runAge==='Not reported'?'':' ago')+'</span>':'')+'<span><b>Worker</b> '+esc(v.workerLabel)+'</span>'+(!terminal?'<span class="stage-progress-text">'+esc(v.progress)+'</span>':'')+(v.eta?'<span>'+esc(v.eta)+'</span>':'')+'</div>'+(v.tone!=='good'?'<div class="activity-note">'+esc(v.note)+'</div>':'')+(v.retry&&!terminal?'<div class="retry"><strong>'+esc(v.retry)+'</strong></div>':'')+(pct!==null?'<div class="progress-heading"><span>Current stage</span><b>'+pct.toFixed(1)+'<small>%</small></b></div><div class="stage-meter" role="progressbar" aria-label="Current stage progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+pct+'"><span style="width:'+pct+'%"></span></div>':'')+'</div>';
  if(box.innerHTML!==html)box.innerHTML=html;
  const badge=$('runBadge');if(badge&&['STARTED','PAUSE_REQUESTED'].includes(activityState.run?.processing_status)){badge.className='badge '+v.tone;badge.textContent=v.label;}
  const stage=$('currentCheckpoint');if(stage&&h?.worker_healthy&&h.worker_run_id===activityState.run?.pipeline_run_id&&h.worker_instance&&h.worker_instance===d.worker_instance){stage.textContent=stageLabel(h.worker_stage||d.phase3_stage);stage.title=h.worker_stage||d.phase3_stage||'Not reported';}
@@ -465,4 +554,5 @@ window.addEventListener('dc:data-workspace-active',()=>refresh());
 setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').hidden)renderActivity()},1000);
 })();
 </script></body></html>'''
+
 
