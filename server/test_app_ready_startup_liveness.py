@@ -65,12 +65,11 @@ class StartupLivenessTests(unittest.TestCase):
             self.assertIn(b'"ok":true', messages[1]["body"])
             self.assertEqual(calls, [])
             self.release.set()
-            self.assertTrue(self.finished.wait(1))
             for _ in range(100):
                 if not app.state.yipman_app_ready_startup_loading:
                     break
                 await asyncio.sleep(.01)
-            self.assertEqual(calls, ["hydrated", "STARTUP"])
+            self.assertEqual(calls, ["hydrated"])
             self.assertTrue(app.state.yipman_app_ready_durable_hydrated)
             self.assertFalse(app.state.yipman_app_ready_startup_loading)
             await lifespan.__aexit__(None, None, None)

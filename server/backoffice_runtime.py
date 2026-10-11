@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from background_analysis_budget import serialized_background
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from difflib import SequenceMatcher
@@ -1981,6 +1982,7 @@ def _persist_ordering_review(cache_key: str, value: dict[str,Any]) -> None:
         cur.close()
 
 
+@serialized_background
 def _ordering_review_refresh_worker(
     category: str,
     delivery_date: date,
@@ -6176,6 +6178,7 @@ def _build_backoffice_home_summary() -> dict[str, Any]:
     }
 
 
+@serialized_background
 def _refresh_home_summary_worker() -> None:
     global _HOME_SUMMARY_CACHE_VALUE, _HOME_SUMMARY_CACHE_AT, _HOME_SUMMARY_REFRESHING, _HOME_SUMMARY_LAST_ERROR
     try:
@@ -8808,6 +8811,7 @@ def _persist_tpr_review(cache_key: str, value: dict[str,Any]) -> None:
         cur.close()
 
 
+@serialized_background
 def _tpr_review_refresh_worker(category: str, limit: int, cache_key: str) -> None:
     try:
         _TPR_REVIEW_LAST_ERROR.pop(cache_key,None)
@@ -9038,6 +9042,7 @@ def _persist_pricing_review(cache_key: str, value: dict[str,Any]) -> None:
         cur.close()
 
 
+@serialized_background
 def _pricing_review_refresh_worker(category: str, limit: int, cache_key: str) -> None:
     try:
         _PRICING_REVIEW_LAST_ERROR.pop(cache_key,None)

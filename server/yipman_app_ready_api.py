@@ -120,7 +120,8 @@ def install_app_ready_api(app) -> None:
             try:
                 hydrated = hydrate_durable_app_ready()
                 app.state.yipman_app_ready_durable_hydrated = hydrated
-                request_app_ready_rebuild(source_batch_id="STARTUP")
+                if not hydrated:
+                    request_app_ready_rebuild(source_batch_id="STARTUP")
             except Exception:
                 _LOG.exception("App Ready background startup failed")
             finally:

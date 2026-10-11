@@ -28,4 +28,13 @@ def runtime_health(root=Path('/sys/fs/cgroup')):
         out['oom_kills'] = int(events.get('oom_kill', 0))
     except (OSError, ValueError):
         pass
+    # App Platform may expose a v1 memory controller rather than cgroup v2.
+    if 'memory_mb' not in out:
+        for filename, key in [('memory.usage_in_bytes', 'memory_mb'),
+                              ('memory.max_usage_in_bytes', 'peak_memory_mb'),
+                              ('memory.limit_in_bytes', 'memory_limit_mb')]:
+            try:
+                out[key] = round(int((root / 'memory' / filename).read_text()) / 1048576, 1)
+            except (OSError, ValueError):
+                pass
     return out

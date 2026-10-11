@@ -1,1 +1,1 @@
-VERSION='7.0.511-nonblocking-snapshot-startup'
+VERSION='7.0.512-bounded-background-recovery'
