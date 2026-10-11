@@ -4,12 +4,14 @@ from decimal import Decimal
 import threading
 import time
 
-def rank_page(rows, metrics, *, cursor=0, limit=30, sort='velocity7', status='all', unit='all'):
+def rank_page(rows, metrics, *, cursor=0, limit=30, sort='velocity7', status='all', unit='all', category='ALL', overrides=None):
     if cursor < 0 or not 1 <= limit <= 100 or sort not in ('velocity7','velocity14','name','article') or status not in ('all','verified','unknown'):
         raise ValueError('Invalid inventory controls')
     out=[]
     for original in rows:
         row=dict(original)
+        row['category']=(overrides or {}).get(str(row['family_id']),row.get('category','UNKNOWN'))
+        if category!='ALL' and row['category']!=category: continue
         row.update(metrics.get(int(row['family_id']), {'velocity7':None,'velocity14':None,'movement_uom':''}))
         value=row['velocity14' if sort=='velocity14' else 'velocity7']
         if status=='verified' and value is None or status=='unknown' and value is not None:
@@ -37,6 +39,10 @@ def read_roster(query):
                 rows.extend(page['rows'])
                 if page['next_cursor'] is None: break
                 after=int(page['next_cursor'])
+            from mobile_pricing import category_index
+            from business_clock import business_today
+            categories=category_index(cur,rows,business_today())
+            for row in rows: row['category']=categories.get(int(row['family_id']),{}).get('category','UNKNOWN')
             days=sorted(source_data_days(cur,'movement',limit=14,up_to=completed_through_date()),key=lambda d:d['date'])
             if not days: return rows,{},[]
             clauses=[];args=[]
@@ -75,9 +81,14 @@ def install_family_catalog(app):
     from read_singleflight import ReadSingleFlight,ReadBusy
     reads=ReadSingleFlight(max_running=2,wait_seconds=20)
     @app.get('/v1/app/inventory-family-catalog')
-    def catalog(q:str='',cursor:int=0,limit:int=30,sort:str='velocity7',status:str='all',unit:str='all'):
+    def catalog(q:str='',cursor:int=0,limit:int=30,sort:str='velocity7',status:str='all',unit:str='all',category:str='ALL',overrides:str='{}'):
+        import json
+        try:
+            custom=json.loads(overrides)
+            if not isinstance(custom,dict) or len(custom)>5000 or any(not str(k).isdigit() or v not in ('LIVE','FRESH','FROZEN') for k,v in custom.items()): raise ValueError()
+        except (ValueError,TypeError): raise HTTPException(422,'Invalid category corrections')
         query=' '.join(q.strip().split()).lower()
-        if len(query)>80 or cursor<0 or not 1<=limit<=100 or sort not in ('velocity7','velocity14','name','article') or status not in ('all','verified','unknown') or unit not in ('all','LB','EA','KG','OZ','PC','CS'):
+        if category not in ('ALL','LIVE','FRESH','FROZEN','UNKNOWN') or len(query)>80 or cursor<0 or not 1<=limit<=100 or sort not in ('velocity7','velocity14','name','article') or status not in ('all','verified','unknown') or unit not in ('all','LB','EA','KG','OZ','PC','CS'):
             raise HTTPException(422,'Invalid inventory controls')
         def produce():
             with _lock:
@@ -90,7 +101,7 @@ def install_family_catalog(app):
             return result
         try:
             rows,metrics,dates=reads.run(query,produce)
-            result=rank_page(rows,metrics,cursor=cursor,limit=limit,sort=sort,status=status,unit=unit)
+            result=rank_page(rows,metrics,cursor=cursor,limit=limit,sort=sort,status=status,unit=unit,category=category,overrides=custom)
             result.update(query=query,movement_dates=dates)
             return jsonable_encoder(result)
         except ReadBusy:
