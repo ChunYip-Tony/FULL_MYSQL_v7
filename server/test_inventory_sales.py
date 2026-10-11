@@ -49,6 +49,15 @@ class SalesTests(unittest.TestCase):
         self.assertIsNone(tpr['seven']['average'])
         self.assertIn('3M POS',DESKTOP_SCRIPT)
 
+    def test_top_upc_rank_uses_actual_seven_day_quantity_across_types(self):
+        def member(upc,qty,valid=True,reason=None):
+            return {'upc':upc,'uom':'LB','days':[{'date':'2026-10-10','qty':qty,'sales':qty*5,'gp':qty*2,'type':'REG','valid':valid,'reason':reason}]}
+        page={'today':'2026-10-11','days':['2026-10-10'],'items':[{'members':[member('003',3),member('001',20,False,'COST_OR_UNIT_UNVERIFIED'),member('002',10)]}]}
+        result=summarize(page,{})
+        self.assertEqual([m['upc'] for m in result['members']],['001','002','003'])
+        self.assertEqual(result['members'][0]['posQty7'],20)
+        self.assertEqual(result['members'][0]['velocity7'],20)
+
     def test_both_inventory_surfaces(self):
         self.assertIn('#yd-pi .pirow[data-family]', DESKTOP_SCRIPT)
         self.assertIn('#invRows tr', DESKTOP_SCRIPT)
