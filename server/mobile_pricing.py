@@ -284,6 +284,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                     current = config if config and (not latest_pos or config['date'] >= latest_pos['date']) else ({'price': latest_pos['price'], 'type': latest_pos['type'], 'date': latest_pos['date'], 'source': 'CANONICAL_POS'} if latest_pos else None)
                     records.append({'upc': str(row['ean_upc']), 'name': row.get('selling_description'),
                         'article': str(row.get('article_number') or ''), 'uom': row.get('selling_uom'),
+                        'quantityBasis': 'POS_ITEM_COUNT' if str(row.get('selling_uom') or '').upper() == 'LB' else 'POS_SELLING_UNIT',
                         'status': row.get('quick_check_status'), 'blocking_reason': row.get('blocking_reason'),
                         'current': current, 'priceHistory': history, 'cost': cost, 'days': series})
                 first = members[0]
@@ -294,10 +295,51 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                     'receipts': [{'date':r['posting_date'], 'quantity':r.get('base_receipt_quantity') if r.get('base_receipt_quantity') is not None else r.get('receipt_quantity'), 'uom':r.get('base_receipt_uom') or r.get('receipt_uom')} for r in receipt_context.get(int(first['family_id']),[])], 'movement': movements[int(first['family_id'])]})
             return {'contract': 'MOBILE_PRICING_V1', 'today': today, 'through': through,
                 'checkedAt': datetime.now(timezone.utc).isoformat(), 'days': [d['date'] for d in days],
-                'items': items, 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
+                'items': guard_weight_counts(items), 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
                 'scope': 'ALL_QUICK_CHECK_UPCS', 'costOrder': 'RECEIPT_REPORT_OH'}
         finally:
             cur.close()
+
+
+def guard_weight_counts(items):
+    """Keep item counts out of LB metrics; provide labeled ticket-based estimates.
+
+    Actual UPC weight is unavailable in this POS format. Family MVT is never
+    allocated to UPCs. Changed/missing/mixed tickets cannot estimate weight.
+    """
+    for item in items:
+        for member in item['members']:
+            if member.get('quantityBasis') != 'POS_ITEM_COUNT':
+                continue
+            member['quantityStatus'] = 'POS_WEIGHT_ESTIMATED'
+            history = sorted(member.get('priceHistory', []), key=lambda p:(p['date'],p.get('file_id',0)))
+            for day in member['days']:
+                day['posItemCount'] = day['qty']
+                prior = next((p for p in reversed(history) if p['date'] < day['date']), None)
+                on_day = [p for p in history if p['date'] == day['date']]
+                stable = prior and all(p['type'] == prior['type'] and p['price'] == prior['price'] for p in on_day)
+                def estimate(row, pt):
+                    sales = num(row.get('sales'))
+                    if not stable or prior['type'] != pt or sales is None or sales < 0 or num(prior['price']) is None or num(prior['price']) <= 0:
+                        return None
+                    return sales / num(prior['price'])
+                for row in day.get('typeSales', []):
+                    row['posItemCount'] = row['qty']
+                    row['qty'] = estimate(row, row['type'])
+                    cost = day.get('cost')
+                    row['gp'] = row['sales'] - row['qty'] * cost['value'] if row['qty'] is not None and cost else None
+                qty = estimate(day, day.get('type'))
+                if len(day.get('typeSales', [])) > 1:
+                    qty = None
+                cost = day.get('cost')
+                day.update(qty=qty, price=num(prior['price']) if qty is not None else None,
+                    gp=day['sales']-qty*cost['value'] if qty is not None and cost else None,
+                    normalized_gp=day['sales']-qty*member['cost']['value'] if qty is not None and member.get('cost') else None,
+                    valid=False, reason='POS_WEIGHT_ESTIMATED' if qty is not None else 'POS_WEIGHT_MISSING',
+                    quantityBasis='POS_SALES_DIVIDED_BY_STABLE_HISTORICAL_TICKET', quantityEstimated=True)
+            if member.get('current') and member['current'].get('source') == 'CANONICAL_POS':
+                member['current'] = next(iter(reversed(history)), None)
+    return items
 
 _cache = OrderedDict()
 _lock = threading.Lock()
@@ -341,4 +383,5 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         # Bounded code location only: never expose SQL, credentials or row data.
         raise HTTPException(500, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
+
 
