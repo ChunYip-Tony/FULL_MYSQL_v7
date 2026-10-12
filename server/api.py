@@ -5414,3 +5414,24 @@ def quick_check(upc:str,authorization: Annotated[str|None,Header()]=None):
 import sys as _order_assistant_sys
 from order_assistant_api import register as _register_order_assistant
 _register_order_assistant(app, _order_assistant_sys.modules[__name__])
+
+@app.get('/v1/web-upload/diagnostics/pos-file-evidence')
+def web_upload_pos_file_evidence(request:Request,file_id:int):
+    """Bounded read-only RAW/canonical reconciliation for a known POS file."""
+    _browser_upload_guard(request)
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute("SELECT file_id,batch_id,original_filename,source_type,source_row_count FROM ingest_file WHERE file_id=%s",(file_id,))
+            source=cur.fetchone()
+            if not source or source['source_type']!='sales_by_price_type':
+                raise HTTPException(404,'POS file not found')
+            cur.execute("""SELECT r.raw_id,r.source_row_number,r.raw_payload,s.sheet_id,s.sheet_name
+                FROM raw_sales_by_price_type r JOIN ingest_sheet s ON s.sheet_id=r.sheet_id
+                WHERE s.file_id=%s ORDER BY s.sheet_index,r.source_row_number,r.raw_id LIMIT 500""",(file_id,))
+            rows=cur.fetchall()
+            cur.execute("SELECT COUNT(*) AS rows_count,COALESCE(SUM(sales_amount),0) AS sales_amount FROM sales_period_observation WHERE file_id=%s",(file_id,))
+            canonical=cur.fetchone()
+            return json.loads(json.dumps({'source':source,'canonical':canonical,'raw_rows':rows,'truncated':len(rows)>=500},default=j))
+        finally:
+            cur.close()

@@ -1,1 +1,1 @@
-VERSION='7.0.516-family-sales-set-ingest-and-roster'
+VERSION='7.0.517-pos-raw-reconciliation'
