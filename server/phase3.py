@@ -2466,16 +2466,13 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
             'base_uom': r['base_uom'] or r['cost_uom'],
         }
 
-    # Department official cost is authoritative ahead of OH fallback.
+    # OH cost precedes the Live/Fresh/Frozen report fallback.
     cur.execute(
         """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s
-             AND co.source_type IN (
-                 'FROZEN_INVENTORY_OFFICIAL_COST',
-                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-             )
+             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
@@ -2495,7 +2492,10 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s
-             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
+             AND co.source_type IN (
+                 'FROZEN_INVENTORY_OFFICIAL_COST',
+                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
@@ -2864,8 +2864,8 @@ def _historical_sweet_spot(
                           WHEN source_type IN (
                               'FROZEN_INVENTORY_OFFICIAL_COST',
                               'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-                          ) THEN 2
-                          WHEN source_type='ON_HAND_EXPLICIT_COST_FALLBACK' THEN 3
+                          ) THEN 3
+                          WHEN source_type='ON_HAND_EXPLICIT_COST_FALLBACK' THEN 2
                           WHEN source_type='USER_CONFIRMED_FAMILY_COST' THEN 4
                           ELSE 9
                         END,
@@ -3861,5 +3861,6 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
