@@ -108,7 +108,7 @@ def summarize(page, movements):
         selected=set(dates[-7:])
         quantities={date_text(d['date']):number(d.get('qty')) for d in member.get('days',[]) if date_text(d['date']) in selected and number(d.get('qty')) is not None and number(d['qty'])>=0 and number(d.get('sales')) is not None and number(d['sales'])>=0 and not (number(d['qty'])==0 and number(d['sales'])!=0) and d.get('reason')!='QUANTITY_OR_RETURN_REVIEW'}
         qty7=sum(quantities.values(),Decimal(0)) if quantities and member.get('uom') else None
-        out.append({'posQty7':qty7,'velocity7':qty7/len(selected) if qty7 is not None and selected else None,'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14), 'recent': recent_reference(member,t,start,today)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
+        out.append({'posQty7':qty7,'velocity7':qty7/len(selected) if qty7 is not None and selected else None,'current':member.get('current'),'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14), 'recent': recent_reference(member,t,start,today)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
     out.sort(key=lambda m:(m['posQty7'] is None,-(m['posQty7'] or 0),m['upc']))
     return {'historyStart':start,'historyMonths':3,'through': max(dates) if dates else None, 'movement': movements, 'members': out}
 
