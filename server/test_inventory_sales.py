@@ -23,7 +23,8 @@ class SalesTests(unittest.TestCase):
         self.assertEqual(value['days'],3)
         page['items'][0]['members'][0]['days'][0]['gp']=None
         value=summarize(page,{})['members'][0]['types'][0]['seven']
-        self.assertIsNone(value['gpDay'])
+        self.assertEqual(value['gpDay'],-2.5)
+        self.assertEqual(value['gpDays'],2)
         self.assertEqual(value['average'],5)
         self.assertIn('GP$/day',DESKTOP_SCRIPT)
 
@@ -42,10 +43,11 @@ class SalesTests(unittest.TestCase):
         self.assertEqual(reg['recent']['quantity'],54)
         self.assertEqual(reg['recent']['days'],4)
         self.assertEqual(reg['recent']['average'],13.5)
-        self.assertIsNone(reg['recent']['gpDay'])
+        self.assertAlmostEqual(float(reg['recent']['gpDay']),52/3)
+        self.assertEqual(reg['recent']['gpDays'],3)
         self.assertEqual(tpr['recent']['quantity'],6)
         self.assertEqual(tpr['recent']['gpDay'],8)
-        self.assertEqual(reg['seven']['days'],1)
+        self.assertEqual(reg['seven']['days'],2)
         self.assertIsNone(tpr['seven']['average'])
         self.assertIn('3M POS',DESKTOP_SCRIPT)
 
