@@ -49,7 +49,7 @@ def read_family_history(cur, family_id, days):
     from manual_overrides import confirmed_operational_uom_basis
     # Exact structural candidates still require the same unique ACTIVE,
     # CONFIRMED UPC -> Article -> Family authority as movement ingest.
-    cur.execute("""SELECT DISTINCT su.ean_upc
+    cur.execute("""SELECT DISTINCT su.ean_upc,bau.sales_set_number
         FROM selling_upc su
         JOIN bridge_article_upc bau ON bau.upc_id=su.upc_id
           AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
@@ -60,12 +60,28 @@ def read_family_history(cur, family_id, days):
         WHERE baf.family_id=%s AND su.record_status='ACTIVE'""",(family_id,))
     candidates=[]
     for item in cur.fetchall():
+        sales_set=str(item.get('sales_set_number') or '').strip()
+        if re.fullmatch(r'\d{1,18}',sales_set):
+            cur.execute("""SELECT COUNT(DISTINCT baf.family_id) AS family_count,
+                MIN(baf.family_id) AS family_id
+                FROM bridge_article_upc bau
+                JOIN selling_upc su ON su.upc_id=bau.upc_id AND su.record_status='ACTIVE'
+                JOIN bridge_article_family baf ON baf.article_id=bau.article_id
+                  AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
+                  AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+                WHERE bau.sales_set_number=%s AND bau.mapping_status='CONFIRMED'
+                  AND bau.is_primary=TRUE
+                  AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))""",(sales_set,))
+            authority=cur.fetchone() or {}
+            if int(authority.get('family_count') or 0)==1 and authority.get('family_id')==family_id:
+                candidates.append(sales_set)
         match=re.fullmatch(r'(240|245|249)(\d{3})00000',str(item.get('ean_upc') or ''))
         if not match:
             continue
         article='154'+{'240':'0','245':'5','249':'9'}[match[1]]+match[2]
         if _structural_sap_selling_family(cur,article)==family_id:
             candidates.append(article)
+    candidates=sorted(set(candidates))
     clauses=[];params=[family_id]
     scope='m.family_id=%s'
     if candidates:
@@ -78,7 +94,10 @@ def read_family_history(cur, family_id, days):
         m.base_quantity,m.base_uom_code,m.entry_quantity,m.entry_uom_code
         FROM movement_history m WHERE ("""+scope+") AND m.movement_type IN ('251','252') AND ("+' OR '.join(clauses)+") ORDER BY m.raw_id",tuple(params))
     rows=cur.fetchall()
-    return summarize_history(rows,days,confirmed_operational_uom_basis(cur,family_id)) if rows else None
+    result=summarize_history(rows,days,confirmed_operational_uom_basis(cur,family_id)) if rows else None
+    if result is not None:
+        result['confirmed_selling_articles']=candidates
+    return result
 
 
 def movement_evidence(cur, family_id, days):

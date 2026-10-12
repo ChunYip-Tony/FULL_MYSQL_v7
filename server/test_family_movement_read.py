@@ -25,3 +25,25 @@ class Tests(unittest.TestCase):
         r=row(1,-10);r['posting_date']=date(2026,10,11)
         self.assertIsNone(summarize_history([r],days))
 if __name__=='__main__': unittest.main()
+
+class HistoryAuthorityTests(unittest.TestCase):
+    def test_sales_set_requires_unique_confirmed_family(self):
+        import sys,types
+        from unittest.mock import patch
+        from family_movement_read import read_family_history
+        class Cursor:
+            def __init__(self,ambiguous=False):self.sql='';self.ambiguous=ambiguous;self.params=[]
+            def execute(self,sql,params):self.sql=sql;self.params.append((sql,params))
+            def fetchall(self):
+                if 'SELECT DISTINCT su.ean_upc' in self.sql:return [{'ean_upc':'24036500000','sales_set_number':'2007103'}]
+                return [row(1,-10)]
+            def fetchone(self):return {'family_count':2 if self.ambiguous else 1,'family_id':535}
+        phase=types.SimpleNamespace(_structural_sap_selling_family=lambda cur,a:None)
+        manual=types.SimpleNamespace(confirmed_operational_uom_basis=lambda cur,f:None)
+        with patch.dict(sys.modules,{'phase3':phase,'manual_overrides':manual}):
+            cur=Cursor();value=read_family_history(cur,535,days)
+            self.assertEqual(value['confirmed_selling_articles'],['2007103'])
+            sql,args=cur.params[-1];self.assertIn('m.family_id IS NULL',sql);self.assertIn('2007103',args)
+            cur=Cursor(True);value=read_family_history(cur,535,days)
+            self.assertEqual(value['confirmed_selling_articles'],[])
+            self.assertNotIn('2007103',cur.params[-1][1])
