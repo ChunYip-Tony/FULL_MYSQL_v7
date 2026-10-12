@@ -2508,6 +2508,11 @@ def _ordering_family_movement_metrics(
         and str(x.get("base_uom_code") or "").strip()
     ]
     if not raw:
+        from family_movement_read import read_family_history
+        recovered = read_family_history(cur, int(family_id), days)
+        if recovered is not None:
+            return recovered
+    if not raw:
         return {
             "status":"UNAVAILABLE",
             "quantity":Decimal("0"),
@@ -7260,3 +7265,4 @@ def ordering_analysis(
     )
     result["source_upc"]=row.get("ean_upc")
     return result
+
