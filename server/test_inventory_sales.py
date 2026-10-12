@@ -40,4 +40,36 @@ class SellingDayTests(unittest.TestCase):
         member['uom']=''
         self.assertIsNone(summarize(page,{})['members'][0]['types'][0]['seven']['sellingDays'])
 
+
+class PopularityTests(unittest.TestCase):
+    def test_applied_days_include_zero_and_mixed_but_not_other_types(self):
+        rows=[
+            {'date':'2026-10-10','qty':2,'sales':10,'type':'SALE','valid':True},
+            {'date':'2026-10-09','qty':0,'sales':0,'type':'SALE','valid':True},
+            {'date':'2026-10-08','qty':1,'sales':5,'type':'SALE','valid':False,'reason':'COST_OR_UNIT_UNVERIFIED'},
+            {'date':'2026-10-07','valid':False,'reason':'MIXED_PRICE_DAY','typeSales':[{'type':'SALE','qty':1,'sales':5},{'type':'REG','qty':1,'sales':6}]},
+            {'date':'2026-10-06','qty':9,'sales':99,'type':'REG','valid':True},
+            {'date':'2026-10-05','qty':None,'sales':None,'type':'SALE','valid':False},
+            {'date':'2026-10-02','qty':0,'sales':0,'type':'SALE','valid':True},
+            {'date':'2026-10-11','qty':99,'sales':99,'type':'SALE','valid':True}]
+        member={'upc':'001','uom':'PACK','days':rows+[rows[0]]}
+        dates=['2026-10-%02d'%d for d in range(1,12)]
+        sale=next(r for r in summarize({'today':'2026-10-11','days':dates,'items':[{'members':[member,member]}]}, {})['members'][0]['types'] if r['type']=='SALE')
+        self.assertEqual(sale['seven']['sellingDays'],3)
+        self.assertEqual(sale['seven']['appliedDays'],4)
+        self.assertEqual(sale['seven']['popularityPct'],75)
+        self.assertEqual(sale['fourteen']['appliedDays'],5)
+        self.assertEqual(sale['fourteen']['popularityPct'],60)
+        self.assertEqual(sale['recent']['popularityPct'],60)
+
+    def test_full_zero_and_unapplied_score(self):
+        from inventory_sales import popularity
+        m={'uom':'PACK','days':[{'date':'2026-10-10','qty':1,'sales':5,'type':'TPR','valid':True}]}
+        self.assertEqual(popularity(m,'TPR',{'2026-10-10'})['popularityPct'],100)
+        self.assertIsNone(popularity(m,'SALE',{'2026-10-10'})['popularityPct'])
+        m['days'][0].update(qty=0,sales=0)
+        self.assertEqual(popularity(m,'TPR',{'2026-10-10'})['popularityPct'],0)
+        m['uom']=''
+        self.assertIsNone(popularity(m,'TPR',{'2026-10-10'})['popularityPct'])
+
 if __name__=='__main__': unittest.main()
