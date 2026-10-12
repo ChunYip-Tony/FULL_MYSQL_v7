@@ -527,7 +527,10 @@ def _find_article(cur, article_number: str | None) -> tuple[int | None, int | No
     # A SAP 251/252 selling Article can appear in movement before its SUB bridge
     # is materialized. Recover the Family only through the exact structural
     # Article -> canonical UPC transform and a unique confirmed UPC family.
-    family_id = _structural_sap_selling_family(cur, article_number)
+    from family_movement_read import sales_set_family
+    family_id = sales_set_family(cur, article_number)
+    if family_id is None:
+        family_id = _structural_sap_selling_family(cur, article_number)
     return article_id, family_id
 
 
@@ -1776,7 +1779,11 @@ def relink_history(cur, progress=None) -> None:
         """SELECT DISTINCT article_number
            FROM movement_history
            WHERE family_id IS NULL
-             AND article_number REGEXP '^154[059][0-9]{3}$'
+             AND (article_number REGEXP '^154[059][0-9]{3}$'
+                  OR EXISTS (SELECT 1 FROM bridge_article_upc bau
+                     WHERE bau.sales_set_number=movement_history.article_number
+                       AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
+                       AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))))
            ORDER BY article_number"""
     )
     for structural_row in cur.fetchall():
@@ -3854,4 +3861,5 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 

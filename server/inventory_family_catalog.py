@@ -69,22 +69,16 @@ def read_roster(query):
                     units.update(uoms)
                 m['movement_uom']=m['uom7'] or m['uom14']
                 metrics[fid]=m
-            # Search results are bounded; recover absent derived mirrors without
-            # issuing thousands of per-family reads during the full roster scan.
-            if query and len(rows)<=30:
-                from webapp_v2_runtime import _ordering_family_movement_metrics
-                for row in rows:
-                    fid=int(row['family_id'])
-                    if fid in metrics:
-                        continue
-                    recovered={}
-                    for count in (7,14):
-                        value=_ordering_family_movement_metrics(cur,fid,days[-count:])
-                        valid=value.get('status')=='READY' and value.get('uom') and value.get('quantity') is not None
-                        recovered['velocity'+str(count)]=value.get('velocity_per_supported_day') if valid else None
-                        recovered['uom'+str(count)]=value.get('uom') if valid else ''
-                    recovered['movement_uom']=recovered['uom7'] or recovered['uom14']
-                    metrics[fid]=recovered
+            from family_movement_read import read_missing_family_histories
+            missing=[int(row['family_id']) for row in rows if int(row['family_id']) not in metrics]
+            for fid,windows in read_missing_family_histories(cur,missing,days).items():
+                recovered={}
+                for count,value in windows.items():
+                    valid=value and value.get('status')=='READY' and value.get('uom')
+                    recovered['velocity'+str(count)]=value.get('velocity_per_supported_day') if valid else None
+                    recovered['uom'+str(count)]=value.get('uom') if valid else ''
+                recovered['movement_uom']=recovered['uom7'] or recovered['uom14']
+                metrics[fid]=recovered
             return rows,metrics,[str(d['date']) for d in days]
         finally:
             cur.close()

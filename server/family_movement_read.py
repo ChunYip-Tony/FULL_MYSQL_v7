@@ -120,3 +120,46 @@ def movement_evidence(cur, family_id, days):
     rows=[{**r,'canonical':(int(r['file_id']),r['posting_date']) in canonical,
            'confirmedFamily':r.get('family_id')==family_id} for r in cur.fetchall()]
     return {'status':'DIAGNOSTIC_ONLY','rows':rows,'basis':'NAME_MATCH_IS_NOT_FAMILY_AUTHORITY'}
+
+
+def sales_set_family(cur, article_number):
+    """A unique, current confirmed sales-set bridge is identity authority."""
+    cur.execute("""SELECT COUNT(DISTINCT baf.family_id) AS family_count,MIN(baf.family_id) AS family_id
+        FROM bridge_article_upc bau
+        JOIN selling_upc su ON su.upc_id=bau.upc_id AND su.record_status='ACTIVE'
+        JOIN bridge_article_family baf ON baf.article_id=bau.article_id
+          AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
+          AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+        WHERE bau.sales_set_number=%s AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
+          AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))""",(article_number,))
+    authority=cur.fetchone() or {}
+    return int(authority['family_id']) if int(authority.get('family_count') or 0)==1 and authority.get('family_id') is not None else None
+
+
+def read_missing_family_histories(cur, family_ids, days):
+    """One canonical history scan restores full-roster ranking, without N reads."""
+    if not family_ids or not days:
+        return {}
+    clauses=[];params=list(family_ids)
+    for day in days:
+        clauses.append('(m.file_id=%s AND m.posting_date=%s)')
+        params.extend([int(day['file_id']),day['date']])
+    cur.execute("""SELECT COALESCE(m.family_id,authority.family_id) AS resolved_family_id,
+        m.file_id,m.raw_id,m.posting_date,m.movement_type,m.base_quantity,m.base_uom_code,m.entry_quantity,m.entry_uom_code
+        FROM movement_history m LEFT JOIN (
+          SELECT bau.sales_set_number,MIN(baf.family_id) AS family_id
+          FROM bridge_article_upc bau
+          JOIN selling_upc su ON su.upc_id=bau.upc_id AND su.record_status='ACTIVE'
+          JOIN bridge_article_family baf ON baf.article_id=bau.article_id
+            AND baf.mapping_status='CONFIRMED' AND baf.is_primary=TRUE
+            AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
+          WHERE bau.sales_set_number IS NOT NULL AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
+            AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+          GROUP BY bau.sales_set_number HAVING COUNT(DISTINCT baf.family_id)=1
+        ) authority ON m.family_id IS NULL AND authority.sales_set_number=m.article_number
+        WHERE COALESCE(m.family_id,authority.family_id) IN ("""+','.join(['%s']*len(family_ids))+") AND m.movement_type IN ('251','252') AND ("+' OR '.join(clauses)+") ORDER BY m.raw_id",tuple(params))
+    groups={}
+    for row in cur.fetchall():
+        groups.setdefault(int(row['resolved_family_id']),[]).append(row)
+    from manual_overrides import confirmed_operational_uom_basis
+    return {fid:{count:summarize_history(rows,days[-count:],confirmed_operational_uom_basis(cur,fid)) for count in (7,14)} for fid,rows in groups.items()}

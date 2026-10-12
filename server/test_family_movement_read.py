@@ -47,3 +47,20 @@ class HistoryAuthorityTests(unittest.TestCase):
             cur=Cursor(True);value=read_family_history(cur,535,days)
             self.assertEqual(value['confirmed_selling_articles'],[])
             self.assertNotIn('2007103',cur.params[-1][1])
+
+class PipelineRecoveryTests(unittest.TestCase):
+    def test_ingest_reuses_sales_set_authority_and_keeps_existing_bridge(self):
+        import ast
+        from pathlib import Path
+        tree=ast.parse(Path('phase3.py').read_text())
+        function=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='_find_article')
+        namespace={'_structural_sap_selling_family':lambda cur,a:None}
+        exec(compile(ast.Module(body=[function],type_ignores=[]),'phase3.py','exec'),namespace)
+        class Cursor:
+            def __init__(self,direct=None,count=1):self.direct=direct;self.count=count;self.calls=0
+            def execute(self,sql,args):self.calls+=1
+            def fetchone(self):return self.direct if self.calls==1 else {'family_count':self.count,'family_id':535}
+        self.assertEqual(namespace['_find_article'](Cursor(), '2007103'),(None,535))
+        self.assertEqual(namespace['_find_article'](Cursor(count=2),'2007103'),(None,None))
+        cur=Cursor({'article_id':2,'family_id':999})
+        self.assertEqual(namespace['_find_article'](cur,'2007103'),(2,999));self.assertEqual(cur.calls,1)
