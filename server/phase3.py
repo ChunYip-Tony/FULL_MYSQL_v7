@@ -598,10 +598,22 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any], *, article_manual_inde
         from raw_pages import iter_raw_rows
         rows = iter_raw_rows(cur, 'raw_sales_by_price_type', sh['sheet_id'])
         current_dept = None
+        single_total = False
         for rr in rows:
             p = _j(rr['raw_payload'])
+            title = _norm_header(p.get('A'))
+            if title == 'ITEM SINGLE TOTAL BY SUB DEPARTMENT':
+                single_total = True
+                continue
+            if title == 'ITEM SALES BY PRICE TYPE BY SUB DEPARTMENT':
+                single_total = False
+                continue
             a = _id(p.get('A'))
             b = _text(p.get('B'))
+            # Single Total exports keep the real selling Qty/Weight in H,
+            # Amount in I, description in C, and item count separately in K.
+            if single_total and a and len(a) > 3:
+                b = _text(p.get('C'))
             # Department section rows are exact 3-digit department IDs and have no total sales columns.
             if a and len(a) == 3 and b and not _num(p.get('M')) and not _num(p.get('N')):
                 current_dept = _department_from_pos_section(a)
@@ -612,7 +624,8 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any], *, article_manual_inde
             if not ean or not b:
                 continue
             # Product sales rows have TOTAL amount/qty or at least one price-type amount/qty.
-            if not any(_num(p.get(c)) is not None for pair in SALES_COLS.values() for c in pair):
+            sales_columns = {'TOTAL': ('I', 'H')} if single_total else SALES_COLS
+            if not any(_num(p.get(c)) is not None for pair in sales_columns.values() for c in pair):
                 continue
             upc_id = (
                 _find_pos_upc_id(cur, ean, b, article_manual_index)
@@ -635,7 +648,7 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any], *, article_manual_inde
                 ),
             )
             total_qty = Decimal('0')
-            for price_type, (sales_col, qty_col) in SALES_COLS.items():
+            for price_type, (sales_col, qty_col) in sales_columns.items():
                 sales = _num(p.get(sales_col)) or Decimal('0')
                 qty = _num(p.get(qty_col)) or Decimal('0')
                 if sales == 0 and qty == 0:

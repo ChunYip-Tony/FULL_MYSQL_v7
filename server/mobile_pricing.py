@@ -146,11 +146,18 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
     result['typeSales'] = []
     for pt, values in types.items():
         q, s = num(values.get('sold_quantity')), num(values.get('sales_amount'))
-        if pt in PRIORITY and q is not None and s is not None and q > 0 and s > 0:
+        if (pt in PRIORITY or pt == 'TOTAL') and q is not None and s is not None and q > 0 and s > 0:
             result['typeSales'].append({'type':pt,'qty':q,'sales':s,'gp':s-q*cost['value'] if cost else None})
     if observation:
         qty, sales = num(observation.get('sold_quantity')), num(observation.get('sales_amount'))
         result.update(qty=qty, sales=sales)
+        if 'TOTAL' in types:
+            # The Single Total POS has actual Qty/Weight but no price-type split.
+            # Keep the sales/GP reference without inventing REG/TPR exposure.
+            result.update(type='TOTAL', quantityBasis='POS_QTY_WEIGHT',
+                quantityEstimated=False, price=sales / qty if qty and sales is not None else None,
+                gp=sales-qty*cost['value'] if qty is not None and sales is not None and cost else None,
+                normalized_gp=sales-qty*current_cost['value'] if qty is not None and sales is not None and current_cost else None)
         if qty is None or sales is None or qty < 0 or sales < 0 or (qty == 0 and sales != 0):
             result['reason'] = 'QUANTITY_OR_RETURN_REVIEW'
             return result
@@ -340,6 +347,8 @@ def guard_weight_counts(items):
             member['quantityStatus'] = 'POS_WEIGHT_ESTIMATED'
             history = sorted(member.get('priceHistory', []), key=lambda p:(p['date'],p.get('file_id',0)))
             for day in member['days']:
+                if day.get('quantityBasis') == 'POS_QTY_WEIGHT':
+                    continue
                 day['posItemCount'] = day['qty']
                 prior = next((p for p in reversed(history) if p['date'] < day['date']), None)
                 on_day = [p for p in history if p['date'] == day['date']]

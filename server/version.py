@@ -1,1 +1,1 @@
-VERSION='7.0.517-pos-raw-reconciliation'
+VERSION='7.0.518-pos-single-total-weight-ingest'

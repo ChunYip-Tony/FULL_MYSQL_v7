@@ -5435,3 +5435,55 @@ def web_upload_pos_file_evidence(request:Request,file_id:int):
             return json.loads(json.dumps({'source':source,'canonical':canonical,'raw_rows':rows,'truncated':len(rows)>=500},default=j))
         finally:
             cur.close()
+
+@app.post('/v1/web-upload/batches/{batch_id}/repair-single-total-pos')
+def repair_single_total_pos(batch_id:int,request:Request):
+    """Replay only recognized Single Total POS RAW; reconcile before committing."""
+    _browser_upload_guard(request)
+    from decimal import Decimal
+    from phase3 import _process_sales
+    from phase3_runtime import phase3_lease
+    with db_conn() as conn, phase3_lease(conn):
+        cur=conn.cursor(dictionary=True)
+        try:
+            cur.execute("SELECT file_id,batch_id,original_filename,coverage_start_date,coverage_end_date,header_period_start_date,header_period_end_date FROM ingest_file WHERE batch_id=%s AND source_type='sales_by_price_type' AND processing_status='INGESTED' AND error_count=0 AND duplicate_of_file_id IS NULL",(batch_id,))
+            files=cur.fetchall()
+            repaired=[]
+            for source in files:
+                cur.execute("""SELECT r.raw_payload FROM raw_sales_by_price_type r
+                    JOIN ingest_sheet s ON s.sheet_id=r.sheet_id WHERE s.file_id=%s
+                    ORDER BY s.sheet_index,r.source_row_number LIMIT 10000""",(source['file_id'],))
+                payloads=[json.loads(r['raw_payload']) if isinstance(r['raw_payload'],str) else r['raw_payload'] for r in cur.fetchall()]
+                if not any(str(p.get('A') or '').strip()=='Item Single Total by Sub-department' for p in payloads):
+                    continue
+                totals=[Decimal(str(p['I'])) for p in payloads if str(p.get('G') or '').strip()=='Grand Total' and p.get('I') not in (None,'')]
+                if len(totals)!=1:
+                    raise HTTPException(409,'Single Total requires one explicit Grand Total')
+                count=_process_sales(cur,batch_id,source)
+                cur.execute("SELECT COUNT(*) AS rows_count,COALESCE(SUM(sales_amount),0) AS sales_amount FROM sales_period_observation WHERE file_id=%s",(source['file_id'],))
+                actual=cur.fetchone()
+                if not count or abs(Decimal(str(actual['sales_amount']))-totals[0])>Decimal('0.01'):
+                    raise HTTPException(409,'POS replay does not reconcile to source Grand Total')
+                repaired.append({'file_id':source['file_id'],'rows':actual['rows_count'],'sales_amount':actual['sales_amount'],'expected_sales':totals[0]})
+            if not repaired:
+                raise HTTPException(409,'No recognized Single Total POS file in this batch')
+            detail=json.dumps({'status':'PASS','files':repaired,'quantity_basis':'POS_QTY_WEIGHT','price_type':'TOTAL_UNSPLIT','code_version':VERSION},default=j)
+            cur.execute("""UPDATE phase3_batch_result SET sales_rows=%s,
+                detail_json=JSON_SET(COALESCE(detail_json,JSON_OBJECT()),'$.single_total_pos_repair',CAST(%s AS JSON))
+                WHERE batch_id=%s""",(sum(r['rows'] for r in repaired),detail,batch_id))
+            cur.execute("""INSERT INTO pipeline_run
+                (batch_id,pipeline_name,stage_name,run_number,processing_status,code_version,started_at,completed_at,rows_inserted,error_count,detail_json)
+                SELECT %s,'FULLMYSQL_SECURE_API','POS_SINGLE_TOTAL_REPAIR',
+                COALESCE(MAX(run_number),0)+1,'COMPLETED',%s,CURRENT_TIMESTAMP(6),CURRENT_TIMESTAMP(6),%s,0,%s
+                FROM pipeline_run WHERE batch_id=%s AND stage_name='POS_SINGLE_TOTAL_REPAIR'""",
+                (batch_id,VERSION,sum(r['rows'] for r in repaired),detail,batch_id))
+            conn.commit()
+            import mobile_pricing
+            with mobile_pricing._lock:
+                mobile_pricing._cache.clear()
+            return json.loads(detail)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cur.close()
