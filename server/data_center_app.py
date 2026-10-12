@@ -555,3 +555,6 @@ setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').
 
 
 
+
+from startup_logo import apply_startup_logo
+DATA_CENTER_HTML = apply_startup_logo(DATA_CENTER_HTML)
