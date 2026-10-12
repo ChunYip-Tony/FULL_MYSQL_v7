@@ -17,8 +17,8 @@ router = APIRouter()
 PRIORITY = {'REG': 1, 'TPR': 2, 'SALE': 3, 'IN STORE': 4, 'IN_STORE': 4}
 COST_ORDER = (
     {'MOVEMENT_RECEIPT_VALUATION'},
-    {'FROZEN_INVENTORY_OFFICIAL_COST', 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'},
     {'ON_HAND_EXPLICIT_COST_FALLBACK'},
+    {'FROZEN_INVENTORY_OFFICIAL_COST', 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'},
 )
 
 def num(value):
@@ -28,9 +28,33 @@ def num(value):
     except Exception:
         return None
 
+def selling_unit(row):
+    explicit = str(row.get('selling_uom') or '').strip().upper()
+    if explicit:
+        return 'PACK' if explicit == 'PAC' else explicit
+    digits = str(row.get('ean_upc') or '').lstrip('0')
+    if len(digits) == 11 and digits[:3].isdigit():
+        prefix = int(digits[:3])
+        if 230 <= prefix <= 239 or 250 <= prefix <= 269 or prefix in (240,242,245,247,249):
+            return 'LB'
+    return ''
+
+def effective_cost_as_of(observations, day):
+    # A base-unit cost remains visible even when selling-unit conversion is held.
+    for sources in COST_ORDER:
+        candidates = sorted((o for o in observations if o.get('source_type') in sources
+            and o.get('business_date') and o['business_date'] <= day),
+            key=lambda o:(o['business_date'],o.get('cost_observation_id') or 0), reverse=True)
+        for obs in candidates:
+            value, unit = num(obs.get('cost_value')), str(obs.get('cost_uom') or '').strip().upper()
+            if value is not None and value > 0 and unit:
+                return {'value':value,'uom':unit,'date':obs['business_date'],'source':obs['source_type']}
+    return None
+
 def cost_for_day(row, observations, day):
-    selling = str(row.get('selling_uom') or '').strip().upper()
+    selling = selling_unit(row)
     base = str(row.get('base_uom') or '').strip().upper()
+    base = 'PACK' if base == 'PAC' else base
     factor = num(row.get('base_qty_per_selling_unit'))
     for sources in COST_ORDER:
         candidates = sorted((o for o in observations if o.get('source_type') in sources
@@ -38,6 +62,7 @@ def cost_for_day(row, observations, day):
             key=lambda o: (o['business_date'], o.get('cost_observation_id') or 0), reverse=True)
         for obs in candidates:
             value, unit = num(obs.get('cost_value')), str(obs.get('cost_uom') or '').upper()
+            unit = 'PACK' if unit == 'PAC' else unit
             if value is None or value <= 0 or not selling:
                 continue
             if unit == selling:
@@ -283,10 +308,11 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                     latest_pos = next((d for d in reversed(series) if d['price'] is not None and d['qty'] is not None and d['qty'] > 0), None)
                     current = config if config and (not latest_pos or config['date'] >= latest_pos['date']) else ({'price': latest_pos['price'], 'type': latest_pos['type'], 'date': latest_pos['date'], 'source': 'CANONICAL_POS'} if latest_pos else None)
                     records.append({'upc': str(row['ean_upc']), 'name': row.get('selling_description'),
-                        'article': str(row.get('article_number') or ''), 'uom': row.get('selling_uom'),
-                        'quantityBasis': 'POS_ITEM_COUNT' if str(row.get('selling_uom') or '').upper() == 'LB' else 'POS_SELLING_UNIT',
+                        'article': str(row.get('article_number') or ''), 'uom': selling_unit(row) or None,
+                        'quantityBasis': 'POS_ITEM_COUNT' if selling_unit(row) == 'LB' else 'POS_SELLING_UNIT',
                         'status': row.get('quick_check_status'), 'blocking_reason': row.get('blocking_reason'),
-                        'current': current, 'priceHistory': history, 'cost': cost, 'days': series})
+                        'current': current, 'priceHistory': history, 'cost': cost,
+                        'effectiveCost': cost or effective_cost_as_of(observations,today), 'days': series})
                 first = members[0]
                 items.append({'id': key, 'familyId': str(first['family_id']),
                     'article': str(first.get('main_article_number') or ''),
@@ -296,7 +322,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             return {'contract': 'MOBILE_PRICING_V1', 'today': today, 'through': through,
                 'checkedAt': datetime.now(timezone.utc).isoformat(), 'days': [d['date'] for d in days],
                 'items': guard_weight_counts(items), 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
-                'scope': 'ALL_QUICK_CHECK_UPCS', 'costOrder': 'RECEIPT_REPORT_OH'}
+                'scope': 'ALL_QUICK_CHECK_UPCS', 'costOrder': 'RECEIPT_OH_REPORT'}
         finally:
             cur.close()
 
