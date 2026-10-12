@@ -103,12 +103,10 @@ def summarize(page, movements):
         types.update(r['type'] for d in member.get('days',[]) if start<=date_text(d['date'])<today for r in d.get('typeSales',[]) if number(r.get('qty')) is not None and number(r['qty'])>0)
         types.update(d['type'] for d in member.get('days',[]) if start<=date_text(d['date'])<today and d.get('type') and d.get('reason') in ('COST_OR_UNIT_UNVERIFIED','POS_WEIGHT_ESTIMATED') and number(d.get('qty')) is not None and number(d['qty'])>0)
         types={t for t in types if any(start<=date_text(d['date'])<today and ((d.get('type')==t and (d.get('valid') or d.get('reason') in ('COST_OR_UNIT_UNVERIFIED','POS_WEIGHT_ESTIMATED')) and number(d.get('qty')) is not None and number(d['qty'])>0) or any(r.get('type')==t and number(r.get('qty')) is not None and number(r['qty'])>0 for r in d.get('typeSales',[]))) for d in member.get('days',[]))}
-        if not types:
-            continue
         selected=set(dates[-7:])
         quantities={date_text(d['date']):number(d.get('qty')) for d in member.get('days',[]) if date_text(d['date']) in selected and number(d.get('qty')) is not None and number(d['qty'])>=0 and number(d.get('sales')) is not None and number(d['sales'])>=0 and not (number(d['qty'])==0 and number(d['sales'])!=0) and d.get('reason')!='QUANTITY_OR_RETURN_REVIEW'}
         qty7=sum(quantities.values(),Decimal(0)) if quantities and member.get('uom') else None
-        out.append({'posQty7':qty7,'velocity7':qty7/len(selected) if qty7 is not None and selected else None,'current':member.get('current'),'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14), 'recent': recent_reference(member,t,start,today)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
+        out.append({'posQty7':qty7,'velocity7':qty7/len(selected) if qty7 is not None and selected else None,'current':member.get('current'),'cost':member.get('cost'),'effectiveCost':member.get('effectiveCost'),'upc': member['upc'], 'name': member.get('name'), 'uom': member.get('uom') or '', 'types': [{'type': t, 'seven': average(member, t, 7), 'fourteen': average(member, t, 14), 'recent': recent_reference(member,t,start,today)} for t in sorted(types, key=lambda t: ({'REG': 0, 'TPR': 1, 'SALE': 2, 'IN STORE': 3, 'IN_STORE': 3}.get(t, 4), t))]})
     for result in out:
         if members[result['upc']].get('quantityStatus') not in ('POS_WEIGHT_MISSING','POS_WEIGHT_ESTIMATED'):
             continue
@@ -120,6 +118,18 @@ def summarize(page, movements):
                     row[key].update(quantity=None, average=None, price=None, gpDay=None, gpDays=0)
     out.sort(key=lambda m:(m['posQty7'] is None,-(m['posQty7'] or 0),m['upc']))
     return {'historyStart':start,'historyMonths':3,'through': max(dates) if dates else None, 'movement': movements, 'members': out}
+
+
+def restore_completed_zero_window(movement, no_receipts=False):
+    seven, fourteen = movement['seven'], movement['fourteen']
+    if (seven.get('basis') == 'NO_251_252_ROWS_IN_WINDOW'
+            and len(seven.get('supportedDays', [])) == 7
+            and fourteen.get('status') == 'READY' and fourteen.get('uom')
+            and set(seven['supportedDays']).issubset(fourteen.get('supportedDays', []))):
+        seven.update(quantity=Decimal(0), average=Decimal(0), days=7,
+            uom=fourteen['uom'], status='READY', basis='CANONICAL_COMPLETED_ZERO_SALES_WITH_CONFIRMED_FAMILY_UOM')
+        if seven['receipt'].get('quantity') is None and no_receipts:
+            seven['receipt'].update(quantity=Decimal(0),uom=fourteen['uom'],status='READY')
 
 
 def build_summary(family):
@@ -158,6 +168,7 @@ def build_summary(family):
                 receipt_ready = bool(days) and not unresolved and receipt_qty is not None and receipt_uom not in (None, '', 'MIXED')
                 movement[name] = {'average': number(metrics['quantity']) / len(days) if valid else None, 'price': None, 'quantity': metrics.get('quantity') if valid else 0, 'days': len(days) if valid else 0, 'uom': metrics.get('uom') or '', 'start': date_text(days[0]['date']) if days else None, 'through': date_text(days[-1]['date']) if days else None, 'status': metrics.get('status'), 'basis': metrics.get('basis'), 'supportedDays': [date_text(d['date']) for d in days]}
                 movement[name]['receipt'] = {'quantity': receipt_qty if receipt_ready else None, 'uom': receipt_uom or None, 'status': 'READY' if receipt_ready else 'UNVERIFIED', 'days': len(days), 'start': movement[name]['start'], 'through': movement[name]['through'], 'basis': 'CANONICAL_COMPLETED_PHYSICAL_RECEIPTS_101_OR_109_NO_DOUBLE_COUNT'}
+            restore_completed_zero_window(movement, receipts == [])
             diagnostic=None
             if any(m.get('status')!='READY' for m in movement.values()):
                 from family_movement_read import movement_evidence
