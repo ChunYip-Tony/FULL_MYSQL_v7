@@ -149,9 +149,16 @@ def build_summary(family):
                 receipt_ready = bool(days) and not unresolved and receipt_qty is not None and receipt_uom not in (None, '', 'MIXED')
                 movement[name] = {'average': number(metrics['quantity']) / len(days) if valid else None, 'price': None, 'quantity': metrics.get('quantity') if valid else 0, 'days': len(days) if valid else 0, 'uom': metrics.get('uom') or '', 'start': date_text(days[0]['date']) if days else None, 'through': date_text(days[-1]['date']) if days else None, 'status': metrics.get('status'), 'basis': metrics.get('basis'), 'supportedDays': [date_text(d['date']) for d in days]}
                 movement[name]['receipt'] = {'quantity': receipt_qty if receipt_ready else None, 'uom': receipt_uom or None, 'status': 'READY' if receipt_ready else 'UNVERIFIED', 'days': len(days), 'start': movement[name]['start'], 'through': movement[name]['through'], 'basis': 'CANONICAL_COMPLETED_PHYSICAL_RECEIPTS_101_OR_109_NO_DOUBLE_COUNT'}
+            diagnostic=None
+            if any(m.get('status')!='READY' for m in movement.values()):
+                from family_movement_read import movement_evidence
+                diagnostic=movement_evidence(cur,fid,days)
         finally:
             cur.close()
-    return summarize(page, movement)
+    result=summarize(page, movement)
+    if diagnostic is not None:
+        result['movementEvidence']=diagnostic
+    return result
 
 
 _cache = OrderedDict()

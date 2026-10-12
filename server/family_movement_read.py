@@ -79,3 +79,25 @@ def read_family_history(cur, family_id, days):
         FROM movement_history m WHERE ("""+scope+") AND m.movement_type IN ('251','252') AND ("+' OR '.join(clauses)+") ORDER BY m.raw_id",tuple(params))
     rows=cur.fetchall()
     return summarize_history(rows,days,confirmed_operational_uom_basis(cur,family_id)) if rows else None
+
+
+def movement_evidence(cur, family_id, days):
+    """Bounded read-only lineage check; name matches never become demand."""
+    if not days:
+        return {'status':'NO_CANONICAL_DAYS','rows':[]}
+    cur.execute('SELECT main_article_number,family_description FROM product_family WHERE family_id=%s',(family_id,))
+    family=cur.fetchone() or {}
+    words=re.findall(r'[A-Za-z0-9]+',str(family.get('family_description') or ''))
+    pattern='%'+'%'.join(words)+'%' if words else None
+    dates=sorted(d['date'] for d in days)
+    scope='family_id=%s OR article_number=%s';params=[family_id,str(family.get('main_article_number') or '')]
+    if pattern and len(words)>=2:
+        scope+=' OR description LIKE %s';params.append(pattern)
+    params.extend([dates[0],dates[-1]])
+    cur.execute("""SELECT file_id,article_number,family_id,movement_type,posting_date,
+        base_uom_code,COUNT(*) AS row_count,SUM(base_quantity) AS signed_quantity
+        FROM movement_history WHERE ("""+scope+") AND posting_date BETWEEN %s AND %s GROUP BY file_id,article_number,family_id,movement_type,posting_date,base_uom_code ORDER BY posting_date DESC,file_id DESC LIMIT 60",tuple(params))
+    canonical={(int(d['file_id']),d['date']) for d in days}
+    rows=[{**r,'canonical':(int(r['file_id']),r['posting_date']) in canonical,
+           'confirmedFamily':r.get('family_id')==family_id} for r in cur.fetchall()]
+    return {'status':'DIAGNOSTIC_ONLY','rows':rows,'basis':'NAME_MATCH_IS_NOT_FAMILY_AUTHORITY'}
