@@ -1624,6 +1624,24 @@ let priceView='REG', tprFilter='ALL', tprSort='QTY', tprRequestSeq=0, tprRetryTi
 const stockFlowCacheKey='yipman-stock-flow-v9';
 
 let aiBriefLoaded=false, aiBriefLoading=null, aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
+let aiConversation=[],aiRemoteConfigured=null,aiRemoteModel='';
+function aiPlainTextHtml(value){return esc(String(value||'')).replace(/\n/g,'<br>')}
+async function loadAiRemoteStatus(){
+ try{
+   const status=await api('/v1/yipman/ai/status',{timeoutMs:8000});
+   aiRemoteConfigured=status?.configured===true;
+   aiRemoteModel=String(status?.model||'');
+   const badge=$('.aireadonly');
+   if(badge)badge.textContent=(aiRemoteConfigured?'OPENAI':'LOCAL')+' · READ ONLY';
+   const sub=$('.aiheadcopy p');
+   if(sub)sub.textContent=aiRemoteConfigured?('FULL MYSQL · '+(aiRemoteModel||'OpenAI')):'FULL MYSQL · local fallback';
+   return status;
+ }catch{
+   aiRemoteConfigured=false;
+   const badge=$('.aireadonly');if(badge)badge.textContent='LOCAL · READ ONLY';
+   return null;
+ }
+}
 
 async function refreshAfterFamilyTrueStock(family=''){
  aiBriefLoaded=false;aiBriefData={stock:null,price:null,orders:[],dataThrough:null};
@@ -2025,18 +2043,54 @@ async function aiAnswer(question){
 }
 async function aiSubmitQuestion(q){
  aiBubble(esc(q),'user');
- const pending=aiBubble('Checking FULL MYSQL…','ai','thinking');
+ const pending=aiBubble(aiRemoteConfigured===false?'Checking FULL MYSQL…':'Asking OpenAI + FULL MYSQL…','ai','thinking');
+ const history=aiConversation.slice(-10);
  try{
-   const answer=await aiAnswer(q);
-   if(pending?.parentNode)pending.remove();
-   aiBubble(answer,'ai');
+   let answer='',remote=null;
+   if(aiRemoteConfigured!==false){
+     try{
+       remote=await api('/v1/yipman/ai/chat',{
+         method:'POST',
+         headers:{'Content-Type':'application/json'},
+         body:JSON.stringify({message:q,history}),
+         timeoutMs:65000
+       });
+       answer=String(remote?.answer||'').trim();
+       aiRemoteConfigured=true;
+       aiRemoteModel=String(remote?.model||aiRemoteModel||'');
+       const badge=$('.aireadonly');if(badge)badge.textContent='OPENAI · READ ONLY';
+       const sub=$('.aiheadcopy p');if(sub)sub.textContent='FULL MYSQL · '+(aiRemoteModel||'OpenAI');
+     }catch(remoteErr){
+       const msg=String(remoteErr?.message||remoteErr||'');
+       if(/OPENAI_API_KEY_NOT_CONFIGURED|AI_NOT_CONFIGURED/i.test(msg)){
+         aiRemoteConfigured=false;
+         const badge=$('.aireadonly');if(badge)badge.textContent='LOCAL · READ ONLY';
+       }else{
+         throw remoteErr;
+       }
+     }
+   }
+   if(!answer){
+     const local=await aiAnswer(q);
+     answer=String(local||'');
+     if(pending?.parentNode)pending.remove();
+     aiBubble(answer,'ai');
+     aiConversation.push({role:'user',content:q},{role:'assistant',content:answer.replace(/<[^>]*>/g,' ')});
+   }else{
+     if(pending?.parentNode)pending.remove();
+     aiBubble(aiPlainTextHtml(answer),'ai');
+     aiConversation.push({role:'user',content:q},{role:'assistant',content:answer});
+   }
+   if(aiConversation.length>20)aiConversation=aiConversation.slice(-20);
  }catch(e){
    if(pending?.parentNode)pending.remove();
    aiBubble('<b>Could not answer that query.</b><br>'+esc(e.message),'ai','notice');
  }
 }
 function bindAi(){
- const form=$('#aiForm'),input=$('#aiInput');if(!form||!input||form.dataset.bound==='1')return;
+ const form=$('#aiForm'),input=$('#aiInput');if(!form||!input)return;
+ loadAiRemoteStatus();
+ if(form.dataset.bound==='1')return;
  form.dataset.bound='1';
  form.onsubmit=e=>{e.preventDefault();const q=input.value.trim();if(!q)return;input.value='';aiSubmitQuestion(q)};
 }
