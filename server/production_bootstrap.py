@@ -35,3 +35,8 @@ install_inventory_sales(app, _api)
 
 from inventory_family_catalog import install_family_catalog
 install_family_catalog(app)
+
+
+# Final display branding runs after the official mobile renderer composition.
+from fishfinder_brand import install_fishfinder_brand
+install_fishfinder_brand(_api)

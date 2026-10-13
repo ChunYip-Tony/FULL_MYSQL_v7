@@ -1,6 +1,6 @@
 """Standalone Data Center. Uses existing guarded upload and QA endpoints."""
 DATA_CENTER_HTML = r'''<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YipMan Work DataCenter</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FishFinder · Fish Base</title>
 <style>
 :root{color-scheme:dark;--ink:#65ff89;--muted:#91bd9b;--line:#245535;--blue:#85ecda;--teal:#85ecda;--red:#ff9090;--good:#65ff89;--warn:#ffd477;--shadow:none}
 *{box-sizing:border-box}body{margin:0;background:#020a05;color:var(--ink);font:16px/1.35 "Cascadia Mono",Consolas,"Liberation Mono",monospace;-webkit-font-smoothing:antialiased}
@@ -175,8 +175,8 @@ header small{overflow-wrap:anywhere}
 }
 
 </style></head><body>
-<header><div><span class="brand-mark" aria-hidden="true">Y</span><strong>YipMan Work DataCenter</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
-<nav class="dc-functions" aria-label="Data Center functions">
+<header><div><span class="brand-mark" aria-hidden="true">F</span><strong>FishFinder · Fish Base</strong><span class="brand-divider" aria-hidden="true"></span><small>Store #1032</small></div><div><b>FULL MYSQL</b><small id="version">Connecting…</small></div></header>
+<nav class="dc-functions" aria-label="Fish Base functions">
  <button id="dataFunction" type="button" aria-pressed="true" aria-controls="dataWorkspace">Data &amp; Uploads</button>
  <button id="inventoryFunction" type="button" aria-pressed="false" aria-controls="inventoryWorkspace">Inventory</button>
  <button id="priceFunction" type="button" aria-pressed="false" aria-controls="priceWorkspace">Price Review</button>
@@ -185,18 +185,18 @@ header small{overflow-wrap:anywhere}
 </nav>
 <section id="inventoryWorkspace" hidden aria-label="Inventory">
  <p id="inventoryModuleStatus" role="status">Opening Inventory…</p>
- <iframe id="inventoryFrame" title="YipMan Work Inventory" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/inventory" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+ <iframe id="inventoryFrame" title="Fish Watch Inventory" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/inventory" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 </section>
 <section id="priceWorkspace" hidden aria-label="Price Review">
  <p id="priceModuleStatus" role="status">Opening Price Review…</p>
- <iframe id="priceReviewFrame" title="YipMan Work Price Review" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+ <iframe id="priceReviewFrame" title="Fish Watch Price Review" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 </section>
 <main id="dataWorkspace"><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
 <div id="globalError" role="alert"></div><div id="loadStatus" class="load-status" role="status" aria-label="Panel update status"></div><div id="freshness" class="fresh"></div>
 <div class="grid"><div class="monitor-column"><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
 <section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div><div class="tools-column"><section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
 <section class="panel upload-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload files</h2><div class="drop"><label for="files"><b>Select source files</b></label><div class="upload-controls"><input id="files" type="file" multiple accept=".xlsx,.xls,.xlsm,.csv,.txt,.tsv"><button id="upload" class="primary"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 15v5h16v-5"/></svg>Upload &amp; process</button></div><details><summary>Batch note (optional)</summary><label for="note" hidden>Batch note</label><input id="note" type="text" placeholder="For example: October 9 movement"></details></div><div id="uploadStatus" role="status" class="notice"></div><p class="muted">Existing files are saved. No re-upload needed.</p></section></div><div class="history-column"><section class="panel recent-panel"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg>Recent batches</h2><div id="recent" class="scroll">Loading…</div></section></div></div>
-<footer>YipMan Work DataCenter DC-11 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
+<footer>FishFinder · Fish Base DC-11 · AS/400 Classic Green · Times shown in your local time · Published status requires verification.</footer></main>
 <style>
 [hidden]{display:none!important}
 .dc-functions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line);flex:none}
