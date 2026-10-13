@@ -1324,7 +1324,44 @@ jobs:
           assert "while(el.scrollWidth>available&&size>8)" not in text
           assert "el.style.fontSize='';el.style.letterSpacing=''" in text
           assert "const effectiveOh=r.effective_oh??r.oh" in text
+          assert "/v1/yipman/ai/chat" in text
+          assert "/v1/yipman/ai/status" in text
+          assert "OPENAI · READ ONLY" in text
+          assert "aiConversation.slice(-10)" in text
           print('yipman-dom-bindings=PASS')
+          PY
+
+      - name: Validate Yipman OpenAI read-only assistant contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yipman_ai
+
+          assert yipman_ai.DEFAULT_MODEL == 'gpt-6-luna'
+          assert yipman_ai.MAX_TOOL_ROUNDS <= 5
+          assert yipman_ai.RATE_MAX_REQUESTS <= 12
+          names={x['name'] for x in yipman_ai.TOOLS}
+          required={
+              'search_items',
+              'get_sales_performance',
+              'get_inventory',
+              'get_price_review',
+              'get_ordering_review',
+              'get_stock_flow',
+              'get_qa_summary',
+              'get_today_attention',
+          }
+          assert required <= names
+          instructions=yipman_ai._instructions()
+          assert 'UPC sold quantity comes ONLY from POS' in instructions
+          assert 'Missing calendar dates are excluded, never filled as zero' in instructions
+          assert 'READ ONLY' in instructions
+          assert '240 main and 249 service/cooked forms' in instructions
+          api=Path('api.py').read_text(encoding='utf-8')
+          assert "@app.post('/v1/yipman/ai/chat')" in api
+          assert "@app.get('/v1/yipman/ai/status')" in api
+          assert 'OPENAI_API_KEY_NOT_CONFIGURED' in api
+          print('yipman-openai-assistant=PASS')
           PY
 
       - name: Validate universal Effective OH True Stock entry
