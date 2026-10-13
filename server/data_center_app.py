@@ -558,3 +558,6 @@ setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').
 
 from startup_logo import apply_startup_logo
 DATA_CENTER_HTML = apply_startup_logo(DATA_CENTER_HTML)
+
+from fishfinder_brand import rename_display
+DATA_CENTER_HTML = rename_display(DATA_CENTER_HTML)
