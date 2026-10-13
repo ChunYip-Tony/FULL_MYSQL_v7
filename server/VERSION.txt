@@ -1,3 +1,16 @@
+v7.0.519 OpenAI-connected Ask Yipman:
+- Adds a server-side /v1/yipman/ai/chat endpoint using the OpenAI Responses API with function calling.
+- Default AI model is gpt-6-luna and can be overridden with OPENAI_YIPMAN_MODEL.
+- The OpenAI API key is read only from the server-side OPENAI_API_KEY environment variable and is never exposed to browser JavaScript.
+- Ask Yipman can call read-only FULL MYSQL tools for item search, canonical POS sales/performance, Family Effective OH, current price review, ordering review, Stock Flow, QA, and combined Today Attention.
+- Seafood authority rules are enforced in the AI instructions: POS-only UPC sold quantity, completed canonical data days only, receipt de-duplication, cost authority, current price authority, 240/249 equality, GP$/day price testing, and read-only behavior.
+- Mobile AI chat now sends questions plus recent conversation context to the server AI endpoint, enabling follow-up questions such as "How about the day before?".
+- If OPENAI_API_KEY is not configured, the existing local rule-based Yipman answer engine remains available as fallback.
+- Adds per-client rate limiting, input/history caps, tool-loop caps, and compact tool outputs to control API spend.
+- Ask Yipman header shows OPENAI · READ ONLY when connected and LOCAL · READ ONLY when using fallback.
+- Main Yipman PWA cache advances to v476.
+Version: 7.0.519 OpenAI Yipman Assistant
+
 v7.0.441 Four-Mode Price Review + TPR Lifecycle + Clearance:
 - Integrates the v7.0.440 larger mobile/header freshness build with the new price architecture.
 - Price Review has four operational lanes: REG, TPR Suggest, TPR Progress, and Clearance.
