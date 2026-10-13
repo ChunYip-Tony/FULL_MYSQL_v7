@@ -1,1 +1,1 @@
-VERSION='7.0.518-pos-single-total-weight-ingest'
+VERSION='7.0.519-openai-yipman-assistant'\n
