@@ -1,1 +1,1 @@
-VERSION='7.0.519-openai-yipman-assistant'\n
+VERSION='7.0.519-openai-yipman-assistant'
