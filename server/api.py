@@ -72,6 +72,7 @@ from clearance import (
     get_clearance_plan as get_yipman_clearance_plan,
     close_clearance_plan as close_yipman_clearance_plan,
 )
+from yipman_ai import chat as yipman_ai_chat, ai_status as yipman_ai_status
 from version import VERSION
 app=FastAPI(title='FULL MYSQL Secure API',version=VERSION,docs_url=None,redoc_url=None)
 from mobile_pricing import router as mobile_pricing_router
@@ -4113,6 +4114,15 @@ class YipmanClearanceCloseRequest(BaseModel):
     status: str = 'CLOSED'
 
 
+class YipmanAIHistoryMessage(BaseModel):
+    role: str
+    content: str
+
+class YipmanAIChatRequest(BaseModel):
+    message: str
+    history: list[YipmanAIHistoryMessage] = []
+
+
 class YipmanPromotionListRequest(BaseModel):
     list_name: str
     items: list[dict[str,Any]]
@@ -4338,6 +4348,42 @@ def yipman_header_freshness():
         },default=j))
     except Exception as exc:
         raise HTTPException(500,f'Yipman header freshness failed: {exc}')
+
+
+@app.get('/v1/yipman/ai/status')
+def yipman_ai_status_endpoint():
+    return json.loads(json.dumps(yipman_ai_status(),default=j))
+
+
+@app.post('/v1/yipman/ai/chat')
+def yipman_ai_chat_endpoint(
+    body: YipmanAIChatRequest,
+    request: Request,
+):
+    forwarded=str(request.headers.get('x-forwarded-for') or '').split(',')[0].strip()
+    client_key=(
+        str(request.headers.get('cf-connecting-ip') or '').strip()
+        or forwarded
+        or str(request.client.host if request.client else 'unknown')
+    )
+    try:
+        result=yipman_ai_chat(
+            body.message,
+            [x.model_dump() for x in body.history],
+            client_key=client_key,
+        )
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    except RuntimeError as exc:
+        code=str(exc)
+        if code=='OPENAI_API_KEY_NOT_CONFIGURED':
+            raise HTTPException(503,detail={'status':'AI_NOT_CONFIGURED','reason':code})
+        if code=='AI_RATE_LIMIT':
+            raise HTTPException(429,detail={'status':'RATE_LIMITED','reason':code})
+        raise HTTPException(502,detail={'status':'AI_UPSTREAM_ERROR','reason':code})
+    except Exception as exc:
+        raise HTTPException(500,detail={'status':'AI_ERROR','reason':str(exc)})
+    return json.loads(json.dumps(result,default=j))
 
 
 @app.get('/v1/yipman/best-sellers')
