@@ -14,7 +14,7 @@ def rename_display(value: str) -> str:
     value = _BRAND.sub("FishFinder", value).replace("Data Center", "Fish Base")
     if "</head>" in value:
         # Each host needs its own favicon; the Fish Watch icon cannot brand Fish Base.
-        value = re.sub(r'<link\\b[^>]*\\brel=["\\\'](?:shortcut )?icon["\\\'][^>]*>', "", value, flags=re.I)
+        value = re.sub(r'<link\b[^>]*\brel=["\\\'](?:shortcut )?icon["\\\'][^>]*>', "", value, flags=re.I)
         value = value.replace("</head>", '<link rel="icon" type="image/png" href="' + _ICON + '"></head>')
     return value
 
