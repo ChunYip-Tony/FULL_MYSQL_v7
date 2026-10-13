@@ -191,7 +191,7 @@ header small{overflow-wrap:anywhere}
  <p id="priceModuleStatus" role="status">Opening Price Review…</p>
  <iframe id="priceReviewFrame" title="Fish Watch Price Review" data-src="https://seafood-stock-watch.bronzedove3.chatgpt.site/price-review" referrerpolicy="strict-origin-when-cross-origin"></iframe>
 </section>
-<main id="dataWorkspace"><div class="bar pagebar"><div><h1>DataCenter</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
+<main id="dataWorkspace"><div class="bar pagebar"><div><h1>Fish Base</h1><p class="muted">Upload once. Track processing. Verify published data.</p><div id="sync" role="status">Loading live status…</div></div><div id="health" aria-label="Worker health">Checking worker…</div><div class="page-actions"><button id="follow" hidden>Follow current batch</button><button id="refresh"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.2 7a7 7 0 0 1 11.5-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17"/></svg>Refresh</button></div></div>
 <div id="globalError" role="alert"></div><div id="loadStatus" class="load-status" role="status" aria-label="Panel update status"></div><div id="freshness" class="fresh"></div>
 <div class="grid"><div class="monitor-column"><section class="panel monitor-panel" aria-label="Batch monitor"><div id="monitor" aria-live="polite">Loading current batch…</div></section>
 <section class="panel coverage-panel"><div class="coverage-heading"><h2><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-13 5h2m4 0h2"/></svg>14-day completeness</h2><div class="view-toggle" aria-label="Completeness view"><button id="calendarView" aria-pressed="true">Calendar</button><button id="tableView" aria-pressed="false">Table</button></div></div><div id="coverage" class="scroll">Loading…</div></section></div><div class="tools-column"><section class="panel publication-panel" aria-label="Latest verified publish"><h2>Latest verified publish</h2><div id="publication"><span class="publish-empty">Checking published data…</span></div></section>
@@ -555,6 +555,45 @@ setInterval(()=>{if(!document.hidden&&!document.getElementById('dataWorkspace').
 
 
 
+
+FISH_BASE_WATCH_THEME = r'''
+<style id="fish-base-watch-theme">
+:root{--bg:#000;--surface:#000;--raised:#06170b;--ink:#6aef94;--muted:#9ac7a5;--line:#28613a;--green:#39ff78;--good:#39ff78;--warn:#f0db87;--red:#ffa38f;--blue:#39ff78;--teal:#39ff78;--terminal-font:ui-monospace,"Cascadia Mono","SFMono-Regular",Consolas,"Liberation Mono","Courier New",monospace}
+body{background:var(--bg);color:var(--ink);font-family:var(--terminal-font);font-weight:400;-webkit-font-smoothing:auto}
+header,.dc-functions,.panel,.fresh,.metric,pre,input,select,button{background:#000;color:var(--ink);border-color:var(--line);border-radius:0;box-shadow:none}
+header{border-bottom:3px double var(--line)}
+header strong{color:var(--green);text-transform:uppercase;font-weight:600;letter-spacing:.2px}
+header strong:after{content:"";display:inline-block;width:9px;height:17px;margin-left:6px;vertical-align:-2px;background:var(--green)}
+header small,.files,summary,.metric>span,.tile>span,footer{color:var(--muted)}
+.brand-mark{background:var(--green);color:#000;border:1px solid var(--green)}
+.dc-functions{border-bottom:3px double var(--line)}
+.dc-functions button[aria-pressed=true],button.primary,.view-toggle button[aria-pressed=true]{background:var(--green);color:#000;border-color:var(--green);box-shadow:none}
+button:hover:not(:disabled),tbody tr:hover{background:var(--raised);border-color:var(--green)}
+button.primary:hover:not(:disabled){background:#6aef94;color:#000}
+.panel{border:1px solid var(--line);border-left:2px solid var(--green);border-bottom:4px double var(--green)}
+.panel>h2,.coverage-heading{border-color:var(--line)}
+h1,h2,h3,.batch-title h2,.metric>b,.tile b,.publish-dates b{color:var(--green);font-weight:600}
+a,.linkbtn,.panel>h2 .icon,.coverage-heading h2 .icon{color:var(--green)}
+input,select{font-family:var(--terminal-font);caret-color:var(--green)}
+input[type=file]::file-selector-button{background:#000;color:var(--green);border-color:var(--line)}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+::selection{background:var(--green);color:#000}
+.badge.good,.status-text[data-tone=good],.pipeline-step.done,.activity{background:var(--raised);color:var(--green);border-color:var(--line)}
+.badge.warn,.status-text[data-tone=warn],.activity.warn,.qa-holds{color:var(--warn)}
+.badge.bad,.status-text[data-tone=bad],.activity.bad,.notice.bad{color:var(--red)}
+.pipeline-step.current{background:var(--green);color:#000;border-color:var(--green)}
+.pipeline-step.current i{background:#000;color:var(--green)}
+.stage-meter span,.pulse,.tile[data-tone=good]>span:before{background:var(--green)}
+#desktopStartup{background:#000;color:var(--ink);font-family:var(--terminal-font)}
+#desktopStartup .startup-box{background:#000;border:1px solid var(--line);border-top:4px solid var(--green);border-radius:0}
+#desktopStartup h1,#desktopStartup strong{color:var(--green)}
+#desktopStartup progress{accent-color:var(--green)}
+#desktopStartup small{color:var(--muted)}
+#desktopStartup button{background:#000;color:var(--green);border-color:var(--line)}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+</style>
+'''
+DATA_CENTER_HTML = DATA_CENTER_HTML.replace('</body>', FISH_BASE_WATCH_THEME + '</body>', 1)
 
 from startup_logo import apply_startup_logo
 DATA_CENTER_HTML = apply_startup_logo(DATA_CENTER_HTML)
