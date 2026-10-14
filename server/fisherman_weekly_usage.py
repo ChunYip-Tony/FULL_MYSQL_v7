@@ -11,6 +11,19 @@ def promotion_dates(start, end, weekend_only):
     return days, [day for day in days if not weekend_only or day.weekday() in {4, 5, 6}]
 
 
+def week_dates(start, end, today):
+    if start:
+        start = date.fromisoformat(str(start))
+        end = date.fromisoformat(str(end)) if end else start + timedelta(days=6)
+    elif end:
+        end = date.fromisoformat(str(end))
+        start = end - timedelta(days=6)
+    else:
+        start = today - timedelta(days=today.weekday())
+        end = start + timedelta(days=6)
+    return start.isoformat(), end.isoformat()
+
+
 def type_average(daily, price_type, limit):
     """Exclude unknown-type days; retain explicit, supported zero-sale rows."""
     types = (price_type,) if isinstance(price_type, str) else tuple(price_type)
@@ -67,6 +80,10 @@ def _unit(value):
 def weekly_usage(args):
     from webapp_v2_runtime import (db_conn, _canonical_sales_days,
                                    _daily_sales_by_price_type, _safe_qty_uom)
+    args = dict(args)
+    if not args.get('start_date') or not args.get('end_date'):
+        from business_clock import business_today
+        args['start_date'], args['end_date'] = week_dates(args.get('start_date'), args.get('end_date'), business_today())
     items = args.get('items')
     if not isinstance(items, list) or not 1 <= len(items) <= 30:
         raise ValueError('Provide between 1 and 30 items.')
@@ -99,6 +116,8 @@ def weekly_usage(args):
                 family_cache[query] = (families, members)
             families, members = family_cache[query]
             _, promo_days = promotion_dates(args['start_date'], args['end_date'], bool(item.get('weekend_only')))
+            if item.get('promotion_applies') is False:
+                promo_days = []
             result = {'article': query, 'name': str(item.get('name') or query),
                       'promotion_dates': [day.isoformat() for day in promo_days],
                       'regular_days': len(all_days) - len(promo_days), 'promotion_days': len(promo_days),
@@ -152,7 +171,7 @@ def format_usage(items, start, end):
     def num(value):
         return '—' if value is None else f'{value:.1f}'.rstrip('0').rstrip('.')
     lines = [f'Estimated usage for {start} to {end} (historical REG+TPR/SALE averages):', '',
-             '| Item | Promo dates | REG+TPR usage | SALE usage | Weekly usage | Confidence |',
+             '| Item | Promo dates | REG+TPR usage | SALE usage | Suggested weekly usage | Confidence |',
              '| --- | ---: | ---: | ---: | ---: | --- |']
     for row in items:
         name = row['name'].replace('|', '/').replace('\n', ' ')

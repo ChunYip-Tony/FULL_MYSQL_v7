@@ -4,13 +4,19 @@ import sys
 import types
 import unittest
 from unittest.mock import patch
-from fisherman_weekly_usage import promotion_dates, type_average, estimate_member, weekly_usage
+from fisherman_weekly_usage import promotion_dates, week_dates, type_average, estimate_member, weekly_usage
 
 def daily(reg=10, sale=20):
     return {date(2026, 10, 1): {'price_types': {'REG': {'sold_quantity': reg, 'sales_amount': reg * 5}}},
             date(2026, 10, 2): {'price_types': {'SALE': {'sold_quantity': sale, 'sales_amount': sale * 4}}}}
 
 class WeeklyUsageTest(unittest.TestCase):
+    def test_default_week_without_delivery_inputs(self):
+        self.assertEqual(week_dates(None, None, date(2026, 10, 14)), ('2026-10-12', '2026-10-18'))
+
+    def test_promotion_start_defaults_seven_days(self):
+        self.assertEqual(week_dates('2026-10-16', None, date(2026, 10, 14)), ('2026-10-16', '2026-10-22'))
+
     def test_oct16_weekend(self):
         days, promo = promotion_dates('2026-10-16', '2026-10-22', True)
         self.assertEqual(len(days), 7)
@@ -112,9 +118,13 @@ class WeeklyUsageTest(unittest.TestCase):
         with patch.dict(sys.modules, {'webapp_v2_runtime': runtime}):
             result = weekly_usage({'start_date': '2026-10-16', 'end_date': '2026-10-22', 'items': [
                 {'article_or_upc': '1361689', 'name': 'Fish', 'selling_unit': 'LB', 'weekend_only': True}]})
+            regular_only = weekly_usage({'start_date': '2026-10-16', 'end_date': '2026-10-22', 'items': [
+                {'article_or_upc': '1361689', 'name': 'Fish', 'selling_unit': 'LB', 'weekend_only': False, 'promotion_applies': False}]})
         row = result['items'][0]
         self.assertEqual(len(row['members']), 2)
         self.assertEqual(row['total'], Decimal(120))
         self.assertEqual(row['promotion_usage'], Decimal(72))
+        self.assertEqual(regular_only['items'][0]['total'], Decimal(84))
+        self.assertEqual(regular_only['items'][0]['promotion_usage'], Decimal(0))
 
 if __name__ == '__main__': unittest.main()

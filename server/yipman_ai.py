@@ -657,17 +657,17 @@ def _weekly_usage_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 TOOLS = [
     {"type": "function", "name": "estimate_weekly_usage",
-     "description": "Estimate actual-store weekly usage from historical average REG+TPR and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Accept explicit overall start/end dates; Fri Sat Sun only rows select actual weekend dates within that period; all other rows use SALE every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Fewer than 7 supported SALE days uses 2x REG+TPR baseline with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
+     "description": "Estimate actual-store weekly usage from historical average REG+TPR and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Use supplied promotion dates; otherwise pass null dates for the current business week without asking the user. Set promotion_applies false when no promotion is planned; Fri Sat Sun only rows select actual weekend dates within that period; all other rows use SALE every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Fewer than 7 supported SALE days uses 2x REG+TPR baseline with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
      "parameters": {"type": "object", "properties": {
-         "start_date": {"type": "string", "description": "YYYY-MM-DD inclusive"},
-         "end_date": {"type": "string", "description": "YYYY-MM-DD inclusive"},
+         "start_date": {"type": ["string", "null"], "description": "YYYY-MM-DD inclusive; null defaults to the current Monday-Sunday business week"},
+         "end_date": {"type": ["string", "null"], "description": "YYYY-MM-DD inclusive; null defaults to seven days from start"},
          "items": {"type": "array", "minItems": 1, "maxItems": 30, "items": {
              "type": "object", "properties": {
                  "article_or_upc": {"type": "string"}, "name": {"type": "string"},
                  "selling_unit": {"type": "string", "enum": ["LB", "EA", "PACK", "KG"]},
-                 "weekend_only": {"type": "boolean"},
+                 "weekend_only": {"type": "boolean"}, "promotion_applies": {"type": "boolean", "description": "True for a proposed SALE/promotion schedule; false when no promotion is planned."},
                  "promotion_price": {"type": ["number", "null"], "description": "Proposed price per selling unit, or null if missing. Multi-buy $12 for 2 PACK is $6/PACK."}},
-             "required": ["article_or_upc", "name", "selling_unit", "weekend_only", "promotion_price"], "additionalProperties": False}}},
+             "required": ["article_or_upc", "name", "selling_unit", "weekend_only", "promotion_applies", "promotion_price"], "additionalProperties": False}}},
          "required": ["start_date", "end_date", "items"], "additionalProperties": False}, "strict": True},
     {"type": "function", "name": "resolve_promotion_items",
      "description": "Match a pasted promotion list one row at a time using article numbers and confirmed family links. Pass each item row separately. Returns matched, ambiguous, missing or unavailable per item. Preserve proposed prices and pack units from the user; do not treat them as current prices. Ask only about unresolved items, and keep matched items.",
@@ -724,22 +724,6 @@ TOOLS = [
                 "category": {"type": "string", "enum": ["ALL", "LIVE", "FRESH", "FROZEN"]},
             },
             "required": ["query", "category"],
-            "additionalProperties": False,
-        },
-        "strict": True,
-    },
-    {
-        "type": "function",
-        "name": "get_ordering_review",
-        "description": "Get current Family ordering recommendations. Dates may be null to use the strongest observed delivery day and next cycle.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "delivery_date": {"type": ["string", "null"], "description": "YYYY-MM-DD or null"},
-                "next_delivery_date": {"type": ["string", "null"], "description": "YYYY-MM-DD or null"},
-                "item_query": {"type": ["string", "null"]},
-            },
-            "required": ["delivery_date", "next_delivery_date", "item_query"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -804,6 +788,7 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- For usage, ordering-suggestion and how-much-should-I-order questions, provide estimated WEEKLY USAGE in a compact table. Do not ask delivery dates or next delivery dates, and do not deduct stock. Use dates already given for a promotion list; otherwise estimate the current Monday-Sunday business week via null dates. Show historical REG+TPR and SALE rates, regular usage, promotion usage and suggested weekly usage with units/confidence. Ask only to identify an ambiguous item or unknown unit. Never label weekly usage as a stock-adjusted purchase order.
 - For actual-store estimated weekly usage using historical REG+TPR/SALE average velocities, call estimate_weekly_usage directly. This is an authorized estimate, not a guaranteed matching-price forecast. Do not refuse because proposed-price history is unavailable; use the tool's labelled type-average estimate and 2x REG+TPR fallback when fewer than 7 supported SALE days are available. Historical TPR counts as REG for weekly usage estimation only; SALE remains separate. Do not ask delivery dates or deduct stock for weekly usage. Preserve each item's selling unit and weekend restriction. Explicit week dates apply to every row; weekend-only selects actual Fri/Sat/Sun dates inside them. Missing promotion price does not prevent a type-average usage estimate; acknowledge it is missing. Tool-produced dates and arithmetic are authoritative; never replace them with a guessed weekend.
 - For pasted promotion lists, call resolve_promotion_items with one item row per entry. Article numbers on these lists may be receiving or family articles rather than UPCs. Keep confirmed matches and ask only about ambiguous or unmatched entries. A lookup failure means temporarily unavailable, not no matching item. Do not reject the entire list because one row is unresolved. Preserve each proposed price, selling unit, pack and promotion-day note; do not confuse receiving cost with selling price or merge two rows solely because they share an article.
 - Historical sales tools must end on or before the latest completed day, never on a future delivery or the end of the current week. A future forecast is not future recorded sales.
@@ -832,7 +817,7 @@ CRITICAL DATA RULES:
 - Ask one short, focused follow-up covering only the missing information. Use clear options when helpful. If several essential details are missing, a small two-column table is okay. Do not repeat questions already answered in the conversation.
 - Distinguish uncertainty about the question from missing database evidence: clarify unclear wording; explain unavailable data plainly. Use bounded product search when the product wording is understandable but its identity needs matching; ask the user if multiple plausible matches remain.
 - When the user supplies the missing details, continue their original task using the conversation context. Do not restart the discussion or give an unrelated generic answer.
-- Before a delivery-specific order calculation, ask for missing delivery date, next delivery date and specific product. This does not apply to a weekly usage estimate. Do not call ordering or department review tools just to ask for these details. Use dates already supplied by the user in this conversation; do not silently infer delivery dates.
+- Ordering suggestions default to weekly usage estimates. Use known promotion dates or the tool default week. Never ask for delivery or next delivery dates.
 - Distinguish GENERAL SEAFOOD KNOWLEDGE from STORE DATA. Answer species, cuts, cooking, product differences, handling and freezing questions directly from general knowledge without database tools. The tool requirements below apply to Store 1032's current or historical operational facts, not universal knowledge or general cooking quantities.
 - Never imply that general guidance describes this store's actual stock, costs, sales, supplier, inspection status or promotion. Use tools for those claims. For safety questions use conservative established guidance, distinguish quality from safety, and acknowledge uncertainty; never assure safety from smell or appearance alone.
 - Resolve everyday names with search_items before declaring an item missing. Drop filler such as "the" and "in": "oyster in jar" -> "oyster jar". If no results, retry the core product word and inspect package qualifiers. Preserve fresh/frozen/live, jar/shell, size and pack distinctions. Prefer actively selling UPCs over historical aliases; never combine their POS quantities. Ask which item only if multiple plausible active items remain.
@@ -880,7 +865,7 @@ ANSWER STYLE:
   * REG tests need 7 completed days per step. Exclude tests still observing from new price changes. REG must exceed SALE, never equal SALE.
   * Company A/B/C min/max bounds apply except supported Fresh DOH>7 clearance. Ignore price deltas <=$0.25. Company SALE is evidence, not a controllable local change.
   * 240/249 share prices and promotions; count 249 service sales. 245 package premium reference 10-20%, bones/heads discount reference 10-20%; verify identities and costs first.
-  * For delivery-specific orders without dates ask delivery and next delivery dates. Cover delivery through day before next delivery; split demand by REG/promo days; subtract usable effective stock; exclude stock that spoils before delivery.
+  * User wants weekly usage suggestions, not delivery-specific orders. No delivery/next delivery date questions and no stock deduction. Split weekly demand into baseline and promotion days.
   * Promo demand uses same/similar historical price events with dates, price, quantity/velocity and confidence. REG baseline is recent 28 supported completed days. Label weak promo fallback low confidence.
   * Mobile weekly estimator is separate: 0/3/7 promo days, weekly baseline, weekly usage and whether promotion applied. With 0 promo days baseline equals weekly usage. Do not confuse weekly usage with a delivery-specific order. Show verified receiving article and pack/UOM; do not guess case conversions.
   * Check stock, cost, history, selling UOM and period before recommending promo quantity. Remember user-proposed price in conversation; ask only for missing details needed for their decision.
@@ -902,7 +887,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "REG_TPR_SALE_WEEKLY_USAGE_V10",
+        "test_revision": "WEEKLY_USAGE_NO_DELIVERY_V11",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -978,33 +963,8 @@ def _safe_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
 
 
 def _quick_order_question(question: str, history: list[dict[str, Any]] | None) -> dict[str, Any] | None:
-    """Clarify an incomplete order request before any model or database call."""
-    first = question.splitlines()[0].strip()
-    match = re.fullmatch(r"how (?:many|much) (.{1,100}?) should (?:i|we) order[?!.]?", first, re.IGNORECASE)
-    if not match:
-        return None
-    if any("reply in " in line.lower() and "english" not in line.lower()
-           for line in question.splitlines()[1:]):
-        return None
-    date_words = r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|today|tomorrow)\b|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b"
-    if re.search(date_words, first, re.IGNORECASE):
-        return None
-    # Earlier user-provided delivery dates can complete a follow-up request.
-    for message in history or []:
-        text = str(message.get("content") or "")
-        if message.get("role") == "user" and re.search(r"deliver|arriv|order", text, re.IGNORECASE) and re.search(date_words, text, re.IGNORECASE):
-            return None
-    item = match.group(1).strip().replace("|", "/")
-    answer = (
-        "Tell me these details so I can calculate the order:\n\n"
-        "| Detail | What I need |\n| --- | --- |\n"
-        f"| Item | Which {item} product? |\n"
-        "| Delivery | When will this order arrive? |\n"
-        "| Next delivery | When will the following order arrive? |"
-    )
-    return {"answer": answer, "model": None, "read_only": True,
-            "tool_calls": [], "mode": "ORDER_DETAILS_REQUIRED",
-            "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
+    """Ordering wording uses the weekly estimator; never request delivery dates."""
+    return None
 
 
 def _quick_daily_answer(question: str) -> dict[str, Any] | None:
