@@ -368,7 +368,11 @@ def coverage_summary(cur, source_type: str, *, include_batch_id: int | None = No
         expected = movement_expected_through_date()
     else:
         expected = completed_through_date()
-    days = source_data_days(cur, source_type, include_batch_id=include_batch_id, up_to=expected)
+    # The grace cutoff controls missing-file alerts, not which already validated
+    # completed days may be used for reporting. An early-arriving yesterday
+    # file must advance the daily report immediately; today's partial data must not.
+    usable_through = expected_through if expected_through is not None else completed_through_date()
+    days = source_data_days(cur, source_type, include_batch_id=include_batch_id, up_to=usable_through)
     valid = {x['date'] for x in days}
     latest = max(valid) if valid else None
 
@@ -385,7 +389,7 @@ def coverage_summary(cur, source_type: str, *, include_batch_id: int | None = No
             missing.append(d)
         d += timedelta(days=1)
 
-    status = 'CURRENT' if latest == expected and not missing else ('BACKFILL_NEEDED' if valid else 'NO_DATA')
+    status = 'CURRENT' if latest is not None and latest >= expected and not missing else ('BACKFILL_NEEDED' if valid else 'NO_DATA')
     latest7 = sorted(valid, reverse=True)[:7]
     latest30 = sorted(valid, reverse=True)[:30]
     return {
@@ -569,7 +573,7 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                 elif missing_required:
                     overall = 'MISSING'
                     status_detail = 'REQUIRED_SOURCE_MISSING'
-                elif any_required:
+                elif p is not None and m is not None:
                     overall = 'COMPLETE'
                     status_detail = 'REQUIRED_SOURCES_COMPLETE'
                 else:
@@ -636,7 +640,7 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
                     'daily_grace_cutoff_local':'15:00',
                     'snapshot_sources':['PRICE','OH','LIVE_FRESH','FROZEN'],
                     'current_day_required_status':'NOT_DUE',
-                    'yesterday_before_cutoff_status':'PENDING',
+                    'yesterday_before_cutoff_status':'COMPLETE_IF_VALIDATED_POS_AND_MVT_ELSE_PENDING',
                     'current_day_semantics':'ONLY_STORE_LOCAL_TODAY',
                     'missing_semantics':'ONLY_REQUIRED_POS_OR_MVT_ABSENT_AFTER_GRACE',
                     'snapshot_none_semantics':'NO_NEW_SNAPSHOT_THAT_DATE_NOT_DAILY_MISSING',
