@@ -427,6 +427,10 @@ def _ordering_tool(args: dict[str, Any]) -> dict[str, Any]:
     delivery = _parse_iso_date(args.get("delivery_date"), required=False)
     next_delivery = _parse_iso_date(args.get("next_delivery_date"), required=False)
     query = str(args.get("item_query") or "").strip() or None
+    if query:
+        identifiers = re.findall(r"\b\d{6,14}\b", query)
+        if len(identifiers) == 1:
+            query = identifiers[0]
     if delivery is None or next_delivery is None:
         return {
             "needs_details": True,
@@ -814,7 +818,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "EVAL_200_FIXES_V5",
+        "test_revision": "EVAL_200_FIXES_V6",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
