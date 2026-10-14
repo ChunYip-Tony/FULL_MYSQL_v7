@@ -225,7 +225,7 @@ def _item_tool(args: dict[str, Any]) -> dict[str, Any]:
     query = str(args.get("query") or "").strip()
     if not query:
         raise ValueError("ITEM_QUERY_REQUIRED")
-    _, _, results = _search_refs(query)
+    results = _catalog_search_rows(query)
     compact = []
     for row in results[:12]:
         compact.append({
@@ -245,10 +245,7 @@ def _item_tool(args: dict[str, Any]) -> dict[str, Any]:
     return {"query": query, "count": len(compact), "results": compact}
 
 
-def _inventory_tool(args: dict[str, Any]) -> dict[str, Any]:
-    query = str(args.get("query") or "").strip()
-    family_key = _resolve_family(query)
-    info = family_info(family_key)
+def _inventory_result(info: dict[str, Any]) -> dict[str, Any]:
     return {
         "family_article_number": info.get("family_article_number"),
         "family_article_name": info.get("family_article_name"),
@@ -264,7 +261,37 @@ def _inventory_tool(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _price_search_rows(query: str) -> list[dict[str, Any]]:
+def _inventory_tool(args: dict[str, Any]) -> dict[str, Any]:
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return {"needs_details": True, "question": "Which product do you mean?"}
+    if query.isdigit():
+        try:
+            return _inventory_result(family_info(query))
+        except (KeyError, ValueError):
+            pass
+    rows = _catalog_search_rows(query)
+    if query.isdigit():
+        exact = [row for row in rows if _norm_num(row.get("number")) == _norm_num(query)]
+        if exact:
+            rows = exact
+    active = [row for row in rows if Decimal(str(row.get("pos_qty_7d") or 0)) > 0
+              or str(row.get("readiness") or "").upper() == "READY"]
+    if active:
+        rows = active
+    families = {}
+    for row in rows:
+        family = str(row.get("family_article_number") or "")
+        if family:
+            families.setdefault(family, row)
+    if len(families) != 1:
+        return {"needs_details": True, "question": "Which product do you mean?",
+                "options": list(families.values())[:5]}
+    return _inventory_result(family_info(next(iter(families))))
+
+
+
+def _catalog_search_rows(query: str) -> list[dict[str, Any]]:
     """Price identification needs current catalog facts, not per-alias history."""
     data = search_quick_check(_item_search_query(query), 30)
     return [{
@@ -319,7 +346,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     category = str(args.get("category") or "ALL").strip().upper()
     if category not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
         category = "ALL"
-    search_rows = _price_search_rows(query) if query else []
+    search_rows = _catalog_search_rows(query) if query else []
     candidates = [row for row in search_rows
                   if str(row.get("result_type") or "").upper() == "UPC"
                   and row.get("number")]
@@ -614,13 +641,24 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- For a clearly hypothetical ordering calculation with user-provided numbers, use those numbers only and label the result hypothetical. Do not query actual store stock/history or request delivery dates when the requested weekly coverage and demand inputs are already supplied. Keep units consistent and show the arithmetic briefly.
+- Do not use the delivery-order tool to invent dates for a weekly usage scenario. If current tools cannot provide a verified weekly promotion forecast for a fully specified product, state that limitation instead of turning it into a delivery-specific order.
+- For stock questions call get_inventory directly with the item name or exact Family article; do not run a preliminary search. The tool performs fast identification and asks for a choice when several families match.
+- For current-price-only questions, use search_items with the exact UPC and return only the current price, selling unit, price type and effective date. Save get_price_review for an actual recommendation/cost/profit question.
+- For ordinary price suggestions, a change of $0.25 or less is ignored even if a small profit improvement is possible. Do not suggest such a change on generic profit/velocity grounds. A confirmed 240/249 mismatch or an explicit pricing error is a separate correction; do not invent that exception when the user merely asks about a 10-cent change.
+- When the user asks for weekly usage or the 0/3/7-promotion-day estimate, do NOT ask for delivery dates. Ask only for the missing product identity, promotion days or promotion price needed for that weekly scenario. Example: "Estimate salmon this week with 3 promotion days" needs the salmon product, not delivery dates.
+- Reuse user-provided details from history, including ordinary month-name dates such as "October 16" and "October 23". Never repeat a question for a detail already provided. A follow-up order question with known dates should ask only for the product if that is still missing.
+- A current-price-only question should show the current price, selling unit, type and effective date; do not add a suggested price, cost or analysis that the user did not request.
+- Store-specific definitions must be exact: Family sold quantity comes from Family movement 251 minus 252, in the verified Family/base unit. UPC sold quantity comes only from POS, in that UPC's selling unit. Never define Family movement as simply the sum of UPC POS quantities, and never add each/packs to pounds. Explain with distinct sources/units, not an example summing arbitrary UPC counts.
+- 240 is the main selling UPC; do not label it "packaged" merely because its prefix is 240. 249 is the linked cooked/service selling UPC. 245 is generally the packaged form. Always verify the actual selling unit; prefixes do not prove a weight conversion.
+- Explain True Stock precisely: the physical count is the starting point; later valid receipts/sales/adjustments change the displayed stock balance. A new accepted OH upload supersedes the earlier count. The count record is an anchor, not a permanently fixed current stock number.
 - For an item price recommendation, call get_price_review directly with the item query, without preliminary search or department-wide reports. If it returns needs_details, ask that question and show only the relevant choices. Stop tool calls until the user chooses.
 - If price analysis is refreshing or source_changed_since_analysis is true, distinguish the verified current price from dated suggestions; never describe an old recommendation as newly calculated. Give its data date and limitation plainly.
 - If you do not understand the user's question, intent, product, unit, date or requested decision, ask for clarification before answering or calculating. Never choose an interpretation silently, invent missing details, or run broad expensive lookups to compensate for an unclear question.
 - Ask one short, focused follow-up covering only the missing information. Use clear options when helpful. If several essential details are missing, a small two-column table is okay. Do not repeat questions already answered in the conversation.
 - Distinguish uncertainty about the question from missing database evidence: clarify unclear wording; explain unavailable data plainly. Use bounded product search when the product wording is understandable but its identity needs matching; ask the user if multiple plausible matches remain.
 - When the user supplies the missing details, continue their original task using the conversation context. Do not restart the discussion or give an unrelated generic answer.
-- Before an order calculation, ask for missing delivery date, next delivery date and specific product. Do not call ordering or department review tools just to ask for these details. Use dates already supplied by the user in this conversation; do not silently infer delivery dates.
+- Before a delivery-specific order calculation, ask for missing delivery date, next delivery date and specific product. This does not apply to a weekly usage estimate. Do not call ordering or department review tools just to ask for these details. Use dates already supplied by the user in this conversation; do not silently infer delivery dates.
 - Distinguish GENERAL SEAFOOD KNOWLEDGE from STORE DATA. Answer species, cuts, cooking, product differences, handling and freezing questions directly from general knowledge without database tools. The tool requirements below apply to Store 1032's current or historical operational facts, not universal knowledge or general cooking quantities.
 - Never imply that general guidance describes this store's actual stock, costs, sales, supplier, inspection status or promotion. Use tools for those claims. For safety questions use conservative established guidance, distinguish quality from safety, and acknowledge uncertainty; never assure safety from smell or appearance alone.
 - Resolve everyday names with search_items before declaring an item missing. Drop filler such as "the" and "in": "oyster in jar" -> "oyster jar". If no results, retry the core product word and inspect package qualifiers. Preserve fresh/frozen/live, jar/shell, size and pack distinctions. Prefer actively selling UPCs over historical aliases; never combine their POS quantities. Ask which item only if multiple plausible active items remain.
@@ -638,6 +676,8 @@ CRITICAL DATA RULES:
 - This assistant is READ ONLY. Never claim to update price, stock, true stock, orders, QA, or database records.
 
 ANSWER STYLE:
+- DEFAULT BREVITY: unless the user explicitly asks for more detail, answer in at most 60 words. Use a single compact table of at most 3 rows when useful. Do not add a second explanation paragraph, cooking suggestions or extra comparisons that the user did not request. For comparisons use only the 2-3 most useful differences. A short definition can be one sentence.
+- General seafood knowledge: do not imply fresh, frozen, shucked or shell-on form alone proves quality or safety. Quality depends on handling and storage. Cooking time depends on fish size/thickness; safety depends on verified cooking temperature, not a fixed number of minutes. Mention raw-seafood risks when recommending raw consumption.
 - Stay on point and brief by default. Answer only the exact question. Aim for 40-80 words unless the user asks for detail, explanation, a full report or more examples. Do not add unrelated rules, generic advice or repeated summaries.
 - Prefer compact Markdown tables for answers with facts, comparisons, recommendations or steps, including general seafood knowledge. Usually one short table with 2 columns and 3-6 rows is enough. Use 3 columns only when needed; split wider tables into smaller ones. Keep cells short and headings simple. No HTML or code fences.
 - Lead with one direct sentence if it helps, then the table. One short source/date or uncertainty note when needed. Avoid extra sections that repeat table content. For a simple yes/no or follow-up question, one sentence is enough.
@@ -771,7 +811,7 @@ def _quick_order_question(question: str, history: list[dict[str, Any]] | None) -
     if any("reply in " in line.lower() and "english" not in line.lower()
            for line in question.splitlines()[1:]):
         return None
-    date_words = r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|today|tomorrow)\b|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}"
+    date_words = r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|today|tomorrow)\b|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}|\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}\b"
     if re.search(date_words, first, re.IGNORECASE):
         return None
     # Earlier user-provided delivery dates can complete a follow-up request.
@@ -868,7 +908,7 @@ def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
         if not any(str(u).upper() in {"LB","LBS","POUND","POUNDS"} for u in quantities):
             answer=f"{item}: Sales for {label} are recorded as "+", ".join(f"{q} {u}" for u,q in quantities.items())+". Pounds cannot be verified from these selling units."
         else:
-            answer=f"{item}: {pounds} LB sold yesterday ({label}), from POS."
+            answer=f"{item}: {format(pounds.normalize(), 'f')} lb sold yesterday ({label}), from sales records."
             if other:
                 answer+=" Other selling units: "+", ".join(f"{q} {u}" for u,q in other.items())+". These are not converted into pounds."
     else:
