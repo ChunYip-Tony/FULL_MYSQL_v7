@@ -13,6 +13,7 @@ from typing import Any
 import requests
 
 from business_clock import business_today, completed_through_date
+from quick_check_app import search_quick_check
 from backoffice_runtime import (
     cached_ordering_review,
     cached_pricing_review,
@@ -263,12 +264,51 @@ def _inventory_tool(args: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _price_search_rows(query: str) -> list[dict[str, Any]]:
+    """Price identification needs current catalog facts, not per-alias history."""
+    data = search_quick_check(_item_search_query(query), 30)
+    return [{
+        "result_type": "UPC",
+        "number": row.get("ean_upc"),
+        "name": row.get("selling_description"),
+        "family_article_number": row.get("main_article_number"),
+        "readiness": row.get("quick_check_status"),
+        "pos_qty_7d": row.get("pos_qty_7d"),
+        "selling_uom": row.get("selling_uom"),
+        "current_price": row.get("current_price"),
+        "current_price_type": row.get("current_price_type"),
+        "current_price_asof_date": row.get("current_price_asof_date"),
+    } for row in data.get("results") or [] if row.get("ean_upc")]
+
+
+def _clarification_result(result: dict[str, Any], tool_names: list[str]) -> dict[str, Any]:
+    answer = str(result.get("question") or "Could you clarify what you mean?")
+    options = result.get("options") or []
+    if options:
+        lines = [answer, "", "| Product | Current price |", "| --- | --- |"]
+        dates = set()
+        for row in options:
+            name = str(row.get("name") or row.get("number") or "Product").replace("|", "/").replace("\n", " ")
+            price = row.get("current_price")
+            unit = str(row.get("selling_uom") or "").upper()
+            unit = {"LB": "per lb", "LBS": "per lb", "EA": "each", "PACK": "per pack", "PAC": "per pack"}.get(unit, unit.lower())
+            label = f"${Decimal(str(price)):,.2f} {unit}".strip() if price is not None else "Not confirmed"
+            lines.append(f"| {name} | {label} |")
+            if row.get("current_price_asof_date"):
+                dates.add(str(row["current_price_asof_date"]))
+        if dates:
+            lines.extend(["", "Price records: " + ", ".join(sorted(dates)) + "."])
+        answer = "\n".join(lines)
+    return {"answer": answer, "model": None, "read_only": True,
+            "tool_calls": tool_names, "mode": "DETAILS_REQUIRED"}
+
+
 def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     query = str(args.get("query") or "").strip()
     category = str(args.get("category") or "ALL").strip().upper()
     if category not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
         category = "ALL"
-    _, _, search_rows = _search_refs(query) if query else (set(), set(), [])
+    search_rows = _price_search_rows(query) if query else []
     candidates = [row for row in search_rows
                   if str(row.get("result_type") or "").upper() == "UPC"
                   and row.get("number")]
@@ -278,7 +318,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
             candidates = exact
     else:
         active = [row for row in candidates
-                  if Decimal(str(row.get("qty_28d") or 0)) > 0
+                  if Decimal(str(row.get("qty_28d") or row.get("pos_qty_7d") or 0)) > 0
                   or str(row.get("readiness") or "").upper() == "READY"]
         if active:
             candidates = active
@@ -293,7 +333,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
             seen.add(family)
             options.append({key: row.get(key) for key in
                             ("number", "name", "family_article_number", "selling_uom",
-                             "current_price", "current_price_type")})
+                             "current_price", "current_price_type", "current_price_asof_date")})
             if len(options) >= 5:
                 break
         return {"needs_details": True, "question": "Which product do you mean?",
@@ -900,6 +940,8 @@ def chat(
             else:
                 try:
                     result = handler(arguments)
+                    if result.get("needs_details"):
+                        return _clarification_result(result, tool_names)
                 except Exception as exc:
                     result = {"error": str(exc), "tool": name}
             input_items.append({
