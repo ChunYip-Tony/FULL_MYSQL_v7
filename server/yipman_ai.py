@@ -92,8 +92,19 @@ def _check_rate_limit(client_key: str) -> None:
         q.append(now)
 
 
+def _item_search_query(query: str) -> str:
+    """Ignore conversational filler, preserving product and package qualifiers."""
+    raw = str(query or "").strip()
+    if raw.isdigit():
+        return raw
+    tokens = _norm_text(raw).split()
+    stop = {"a", "an", "the", "in", "of", "for", "please"}
+    meaningful = [token for token in tokens if token not in stop]
+    return " ".join(meaningful) or raw
+
+
 def _search_refs(query: str) -> tuple[set[str], set[str], list[dict[str, Any]]]:
-    payload = search_items(query, 30)
+    payload = search_items(_item_search_query(query), 30)
     rows = list(payload.get("results") or [])
     upcs: set[str] = set()
     families: set[str] = set()
@@ -168,7 +179,7 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
     end = _parse_iso_date(args.get("end_date"), required=False) or start
     if start > end:
         raise ValueError("START_DATE_AFTER_END_DATE")
-    item_query = str(args.get("item_query") or "").strip() or None
+    item_query = _item_search_query(str(args.get("item_query") or "")) or None
     result = performance_range(start, end, 2000, item_query=item_query, include_gp=not args.get('_quantity_only', False))
     items = list(result.get("items") or [])
     matched = items  # The canonical range query already scopes item names/identities.
@@ -551,6 +562,7 @@ def ai_status() -> dict[str, Any]:
     return {
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
+        "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
         "read_only": True,
