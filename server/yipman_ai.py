@@ -97,6 +97,9 @@ def _item_search_query(query: str) -> str:
     raw = str(query or "").strip()
     if raw.isdigit():
         return raw
+    explicit_upc = re.search(r"\b\d{11,14}\b", raw)
+    if explicit_upc:
+        return explicit_upc.group(0)
     tokens = _norm_text(raw).split()
     stop = {"a", "an", "the", "in", "of", "for", "please"}
     meaningful = [token for token in tokens if token not in stop]
