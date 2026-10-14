@@ -1,4 +1,4 @@
-"""Historical REG/SALE weekly usage estimates, never purchase orders."""
+"""Historical REG+TPR/SALE weekly usage estimates, never purchase orders."""
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -13,17 +13,21 @@ def promotion_dates(start, end, weekend_only):
 
 def type_average(daily, price_type, limit):
     """Exclude unknown-type days; retain explicit, supported zero-sale rows."""
+    types = (price_type,) if isinstance(price_type, str) else tuple(price_type)
     chosen = []
     for day, row in sorted(daily.items(), reverse=True):
-        values = (row.get('price_types') or {}).get(price_type)
-        if values is None:
+        components = [(row.get('price_types') or {})[kind] for kind in types
+                      if kind in (row.get('price_types') or {})]
+        if not components:
             continue
-        qty = Decimal(str(values.get('sold_quantity', 0)))
-        sales = Decimal(str(values.get('sales_amount', 0)))
-        if not qty.is_finite() or qty < 0 or not sales.is_finite() or sales < 0:
+        amounts = [(Decimal(str(value.get('sold_quantity', 0))),
+                    Decimal(str(value.get('sales_amount', 0)))) for value in components]
+        if any(not qty.is_finite() or qty < 0 or not sales.is_finite() or sales < 0
+               or (qty == 0 and sales != 0) for qty, sales in amounts):
             continue
-        if qty == 0 and sales != 0:
-            continue
+        qty = sum((value[0] for value in amounts), Decimal(0))
+        sales = sum((value[1] for value in amounts), Decimal(0))
+        # REG and TPR on the same supported date are one baseline day.
         chosen.append((day, qty, sales))
         if len(chosen) >= limit:
             break
@@ -37,9 +41,10 @@ def type_average(daily, price_type, limit):
 
 
 def estimate_member(daily, regular_days, sale_days):
-    # REG: latest 28 observed REG days. SALE: latest 90 observed SALE days,
+    # Baseline: latest 28 observed REG/TPR dates, counted once per date.
+    # SALE: latest 90 observed SALE days,
     # searched across up to 365 completed source days.
-    reg, sale = type_average(daily, 'REG', 28), type_average(daily, 'SALE', 90)
+    reg, sale = type_average(daily, ('REG', 'TPR'), 28), type_average(daily, 'SALE', 90)
     reg_rate, sale_rate = reg['average'], sale['average']
     fallback = sale_days > 0 and sale['days'] < 7 and reg_rate is not None
     used_sale_rate = 2 * reg_rate if fallback else sale_rate
@@ -120,8 +125,8 @@ def weekly_usage(args):
                 if upc_id not in daily_cache:
                     daily_cache[upc_id] = _daily_sales_by_price_type(cur, upc_id, supported)
                 daily = daily_cache[upc_id]
-                # Historical aliases with no REG/SALE evidence contribute no estimate.
-                if not any(set((day.get('price_types') or {})) & {'REG', 'SALE'} for day in daily.values()):
+                # Historical aliases with no REG/TPR/SALE evidence contribute no estimate.
+                if not any(set((day.get('price_types') or {})) & {'REG', 'TPR', 'SALE'} for day in daily.values()):
                     continue
                 estimate = estimate_member(daily, result['regular_days'], result['promotion_days'])
                 result['members'].append({'upc': row['ean_upc'], 'name': row.get('selling_description'), 'unit': unit, **estimate})
@@ -138,7 +143,7 @@ def weekly_usage(args):
             results.append(result)
         cur.close()
     return {'start_date': args['start_date'], 'end_date': args['end_date'],
-            'basis': 'HISTORICAL_REG_SALE_TYPE_OBSERVED_COMPLETED_DAYS',
+            'basis': 'HISTORICAL_REG_TPR_SALE_TYPE_OBSERVED_COMPLETED_DAYS',
             'supported_through': max((day['date'] for day in supported), default=None),
             'items': results, 'calculation_answer': format_usage(results, args['start_date'], args['end_date'])}
 
@@ -146,17 +151,17 @@ def weekly_usage(args):
 def format_usage(items, start, end):
     def num(value):
         return '—' if value is None else f'{value:.1f}'.rstrip('0').rstrip('.')
-    lines = [f'Estimated usage for {start} to {end} (historical REG/SALE averages):', '',
-             '| Item | Promo dates | REG usage | SALE usage | Weekly usage | Confidence |',
+    lines = [f'Estimated usage for {start} to {end} (historical REG+TPR/SALE averages):', '',
+             '| Item | Promo dates | REG+TPR usage | SALE usage | Weekly usage | Confidence |',
              '| --- | ---: | ---: | ---: | ---: | --- |']
     for row in items:
         name = row['name'].replace('|', '/').replace('\n', ' ')
         unit = row['unit'].lower()
         total = f"{num(row.get('total'))} {unit}" if row.get('total') is not None else 'Unavailable'
-        sale = num(row.get('promotion_usage')) + (' (2× REG fallback)' if row.get('fallback') else '')
+        sale = num(row.get('promotion_usage')) + (' (2× REG+TPR fallback)' if row.get('fallback') else '')
         dates = ', '.join(date.fromisoformat(day).strftime('%b %d') for day in row['promotion_dates']) or 'None'
         lines.append(f"| {name} | {dates} ({row['promotion_days']} days) | {num(row.get('regular_usage'))} {unit} | {sale} {unit} | {total} | {row.get('confidence', 'LOW').title()} |")
-    lines += ['', 'Weekly usage = REG average × regular days + promotion rate × promotion days. With at least 7 supported SALE days, use the SALE average. Otherwise use 2× REG when REG history exists (low confidence). Weekend items use only Fri/Sat/Sun within the listed dates. These are estimates, not guaranteed demand; historical SALE prices can differ from the proposed price. Units stay separate; matching 249 sales are included in the family.']
+    lines += ['', 'Weekly usage = REG+TPR average × regular days + promotion rate × promotion days. With at least 7 supported SALE days, use the SALE average. Otherwise use 2× REG+TPR when baseline history exists (low confidence). Weekend items use only Fri/Sat/Sun within the listed dates. These are estimates, not guaranteed demand; historical SALE prices can differ from the proposed price. Units stay separate; matching 249 sales are included in the family.']
     for row in items:
         for kind in ('reg', 'sale'):
             evidence = [member[kind] for member in row.get('members', []) if member[kind]['days']]
@@ -164,5 +169,5 @@ def format_usage(items, start, end):
                 days = sorted({str(value) for e in evidence for value in (e['start'], e['end']) if value})
                 counts = '/'.join(str(e['days']) for e in evidence)
                 rate = row.get('reg_rate' if kind == 'reg' else 'sale_rate')
-                lines.append(f"{row['name']} {kind.upper()}: {num(rate)} {row['unit'].lower()}/day; {days[0]}–{days[-1]}; {counts} observed type days per included UPC.")
+                lines.append(f"{row['name']} {('REG+TPR' if kind == 'reg' else 'SALE')}: {num(rate)} {row['unit'].lower()}/day; {days[0]}–{days[-1]}; {counts} observed type days per included UPC.")
     return '\n'.join(lines)

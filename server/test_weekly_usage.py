@@ -66,6 +66,30 @@ class WeeklyUsageTest(unittest.TestCase):
     def test_no_history_remains_unknown(self):
         self.assertIsNone(estimate_member({}, 4, 3)['total'])
 
+    def test_tpr_only_is_regular_baseline(self):
+        data = {date(2026, 10, 1): {'price_types': {'TPR': {'sold_quantity': 10, 'sales_amount': 40}}}}
+        result = estimate_member(data, 4, 3)
+        self.assertEqual(result['reg']['average'], Decimal(10))
+        self.assertEqual(result['regular_usage'], Decimal(40))
+        self.assertEqual(result['promotion_usage'], Decimal(60))
+        self.assertEqual(result['total'], Decimal(100))
+
+    def test_reg_tpr_same_date_counts_once(self):
+        data = {date(2026, 10, 1): {'price_types': {
+            'REG': {'sold_quantity': 4, 'sales_amount': 20},
+            'TPR': {'sold_quantity': 6, 'sales_amount': 24},
+            'SALE': {'sold_quantity': 30, 'sales_amount': 90}}},
+            date(2026, 10, 2): {'price_types': {'TPR': {'sold_quantity': 20, 'sales_amount': 80}}}}
+        result = type_average(data, ('REG', 'TPR'), 28)
+        self.assertEqual(result['days'], 2)
+        self.assertEqual(result['quantity'], Decimal(30))
+        self.assertEqual(result['average'], Decimal(15))
+
+    def test_tpr_does_not_change_sale_rate(self):
+        data = daily()
+        data[date(2026, 10, 1)]['price_types']['TPR'] = {'sold_quantity': 90, 'sales_amount': 360}
+        self.assertEqual(type_average(data, 'SALE', 90)['average'], Decimal(20))
+
     def test_family_249_and_units(self):
         class Cursor:
             def execute(self, sql, args):
