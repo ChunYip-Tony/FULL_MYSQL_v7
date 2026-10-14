@@ -269,22 +269,55 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     if category not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
         category = "ALL"
     _, _, search_rows = _search_refs(query) if query else (set(), set(), [])
+    candidates = [row for row in search_rows
+                  if str(row.get("result_type") or "").upper() == "UPC"
+                  and row.get("number")]
+    if query.isdigit():
+        exact = [row for row in candidates if _norm_num(row.get("number")) == _norm_num(query)]
+        if exact:
+            candidates = exact
+    else:
+        active = [row for row in candidates
+                  if Decimal(str(row.get("qty_28d") or 0)) > 0
+                  or str(row.get("readiness") or "").upper() == "READY"]
+        if active:
+            candidates = active
+    families = {str(row.get("family_article_number") or row.get("number")) for row in candidates}
+    if query and len(families) > 1:
+        options = []
+        seen = set()
+        for row in candidates:
+            family = str(row.get("family_article_number") or row.get("number"))
+            if family in seen:
+                continue
+            seen.add(family)
+            options.append({key: row.get(key) for key in
+                            ("number", "name", "family_article_number", "selling_uom",
+                             "current_price", "current_price_type")})
+            if len(options) >= 5:
+                break
+        return {"needs_details": True, "question": "Which product do you mean?",
+                "query": query, "options": options,
+                "upc_details": [], "price_suggestions": []}
+    if query and not candidates:
+        return {"needs_details": True,
+                "question": "I could not match that product. What name or UPC is on its label?",
+                "query": query, "upc_details": [], "price_suggestions": []}
+    # One product lookup includes stock/cost context; don't load historical aliases.
     upc_details = []
-    for row in search_rows:
-        if str(row.get("result_type") or "").upper() != "UPC" or not row.get("number"):
-            continue
+    for row in candidates[:1]:
         try:
-            d = upc_info(str(row["number"]))
-        except Exception:
-            continue
-        upc_details.append(d)
-        if len(upc_details) >= 8:
-            break
-
+            upc_details.append(upc_info(str(row["number"])))
+        except Exception as exc:
+            upc_details.append({"upc": row["number"], "data_error": str(exc)})
     review = cached_pricing_review(category=category, limit=1000)
     suggestions = list(review.get("rows") or [])
     if query:
-        suggestions = _filter_item_rows(suggestions, query)
+        upcs = {_norm_num(row.get("number")) for row in candidates}
+        family_keys = {str(row["family_article_number"]) for row in candidates if row.get("family_article_number")}
+        suggestions = [row for row in suggestions
+                       if _norm_num(row.get("upc") or row.get("ean_upc")) in upcs
+                       or str(row.get("family_article_number") or row.get("family_article") or "") in family_keys]
     suggestions = sorted(
         suggestions,
         key=lambda x: (
@@ -298,6 +331,8 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
         "query": query or None,
         "category": category,
         "analysis_status": review.get("analysis_status"),
+        "source_changed_since_analysis": review.get("source_changed_since_analysis", False),
+        "refreshing": review.get("refreshing", False),
         "data_health": review.get("current_source_health") or review.get("data_health"),
         "upc_details": upc_details,
         "price_suggestions": suggestions[:20],
@@ -528,6 +563,8 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- For an item price recommendation, call get_price_review directly with the item query, without preliminary search or department-wide reports. If it returns needs_details, ask that question and show only the relevant choices. Stop tool calls until the user chooses.
+- If price analysis is refreshing or source_changed_since_analysis is true, distinguish the verified current price from dated suggestions; never describe an old recommendation as newly calculated. Give its data date and limitation plainly.
 - If you do not understand the user's question, intent, product, unit, date or requested decision, ask for clarification before answering or calculating. Never choose an interpretation silently, invent missing details, or run broad expensive lookups to compensate for an unclear question.
 - Ask one short, focused follow-up covering only the missing information. Use clear options when helpful. If several essential details are missing, a small two-column table is okay. Do not repeat questions already answered in the conversation.
 - Distinguish uncertainty about the question from missing database evidence: clarify unclear wording; explain unavailable data plainly. Use bounded product search when the product wording is understandable but its identity needs matching; ask the user if multiple plausible matches remain.
