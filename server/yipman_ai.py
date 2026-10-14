@@ -543,6 +543,8 @@ def _today_attention_tool(args: dict[str, Any]) -> dict[str, Any]:
 def _order_calculation_tool(args: dict[str, Any]) -> dict[str, Any]:
     """Calculate from supplied quantities only; never retrieve or invent forecasts."""
     from decimal import Decimal, ROUND_CEILING
+    if not args.get("hypothetical"):
+        return {"error": "FORECAST_EVIDENCE_REQUIRED", "explanation": "This calculator cannot turn observed sales into a verified future promotion forecast. Use a supported forecast with matching price/days, or explain that it is unavailable. Do not claim promotion uplift was applied."}
     def number(key: str) -> Decimal:
         value = Decimal(str(args.get(key) or 0))
         if not value.is_finite():
@@ -583,7 +585,7 @@ def _order_calculation_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = [
-    {'type': 'function', 'name': 'calculate_order_quantities', 'description': 'Exact arithmetic using supplied or already verified demand and stock in one shared unit. For weekly usage choose purpose usage and regular/promotion daily rates plus coverage days. For order subtract usable stock once and any stock spoiled before delivery; negative stock counts as zero. Set total_demand when already provided, otherwise null. Convert net order to whole cases only with a verified case size in the SAME unit. Never invent rates or conversions. All irrelevant numeric fields must be null. For linked products sum daily demand only when units and shared pool are confirmed.', 'parameters': {'type': 'object', 'properties': {'total_demand': {'type': ['number', 'null']}, 'coverage_days': {'type': ['number', 'null']}, 'promotion_days': {'type': ['number', 'null']}, 'regular_daily_demand': {'type': ['number', 'null']}, 'promotion_daily_demand': {'type': ['number', 'null']}, 'usable_stock': {'type': ['number', 'null']}, 'spoilage_before_delivery': {'type': ['number', 'null']}, 'case_size': {'type': ['number', 'null']}, 'unit': {'type': 'string', 'enum': ['lb', 'each', 'pack', 'kg']}, 'purpose': {'type': 'string', 'enum': ['usage', 'order']}, 'hypothetical': {'type': 'boolean'}}, 'required': ['total_demand', 'coverage_days', 'promotion_days', 'regular_daily_demand', 'promotion_daily_demand', 'usable_stock', 'spoilage_before_delivery', 'case_size', 'unit', 'purpose', 'hypothetical'], 'additionalProperties': False}, 'strict': True},
+    {'type': 'function', 'name': 'calculate_order_quantities', 'description': 'Exact arithmetic for explicitly hypothetical user-supplied scenarios only, in one shared unit. Never use this tool to create an actual-store future forecast from observed historical sales. For weekly usage choose purpose usage and regular/promotion daily rates plus coverage days. For order subtract usable stock once and any stock spoiled before delivery; negative stock counts as zero. Set total_demand when already provided, otherwise null. Convert net order to whole cases only with a verified case size in the SAME unit. Never invent rates or conversions. All irrelevant numeric fields must be null. For linked products sum daily demand only when units and shared pool are confirmed.', 'parameters': {'type': 'object', 'properties': {'total_demand': {'type': ['number', 'null']}, 'coverage_days': {'type': ['number', 'null']}, 'promotion_days': {'type': ['number', 'null']}, 'regular_daily_demand': {'type': ['number', 'null']}, 'promotion_daily_demand': {'type': ['number', 'null']}, 'usable_stock': {'type': ['number', 'null']}, 'spoilage_before_delivery': {'type': ['number', 'null']}, 'case_size': {'type': ['number', 'null']}, 'unit': {'type': 'string', 'enum': ['lb', 'each', 'pack', 'kg']}, 'purpose': {'type': 'string', 'enum': ['usage', 'order']}, 'hypothetical': {'type': 'boolean'}}, 'required': ['total_demand', 'coverage_days', 'promotion_days', 'regular_daily_demand', 'promotion_daily_demand', 'usable_stock', 'spoilage_before_delivery', 'case_size', 'unit', 'purpose', 'hypothetical'], 'additionalProperties': False}, 'strict': True},
     {
         "type": "function",
         "name": "search_items",
@@ -716,6 +718,7 @@ CRITICAL DATA RULES:
 - Historical sales tools must end on or before the latest completed day, never on a future delivery or the end of the current week. A future forecast is not future recorded sales.
 - Current stock is not automatically usable on a future delivery date. Without freshness and pre-delivery usage evidence, report it only as current stock and say future usable stock is unverified. Do not lead with "safely count" and then undermine that statement.
 - Stock spoiled before delivery must NOT reduce the order. Answer that yes/no question with "No" and explain briefly; do not lead with a conflicting yes.
+- Do not use hypothetical=true for actual-store future forecasts. Historical sales at current prices do not establish demand for a proposed price. If matching planned-price/day forecast evidence is unavailable, say so; do not output a calculated future quantity as verified.
 - Always use calculate_order_quantities for numerical weekly usage, promotion demand, stock deduction and case arithmetic. Do not compute these totals in prose. Use supplied hypothetical numbers without any database lookup; never substitute store data. The calculator does not create a verified store forecast.
 - Treat "Can you calculate..." about actual store figures as a request to do the calculation, not merely a capability question. If costs are incomplete, return only a clearly labelled partial gross profit with the number of priced items; never call it the full department total.
 - For a future promotion, never claim promotion uplift was applied unless the returned forecast explicitly reflects the user's planned price and promotion days. A current regular-price forecast is not proof of a future promotion forecast. If no supported projection is returned, say so plainly; do not invent an uplift.
@@ -808,7 +811,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "EVAL_200_FIXES_V4",
+        "test_revision": "EVAL_200_FIXES_V5",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
