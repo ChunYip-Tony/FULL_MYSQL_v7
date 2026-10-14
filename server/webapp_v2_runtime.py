@@ -5947,6 +5947,9 @@ def performance_range(
     start_date: date|None=None,
     end_date: date|None=None,
     limit: int=1000,
+    *,
+    item_query: str|None=None,
+    include_gp: bool=True,
 ) -> dict[str,Any]:
     """Aggregate Seafood performance over a user-selected canonical date range.
 
@@ -5987,10 +5990,24 @@ def performance_range(
             cur.close()
             raise ValueError("NO_SUPPORTED_DATES_IN_RANGE")
 
-        cur.execute("SELECT * FROM quick_check_current")
+        query=str(item_query or "").strip()
+        if query:
+            tokens=query.lower().split()[:12]
+            clauses=[]
+            args=[]
+            for token in tokens:
+                # Names and identities only; all values stay bound SQL parameters.
+                clauses.append("""(LOWER(COALESCE(selling_description,'')) LIKE %s
+                    OR LOWER(COALESCE(family_description,'')) LIKE %s
+                    OR CAST(ean_upc AS CHAR) LIKE %s
+                    OR CAST(main_article_number AS CHAR) LIKE %s)""")
+                args.extend(["%"+token+"%"]*4)
+            cur.execute("SELECT * FROM quick_check_current WHERE "+" AND ".join(clauses),tuple(args))
+        else:
+            cur.execute("SELECT * FROM quick_check_current")
         rows=cur.fetchall()
         daily=_batch_daily_sales_by_price_type(cur,rows,selected)
-        cost_obs=_performance_range_cost_rows(cur,rows,resolved_end)
+        cost_obs=_performance_range_cost_rows(cur,rows,resolved_end) if include_gp else {}
 
         items=[]
         total_sales=Decimal("0")
@@ -6022,7 +6039,7 @@ def performance_range(
                 if day_qty<=0:
                     continue
                 sold_days+=1
-                cost=_performance_cost_for_day(row,cost_obs,day)
+                cost=_performance_cost_for_day(row,cost_obs,day) if include_gp else None
                 if cost is None:
                     missing_cost_days.append(day)
                     continue

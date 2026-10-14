@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 from collections import defaultdict, deque
@@ -168,9 +169,9 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
     if start > end:
         raise ValueError("START_DATE_AFTER_END_DATE")
     item_query = str(args.get("item_query") or "").strip() or None
-    result = performance_range(start, end, 2000)
+    result = performance_range(start, end, 2000, item_query=item_query, include_gp=not args.get('_quantity_only', False))
     items = list(result.get("items") or [])
-    matched = _filter_item_rows(items, item_query)
+    matched = items  # The canonical range query already scopes item names/identities.
     chosen = matched if item_query else items
     chosen = sorted(
         chosen,
@@ -206,7 +207,7 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
     }
     if not item_query:
         payload["department_summary"] = result.get("summary")
-    if start == end:
+    if start == end and not item_query:
         try:
             day = performance_report("ALL", 100, start)
             payload["daily_analysis"] = day.get("analysis")
@@ -407,7 +408,7 @@ TOOLS = [
     {
         "type": "function",
         "name": "get_sales_performance",
-        "description": "Get canonical POS sales, quantity, historical-cost GP, top sellers, and daily performance for a supported date or date range. Use this for sales/performance/GP questions.",
+        "description": "Get canonical POS sales, quantity, historical-cost GP, top sellers, and daily performance for a supported date or date range. Use this directly for sales/performance/GP questions; item_query resolves the item inside this tool, so no preliminary search is needed.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -520,7 +521,7 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
-- Use tools for every current, numeric, sales, stock, receipt, price, ordering, GP, freshness, or QA claim. Never invent missing numbers.
+- For item sales questions, call get_sales_performance directly with item_query. Do not run search_items or a department attention report first.\n- Use tools for every current, numeric, sales, stock, receipt, price, ordering, GP, freshness, or QA claim. Never invent missing numbers.
 - UPC sold quantity comes ONLY from POS. Family movement 251-252 is Family-level quantity and must never be presented as an individual UPC sold quantity.
 - Completed canonical sales/data days only. Missing calendar dates are excluded, never filled as zero.
 - Physical delivery quantity follows canonical receipt semantics: 101 OR the 107+109 receipt event; never double count the same delivery.
@@ -621,6 +622,45 @@ def _safe_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
     return out
 
 
+
+def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
+    """Answer a narrow completed-day POS quantity question without model round trips."""
+    line=question.split("\n",1)[0].strip()
+    match=re.fullmatch(
+        r"how many (pounds|lbs?|units) of (.{1,100}?) did we sell yesterday[?!.]?",
+        line, re.IGNORECASE,
+    )
+    if not match:
+        return None
+    # Preserve the selected UI language; other languages use the model path.
+    if "\nReply in " in question and "\nReply in English." not in question:
+        return None
+    unit,item=match.groups()
+    day=completed_through_date()
+    data=_sales_tool({"start_date":day.isoformat(),"end_date":day.isoformat(),
+                     "item_query":item,"_quantity_only":True})
+    quantities=data.get("sold_quantity_by_uom") or {}
+    label=day.strftime("%a, %b %d")
+    if not data.get("matched_item_count"):
+        answer=f"{item}: no matching positive POS sales were found for {label}. This does not establish stock availability."
+    elif unit.lower() in {"pound","pounds","lb","lbs"}:
+        pounds=sum((Decimal(str(q)) for u,q in quantities.items()
+                    if str(u).upper() in {"LB","LBS","POUND","POUNDS"}),Decimal("0"))
+        other={u:q for u,q in quantities.items()
+               if str(u).upper() not in {"LB","LBS","POUND","POUNDS"}}
+        if not any(str(u).upper() in {"LB","LBS","POUND","POUNDS"} for u in quantities):
+            answer=f"{item}: POS sales for {label} are recorded as "+", ".join(f"{q} {u}" for u,q in quantities.items())+". Pounds cannot be verified from these selling units."
+        else:
+            answer=f"{item}: {pounds} LB sold yesterday ({label}), from POS."
+            if other:
+                answer+=" Other selling units: "+", ".join(f"{q} {u}" for u,q in other.items())+". These are not converted into pounds."
+    else:
+        answer=f"{item}, yesterday ({label}): "+", ".join(f"{q} {u}" for u,q in quantities.items())+" sold from POS."
+    return {"answer":answer,"model":None,"read_only":True,
+            "tool_calls":["get_sales_performance"],"mode":"CANONICAL_POS_DIRECT",
+            "usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
+
+
 def chat(
     message: str,
     history: list[dict[str, Any]] | None = None,
@@ -634,6 +674,10 @@ def chat(
     if len(question) > MAX_MESSAGE_CHARS:
         raise ValueError("MESSAGE_TOO_LONG")
 
+    quick = _quick_quantity_answer(question)
+    if quick is not None:
+        return quick
+
     input_items: list[dict[str, Any]] = list(_safe_history(history))
     input_items.append({"role": "user", "content": question})
 
@@ -642,7 +686,8 @@ def chat(
         "instructions": _instructions(),
         "tools": TOOLS,
         "tool_choice": "auto",
-        "reasoning": {"effort": "low"},
+        "reasoning": {"effort": "none"},
+        "store": False,
         "max_output_tokens": 1100,
     }
 
