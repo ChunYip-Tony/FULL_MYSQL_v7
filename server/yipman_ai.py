@@ -100,6 +100,11 @@ def _item_search_query(query: str) -> str:
     explicit_upc = re.search(r"\b\d{11,14}\b", raw)
     if explicit_upc:
         return explicit_upc.group(0)
+    # Pasted promotion rows contain a receiving/family article plus prices,
+    # pack sizes and weekday notes. Search the identity, not the whole row.
+    articles = re.findall(r"\b\d{6,10}\b", raw)
+    if len(articles) == 1:
+        return articles[0]
     tokens = _norm_text(raw).split()
     stop = {"a", "an", "the", "in", "of", "for", "please"}
     meaningful = [token for token in tokens if token not in stop]
@@ -299,8 +304,18 @@ def _inventory_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 def _catalog_search_rows(query: str) -> list[dict[str, Any]]:
     """Price identification needs current catalog facts, not per-alias history."""
-    data = search_quick_check(_item_search_query(query), 30)
-    return [{
+    term = _item_search_query(query)
+    # The quick UPC catalog cannot expose receiving-only article aliases.
+    # Use the confirmed article/family bridge for article-length identifiers.
+    if term.isdigit() and len(term) < 11:
+        rows = list(search_items(term, 30).get("results") or [])
+        exact = [row for row in rows if _norm_num(row.get("number")) == _norm_num(term)
+                 or _norm_num(row.get("article_number")) == _norm_num(term)
+                 or _norm_num(row.get("family_article_number")) == _norm_num(term)]
+        return [dict(row, family_article_number=row.get("family_article_number") or
+                     (row.get("number") if row.get("result_type") == "FAMILY" else None)) for row in exact]
+    data = search_quick_check(term, 30)
+    rows = [{
         "result_type": "UPC",
         "number": row.get("ean_upc"),
         "name": row.get("selling_description"),
@@ -312,6 +327,36 @@ def _catalog_search_rows(query: str) -> list[dict[str, Any]]:
         "current_price_type": row.get("current_price_type"),
         "current_price_asof_date": row.get("current_price_asof_date"),
     } for row in data.get("results") or [] if row.get("ean_upc")]
+    if rows:
+        return rows
+    # Names may exist only on receiving articles; keep their actual role.
+    return [dict(row, family_article_number=row.get("family_article_number") or
+                 (row.get("number") if row.get("result_type") == "FAMILY" else None))
+            for row in search_items(term, 30).get("results") or []]
+
+
+def _promotion_items_tool(args: dict[str, Any]) -> dict[str, Any]:
+    """Resolve each pasted item independently without inventing mappings."""
+    entries = args.get("items")
+    if not isinstance(entries, list) or not 1 <= len(entries) <= 30:
+        raise ValueError("SUPPLY_1_TO_30_PROMOTION_ITEMS")
+    resolved = []
+    for entry in entries:
+        query = str(entry or "").strip()
+        if not query or len(query) > 400:
+            raise ValueError("INVALID_PROMOTION_ITEM")
+        try:
+            rows = _catalog_search_rows(query)
+            families = {str(row.get("family_article_number") or
+                            (row.get("number") if row.get("result_type") == "FAMILY" else ""))
+                        for row in rows}
+            families.discard("")
+            status = "MATCHED" if len(families) == 1 else "AMBIGUOUS" if families else "NOT_FOUND"
+            resolved.append({"input": query, "status": status,
+                             "family_article_numbers": sorted(families), "matches": rows[:12]})
+        except Exception:
+            resolved.append({"input": query, "status": "LOOKUP_UNAVAILABLE", "matches": []})
+    return {"items": resolved, "matched_count": sum(row["status"] == "MATCHED" for row in resolved)}
 
 
 def _clarification_result(result: dict[str, Any], tool_names: list[str], question: str = "") -> dict[str, Any]:
@@ -353,6 +398,20 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     if category not in {"ALL", "LIVE", "FRESH", "FROZEN"}:
         category = "ALL"
     search_rows = _catalog_search_rows(query) if query else []
+    # Article matches identify a family, not a retail price. Fetch its UPC
+    # children only after the family is unambiguous.
+    matched_families = {str(row["family_article_number"]) for row in search_rows
+                        if row.get("family_article_number")}
+    if search_rows and len(matched_families) == 1 and not any(
+            row.get("result_type") == "UPC" for row in search_rows):
+        data = search_quick_check(next(iter(matched_families)), 30)
+        search_rows = [{"result_type": "UPC", "number": row.get("ean_upc"),
+                        "name": row.get("selling_description"),
+                        "family_article_number": row.get("main_article_number"),
+                        "readiness": row.get("quick_check_status"),
+                        "pos_qty_7d": row.get("pos_qty_7d")}
+                       for row in data.get("results") or [] if row.get("ean_upc")
+                       and str(row.get("main_article_number")) in matched_families]
     candidates = [row for row in search_rows
                   if str(row.get("result_type") or "").upper() == "UPC"
                   and row.get("number")]
@@ -592,6 +651,9 @@ def _order_calculation_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = [
+    {"type": "function", "name": "resolve_promotion_items",
+     "description": "Match a pasted promotion list one row at a time using article numbers and confirmed family links. Pass each item row separately. Returns matched, ambiguous, missing or unavailable per item. Preserve proposed prices and pack units from the user; do not treat them as current prices. Ask only about unresolved items, and keep matched items.",
+     "parameters": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 30}}, "required": ["items"], "additionalProperties": False}, "strict": True},
     {'type': 'function', 'name': 'calculate_order_quantities', 'description': 'Exact arithmetic for explicitly hypothetical user-supplied scenarios only, in one shared unit. Never use this tool to create an actual-store future forecast from observed historical sales. For weekly usage choose purpose usage and regular/promotion daily rates plus coverage days. For order subtract usable stock once and any stock spoiled before delivery; negative stock counts as zero. Set total_demand when already provided, otherwise null. Convert net order to whole cases only with a verified case size in the SAME unit. Never invent rates or conversions. All irrelevant numeric fields must be null. For linked products sum daily demand only when units and shared pool are confirmed.', 'parameters': {'type': 'object', 'properties': {'total_demand': {'type': ['number', 'null']}, 'coverage_days': {'type': ['number', 'null']}, 'promotion_days': {'type': ['number', 'null']}, 'regular_daily_demand': {'type': ['number', 'null']}, 'promotion_daily_demand': {'type': ['number', 'null']}, 'usable_stock': {'type': ['number', 'null']}, 'spoilage_before_delivery': {'type': ['number', 'null']}, 'case_size': {'type': ['number', 'null']}, 'unit': {'type': 'string', 'enum': ['lb', 'each', 'pack', 'kg']}, 'purpose': {'type': 'string', 'enum': ['usage', 'order']}, 'hypothetical': {'type': 'boolean'}}, 'required': ['total_demand', 'coverage_days', 'promotion_days', 'regular_daily_demand', 'promotion_daily_demand', 'usable_stock', 'spoilage_before_delivery', 'case_size', 'unit', 'purpose', 'hypothetical'], 'additionalProperties': False}, 'strict': True},
     {
         "type": "function",
@@ -703,6 +765,7 @@ TOOLS = [
 ]
 
 _TOOL_HANDLERS = {
+    "resolve_promotion_items": _promotion_items_tool,
     "calculate_order_quantities": _order_calculation_tool,
     "search_items": _item_tool,
     "get_sales_performance": _sales_tool,
@@ -722,6 +785,7 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- For pasted promotion lists, call resolve_promotion_items with one item row per entry. Article numbers on these lists may be receiving or family articles rather than UPCs. Keep confirmed matches and ask only about ambiguous or unmatched entries. A lookup failure means temporarily unavailable, not no matching item. Do not reject the entire list because one row is unresolved. Preserve each proposed price, selling unit, pack and promotion-day note; do not confuse receiving cost with selling price or merge two rows solely because they share an article.
 - Historical sales tools must end on or before the latest completed day, never on a future delivery or the end of the current week. A future forecast is not future recorded sales.
 - Current stock is not automatically usable on a future delivery date. Without freshness and pre-delivery usage evidence, report it only as current stock and say future usable stock is unverified. Do not lead with "safely count" and then undermine that statement.
 - Stock spoiled before delivery must NOT reduce the order. Answer that yes/no question with "No" and explain briefly; do not lead with a conflicting yes.
@@ -818,7 +882,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "EVAL_200_FIXES_V6",
+        "test_revision": "PROMOTION_ARTICLE_MATCH_V7",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -1095,5 +1159,6 @@ def chat(
             })
 
     raise RuntimeError("OPENAI_TOOL_LOOP_LIMIT")
+
 
 
