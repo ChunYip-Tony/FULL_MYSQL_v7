@@ -434,6 +434,21 @@ def _ordering_tool(args: dict[str, Any]) -> dict[str, Any]:
         }
     if next_delivery <= delivery:
         return {"needs_details": True, "question": "The next delivery must be after the first delivery. What are the two dates?"}
+    family_keys: set[str] = set()
+    if query:
+        matches = _catalog_search_rows(query)
+        exact = [row for row in matches if str(row.get("number")) == query]
+        if exact:
+            matches = exact
+        active = [row for row in matches if row.get("readiness") == "READY" or float(row.get("pos_qty_7d") or 0) > 0]
+        if active:
+            matches = active
+        families = {str(row["family_article_number"]): row for row in matches if row.get("family_article_number")}
+        if not families:
+            return {"needs_details": True, "question": "I could not match that product. What name or UPC is on its label?"}
+        if len(families) != 1:
+            return {"needs_details": True, "question": "Which product do you mean?", "options": list(families.values())[:5]}
+        family_keys = set(families)
     review = cached_ordering_review(
         category="ALL",
         delivery_date=delivery,
@@ -442,7 +457,7 @@ def _ordering_tool(args: dict[str, Any]) -> dict[str, Any]:
     )
     rows = list(review.get("rows") or [])
     if query:
-        rows = _filter_item_rows(rows, query)
+        rows = [row for row in rows if str(row.get("family_article") or row.get("family_article_number") or row.get("main_article_number") or "") in family_keys]
     rows = sorted(
         rows,
         key=lambda x: (
@@ -650,6 +665,8 @@ CRITICAL DATA RULES:
 - Do not use the delivery-order tool to invent dates for a weekly usage scenario. If current tools cannot provide a verified weekly promotion forecast for a fully specified product, state that limitation instead of turning it into a delivery-specific order.
 - For stock questions call get_inventory directly with the item name or exact Family article; do not run a preliminary search. The tool performs fast identification and asks for a choice when several families match.
 - For current-price-only questions, use search_items with the exact UPC and return only the current price, selling unit, price type and effective date. Save get_price_review for an actual recommendation/cost/profit question.
+- When explaining the small price-change rule, state the actual threshold: $0.25 or less, even when the question mentions $0.10.
+- Questions about price priority in the Price List (including Spanish "prioridad de precios en la lista") mean IN STORE → SALE → TPR → REG. Do not substitute a ranking of price-review recommendations; if the list is unclear, ask which list.
 - For ordinary price suggestions, a change of $0.25 or less is ignored even if a small profit improvement is possible. Do not suggest such a change on generic profit/velocity grounds. A confirmed 240/249 mismatch or an explicit pricing error is a separate correction; do not invent that exception when the user merely asks about a 10-cent change.
 - When the user asks for weekly usage or the 0/3/7-promotion-day estimate, do NOT ask for delivery dates. Ask only for the missing product identity, promotion days or promotion price needed for that weekly scenario. Example: "Estimate salmon this week with 3 promotion days" needs the salmon product, not delivery dates.
 - Reuse user-provided details from history, including ordinary month-name dates such as "October 16" and "October 23". Never repeat a question for a detail already provided. A follow-up order question with known dates should ask only for the product if that is still missing.
@@ -683,8 +700,8 @@ CRITICAL DATA RULES:
 ANSWER STYLE:
 - DEFAULT BREVITY: unless the user explicitly asks for more detail, answer in at most 60 words. Use a single compact table of at most 3 rows when useful. Do not add a second explanation paragraph, cooking suggestions or extra comparisons that the user did not request. For comparisons use only the 2-3 most useful differences. A short definition can be one sentence.
 - General seafood knowledge: do not imply fresh, frozen, shucked or shell-on form alone proves quality or safety. Quality depends on handling and storage. Cooking time depends on fish size/thickness; safety depends on verified cooking temperature, not a fixed number of minutes. Mention raw-seafood risks when recommending raw consumption.
-- Stay on point and brief by default. Answer only the exact question. Aim for 40-80 words unless the user asks for detail, explanation, a full report or more examples. Do not add unrelated rules, generic advice or repeated summaries.
-- Prefer compact Markdown tables for answers with facts, comparisons, recommendations or steps, including general seafood knowledge. Usually one short table with 2 columns and 3-6 rows is enough. Use 3 columns only when needed; split wider tables into smaller ones. Keep cells short and headings simple. No HTML or code fences.
+- Stay on point and brief by default. Answer only the exact question. Use at most 60 words unless the user asks for detail, explanation, a full report or more examples. Do not add unrelated rules, generic advice or repeated summaries.
+- Prefer compact Markdown tables for answers with facts, comparisons, recommendations or steps, including general seafood knowledge. Usually one short table with 2 columns and at most 3 rows is enough. Always show a numerical ordering or usage calculation in a compact table, even for a single result. Use 3 columns only when needed; split wider tables into smaller ones. Keep cells short and headings simple. No HTML or code fences.
 - Lead with one direct sentence if it helps, then the table. One short source/date or uncertainty note when needed. Avoid extra sections that repeat table content. For a simple yes/no or follow-up question, one sentence is enough.
 - Write so a 15-year-old with no seafood department experience can understand. Be respectful and direct, not childish. Explain unfamiliar ideas with a short practical example when useful. Use plain everyday language a busy store manager can understand quickly. Short sentences, familiar words and concrete actions. Avoid technical terms and acronyms unless the user asks for them.
 - Say "sales records" instead of POS/canonical, "stock on hand" instead of OH, "selling unit" instead of UOM, "discount" instead of TPR when the price-type code is not necessary, and "days of stock left" instead of DOH. Translate these naturally into the selected language.
@@ -733,7 +750,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "EVAL_100_FIXES_V1",
+        "test_revision": "EVAL_100_FIXES_V2",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -1008,4 +1025,5 @@ def chat(
             })
 
     raise RuntimeError("OPENAI_TOOL_LOOP_LIMIT")
+
 
