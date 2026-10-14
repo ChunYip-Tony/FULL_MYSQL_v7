@@ -308,11 +308,16 @@ def _ordering_tool(args: dict[str, Any]) -> dict[str, Any]:
     delivery = _parse_iso_date(args.get("delivery_date"), required=False)
     next_delivery = _parse_iso_date(args.get("next_delivery_date"), required=False)
     query = str(args.get("item_query") or "").strip() or None
-    calendar = yipman_ordering_calendar(lookback_days=180, days=28)
-    if delivery is None:
-        delivery = _parse_iso_date(calendar.get("default_delivery_date"))
-    if next_delivery is None:
-        next_delivery = _parse_iso_date(calendar.get("default_next_delivery_date"))
+    if delivery is None or next_delivery is None:
+        return {
+            "needs_details": True,
+            "question": "What are the delivery date and the next delivery date?",
+            "missing": [key for key, value in
+                        (("delivery_date", delivery), ("next_delivery_date", next_delivery))
+                        if value is None],
+        }
+    if next_delivery <= delivery:
+        return {"needs_details": True, "question": "The next delivery must be after the first delivery. What are the two dates?"}
     review = cached_ordering_review(
         category="ALL",
         delivery_date=delivery,
@@ -523,6 +528,7 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- Before an order calculation, ask for missing delivery date, next delivery date and specific product. Do not call ordering or department review tools just to ask for these details. Use dates already supplied by the user in this conversation; do not silently infer delivery dates.
 - Distinguish GENERAL SEAFOOD KNOWLEDGE from STORE DATA. Answer species, cuts, cooking, product differences, handling and freezing questions directly from general knowledge without database tools. The tool requirements below apply to Store 1032's current or historical operational facts, not universal knowledge or general cooking quantities.
 - Never imply that general guidance describes this store's actual stock, costs, sales, supplier, inspection status or promotion. Use tools for those claims. For safety questions use conservative established guidance, distinguish quality from safety, and acknowledge uncertainty; never assure safety from smell or appearance alone.
 - Resolve everyday names with search_items before declaring an item missing. Drop filler such as "the" and "in": "oyster in jar" -> "oyster jar". If no results, retry the core product word and inspect package qualifiers. Preserve fresh/frozen/live, jar/shell, size and pack distinctions. Prefer actively selling UPCs over historical aliases; never combine their POS quantities. Ask which item only if multiple plausible active items remain.
@@ -664,6 +670,36 @@ def _safe_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
 
 
 
+def _quick_order_question(question: str, history: list[dict[str, Any]] | None) -> dict[str, Any] | None:
+    """Clarify an incomplete order request before any model or database call."""
+    first = question.splitlines()[0].strip()
+    match = re.fullmatch(r"how (?:many|much) (.{1,100}?) should (?:i|we) order[?!.]?", first, re.IGNORECASE)
+    if not match:
+        return None
+    if any("reply in " in line.lower() and "english" not in line.lower()
+           for line in question.splitlines()[1:]):
+        return None
+    date_words = r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?|today|tomorrow)\b|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}"
+    if re.search(date_words, first, re.IGNORECASE):
+        return None
+    # Earlier user-provided delivery dates can complete a follow-up request.
+    for message in history or []:
+        text = str(message.get("content") or "")
+        if message.get("role") == "user" and re.search(r"deliver|arriv|order", text, re.IGNORECASE) and re.search(date_words, text, re.IGNORECASE):
+            return None
+    item = match.group(1).strip().replace("|", "/")
+    answer = (
+        "Tell me these details so I can calculate the order:\n\n"
+        "| Detail | What I need |\n| --- | --- |\n"
+        f"| Item | Which {item} product? |\n"
+        "| Delivery | When will this order arrive? |\n"
+        "| Next delivery | When will the following order arrive? |"
+    )
+    return {"answer": answer, "model": None, "read_only": True,
+            "tool_calls": [], "mode": "ORDER_DETAILS_REQUIRED",
+            "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
+
+
 def _quick_daily_answer(question: str) -> dict[str, Any] | None:
     """Common daily summary uses one canonical query, with no pricing review."""
     first = question.splitlines()[0].strip().rstrip("?!.").lower()
@@ -763,7 +799,9 @@ def chat(
     if len(question) > MAX_MESSAGE_CHARS:
         raise ValueError("MESSAGE_TOO_LONG")
 
-    quick = _quick_daily_answer(question)
+    quick = _quick_order_question(question, history)
+    if quick is None:
+        quick = _quick_daily_answer(question)
     if quick is None:
         quick = _quick_quantity_answer(question)
     if quick is not None:
