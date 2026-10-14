@@ -657,7 +657,7 @@ def _weekly_usage_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 TOOLS = [
     {"type": "function", "name": "estimate_weekly_usage",
-     "description": "Estimate actual-store weekly usage from historical average REG and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Accept explicit overall start/end dates; Fri Sat Sun only rows select actual weekend dates within that period; all other rows use SALE every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Missing SALE uses REG with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
+     "description": "Estimate actual-store weekly usage from historical average REG and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Accept explicit overall start/end dates; Fri Sat Sun only rows select actual weekend dates within that period; all other rows use SALE every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Fewer than 7 supported SALE days uses 2x REG with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
      "parameters": {"type": "object", "properties": {
          "start_date": {"type": "string", "description": "YYYY-MM-DD inclusive"},
          "end_date": {"type": "string", "description": "YYYY-MM-DD inclusive"},
@@ -804,7 +804,7 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
-- For actual-store estimated weekly usage using historical REG/SALE average velocities, call estimate_weekly_usage directly. This is an authorized estimate, not a guaranteed matching-price forecast. Do not refuse because proposed-price history is unavailable; use the tool's labelled type-average estimate and REG fallback when required. Do not ask delivery dates or deduct stock for weekly usage. Preserve each item's selling unit and weekend restriction. Explicit week dates apply to every row; weekend-only selects actual Fri/Sat/Sun dates inside them. Missing promotion price does not prevent a type-average usage estimate; acknowledge it is missing. Tool-produced dates and arithmetic are authoritative; never replace them with a guessed weekend.
+- For actual-store estimated weekly usage using historical REG/SALE average velocities, call estimate_weekly_usage directly. This is an authorized estimate, not a guaranteed matching-price forecast. Do not refuse because proposed-price history is unavailable; use the tool's labelled type-average estimate and 2x REG fallback when fewer than 7 supported SALE days are available. Do not ask delivery dates or deduct stock for weekly usage. Preserve each item's selling unit and weekend restriction. Explicit week dates apply to every row; weekend-only selects actual Fri/Sat/Sun dates inside them. Missing promotion price does not prevent a type-average usage estimate; acknowledge it is missing. Tool-produced dates and arithmetic are authoritative; never replace them with a guessed weekend.
 - For pasted promotion lists, call resolve_promotion_items with one item row per entry. Article numbers on these lists may be receiving or family articles rather than UPCs. Keep confirmed matches and ask only about ambiguous or unmatched entries. A lookup failure means temporarily unavailable, not no matching item. Do not reject the entire list because one row is unresolved. Preserve each proposed price, selling unit, pack and promotion-day note; do not confuse receiving cost with selling price or merge two rows solely because they share an article.
 - Historical sales tools must end on or before the latest completed day, never on a future delivery or the end of the current week. A future forecast is not future recorded sales.
 - Current stock is not automatically usable on a future delivery date. Without freshness and pre-delivery usage evidence, report it only as current stock and say future usable stock is unverified. Do not lead with "safely count" and then undermine that statement.
@@ -902,7 +902,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "REG_SALE_WEEKLY_USAGE_V8",
+        "test_revision": "REG_SALE_DOUBLE_FALLBACK_V9",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",

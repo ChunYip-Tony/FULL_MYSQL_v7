@@ -38,7 +38,7 @@ class WeeklyUsageTest(unittest.TestCase):
 
     def test_missing_sale_fallback_label(self):
         result = estimate_member({d: row for d, row in daily().items() if 'REG' in row['price_types']}, 4, 3)
-        self.assertEqual(result['total'], Decimal(70))
+        self.assertEqual(result['total'], Decimal(100))
         self.assertTrue(result['sale_fallback_to_reg'])
         self.assertEqual(result['confidence'], 'LOW')
 
@@ -49,6 +49,22 @@ class WeeklyUsageTest(unittest.TestCase):
         result = type_average(data, 'REG', 28)
         self.assertEqual(result['days'], 2)
         self.assertEqual(result['average'], Decimal(5))
+
+    def test_supported_sale_average_wins(self):
+        data = daily(10, 30)
+        for day in range(3, 9):
+            data[date(2026, 10, day)] = {'price_types': {'SALE': {'sold_quantity': 30, 'sales_amount': 120}}}
+        result = estimate_member(data, 4, 3)
+        self.assertEqual(result['total'], Decimal(130))
+        self.assertFalse(result['sale_fallback_to_reg'])
+
+    def test_weak_sale_uses_double_reg(self):
+        result = estimate_member(daily(10, 30), 4, 3)
+        self.assertEqual(result['total'], Decimal(100))
+        self.assertTrue(result['sale_fallback_to_reg'])
+
+    def test_no_history_remains_unknown(self):
+        self.assertIsNone(estimate_member({}, 4, 3)['total'])
 
     def test_family_249_and_units(self):
         class Cursor:

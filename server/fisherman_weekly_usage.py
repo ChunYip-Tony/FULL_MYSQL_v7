@@ -41,8 +41,8 @@ def estimate_member(daily, regular_days, sale_days):
     # searched across up to 365 completed source days.
     reg, sale = type_average(daily, 'REG', 28), type_average(daily, 'SALE', 90)
     reg_rate, sale_rate = reg['average'], sale['average']
-    fallback = sale_days > 0 and sale_rate is None and reg_rate is not None
-    used_sale_rate = reg_rate if fallback else sale_rate
+    fallback = sale_days > 0 and sale['days'] < 7 and reg_rate is not None
+    used_sale_rate = 2 * reg_rate if fallback else sale_rate
     regular_usage = reg_rate * regular_days if regular_days and reg_rate is not None else Decimal(0) if not regular_days else None
     sale_usage = used_sale_rate * sale_days if sale_days and used_sale_rate is not None else Decimal(0) if not sale_days else None
     total = regular_usage + sale_usage if regular_usage is not None and sale_usage is not None else None
@@ -133,6 +133,7 @@ def weekly_usage(args):
             result['reg_rate'] = sum((row['reg']['average'] for row in included), Decimal(0)) if included and all(row['reg']['average'] is not None for row in included) else None
             result['sale_rate'] = sum((row['sale']['average'] for row in included), Decimal(0)) if included and all(row['sale']['average'] is not None for row in included) else None
             result['fallback'] = any(row['sale_fallback_to_reg'] for row in included)
+            result['applied_promo_rate'] = sum((2 * row['reg']['average'] if row['sale_fallback_to_reg'] else row['sale']['average'] for row in included), Decimal(0)) if included and all(row['sale_fallback_to_reg'] or row['sale']['average'] is not None for row in included) else None
             result['confidence'] = 'LOW' if not included or result['status'] != 'ESTIMATED' or any(row['confidence'] == 'LOW' for row in included) else 'MEDIUM'
             results.append(result)
         cur.close()
@@ -152,10 +153,10 @@ def format_usage(items, start, end):
         name = row['name'].replace('|', '/').replace('\n', ' ')
         unit = row['unit'].lower()
         total = f"{num(row.get('total'))} {unit}" if row.get('total') is not None else 'Unavailable'
-        sale = num(row.get('promotion_usage')) + (' (REG fallback)' if row.get('fallback') else '')
+        sale = num(row.get('promotion_usage')) + (' (2× REG fallback)' if row.get('fallback') else '')
         dates = ', '.join(date.fromisoformat(day).strftime('%b %d') for day in row['promotion_dates']) or 'None'
         lines.append(f"| {name} | {dates} ({row['promotion_days']} days) | {num(row.get('regular_usage'))} {unit} | {sale} {unit} | {total} | {row.get('confidence', 'LOW').title()} |")
-    lines += ['', 'Weekly usage = REG average × regular days + SALE average × promotion days. Weekend items use only Fri/Sat/Sun within the listed dates. These are estimates, not guaranteed demand; historical SALE prices can differ from the proposed price. Missing SALE history uses REG with low confidence. Units stay separate; matching 249 sales are included in the family.']
+    lines += ['', 'Weekly usage = REG average × regular days + promotion rate × promotion days. With at least 7 supported SALE days, use the SALE average. Otherwise use 2× REG when REG history exists (low confidence). Weekend items use only Fri/Sat/Sun within the listed dates. These are estimates, not guaranteed demand; historical SALE prices can differ from the proposed price. Units stay separate; matching 249 sales are included in the family.']
     for row in items:
         for kind in ('reg', 'sale'):
             evidence = [member[kind] for member in row.get('members', []) if member[kind]['days']]
