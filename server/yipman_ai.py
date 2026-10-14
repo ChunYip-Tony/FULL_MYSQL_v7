@@ -214,6 +214,9 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
         "sold_quantity_by_uom": qty_by_uom,
         "gp_dollars": gp if gp_complete else None,
         "gp_complete": gp_complete,
+        "gp_partial_dollars": gp if any(x.get("gp_dollars") is not None for x in chosen) else None,
+        "gp_known_cost_item_count": sum(x.get("gp_dollars") is not None for x in chosen),
+        "gp_missing_cost_item_count": sum(x.get("gp_dollars") is None for x in chosen),
         "top_items": chosen[:20],
     }
     if not item_query:
@@ -641,6 +644,8 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- Treat "Can you calculate..." about actual store figures as a request to do the calculation, not merely a capability question. If costs are incomplete, return only a clearly labelled partial gross profit with the number of priced items; never call it the full department total.
+- For a future promotion, never claim promotion uplift was applied unless the returned forecast explicitly reflects the user's planned price and promotion days. A current regular-price forecast is not proof of a future promotion forecast. If no supported projection is returned, say so plainly; do not invent an uplift.
 - For a clearly hypothetical ordering calculation with user-provided numbers, use those numbers only and label the result hypothetical. Do not query actual store stock/history or request delivery dates when the requested weekly coverage and demand inputs are already supplied. Keep units consistent and show the arithmetic briefly.
 - Do not use the delivery-order tool to invent dates for a weekly usage scenario. If current tools cannot provide a verified weekly promotion forecast for a fully specified product, state that limitation instead of turning it into a delivery-specific order.
 - For stock questions call get_inventory directly with the item name or exact Family article; do not run a preliminary search. The tool performs fast identification and asks for a choice when several families match.
@@ -728,6 +733,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
+        "test_revision": "EVAL_100_FIXES_V1",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
