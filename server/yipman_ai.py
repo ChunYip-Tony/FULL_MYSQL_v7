@@ -550,6 +550,7 @@ def _openai_key() -> str:
 def ai_status() -> dict[str, Any]:
     return {
         "configured": bool(_openai_key()),
+        "quantity_lookup": "DIRECT_POS_V1",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
         "read_only": True,
