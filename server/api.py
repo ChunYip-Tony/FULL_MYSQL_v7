@@ -4380,6 +4380,20 @@ def yipman_ai_chat_endpoint(
             raise HTTPException(503,detail={'status':'AI_NOT_CONFIGURED','reason':code})
         if code=='AI_RATE_LIMIT':
             raise HTTPException(429,detail={'status':'RATE_LIMITED','reason':code})
+        if code=='OPENAI_API_CREDITS_REQUIRED':
+            raise HTTPException(402,detail={
+                'status':'API_CREDITS_REQUIRED',
+                'reason':'FishFinder AI needs OpenAI API credits. Add credits to the project, then try again.',
+                'billing_url':'https://platform.openai.com/settings/organization/billing',
+            })
+        if code=='OPENAI_RATE_LIMITED':
+            raise HTTPException(429,detail={'status':'RATE_LIMITED','reason':'OpenAI is rate limiting requests. Wait briefly, then try again.'})
+        if code=='OPENAI_AUTHENTICATION_FAILED':
+            raise HTTPException(503,detail={'status':'AI_AUTHENTICATION_FAILED','reason':'FishFinder could not authenticate with OpenAI. Check the server API key.'})
+        if code=='OPENAI_MODEL_ACCESS_DENIED':
+            raise HTTPException(503,detail={'status':'AI_MODEL_ACCESS_DENIED','reason':'The configured OpenAI model is unavailable to this project. Check the server model setting.'})
+        if code in {'OPENAI_CONNECTION_TIMEOUT','OPENAI_CONNECTION_FAILED'}:
+            raise HTTPException(503,detail={'status':'AI_CONNECTION_FAILED','reason':'FishFinder could not reach OpenAI. Try again shortly.'})
         raise HTTPException(502,detail={'status':'AI_UPSTREAM_ERROR','reason':code})
     except Exception as exc:
         raise HTTPException(500,detail={'status':'AI_ERROR','reason':str(exc)})

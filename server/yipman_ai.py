@@ -516,7 +516,7 @@ _TOOL_HANDLERS = {
 def _instructions() -> str:
     today = business_today().isoformat()
     completed = completed_through_date().isoformat()
-    return f"""You are Ask Yipman, the read-only seafood operations assistant for Store 1032.
+    return f"""You are Ask FishFinder, the read-only seafood operations assistant for Store 1032.
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
@@ -559,23 +559,38 @@ def _post_responses(payload: dict[str, Any]) -> dict[str, Any]:
     key = _openai_key()
     if not key:
         raise RuntimeError("OPENAI_API_KEY_NOT_CONFIGURED")
-    response = requests.post(
-        OPENAI_RESPONSES_URL,
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=45,
-    )
+    try:
+        response = requests.post(
+            OPENAI_RESPONSES_URL,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=(5, 25),
+        )
+    except requests.Timeout as exc:
+        raise RuntimeError("OPENAI_CONNECTION_TIMEOUT") from exc
+    except requests.ConnectionError as exc:
+        raise RuntimeError("OPENAI_CONNECTION_FAILED") from exc
     try:
         data = response.json()
     except Exception as exc:
         raise RuntimeError(f"OPENAI_INVALID_RESPONSE_HTTP_{response.status_code}") from exc
     if response.status_code >= 400:
         err = data.get("error") if isinstance(data, dict) else None
-        message = err.get("message") if isinstance(err, dict) else None
-        raise RuntimeError(f"OPENAI_API_ERROR_{response.status_code}: {message or 'request failed'}")
+        code = str(err.get("code") or "") if isinstance(err, dict) else ""
+        error_type = str(err.get("type") or "") if isinstance(err, dict) else ""
+        if code in {"insufficient_quota", "credit_balance_exhausted"} or error_type == "insufficient_quota":
+            raise RuntimeError("OPENAI_API_CREDITS_REQUIRED")
+        if response.status_code == 401:
+            raise RuntimeError("OPENAI_AUTHENTICATION_FAILED")
+        if response.status_code == 429:
+            raise RuntimeError("OPENAI_RATE_LIMITED")
+        if response.status_code == 403 or code == "model_not_found":
+            raise RuntimeError("OPENAI_MODEL_ACCESS_DENIED")
+        # Do not pass provider messages through: they can contain credential fragments.
+        raise RuntimeError(f"OPENAI_API_ERROR_{response.status_code}")
     return data
 
 
