@@ -436,7 +436,17 @@ def _ordering_tool(args: dict[str, Any]) -> dict[str, Any]:
         return {"needs_details": True, "question": "The next delivery must be after the first delivery. What are the two dates?"}
     family_keys: set[str] = set()
     if query:
-        matches = _catalog_search_rows(query)
+        matches = []
+        if query.isdigit() and len(query) < 11:
+            try:
+                info = family_info(query)
+                if info.get("family_article_number"):
+                    matches = [{"family_article_number": info["family_article_number"], "number": query,
+                                "name": info.get("family_article_name"), "readiness": "READY"}]
+            except (KeyError, ValueError):
+                pass
+        if not matches:
+            matches = _catalog_search_rows(query)
         exact = [row for row in matches if str(row.get("number")) == query]
         if exact:
             matches = exact
@@ -703,6 +713,9 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- Historical sales tools must end on or before the latest completed day, never on a future delivery or the end of the current week. A future forecast is not future recorded sales.
+- Current stock is not automatically usable on a future delivery date. Without freshness and pre-delivery usage evidence, report it only as current stock and say future usable stock is unverified. Do not lead with "safely count" and then undermine that statement.
+- Stock spoiled before delivery must NOT reduce the order. Answer that yes/no question with "No" and explain briefly; do not lead with a conflicting yes.
 - Always use calculate_order_quantities for numerical weekly usage, promotion demand, stock deduction and case arithmetic. Do not compute these totals in prose. Use supplied hypothetical numbers without any database lookup; never substitute store data. The calculator does not create a verified store forecast.
 - Treat "Can you calculate..." about actual store figures as a request to do the calculation, not merely a capability question. If costs are incomplete, return only a clearly labelled partial gross profit with the number of priced items; never call it the full department total.
 - For a future promotion, never claim promotion uplift was applied unless the returned forecast explicitly reflects the user's planned price and promotion days. A current regular-price forecast is not proof of a future promotion forecast. If no supported projection is returned, say so plainly; do not invent an uplift.
@@ -795,7 +808,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "EVAL_200_FIXES_V3",
+        "test_revision": "EVAL_200_FIXES_V4",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
