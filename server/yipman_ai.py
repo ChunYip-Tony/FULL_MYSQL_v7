@@ -281,23 +281,34 @@ def _price_search_rows(query: str) -> list[dict[str, Any]]:
     } for row in data.get("results") or [] if row.get("ean_upc")]
 
 
-def _clarification_result(result: dict[str, Any], tool_names: list[str]) -> dict[str, Any]:
-    answer = str(result.get("question") or "Could you clarify what you mean?")
+def _clarification_result(result: dict[str, Any], tool_names: list[str], question: str = "") -> dict[str, Any]:
+    language = "es" if "reply in spanish." in question.lower() else "yue" if "reply in cantonese" in question.lower() else "en"
+    def copy(en: str, es: str, yue: str) -> str:
+        return es if language == "es" else yue if language == "yue" else en
+    original = str(result.get("question") or "Could you clarify what you mean?")
+    translations = {
+        "Which product do you mean?": copy(original, "¿Qué producto quieres decir?", "你指邊款商品？"),
+        "What are the delivery date and the next delivery date?": copy(original, "¿Cuáles son la fecha de entrega y la siguiente fecha de entrega?", "今次同下一次幾時到貨？"),
+        "I could not match that product. What name or UPC is on its label?": copy(original, "No pude encontrar ese producto. ¿Qué nombre o UPC aparece en la etiqueta?", "未搵到呢款商品，標籤有咩名稱或 UPC？"),
+        "The next delivery must be after the first delivery. What are the two dates?": copy(original, "La siguiente entrega debe ser posterior a la primera. ¿Cuáles son las dos fechas?", "下一次到貨要喺今次之後，兩次到貨日期係幾時？"),
+    }
+    answer = translations.get(original, original if language == "en" else copy(original, "¿Puedes aclarar la información que falta?", "可唔可以補充缺少嘅資料？"))
     options = result.get("options") or []
     if options:
-        lines = [answer, "", "| Product | Current price |", "| --- | --- |"]
+        lines = [answer, "", copy("| Product | Current price |", "| Producto | Precio actual |", "| 商品 | 現價 |"), "| --- | --- |"]
         dates = set()
         for row in options:
             name = str(row.get("name") or row.get("number") or "Product").replace("|", "/").replace("\n", " ")
             price = row.get("current_price")
             unit = str(row.get("selling_uom") or "").upper()
             unit = {"LB": "per lb", "LBS": "per lb", "EA": "each", "PACK": "per pack", "PAC": "per pack"}.get(unit, unit.lower())
-            label = f"${Decimal(str(price)):,.2f} {unit}".strip() if price is not None else "Not confirmed"
+            unit = {"per lb": copy("per lb", "por lb", "每磅"), "each": copy("each", "cada uno", "每件"), "per pack": copy("per pack", "por paquete", "每包")}.get(unit, unit)
+            label = f"${Decimal(str(price)):,.2f} {unit}".strip() if price is not None else copy("Not confirmed", "Sin confirmar", "未確認")
             lines.append(f"| {name} | {label} |")
             if row.get("current_price_asof_date"):
                 dates.add(str(row["current_price_asof_date"]))
         if dates:
-            lines.extend(["", "Price records: " + ", ".join(sorted(dates)) + "."])
+            lines.extend(["", copy("Price records: ", "Precios registrados: ", "價格記錄：") + ", ".join(sorted(dates)) + "."])
         answer = "\n".join(lines)
     return {"answer": answer, "model": None, "read_only": True,
             "tool_calls": tool_names, "mode": "DETAILS_REQUIRED"}
@@ -941,7 +952,7 @@ def chat(
                 try:
                     result = handler(arguments)
                     if result.get("needs_details"):
-                        return _clarification_result(result, tool_names)
+                        return _clarification_result(result, tool_names, question)
                 except Exception as exc:
                     result = {"error": str(exc), "tool": name}
             input_items.append({
