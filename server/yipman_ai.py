@@ -24,7 +24,6 @@ from webapp_v2_runtime import (
     family_info,
     latest_performance_date,
     performance_range,
-    performance_report,
     search_items,
     upc_info,
 )
@@ -218,14 +217,6 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
     }
     if not item_query:
         payload["department_summary"] = result.get("summary")
-    if start == end and not item_query:
-        try:
-            day = performance_report("ALL", 100, start)
-            payload["daily_analysis"] = day.get("analysis")
-            payload["daily_narrative"] = day.get("narrative_analysis")
-            payload["daily_top_sellers"] = day.get("report_date_top_sellers")
-        except Exception as exc:
-            payload["daily_report_warning"] = str(exc)
     return payload
 
 
@@ -588,6 +579,7 @@ def ai_status() -> dict[str, Any]:
     return {
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
+        "daily_summary": "DIRECT_DAILY_V1",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -662,6 +654,51 @@ def _safe_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
 
 
 
+def _quick_daily_answer(question: str) -> dict[str, Any] | None:
+    """Common daily summary uses one canonical query, with no pricing review."""
+    first = question.splitlines()[0].strip().rstrip("?!.").lower()
+    if first not in {
+        "how did we sell yesterday", "how were sales yesterday",
+        "yesterday sales", "yesterday sales report", "yesterday performance report",
+        "how did we do yesterday",
+    }:
+        return None
+    # Respect the requested reply language; other languages use the model path.
+    if any("reply in " in line.lower() and "english" not in line.lower()
+           for line in question.splitlines()[1:]):
+        return None
+    day = completed_through_date()
+    data = performance_range(day, day, 2000)
+    summary = data.get("summary") or {}
+    sales = Decimal(str(summary.get("sales_dollars") or 0))
+    gp = summary.get("gp_dollars")
+    items = sorted(data.get("items") or [],
+                   key=lambda row: -Decimal(str(row.get("sales_amount") or 0)))[:5]
+    lines = [
+        "Result:",
+        f"Yesterday ({day.strftime('%a, %b %d, %Y')}): ${sales:,.2f} in seafood POS sales.",
+        "",
+        "Supporting data:",
+        f"- Selling UPCs: {summary.get('sold_item_count', 0)}",
+    ]
+    if summary.get("gp_dollars_complete") and gp is not None:
+        profit = Decimal(str(gp))
+        lines.append(f"- GP: ${profit:,.2f}" + (f" ({profit / sales * 100:.1f}%)" if sales > 0 else ""))
+    else:
+        lines.append("- GP unavailable: historical cost is incomplete; no estimated department GP is shown.")
+    if items:
+        lines.extend(["", "Top sellers:"])
+        for row in items:
+            qty = format(Decimal(str(row.get("sold_quantity") or 0)).normalize(), "f")
+            unit = row.get("qty_uom") or row.get("selling_uom") or "unverified UOM"
+            lines.append(f"- {row.get('name') or 'Unnamed item'} ({row.get('upc')}): "
+                         f"${Decimal(str(row.get('sales_amount') or 0)):,.2f}; {qty} {unit}")
+    lines.extend(["", "Source:", "Completed canonical POS day; GP uses applicable historical cost. No prior-day comparison was calculated."])
+    return {"answer": "\n".join(lines), "model": None, "read_only": True,
+            "tool_calls": ["get_sales_performance"], "mode": "CANONICAL_DAILY_DIRECT",
+            "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
+
+
 def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
     """Answer a narrow completed-day POS quantity question without model round trips."""
     line=question.split("\n",1)[0].strip()
@@ -713,7 +750,9 @@ def chat(
     if len(question) > MAX_MESSAGE_CHARS:
         raise ValueError("MESSAGE_TOO_LONG")
 
-    quick = _quick_quantity_answer(question)
+    quick = _quick_daily_answer(question)
+    if quick is None:
+        quick = _quick_quantity_answer(question)
     if quick is not None:
         return quick
 
