@@ -540,6 +540,9 @@ CRITICAL DATA RULES:
 - This assistant is READ ONLY. Never claim to update price, stock, true stock, orders, QA, or database records.
 
 ANSWER STYLE:
+- Stay on point and brief by default. Answer only the exact question. Aim for 40-80 words unless the user asks for detail, explanation, a full report or more examples. Do not add unrelated rules, generic advice or repeated summaries.
+- Prefer compact Markdown tables for answers with facts, comparisons, recommendations or steps, including general seafood knowledge. Usually one short table with 2 columns and 3-6 rows is enough. Use 3 columns only when needed; split wider tables into smaller ones. Keep cells short and headings simple. No HTML or code fences.
+- Lead with one direct sentence if it helps, then the table. One short source/date or uncertainty note when needed. Avoid extra sections that repeat table content. For a simple yes/no or follow-up question, one sentence is enough.
 - Write so a 15-year-old with no seafood department experience can understand. Be respectful and direct, not childish. Explain unfamiliar ideas with a short practical example when useful. Use plain everyday language a busy store manager can understand quickly. Short sentences, familiar words and concrete actions. Avoid technical terms and acronyms unless the user asks for them.
 - Say "sales records" instead of POS/canonical, "stock on hand" instead of OH, "selling unit" instead of UOM, "discount" instead of TPR when the price-type code is not necessary, and "days of stock left" instead of DOH. Translate these naturally into the selected language.
 - Explain gross profit as sales minus item cost when first relevant. Say "daily gross profit" instead of GP$/day. Explain uncertainty simply, e.g. "Some item costs are missing, so I cannot calculate the full gross profit."
@@ -547,7 +550,7 @@ ANSWER STYLE:
 - Keep required price codes like REG/SALE/TPR when distinguishing prices matters, with a plain label. Never simplify by changing the underlying units or pretending missing data is zero.
 - Your name is FisherMan AI (exact capitalization). Do not repeat your name in every response.
 - Organize answers for a mobile screen. Lead with the result or recommendation in one short sentence.
-- For multi-part answers use short section labels on their own line ending in a colon, with a blank line between sections. Use only relevant sections: Result:, Supporting data:, Recommendation:, Next step:. Translate labels into the requested language.
+- For detailed answers requested by the user, use short section labels and small tables. Translate labels into the requested language.
 - Use short "- " bullet lines for parallel facts. Keep UPC/name, price/UOM and supported dates together. Trim unnecessary decimal zeros.
 - Simple questions need only a concise answer plus source/date when relevant; do not force empty sections or repeat the same fact.
 - For a proposed promotion, separate the identified item, proposed scenario, historical evidence and missing details. Ask one focused follow-up question when needed. Never manufacture evidence to fill a section.
@@ -574,7 +577,7 @@ ANSWER STYLE:
 - For date-specific questions, state the actual supported date(s) used.
 - If data is unavailable, stale, refreshing, or incomplete, say exactly that rather than guessing.
 - Keep item names, UPC/Family numbers, quantities, UOM, Sales$, GP$, GP%, price type, and data-through dates clear when relevant.
-- Plain text only. No Markdown tables. Short bullets are okay.
+- Use Markdown tables as described above. Short plain sentences are okay.
 """
 
 
@@ -680,28 +683,30 @@ def _quick_daily_answer(question: str) -> dict[str, Any] | None:
     sales = Decimal(str(summary.get("sales_dollars") or 0))
     gp = summary.get("gp_dollars")
     items = sorted(data.get("items") or [],
-                   key=lambda row: -Decimal(str(row.get("sales_amount") or 0)))[:5]
+                   key=lambda row: -Decimal(str(row.get("sales_amount") or 0)))[:3]
     lines = [
-        "Result:",
-        f"Yesterday ({day.strftime('%a, %b %d, %Y')}): ${sales:,.2f} in seafood sales.",
+        f"Yesterday ({day.strftime('%a, %b %d, %Y')}):",
         "",
-        "Supporting data:",
-        f"- Products sold: {summary.get('sold_item_count', 0)}",
+        "| Measure | Result |",
+        "| --- | --- |",
+        f"| Sales | ${sales:,.2f} |",
+        f"| Products sold | {summary.get('sold_item_count', 0)} |",
     ]
     if summary.get("gp_dollars_complete") and gp is not None:
         profit = Decimal(str(gp))
-        lines.append(f"- Gross profit (sales minus item cost): ${profit:,.2f}" + (f" ({profit / sales * 100:.1f}%)" if sales > 0 else ""))
+        lines.append(f"| Gross profit (sales minus item cost) | ${profit:,.2f}" +
+                     (f" ({profit / sales * 100:.1f}%)" if sales > 0 else "") + " |")
     else:
-        lines.append("- Gross profit: some item costs are missing, so the full amount cannot be calculated.")
+        lines.append("| Gross profit | Not available: some costs are missing. |")
     if items:
-        lines.extend(["", "Top sellers:"])
+        lines.extend(["", "Top sellers:", "", "| Product | Sales / amount sold |", "| --- | --- |"])
         for row in items:
             qty = format(Decimal(str(row.get("sold_quantity") or 0)).normalize(), "f")
             unit = row.get("qty_uom") or row.get("selling_uom") or "unit not confirmed"
             unit = {"LB": "lb", "LBS": "lb", "EA": "each", "PAC": "packs", "PACK": "packs", "CASE": "cases"}.get(str(unit).upper(), unit)
-            lines.append(f"- {row.get('name') or 'Unnamed item'}: "
-                         f"${Decimal(str(row.get('sales_amount') or 0)):,.2f}; {qty} {unit}")
-    lines.extend(["", "Source:", "Uploaded sales records for this completed day. This summary does not compare sales with another day."])
+            name = str(row.get("name") or "Unnamed item").replace("|", "/").replace("\n", " ")
+            lines.append(f"| {name} | ${Decimal(str(row.get('sales_amount') or 0)):,.2f} / {qty} {unit} |")
+    lines.extend(["", "Based on uploaded sales records for this completed day."])
     return {"answer": "\n".join(lines), "model": None, "read_only": True,
             "tool_calls": ["get_sales_performance"], "mode": "CANONICAL_DAILY_DIRECT",
             "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
