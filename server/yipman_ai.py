@@ -530,7 +530,50 @@ def _today_attention_tool(args: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _order_calculation_tool(args: dict[str, Any]) -> dict[str, Any]:
+    """Calculate from supplied quantities only; never retrieve or invent forecasts."""
+    from decimal import Decimal, ROUND_CEILING
+    def number(key: str) -> Decimal:
+        value = Decimal(str(args.get(key) or 0))
+        if not value.is_finite():
+            raise ValueError("Calculation requires finite quantities")
+        return value
+    unit = str(args.get("unit") or "").strip().lower()
+    if unit not in {"lb", "each", "pack", "kg"}:
+        return {"needs_details": True, "question": "What is the shared unit for demand and stock?"}
+    total = args.get("total_demand")
+    if total is not None:
+        demand = number("total_demand")
+    else:
+        days, promo_days = number("coverage_days"), number("promotion_days")
+        if days <= 0 or not 0 <= promo_days <= days:
+            raise ValueError("Promotion days must fit within the coverage period")
+        regular, promo = number("regular_daily_demand"), number("promotion_daily_demand")
+        if regular < 0 or promo < 0:
+            raise ValueError("Demand cannot be negative")
+        demand = regular * (days - promo_days) + promo * promo_days
+    if demand < 0 or number("spoilage_before_delivery") < 0:
+        raise ValueError("Demand and spoilage cannot be negative")
+    stock = max(Decimal(0), number("usable_stock") - number("spoilage_before_delivery"))
+    net = max(Decimal(0), demand - stock)
+    fmt = lambda value: format(value.normalize(), "f")
+    purpose = str(args.get("purpose") or "order")
+    rows = [("Estimated usage", f"{fmt(demand)} {unit}")]
+    if purpose != "usage":
+        rows.extend([("Usable stock", f"{fmt(stock)} {unit}"), ("Order", f"{fmt(net)} {unit}")])
+        if args.get("case_size") is not None:
+            case = number("case_size")
+            if case <= 0:
+                raise ValueError("Verified case size must be positive")
+            cases = (net / case).to_integral_value(rounding=ROUND_CEILING)
+            rows[-1] = ("Order", f"{fmt(cases)} whole cases ({fmt(cases * case)} {unit})")
+    label = "Hypothetical calculation using your numbers." if args.get("hypothetical") else "Calculation using the quantities provided."
+    answer = label + "\n\n| Detail | Quantity |\n| --- | --- |\n" + "\n".join(f"| {key} | {value} |" for key, value in rows)
+    return {"calculation_answer": answer, "demand": fmt(demand), "net_order": fmt(net)}
+
+
 TOOLS = [
+    {"type": "function", "name": "calculate_order_quantities", "description": "Exact arithmetic using supplied or already verified demand and stock in one shared unit. For weekly usage choose purpose usage and regular/promotion daily rates plus coverage days. For order subtract usable stock once and any stock spoiled before delivery; negative stock counts as zero. Set total_demand when already provided, otherwise null. Convert net order to whole cases only with a verified case size in the SAME unit. Never invent rates or conversions. All irrelevant numeric fields must be null. For linked products sum daily demand only when units and shared pool are confirmed.", "parameters": {"type": "object", "properties": {"total_demand": {"type": ["number", "null"]}, "coverage_days": {"type": ["number", "null"]}, "promotion_days": {"type": ["number", "null"]}, "regular_daily_demand": {"type": ["number", "null"]}, "promotion_daily_demand": {"type": ["number", "null"]}, "usable_stock": {"type": ["number", "null"]}, "spoilage_before_delivery": {"type": ["number", "null"]}, "case_size": {"type": ["number", "null"]}, "unit": {"type": "string", "enum": ["lb", "each", "pack", "kg"]}, "purpose": {"type": "string", "enum": ["usage", "order"]}, "hypothetical": {"type": "boolean"}}, "required": ["total_demand", "coverage_days", "promotion_days", "regular_daily_demand", "promotion_daily_demand", "usable_stock", "spoilage_before_delivery", "case_size", "unit", "purpose", "hypothetical"], "additionalProperties": false}, "strict": true},
     {
         "type": "function",
         "name": "search_items",
@@ -641,6 +684,7 @@ TOOLS = [
 ]
 
 _TOOL_HANDLERS = {
+    "calculate_order_quantities": _order_calculation_tool,
     "search_items": _item_tool,
     "get_sales_performance": _sales_tool,
     "get_inventory": _inventory_tool,
@@ -659,6 +703,7 @@ def _instructions() -> str:
 Business date: {today}. Latest normally completed business day: {completed}.
 
 CRITICAL DATA RULES:
+- Always use calculate_order_quantities for numerical weekly usage, promotion demand, stock deduction and case arithmetic. Do not compute these totals in prose. Use supplied hypothetical numbers without any database lookup; never substitute store data. The calculator does not create a verified store forecast.
 - Treat "Can you calculate..." about actual store figures as a request to do the calculation, not merely a capability question. If costs are incomplete, return only a clearly labelled partial gross profit with the number of priced items; never call it the full department total.
 - For a future promotion, never claim promotion uplift was applied unless the returned forecast explicitly reflects the user's planned price and promotion days. A current regular-price forecast is not proof of a future promotion forecast. If no supported projection is returned, say so plainly; do not invent an uplift.
 - For a clearly hypothetical ordering calculation with user-provided numbers, use those numbers only and label the result hypothetical. Do not query actual store stock/history or request delivery dates when the requested weekly coverage and demand inputs are already supplied. Keep units consistent and show the arithmetic briefly.
@@ -750,7 +795,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "EVAL_100_FIXES_V2",
+        "test_revision": "EVAL_200_FIXES_V3",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -1014,6 +1059,8 @@ def chat(
             else:
                 try:
                     result = handler(arguments)
+                    if result.get("calculation_answer"):
+                        return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names}
                     if result.get("needs_details"):
                         return _clarification_result(result, tool_names, question)
                 except Exception as exc:
