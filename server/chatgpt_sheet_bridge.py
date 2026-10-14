@@ -1194,14 +1194,14 @@ def _canonical_freshness(cur, batch_id: int) -> dict[str, Any]:
         "sales_by_price_type",
         limit=1,
         include_batch_id=bid,
-        up_to=pos.get("expected_through"),
+        up_to=pos.get("latest_valid_date") or pos.get("expected_through"),
     )
     mvt_days = source_data_days(
         cur,
         "movement",
         limit=1,
         include_batch_id=bid,
-        up_to=mvt.get("expected_through"),
+        up_to=mvt.get("latest_valid_date") or mvt.get("expected_through"),
     )
     pos_latest = pos_days[0] if pos_days else {}
     mvt_latest = mvt_days[0] if mvt_days else {}
