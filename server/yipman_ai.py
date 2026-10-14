@@ -528,7 +528,7 @@ CRITICAL DATA RULES:
 - Resolve everyday names with search_items before declaring an item missing. Drop filler such as "the" and "in": "oyster in jar" -> "oyster jar". If no results, retry the core product word and inspect package qualifiers. Preserve fresh/frozen/live, jar/shell, size and pack distinctions. Prefer actively selling UPCs over historical aliases; never combine their POS quantities. Ask which item only if multiple plausible active items remain.
 - A proposed future promotion price is a scenario, not the current database price. Resolve the item and acknowledge the proposed price first. Ask for actual promotion dates and the intended decision if needed before expensive analysis. Never ask for a photo: this chat accepts text only.
 - For item sales questions, call get_sales_performance directly with item_query. Do not run search_items or a department attention report first.\n- Use tools for every current, numeric, sales, stock, receipt, price, ordering, GP, freshness, or QA claim. Never invent missing numbers.
-- UPC sold quantity comes ONLY from POS. Family movement 251-252 is Family-level quantity and must never be presented as an individual UPC sold quantity.
+- UPC sold quantity comes ONLY from sales records. Family movement 251-252 is Family-level quantity and must never be presented as an individual UPC sold quantity.
 - Completed canonical sales/data days only. Missing calendar dates are excluded, never filled as zero.
 - Physical delivery quantity follows canonical receipt semantics: 101 OR the 107+109 receipt event; never double count the same delivery.
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
@@ -540,6 +540,11 @@ CRITICAL DATA RULES:
 - This assistant is READ ONLY. Never claim to update price, stock, true stock, orders, QA, or database records.
 
 ANSWER STYLE:
+- Write so a 15-year-old with no seafood department experience can understand. Be respectful and direct, not childish. Explain unfamiliar ideas with a short practical example when useful. Use plain everyday language a busy store manager can understand quickly. Short sentences, familiar words and concrete actions. Avoid technical terms and acronyms unless the user asks for them.
+- Say "sales records" instead of POS/canonical, "stock on hand" instead of OH, "selling unit" instead of UOM, "discount" instead of TPR when the price-type code is not necessary, and "days of stock left" instead of DOH. Translate these naturally into the selected language.
+- Explain gross profit as sales minus item cost when first relevant. Say "daily gross profit" instead of GP$/day. Explain uncertainty simply, e.g. "Some item costs are missing, so I cannot calculate the full gross profit."
+- Do not mention MySQL, serving layers, identity resolution, tool names, internal processing stages or technical status codes in normal answers. Use actual dates, clear units and useful product names. Show UPC/article numbers only when needed to identify a product or requested.
+- Keep required price codes like REG/SALE/TPR when distinguishing prices matters, with a plain label. Never simplify by changing the underlying units or pretending missing data is zero.
 - Your name is FisherMan AI (exact capitalization). Do not repeat your name in every response.
 - Organize answers for a mobile screen. Lead with the result or recommendation in one short sentence.
 - For multi-part answers use short section labels on their own line ending in a colon, with a blank line between sections. Use only relevant sections: Result:, Supporting data:, Recommendation:, Next step:. Translate labels into the requested language.
@@ -678,24 +683,25 @@ def _quick_daily_answer(question: str) -> dict[str, Any] | None:
                    key=lambda row: -Decimal(str(row.get("sales_amount") or 0)))[:5]
     lines = [
         "Result:",
-        f"Yesterday ({day.strftime('%a, %b %d, %Y')}): ${sales:,.2f} in seafood POS sales.",
+        f"Yesterday ({day.strftime('%a, %b %d, %Y')}): ${sales:,.2f} in seafood sales.",
         "",
         "Supporting data:",
-        f"- Selling UPCs: {summary.get('sold_item_count', 0)}",
+        f"- Products sold: {summary.get('sold_item_count', 0)}",
     ]
     if summary.get("gp_dollars_complete") and gp is not None:
         profit = Decimal(str(gp))
-        lines.append(f"- GP: ${profit:,.2f}" + (f" ({profit / sales * 100:.1f}%)" if sales > 0 else ""))
+        lines.append(f"- Gross profit (sales minus item cost): ${profit:,.2f}" + (f" ({profit / sales * 100:.1f}%)" if sales > 0 else ""))
     else:
-        lines.append("- GP unavailable: historical cost is incomplete; no estimated department GP is shown.")
+        lines.append("- Gross profit: some item costs are missing, so the full amount cannot be calculated.")
     if items:
         lines.extend(["", "Top sellers:"])
         for row in items:
             qty = format(Decimal(str(row.get("sold_quantity") or 0)).normalize(), "f")
-            unit = row.get("qty_uom") or row.get("selling_uom") or "unverified UOM"
-            lines.append(f"- {row.get('name') or 'Unnamed item'} ({row.get('upc')}): "
+            unit = row.get("qty_uom") or row.get("selling_uom") or "unit not confirmed"
+            unit = {"LB": "lb", "LBS": "lb", "EA": "each", "PAC": "packs", "PACK": "packs", "CASE": "cases"}.get(str(unit).upper(), unit)
+            lines.append(f"- {row.get('name') or 'Unnamed item'}: "
                          f"${Decimal(str(row.get('sales_amount') or 0)):,.2f}; {qty} {unit}")
-    lines.extend(["", "Source:", "Completed canonical POS day; GP uses applicable historical cost. No prior-day comparison was calculated."])
+    lines.extend(["", "Source:", "Uploaded sales records for this completed day. This summary does not compare sales with another day."])
     return {"answer": "\n".join(lines), "model": None, "read_only": True,
             "tool_calls": ["get_sales_performance"], "mode": "CANONICAL_DAILY_DIRECT",
             "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
@@ -727,13 +733,13 @@ def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
         other={u:q for u,q in quantities.items()
                if str(u).upper() not in {"LB","LBS","POUND","POUNDS"}}
         if not any(str(u).upper() in {"LB","LBS","POUND","POUNDS"} for u in quantities):
-            answer=f"{item}: POS sales for {label} are recorded as "+", ".join(f"{q} {u}" for u,q in quantities.items())+". Pounds cannot be verified from these selling units."
+            answer=f"{item}: Sales for {label} are recorded as "+", ".join(f"{q} {u}" for u,q in quantities.items())+". Pounds cannot be verified from these selling units."
         else:
             answer=f"{item}: {pounds} LB sold yesterday ({label}), from POS."
             if other:
                 answer+=" Other selling units: "+", ".join(f"{q} {u}" for u,q in other.items())+". These are not converted into pounds."
     else:
-        answer=f"{item}, yesterday ({label}): "+", ".join(f"{q} {u}" for u,q in quantities.items())+" sold from POS."
+        answer=f"{item}, yesterday ({label}): "+", ".join(f"{q} {u}" for u,q in quantities.items())+" sold from sales records."
     return {"answer":answer,"model":None,"read_only":True,
             "tool_calls":["get_sales_performance"],"mode":"CANONICAL_POS_DIRECT",
             "usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
