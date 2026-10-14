@@ -5913,8 +5913,8 @@ def _performance_cost_for_day(
     )
     precedence=(
         {"MOVEMENT_RECEIPT_VALUATION"},
-        {"ON_HAND_EXPLICIT_COST_FALLBACK"},
         {"FROZEN_INVENTORY_OFFICIAL_COST","LIVE_FRESH_SUGGESTION_OFFICIAL_COST"},
+        {"ON_HAND_EXPLICIT_COST_FALLBACK"},
         {"USER_CONFIRMED_FAMILY_COST"},
     )
     obs=observations.get(int(fid),[])
