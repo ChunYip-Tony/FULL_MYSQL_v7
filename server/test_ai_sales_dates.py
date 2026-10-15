@@ -16,7 +16,7 @@ def extract(filename, names, namespace):
 
 class SalesDateTests(unittest.TestCase):
     def setUp(self):
-        self.ns = {'date': date, 'Any': Any, 'Decimal': Decimal}
+        self.ns = {'date': date, 'Any': Any, 'Decimal': Decimal, 're': __import__('re')}
         extract('webapp_v2_runtime.py', {'_select_performance_range_days'}, self.ns)
         self.select = self.ns['_select_performance_range_days']
         self.days = [{'date': date(2026, 10, d)} for d in [1, 2, 3, 5, 6, 8, 9, 10, 12, 13]]
@@ -98,7 +98,7 @@ class SalesDateTests(unittest.TestCase):
         performance = Mock(return_value=result, side_effect=error)
         self.ns.update(performance_range=performance, _item_search_query=lambda x: x,
                        latest_performance_date=lambda: {'latest_completed_supported_sales_date': date(2026, 10, 13)})
-        extract('yipman_ai.py', {'_parse_iso_date', '_sales_tool'}, self.ns)
+        extract('yipman_ai.py', {'_parse_iso_date', '_sales_tool', '_select_sales_item_rows', '_norm_text', '_norm_num'}, self.ns)
         return self.ns['_sales_tool'], performance
 
     def result(self):

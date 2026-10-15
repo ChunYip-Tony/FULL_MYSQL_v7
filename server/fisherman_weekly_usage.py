@@ -24,6 +24,25 @@ def week_dates(start, end, today):
     return start.isoformat(), end.isoformat()
 
 
+def promotion_schedule(start, end, item):
+    """Preserve a supplied day count without inventing calendar dates."""
+    days, promo = promotion_dates(start, end, bool(item.get('weekend_only')))
+    count = item.get('promotion_days')
+    if item.get('promotion_applies') is False:
+        if count not in (None, 0):
+            raise ValueError('Promotion day count conflicts with no promotion.')
+        return days, [], 0
+    if count is not None:
+        if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= len(days):
+            raise ValueError('Promotion days must fit within the usage period.')
+        if item.get('weekend_only'):
+            if count != len(promo):
+                raise ValueError('Promotion day count conflicts with the weekend dates.')
+        elif count != len(days):
+            return days, [] if count == 0 else None, count
+    return days, promo, len(promo)
+
+
 def type_average(daily, price_type, limit):
     """Exclude unknown-type days; retain explicit, supported zero-sale rows."""
     types = (price_type,) if isinstance(price_type, str) else tuple(price_type)
@@ -94,7 +113,7 @@ def weekly_usage(args):
         supported = _canonical_sales_days(cur, limit=365)
         for item in items:
             query = str(item.get('article_or_upc') or '').strip()
-            if not query.isdigit() or not 6 <= len(query) <= 14:
+            if not query.isdigit() or not 1 <= len(query) <= 14:
                 raise ValueError('Use a confirmed article or UPC number for each item.')
             if query not in family_cache:
                 cur.execute('''SELECT DISTINCT pf.family_id,pf.main_article_number,pf.family_description
@@ -115,12 +134,10 @@ def weekly_usage(args):
                     members = list({str(row['ean_upc']): row for row in cur.fetchall()}.values())
                 family_cache[query] = (families, members)
             families, members = family_cache[query]
-            _, promo_days = promotion_dates(args['start_date'], args['end_date'], bool(item.get('weekend_only')))
-            if item.get('promotion_applies') is False:
-                promo_days = []
+            _, promo_days, promo_count = promotion_schedule(args['start_date'], args['end_date'], item)
             result = {'article': query, 'name': str(item.get('name') or query),
-                      'promotion_dates': [day.isoformat() for day in promo_days],
-                      'regular_days': len(all_days) - len(promo_days), 'promotion_days': len(promo_days),
+                      'promotion_dates': [day.isoformat() for day in promo_days] if promo_days is not None else None,
+                      'regular_days': len(all_days) - promo_count, 'promotion_days': promo_count,
                       'requested_price': item.get('promotion_price'), 'unit': _unit(item.get('selling_unit')),
                       'members': [], 'status': 'AMBIGUOUS' if len(families) > 1 else 'NOT_FOUND'}
             if len(families) != 1:
@@ -129,13 +146,31 @@ def weekly_usage(args):
             result['family_article'] = families[0]['main_article_number']
             # An exact UPC request includes its confirmed 240/249 companion;
             # an article request includes the family, separated by selling unit.
-            if len(query.lstrip('0')) >= 11:
-                exact = [row for row in members if str(row['ean_upc']).lstrip('0') == query.lstrip('0')]
-                if exact:
-                    key = query.lstrip('0')
-                    members = [row for row in members if str(row['ean_upc']).lstrip('0') == key or
-                               (key[:3] in {'240', '249'} and str(row['ean_upc']).lstrip('0')[:3] in {'240', '249'}
-                                and str(row['ean_upc']).lstrip('0')[3:6] == key[3:6])]
+            exact = [row for row in members if str(row['ean_upc']).lstrip('0') == query.lstrip('0')]
+            if exact:
+                key = query.lstrip('0')
+                members = [row for row in members if str(row['ean_upc']).lstrip('0') == key or
+                           (key[:3] in {'240', '249'} and str(row['ean_upc']).lstrip('0')[:3] in {'240', '249'}
+                            and str(row['ean_upc']).lstrip('0')[3:6] == key[3:6])]
+            requested_unit = result['unit']
+            verified_units = {_unit(_safe_qty_uom(row.get('ean_upc'), row.get('selling_uom')))
+                              for row in members}
+            verified_units.discard('')
+            exact_unit = _unit(_safe_qty_uom(exact[0].get('ean_upc'), exact[0].get('selling_uom'))) if exact else ''
+            # The model may omit or guess a unit. Canonical selling units own
+            # the quantity; never silently drop known history on a guessed UOM.
+            verified_unit = exact_unit or (next(iter(verified_units)) if len(verified_units) == 1 else '')
+            if verified_unit:
+                result['unit'] = verified_unit
+                if requested_unit and requested_unit != verified_unit:
+                    result['unit_note'] = f"Verified selling unit is {verified_unit}; requested {requested_unit} was not used or converted."
+            elif requested_unit not in verified_units:
+                result['status'] = 'SELLING_UNIT_NEEDS_CONFIRMATION'
+                result['available_units'] = sorted(verified_units)
+                result['unit'] = ''
+                result['unit_note'] = 'This family has multiple selling units. Specify the UPC or a verified selling unit; unlike units are not combined.'
+                results.append(result)
+                continue
             for row in members:
                 unit = _unit(_safe_qty_uom(row.get('ean_upc'), row.get('selling_uom')))
                 if not unit or unit != result['unit']:
@@ -174,14 +209,19 @@ def format_usage(items, start, end):
              '| Item | Promo dates | REG+TPR usage | SALE usage | Suggested weekly usage | Confidence |',
              '| --- | ---: | ---: | ---: | ---: | --- |']
     for row in items:
-        name = row['name'].replace('|', '/').replace('\n', ' ')
-        unit = row['unit'].lower()
+        name = row['name'].replace('|', '/').replace('\n', ' ') + ' · ' + row['article']
+        unit = (row.get('unit') or 'unit unconfirmed').lower()
         total = f"{num(row.get('total'))} {unit}" if row.get('total') is not None else 'Unavailable'
         sale = num(row.get('promotion_usage')) + (' (2× REG+TPR fallback)' if row.get('fallback') else '')
-        dates = ', '.join(date.fromisoformat(day).strftime('%b %d') for day in row['promotion_dates']) or 'None'
+        dates = ('Dates unspecified' if row['promotion_dates'] is None else
+                 ', '.join(date.fromisoformat(day).strftime('%b %d') for day in row['promotion_dates']) or 'None')
         lines.append(f"| {name} | {dates} ({row['promotion_days']} days) | {num(row.get('regular_usage'))} {unit} | {sale} {unit} | {total} | {row.get('confidence', 'LOW').title()} |")
     lines += ['', 'Weekly usage = REG+TPR average × regular days + promotion rate × promotion days. With at least 7 supported SALE days, use the SALE average. Otherwise use 2× REG+TPR when baseline history exists (low confidence). Weekend items use only Fri/Sat/Sun within the listed dates. These are estimates, not guaranteed demand; historical SALE prices can differ from the proposed price. Units stay separate; matching 249 sales are included in the family.']
     for row in items:
+        if row.get('unit_note'):
+            lines.append(row['unit_note'])
+        if row.get('status') in {'NOT_FOUND', 'AMBIGUOUS', 'SELLING_UNIT_NEEDS_CONFIRMATION'}:
+            lines.append(f"{row['name']}: {row['status'].replace('_', ' ').lower()}. No quantity was invented.")
         for kind in ('reg', 'sale'):
             evidence = [member[kind] for member in row.get('members', []) if member[kind]['days']]
             if evidence:
@@ -190,3 +230,4 @@ def format_usage(items, start, end):
                 rate = row.get('reg_rate' if kind == 'reg' else 'sale_rate')
                 lines.append(f"{row['name']} {('REG+TPR' if kind == 'reg' else 'SALE')}: {num(rate)} {row['unit'].lower()}/day; {days[0]}–{days[-1]}; {counts} observed type days per included UPC.")
     return '\n'.join(lines)
+

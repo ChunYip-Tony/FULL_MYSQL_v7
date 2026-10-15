@@ -182,6 +182,27 @@ def _resolve_family(query: str) -> str:
     return str(key)
 
 
+def _select_sales_item_rows(items: list[dict[str, Any]], query: str | None) -> tuple[list[dict[str, Any]], bool]:
+    """A named live/fresh SKU must not inherit every UPC in its family."""
+    if not query or not items:
+        return items, False
+    if query.isdigit():
+        exact = [row for row in items if _norm_num(row.get('upc')) == _norm_num(query)]
+        return (exact, False) if exact else (items, False)
+    term = _norm_text(query)
+    words = term.split()
+    exact = [row for row in items if _norm_text(str(row.get('name') or '')) == term]
+    if len(words) >= 2 and len(exact) == 1:
+        return exact, False
+    named = [row for row in items if all(word in _norm_text(str(row.get('name') or '')) for word in words)]
+    candidates = named or items
+    if len(candidates) == 1:
+        return candidates, False
+    # Broad names need a choice; do not label a sum of fresh/live/service UPCs
+    # as the quantity of one unspecified product.
+    return candidates, True
+
+
 def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
     start = _parse_iso_date(args.get("start_date"), required=False)
     end = _parse_iso_date(args.get("end_date"), required=False)
@@ -209,8 +230,15 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
             "date_note": "No supported completed POS day exists inside this requested range. Do not report zero sales or move the request to an older day. For a general current sales question, retry once with both dates null to use the latest available 7 supported days.",
         }
     items = list(result.get("items") or [])
-    matched = items  # The canonical range query already scopes item names/identities.
-    chosen = matched if item_query else items
+    chosen, ambiguous = _select_sales_item_rows(items, item_query)
+    if ambiguous:
+        choices = sorted(chosen, key=lambda row: (
+            0 if str(row.get('upc') or '').startswith('240') else 1,
+            -float(row.get('sales_amount') or 0), str(row.get('name') or ''),
+        ))
+        return {"needs_details": True, "question": "Which product do you mean?",
+                "options": [{"name": row.get('name'), "number": row.get('upc'),
+                             "selling_uom": row.get('qty_uom') or row.get('selling_uom')} for row in choices[:5]]}
     chosen = sorted(
         chosen,
         key=lambda x: (
@@ -384,7 +412,7 @@ def _promotion_items_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 
 def _clarification_result(result: dict[str, Any], tool_names: list[str], question: str = "") -> dict[str, Any]:
-    language = "es" if "reply in spanish." in question.lower() else "yue" if "reply in cantonese" in question.lower() else "en"
+    language = "es" if re.search(r"spanish|español", question, re.I) else "yue" if re.search(r"cantonese|廣東話|繁體", question, re.I) else "en"
     def copy(en: str, es: str, yue: str) -> str:
         return es if language == "es" else yue if language == "yue" else en
     original = str(result.get("question") or "Could you clarify what you mean?")
@@ -397,7 +425,9 @@ def _clarification_result(result: dict[str, Any], tool_names: list[str], questio
     answer = translations.get(original, original if language == "en" else copy(original, "¿Puedes aclarar la información que falta?", "可唔可以補充缺少嘅資料？"))
     options = result.get("options") or []
     if options:
-        lines = [answer, "", copy("| Product | Current price |", "| Producto | Precio actual |", "| 商品 | 現價 |"), "| --- | --- |"]
+        show_prices = any(row.get('current_price') is not None for row in options)
+        heading = copy("| Product | Current price |", "| Producto | Precio actual |", "| 商品 | 現價 |") if show_prices else copy("| Product | UPC / Article |", "| Producto | UPC / Artículo |", "| 商品 | UPC／貨號 |")
+        lines = [answer, "", heading, "| --- | --- |"]
         dates = set()
         for row in options:
             name = str(row.get("name") or row.get("number") or "Product").replace("|", "/").replace("\n", " ")
@@ -406,7 +436,8 @@ def _clarification_result(result: dict[str, Any], tool_names: list[str], questio
             unit = {"LB": "per lb", "LBS": "per lb", "EA": "each", "PACK": "per pack", "PAC": "per pack"}.get(unit, unit.lower())
             unit = {"per lb": copy("per lb", "por lb", "每磅"), "each": copy("each", "cada uno", "每件"), "per pack": copy("per pack", "por paquete", "每包")}.get(unit, unit)
             label = f"${Decimal(str(price)):,.2f} {unit}".strip() if price is not None else copy("Not confirmed", "Sin confirmar", "未確認")
-            lines.append(f"| {name} | {label} |")
+            identity = str(row.get('number') or row.get('upc') or row.get('family_article_number') or '—')
+            lines.append(f"| {name + (' · ' + identity if show_prices else '')} | {label if show_prices else identity} |")
             if row.get("current_price_asof_date"):
                 dates.add(str(row["current_price_asof_date"]))
         if dates:
@@ -681,17 +712,18 @@ def _weekly_usage_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 TOOLS = [
     {"type": "function", "name": "estimate_weekly_usage",
-     "description": "Estimate actual-store weekly usage from historical average REG+TPR and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Use supplied promotion dates; otherwise pass null dates for the current business week without asking the user. Set promotion_applies false when no promotion is planned; Fri Sat Sun only rows select actual weekend dates within that period; all other rows use SALE every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Fewer than 7 supported SALE days uses 2x REG+TPR baseline with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
+     "description": "Estimate actual-store weekly usage from historical average REG+TPR and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Use supplied promotion dates; otherwise pass null dates for the current business week without asking the user. Set promotion_applies false when no promotion is planned; Fri Sat Sun only rows select actual weekend dates within that period; For explicit 0/3/7-day scenarios set promotion_days to that count; do not replace three days with the full week. With no count or weekend restriction, promotion applies every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Fewer than 7 supported SALE days uses 2x REG+TPR baseline with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
      "parameters": {"type": "object", "properties": {
          "start_date": {"type": ["string", "null"], "description": "YYYY-MM-DD inclusive; null defaults to the current Monday-Sunday business week"},
          "end_date": {"type": ["string", "null"], "description": "YYYY-MM-DD inclusive; null defaults to seven days from start"},
          "items": {"type": "array", "minItems": 1, "maxItems": 30, "items": {
              "type": "object", "properties": {
                  "article_or_upc": {"type": "string"}, "name": {"type": "string"},
-                 "selling_unit": {"type": "string", "enum": ["LB", "EA", "PACK", "KG"]},
+                 "selling_unit": {"type": ["string", "null"], "description": "Use null when the user did not specify a selling unit; the tool derives the verified UPC selling unit. Never guess EA or convert LB/PACK.", "enum": ["LB", "EA", "PACK", "KG", "BX", "PC", "CS", "CASE", "BAG", "TRAY", "OZ", None]},
                  "weekend_only": {"type": "boolean"}, "promotion_applies": {"type": "boolean", "description": "True for a proposed SALE/promotion schedule; false when no promotion is planned."},
+                 "promotion_days": {"type": ["integer", "null"], "minimum": 0, "maximum": 31, "description": "Exact number of promotion days supplied by the user, including 0, 3 or 7; preserve it even if calendar dates are unspecified. Null only if the user gives no count; weekend_only then determines actual dates."},
                  "promotion_price": {"type": ["number", "null"], "description": "Proposed price per selling unit, or null if missing. Multi-buy $12 for 2 PACK is $6/PACK."}},
-             "required": ["article_or_upc", "name", "selling_unit", "weekend_only", "promotion_applies", "promotion_price"], "additionalProperties": False}}},
+             "required": ["article_or_upc", "name", "selling_unit", "weekend_only", "promotion_applies", "promotion_days", "promotion_price"], "additionalProperties": False}}},
          "required": ["start_date", "end_date", "items"], "additionalProperties": False}, "strict": True},
     {"type": "function", "name": "resolve_promotion_items",
      "description": "Match a pasted promotion list one row at a time using article numbers and confirmed family links. Pass each item row separately. Returns matched, ambiguous, missing or unavailable per item. Preserve proposed prices and pack units from the user; do not treat them as current prices. Ask only about unresolved items, and keep matched items.",
@@ -810,6 +842,7 @@ def _instructions() -> str:
     completed = completed_through_date().isoformat()
     return f"""You are FisherMan AI, the read-only seafood operations assistant for Store 1032.
 Business date: {today}. Latest normally completed business day: {completed}.
+Product roles: FishFinder is the mobile app; Fish Base is the Data Center for uploading, processing, QA and maintenance; Fish Watch is the desktop information checking and analysis interface. FisherMan AI is the read-only seafood assistant across these interfaces.
 
 CRITICAL DATA RULES:
 - For usage, ordering-suggestion and how-much-should-I-order questions, provide estimated WEEKLY USAGE in a compact table. Do not ask delivery dates or next delivery dates, and do not deduct stock. Use dates already given for a promotion list; otherwise estimate the current Monday-Sunday business week via null dates. Show historical REG+TPR and SALE rates, regular usage, promotion usage and suggested weekly usage with units/confidence. Ask only to identify an ambiguous item or unknown unit. Never label weekly usage as a stock-adjusted purchase order.
@@ -819,7 +852,7 @@ CRITICAL DATA RULES:
 - Current stock is not automatically usable on a future delivery date. Without freshness and pre-delivery usage evidence, report it only as current stock and say future usable stock is unverified. Do not lead with "safely count" and then undermine that statement.
 - Stock spoiled before delivery must NOT reduce the order. Answer that yes/no question with "No" and explain briefly; do not lead with a conflicting yes.
 - Do not use hypothetical=true for actual-store future forecasts. Historical sales at current prices do not establish demand for a proposed price. If matching planned-price/day forecast evidence is unavailable, say so; do not output a calculated future quantity as verified.
-- Always use calculate_order_quantities for numerical weekly usage, promotion demand, stock deduction and case arithmetic. Do not compute these totals in prose. Use supplied hypothetical numbers without any database lookup; never substitute store data. The calculator does not create a verified store forecast.
+- Use estimate_weekly_usage for actual-store historical weekly usage. Use calculate_order_quantities for explicitly hypothetical user-supplied demand, stock deduction and case arithmetic. Do not compute these totals in prose. Use supplied hypothetical numbers without any database lookup; never substitute store data. The calculator does not create a verified store forecast.
 - Treat "Can you calculate..." about actual store figures as a request to do the calculation, not merely a capability question. If costs are incomplete, return only a clearly labelled partial gross profit with the number of priced items; never call it the full department total.
 - For a future promotion, never claim promotion uplift was applied unless the returned forecast explicitly reflects the user's planned price and promotion days. A current regular-price forecast is not proof of a future promotion forecast. If no supported projection is returned, say so plainly; do not invent an uplift.
 - For a clearly hypothetical ordering calculation with user-provided numbers, use those numbers only and label the result hypothetical. Do not query actual store stock/history or request delivery dates when the requested weekly coverage and demand inputs are already supplied. Keep units consistent and show the arithmetic briefly.
@@ -850,12 +883,12 @@ CRITICAL DATA RULES:
 - For general item sales questions with no requested dates (including how is this item selling), call get_sales_performance directly with item_query and both dates null. This uses the latest available 7 supported completed POS days, which may be earlier than yesterday. For explicit dates, preserve the requested bounds; report only the actual returned supported dates and day count. If range_adjusted is true, say the unavailable boundary dates were excluded. If data_available is false, do not report zero sales, claim the item has no history, or repeat the same failed dates. Explain that this requested period has no supported POS days and state the latest supported date when supplied. Never substitute older data for an explicit single-day question. For item sales questions, call get_sales_performance directly with item_query. Do not run search_items or a department attention report first.\n- Use tools for every current, numeric, sales, stock, receipt, price, ordering, GP, freshness, or QA claim. Never invent missing numbers.
 - UPC sold quantity comes ONLY from sales records. Family movement 251-252 is Family-level quantity and must never be presented as an individual UPC sold quantity.
 - Completed canonical sales/data days only. Missing calendar dates are excluded, never filled as zero.
-- Physical delivery quantity follows canonical receipt semantics: 101 OR the 107+109 receipt event; never double count the same delivery.
+- Physical delivery quantity follows canonical receipt semantics: one 101 delivery OR one paired 107/109 receipt event. 109 is the goods-receipt quantity; 107 supplies the paired cost/valuation posting. NEVER add the 107 quantity to the 109 quantity: two 100-LB postings for the same event represent 100 LB received, not 200 LB. If 101 also represents that event, do not add it again.
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
 - Current UPC price is the newest authoritative sold-event POS price versus current Price List authority. Do not use SAP retail.
 - 240 main and 249 service/cooked forms in the same product group must have equal current price; when 240 is promoted, 249 participates.
 - For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days before judging the next step.
-- Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates.
+- Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates. A recent receipt or 4.4 days of stock alone does not prove old stock or overstock. State the returned risk flag and its evidence; if no item-specific flag or excess-stock threshold is available, say overstock is unconfirmed. Receipts below movement are not proof of over-receiving. A single available price type is not a comparative winner when SALE or REG evidence is missing.
 - Ordering uses effective OH, observed receipt cadence, completed-day demand, promotion evidence, and freshness constraints from the tool result.
 - This assistant is READ ONLY. Never claim to update price, stock, true stock, orders, QA, or database records.
 
@@ -868,18 +901,19 @@ ANSWER STYLE:
 - Write so a 15-year-old with no seafood department experience can understand. Be respectful and direct, not childish. Explain unfamiliar ideas with a short practical example when useful. Use plain everyday language a busy store manager can understand quickly. Short sentences, familiar words and concrete actions. Avoid technical terms and acronyms unless the user asks for them.
 - Say "sales records" instead of POS/canonical, "stock on hand" instead of OH, "selling unit" instead of UOM, "discount" instead of TPR when the price-type code is not necessary, and "days of stock left" instead of DOH. Translate these naturally into the selected language.
 - Explain gross profit as sales minus item cost when first relevant. Say "daily gross profit" instead of GP$/day. Explain uncertainty simply, e.g. "Some item costs are missing, so I cannot calculate the full gross profit."
-- Do not mention MySQL, serving layers, identity resolution, tool names, internal processing stages or technical status codes in normal answers. Use actual dates, clear units and useful product names. Show UPC/article numbers only when needed to identify a product or requested.
+- Do not mention MySQL, serving layers, identity resolution, tool names, internal processing stages or technical status codes in normal answers. Use actual dates, clear units and useful product names. Keep the UPC/article number alongside the product name in item-specific checks and analysis.
 - Keep required price codes like REG/SALE/TPR when distinguishing prices matters, with a plain label. Never simplify by changing the underlying units or pretending missing data is zero.
 - Your name is FisherMan AI (exact capitalization). Do not repeat your name in every response.
 - Organize answers for a mobile screen. Lead with the result or recommendation in one short sentence.
 - For detailed answers requested by the user, use short section labels and small tables. Translate labels into the requested language.
+- Do not call sales steady, strong, weak, improving or declining from one aggregate period alone. Describe its observed quantity/day; use a comparable prior period before making a trend claim.
 - Use short "- " bullet lines for parallel facts. Keep UPC/name, price/UOM and supported dates together. Trim unnecessary decimal zeros.
 - Simple questions need only a concise answer plus source/date when relevant; do not force empty sections or repeat the same fact.
 - For a proposed promotion, separate the identified item, proposed scenario, historical evidence and missing details. Ask one focused follow-up question when needed. Never manufacture evidence to fill a section.
 - Apply Store 1032 workflow without dumping these rules into every answer:
   * Pipeline: upload -> raw extraction -> identity/UOM validation -> analysis/publish. Use canonical FULL MYSQL tool data. Unknown or unsupported stock is never confirmed zero.
   * Preserve UPC, family, receiving article, pack and selling UOM. Never infer pounds from POS dollars or EA/PAC quantities.
-  * Latest receipt cost -> Live/Fresh/Frozen report -> OH. Physical receipts are 101 OR 107+109, never double counted.
+  * Latest receipt cost -> Live/Fresh/Frozen report -> OH. Physical receipts are 101 OR a paired 107/109 event: use 109 quantity and 107 valuation, never sum both quantities.
   * Price is the newer completed POS sold-event price (sales dollars / POS quantity) versus uploaded Price List. Price List priority: IN STORE -> SALE -> TPR -> REG.
   * Effective stock: latest OH baseline + valid receipts - valid sales +/- adjustments through completed day. True Stock/Zero anchors later movements until new OH or recorded dump supersedes it. Negative available stock is zero; unverified OH stays unknown.
   * Completed days only; exclude missing days. Always retain units, supported dates and coverage.
@@ -912,7 +946,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "WEEKLY_USAGE_NO_DELIVERY_V11",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V12",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
