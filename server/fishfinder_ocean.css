@@ -1,0 +1,136 @@
+/* FishFinder Ocean: shared design contract for mobile, Watch and Base. */
+:root,html body,.app-shell{
+ color-scheme:light;--bg:#f3f7fa;--surface:#ffffff;--raised:#eaf5f3;
+ --ink:#17324d;--muted:#536b7c;--line:#d7e3eb;--green:#087f8c;
+ --amber:#99620b;--red:#bd3b46;--good:#15734e;--warn:#99620b;--blue:#2563a6;--teal:#087f8c;
+ --ocean-font:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Arial,sans-serif;
+ --terminal-font:var(--ocean-font);--shadow:0 3px 14px #17324d08;
+ --radius:14px;--focus:#087f8c;--accent-soft:#e7f4f5;
+}
+html,html body,html[lang] body{background:var(--bg)!important;color:var(--ink)!important;font-family:var(--ocean-font)!important;letter-spacing:0;-webkit-font-smoothing:antialiased}
+body *,body *::before,body *::after{font-family:inherit;text-shadow:none!important}
+body :is(button,input,select,textarea,summary){font-family:var(--ocean-font)!important;letter-spacing:0}
+body :is(input,select,textarea){color:var(--ink);caret-color:var(--green);accent-color:var(--green)}
+body :is(button,a,input,select,textarea,summary):focus-visible{outline:3px solid var(--focus)!important;outline-offset:3px}
+body ::selection{background:#bde7e9;color:var(--ink)}
+body :is(h1,h2,h3){letter-spacing:-.025em;font-weight:750}
+body :is(button,.secondary,.search,.category-switch select,.field input,.field select){border-radius:10px!important}
+body :is(button,a){-webkit-tap-highlight-color:#087f8c18}
+body button:active:not(:disabled){filter:brightness(.97)}
+body :is(.app-header,.floating-filters){background:var(--bg)!important;border-bottom:1px solid var(--line)!important;box-shadow:none!important}
+body .floating-filters::before{background:var(--bg)!important}
+body .app-header{min-height:62px;padding-bottom:6px}
+body .brand b{color:var(--ink)!important;text-transform:none!important;font-size:25px;font-weight:800!important;letter-spacing:-.6px!important}
+body .brand b::after,body header strong::after{display:none!important}
+body .brand .terminal-caption{color:var(--muted)!important;font:600 10px/1.3 var(--ocean-font)!important;letter-spacing:1.1px}
+body .brand-icon{background:var(--accent-soft)!important;border:1px solid #c5e4e6!important;border-radius:12px!important;box-shadow:none!important;color:var(--green)!important}
+body .header-actions :is(button,.language-switch){color:var(--muted);border-radius:10px!important}
+body .header-actions button:hover{background:var(--accent-soft)}
+body :is(.compact-stock,.stock-card,.rules-card,.catalog-family-card,.compact-empty){background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:var(--radius)!important;box-shadow:var(--shadow)!important;color:var(--ink)}
+body .compact-stock{border-left:4px solid var(--review-item-line,var(--green))!important;border-bottom:1px solid var(--line)!important}
+body .compact-stock.fresh{border-left-color:var(--red)!important}
+body .compact-stock.excess{border-left-color:var(--amber)!important}
+body .compact-stock[data-selection=pending]{background:#edf8f8!important;border-color:var(--green)!important}
+body :is(.row-name>strong,.inventory-upc-identity>strong,.inventory-upc-display>strong,.inventory-family-name){color:var(--ink)!important;letter-spacing:-.025em!important;font-weight:750!important}
+body :is(.card-article,.inventory-upc-number,.value-uom,.row-dates,.row-facts){font-variant-numeric:tabular-nums}
+body .risk-tabs{gap:6px}
+body .risk-tabs button{background:var(--surface)!important;border:1px solid var(--line)!important;color:var(--muted)!important;box-shadow:none!important;font-weight:650!important}
+body :is(.risk-tabs button.active,.window-switch button.active,.inventory-section-tabs button.active,.inventory-section-tabs button[aria-selected=true]){background:var(--green)!important;color:#fff!important;border-color:var(--green)!important;box-shadow:none!important}
+body .window-switch{background:#e7eef3!important;border:0!important;border-radius:12px!important;padding:3px;gap:3px}
+body .window-switch button{color:var(--muted);border-radius:9px!important}
+body :is(.category-switch select,.search,.filter-controls,.search-toggle,.filter-toggle){background:var(--surface)!important;border:1px solid var(--line)!important;color:var(--ink)!important;box-shadow:none!important}
+body .search:focus-within{border-color:var(--green)!important;box-shadow:0 0 0 3px #087f8c14!important}
+body .search input{color:var(--ink)!important;background:transparent!important}
+body input::placeholder,body textarea::placeholder{color:#667f90;opacity:1}
+body :is(.card-category select,.inventory-category select){background:var(--accent-soft)!important;color:var(--green)!important;border-color:#c5e4e6!important}
+body :is(.bottom-dock,.bottom-nav){background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:16px!important;box-shadow:0 4px 24px #17324d14!important}
+body .bottom-dock .bottom-nav{border:0!important;box-shadow:none!important;border-radius:0!important;background:transparent!important}
+body .bottom-nav button{color:var(--muted)!important;box-shadow:none!important;border-radius:10px!important;font-weight:650!important}
+body .bottom-nav button.active{background:var(--accent-soft)!important;color:var(--green)!important;border-color:transparent!important;box-shadow:none!important}
+body :is(.primary,.action-save,.sales-details-footer button,.ai-composer button,.sheet-footer button.primary){background:var(--green)!important;color:#fff!important;border-color:var(--green)!important;border-radius:10px!important;box-shadow:none!important}
+body :is(dialog,.sheet,.startup-panel){background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;border-radius:18px!important;box-shadow:0 18px 60px #17324d24!important}
+body dialog::backdrop{background:#17324d66;backdrop-filter:blur(3px)}
+body :is(.sheet-header,.sheet-body,dialog>header,.sheet-footer,.sales-details-footer){background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+body :is(dialog h2,dialog h3,.sheet-header h2,.price-action-item h2){color:var(--ink)!important;font-weight:750!important}
+body :is(.inventory-evidence,.receipt-event,.inventory-price-focus,.inventory-sales-section,.inventory-stock-section,.inventory-upc-options,.price-action-item,.action-linked,.weekly-plan-controls){background:var(--surface)!important;color:var(--ink);border-color:var(--line)!important;border-radius:12px!important;box-shadow:none!important}
+body .inventory-card-section>header{background:#f7fafc!important;border-color:var(--line)!important}
+body :is(.pc-snapshot,.weekly-order-result){background:#f5f9fc!important;border-color:var(--line)!important;border-radius:12px!important;overflow:hidden}
+body :is(.pc-current strong,.pc-cost strong,.inventory-current-price){color:var(--ink)!important}
+body :is(.pc-recommendation,.suggestion-price-box,.inventory-promo-weekly,.weekly-estimate-mode){background:var(--accent-soft)!important;border:1px solid #b5dce0!important;border-radius:12px!important}
+body :is(.pc-recommendation-value>strong,.pc-recommendation-heading,.suggestion-price-inline strong,.weekly-order-result strong){color:var(--green)!important}
+body :is(.pc-type,.inventory-type-badge,.inventory-current-type,.suggested-price-type){background:#edf4f8!important;color:#335570!important;border:1px solid #d1e0eb!important;border-radius:6px!important;font-weight:700}
+body :is(.inventory-type-badge,.inventory-current-type)[data-price-type=SALE],body :is(.inventory-type-badge,.inventory-current-type)[data-price-type=TPR]{background:#fff4dd!important;color:var(--amber)!important;border-color:#eddbb4!important}
+body :is(.pc-gp,.pc-current-gp,.suggestion-gp){border-radius:7px!important;background:#f4f7fa!important}
+body [data-band=best],body .pc-gp[data-band=best],body .pc-current-gp[data-band=best]{color:var(--good)!important;background:#e9f6ef!important;border-color:#c9e7d6!important}
+body [data-band=good],body .pc-gp[data-band=good],body .pc-current-gp[data-band=good]{color:var(--amber)!important;background:#fff5e5!important;border-color:#eedcb8!important}
+body [data-band=low],body .pc-gp[data-band=low],body .pc-current-gp[data-band=low]{color:var(--red)!important;background:#fff0ef!important;border-color:#f0cece!important}
+body :is(.inventory-upc-options>button,.inventory-result-items>button){background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+body :is(.inventory-upc-options>button[aria-selected=true],.inventory-result-items>button[aria-current=true]){background:var(--accent-soft)!important;border-color:var(--green)!important;color:var(--ink)!important}
+body .inventory-upc-options>button[aria-selected=true] *{color:inherit!important}
+body :is(.inventory-stock-table-wrap,.inventory-price-history,.upc-history-open,.pc-links>button){border-color:var(--line)!important}
+body table{font-variant-numeric:tabular-nums;color:var(--ink)}
+body th{background:#edf3f7!important;color:var(--muted)!important;border-color:var(--line)!important}
+body td{border-color:var(--line)!important}
+body tbody tr:nth-child(even){background:#f7fafc!important}
+body :is(.compact-alert,.warning,.ai-error){color:var(--amber)!important;background:#fff5e5!important;border-color:#eedcb8!important;border-radius:10px!important}
+body :is(.toast,.pull-refresh){background:var(--ink)!important;color:#fff!important;border:0!important;border-radius:12px!important;box-shadow:0 8px 24px #17324d24!important}
+body .startup-overlay{background:var(--bg)!important}
+body :is(.startup-brand,.startup-main,.startup-file-details,.startup-files,.startup-steps>div){background:var(--surface)!important;border-color:var(--line)!important;color:var(--ink)!important}
+body .startup-brand h1{color:var(--ink)!important;text-transform:none!important}
+body :is(.startup-brand .startup-live,.startup-step-mark){background:var(--accent-soft)!important;color:var(--green)!important;border-radius:8px!important;border-color:#b5dce0!important}
+body .startup-panel progress{accent-color:var(--green);border:0!important;border-radius:8px!important;background:#e3edf3}
+body .startup-panel progress::-webkit-progress-value{background:var(--green)!important;border-radius:8px}
+body :is(.app-ready-status,.ready-source){color:var(--muted)!important;border-color:var(--line)!important;background:transparent!important}
+body .ready-source[data-state=current]{color:var(--good)!important}
+body .ready-source[data-state=old],body .ready-source[data-state=unverified]{color:var(--amber)!important}
+body .fishfinder-ai{color:var(--ink)}
+body .ai-starters button{background:var(--surface)!important;border-color:var(--line)!important;border-radius:12px!important;color:var(--ink)!important}
+body .ai-starters button:hover{background:var(--accent-soft)!important;border-color:var(--green)!important}
+body .ai-message{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:14px!important;box-shadow:var(--shadow)}
+body .ai-message.user{background:var(--accent-soft)!important;border-color:#c5e4e6!important;border-radius:14px 14px 4px 14px!important}
+body .ai-message.assistant{border-radius:14px 14px 14px 4px!important}
+body :is(.ai-answer-section:first-child p,.ai-message>div,.ai-answer){color:var(--ink)!important}
+body .ai-composer textarea{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:12px!important;color:var(--ink)!important}
+body .ai-thinking::before{border-radius:50%}
+body .ai-table-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+body :is(.weekly-usage-calculate,.search-submit){background:var(--green)!important;color:#fff!important;border-color:var(--green)!important;border-radius:10px!important}
+/* Fish Base uses the same tokens and components around the embedded Watch views. */
+body:has(#dataWorkspace)>header{background:var(--surface)!important;border-bottom:1px solid var(--line)!important;color:var(--ink)!important;min-height:48px;padding:7px 14px}
+body:has(#dataWorkspace)>header strong{color:var(--ink)!important;font-weight:800!important;text-transform:none!important;letter-spacing:-.5px!important}
+body:has(#dataWorkspace) .brand-mark{background:var(--accent-soft)!important;color:var(--green)!important;border:1px solid #c5e4e6!important;border-radius:10px!important;width:30px;height:30px;box-shadow:none!important}
+body .dc-functions{background:var(--surface)!important;border-bottom:1px solid var(--line)!important;gap:6px;padding:5px 12px}
+body .dc-functions button{background:transparent!important;color:var(--muted)!important;border:1px solid transparent!important;box-shadow:none!important;min-height:36px}
+body .dc-functions button[aria-pressed=true]{background:var(--accent-soft)!important;color:var(--green)!important;border-color:#c5e4e6!important;box-shadow:none!important}
+body:has(#dataWorkspace) :is(.panel,.fresh){background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:14px!important;box-shadow:var(--shadow)!important}
+body:has(#dataWorkspace) .panel{border-left:1px solid var(--line)!important;border-bottom:1px solid var(--line)!important}
+body:has(#dataWorkspace) :is(h1,h2,h3,.batch-title h2,.metric>b,.tile b,.publish-dates b){color:var(--ink)!important;font-weight:750!important;text-transform:none!important;letter-spacing:-.02em!important}
+body:has(#dataWorkspace) :is(.metric,.calendar-day,pre){background:#f3f7fa!important;border-radius:9px!important;color:var(--ink)!important;border-color:var(--line)!important}
+body:has(#dataWorkspace) :is(.files,summary,footer,.tile>span,.tile small,header small){color:var(--muted)!important}
+body:has(#dataWorkspace) :is(.drop,.activity,.notice,.steps span,.pipeline-step){background:var(--accent-soft)!important;color:var(--green)!important;border-color:#c5e4e6!important;border-radius:10px!important}
+body:has(#dataWorkspace) .drop{border:1px dashed #92bec5!important;padding:12px}
+body:has(#dataWorkspace) :is(.badge,.status-text){border:0!important;border-radius:6px!important;background:#edf3f7!important;color:var(--muted)!important}
+body:has(#dataWorkspace) :is(.badge.good,.status-text[data-tone=good],.activity.good,.steps .done,.pipeline-step.done){background:#e9f6ef!important;color:var(--good)!important;border-color:#c9e7d6!important}
+body:has(#dataWorkspace) :is(.badge.warn,.status-text[data-tone=warn],.activity.warn,.notice.warn,.fresh-warning,.qa-holds,.steps .hold){background:#fff5e5!important;color:var(--amber)!important;border-color:#eedcb8!important}
+body:has(#dataWorkspace) :is(.badge.bad,.status-text[data-tone=bad],.activity.bad,.notice.bad,.calendar-day[data-tone=bad],.pipeline-step.blocked){background:#fff0ef!important;color:var(--red)!important;border-color:#f0cece!important}
+body:has(#dataWorkspace) :is(.calendar-day[aria-pressed=true],.view-toggle button[aria-pressed=true],.pipeline-step.current){background:var(--green)!important;color:#fff!important;border-color:var(--green)!important;box-shadow:none!important}
+body:has(#dataWorkspace) .calendar-day[aria-pressed=true] small{color:#fff!important}
+body:has(#dataWorkspace) .pipeline-step.current i{background:#fff!important;color:var(--green)!important}
+body:has(#dataWorkspace) input[type=text],body:has(#dataWorkspace) input[type=file]::file-selector-button{background:var(--surface)!important;color:var(--ink)!important;border:1px solid var(--line)!important;border-radius:9px!important}
+body:has(#dataWorkspace) :is(.pulse,.load-chip i,.tile>span::before,.badge::before){border-radius:50%!important}
+body:has(#dataWorkspace) .stage-meter{background:#dcecef!important;border-radius:8px!important;overflow:hidden}
+body:has(#dataWorkspace) .stage-meter span{background:var(--green)!important}
+body #desktopStartup{background:var(--bg)!important;color:var(--ink)!important;font-family:var(--ocean-font)!important}
+body #desktopStartup .startup-box{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:18px!important;box-shadow:0 18px 60px #17324d24!important}
+body #desktopStartup :is(h1,strong){color:var(--ink)!important}
+body #desktopStartup progress{accent-color:var(--green)}
+body #desktopStartup button{background:var(--green)!important;color:#fff!important;border-color:var(--green)!important}
+@media(min-width:1024px){body .app-shell{padding-left:18px;padding-right:18px}body .app-header{min-height:62px}body .brand-icon{width:38px;height:38px}body .inventory-result-items>button{border-radius:10px!important;margin-bottom:5px}body .catalog-card{border-radius:16px!important}}
+@media(max-width:1023px){body .app-shell .app-header{min-height:52px!important;padding:4px 0 7px!important}body .app-shell .brand b{font-size:21px!important;font-weight:800!important}body .app-shell .brand-icon{width:34px!important;height:34px!important;border-radius:10px!important}body .app-shell .brand-icon img{width:27px!important;height:27px!important}body .brand .terminal-caption{display:none!important}body .app-shell .header-actions button{min-height:42px!important}body .compact-stock{border-radius:12px!important}body .bottom-dock{border-radius:16px 16px 0 0!important}body dialog{border-radius:16px!important}}
+@media(prefers-reduced-motion:reduce){body *,body *::before,body *::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+/* Physical-stock records share the Fish Base workspace. */
+body:has(.records-main)>header{background:var(--surface)!important;border-bottom:1px solid var(--line)!important}
+body:has(.records-main) :is(.record-summary,.records-pane,.panel){background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:14px!important;box-shadow:var(--shadow)!important}
+body:has(.records-main) :is(.record-context b,.record-summary b,header strong){color:var(--ink)!important}
+body:has(.records-main) .records-nav a{border-radius:9px;color:var(--muted);background:var(--surface)}
+body:has(.records-main) .records-nav a[aria-current=page]{background:var(--accent-soft)!important;color:var(--green)!important;border-color:#c5e4e6}
