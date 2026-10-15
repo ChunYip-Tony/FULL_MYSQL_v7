@@ -199,6 +199,36 @@ class PriceTypeHistoryTest(unittest.TestCase):
         self.assertEqual(self.summarize({'rows': []}, Decimal(2)), [])
 
 
+class PriceAdviceScopeTest(unittest.TestCase):
+    def setUp(self):
+        self.ns = {'Any': Any}
+        sales_dates.extract('yipman_ai.py', {'_norm_num', '_filter_item_price_suggestions', '_item_price_decisions'}, self.ns)
+        self.candidates = [{'number': '24060200000', 'name': 'Live Tilapia', 'family_article_number': '1361602'}]
+        self.rows = [
+            {'upc': '24060200000', 'family_article_number': '1361602', 'actionable': False, 'suggested_price': None, 'final_tpr_decision': 'NO_TPR_ACTION'},
+            {'upc': '24960200000', 'family_article_number': '1361602', 'actionable': False, 'suggested_price': None},
+            {'upc': '24053500000', 'family_article_number': '1361602', 'actionable': True, 'suggested_price': 5.49},
+            {'upc': '24560200000', 'family_article_number': '1361602', 'actionable': True, 'suggested_price': 10.99}]
+
+    def test_same_family_price_advice_excludes_fresh_and_package_variants(self):
+        out = self.ns['_filter_item_price_suggestions'](self.rows, self.candidates)
+        self.assertEqual({r['upc'] for r in out}, {'24060200000', '24960200000'})
+
+    def test_no_action_for_exact_upc_cannot_become_sweet_spot_recommendation(self):
+        out = self.ns['_item_price_decisions'](self.candidates, self.rows, {})[0]
+        self.assertFalse(out['can_recommend_new_price_now'])
+        self.assertIsNone(out['supported_price_for_dated_review'])
+        self.assertEqual(out['policy_decision'], 'NO_TPR_ACTION')
+
+    def test_stale_candidate_is_only_a_dated_review(self):
+        rows = [{'upc': '24060200000', 'actionable': True, 'suggested_price': 9.99, 'final_tpr_decision': 'START_TPR'}]
+        out = self.ns['_item_price_decisions'](self.candidates, rows, {'refreshing': True})[0]
+        self.assertFalse(out['can_recommend_new_price_now'])
+        self.assertEqual(out['supported_price_for_dated_review'], 9.99)
+        fresh = self.ns['_item_price_decisions'](self.candidates, rows, {'refreshing': False})[0]
+        self.assertTrue(fresh['can_recommend_new_price_now'])
+
+
 class ToolSchemaTest(unittest.TestCase):
     def test_calculation_respects_ui_or_explicit_reply_language(self):
         ns = {'re': re}

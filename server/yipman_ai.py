@@ -475,6 +475,41 @@ def _published_pricing_review(category: str) -> dict[str, Any]:
     return backoffice_cached_pricing_review(category=category, limit=1000)
 
 
+def _filter_item_price_suggestions(suggestions: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A shared family does not make fresh/live/package price advice interchangeable."""
+    direct = {_norm_num(row.get('number')) for row in candidates}
+    pairs = {(str(row.get('family_article_number')), key[3:6])
+             for row in candidates for key in [_norm_num(row.get('number'))]
+             if key[:3] in {'240', '249'}}
+    selected = []
+    for row in suggestions:
+        key = _norm_num(row.get('upc') or row.get('ean_upc'))
+        family = str(row.get('family_article_number') or row.get('family_article') or '')
+        if key in direct or (key[:3] in {'240', '249'} and (family, key[3:6]) in pairs):
+            selected.append(row)
+    return selected
+
+
+def _item_price_decisions(candidates: list[dict[str, Any]], suggestions: list[dict[str, Any]], review: dict[str, Any]) -> list[dict[str, Any]]:
+    by_upc = {_norm_num(row.get('upc') or row.get('ean_upc')): row for row in suggestions}
+    stale = bool(review.get('refreshing') or review.get('source_changed_since_analysis') or
+                 'STALE' in str(review.get('analysis_status') or '').upper())
+    out = []
+    for candidate in candidates:
+        row = by_upc.get(_norm_num(candidate.get('number')), {})
+        final = row.get('final_tpr_decision')
+        price = row.get('suggested_price')
+        eligible = bool(row.get('actionable') and price is not None and
+                        final not in {'NO_TPR_ACTION', 'SALE_LOCKED'})
+        out.append({'upc': candidate.get('number'), 'name': candidate.get('name'),
+                    'can_recommend_new_price_now': eligible and not stale,
+                    'policy_decision': final or row.get('review_status') or 'NO_SUPPORTED_PRICE_ACTION',
+                    'supported_price_for_dated_review': price if eligible else None,
+                    'analysis_is_stale_or_refreshing': stale,
+                    'reason': row.get('final_tpr_decision_reason') or row.get('review_blocker') or 'No actionable exact-UPC price was returned. A sweet-spot reference is not a recommendation.'})
+    return out
+
+
 def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     query = str(args.get("query") or "").strip()
     category = str(args.get("category") or "ALL").strip().upper()
@@ -539,11 +574,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     review = _published_pricing_review(category)
     suggestions = list(review.get("rows") or [])
     if query:
-        upcs = {_norm_num(row.get("number")) for row in candidates}
-        family_keys = {str(row["family_article_number"]) for row in candidates if row.get("family_article_number")}
-        suggestions = [row for row in suggestions
-                       if _norm_num(row.get("upc") or row.get("ean_upc")) in upcs
-                       or str(row.get("family_article_number") or row.get("family_article") or "") in family_keys]
+        suggestions = _filter_item_price_suggestions(suggestions, candidates)
     suggestions = sorted(
         suggestions,
         key=lambda x: (
@@ -561,6 +592,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
         "refreshing": review.get("refreshing", False),
         "data_health": review.get("current_source_health") or review.get("data_health"),
         "upc_details": upc_details,
+        "requested_item_decisions": _item_price_decisions(candidates, suggestions, review) if query else [],
         "price_suggestions": suggestions[:20],
         "price_decision_note": "Use final_tpr_decision and final_tpr_price_suggestion when returned by the shared mobile/desktop policy. SALE_LOCKED means no local price action. Blocked candidate_price is not an actionable recommendation. A 7-day sales aggregate is not proof of a completed current-price observation cycle; require explicit observation_supported_days/cycle fields or state that status is unconfirmed.",
     }
@@ -923,6 +955,7 @@ CRITICAL DATA RULES:
 - Store-specific definitions must be exact: Family sold quantity comes from Family movement 251 minus 252, in the verified Family/base unit. UPC sold quantity comes only from POS, in that UPC's selling unit. Never define Family movement as simply the sum of UPC POS quantities, and never add each/packs to pounds. Explain with distinct sources/units, not an example summing arbitrary UPC counts.
 - 240 is the main selling UPC; do not label it "packaged" merely because its prefix is 240. 249 is the linked cooked/service selling UPC. 245 is generally the packaged form. Always verify the actual selling unit; prefixes do not prove a weight conversion.
 - Explain True Stock precisely: the physical count is the starting point; later valid receipts/sales/adjustments change the displayed stock balance. A new accepted OH upload supersedes the earlier count. The count record is an anchor, not a permanently fixed current stock number.
+- For a price recommendation, requested_item_decisions controls the answer. If can_recommend_new_price_now is false, do not recommend a new price. You may show supported_price_for_dated_review as a dated, conditional candidate only; if it is null, no supported new price exists. Never turn upc_details sweet_spot_price or a different fresh/live/package UPC’s suggestion into a recommendation for the requested SKU.
 - For an item price recommendation, call get_price_review directly with the item query, without preliminary search or department-wide reports. If it returns needs_details, ask that question and show only the relevant choices. Stop tool calls until the user chooses.
 - If price analysis is refreshing or source_changed_since_analysis is true, distinguish the verified current price from dated suggestions; never describe an old recommendation as newly calculated. Give its data date and limitation plainly. Only a row with actionable=true and a non-null suggested_price can support an action now. candidate_price is a blocked or unapproved test candidate, not a recommendation. An active SALE lock means wait; do not lead with Recommend a blocked candidate and then qualify it.
 - If you do not understand the user's question, intent, product, unit, date or requested decision, ask for clarification before answering or calculating. Never choose an interpretation silently, invent missing details, or run broad expensive lookups to compensate for an unclear question.
@@ -1005,7 +1038,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V17",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V18",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
