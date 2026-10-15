@@ -248,7 +248,7 @@ class ToolSchemaTest(unittest.TestCase):
               '_check_rate_limit': lambda key: None, '_quick_order_question': lambda *args: None,
               '_quick_daily_answer': lambda *args: None, '_quick_quantity_answer': lambda *args: None,
               '_safe_history': lambda value: [], '_instructions': lambda: 'Use verified quantities.',
-              'MAX_MESSAGE_CHARS': 1600, 'MAX_TOOL_ROUNDS': 5, 'DEFAULT_MODEL': 'test', 'TOOLS': [],
+              'AI_REVISION': 'TEST', 'MAX_MESSAGE_CHARS': 1600, 'MAX_TOOL_ROUNDS': 5, 'DEFAULT_MODEL': 'test', 'TOOLS': [],
               '_TOOL_HANDLERS': {'estimate_weekly_usage': handler}, '_post_responses': post,
               '_compact_json': json.dumps}
         sales_dates.extract('yipman_ai.py', {'chat', '_calculation_requires_translation', '_output_text'}, ns)

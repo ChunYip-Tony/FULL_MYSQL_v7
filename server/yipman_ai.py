@@ -39,6 +39,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 1600
 MAX_TOOL_ROUNDS = 5
+AI_REVISION = 'SEAFOOD_QUICK_CHECK_V19'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -1038,7 +1039,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V18",
+        "test_revision": AI_REVISION,
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -1248,7 +1249,7 @@ def chat(
     if quick is None:
         quick = _quick_quantity_answer(question)
     if quick is not None:
-        return quick
+        return {**quick, 'server_revision': AI_REVISION}
 
     input_items: list[dict[str, Any]] = list(_safe_history(history))
     input_items.append({"role": "user", "content": question})
@@ -1264,6 +1265,7 @@ def chat(
     }
 
     tool_names: list[str] = []
+    source_evidence: list[dict[str, Any]] = []
     response: dict[str, Any] | None = None
     for _round in range(MAX_TOOL_ROUNDS):
         response = _post_responses({**base_payload, "input": input_items})
@@ -1279,6 +1281,8 @@ def chat(
                 "model": response.get("model") or DEFAULT_MODEL,
                 "read_only": True,
                 "tool_calls": tool_names,
+                "server_revision": AI_REVISION,
+                "source_evidence": source_evidence,
                 "usage": {
                     "input_tokens": usage.get("input_tokens"),
                     "output_tokens": usage.get("output_tokens"),
@@ -1302,10 +1306,16 @@ def chat(
             else:
                 try:
                     result = handler(arguments)
+                    if name == 'get_price_review':
+                        source_evidence.append({'kind': 'PRICE_POLICY', 'query': arguments.get('query'),
+                            'analysis_status': result.get('analysis_status'),
+                            'refreshing': result.get('refreshing'),
+                            'source_changed_since_analysis': result.get('source_changed_since_analysis'),
+                            'requested_item_decisions': result.get('requested_item_decisions') or []})
                     if result.get("calculation_answer") and not _calculation_requires_translation(question):
-                        return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names}
+                        return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names, 'server_revision': AI_REVISION}
                     if result.get("needs_details"):
-                        return _clarification_result(result, tool_names, question)
+                        return {**_clarification_result(result, tool_names, question), 'server_revision': AI_REVISION}
                 except Exception as exc:
                     result = {"error": str(exc), "tool": name}
             input_items.append({
