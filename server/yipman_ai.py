@@ -25,6 +25,7 @@ from webapp_v2_runtime import (
     family_info,
     latest_performance_date,
     performance_range,
+    price_type_history,
     search_items,
     upc_info,
 )
@@ -362,16 +363,21 @@ def _inventory_tool(args: dict[str, Any]) -> dict[str, Any]:
 def _catalog_search_rows(query: str) -> list[dict[str, Any]]:
     """Price identification needs current catalog facts, not per-alias history."""
     term = _item_search_query(query)
+    data = search_quick_check(term, 30)
     # The quick UPC catalog cannot expose receiving-only article aliases.
     # Use the confirmed article/family bridge for article-length identifiers.
     if term.isdigit() and len(term) < 11:
-        rows = list(search_items(term, 30).get("results") or [])
-        exact = [row for row in rows if _norm_num(row.get("number")) == _norm_num(term)
-                 or _norm_num(row.get("article_number")) == _norm_num(term)
-                 or _norm_num(row.get("family_article_number")) == _norm_num(term)]
-        return [dict(row, family_article_number=row.get("family_article_number") or
-                     (row.get("number") if row.get("result_type") == "FAMILY" else None)) for row in exact]
-    data = search_quick_check(term, 30)
+        exact_upcs = [row for row in data.get('results') or []
+                      if _norm_num(row.get('ean_upc')) == _norm_num(term)]
+        if exact_upcs:
+            data = {'results': exact_upcs}
+        else:
+            rows = list(search_items(term, 30).get("results") or [])
+            exact = [row for row in rows if _norm_num(row.get("number")) == _norm_num(term)
+                     or _norm_num(row.get("article_number")) == _norm_num(term)
+                     or _norm_num(row.get("family_article_number")) == _norm_num(term)]
+            return [dict(row, family_article_number=row.get("family_article_number") or
+                         (row.get("number") if row.get("result_type") == "FAMILY" else None)) for row in exact]
     rows = [{
         "result_type": "UPC",
         "number": row.get("ean_upc"),
@@ -388,6 +394,14 @@ def _catalog_search_rows(query: str) -> list[dict[str, Any]]:
         "company_price_c": row.get('company_price_c'),
     } for row in data.get("results") or [] if row.get("ean_upc")]
     if rows:
+        if not term.isdigit():
+            normalized = _norm_text(term)
+            exact_names = [row for row in rows if _norm_text(row.get('name')) == normalized]
+            if len(normalized.split()) >= 2 and len(exact_names) == 1:
+                return exact_names
+            named = [row for row in rows if all(word in _norm_text(row.get('name')) for word in normalized.split())]
+            if named:
+                return named
         return rows
     # Names may exist only on receiving articles; keep their actual role.
     return [dict(row, family_article_number=row.get("family_article_number") or
@@ -495,14 +509,14 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
         if active:
             candidates = active
     families = {str(row.get("family_article_number") or row.get("number")) for row in candidates}
-    if query and len(families) > 1:
+    if query and len(candidates) > 1:
         options = []
         seen = set()
         for row in candidates:
-            family = str(row.get("family_article_number") or row.get("number"))
-            if family in seen:
+            identity = str(row.get('number'))
+            if identity in seen:
                 continue
-            seen.add(family)
+            seen.add(identity)
             options.append({key: row.get(key) for key in
                             ("number", "name", "family_article_number", "selling_uom",
                              "current_price", "current_price_type", "current_price_asof_date")})
@@ -742,6 +756,12 @@ def _weekly_usage_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = [
+    {'type': 'function', 'name': 'get_price_type_history',
+     'description': 'Compare historical REG versus SALE prices, daily velocity and GP dollars/day using separately verified REG, TPR and SALE records. Use this for price-type performance comparisons; optimizer candidate prices and TOTAL-only daily averages do not prove SALE history. Exact UPC required; use search_items if identity is unclear. GP is at current effective cost and samples count observed type days.',
+     'parameters': {'type': 'object', 'properties': {
+         'upc': {'type': 'string'},
+         'supported_days': {'type': ['integer', 'null'], 'minimum': 1, 'maximum': 365, 'description': 'Latest supported-day lookback; null defaults to 90.'}},
+         'required': ['upc', 'supported_days'], 'additionalProperties': False}, 'strict': True},
     {"type": "function", "name": "estimate_weekly_usage",
      "description": "Estimate actual-store weekly usage from historical average REG+TPR and SALE POS velocity. Use this for promotion list usage estimates, not delivery orders. Use supplied promotion dates; otherwise pass null dates for the current business week without asking the user. Set promotion_applies false when no promotion is planned; Fri Sat Sun only rows select actual weekend dates within that period; For explicit 0/3/7-day scenarios set promotion_days to that count; do not replace three days with the full week. With no count or weekend restriction, promotion applies every day. Use receiving/family article or exact UPC, preserve selling unit, and keep LB/EA/PACK separate. Include confirmed linked 249. No matching-price history is required for this historical price-type estimate: label it an estimate. Fewer than 7 supported SALE days uses 2x REG+TPR baseline with low confidence; missing units/history stay unavailable. This tool performs calendar and usage arithmetic and returns the completed table. Do not use hypothetical calculator or sales-performance totals instead.",
      "parameters": {"type": "object", "properties": {
@@ -856,6 +876,7 @@ TOOLS = [
 ]
 
 _TOOL_HANDLERS = {
+    'get_price_type_history': lambda args: price_type_history(args['upc'], args.get('supported_days') or 90),
     "estimate_weekly_usage": _weekly_usage_tool,
     "resolve_promotion_items": _promotion_items_tool,
     "calculate_order_quantities": _order_calculation_tool,
@@ -921,6 +942,7 @@ CRITICAL DATA RULES:
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
 - Current UPC price is whichever authoritative source is NEWER: completed POS sold-event price or current Price List. A newer Price List beats an older POS event; a newer POS event beats an older Price List. POS never wins merely because it is POS. Use the tool-resolved current_price; do not use SAP retail.
 - 240 main and 249 service/cooked forms in the same product group must have equal current price; when 240 is promoted, 249 participates.
+- For historical REG versus SALE price-performance questions, call get_price_type_history with the exact UPC. Keep TPR separate from SALE; never infer a type from a low price or optimizer candidate. TOTAL-only daily evidence cannot be relabeled SALE or TPR. The weekly-usage REG+TPR grouping applies only to usage estimation.
 - For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days at that price before judging the next step. The latest 7-day sales window does not prove 7 observation days at the current price. Use explicit price-test evidence; otherwise say the observation start/count is unconfirmed. At exactly 7 completed test days the minimum is met, not still below 7. Active SALE locks are separate from REG observation.
 - Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates. A recent receipt or 4.4 days of stock alone does not prove old stock or overstock. State the returned risk flag and its evidence; if no item-specific flag or excess-stock threshold is available, say overstock is unconfirmed. Receipts below movement are not proof of over-receiving. A single available price type is not a comparative winner when SALE or REG evidence is missing.
 - Ordering uses effective OH, observed receipt cadence, completed-day demand, promotion evidence, and freshness constraints from the tool result.
@@ -981,7 +1003,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V14",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V15",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",

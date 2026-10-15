@@ -392,6 +392,60 @@ def _price_sales_trend(
         "gp_curve_cost_per_selling_unit":cost_per_selling_unit,
     }
 
+def _summarize_price_types(trend: dict[str, Any], cost: Decimal | None) -> list[dict[str, Any]]:
+    """Price-type evidence stays separate; a TOTAL row is never a SALE row."""
+    groups = {}
+    for row in trend.get('rows') or []:
+        for part in row.get('price_types') or []:
+            kind = str(part.get('price_type') or 'UNKNOWN').upper()
+            group = groups.setdefault(kind, {'dates': set(), 'quantity': Decimal(0), 'sales': Decimal(0)})
+            group['dates'].add(row['date'])
+            group['quantity'] += Decimal(str(part.get('sold_quantity') or 0))
+            group['sales'] += Decimal(str(part.get('sales_amount') or 0))
+    out = []
+    for kind, group in sorted(groups.items()):
+        n = len(group['dates'])
+        qty, sales = group['quantity'], group['sales']
+        gp = sales - qty * cost if cost is not None else None
+        out.append({'price_type': kind, 'observed_type_days': n,
+                    'start_date': min(group['dates']), 'end_date': max(group['dates']),
+                    'sold_quantity': qty, 'sales_dollars': sales,
+                    'average_sold_price': sales / qty if qty > 0 else None,
+                    'velocity_per_observed_type_day': qty / n,
+                    'gp_dollars_at_current_cost': gp,
+                    'gp_per_observed_type_day_at_current_cost': gp / n if gp is not None else None,
+                    'gp_pct_at_current_cost': gp / sales if gp is not None and sales > 0 else None})
+    return out
+
+
+def price_type_history(upc: str, supported_days: int = 90) -> dict[str, Any]:
+    """Bounded current-cost comparison of canonical REG, TPR and SALE history."""
+    raw = str(upc or '').strip()
+    if not raw.isdigit():
+        raise ValueError('EXACT_UPC_REQUIRED')
+    count = max(1, min(int(supported_days or 90), 365))
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute('''SELECT * FROM quick_check_current WHERE ean_upc=%s
+            OR (ean_upc REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM ean_upc)=%s)
+            ORDER BY CASE WHEN ean_upc=%s THEN 0 ELSE 1 END LIMIT 1''', (raw, _numeric_key(raw), raw))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            raise KeyError('V2_UPC_NOT_FOUND')
+        unit = _safe_qty_uom(row.get('ean_upc'), row.get('selling_uom'))
+        value = row.get('current_cost_per_selling_unit')
+        cost = Decimal(str(value)) if value is not None else None
+        trend = _price_sales_trend(cur, int(row['upc_id']), count, qty_uom=unit)
+        cur.close()
+    return {'upc': row.get('ean_upc'), 'name': row.get('selling_description'),
+            'selling_unit': unit, 'cost_per_selling_unit': cost,
+            'cost_date': row.get('cost_date'), 'cost_source': row.get('cost_source'),
+            'requested_supported_days': count, 'supported_day_count': trend['supported_day_count'],
+            'price_types': _summarize_price_types(trend, cost),
+            'comparison_note': 'REG, TPR and SALE are distinct. TOTAL/UNKNOWN has no verified type. Compare velocity and GP per observed type day; unequal and sparse samples are directional, not proof of causation. GP is recalculated at current effective cost, not historical booked profit. Missing source dates are excluded; absent types are unavailable, not zero.'}
+
+
 def _promotion_type(start: date, end: date) -> str:
     """Classify the two Store #1032 promotion windows.
 

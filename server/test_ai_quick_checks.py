@@ -161,7 +161,70 @@ class StockFlowScopeTest(unittest.TestCase):
         self.assertEqual(self.flow(family_article='9999999')['rows'], [])
 
 
+class PriceTypeHistoryTest(unittest.TestCase):
+    def setUp(self):
+        ns = {'Any': Any, 'Decimal': Decimal}
+        sales_dates.extract('webapp_v2_runtime.py', {'_summarize_price_types'}, ns)
+        self.summarize = ns['_summarize_price_types']
+        self.trend = {'rows': [
+            {'date': date(2026, 10, 10), 'price_types': [
+                {'price_type': 'REG', 'sold_quantity': 10, 'sales_amount': 50},
+                {'price_type': 'TPR', 'sold_quantity': 20, 'sales_amount': 80}]},
+            {'date': date(2026, 10, 11), 'price_types': [
+                {'price_type': 'TOTAL', 'sold_quantity': 30, 'sales_amount': 120}]},
+            {'date': date(2026, 10, 12), 'price_types': [
+                {'price_type': 'REG', 'sold_quantity': 0, 'sales_amount': 0}]}]}
+
+    def test_tpr_and_total_do_not_become_sale(self):
+        out = {r['price_type']: r for r in self.summarize(self.trend, Decimal(2))}
+        self.assertEqual(set(out), {'REG', 'TPR', 'TOTAL'})
+        self.assertEqual(out['REG']['observed_type_days'], 2)
+        self.assertEqual(out['REG']['velocity_per_observed_type_day'], Decimal(5))
+        self.assertEqual(out['TPR']['velocity_per_observed_type_day'], Decimal(20))
+
+    def test_current_cost_gp_is_computed_with_type_day_denominator(self):
+        out = {r['price_type']: r for r in self.summarize(self.trend, Decimal(2))}
+        self.assertEqual(out['REG']['gp_per_observed_type_day_at_current_cost'], Decimal(15))
+        self.assertEqual(out['TPR']['gp_per_observed_type_day_at_current_cost'], Decimal(40))
+        self.assertEqual(out['REG']['average_sold_price'], Decimal(5))
+
+    def test_missing_cost_withholds_gp_without_dropping_sales(self):
+        out = self.summarize(self.trend, None)
+        self.assertTrue(all(r['gp_dollars_at_current_cost'] is None for r in out))
+        self.assertTrue(any(r['sales_dollars'] > 0 for r in out))
+
+    def test_no_records_returns_no_price_types(self):
+        self.assertEqual(self.summarize({'rows': []}, Decimal(2)), [])
+
+
 class ToolSchemaTest(unittest.TestCase):
+    def catalog(self, rows):
+        ns = {'Any': Any, '_item_search_query': lambda value: value,
+              'search_quick_check': lambda *args: {'results': rows},
+              'search_items': Mock(return_value={'results': []})}
+        sales_dates.extract('yipman_ai.py', {'_catalog_search_rows', '_norm_num', '_norm_text'}, ns)
+        return ns['_catalog_search_rows'], ns['search_items']
+
+    def test_short_upc_uses_exact_quick_check_instead_of_article_path(self):
+        catalog, article_search = self.catalog([{'ean_upc': '4843', 'selling_description': 'Prawn', 'company_price_a': 29.99}])
+        row = catalog('4843')[0]
+        self.assertEqual(row['number'], '4843')
+        self.assertEqual(row['company_price_a'], 29.99)
+        article_search.assert_not_called()
+
+    def test_named_live_product_excludes_fresh_and_service_aliases(self):
+        catalog, _ = self.catalog([
+            {'ean_upc': '24053500000', 'selling_description': 'FRESH TILAPIA'},
+            {'ean_upc': '24960200000', 'selling_description': 'LIVE TILAPIA(Fried Service)'},
+            {'ean_upc': '24060200000', 'selling_description': 'LIVE TILAPIA'}])
+        self.assertEqual([r['number'] for r in catalog('live tilapia')], ['24060200000'])
+
+    def test_article_falls_back_to_confirmed_bridge(self):
+        catalog, article_search = self.catalog([])
+        article_search.return_value = {'results': [{'result_type': 'ARTICLE', 'number': '1342107', 'family_article_number': '1342107'}]}
+        self.assertEqual(catalog('1342107')[0]['number'], '1342107')
+        article_search.assert_called_once()
+
     def test_ai_uses_same_wrapped_pricing_policy_as_app_api(self):
         published = Mock(return_value={'rows': [], 'contract_version': 'SHARED_POLICY'})
         ns = {'Any': Any}
