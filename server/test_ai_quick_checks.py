@@ -3,6 +3,8 @@ import sys
 import types
 import unittest
 import ast
+import re
+import json
 from pathlib import Path
 from typing import Any
 from datetime import date
@@ -198,6 +200,33 @@ class PriceTypeHistoryTest(unittest.TestCase):
 
 
 class ToolSchemaTest(unittest.TestCase):
+    def test_calculation_respects_ui_or_explicit_reply_language(self):
+        ns = {'re': re}
+        sales_dates.extract('yipman_ai.py', {'_calculation_requires_translation'}, ns)
+        translate = ns['_calculation_requires_translation']
+        self.assertTrue(translate('Estimate usage\nReply in Cantonese.'))
+        self.assertTrue(translate('用廣東話估計今星期用量'))
+        self.assertTrue(translate('Estimate usage in Spanish.'))
+        self.assertFalse(translate('Estimate usage\nReply in English.'))
+
+    def test_translated_calculation_finishes_through_model_without_recalculating(self):
+        post = Mock(side_effect=[
+            {'output': [{'type': 'function_call', 'name': 'estimate_weekly_usage', 'arguments': '{}', 'call_id': 'call-1'}]},
+            {'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '每週估計用量：100 LB'}]}]}])
+        handler = Mock(return_value={'calculation_answer': 'Weekly usage: 100 LB'})
+        ns = {'Any': Any, 're': re, 'json': json,
+              '_check_rate_limit': lambda key: None, '_quick_order_question': lambda *args: None,
+              '_quick_daily_answer': lambda *args: None, '_quick_quantity_answer': lambda *args: None,
+              '_safe_history': lambda value: [], '_instructions': lambda: 'Use verified quantities.',
+              'MAX_MESSAGE_CHARS': 1600, 'MAX_TOOL_ROUNDS': 5, 'DEFAULT_MODEL': 'test', 'TOOLS': [],
+              '_TOOL_HANDLERS': {'estimate_weekly_usage': handler}, '_post_responses': post,
+              '_compact_json': json.dumps}
+        sales_dates.extract('yipman_ai.py', {'chat', '_calculation_requires_translation', '_output_text'}, ns)
+        out = ns['chat']('Estimate usage\nReply in Cantonese.')
+        self.assertEqual(out['answer'], '每週估計用量：100 LB')
+        self.assertEqual(post.call_count, 2)
+        handler.assert_called_once()
+
     def catalog(self, rows):
         ns = {'Any': Any, '_item_search_query': lambda value: value,
               'search_quick_check': lambda *args: {'results': rows},

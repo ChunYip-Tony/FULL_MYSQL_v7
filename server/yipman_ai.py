@@ -319,8 +319,8 @@ def _inventory_result(info: dict[str, Any]) -> dict[str, Any]:
         "family_article_name": info.get("family_article_name"),
         "category": info.get("category"),
         "current_effective_oh": info.get("current_effective_oh"),
-        "family_sales_7d": info.get("family_sales_7d"),
-        "family_sales_28d": info.get("family_sales_28d"),
+        "family_pos_demand_7d": info.get("family_sales_7d"),
+        "family_pos_demand_28d": info.get("family_sales_28d"),
         "family_sales_basis": "POS_DEMAND_IN_COMPATIBLE_UNIT_NOT_251_MINUS_252_MOVEMENT",
         "observed_delivery": info.get("observed_delivery"),
         "last_receipt": info.get("last_receipt"),
@@ -952,6 +952,8 @@ ANSWER STYLE:
 - DEFAULT BREVITY: unless the user explicitly asks for more detail, answer in at most 60 words. Use a single compact table of at most 3 rows when useful. Do not add a second explanation paragraph, cooking suggestions or extra comparisons that the user did not request. For comparisons use only the 2-3 most useful differences. A short definition can be one sentence.
 - General seafood knowledge: do not imply fresh, frozen, shucked or shell-on form alone proves quality or safety. Quality depends on handling and storage. Cooking time depends on fish size/thickness; safety depends on verified cooking temperature, not a fixed number of minutes. Mention raw-seafood risks when recommending raw consumption.
 - Stay on point and brief by default. Answer only the exact question. Use at most 60 words unless the user asks for detail, explanation, a full report or more examples. Do not add unrelated rules, generic advice or repeated summaries.
+- When a tool returns calculation_answer, preserve its verified dates, quantities, unit, included UPC pool and confidence. Translate its labels and notes into the requested reply language; never redo or change the arithmetic.
+- Show prices to 2 decimal places and ordinary cost checks to at most 4 decimals unless the user requests more precision.
 - Prefer compact Markdown tables for answers with facts, comparisons, recommendations or steps, including general seafood knowledge. Usually one short table with 2 columns and at most 3 rows is enough. Always show a numerical ordering or usage calculation in a compact table, even for a single result. Use 3 columns only when needed; split wider tables into smaller ones. Keep cells short and headings simple. No HTML or code fences.
 - Lead with one direct sentence if it helps, then the table. One short source/date or uncertainty note when needed. Avoid extra sections that repeat table content. For a simple yes/no or follow-up question, one sentence is enough.
 - Write so a 15-year-old with no seafood department experience can understand. Be respectful and direct, not childish. Explain unfamiliar ideas with a short practical example when useful. Use plain everyday language a busy store manager can understand quickly. Short sentences, familiar words and concrete actions. Avoid technical terms and acronyms unless the user asks for them.
@@ -1003,7 +1005,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V15",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V16",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -1187,6 +1189,13 @@ def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
             "usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}
 
 
+def _calculation_requires_translation(question: str) -> bool:
+    replies = re.findall(r'\nReply in ([^.\n]+)', question, re.I)
+    if replies:
+        return replies[-1].strip().lower() != 'english'
+    return bool(re.search(r'Spanish|español|Cantonese|廣東話|繁體|[\u3400-\u9fff]', question, re.I))
+
+
 def chat(
     message: str,
     history: list[dict[str, Any]] | None = None,
@@ -1260,7 +1269,7 @@ def chat(
             else:
                 try:
                     result = handler(arguments)
-                    if result.get("calculation_answer"):
+                    if result.get("calculation_answer") and not _calculation_requires_translation(question):
                         return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names}
                     if result.get("needs_details"):
                         return _clarification_result(result, tool_names, question)
