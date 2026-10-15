@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from fisherman_weekly_usage import weekly_usage, promotion_schedule
 import test_ai_sales_dates as sales_dates
@@ -162,6 +162,27 @@ class StockFlowScopeTest(unittest.TestCase):
 
 
 class ToolSchemaTest(unittest.TestCase):
+    def test_ai_uses_same_wrapped_pricing_policy_as_app_api(self):
+        published = Mock(return_value={'rows': [], 'contract_version': 'SHARED_POLICY'})
+        ns = {'Any': Any}
+        sales_dates.extract('yipman_ai.py', {'_published_pricing_review'}, ns)
+        with patch.dict(sys.modules, {'api': types.SimpleNamespace(backoffice_cached_pricing_review=published)}):
+            out = ns['_published_pricing_review']('FROZEN')
+        self.assertEqual(out['contract_version'], 'SHARED_POLICY')
+        published.assert_called_once_with(category='FROZEN', limit=1000)
+
+    def test_item_search_preserves_company_prices_without_cost(self):
+        ns = {'Any': Any,
+              '_item_search_query': lambda value: value,
+              'search_quick_check': lambda *args: {'results': [{
+                  'ean_upc': '24953300000', 'selling_description': 'Tilapia Fried Service',
+                  'selling_uom': 'LB', 'current_price': 4.99,
+                  'company_price_a': 4.99, 'company_price_b': 3.99, 'company_price_c': 3.69}]}}
+        sales_dates.extract('yipman_ai.py', {'_item_tool', '_catalog_search_rows'}, ns)
+        row = ns['_item_tool']({'query': '24953300000'})['results'][0]
+        self.assertEqual((row['company_price_a'], row['company_price_b'], row['company_price_c']), (4.99, 3.99, 3.69))
+        self.assertNotIn('current_cost_per_selling_unit', row)
+
     def test_strict_object_schemas_require_exact_properties(self):
         tree = ast.parse(Path(__file__).with_name('yipman_ai.py').read_text())
         schema = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'TOOLS' for t in node.targets))

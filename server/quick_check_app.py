@@ -517,6 +517,7 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                        selling_description,family_description,selling_uom,
                        quick_check_status,blocking_reason,current_price,current_price_type,
                        current_price_source,current_price_asof_date,
+                       company_price_a,company_price_b,company_price_c,
                        sales_dollars_7d,pos_qty_7d,sales_days_7d,
                        current_oh,current_oh_uom,publish_batch_id,published_at,
                        CASE
@@ -573,6 +574,7 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                        selling_description,family_description,selling_uom,
                        quick_check_status,blocking_reason,current_price,current_price_type,
                        current_price_source,current_price_asof_date,
+                       company_price_a,company_price_b,company_price_c,
                        sales_dollars_7d,pos_qty_7d,sales_days_7d,
                        current_oh,current_oh_uom,publish_batch_id,published_at,
                        CASE
@@ -4477,4 +4479,5 @@ def pending_dumping_discrepancies() -> list[dict[str, Any]]:
         conn.commit()
         cur.close()
         return rows
+
 

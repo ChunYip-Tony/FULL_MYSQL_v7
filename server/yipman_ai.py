@@ -303,6 +303,9 @@ def _item_tool(args: dict[str, Any]) -> dict[str, Any]:
             "current_price": row.get("current_price"),
             "current_price_type": row.get("current_price_type"),
             "current_price_asof_date": row.get("current_price_asof_date"),
+            "company_price_a": row.get('company_price_a'),
+            "company_price_b": row.get('company_price_b'),
+            "company_price_c": row.get('company_price_c'),
             "qty_28d": row.get("qty_28d"),
             "supported_days_28d": row.get("supported_days_28d"),
         })
@@ -380,6 +383,9 @@ def _catalog_search_rows(query: str) -> list[dict[str, Any]]:
         "current_price": row.get("current_price"),
         "current_price_type": row.get("current_price_type"),
         "current_price_asof_date": row.get("current_price_asof_date"),
+        "company_price_a": row.get('company_price_a'),
+        "company_price_b": row.get('company_price_b'),
+        "company_price_c": row.get('company_price_c'),
     } for row in data.get("results") or [] if row.get("ean_upc")]
     if rows:
         return rows
@@ -449,6 +455,12 @@ def _clarification_result(result: dict[str, Any], tool_names: list[str], questio
             "tool_calls": tool_names, "mode": "DETAILS_REQUIRED"}
 
 
+def _published_pricing_review(category: str) -> dict[str, Any]:
+    """Use the same policy-wrapped review callable as the mobile/desktop API."""
+    from api import backoffice_cached_pricing_review
+    return backoffice_cached_pricing_review(category=category, limit=1000)
+
+
 def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
     query = str(args.get("query") or "").strip()
     category = str(args.get("category") or "ALL").strip().upper()
@@ -510,7 +522,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
             upc_details.append(upc_info(str(row["number"])))
         except Exception as exc:
             upc_details.append({"upc": row["number"], "data_error": str(exc)})
-    review = cached_pricing_review(category=category, limit=1000)
+    review = _published_pricing_review(category)
     suggestions = list(review.get("rows") or [])
     if query:
         upcs = {_norm_num(row.get("number")) for row in candidates}
@@ -536,6 +548,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
         "data_health": review.get("current_source_health") or review.get("data_health"),
         "upc_details": upc_details,
         "price_suggestions": suggestions[:20],
+        "price_decision_note": "Use final_tpr_decision and final_tpr_price_suggestion when returned by the shared mobile/desktop policy. SALE_LOCKED means no local price action. Blocked candidate_price is not an actionable recommendation. A 7-day sales aggregate is not proof of a completed current-price observation cycle; require explicit observation_supported_days/cycle fields or state that status is unconfirmed.",
     }
 
 
@@ -940,6 +953,7 @@ ANSWER STYLE:
   * Completed days only; exclude missing days. Always retain units, supported dates and coverage.
   * Sell old stock before delivery. Fresh usually Friday; Frozen Tuesday including promotions. Observed Tue/Wed suggests Frozen, Fri/Sat Fresh, Thu requires confirmation; Live has no fixed pattern. User corrections win.
   * Mobile freshness thresholds: Live 7 days, Fresh 10 days, Frozen 60 days. Clearance TPR starts 2 days before threshold and ends on threshold. Use actual freshness evidence; do not invent expiry.
+  * GP color legend in the UI: above 36% is green (Best), 30–36% inclusive is amber (Good), below 30% is red (Low); unknown is neutral. These are visual bands, not proof that a price maximizes daily gross profit.
   * Price objective: GP dollars/day while protecting velocity, then DOH and company A/B/C. Department GP target 36%; mix references Live 15%, Fresh 30%, Frozen 44%. Targets are not measured results.
   * Compare historical price/type events by qty/day, GP dollars/day, GP%, supported days and popularity (positive-sales days / supported days at that price type). Candidate GP% uses current effective cost.
   * REG tests need 7 completed days per step. Exclude tests still observing from new price changes. REG must exceed SALE, never equal SALE.
@@ -967,7 +981,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V13",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V14",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
@@ -1123,6 +1137,8 @@ def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
     day=completed_through_date()
     data=_sales_tool({"start_date":day.isoformat(),"end_date":day.isoformat(),
                      "item_query":item,"_quantity_only":True})
+    if data.get('needs_details'):
+        return _clarification_result(data, ['get_sales_performance'], question)
     quantities=data.get("sold_quantity_by_uom") or {}
     label=day.strftime("%a, %b %d")
     if data.get("data_available") is False:
