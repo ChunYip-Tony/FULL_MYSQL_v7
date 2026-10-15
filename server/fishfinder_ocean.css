@@ -144,3 +144,57 @@ body:has(.records-main) :is(.record-summary,.records-pane,.panel){background:var
 body:has(.records-main) :is(.record-context b,.record-summary b,header strong){color:var(--ink)!important}
 body:has(.records-main) .records-nav a{border-radius:9px;color:var(--muted);background:var(--surface)}
 body:has(.records-main) .records-nav a[aria-current=page]{background:var(--accent-soft)!important;color:var(--green)!important;border-color:#c5e4e6}
+/* Functional color: workspace identity, action, and evidence-backed status. */
+:root,html body,.app-shell{--receiving:#245eb5;--receiving-soft:#edf4fe;--receiving-line:#c7d9f3;--pricing:#6a42a5;--pricing-soft:#f3edfc;--pricing-line:#d9c9ef;--attention-soft:#fff5e5;--attention-line:#eed39d;--risk-soft:#fff0ef;--risk-line:#efbfc3;--healthy-soft:#e9f6ef;--healthy-line:#bcdfcc}
+body .inventory-stock-section>.inventory-section-caption{background:var(--receiving-soft)!important;color:var(--receiving)!important;border-color:var(--receiving-line)!important;border-top:3px solid var(--receiving)!important}
+body .inventory-sales-section>.inventory-section-caption{background:var(--pricing-soft)!important;color:var(--pricing)!important;border-color:var(--pricing-line)!important;border-top:3px solid var(--pricing)!important}
+body :is(.inventory-stock-section,.inventory-sales-section)>.inventory-section-caption :is(h3,small,span,button){color:inherit!important}
+body .inventory-stock-section>.inventory-section-caption button{background:#dce9fc!important}
+body .inventory-sales-section>.inventory-section-caption button{background:#e6daf7!important}
+body .inventory-section-switch button:first-child{color:var(--receiving)!important;background:var(--receiving-soft)!important;border-color:var(--receiving-line)!important}
+body .inventory-section-switch button:last-child{color:var(--pricing)!important;background:var(--pricing-soft)!important;border-color:var(--pricing-line)!important}
+body .inventory-section-switch button:first-child[aria-pressed=true]{color:#fff!important;background:var(--receiving)!important;border-color:var(--receiving)!important}
+body .inventory-section-switch button:last-child[aria-pressed=true]{color:#fff!important;background:var(--pricing)!important;border-color:var(--pricing)!important}
+body .catalog-card{border-left-color:var(--receiving)!important}
+body .inventory-result-items>button{border-left:3px solid transparent!important}
+body .inventory-result-items>button[aria-current=true]{background:var(--receiving-soft)!important;color:var(--receiving)!important;border-color:var(--receiving-line)!important;border-left:4px solid var(--receiving)!important}
+body .inventory-stock-section :is(.weekly-order-result,.inventory-stock-table-wrap){background:var(--receiving-soft)!important;border-color:var(--receiving-line)!important}
+body .inventory-stock-section .weekly-order-result strong{color:var(--receiving)!important}
+body .pricing-page .price-card{--review-item-bg:#f8f5fd;--review-item-line:var(--pricing);border-left-color:var(--pricing)!important}
+body .price-card :is(.price-name,.price-upcs),body .inventory-sales-section .inventory-upc-number{color:var(--pricing)!important}
+body .price-card .price-suggestion-panel{background:var(--pricing-soft)!important;border:1px solid var(--pricing-line)!important;border-left:3px solid var(--pricing)!important;border-radius:10px!important}
+body .price-card .price-suggestion-panel.needs-stock{background:var(--attention-soft)!important;border-color:var(--attention-line)!important;border-left-color:var(--amber)!important}
+body :is(.inventory-type-badge,.inventory-current-type)[data-price-type=SALE],body :is(.inventory-type-badge,.inventory-current-type)[data-price-type=TPR]{color:var(--pricing)!important;background:var(--pricing-soft)!important;border-color:var(--pricing-line)!important}
+body .bottom-nav button.active:has(svg.lucide-boxes),body .bottom-nav button.active:has(svg.lucide-package-search){color:var(--receiving)!important;background:var(--receiving-soft)!important}
+body .inventory-view .bottom-nav button:nth-child(2){color:var(--receiving)!important;background:var(--receiving-soft)!important}
+body .prices-view .bottom-nav button:nth-child(3),body .price-review-module .bottom-nav button:nth-child(3){color:var(--pricing)!important;background:var(--pricing-soft)!important}
+body .risk-tabs button.amber{background:var(--attention-soft)!important;color:var(--amber)!important;border-color:var(--attention-line)!important}
+body .risk-tabs button.red{background:var(--risk-soft)!important;color:var(--red)!important;border-color:var(--risk-line)!important}
+body .risk-tabs button.slate{background:#edf2f7!important;color:var(--muted)!important;border-color:var(--line)!important}
+body .risk-tabs button.amber.active{background:var(--amber)!important;color:#fff!important;border-color:var(--amber)!important;box-shadow:0 0 0 2px var(--attention-line)!important}
+body .risk-tabs button.red.active{background:var(--red)!important;color:#fff!important;border-color:var(--red)!important;box-shadow:0 0 0 2px var(--risk-line)!important}
+body .risk-tabs button.slate.active{background:var(--muted)!important;color:#fff!important;border-color:var(--muted)!important}
+body .home-stock-view .compact-stock.excess{background:#fffdf7!important;border-left-color:var(--amber)!important}
+body .home-stock-view .compact-stock.fresh{background:#fffafa!important;border-left-color:var(--red)!important}
+body .home-stock-view .compact-stock.pending{border-left-color:var(--muted)!important}
+body .badge.amber{background:var(--attention-soft)!important;color:var(--amber)!important;border-color:var(--attention-line)!important}
+body .badge.red{background:var(--risk-soft)!important;color:var(--red)!important;border-color:var(--risk-line)!important}
+body .badge.green,body .badge.good{background:var(--healthy-soft)!important;color:var(--good)!important;border-color:var(--healthy-line)!important}
+body .ready-source[data-state=current]{background:var(--healthy-soft)!important;color:var(--good)!important;border-color:var(--healthy-line)!important}
+body .ready-source[data-state=old],body .ready-source[data-state=unknown]{background:var(--attention-soft)!important;color:var(--amber)!important;border-color:var(--attention-line)!important}
+body .startup-steps>div[data-state=ready] .startup-step-mark{background:var(--healthy-soft)!important;color:var(--good)!important;border-color:var(--healthy-line)!important}
+body .startup-steps>div[data-state=error] .startup-step-mark{background:var(--risk-soft)!important;color:var(--red)!important;border-color:var(--risk-line)!important}
+body:has(#dataWorkspace) .panel.monitor-panel,body:has(#dataWorkspace) .panel.coverage-panel,body:has(#dataWorkspace) .panel.recent-panel{border-top:3px solid var(--receiving)!important}
+body:has(#dataWorkspace) :is(.monitor-panel,.coverage-panel,.recent-panel)>h2{background:var(--receiving-soft)!important;color:var(--receiving)!important;border-radius:8px;padding:5px 7px}
+body:has(#dataWorkspace) .panel.upload-panel{border-top:3px solid var(--teal)!important}
+body:has(#dataWorkspace) .upload-panel>h2{background:var(--accent-soft)!important;color:var(--teal)!important;border-radius:8px;padding:5px 7px}
+body:has(#dataWorkspace) .publication-panel>h2{background:var(--receiving-soft)!important;color:var(--receiving)!important;border-radius:8px;padding:5px 7px}
+body:has(#dataWorkspace) .metric[data-tone=good]>b{color:var(--good)!important}
+body:has(#dataWorkspace) .metric[data-tone=warn]>b{color:var(--amber)!important}
+body:has(#dataWorkspace) .metric[data-tone=bad]>b{color:var(--red)!important}
+body:has(#dataWorkspace) .tile[data-tone=good]{background:var(--healthy-soft)!important}
+body:has(#dataWorkspace) .tile[data-tone=warn]{background:var(--attention-soft)!important}
+body:has(#dataWorkspace) .tile[data-tone=bad]{background:var(--risk-soft)!important}
+body:has(#dataWorkspace) .tile[data-tone=good]>span:before{background:var(--good)!important}
+body:has(#dataWorkspace) .tile[data-tone=warn]>span:before{background:var(--amber)!important}
+body:has(#dataWorkspace) .tile[data-tone=bad]>span:before{background:var(--red)!important}
