@@ -2,6 +2,9 @@
 import sys
 import types
 import unittest
+import ast
+from pathlib import Path
+from typing import Any
 from datetime import date
 from decimal import Decimal
 from unittest.mock import patch
@@ -16,6 +19,13 @@ class ItemSalesSelectionTest(unittest.TestCase):
         self.helper.setUp()
         self.result = self.helper.result
         self.ai = self.helper.ai
+
+    def test_latest_n_uses_supported_days_instead_of_calendar_guess(self):
+        start, end, days = self.helper.select(self.helper.days, None, None, latest_supported_day_count=10)
+        self.assertEqual((start.day, end.day, len(days)), (1, 13, 10))
+        tool, performance = self.ai(self.result())
+        tool({'item_query': '24053300000', 'supported_days': 14})
+        self.assertEqual(performance.call_args.kwargs['latest_supported_day_count'], 14)
 
     def test_live_tilapia_does_not_include_fresh_family_members(self):
         result = self.result()
@@ -107,6 +117,63 @@ class WeeklyQuickCheckTest(unittest.TestCase):
                 self.call(count=count)
         with self.assertRaisesRegex(ValueError, 'conflicts'):
             promotion_schedule('2026-10-16', '2026-10-22', {'weekend_only': True, 'promotion_days': 7})
+
+
+class StockFlowScopeTest(unittest.TestCase):
+    def setUp(self):
+        class Cursor:
+            def execute(self, sql, args=None):
+                self.sql = sql
+            def fetchall(self):
+                if 'MAX(main_article_number)' in self.sql:
+                    return [{'family_id': 1, 'family_article': '1361571', 'family_name': 'Pompano', 'family_movement_7d': 570, 'family_movement_uom': 'LB'}]
+                return []
+            def close(self): pass
+        class Conn:
+            def __enter__(self): return self
+            def __exit__(self, *args): pass
+            def cursor(self, **kwargs): return Cursor()
+        events = [{'posting_date': date(2026, 10, 13), 'receipt_quantity': 200, 'receipt_uom': 'LB'},
+                  {'posting_date': date(2026, 10, 6), 'receipt_quantity': 200, 'receipt_uom': 'LB'}]
+        ns = {'Any': Any, 'Decimal': Decimal, 'db_conn': Conn,
+              'completed_through_date': lambda: date(2026, 10, 14),
+              'source_data_days': lambda cur, source, **kwargs: [{'date': date(2026, 10, d)} for d in range(8, 15)] if source == 'movement' else [],
+              '_family_receipt_events_bulk': lambda *args, **kwargs: {1: events},
+              '_delivery_pattern': lambda *args, **kwargs: {},
+              '_published_family_oh_fallback': lambda rows: {'quantity': 355, 'uom': 'LB'},
+              '_d': lambda value: Decimal(str(value or 0))}
+        sales_dates.extract('backoffice_runtime.py', {'yipman_best_sellers'}, ns)
+        self.flow = ns['yipman_best_sellers']
+
+    def test_department_watch_keeps_qualification_filter(self):
+        self.assertEqual(self.flow()['rows'], [])
+
+    def test_specific_item_returns_even_below_watch_threshold(self):
+        out = self.flow(family_article='1361571')
+        row = out['rows'][0]
+        self.assertFalse(row['over_receiving'])
+        self.assertEqual(row['family_receipt_7d_qty'], Decimal(200))
+        self.assertEqual(row['family_group_movement_7d'], Decimal(570))
+        self.assertEqual(len(row['family_receipt_history']), 2)
+        self.assertEqual(len(out['movement_dates_7d']), 7)
+
+    def test_unmatched_family_does_not_fall_back_to_department(self):
+        self.assertEqual(self.flow(family_article='9999999')['rows'], [])
+
+
+class ToolSchemaTest(unittest.TestCase):
+    def test_strict_object_schemas_require_exact_properties(self):
+        tree = ast.parse(Path(__file__).with_name('yipman_ai.py').read_text())
+        schema = next(ast.literal_eval(node.value) for node in tree.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == 'TOOLS' for t in node.targets))
+        def check(value):
+            if isinstance(value, dict):
+                if value.get('type') == 'object':
+                    self.assertEqual(set(value['required']), set(value['properties']))
+                    self.assertFalse(value['additionalProperties'])
+                for item in value.values(): check(item)
+            elif isinstance(value, list):
+                for item in value: check(item)
+        check(schema)
 
 
 if __name__ == '__main__':

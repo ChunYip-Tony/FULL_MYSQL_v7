@@ -214,6 +214,7 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
             start, end if end is not None else start, 2000,
             item_query=item_query, include_gp=not args.get('_quantity_only', False),
             allow_partial_range=True,
+            latest_supported_day_count=args.get('supported_days') or 7,
         )
     except ValueError as exc:
         if str(exc) not in {"NO_SUPPORTED_DATES_IN_RANGE", "NO_COMPLETED_SUPPORTED_SALES_DATE"}:
@@ -316,6 +317,7 @@ def _inventory_result(info: dict[str, Any]) -> dict[str, Any]:
         "current_effective_oh": info.get("current_effective_oh"),
         "family_sales_7d": info.get("family_sales_7d"),
         "family_sales_28d": info.get("family_sales_28d"),
+        "family_sales_basis": "POS_DEMAND_IN_COMPATIBLE_UNIT_NOT_251_MINUS_252_MOVEMENT",
         "observed_delivery": info.get("observed_delivery"),
         "last_receipt": info.get("last_receipt"),
         "next_expected_delivery_date": info.get("next_expected_delivery_date"),
@@ -610,11 +612,27 @@ def _ordering_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 def _stock_flow_tool(args: dict[str, Any]) -> dict[str, Any]:
     limit = max(1, min(int(args.get("limit") or 20), 40))
-    result = yipman_best_sellers(limit=limit)
+    query = str(args.get('query') or '').strip()
+    family_article = None
+    if query:
+        matches = _catalog_search_rows(query)
+        if query.isdigit():
+            exact = [row for row in matches if _norm_num(row.get('number')) == _norm_num(query)
+                     or _norm_num(row.get('family_article_number')) == _norm_num(query)]
+            matches = exact or matches
+        families = {str(row['family_article_number']): row for row in matches if row.get('family_article_number')}
+        if len(families) != 1:
+            return {'needs_details': True, 'question': 'Which product do you mean?', 'options': list(families.values())[:5]}
+        family_article = next(iter(families))
+    result = yipman_best_sellers(limit=limit, family_article=family_article)
     rows = list(result.get("rows") or [])
     return {
         "count": len(rows),
         "data_health": result.get("data_health"),
+        "movement_dates_7d": result.get('movement_dates_7d'),
+        "movement_day_count_7d": result.get('movement_day_count_7d'),
+        "requested_family_article": family_article,
+        "scope_note": "Item requests include the matched family even when over_receiving is false. Department lists include only qualifying over-receiving families. Family POS demand is separate from family selling movement 251 minus 252. Overstock and old-stock age require separate stock/aging evidence.",
         "rows": rows[:limit],
     }
 
@@ -751,8 +769,9 @@ TOOLS = [
                 "start_date": {"type": ["string", "null"], "description": "YYYY-MM-DD, or null with null end_date for the latest available 7 supported POS days"},
                 "end_date": {"type": ["string", "null"], "description": "YYYY-MM-DD; null with a supplied start_date means that exact single day; both dates null means latest available 7 supported POS days"},
                 "item_query": {"type": ["string", "null"], "description": "Optional item, UPC, or Family query"},
+                "supported_days": {"type": ["integer", "null"], "minimum": 1, "maximum": 365, "description": "For latest N supported-day comparisons, pass N with null dates, e.g. 7 or 14. Do not guess calendar bounds using yesterday. Null defaults to 7. For explicit calendar dates pass null."},
             },
-            "required": ["start_date", "end_date", "item_query"],
+            "required": ["start_date", "end_date", "item_query", "supported_days"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -787,11 +806,12 @@ TOOLS = [
     {
         "type": "function",
         "name": "get_stock_flow",
-        "description": "Get Family over-receipt/stock-flow watch items using canonical physical receipts versus Family selling movement.",
+        "description": "Compare canonical physical receipts with Family selling movement 251 minus 252, including the last two receipts. For an item-specific stock/overstock question pass its exact UPC/article or name as query; this returns that family even when it does not qualify for the department over-receiving watch. Null query returns the department watch. Not appearing in the department list does not mean the product or its data is missing.",
         "parameters": {
             "type": "object",
-            "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 40}},
-            "required": ["limit"],
+            "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 40},
+                           "query": {"type": ["string", "null"], "description": "Exact UPC, receiving/family article or item name for an item check; null for the department watch."}},
+            "required": ["limit", "query"],
             "additionalProperties": False,
         },
         "strict": True,
@@ -857,6 +877,7 @@ CRITICAL DATA RULES:
 - For a future promotion, never claim promotion uplift was applied unless the returned forecast explicitly reflects the user's planned price and promotion days. A current regular-price forecast is not proof of a future promotion forecast. If no supported projection is returned, say so plainly; do not invent an uplift.
 - For a clearly hypothetical ordering calculation with user-provided numbers, use those numbers only and label the result hypothetical. Do not query actual store stock/history or request delivery dates when the requested weekly coverage and demand inputs are already supplied. Keep units consistent and show the arithmetic briefly.
 - Do not use the delivery-order tool to invent dates for a weekly usage scenario. If current tools cannot provide a verified weekly promotion forecast for a fully specified product, state that limitation instead of turning it into a delivery-specific order.
+- For item-specific overstock, over-receiving or last-two-receipts questions, call get_stock_flow with that item as query; do not look only at the department top list or ask for a family article when the UPC is already known.
 - For stock questions call get_inventory directly with the item name or exact Family article; do not run a preliminary search. The tool performs fast identification and asks for a choice when several families match.
 - For current-price-only questions, use search_items with the exact UPC and return only the current price, selling unit, price type and effective date. Save get_price_review for an actual recommendation/cost/profit question.
 - When explaining the small price-change rule, state the actual threshold: $0.25 or less, even when the question mentions $0.10.
@@ -869,7 +890,7 @@ CRITICAL DATA RULES:
 - 240 is the main selling UPC; do not label it "packaged" merely because its prefix is 240. 249 is the linked cooked/service selling UPC. 245 is generally the packaged form. Always verify the actual selling unit; prefixes do not prove a weight conversion.
 - Explain True Stock precisely: the physical count is the starting point; later valid receipts/sales/adjustments change the displayed stock balance. A new accepted OH upload supersedes the earlier count. The count record is an anchor, not a permanently fixed current stock number.
 - For an item price recommendation, call get_price_review directly with the item query, without preliminary search or department-wide reports. If it returns needs_details, ask that question and show only the relevant choices. Stop tool calls until the user chooses.
-- If price analysis is refreshing or source_changed_since_analysis is true, distinguish the verified current price from dated suggestions; never describe an old recommendation as newly calculated. Give its data date and limitation plainly.
+- If price analysis is refreshing or source_changed_since_analysis is true, distinguish the verified current price from dated suggestions; never describe an old recommendation as newly calculated. Give its data date and limitation plainly. Only a row with actionable=true and a non-null suggested_price can support an action now. candidate_price is a blocked or unapproved test candidate, not a recommendation. An active SALE lock means wait; do not lead with Recommend a blocked candidate and then qualify it.
 - If you do not understand the user's question, intent, product, unit, date or requested decision, ask for clarification before answering or calculating. Never choose an interpretation silently, invent missing details, or run broad expensive lookups to compensate for an unclear question.
 - Ask one short, focused follow-up covering only the missing information. Use clear options when helpful. If several essential details are missing, a small two-column table is okay. Do not repeat questions already answered in the conversation.
 - Distinguish uncertainty about the question from missing database evidence: clarify unclear wording; explain unavailable data plainly. Use bounded product search when the product wording is understandable but its identity needs matching; ask the user if multiple plausible matches remain.
@@ -885,9 +906,9 @@ CRITICAL DATA RULES:
 - Completed canonical sales/data days only. Missing calendar dates are excluded, never filled as zero.
 - Physical delivery quantity follows canonical receipt semantics: one 101 delivery OR one paired 107/109 receipt event. 109 is the goods-receipt quantity; 107 supplies the paired cost/valuation posting. NEVER add the 107 quantity to the 109 quantity: two 100-LB postings for the same event represent 100 LB received, not 200 LB. If 101 also represents that event, do not add it again.
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
-- Current UPC price is the newest authoritative sold-event POS price versus current Price List authority. Do not use SAP retail.
+- Current UPC price is whichever authoritative source is NEWER: completed POS sold-event price or current Price List. A newer Price List beats an older POS event; a newer POS event beats an older Price List. POS never wins merely because it is POS. Use the tool-resolved current_price; do not use SAP retail.
 - 240 main and 249 service/cooked forms in the same product group must have equal current price; when 240 is promoted, 249 participates.
-- For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days before judging the next step.
+- For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days at that price before judging the next step. The latest 7-day sales window does not prove 7 observation days at the current price. Use explicit price-test evidence; otherwise say the observation start/count is unconfirmed. At exactly 7 completed test days the minimum is met, not still below 7. Active SALE locks are separate from REG observation.
 - Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates. A recent receipt or 4.4 days of stock alone does not prove old stock or overstock. State the returned risk flag and its evidence; if no item-specific flag or excess-stock threshold is available, say overstock is unconfirmed. Receipts below movement are not proof of over-receiving. A single available price type is not a comparative winner when SALE or REG evidence is missing.
 - Ordering uses effective OH, observed receipt cadence, completed-day demand, promotion evidence, and freshness constraints from the tool result.
 - This assistant is READ ONLY. Never claim to update price, stock, true stock, orders, QA, or database records.
@@ -946,7 +967,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V12",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V13",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",

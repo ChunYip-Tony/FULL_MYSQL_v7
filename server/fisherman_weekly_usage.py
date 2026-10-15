@@ -148,6 +148,7 @@ def weekly_usage(args):
             # an article request includes the family, separated by selling unit.
             exact = [row for row in members if str(row['ean_upc']).lstrip('0') == query.lstrip('0')]
             if exact:
+                result['name'] = exact[0].get('selling_description') or result['name']
                 key = query.lstrip('0')
                 members = [row for row in members if str(row['ean_upc']).lstrip('0') == key or
                            (key[:3] in {'240', '249'} and str(row['ean_upc']).lstrip('0')[:3] in {'240', '249'}
@@ -205,6 +206,33 @@ def weekly_usage(args):
 def format_usage(items, start, end):
     def num(value):
         return '—' if value is None else f'{value:.1f}'.rstrip('0').rstrip('.')
+    if len(items) == 1:
+        row = items[0]
+        name = row['name'].replace('|', '/').replace('\n', ' ')
+        unit = (row.get('unit') or 'unit unconfirmed').lower()
+        promo_rate = row.get('applied_promo_rate')
+        dates = ('Dates unspecified' if row['promotion_dates'] is None else
+                 ', '.join(date.fromisoformat(day).strftime('%b %d') for day in row['promotion_dates']) or 'None')
+        lines = [f"Estimated usage · {start}–{end}", f"{name} · {row['article']}", '',
+                 '| Basis | Daily rate | Usage |', '| --- | ---: | ---: |',
+                 f"| REG+TPR · {row['regular_days']} days | {num(row.get('reg_rate'))} {unit} | {num(row.get('regular_usage'))} {unit} |",
+                 f"| SALE · {row['promotion_days']} days | {num(promo_rate)} {unit} | {num(row.get('promotion_usage'))} {unit} |",
+                 f"| Weekly total | {row.get('confidence', 'LOW').title()} confidence | {num(row.get('total')) + ' ' + unit if row.get('total') is not None else 'Unavailable'} |",
+                 '', f'Promotion dates: {dates}.']
+        if row.get('fallback'):
+            lines.append('SALE estimate uses 2× REG+TPR: fewer than 7 supported SALE days. Low confidence.')
+        if len(row.get('members', [])) > 1:
+            lines.append('Combined selling pool: ' + ' + '.join(str(member['upc']) for member in row['members']) + f' ({unit}).')
+        for kind, label in (('reg', 'REG+TPR'), ('sale', 'SALE')):
+            evidence = [member[kind] for member in row.get('members', []) if member[kind]['days']]
+            if evidence:
+                lines.append(f"{label} evidence: {min(e['start'] for e in evidence)}–{max(e['end'] for e in evidence)}; " + '/'.join(str(e['days']) for e in evidence) + ' observed days per UPC.')
+        if row.get('unit_note'):
+            lines.append(row['unit_note'])
+        if row.get('status') != 'ESTIMATED':
+            lines.append('Estimate unavailable: confirm the item, selling unit or supported history.')
+        lines.append('Historical estimate; proposed price can change demand.')
+        return '\n'.join(lines)
     lines = [f'Estimated usage for {start} to {end} (historical REG+TPR/SALE averages):', '',
              '| Item | Promo dates | REG+TPR usage | SALE usage | Suggested weekly usage | Confidence |',
              '| --- | ---: | ---: | ---: | ---: | --- |']

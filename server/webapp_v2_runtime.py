@@ -5956,6 +5956,7 @@ def _select_performance_range_days(
     end_date: date | None,
     *,
     allow_partial_range: bool = False,
+    latest_supported_day_count: int = 7,
 ) -> tuple[date, date, list[dict[str, Any]]]:
     """Keep only supported days inside the requested bounds; never fill gaps."""
     if start_date is not None and end_date is not None and start_date > end_date:
@@ -5970,7 +5971,9 @@ def _select_performance_range_days(
     eligible = [x for x in ordered if x["date"] <= requested_end]
     if not eligible:
         raise ValueError("NO_SUPPORTED_DATES_IN_RANGE")
-    requested_start = start_date if start_date is not None else eligible[-7:][0]["date"]
+    if isinstance(latest_supported_day_count, bool) or not isinstance(latest_supported_day_count, int) or not 1 <= latest_supported_day_count <= 365:
+        raise ValueError('SUPPORTED_DAY_COUNT_MUST_BE_1_TO_365')
+    requested_start = start_date if start_date is not None else eligible[-latest_supported_day_count:][0]["date"]
     if not allow_partial_range and requested_start not in supported:
         raise ValueError("START_DATE_NOT_SUPPORTED")
     if requested_start > requested_end:
@@ -5989,6 +5992,7 @@ def performance_range(
     item_query: str|None=None,
     include_gp: bool=True,
     allow_partial_range: bool=False,
+    latest_supported_day_count: int=7,
 ) -> dict[str,Any]:
     """Aggregate Seafood performance over a user-selected canonical date range.
 
@@ -6004,6 +6008,7 @@ def performance_range(
         try:
             resolved_start, resolved_end, selected = _select_performance_range_days(
                 all_days, start_date, end_date, allow_partial_range=allow_partial_range,
+                latest_supported_day_count=latest_supported_day_count,
             )
         except ValueError:
             cur.close()

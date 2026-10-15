@@ -4661,7 +4661,7 @@ def _recent_family_sale_event_from_batch(
 
 
 
-def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
+def yipman_best_sellers(limit: int = 40, family_article: str | None = None) -> dict[str, Any]:
     """Fast Family Stock Flow watch for the Yipman / desktop Quick Check home.
 
     Keep Stock Flow on published Family movement plus canonical physical receipt
@@ -4701,6 +4701,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                ORDER BY family_id"""
         )
         families = cur.fetchall()
+        if family_article is not None:
+            families = [row for row in families if str(row.get('family_article')) == str(family_article)]
         family_ids = [
             int(x["family_id"])
             for x in families
@@ -4782,9 +4784,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
 
             ratio = receipt_qty / sold_d if sold_d > 0 else None
             no_recent_selling = bool(sold_d == 0 and receipt_qty > 0)
-            if not no_recent_selling and (
-                ratio is None or ratio < Decimal("1.50")
-            ):
+            over_receiving = no_recent_selling or (ratio is not None and ratio >= Decimal('1.50'))
+            if family_article is None and not over_receiving:
                 continue
 
             history = []
@@ -4861,6 +4862,7 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
                     if ratio is not None else None
                 ),
                 "no_recent_selling": no_recent_selling,
+                "over_receiving": over_receiving,
                 "recent_promotion_event": None,
                 "observed_delivery_days": observed_delivery_days,
                 "observed_delivery_weekday_numbers": [
@@ -5083,6 +5085,8 @@ def yipman_best_sellers(limit: int = 40) -> dict[str, Any]:
         "count": qualified_count,
         "returned_count": len(rows),
         "movement_day_count_7d": day_count,
+        "movement_dates_7d": sorted(completed_7_dates),
+        "requested_family_article": family_article,
         "rows": rows[:lim],
         "rules": {
             "scope": "FAMILY_ARTICLE_ONLY",
@@ -9223,3 +9227,4 @@ def accept_price_suggestion(
         "candidate_price":row.get("candidate_price"),
         "suppression_rule":"UNTIL_PRICE_EVIDENCE_OR_CANDIDATE_CHANGES",
     }
+
