@@ -74,10 +74,15 @@ def review(root):
             decisions = evidence.get('requested_item_decisions') or []
             if decisions:
                 checks['exact_upc_price_action_evidence'] += 1
-                if any(not d.get('can_recommend_new_price_now') for d in decisions) and re.search(r'^\s*(?:\*\*)?(?:Recommend|Suggest(?: testing)?)\b', answer, re.I):
+                if any(not d.get('can_recommend_new_price_now') for d in decisions) and re.search(r'^\s*(?:\*\*)?(?:Recommend(?:ation)?|Suggest(?:ed(?: price)?| testing)?)\b', answer, re.I):
                     flags.append('BLOCKED_OR_STALE_PRICE_ADVICE_REVIEW')
         rows.append({'id': record['id'], 'category': record['category'], 'flags': sorted(set(flags))})
     statuses = Counter(str(r.get('http_status')) for r in records)
+    recoveries = [json.loads(line) for line in (root/'recovery.jsonl').read_text().splitlines() if line.strip()] if (root/'recovery.jsonl').exists() else []
+    effective = {r['id']: r for r in records}
+    for record in recoveries:
+        if record.get('http_status') == 200:
+            effective[record['id']] = record
     by_category = Counter(r['category'] for r in records)
     seconds = sorted(r['seconds'] for r in records)
     retests = []
@@ -86,6 +91,9 @@ def review(root):
     summary = {'generated_at': datetime.now(timezone.utc).isoformat(),
                'planned_questions': len(cases), 'completed_questions': len(records),
                'unique_completed_ids': len({r['id'] for r in records}),
+               'successfully_answered_unique_questions': sum(r.get('http_status') == 200 for r in effective.values()),
+               'recovered_question_ids': [r['id'] for r in records if r.get('http_status') != 200 and effective[r['id']].get('http_status') == 200],
+               'unresolved_transport_question_ids': [r['id'] for r in effective.values() if r.get('http_status') != 200],
                'http_status_counts': dict(statuses), 'category_counts': dict(by_category),
                'source_check_counts': dict(checks),
                'automated_flagged_records': sum(bool(r['flags']) for r in rows),
