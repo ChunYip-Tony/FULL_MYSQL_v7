@@ -183,12 +183,31 @@ def _resolve_family(query: str) -> str:
 
 
 def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
-    start = _parse_iso_date(args.get("start_date"))
-    end = _parse_iso_date(args.get("end_date"), required=False) or start
-    if start > end:
+    start = _parse_iso_date(args.get("start_date"), required=False)
+    end = _parse_iso_date(args.get("end_date"), required=False)
+    if start is not None and end is not None and start > end:
         raise ValueError("START_DATE_AFTER_END_DATE")
     item_query = _item_search_query(str(args.get("item_query") or "")) or None
-    result = performance_range(start, end, 2000, item_query=item_query, include_gp=not args.get('_quantity_only', False))
+    try:
+        result = performance_range(
+            start, end if end is not None else start, 2000,
+            item_query=item_query, include_gp=not args.get('_quantity_only', False),
+            allow_partial_range=True,
+        )
+    except ValueError as exc:
+        if str(exc) not in {"NO_SUPPORTED_DATES_IN_RANGE", "NO_COMPLETED_SUPPORTED_SALES_DATE"}:
+            raise
+        latest = latest_performance_date().get("latest_completed_supported_sales_date")
+        return {
+            "data_available": False,
+            "reason": "NO_SUPPORTED_POS_DAYS_IN_REQUESTED_RANGE",
+            "requested_start_date": start,
+            "requested_end_date": end if end is not None else start,
+            "latest_completed_supported_sales_date": latest,
+            "item_query": item_query,
+            "missing_calendar_dates_are_zero": False,
+            "date_note": "No supported completed POS day exists inside this requested range. Do not report zero sales or move the request to an older day. For a general current sales question, retry once with both dates null to use the latest available 7 supported days.",
+        }
     items = list(result.get("items") or [])
     matched = items  # The canonical range query already scopes item names/identities.
     chosen = matched if item_query else items
@@ -211,6 +230,11 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
             gp += Decimal(str(row.get("gp_dollars") or 0))
 
     payload: dict[str, Any] = {
+        "data_available": True,
+        "requested_start_date": result.get("requested_start_date"),
+        "requested_end_date": result.get("requested_end_date"),
+        "range_adjusted": result.get("range_adjusted", False),
+        "date_note": "Only the returned supported POS dates are included. Show the actual date range and supported-day count; if range_adjusted is true, explicitly say unavailable boundary dates were excluded. Missing dates are not zero-sale days.",
         "start_date": result.get("start_date"),
         "end_date": result.get("end_date"),
         "supported_day_count": result.get("supported_day_count"),
@@ -692,8 +716,8 @@ TOOLS = [
         "parameters": {
             "type": "object",
             "properties": {
-                "start_date": {"type": "string", "description": "YYYY-MM-DD"},
-                "end_date": {"type": ["string", "null"], "description": "YYYY-MM-DD or null for one day"},
+                "start_date": {"type": ["string", "null"], "description": "YYYY-MM-DD, or null with null end_date for the latest available 7 supported POS days"},
+                "end_date": {"type": ["string", "null"], "description": "YYYY-MM-DD; null with a supplied start_date means that exact single day; both dates null means latest available 7 supported POS days"},
                 "item_query": {"type": ["string", "null"], "description": "Optional item, UPC, or Family query"},
             },
             "required": ["start_date", "end_date", "item_query"],
@@ -822,7 +846,8 @@ CRITICAL DATA RULES:
 - Never imply that general guidance describes this store's actual stock, costs, sales, supplier, inspection status or promotion. Use tools for those claims. For safety questions use conservative established guidance, distinguish quality from safety, and acknowledge uncertainty; never assure safety from smell or appearance alone.
 - Resolve everyday names with search_items before declaring an item missing. Drop filler such as "the" and "in": "oyster in jar" -> "oyster jar". If no results, retry the core product word and inspect package qualifiers. Preserve fresh/frozen/live, jar/shell, size and pack distinctions. Prefer actively selling UPCs over historical aliases; never combine their POS quantities. Ask which item only if multiple plausible active items remain.
 - A proposed future promotion price is a scenario, not the current database price. Resolve the item and acknowledge the proposed price first. Ask for actual promotion dates and the intended decision if needed before expensive analysis. Never ask for a photo: this chat accepts text only.
-- For item sales questions, call get_sales_performance directly with item_query. Do not run search_items or a department attention report first.\n- Use tools for every current, numeric, sales, stock, receipt, price, ordering, GP, freshness, or QA claim. Never invent missing numbers.
+- If the user says try again after an unsupported sales date error, rerun the sales tool using the original item. For a general how-is-it-selling question use both dates null; do not repeat the old date failure as the answer. Preserve explicit user date limits.
+- For general item sales questions with no requested dates (including how is this item selling), call get_sales_performance directly with item_query and both dates null. This uses the latest available 7 supported completed POS days, which may be earlier than yesterday. For explicit dates, preserve the requested bounds; report only the actual returned supported dates and day count. If range_adjusted is true, say the unavailable boundary dates were excluded. If data_available is false, do not report zero sales, claim the item has no history, or repeat the same failed dates. Explain that this requested period has no supported POS days and state the latest supported date when supplied. Never substitute older data for an explicit single-day question. For item sales questions, call get_sales_performance directly with item_query. Do not run search_items or a department attention report first.\n- Use tools for every current, numeric, sales, stock, receipt, price, ordering, GP, freshness, or QA claim. Never invent missing numbers.
 - UPC sold quantity comes ONLY from sales records. Family movement 251-252 is Family-level quantity and must never be presented as an individual UPC sold quantity.
 - Completed canonical sales/data days only. Missing calendar dates are excluded, never filled as zero.
 - Physical delivery quantity follows canonical receipt semantics: 101 OR the 107+109 receipt event; never double count the same delivery.
@@ -981,7 +1006,19 @@ def _quick_daily_answer(question: str) -> dict[str, Any] | None:
            for line in question.splitlines()[1:]):
         return None
     day = completed_through_date()
-    data = performance_range(day, day, 2000)
+    try:
+        data = performance_range(day, day, 2000)
+    except ValueError as exc:
+        if str(exc) not in {"END_DATE_NOT_SUPPORTED", "START_DATE_NOT_SUPPORTED", "NO_SUPPORTED_DATES_IN_RANGE", "NO_COMPLETED_SUPPORTED_SALES_DATE"}:
+            raise
+        latest = latest_performance_date().get("latest_completed_supported_sales_date")
+        answer = f"Sales records for yesterday ({day.isoformat()}) are not available yet. This does not mean zero sales."
+        if latest is not None:
+            answer += f" The latest supported sales date is {latest}."
+        return {"answer": answer, "model": None, "read_only": True,
+                "tool_calls": ["get_sales_performance"], "mode": "CANONICAL_DATE_UNAVAILABLE",
+                "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}}
+
     summary = data.get("summary") or {}
     sales = Decimal(str(summary.get("sales_dollars") or 0))
     gp = summary.get("gp_dollars")
@@ -1033,7 +1070,11 @@ def _quick_quantity_answer(question: str) -> dict[str, Any] | None:
                      "item_query":item,"_quantity_only":True})
     quantities=data.get("sold_quantity_by_uom") or {}
     label=day.strftime("%a, %b %d")
-    if not data.get("matched_item_count"):
+    if data.get("data_available") is False:
+        answer=f"{item}: sales records for yesterday ({label}) are not available yet. No sold quantity can be confirmed."
+        if data.get("latest_completed_supported_sales_date") is not None:
+            answer+=f" The latest supported sales date is {data['latest_completed_supported_sales_date']}."
+    elif not data.get("matched_item_count"):
         answer=f"{item}: no matching positive POS sales were found for {label}. This does not establish stock availability."
     elif unit.lower() in {"pound","pounds","lb","lbs"}:
         pounds=sum((Decimal(str(q)) for u,q in quantities.items()
@@ -1139,6 +1180,7 @@ def chat(
             })
 
     raise RuntimeError("OPENAI_TOOL_LOOP_LIMIT")
+
 
 
 

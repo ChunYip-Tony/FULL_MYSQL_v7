@@ -5943,6 +5943,37 @@ def _performance_cost_for_day(
     return None
 
 
+def _select_performance_range_days(
+    all_days: list[dict[str, Any]],
+    start_date: date | None,
+    end_date: date | None,
+    *,
+    allow_partial_range: bool = False,
+) -> tuple[date, date, list[dict[str, Any]]]:
+    """Keep only supported days inside the requested bounds; never fill gaps."""
+    if start_date is not None and end_date is not None and start_date > end_date:
+        raise ValueError("START_DATE_AFTER_END_DATE")
+    ordered = sorted(all_days, key=lambda x: x["date"])
+    if not ordered:
+        raise ValueError("NO_COMPLETED_SUPPORTED_SALES_DATE")
+    supported = {x["date"] for x in ordered}
+    requested_end = end_date or ordered[-1]["date"]
+    if not allow_partial_range and requested_end not in supported:
+        raise ValueError("END_DATE_NOT_SUPPORTED")
+    eligible = [x for x in ordered if x["date"] <= requested_end]
+    if not eligible:
+        raise ValueError("NO_SUPPORTED_DATES_IN_RANGE")
+    requested_start = start_date if start_date is not None else eligible[-7:][0]["date"]
+    if not allow_partial_range and requested_start not in supported:
+        raise ValueError("START_DATE_NOT_SUPPORTED")
+    if requested_start > requested_end:
+        raise ValueError("START_DATE_AFTER_END_DATE")
+    selected = [x for x in eligible if requested_start <= x["date"] <= requested_end]
+    if not selected:
+        raise ValueError("NO_SUPPORTED_DATES_IN_RANGE")
+    return selected[0]["date"], selected[-1]["date"], selected
+
+
 def performance_range(
     start_date: date|None=None,
     end_date: date|None=None,
@@ -5950,6 +5981,7 @@ def performance_range(
     *,
     item_query: str|None=None,
     include_gp: bool=True,
+    allow_partial_range: bool=False,
 ) -> dict[str,Any]:
     """Aggregate Seafood performance over a user-selected canonical date range.
 
@@ -5962,33 +5994,13 @@ def performance_range(
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
         all_days=_canonical_sales_days(cur,limit=365,up_to=end_date)
-        ordered=sorted(all_days,key=lambda x:x["date"])
-        if not ordered:
+        try:
+            resolved_start, resolved_end, selected = _select_performance_range_days(
+                all_days, start_date, end_date, allow_partial_range=allow_partial_range,
+            )
+        except ValueError:
             cur.close()
-            raise ValueError("NO_COMPLETED_SUPPORTED_SALES_DATE")
-
-        supported={x["date"] for x in ordered}
-        resolved_end=end_date or ordered[-1]["date"]
-        if resolved_end not in supported:
-            cur.close()
-            raise ValueError("END_DATE_NOT_SUPPORTED")
-        eligible=[x for x in ordered if x["date"]<=resolved_end]
-        if start_date is None:
-            default_days=eligible[-7:]
-            resolved_start=default_days[0]["date"]
-        else:
-            resolved_start=start_date
-        if resolved_start not in supported:
-            cur.close()
-            raise ValueError("START_DATE_NOT_SUPPORTED")
-        if resolved_start>resolved_end:
-            cur.close()
-            raise ValueError("START_DATE_AFTER_END_DATE")
-
-        selected=[x for x in ordered if resolved_start<=x["date"]<=resolved_end]
-        if not selected:
-            cur.close()
-            raise ValueError("NO_SUPPORTED_DATES_IN_RANGE")
+            raise
 
         query=str(item_query or "").strip()
         if query:
@@ -6101,6 +6113,12 @@ def performance_range(
         "contract_version":"WEBAPP_V2_PERFORMANCE_RANGE_V1",
         "start_date":resolved_start,
         "end_date":resolved_end,
+        "requested_start_date":start_date,
+        "requested_end_date":end_date,
+        "range_adjusted":bool(
+            (start_date is not None and start_date != resolved_start)
+            or (end_date is not None and end_date != resolved_end)
+        ),
         "supported_day_count":len(selected),
         "supported_dates":[x["date"] for x in selected],
         "supported_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
@@ -7282,4 +7300,5 @@ def ordering_analysis(
     )
     result["source_upc"]=row.get("ean_upc")
     return result
+
 
