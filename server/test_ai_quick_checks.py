@@ -22,6 +22,30 @@ class ItemSalesSelectionTest(unittest.TestCase):
         self.result = self.helper.result
         self.ai = self.helper.ai
 
+    def test_embedded_short_upc_survives_name_and_pack_qualifiers(self):
+        ns = {'re': re, 'Any': Any}
+        sales_dates.extract('yipman_ai.py', {'_item_search_query', '_norm_text'}, ns)
+        self.assertEqual(ns['_item_search_query']('4/6 Fresh Water Prawn, UPC 4843'), '4843')
+        self.assertEqual(ns['_item_search_query']('Scallop 60/80 30/12OZ UPC: 4029551456'), '4029551456')
+
+    def test_sales_tool_uses_embedded_short_upc_instead_of_filler_tokens(self):
+        result = self.result()
+        result['items'] = [{'upc': '4843', 'name': '4/6 FRESH WATER PRAWN', 'sales_amount': '209.93', 'sold_quantity': 7, 'qty_uom': 'EA'}]
+        tool, perf = self.ai(result)
+        sales_dates.extract('yipman_ai.py', {'_item_search_query'}, self.helper.ns)
+        out = tool({'item_query': '4/6 Fresh Water Prawn, UPC 4843'})
+        self.assertEqual(perf.call_args.kwargs['item_query'], '4843')
+        self.assertEqual(out['sales_dollars'], Decimal('209.93'))
+        self.assertEqual(out['sold_quantity_by_uom'], {'EA': Decimal(7)})
+
+    def test_unmatched_sales_query_does_not_fabricate_zero(self):
+        result = self.result();result['items'] = []
+        tool, _ = self.ai(result)
+        out = tool({'item_query': 'Unknown item UPC 9999'})
+        self.assertFalse(out['data_available'])
+        self.assertNotIn('sales_dollars', out)
+        self.assertNotIn('sold_quantity_by_uom', out)
+
     def test_latest_n_uses_supported_days_instead_of_calendar_guess(self):
         start, end, days = self.helper.select(self.helper.days, None, None, latest_supported_day_count=10)
         self.assertEqual((start.day, end.day, len(days)), (1, 13, 10))

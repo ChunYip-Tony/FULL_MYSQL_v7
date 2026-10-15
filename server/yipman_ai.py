@@ -40,7 +40,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 1600
 MAX_TOOL_ROUNDS = 5
-AI_REVISION = 'SEAFOOD_QUICK_CHECK_V22'
+AI_REVISION = 'SEAFOOD_QUICK_CHECK_V23'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -100,6 +100,9 @@ def _item_search_query(query: str) -> str:
     raw = str(query or "").strip()
     if raw.isdigit():
         return raw
+    labeled_upc = re.search(r'\bUPC\s*(?:(?:number|no\.?)\s*)?[:#]?\s*(\d{1,14})\b', raw, re.I)
+    if labeled_upc:
+        return labeled_upc.group(1)
     explicit_upc = re.search(r"\b\d{11,14}\b", raw)
     if explicit_upc:
         return explicit_upc.group(0)
@@ -235,6 +238,12 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
         }
     items = list(result.get("items") or [])
     chosen, ambiguous = _select_sales_item_rows(items, item_query)
+    if item_query and not chosen:
+        return {'data_available': False, 'reason': 'NO_MATCHING_POS_ITEM_IN_RANGE',
+                'item_query': item_query, 'start_date': result.get('start_date'), 'end_date': result.get('end_date'),
+                'supported_day_count': result.get('supported_day_count'),
+                'missing_calendar_dates_are_zero': False,
+                'date_note': 'The query did not match a positive UPC sales row in this supported range. This result does not establish zero sales for the intended product. Retry the exact labeled UPC or clarify the product; never invent a zero amount.'}
     if ambiguous:
         choices = sorted(chosen, key=lambda row: (
             0 if str(row.get('upc') or '').startswith('240') else 1,
