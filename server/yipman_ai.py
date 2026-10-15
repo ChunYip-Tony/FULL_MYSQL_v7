@@ -40,7 +40,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 1600
 MAX_TOOL_ROUNDS = 5
-AI_REVISION = 'SEAFOOD_QUICK_CHECK_V21'
+AI_REVISION = 'SEAFOOD_QUICK_CHECK_V22'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -515,8 +515,52 @@ def _item_price_decisions(candidates: list[dict[str, Any]], suggestions: list[di
                     'policy_decision': final or row.get('review_status') or 'NO_SUPPORTED_PRICE_ACTION',
                     'supported_price_for_dated_review': price if eligible else None,
                     'analysis_is_stale_or_refreshing': stale,
+                    'observation_supported_days': row.get('observation_supported_days'),
+                    'observation_cycle_complete': row.get('observation_cycle_complete'),
                     'reason': row.get('final_tpr_decision_reason') or row.get('review_blocker') or 'No actionable exact-UPC price was returned. A sweet-spot reference is not a recommendation.'})
     return out
+
+
+def _price_policy_answer(result: dict[str, Any], question: str, history: list[dict[str, Any]] | None = None) -> str | None:
+    """Render a blocked policy decision before prose can turn it into an action."""
+    text = question.split('\nReply in ', 1)[0].strip()
+    if re.fullmatch(r'[\d\s.,?]+|try again[.!?]?|the live one[.!?]?', text, re.I):
+        text += ' ' + ' '.join(str(row.get('content') or '') for row in (history or []) if row.get('role') == 'user')
+    observation = bool(re.search(r'observ(?:ation|ing|ación|acion)|觀察|观察', text, re.I))
+    recommendation = bool(re.search(r'suggest|recommend|should.{0,25}(?:change|price)|recomiend|suger|sugier|建議|改價|調價', text, re.I))
+    decisions = result.get('requested_item_decisions') or []
+    if not decisions or not (observation or recommendation):
+        return None
+    decision = decisions[0]
+    if not observation and decision.get('can_recommend_new_price_now'):
+        return None
+    info = next((row for row in result.get('upc_details') or [] if str(row.get('upc')) == str(decision.get('upc'))), {})
+    name = str(decision.get('name') or info.get('upc_name') or 'Item').replace('|', '/').replace('\n', ' ')
+    identity = str(decision.get('upc') or '')
+    unit = str(info.get('qty_uom') or info.get('selling_uom') or '').lower()
+    price = info.get('current_price')
+    current = (f"${Decimal(str(price)):.2f}/{unit} {info.get('current_price_type') or ''}" if price is not None and unit else 'Unconfirmed')
+    if observation:
+        count = decision.get('observation_supported_days')
+        if decision.get('observation_cycle_complete') is True and count is not None and int(count) >= 7:
+            lead, action = f"The minimum observation period is met ({count} completed test days).", 'Review the result'
+        elif count is not None and int(count) < 7:
+            lead, action = f"The price is still observing ({count} of 7 completed test days).", 'Wait for 7 test days'
+        else:
+            lead, action = 'The current-price observation status is unconfirmed.', 'Do not infer it from total sales days'
+    else:
+        lead, action = 'No new price can be recommended now.', 'No current price action'
+    if decision.get('policy_decision') == 'SALE_LOCKED':
+        action = 'Company SALE is locked'
+    lines = [lead, '', '| Item | Current price | Decision |', '| --- | ---: | --- |',
+             f'| {name} · {identity} | {current} | {action} |']
+    candidate = decision.get('supported_price_for_dated_review')
+    if candidate is not None:
+        lines += ['', f"Dated candidate: ${Decimal(str(candidate)):.2f}/{unit or 'unit unconfirmed'} — review only, not an instruction to change price."]
+    health = result.get('data_health') or {}
+    if health.get('data_through'):
+        lines += ['', f"Analysis data through {health['data_through']}." + (' Source records are stale or refreshing.' if decision.get('analysis_is_stale_or_refreshing') else '')]
+    return '\n'.join(lines)
 
 
 def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
@@ -1327,8 +1371,11 @@ def chat(
                             'source_changed_since_analysis': result.get('source_changed_since_analysis'),
                             'data_health': result.get('data_health'),
                             'requested_item_decisions': result.get('requested_item_decisions') or []})
+                        policy_answer = _price_policy_answer(result, question, history)
+                        if policy_answer:
+                            result['calculation_answer'] = policy_answer
                     if result.get("calculation_answer") and not _calculation_requires_translation(question):
-                        return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names, 'server_revision': AI_REVISION}
+                        return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names, 'server_revision': AI_REVISION, 'source_evidence': source_evidence}
                     if result.get("needs_details"):
                         return {**_clarification_result(result, tool_names, question), 'server_revision': AI_REVISION}
                 except Exception as exc:

@@ -259,6 +259,29 @@ class PriceAdviceScopeTest(unittest.TestCase):
         fresh = self.ns['_item_price_decisions'](self.candidates, rows, {'refreshing': False})[0]
         self.assertTrue(fresh['can_recommend_new_price_now'])
 
+    def policy_answer(self, question):
+        ns = {'Any': Any, 're': re, 'Decimal': Decimal}
+        sales_dates.extract('yipman_ai.py', {'_price_policy_answer'}, ns)
+        return ns['_price_policy_answer']({
+            'requested_item_decisions': [{'upc': '24060200000', 'name': 'Live Tilapia',
+                'can_recommend_new_price_now': False, 'supported_price_for_dated_review': 9.99,
+                'analysis_is_stale_or_refreshing': True, 'policy_decision': 'START_TPR'}],
+            'upc_details': [{'upc': '24060200000', 'current_price': 9.49, 'current_price_type': 'REG', 'qty_uom': 'LB'}],
+            'data_health': {'data_through': '2026-10-13'}}, question)
+
+    def test_blocked_price_policy_is_rendered_before_model_prose(self):
+        answer = self.policy_answer('Suggest a price for live tilapia.')
+        self.assertTrue(answer.startswith('No new price can be recommended now.'))
+        self.assertIn('review only', answer)
+        self.assertIn('$9.99/lb', answer)
+
+    def test_unknown_price_observation_does_not_become_yes(self):
+        answer = self.policy_answer('Is it in an observation period?')
+        self.assertTrue(answer.startswith('The current-price observation status is unconfirmed.'))
+
+    def test_current_margin_question_is_not_replaced_by_price_policy(self):
+        self.assertIsNone(self.policy_answer('What is the current GP percent?'))
+
     def test_ready_cache_does_not_make_stale_source_files_current(self):
         rows = [{'upc': '24060200000', 'actionable': True, 'suggested_price': 9.99, 'final_tpr_decision': 'START_TPR'}]
         out = self.ns['_item_price_decisions'](self.candidates, rows, {
