@@ -942,7 +942,7 @@ CRITICAL DATA RULES:
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
 - Current UPC price is whichever authoritative source is NEWER: completed POS sold-event price or current Price List. A newer Price List beats an older POS event; a newer POS event beats an older Price List. POS never wins merely because it is POS. Use the tool-resolved current_price; do not use SAP retail.
 - 240 main and 249 service/cooked forms in the same product group must have equal current price; when 240 is promoted, 249 participates.
-- For historical REG versus SALE price-performance questions, call get_price_type_history with the exact UPC. Keep TPR separate from SALE; never infer a type from a low price or optimizer candidate. TOTAL-only daily evidence cannot be relabeled SALE or TPR. The weekly-usage REG+TPR grouping applies only to usage estimation.
+- For historical REG versus SALE price-performance questions, call get_price_type_history with the exact UPC. Keep TPR separate from SALE; never infer a type from a low price or optimizer candidate. TOTAL-only daily evidence cannot be relabeled SALE or TPR. The weekly-usage REG+TPR grouping applies only to usage estimation. Show each compared type’s weighted average selling price, quantity/day, daily gross profit and observed-day count. Label this GP as recalculated at current effective cost; it is not historical booked profit. An average selling price is not one fixed tested price. A compact four-column comparison table is allowed when these requested measures are needed.
 - For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days at that price before judging the next step. The latest 7-day sales window does not prove 7 observation days at the current price. Use explicit price-test evidence; otherwise say the observation start/count is unconfirmed. At exactly 7 completed test days the minimum is met, not still below 7. Active SALE locks are separate from REG observation.
 - Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates. A recent receipt or 4.4 days of stock alone does not prove old stock or overstock. State the returned risk flag and its evidence; if no item-specific flag or excess-stock threshold is available, say overstock is unconfirmed. Receipts below movement are not proof of over-receiving. A single available price type is not a comparative winner when SALE or REG evidence is missing.
 - Ordering uses effective OH, observed receipt cadence, completed-day demand, promotion evidence, and freshness constraints from the tool result.
@@ -1005,7 +1005,7 @@ def ai_status() -> dict[str, Any]:
         "configured": bool(_openai_key()),
         "quantity_lookup": "DIRECT_POS_V1",
         "daily_summary": "DIRECT_DAILY_V1",
-        "test_revision": "SEAFOOD_QUICK_CHECK_V16",
+        "test_revision": "SEAFOOD_QUICK_CHECK_V17",
         "seafood_workflow": "STORE_1032_V2",
         "model": DEFAULT_MODEL,
         "mode": "OPENAI_RESPONSES_FUNCTION_CALLING" if _openai_key() else "LOCAL_FALLBACK",
