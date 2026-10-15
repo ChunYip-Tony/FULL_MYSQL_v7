@@ -39,7 +39,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 1600
 MAX_TOOL_ROUNDS = 5
-AI_REVISION = 'SEAFOOD_QUICK_CHECK_V19'
+AI_REVISION = 'SEAFOOD_QUICK_CHECK_V20'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -495,6 +495,12 @@ def _item_price_decisions(candidates: list[dict[str, Any]], suggestions: list[di
     by_upc = {_norm_num(row.get('upc') or row.get('ean_upc')): row for row in suggestions}
     stale = bool(review.get('refreshing') or review.get('source_changed_since_analysis') or
                  'STALE' in str(review.get('analysis_status') or '').upper())
+    # A newly calculated cache can still use source files behind the completed
+    # business day. Cache freshness does not prove current source coverage.
+    for health in (review.get('current_source_health') or {}, review.get('data_health') or {}):
+        states = str(health.get('status') or '') + ' ' + str(health.get('decision_mode') or '')
+        if any(word in states.upper() for word in ('STALE', 'BLOCKED', 'INCOMPLETE', 'UNAVAILABLE', 'REFRESH')) or health.get('missing_required_sources'):
+            stale = True
     out = []
     for candidate in candidates:
         row = by_upc.get(_norm_num(candidate.get('number')), {})
@@ -1311,6 +1317,7 @@ def chat(
                             'analysis_status': result.get('analysis_status'),
                             'refreshing': result.get('refreshing'),
                             'source_changed_since_analysis': result.get('source_changed_since_analysis'),
+                            'data_health': result.get('data_health'),
                             'requested_item_decisions': result.get('requested_item_decisions') or []})
                     if result.get("calculation_answer") and not _calculation_requires_translation(question):
                         return {"answer": result["calculation_answer"], "model": DEFAULT_MODEL, "read_only": True, "tool_calls": tool_names, 'server_revision': AI_REVISION}

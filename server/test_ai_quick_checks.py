@@ -228,6 +228,15 @@ class PriceAdviceScopeTest(unittest.TestCase):
         fresh = self.ns['_item_price_decisions'](self.candidates, rows, {'refreshing': False})[0]
         self.assertTrue(fresh['can_recommend_new_price_now'])
 
+    def test_ready_cache_does_not_make_stale_source_files_current(self):
+        rows = [{'upc': '24060200000', 'actionable': True, 'suggested_price': 9.99, 'final_tpr_decision': 'START_TPR'}]
+        out = self.ns['_item_price_decisions'](self.candidates, rows, {
+            'analysis_status': 'READY', 'refreshing': False,
+            'data_health': {'status': 'STALE_ESTIMATE_AVAILABLE', 'decision_mode': 'STALE_ESTIMATE', 'missing_required_sources': ['POS', 'MVT']}})[0]
+        self.assertFalse(out['can_recommend_new_price_now'])
+        self.assertTrue(out['analysis_is_stale_or_refreshing'])
+        self.assertEqual(out['supported_price_for_dated_review'], 9.99)
+
 
 class ToolSchemaTest(unittest.TestCase):
     def test_calculation_respects_ui_or_explicit_reply_language(self):
