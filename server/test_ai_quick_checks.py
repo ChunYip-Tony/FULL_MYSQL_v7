@@ -29,6 +29,15 @@ class ItemSalesSelectionTest(unittest.TestCase):
         tool({'item_query': '24053300000', 'supported_days': 14})
         self.assertEqual(performance.call_args.kwargs['latest_supported_day_count'], 14)
 
+    def test_positive_sales_days_are_not_relabeled_as_supported_days(self):
+        result = self.result()
+        result['items'][0]['sold_supported_day_count'] = 4
+        tool, _ = self.ai(result)
+        out = tool({'item_query': '24053300000'})
+        self.assertEqual(out['supported_day_count'], 5)
+        self.assertEqual(out['top_items'][0]['positive_sales_day_count'], 4)
+        self.assertNotIn('sold_supported_day_count', out['top_items'][0])
+
     def test_live_tilapia_does_not_include_fresh_family_members(self):
         result = self.result()
         result['items'] = [
@@ -197,6 +206,28 @@ class PriceTypeHistoryTest(unittest.TestCase):
 
     def test_no_records_returns_no_price_types(self):
         self.assertEqual(self.summarize({'rows': []}, Decimal(2)), [])
+
+    def test_upc_cost_uses_selling_unit_not_family_receipt_unit(self):
+        row = {'ean_upc': '66718100001', 'selling_description': 'Green Mussel',
+               'selling_uom': 'EA', 'base_uom': 'LB', 'base_qty_per_selling_unit': Decimal(2),
+               'current_cost_per_base_uom': Decimal('4.79166667'),
+               'current_cost_per_selling_unit': Decimal('9.58333334'),
+               'current_price': Decimal('14.99'), 'cost_source': 'MOVEMENT_RECEIPT_VALUATION',
+               'cost_date': date(2026, 10, 13)}
+        cur = Mock();cur.fetchone.return_value = row
+        from unittest.mock import MagicMock
+        conn = MagicMock();conn.__enter__.return_value.cursor.return_value = cur
+        ns = {'Any': Any, 'Decimal': Decimal, 'db_conn': lambda: conn,
+              '_numeric_key': lambda value: value.lstrip('0'),
+              '_safe_qty_uom': lambda upc, unit: unit,
+              '_overlay_live_current_price': lambda cursor, item: item}
+        sales_dates.extract('webapp_v2_runtime.py', {'current_item_cost'}, ns)
+        out = ns['current_item_cost']('66718100001')
+        self.assertEqual(out['cost_per_selling_unit'], Decimal('9.58333334'))
+        self.assertEqual(out['cost_unit'], 'EA')
+        self.assertEqual(out['cost_per_base_unit'], Decimal('4.79166667'))
+        self.assertEqual(out['verified_base_quantity_per_selling_unit'], Decimal(2))
+        self.assertAlmostEqual(float(out['gp_pct_fraction_at_current_cost']), .360685, places=5)
 
 
 class PriceAdviceScopeTest(unittest.TestCase):

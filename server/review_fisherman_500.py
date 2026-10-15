@@ -70,13 +70,19 @@ def review(root):
                 if not contains_number(answer, cost): flags.append('EFFECTIVE_COST_SNAPSHOT_REVIEW')
         if record['category']=='pricing' and 'historical REG and SALE' in question:
             if re.search(r'SALE\s*[/+]\s*TPR|TPR\s*[/+]\s*SALE', answer): flags.append('SALE_TPR_MERGE_REVIEW')
+        for evidence in record.get('response', {}).get('source_evidence') or []:
+            decisions = evidence.get('requested_item_decisions') or []
+            if decisions:
+                checks['exact_upc_price_action_evidence'] += 1
+                if any(not d.get('can_recommend_new_price_now') for d in decisions) and re.search(r'^\s*(?:\*\*)?(?:Recommend|Suggest(?: testing)?)\b', answer, re.I):
+                    flags.append('BLOCKED_OR_STALE_PRICE_ADVICE_REVIEW')
         rows.append({'id': record['id'], 'category': record['category'], 'flags': sorted(set(flags))})
     statuses = Counter(str(r.get('http_status')) for r in records)
     by_category = Counter(r['category'] for r in records)
     seconds = sorted(r['seconds'] for r in records)
     retests = []
-    for filename in ('retest-v12.jsonl', 'retest-final.jsonl'):
-        if (root/filename).exists(): retests += [json.loads(line) for line in (root/filename).read_text().splitlines() if line.strip()]
+    for path in sorted(root.glob('retest-*.jsonl')):
+        retests += [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     summary = {'generated_at': datetime.now(timezone.utc).isoformat(),
                'planned_questions': len(cases), 'completed_questions': len(records),
                'unique_completed_ids': len({r['id'] for r in records}),
@@ -87,9 +93,12 @@ def review(root):
                'median_seconds': round(statistics.median(seconds), 2) if seconds else None,
                'p95_seconds': seconds[min(len(seconds)-1,int(len(seconds)*.95))] if seconds else None,
                'targeted_retest_count': len(retests),
+               'actual_serving_revision_counts': dict(Counter(r.get('response', {}).get('server_revision') or 'UNSTAMPED_DURING_ROLLOUT' for r in records)),
+               'retest_actual_serving_revision_counts': dict(Counter(r.get('response', {}).get('server_revision') or 'UNSTAMPED_DURING_ROLLOUT' for r in retests)),
                'final_retest_revision_counts': dict(Counter(r.get('observed_revision_before_request') for r in retests if r['phase']=='retest-final')),
                'limitations': ['Automated flags are review aids, not a semantic pass/fail score.',
                                'The initial 500-question batch spans multiple deployments. It is not 500 tests of the final revision.',
+                               'A status revision observed before a request may differ from the serving instance during a rolling deployment; response.server_revision is authoritative when present.',
                                'Snapshot checks can become stale if store source data changes; requested Oct 7–13 sales checks use a fixed supported-date reference.',
                                'Missing history, company references, price-test coverage or unit conversions must remain unavailable rather than being fabricated.']}
     (root/'automated-review.json').write_text(json.dumps({'summary': summary, 'records': rows}, indent=2))

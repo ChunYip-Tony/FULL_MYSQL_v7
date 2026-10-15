@@ -392,6 +392,37 @@ def _price_sales_trend(
         "gp_curve_cost_per_selling_unit":cost_per_selling_unit,
     }
 
+def current_item_cost(upc: str) -> dict[str, Any]:
+    """Exact UPC cost and current-price GP in its verified selling unit."""
+    raw = str(upc or '').strip()
+    if not raw.isdigit():
+        raise ValueError('EXACT_UPC_REQUIRED')
+    with db_conn() as conn:
+        cur = conn.cursor(dictionary=True)
+        cur.execute('''SELECT * FROM quick_check_current WHERE ean_upc=%s
+            OR (ean_upc REGEXP '^[0-9]+$' AND TRIM(LEADING '0' FROM ean_upc)=%s)
+            ORDER BY CASE WHEN ean_upc=%s THEN 0 ELSE 1 END LIMIT 1''', (raw, _numeric_key(raw), raw))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            raise KeyError('V2_UPC_NOT_FOUND')
+        _overlay_live_current_price(cur, row)
+        cur.close()
+    price = row.get('current_price')
+    cost = row.get('current_cost_per_selling_unit')
+    unit = _safe_qty_uom(row.get('ean_upc'), row.get('selling_uom'))
+    gp = ((Decimal(str(price))-Decimal(str(cost)))/Decimal(str(price))
+          if unit and price is not None and cost is not None and Decimal(str(price)) > 0 else None)
+    return {'upc': row.get('ean_upc'), 'name': row.get('selling_description'),
+            'selling_unit': unit, 'cost_per_selling_unit': cost, 'cost_unit': unit,
+            'base_unit': row.get('base_uom'), 'cost_per_base_unit': row.get('current_cost_per_base_uom'),
+            'verified_base_quantity_per_selling_unit': row.get('base_qty_per_selling_unit'),
+            'cost_source': row.get('cost_source'), 'cost_date': row.get('cost_date'),
+            'current_price': price, 'price_unit': unit, 'price_type': row.get('current_price_type'),
+            'price_date': row.get('current_price_asof_date'), 'gp_pct_fraction_at_current_cost': gp,
+            'unit_note': 'For a UPC cost or margin check use cost_per_selling_unit and its selling unit. A Family receipt/base-unit cost is separate and must not be compared directly with an EA/PACK selling price. Do not invent any conversion.'}
+
+
 def _summarize_price_types(trend: dict[str, Any], cost: Decimal | None) -> list[dict[str, Any]]:
     """Price-type evidence stays separate; a TOTAL row is never a SALE row."""
     groups = {}

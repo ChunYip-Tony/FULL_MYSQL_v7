@@ -23,6 +23,7 @@ from backoffice_runtime import (
 from qa_resolution import qa_review
 from webapp_v2_runtime import (
     family_info,
+    current_item_cost,
     latest_performance_date,
     performance_range,
     price_type_history,
@@ -39,7 +40,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 1600
 MAX_TOOL_ROUNDS = 5
-AI_REVISION = 'SEAFOOD_QUICK_CHECK_V20'
+AI_REVISION = 'SEAFOOD_QUICK_CHECK_V21'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -265,7 +266,7 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
         "requested_start_date": result.get("requested_start_date"),
         "requested_end_date": result.get("requested_end_date"),
         "range_adjusted": result.get("range_adjusted", False),
-        "date_note": "Only the returned supported POS dates are included. Show the actual date range and supported-day count; if range_adjusted is true, explicitly say unavailable boundary dates were excluded. Missing dates are not zero-sale days.",
+        "date_note": "Only the returned supported POS dates are included. Show the actual date range and supported-day count; if range_adjusted is true, explicitly say unavailable boundary dates were excluded. Missing dates are not zero-sale days. Supported dates include verified zero-sales days for this UPC. positive_sales_day_count counts only dates with sales and may be smaller; it does not reduce the supported-day denominator.",
         "start_date": result.get("start_date"),
         "end_date": result.get("end_date"),
         "supported_day_count": result.get("supported_day_count"),
@@ -280,7 +281,8 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
         "gp_partial_dollars": gp if any(x.get("gp_dollars") is not None for x in chosen) else None,
         "gp_known_cost_item_count": sum(x.get("gp_dollars") is not None for x in chosen),
         "gp_missing_cost_item_count": sum(x.get("gp_dollars") is None for x in chosen),
-        "top_items": chosen[:20],
+        "top_items": [{**{key: value for key, value in row.items() if key != 'sold_supported_day_count'},
+                       'positive_sales_day_count': row.get('sold_supported_day_count')} for row in chosen[:20]],
     }
     if not item_query:
         payload["department_summary"] = result.get("summary")
@@ -795,6 +797,10 @@ def _weekly_usage_tool(args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOLS = [
+    {'type': 'function', 'name': 'get_item_cost',
+     'description': 'Quick exact-UPC current effective cost, source/date, verified selling unit, current price and current-cost GP. Use this directly for UPC cost/source/unit or current-margin checks, rather than family inventory receipt cost or a broad price recommendation review. Base cost per LB may differ from UPC cost per EA/PACK; preserve the verified conversion. Exact UPC required; identify a named product with search_items if necessary.',
+     'parameters': {'type': 'object', 'properties': {'upc': {'type': 'string'}},
+                    'required': ['upc'], 'additionalProperties': False}, 'strict': True},
     {'type': 'function', 'name': 'get_price_type_history',
      'description': 'Compare historical REG versus SALE prices, daily velocity and GP dollars/day using separately verified REG, TPR and SALE records. Use this for price-type performance comparisons; optimizer candidate prices and TOTAL-only daily averages do not prove SALE history. Exact UPC required; use search_items if identity is unclear. GP is at current effective cost and samples count observed type days.',
      'parameters': {'type': 'object', 'properties': {
@@ -915,6 +921,7 @@ TOOLS = [
 ]
 
 _TOOL_HANDLERS = {
+    'get_item_cost': lambda args: current_item_cost(args['upc']),
     'get_price_type_history': lambda args: price_type_history(args['upc'], args.get('supported_days') or 90),
     "estimate_weekly_usage": _weekly_usage_tool,
     "resolve_promotion_items": _promotion_items_tool,
@@ -952,6 +959,7 @@ CRITICAL DATA RULES:
 - Do not use the delivery-order tool to invent dates for a weekly usage scenario. If current tools cannot provide a verified weekly promotion forecast for a fully specified product, state that limitation instead of turning it into a delivery-specific order.
 - For item-specific overstock, over-receiving or last-two-receipts questions, call get_stock_flow with that item as query; do not look only at the department top list or ask for a family article when the UPC is already known.
 - For stock questions call get_inventory directly with the item name or exact Family article; do not run a preliminary search. The tool performs fast identification and asks for a choice when several families match.
+- For a UPC current-cost, cost-source, cost-unit or current-price GP% check, call get_item_cost directly with that UPC. Answer cost per verified selling unit first. If only family receipt/base cost was returned, it is not the UPC cost per each/pack; retrieve get_item_cost before giving a UPC margin.
 - For current-price-only questions, use search_items with the exact UPC and return only the current price, selling unit, price type and effective date. Save get_price_review for an actual recommendation/cost/profit question.
 - When explaining the small price-change rule, state the actual threshold: $0.25 or less, even when the question mentions $0.10.
 - Questions about price priority in the Price List (including Spanish "prioridad de precios en la lista") mean IN STORE → SALE → TPR → REG. Do not substitute a ranking of price-review recommendations; if the list is unclear, ask which list.
