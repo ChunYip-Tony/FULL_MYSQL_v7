@@ -93,6 +93,16 @@ body :is(.ai-answer-section:first-child p,.ai-message>div,.ai-answer){color:var(
 body .ai-composer textarea{background:var(--surface)!important;border:1px solid var(--line)!important;border-radius:12px!important;color:var(--ink)!important}
 body .ai-thinking::before{border-radius:50%}
 body .ai-table-wrap{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+body :is(select,textarea,input[type=text],input[type=number]){background:var(--surface)!important;color:var(--ink)!important;border-color:var(--line)!important}
+body .true-stock-buttons button{background:#f1f7fa!important;border-color:var(--line)!important;color:var(--green)!important}
+body .true-stock-buttons .zero-stock,body .true-stock-buttons button:last-child{background:#fff7e9!important;color:var(--amber)!important;border-color:#eedcb8!important}
+body .true-stock-buttons .oh-edit{background:var(--accent-soft)!important;border-color:#b5dce0!important}
+body *{scrollbar-color:#a9bdca transparent}
+body *::-webkit-scrollbar{width:7px;height:7px}
+body *::-webkit-scrollbar-track{background:transparent!important}
+body *::-webkit-scrollbar-thumb{background:#a9bdca!important;border-radius:8px!important}
+body #desktopStartupFiles,body #desktopStartupFiles *{color:var(--muted)!important}
+body .startup-files [data-current=true],body .startup-files [data-current=true] *{color:var(--good)!important}
 body :is(.weekly-usage-calculate,.search-submit){background:var(--green)!important;color:#fff!important;border-color:var(--green)!important;border-radius:10px!important}
 /* Fish Base uses the same tokens and components around the embedded Watch views. */
 body:has(#dataWorkspace)>header{background:var(--surface)!important;border-bottom:1px solid var(--line)!important;color:var(--ink)!important;min-height:48px;padding:7px 14px}
