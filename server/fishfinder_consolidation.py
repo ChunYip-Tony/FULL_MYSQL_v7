@@ -18,7 +18,12 @@ ENTRY_POINTS = {
     "/app/yipman-v1/exit": "/",
 }
 
-def install_fish_finder_entrypoints(app):
+def install_fish_finder_entrypoints(app, health_loader):
+    async def data_center_worker_status():
+        return await health_loader()
+
+    app.add_api_route("/v1/app/data-center/worker-status", data_center_worker_status, methods=["GET"])
+
     @app.middleware("http")
     async def unified_entrypoints(request, call_next):
         path = request.url.path.rstrip("/")
