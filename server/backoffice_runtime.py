@@ -1453,7 +1453,17 @@ def ordering_review(
                     best_available_match=bool(
                         best_available_delivery_evidence and observed_count>=1
                     )
-                    if standard_window_match or best_available_match:
+                    # An explicit category confirmation wins over incidental
+                    # receiving weekdays (for example Friday-received Frozen).
+                    from mobile_pricing import confirmed_category
+                    confirmed_match=bool(
+                        best_available_delivery_evidence
+                        and confirmed_category(fam.get("main_article_number"))==kind
+                    )
+                    if standard_window_match or best_available_match or confirmed_match:
+                        if confirmed_match:
+                            delivery_window=dict(delivery_window)
+                            delivery_window["confirmed_category_match"]=True
                         if best_available_match:
                             delivery_window=dict(delivery_window)
                             delivery_window["best_available_low_confidence"]=not standard_window_match
@@ -1535,7 +1545,8 @@ def ordering_review(
                     if (
                         x.get("posting_date") is not None
                         and (
-                            not delivery_window_weekdays
+                            delivery_window.get("confirmed_category_match")
+                            or not delivery_window_weekdays
                             or int(x["posting_date"].weekday()) in delivery_window_weekdays
                         )
                     )
@@ -1718,7 +1729,10 @@ def ordering_review(
                     delivery_window_events=[
                         x for x in (delivery_event_cache.get(fid) or [])
                         if x.get("posting_date") is not None
-                        and int(x["posting_date"].weekday()) in delivery_window_weekdays
+                        and (
+                            delivery_window.get("confirmed_category_match")
+                            or int(x["posting_date"].weekday()) in delivery_window_weekdays
+                        )
                     ]
                     historical_receiving_articles=_historical_receiving_article_summary(
                         cur,
@@ -1926,7 +1940,7 @@ def _ordering_review_cache_key(
     # Do not reuse persisted V7 payloads that may contain generic SAP document
     # numbers (for example 4920...) in the GR field.
     next_key=next_delivery_date.isoformat() if next_delivery_date is not None else "AUTO7"
-    return f"V22_CONFIRMED_ACTIVE_CATEGORIES_20261015|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
+    return f"V23_CONFIRMED_CATEGORY_DELIVERY_ROSTER_20261015|{mode}|{str(category or 'ALL').upper()}|{delivery_date.isoformat()}|{next_key}"
 
 
 def _ensure_ordering_review_cache_table(cur) -> None:
@@ -9227,4 +9241,5 @@ def accept_price_suggestion(
         "candidate_price":row.get("candidate_price"),
         "suppression_rule":"UNTIL_PRICE_EVIDENCE_OR_CANDIDATE_CHANGES",
     }
+
 
