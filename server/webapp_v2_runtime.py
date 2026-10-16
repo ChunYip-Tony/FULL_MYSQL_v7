@@ -141,6 +141,10 @@ def _overlay_live_current_price(cur, row: dict[str,Any]) -> dict[str,Any]:
     """
     if not row or row.get("upc_id") is None:
         return row
+    from mobile_pricing import confirmed_category
+    confirmed = confirmed_category(row.get('main_article_number'), row.get('article_number'))
+    if confirmed:
+        row['product_class'] = confirmed
     live=_live_current_price(cur,int(row["upc_id"]),row.get("ean_upc"))
     if not live:
         # Never preserve a stale snapshot as CURRENT price. Historical price
@@ -3222,6 +3226,10 @@ def _ordering_candidate_families(cur, kind: str) -> list[dict[str,Any]]:
     )
     out=[]
     for fam in cur.fetchall():
+        from mobile_pricing import confirmed_category
+        confirmed = confirmed_category(fam.get("main_article_number"))
+        if confirmed:
+            fam["product_class"] = confirmed
         pclass=str(fam.get("product_class") or "").strip().upper()
         cost_source=str(fam.get("cost_source") or "").strip().upper()
         official_source=str(fam.get("official_source") or "").strip().upper()

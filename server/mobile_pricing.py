@@ -195,6 +195,24 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
     return result
 
 
+# Item categories confirmed by Tony after the 2026-10-15 receiving review.
+# Includes family and observed receiving aliases; never infer from a name.
+CONFIRMED_CATEGORIES = {
+    '1363489':'FROZEN', '3400489':'FROZEN',
+    '1351010':'FROZEN', '3467050':'FROZEN',
+    '1341262':'FROZEN', '1341274':'FROZEN',
+    '1343317':'FROZEN', '3461000':'FROZEN',
+    '3400200':'FROZEN', '3401200':'FROZEN',
+    '1341020':'FROZEN', '1341138':'FROZEN', '1342207':'FROZEN',
+    '1361760':'FRESH', '3500527':'FRESH', '3540032':'FRESH',
+}
+def confirmed_category(*articles):
+    for article in articles:
+        category = CONFIRMED_CATEGORIES.get(str(article or '').strip())
+        if category:
+            return category
+    return None
+
 _category_cache = (0, {})
 def category_index(cur, rows, today):
     """Same receipt-weekday rules and confirmed exceptions as the mobile stock model."""
@@ -243,7 +261,10 @@ def category_index(cur, rows, today):
         name = ' '.join(str(row.get('family_description') or '').upper().split())
         dates = sorted(d for d in dates_by_family.get(fid,set()) if 0 <= (today-d).days <= 84)
         weekdays = {d.weekday() for d in dates}
-        if name in {'ATLANTIC SALMON STEAK','FRESH BIG MOUTH BASS'}:
+        confirmed = confirmed_category(row.get('main_article_number'), row.get('article_number'))
+        if confirmed:
+            category = confirmed
+        elif name in {'ATLANTIC SALMON STEAK','FRESH BIG MOUTH BASS'}:
             category = 'FRESH'
         elif str(row.get('product_class') or '').upper() == 'LIVE' or name.startswith('LIVE '):
             category = 'LIVE'

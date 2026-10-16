@@ -21,6 +21,23 @@ COSTS=[obs('MOVEMENT_RECEIPT_VALUATION',6)]
 CONFIG=[{'date':date(2026,10,1),'price':D('9.99'),'type':'REG'}]
 def sales(q,s,types=None):return {'sold_quantity':q,'sales_amount':s,'price_types':types or {'REG':{'sold_quantity':q,'sales_amount':s}}}
 class EvidenceTests(unittest.TestCase):
+    def test_tony_confirmed_categories(self):
+        frozen=['1363489','3400489','1351010','3467050','1341262','1341274','1343317','3461000','3400200','3401200','1341020','1341138','1342207']
+        fresh=['1361760','3500527','3540032']
+        for code in frozen: self.assertEqual(module.confirmed_category(code),'FROZEN')
+        for code in fresh: self.assertEqual(module.confirmed_category(code),'FRESH')
+        self.assertIsNone(module.confirmed_category('1361120'))
+        self.assertIsNone(module.confirmed_category('unknown'))
+    def test_confirmed_family_wins_without_receipts(self):
+        coverage=types.ModuleType('data_coverage');coverage.source_data_days=lambda *a,**kw:[]
+        clock=types.ModuleType('business_clock');clock.completed_through_date=lambda:DAY
+        semantics=types.ModuleType('receipt_semantics');semantics.physical_receipt_stage_rows=lambda rows:(rows,'TEST')
+        rows=[{**ROW,'family_id':1,'main_article_number':'1341138','product_class':'FRESH'}, {**ROW,'family_id':2,'main_article_number':'1361760','product_class':'FROZEN'}]
+        with patch.dict(sys.modules,{'data_coverage':coverage,'business_clock':clock,'receipt_semantics':semantics}), patch.object(module,'_category_cache',(0,{})):
+            result=module.category_index(None,rows,DAY)
+            self.assertEqual(result[1]['category'],'FROZEN')
+            self.assertEqual(result[2]['category'],'FRESH')
+
     def evidence(self,o=None,config=CONFIG,costs=COSTS):
         return day_evidence(ROW,DAY,o,config,costs,cost_for_day(ROW,costs,DAY))
     def test_cold_start_empty_cache_is_not_valid(self):
@@ -70,3 +87,4 @@ class EvidenceTests(unittest.TestCase):
     def test_returns_are_not_price_trials(self):
         self.assertFalse(self.evidence(sales(-1,-10))['valid'])
 if __name__=='__main__':unittest.main()
+
