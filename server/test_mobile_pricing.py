@@ -21,6 +21,22 @@ COSTS=[obs('MOVEMENT_RECEIPT_VALUATION',6)]
 CONFIG=[{'date':date(2026,10,1),'price':D('9.99'),'type':'REG'}]
 def sales(q,s,types=None):return {'sold_quantity':q,'sales_amount':s,'price_types':types or {'REG':{'sold_quantity':q,'sales_amount':s}}}
 class EvidenceTests(unittest.TestCase):
+    def test_primary_weekdays_ignore_secondary_receiving_days(self):
+        coverage=types.ModuleType('data_coverage')
+        coverage.source_data_days=lambda *a,**kw:[{'date':date(2026,10,d),'file_id':1} for d in [2,5,6,7,8]]
+        clock=types.ModuleType('business_clock');clock.completed_through_date=lambda:DAY
+        semantics=types.ModuleType('receipt_semantics');semantics.physical_receipt_stage_rows=lambda rows:(rows,'TEST')
+        receipts=[]
+        for fid,days in [(1,[5,6]),(2,[5,2]),(3,[6,2]),(4,[7,8])]:
+            for day in days:receipts.append({'family_id':fid,'posting_date':date(2026,10,day),'file_id':1,'article_id':fid,'purchase_order':'','article_document':'','base_uom_code':'LB','base_quantity':1,'entry_uom_code':'LB','entry_quantity':1})
+        class Cursor:
+            def execute(self,*args):pass
+            def fetchall(self):return receipts
+        rows=[{**ROW,'family_id':fid,'family_description':'Test item'} for fid in range(1,5)]
+        with patch.dict(sys.modules,{'data_coverage':coverage,'business_clock':clock,'receipt_semantics':semantics}), patch.object(module,'_category_cache',(0,{})):
+            result=module.category_index(Cursor(),rows,DAY)
+            self.assertEqual([result[fid]['category'] for fid in range(1,5)],['FROZEN','FRESH','UNKNOWN','UNKNOWN'])
+
     def test_tony_confirmed_categories(self):
         frozen=['1363489','3400489','1351010','3467050','1341262','1341274','1343317','3461000','3400200','3401200','1341020','1341138','1342207']
         fresh=['1361760','3500527','3540032']

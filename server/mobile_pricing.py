@@ -268,9 +268,9 @@ def category_index(cur, rows, today):
             category = 'FRESH'
         elif str(row.get('product_class') or '').upper() == 'LIVE' or name.startswith('LIVE '):
             category = 'LIVE'
-        elif weekdays and weekdays <= {1, 2}:
+        elif 1 in weekdays and 4 not in weekdays:
             category = 'FROZEN'
-        elif weekdays and weekdays <= {4, 5}:
+        elif 4 in weekdays and 1 not in weekdays:
             category = 'FRESH'
         else:
             category = 'UNKNOWN'
@@ -439,5 +439,6 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         # Bounded code location only: never expose SQL, credentials or row data.
         raise HTTPException(500, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
+
 
 
