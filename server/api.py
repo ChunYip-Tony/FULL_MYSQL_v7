@@ -5547,3 +5547,8 @@ def repair_single_total_pos(batch_id:int,request:Request):
             raise
         finally:
             cur.close()
+
+
+# One Fish Finder browser surface; keep every ingestion/API endpoint intact.
+from fishfinder_consolidation import install_fish_finder_entrypoints
+install_fish_finder_entrypoints(app)
