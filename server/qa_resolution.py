@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from db import db_conn
+from qa_pending import pending_confirmations
 from selling_status import selling_status_rows
 from manual_overrides import (
     ensure_override_table,
@@ -396,6 +397,7 @@ def qa_review(limit: int = 250) -> dict[str, Any]:
                 }
             )
 
+        queued_confirmations = pending_confirmations(cur)
         selling_overrides = selling_status_rows(cur)
         inactive = {str(r['ean_upc']) for r in selling_overrides if r['selling_status'] == 'INACTIVE'}
         issues = [i for i in issues if not (i.get('entity_type') == 'UPC' and str(i.get('entity_key')) in inactive)]
@@ -424,6 +426,7 @@ def qa_review(limit: int = 250) -> dict[str, Any]:
         "issues": issues,
         "resolution_history": history,
         "selling_status_overrides": selling_overrides,
+        "pending_confirmations": queued_confirmations,
         "rules": {
             "raw_source_rows_editable": False,
             "allowed_resolution_write": "USER_CONFIRMED_UPC_IDENTITY_UOM_OVERRIDE_ONLY",

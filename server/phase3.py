@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from db import db_conn
+from qa_pending import ensure_pending_table, apply_pending_confirmations
 from selling_status import confirmed_inactive_upcs, apply_inactive_current_scope
 from phase3_runtime import phase3_lease
 from data_coverage import source_data_days, coverage_summary
@@ -3516,6 +3517,10 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             ensure_analysis_layer_tables(cur)
             conn.commit()
             report('PHASE3_SCHEMA_READY')
+            ensure_pending_table(cur)
+            from qa_resolution import _ensure_resolution_table
+            _ensure_resolution_table(cur)
+            conn.commit()
             conn.start_transaction()
 
             cur.execute('SELECT processing_status FROM ingest_batch WHERE batch_id=%s', (batch_id,))
@@ -3706,6 +3711,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             cur.execute('SAVEPOINT before_quick_check_publish')
             report('PHASE3_QUICK_CHECK_REBUILD')
             qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress)
+            apply_pending_confirmations(cur, batch_id)
             apply_inactive_current_scope(cur)
             cur.execute("""SELECT SUM(quick_check_status='READY') AS ready,
                            SUM(quick_check_status='QA_HOLD') AS hold,
