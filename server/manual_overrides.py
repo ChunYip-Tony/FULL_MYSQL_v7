@@ -589,6 +589,12 @@ def seed_confirmed_overrides(cur) -> int:
             (row['ean_upc'],),
         )
         existing = cur.fetchone()
+        # An interactive user confirmation is newer authority than bundled seeds.
+        # Reapplying seeds must not reset its identity, unit, or conversion.
+        if (existing and existing.get('override_status') == 'CONFIRMED'
+                and str(existing.get('source_note') or '').startswith(
+                    'BACKOFFICE_QA_USER_CONFIRMED:')):
+            continue
         if existing and existing.get('override_status') == 'CONFIRMED' and all(
             existing.get(key) == row.get(key)
             for key in ('article_number','selling_uom_code','base_uom_code',
