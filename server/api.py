@@ -49,6 +49,7 @@ from backoffice_runtime import (
     yipman_ordering_calendar as backoffice_yipman_ordering_calendar,
     invalidate_true_stock_dependent_caches as backoffice_invalidate_true_stock_dependent_caches,
 )
+from selling_status import set_selling_status
 from qa_resolution import (
     qa_review as backoffice_qa_review,
     resolve_qa_issue as backoffice_resolve_qa_issue,
@@ -4059,6 +4060,13 @@ def app_dashboard():
     return json.loads(json.dumps(result,default=j))
 
 
+class BackofficeSellingStatusRequest(BaseModel):
+    ean_upc: str
+    selling_status: str
+    note: str
+    confirm: str
+
+
 class BackofficeQAResolveRequest(BaseModel):
     issue_id: int | None = None
     ean_upc: str
@@ -4153,6 +4161,22 @@ def backoffice_qa(limit:int=250):
         result=backoffice_qa_review(limit=limit)
     except Exception as exc:
         raise HTTPException(500,f'Backoffice QA review failed: {exc}')
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/backoffice/qa-set-selling-status')
+def backoffice_set_selling_status(
+    body: BackofficeSellingStatusRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor = public_app_actor(authorization)
+    try:
+        result = set_selling_status(ean_upc=body.ean_upc,selling_status=body.selling_status,
+                                    note=body.note,actor=actor,confirm=body.confirm)
+    except RuntimeError as exc:
+        raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     return json.loads(json.dumps(result,default=j))
 
 
@@ -5552,3 +5576,4 @@ def repair_single_total_pos(batch_id:int,request:Request):
 # One Fish Finder browser surface; keep every ingestion/API endpoint intact.
 from fishfinder_consolidation import install_fish_finder_entrypoints
 install_fish_finder_entrypoints(app, healthz)
+

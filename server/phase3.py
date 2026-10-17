@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from db import db_conn
+from selling_status import confirmed_inactive_upcs
 from phase3_runtime import phase3_lease
 from data_coverage import source_data_days, coverage_summary
 from business_clock import BUSINESS_TIMEZONE, business_today, completed_through_date
@@ -2149,6 +2150,7 @@ def _active_selling_evidence_for_unmapped(
     ean: str,
     batch_id: int,
     pos_days: list[dict[str, Any]] | None = None,
+    inactive_upcs: set[str] | None = None,
 ) -> dict[str, Any]:
     """Current activity scope for an unmapped historical UPC.
 
@@ -2172,7 +2174,11 @@ def _active_selling_evidence_for_unmapped(
     )
     recent_latest = max(daily) if daily else None
 
-    if recent_qty > 0:
+    inactive = confirmed_inactive_upcs(cur) if inactive_upcs is None else inactive_upcs
+    if ean in inactive:
+        scope = 'HISTORICAL_ONLY'
+        basis = 'USER_CONFIRMED_NOT_CURRENTLY_SOLD'
+    elif recent_qty > 0:
         scope = 'ACTIVE_SELLING'
         basis = 'POS_LATEST_28_VALID_DATA_DAYS'
     else:
@@ -2361,6 +2367,7 @@ def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str,
         'department_code': SEAFOOD_DEPT_CODE,
     }
 
+    inactive_selling = confirmed_inactive_upcs(cur)
     for ean in candidates:
         if _upc_identity_ready(cur, ean):
             result['mapped_count'] += 1
@@ -2372,6 +2379,7 @@ def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str,
             ean,
             batch_id,
             pos_days=pos_days,
+            inactive_upcs=inactive_selling,
         )
         if evidence['activity_scope'] != 'ACTIVE_SELLING':
             result['inactive_or_historical_count'] += 1
@@ -2415,6 +2423,7 @@ def rebuild_current_active_unmapped_sales_guard(cur, batch_id: int) -> dict[str,
 
 def _mapped_current_activity_scope(
     m28: dict[str, Any],
+    inactive: bool = False,
 ) -> tuple[str, str]:
     """Activity scope for mapped serving rows.
 
@@ -2424,6 +2433,8 @@ def _mapped_current_activity_scope(
 
     Price List presence alone does not make a UPC current-active.
     """
+    if inactive:
+        return 'HISTORICAL_ONLY', 'USER_CONFIRMED_NOT_CURRENTLY_SOLD'
     if Decimal(str(m28['qty'] or 0)) > 0:
         return 'ACTIVE_SELLING', 'POS_LATEST_28_VALID_DATA_DAYS'
 
@@ -2962,6 +2973,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
            ORDER BY su.upc_id"""
     )
     products = cur.fetchall()
+    inactive_selling = confirmed_inactive_upcs(cur)
     active_rows = active_ready = active_hold = historical_rows = 0
     live_issue_counts: dict[str, int] = defaultdict(int)
     total_rows = len(products)
@@ -3104,7 +3116,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
             wgpm = (cost_sell / (Decimal('1') - target)).quantize(Decimal('0.01'))
         sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc']) if cost else None
         reasons = []
-        activity_scope, activity_basis = _mapped_current_activity_scope(m28)
+        activity_scope, activity_basis = _mapped_current_activity_scope(m28, inactive=p['ean_upc'] in inactive_selling)
         # Only positive sales in the latest up-to-28 VALID POS data days make
         # a UPC current-active. Everything else remains historical/non-blocking.
         active_current = activity_scope == 'ACTIVE_SELLING'
@@ -3292,6 +3304,7 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
         (batch_id, *target_eans),
     )
     prior_target_core_holds_resolved = int(cur.rowcount or 0)
+    inactive_selling = confirmed_inactive_upcs(cur)
     active_rows = active_ready = active_hold = historical_rows = 0
     for p in products:
         upc_id = int(p['upc_id']); family_id = int(p['family_id'])
@@ -3390,7 +3403,7 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
             wgpm = (cost_sell / (Decimal('1') - target)).quantize(Decimal('0.01'))
         sweet = _historical_sweet_spot(cur, upc_id, family_id, factor, pos_days_30, p['ean_upc']) if cost else None
         reasons = []
-        activity_scope, activity_basis = _mapped_current_activity_scope(m28)
+        activity_scope, activity_basis = _mapped_current_activity_scope(m28, inactive=p['ean_upc'] in inactive_selling)
         # Only positive sales in the latest up-to-28 VALID POS data days make
         # a UPC current-active. Everything else remains historical/non-blocking.
         active_current = activity_scope == 'ACTIVE_SELLING'
@@ -3874,6 +3887,7 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
 
