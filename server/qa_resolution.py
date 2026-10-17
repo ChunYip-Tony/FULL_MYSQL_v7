@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from db import db_conn
+from selling_status import selling_status_rows
 from manual_overrides import (
     ensure_override_table,
     apply_manual_upc_overrides,
@@ -395,6 +396,10 @@ def qa_review(limit: int = 250) -> dict[str, Any]:
                 }
             )
 
+        selling_overrides = selling_status_rows(cur)
+        inactive = {str(r['ean_upc']) for r in selling_overrides if r['selling_status'] == 'INACTIVE'}
+        issues = [i for i in issues if not (i.get('entity_type') == 'UPC' and str(i.get('entity_key')) in inactive)]
+
         name_index = _latest_article_manual_name_index(cur)
         for issue in issues:
             _attach_display_names(issue, name_index)
@@ -418,6 +423,7 @@ def qa_review(limit: int = 250) -> dict[str, Any]:
         "fixable_count": sum(1 for x in issues if x.get("can_fix")),
         "issues": issues,
         "resolution_history": history,
+        "selling_status_overrides": selling_overrides,
         "rules": {
             "raw_source_rows_editable": False,
             "allowed_resolution_write": "USER_CONFIRMED_UPC_IDENTITY_UOM_OVERRIDE_ONLY",
@@ -1143,3 +1149,4 @@ def resolve_article_family_issue(
             "write_scope": "USER_CONFIRMED_ARTICLE_TO_FAMILY_AUTHORITY_ONLY",
         },
     }
+
