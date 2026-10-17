@@ -1,1 +1,1 @@
-VERSION='7.0.519-openai-yipman-assistant'
+VERSION='7.0.520-retain-confirmed-qa-answers'
