@@ -57,9 +57,15 @@ class SellingStatusTests(unittest.TestCase):
         self.assertFalse(any("quick_check_status='READY'" in q for q,p in self.conn.calls))
     def test_busy_pipeline_blocks_business_writes(self):
         self.conn.busy=True
-        with self.assertRaisesRegex(RuntimeError,'PIPELINE_BUSY'):self.apply()
+        with self.assertRaisesRegex(RuntimeError,'PIPELINE_BUSY'):self.apply(selling_status='ACTIVE')
         self.assertEqual(self.conn.starts,0)
         self.assertFalse(any(q.lstrip().startswith(('INSERT','UPDATE')) for q,p in self.conn.calls))
+    def test_inactive_can_queue_without_touching_busy_serving_rows(self):
+        self.conn.busy=True
+        result=self.apply()
+        self.assertTrue(result['rules']['readiness_refresh_pending'])
+        self.assertFalse(any(q.lstrip().startswith('UPDATE quick_check_current') for q,p in self.conn.calls))
+        self.assertTrue(any('INSERT INTO manual_upc_selling_status' in q for q,p in self.conn.calls))
     def test_audit_failure_rolls_back_status(self):
         self.conn.fail_audit=True
         with self.assertRaisesRegex(RuntimeError,'audit unavailable'):self.apply()
@@ -69,6 +75,12 @@ class SellingStatusTests(unittest.TestCase):
             with self.assertRaises(ValueError):self.apply(**kw)
         self.conn.identity=None
         with self.assertRaisesRegex(ValueError,'UPC_NOT_FOUND'):self.apply()
+    def test_final_rebuild_uses_current_read_joins_for_late_confirmations(self):
+        status.apply_inactive_current_scope(Cursor(self.conn))
+        writes=[q for q,p in self.conn.calls if q.lstrip().startswith('UPDATE')]
+        self.assertEqual(len(writes),2)
+        self.assertTrue(all('JOIN manual_upc_selling_status' in q for q in writes))
+        self.assertFalse(any('DELETE' in q for q,p in self.conn.calls))
     def test_no_new_table_is_required_for_old_deployments_reads(self):
         self.conn.table_exists=False
         self.assertEqual(status.confirmed_inactive_upcs(Cursor(self.conn)),set())

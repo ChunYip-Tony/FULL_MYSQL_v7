@@ -1,1 +1,1 @@
-VERSION='7.0.521-current-selling-status'
+VERSION='7.0.522-current-selling-status-queue'
