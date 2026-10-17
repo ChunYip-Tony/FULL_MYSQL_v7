@@ -49,6 +49,7 @@ from backoffice_runtime import (
     yipman_ordering_calendar as backoffice_yipman_ordering_calendar,
     invalidate_true_stock_dependent_caches as backoffice_invalidate_true_stock_dependent_caches,
 )
+from qa_pending import queue_confirmation
 from selling_status import set_selling_status
 from qa_resolution import (
     qa_review as backoffice_qa_review,
@@ -4077,6 +4078,16 @@ class BackofficeQAResolveRequest(BaseModel):
     note: str | None = None
     confirm: str
 
+class BackofficeQAQueueRequest(BaseModel):
+    ean_upc: str
+    article_number: str
+    selling_uom: str
+    base_uom: str
+    base_qty_per_selling_unit: Decimal
+    note: str
+    confirm: str
+
+
 class BackofficeQACostConversionRequest(BaseModel):
     issue_id: int | None = None
     ean_upc: str
@@ -4175,6 +4186,22 @@ def backoffice_set_selling_status(
                                     note=body.note,actor=actor,confirm=body.confirm)
     except RuntimeError as exc:
         raise HTTPException(409,detail={'status':'BLOCKED','reason':str(exc)})
+    except ValueError as exc:
+        raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
+    return json.loads(json.dumps(result,default=j))
+
+
+@app.post('/v1/backoffice/qa-queue-confirmation')
+def backoffice_queue_confirmation(
+    body: BackofficeQAQueueRequest,
+    authorization: Annotated[str|None,Header()]=None,
+):
+    actor = public_app_actor(authorization)
+    try:
+        result = queue_confirmation(ean_upc=body.ean_upc,article_number=body.article_number,
+            selling_uom=body.selling_uom,base_uom=body.base_uom,
+            base_qty_per_selling_unit=body.base_qty_per_selling_unit,
+            note=body.note,actor=actor,confirm=body.confirm)
     except ValueError as exc:
         raise HTTPException(422,detail={'status':'INVALID','reason':str(exc)})
     return json.loads(json.dumps(result,default=j))

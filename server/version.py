@@ -1,1 +1,1 @@
-VERSION='7.0.522-current-selling-status-queue'
+VERSION='7.0.523-queued-qa-confirmations'
