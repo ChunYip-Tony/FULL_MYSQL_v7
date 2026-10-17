@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from db import db_conn
-from selling_status import confirmed_inactive_upcs
+from selling_status import confirmed_inactive_upcs, apply_inactive_current_scope
 from phase3_runtime import phase3_lease
 from data_coverage import source_data_days, coverage_summary
 from business_clock import BUSINESS_TIMEZONE, business_today, completed_through_date
@@ -3706,6 +3706,16 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             cur.execute('SAVEPOINT before_quick_check_publish')
             report('PHASE3_QUICK_CHECK_REBUILD')
             qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress)
+            apply_inactive_current_scope(cur)
+            cur.execute("""SELECT SUM(quick_check_status='READY') AS ready,
+                           SUM(quick_check_status='QA_HOLD') AS hold,
+                           SUM(quick_check_status='HISTORICAL_ONLY') AS historical
+                           FROM quick_check_current""")
+            status_counts = cur.fetchone() or {}
+            qc_attempt.update(ready=int(status_counts.get('ready') or 0),
+                              hold=int(status_counts.get('hold') or 0),
+                              rows=int(status_counts.get('ready') or 0)+int(status_counts.get('hold') or 0),
+                              historical_rows=int(status_counts.get('historical') or 0))
             report('PHASE3_ANALYSIS_LAYER_REFRESH')
             seafood_analysis_attempt = refresh_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)
             seafood_analysis_audit = audit_analysis_layer(cur, batch_id, SEAFOOD_DEPT_CODE)

@@ -49,7 +49,8 @@ def set_selling_status(*, ean_upc, selling_status, note, actor, confirm):
         conn.commit()
         cur.execute("""SELECT 1 FROM pipeline_run WHERE processing_status='STARTED'
                        AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN') LIMIT 1""")
-        if cur.fetchone():
+        pipeline_busy = bool(cur.fetchone())
+        if pipeline_busy and status == 'ACTIVE':
             raise RuntimeError('PIPELINE_BUSY_RETRY_AFTER_ACTIVE_BATCH_FINISHES')
         cur.execute('SELECT upc_id,ean_upc,record_status FROM selling_upc WHERE ean_upc=%s LIMIT 1', (ean,))
         identity = cur.fetchone()
@@ -67,7 +68,7 @@ def set_selling_status(*, ean_upc, selling_status, note, actor, confirm):
                            VALUES (%s,%s,%s,%s) ON DUPLICATE KEY UPDATE
                            selling_status=VALUES(selling_status),source_note=VALUES(source_note),actor=VALUES(actor)""",
                         (ean,status,reason[:512],str(actor)[:128]))
-            if status == 'INACTIVE':
+            if status == 'INACTIVE' and not pipeline_busy:
                 # Keep every metric/identity/history field; only current readiness changes.
                 cur.execute("""UPDATE quick_check_current SET quick_check_status='HISTORICAL_ONLY',
                                blocking_reason=NULL,published_at=CURRENT_TIMESTAMP(6) WHERE ean_upc=%s""", (ean,))
@@ -76,6 +77,10 @@ def set_selling_status(*, ean_upc, selling_status, note, actor, confirm):
                                  '$.manual_selling_status',CAST(%s AS JSON))
                                WHERE entity_type='UPC' AND entity_key=%s AND issue_status='OPEN'""",
                             (json.dumps({'selling_status':status,'actor':actor,'note':reason[:512]}),ean))
+            elif status == 'INACTIVE':
+                # Save authority independently of the long rebuild transaction.
+                # QA review respects it immediately; the rebuild reapplies it before analysis.
+                pass
             elif batch_id is not None:
                 refresh_quick_check_subset(cur,batch_id,upcs=[ean])
             else:
@@ -97,4 +102,21 @@ def set_selling_status(*, ean_upc, selling_status, note, actor, confirm):
             cur.close()
     return {'status':'APPLIED','resolution_id':resolution_id,**after,
             'rules':{'raw_source_rows_modified':False,'historical_sales_preserved':True,
-                     'identity_preserved':True,'reversible':True}}
+                     'identity_preserved':True,'reversible':True,
+                     'readiness_refresh_pending':pipeline_busy}}
+
+
+def apply_inactive_current_scope(cur):
+    """Current-read writes apply confirmations saved during a long rebuild."""
+    cur.execute("""SELECT 1 FROM information_schema.tables WHERE table_schema=DATABASE()
+                   AND table_name='manual_upc_selling_status' LIMIT 1""")
+    if not cur.fetchone():
+        return
+    cur.execute("""UPDATE quick_check_current q JOIN manual_upc_selling_status m
+                   ON m.ean_upc=q.ean_upc AND m.selling_status='INACTIVE'
+                   SET q.quick_check_status='HISTORICAL_ONLY',q.blocking_reason=NULL""")
+    cur.execute("""UPDATE qa_phase3_issue q JOIN manual_upc_selling_status m
+                   ON q.entity_type='UPC' AND m.ean_upc=q.entity_key AND m.selling_status='INACTIVE'
+                   SET q.issue_status='RESOLVED',q.detail_json=JSON_SET(
+                       COALESCE(q.detail_json,JSON_OBJECT()),'$.activity_basis','USER_CONFIRMED_NOT_CURRENTLY_SOLD')
+                   WHERE q.issue_status='OPEN'""")
