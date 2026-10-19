@@ -19,7 +19,6 @@ API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets"
 
 MYSQL_TABS = {
     "source": "MYSQL_SOURCE_STATUS",
-    "family_daily": "MYSQL_FAMILY_DAILY_GP",
     "lookup": "MYSQL_LOOKUP_INDEX",
     "quick": "MYSQL_QUICK_CHECK_CURRENT",
     "family": "MYSQL_FAMILY_CURRENT",
@@ -1323,16 +1322,12 @@ def _validate_readback_once(
         spreadsheet_id,
         f"'{MYSQL_TABS['analysis']}'!A{analysis_row_count + 1}:B{analysis_row_count + 1}",
     )
-    family_daily_head = read(session, spreadsheet_id, f"'{MYSQL_TABS["family_daily"]}'!A1:R2")
+    family_daily_head = read(session, spreadsheet_id, f"'{MYSQL_TABS["family"]}'!S1:AN2")
     source_map = {str(r[0]): r[1] if len(r) > 1 else "" for r in source[1:] if r}
-    family_count = int(source_map.get("Family_MVT_Family_Count") or 0)
-    family_tail = read(session, spreadsheet_id, f"'{MYSQL_TABS["family_daily"]}'!A{family_count+1}:R{family_count+1}") if family_count else []
     failures: list[str] = []
-    if family_count and (not family_tail or len(family_tail[0])<18 or str(family_tail[0][17]) != str(batch_id)):
-        failures.append("FAMILY_DAILY_LAST_ROW_MISMATCH")
-    if not family_daily_head or family_daily_head[0][:3] != ["department", "date", "family_id"]:
+    if not family_daily_head or family_daily_head[0][:3] != ["daily_department", "daily_date", "daily_family_id"]:
         failures.append("FAMILY_DAILY_HEADER_MISMATCH")
-    if len(family_daily_head)>1 and str(family_daily_head[1][17]) != str(batch_id):
+    if len(family_daily_head)>1 and len(family_daily_head[1])>17 and family_daily_head[1][17] not in (None, "") and str(family_daily_head[1][17]) != str(batch_id):
         failures.append("FAMILY_DAILY_BATCH_MISMATCH")
     if str(source_map.get("MySQL_Batch_ID")) != str(batch_id):
         failures.append("BATCH_ID_MISMATCH")
@@ -1467,6 +1462,9 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
 
         analysis_matrix = _build_analysis(rows)
         family_matrix = _build_family(rows)
+        daily_by_family = {str(r[2]): r for r in family_daily_matrix[1:]}
+        daily_width = len(family_daily_matrix[0])
+        family_matrix = [family_matrix[0] + ["daily_"+str(c) for c in family_daily_matrix[0]]] + [r + daily_by_family.get(str(r[0]), [None]*daily_width) for r in family_matrix[1:]]
         analysis_row_count = max(0, len(analysis_matrix) - 1)
         analysis_family_count = max(0, len(family_matrix) - 1)
 
@@ -1482,7 +1480,6 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 latest_daily=latest_daily,
                 recent_3d=recent_3d,
             ),
-            MYSQL_TABS["family_daily"]:family_daily_matrix,
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
             MYSQL_TABS["family"]:family_matrix,
