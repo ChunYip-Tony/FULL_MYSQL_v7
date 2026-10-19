@@ -2,10 +2,20 @@
 from collections import defaultdict
 from decimal import Decimal
 
-HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis','family_avg_sold_price_per_movement_unit']
+HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis','family_avg_sold_price_per_movement_unit','gp_quantity','gp_quantity_uom','gp_quantity_basis']
 
 def d(v):
     return Decimal(str(v or 0))
+
+def confirmed_pos_lb(row, day):
+    # Tony confirmed this exact UPC's observed POS quantity as LB on 2026-10-19.
+    # Do not extend the decision to sibling UPCs or earlier business dates.
+    if str(row.get('ean_upc') or '') != '24929400000' or str(day)[:10] < '2026-10-18':
+        return None
+    if str(row.get('selling_uom') or '').upper() != 'LB':
+        return None
+    value=row.get('latest_daily_pos_reported_qty',row.get('latest_daily_pos_qty'))
+    return d(value) if value not in (None,'') and d(value)>=0 else None
 
 def family_result(sales, movement, cost):
     if movement.get('status') != 'READY':
@@ -40,7 +50,7 @@ def build_family_daily(cur, rows, daily, batch_id):
     for r in rows:
         if r.get('family_id') is not None:
             grouped[int(r['family_id'])].append(r)
-    total_gp=Decimal(0);total_cogs=Decimal(0);resolved_sales=Decimal(0);unresolved_sales=abs(d(daily.get('unmapped_sales')));failures=0
+    total_gp=Decimal(0);total_cogs=Decimal(0);resolved_sales=Decimal(0);unresolved_sales=abs(d(daily.get('unmapped_sales')));failures=0;pos_fallbacks=0
     for fid,members in sorted(grouped.items()):
         sales=sum((d(r.get('latest_daily_sales_dollars')) for r in members),Decimal(0))
         obs=movements.get(fid,[])
@@ -63,12 +73,21 @@ def build_family_daily(cur, rows, daily, batch_id):
         synthetic={**first,'selling_uom':unit,'base_uom':unit,'base_qty_per_selling_unit':1,'current_cost_per_selling_unit':None,'cost_source':None}
         cost=_family_cost_as_of(cur,synthetic,day) if unit else {'status':'NO_MOVEMENT_UNIT'}
         result=family_result(sales,movement,cost)
-        if result['status']=='RESOLVED_FAMILY_MVT':
+        gp_qty=movement.get('quantity');gp_unit=unit;gp_basis='FAMILY_251_MINUS_252'
+        if result['status']!='RESOLVED_FAMILY_MVT' and selling and all(confirmed_pos_lb(r,day) is not None for r in selling):
+            fallback_costs=[_family_cost_as_of(cur,r,day) for r in selling]
+            if all(c.get('status')=='RESOLVED' for c in fallback_costs):
+                gp_qty=sum((confirmed_pos_lb(r,day) for r in selling),Decimal(0))
+                gp_unit='LB';gp_basis='USER_CONFIRMED_POS_LB_251_252_UNMATCHED'
+                cogs=sum((confirmed_pos_lb(r,day)*d(c['cost_per_selling_unit']) for r,c in zip(selling,fallback_costs)),Decimal(0))
+                gp=sales-cogs;result={'status':'RESOLVED_USER_CONFIRMED_POS','cogs':cogs,'gp':gp,'gp_pct':gp/sales if sales else None}
+                cost=fallback_costs[0];comparison='POS_USED_251_252_UNMATCHED';pos_fallbacks+=1
+        if result['status'] in ('RESOLVED_FAMILY_MVT','RESOLVED_USER_CONFIRMED_POS'):
             total_gp+=result['gp'];total_cogs+=result['cogs'];resolved_sales+=sales
         else:
             failures+=1;unresolved_sales+=abs(sales)
-        matrix.append(['Seafood',day,fid,first.get('main_article_number'),first.get('family_description'),sales,movement.get('quantity'),unit,cost.get('cost_per_selling_unit'),cost.get('source'),cost.get('date'),result['cogs'],result['gp'],result['gp_pct'],result['status'],len({r.get('ean_upc') for r in members}),'FAMILY_251_MINUS_252_NO_UPC_ALLOCATION',batch_id,reported,comparison,'POS_SALES_DIV_REPORTED_QTY_IS_NOT_VERIFIED_PRICE_PER_LB',sales/d(movement['quantity']) if movement.get('status')=='READY' and d(movement.get('quantity'))>0 else None])
+        matrix.append(['Seafood',day,fid,first.get('main_article_number'),first.get('family_description'),sales,movement.get('quantity'),unit,cost.get('cost_per_selling_unit'),cost.get('source'),cost.get('date'),result['cogs'],result['gp'],result['gp_pct'],result['status'],len({r.get('ean_upc') for r in members}),'FAMILY_251_MINUS_252_NO_UPC_ALLOCATION',batch_id,reported,comparison,'POS_SALES_DIV_REPORTED_QTY_IS_NOT_VERIFIED_PRICE_PER_LB',sales/d(movement['quantity']) if movement.get('status')=='READY' and d(movement.get('quantity'))>0 else None,gp_qty,gp_unit,gp_basis])
     # Do not claim complete if a POS family was absent, a movement-only family is
     # unresolved, or department revenue does not equal the reconstructed scope.
     complete=bool(days) and failures==0 and unresolved_sales==0 and abs(resolved_sales-d(daily.get('sales_dollars')))<=Decimal('.01')
-    return matrix,{'status':'COMPLETE_FAMILY_MVT' if complete else 'PARTIAL_FAMILY_MVT','gp':total_gp if complete else None,'cogs':total_cogs if complete else None,'verified_family_gp_subtotal':total_gp,'unresolved_sales':unresolved_sales,'family_count':len(matrix)-1}
+    return matrix,{'status':('COMPLETE_WITH_CONFIRMED_POS' if pos_fallbacks else 'COMPLETE_FAMILY_MVT') if complete else 'PARTIAL_FAMILY_MVT','gp':total_gp if complete else None,'cogs':total_cogs if complete else None,'verified_family_gp_subtotal':total_gp,'unresolved_sales':unresolved_sales,'family_count':len(matrix)-1}

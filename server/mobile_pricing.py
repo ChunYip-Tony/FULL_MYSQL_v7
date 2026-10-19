@@ -457,6 +457,18 @@ def guard_weight_counts(items):
             member['quantityStatus'] = 'POS_WEIGHT_ESTIMATED'
             history = sorted(member.get('priceHistory', []), key=lambda p:(p['date'],p.get('file_id',0)))
             for day in member['days']:
+                from family_daily_gp import confirmed_pos_lb
+                confirmed=confirmed_pos_lb({'ean_upc':member.get('upc'),'selling_uom':member.get('uom'),'latest_daily_pos_reported_qty':day.get('qty')},day.get('date'))
+                if confirmed is not None and day.get('sales') is not None:
+                    cost=day.get('cost');current_cost=member.get('cost')
+                    day.update(qty=confirmed,quantityBasis='POS_QTY_WEIGHT',quantityEstimated=False,
+                        quantityConfirmation='TONY_CONFIRMED_POS_LB_2026_10_19',quantityReconciliation='251_252_UNMATCHED',
+                        gp=num(day['sales'])-confirmed*num(cost['value']) if cost else None,
+                        normalized_gp=num(day['sales'])-confirmed*num(current_cost['value']) if current_cost else None,
+                        valid=bool(cost and day.get('type') in PRIORITY),reason=None if cost else 'COST_OR_UNIT_UNVERIFIED')
+                    for value in day.get('typeSales',[]):
+                        value['gp']=num(value['sales'])-num(value['qty'])*num(cost['value']) if cost and num(value.get('qty')) is not None else None
+                    continue
                 if day.get('quantityBasis') == 'POS_QTY_WEIGHT':
                     continue
                 day['posItemCount'] = day['qty']
