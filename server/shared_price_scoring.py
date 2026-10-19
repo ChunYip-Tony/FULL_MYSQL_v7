@@ -62,3 +62,25 @@ def choose_price(candidates: list[Mapping[str, Any]]) -> dict[str, Any] | None:
     ranked = rank_price_candidates(candidates)
     proven = [r for r in ranked if r["confidence"] == "PROVEN"]
     return proven[0] if proven else None
+
+
+def price_references(company_a: Any = None, company_b: Any = None,
+                     company_c: Any = None, effective_cost: Any = None) -> dict[str, Any]:
+    """Return display-only Company A/B/C and 36% GP reference.
+
+    Do not substitute missing company values or use the 36% reference
+    as a 50/50 score input. Effective cost must already be verified per
+    the UPC selling unit; unverified costs yield a null target.
+    """
+    from decimal import ROUND_HALF_UP
+    cost = number(effective_cost)
+    gp36 = ((cost / Decimal("0.64")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if cost is not None and cost > 0 else None)
+    return {
+        "company_a": number(company_a),
+        "company_b": number(company_b),
+        "company_c": number(company_c),
+        "gp36_reference_price": gp36,
+        "gp36_target_gp_pct": Decimal("36"),
+        "gp36_reference_only": True,
+    }
