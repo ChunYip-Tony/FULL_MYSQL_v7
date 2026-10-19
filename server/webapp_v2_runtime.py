@@ -5966,6 +5966,14 @@ def _performance_range_cost_rows(
     })
     if not family_ids:
         return {}
+    shared_targets={int(x["family_id"]) for x in rows if str(x.get("main_article_number") or "")=="3400136" or str(x.get("ean_upc") or "") in {"24013600000","24513600000"}}
+    shared_id=None
+    if shared_targets:
+        cur.execute("SELECT family_id FROM product_family WHERE main_article_number=%s",("1348021",))
+        shared=cur.fetchone()
+        if shared:
+            shared_id=int(shared["family_id"])
+            family_ids=sorted(set(family_ids)|{shared_id})
     ph=",".join(["%s"]*len(family_ids))
     sources=(
         "MOVEMENT_RECEIPT_VALUATION",
@@ -5994,6 +6002,9 @@ def _performance_range_cost_rows(
     out: dict[int,list[dict[str,Any]]]={}
     for x in cur.fetchall():
         out.setdefault(int(x["family_id"]),[]).append(x)
+    if shared_id is not None:
+        for target in shared_targets:
+            out[target]=[dict(x,shared_cost_article="1348021",cost_authority_confirmation="TONY_2026_10_19") for x in out.get(shared_id,[])]
     return out
 
 

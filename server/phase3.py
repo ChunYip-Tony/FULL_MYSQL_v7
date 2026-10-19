@@ -2464,6 +2464,13 @@ def _product_class(article_desc: str | None, family_desc: str | None, category: 
 
 
 def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
+    # Tony-confirmed shared receipt authority for loose/packed green mussels.
+    cur.execute("""SELECT shared.family_id FROM product_family own
+        JOIN product_family shared ON shared.main_article_number='1348021'
+        WHERE own.family_id=%s AND own.main_article_number='3400136'""",(family_id,))
+    shared=cur.fetchone()
+    if shared:
+        family_id=shared['family_id']
     # Authority order:
     # 1) valid 101/107 receipt valuation (109 is physical GR quantity/date, not cost)
     # 2) supported OH-report cost: explicit unit cost or Total Value / Unrestricted Qty
