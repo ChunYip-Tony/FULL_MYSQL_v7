@@ -26,6 +26,9 @@ class ConfirmedSellingArticleTests(unittest.TestCase):
   cur=Mock();cur.fetchall.side_effect=[[],[{'family_id':47,'main_article_number':'1341139'}]]
   self.assertEqual(article_alias_families(cur,'2015950'),{47:['2015950']})
   self.assertEqual(cur.execute.call_args.args[1],('1341139',))
+ def test_2015994_reaches_cuttlefish_family(self):
+  cur=Mock();cur.fetchall.side_effect=[[],[{'family_id':1,'main_article_number':'1340302'}]]
+  self.assertEqual(article_alias_families(cur,'2015994'),{1:['2015994']})
  def test_exact_steak_is_ranked_before_other_family_cuts(self):
   from article_search_aliases import search_alias_priority
   self.assertLess(search_alias_priority('2015950','SEA BASS  STEAK'),search_alias_priority('2015950','CHILLEAN H&G SEA BASS FILLET'))

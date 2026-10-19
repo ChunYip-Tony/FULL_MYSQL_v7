@@ -26,6 +26,8 @@ def article_alias_families(cur, query):
 # Search-only correction confirmed by Tony on 2026-10-19. This does not alter
 # receiving identity, inventory, UPC sales, price, cost, or raw source records.
 CONFIRMED_SEARCH_ALIASES = {
+    # Historical UPC crosswalk: 2015994 -> 24271500000 -> 1340302.
+    '2015994': {'main_article_number':'1340302','name':'CUTTLEFISH WHOLE CLEANED'},
     '2015950': {'main_article_number':'1341139','name':'SEA BASS STEAK'},
 }
 
