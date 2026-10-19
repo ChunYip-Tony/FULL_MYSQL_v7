@@ -2,7 +2,7 @@
 from collections import defaultdict
 from decimal import Decimal
 
-HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis']
+HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis','family_avg_sold_price_per_movement_unit']
 
 def d(v):
     return Decimal(str(v or 0))
@@ -67,7 +67,7 @@ def build_family_daily(cur, rows, daily, batch_id):
             total_gp+=result['gp'];total_cogs+=result['cogs'];resolved_sales+=sales
         else:
             failures+=1;unresolved_sales+=abs(sales)
-        matrix.append(['Seafood',day,fid,first.get('main_article_number'),first.get('family_description'),sales,movement.get('quantity'),unit,cost.get('cost_per_selling_unit'),cost.get('source'),cost.get('date'),result['cogs'],result['gp'],result['gp_pct'],result['status'],len({r.get('ean_upc') for r in members}),'FAMILY_251_MINUS_252_NO_UPC_ALLOCATION',batch_id,reported,comparison,'POS_SALES_DIV_REPORTED_QTY_IS_NOT_VERIFIED_PRICE_PER_LB'])
+        matrix.append(['Seafood',day,fid,first.get('main_article_number'),first.get('family_description'),sales,movement.get('quantity'),unit,cost.get('cost_per_selling_unit'),cost.get('source'),cost.get('date'),result['cogs'],result['gp'],result['gp_pct'],result['status'],len({r.get('ean_upc') for r in members}),'FAMILY_251_MINUS_252_NO_UPC_ALLOCATION',batch_id,reported,comparison,'POS_SALES_DIV_REPORTED_QTY_IS_NOT_VERIFIED_PRICE_PER_LB',sales/d(movement['quantity']) if movement.get('status')=='READY' and d(movement.get('quantity'))>0 else None])
     # Do not claim complete if a POS family was absent, a movement-only family is
     # unresolved, or department revenue does not equal the reconstructed scope.
     complete=bool(days) and failures==0 and unresolved_sales==0 and abs(resolved_sales-d(daily.get('sales_dollars')))<=Decimal('.01')
