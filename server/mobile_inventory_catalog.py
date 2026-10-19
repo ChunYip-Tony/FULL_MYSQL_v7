@@ -40,6 +40,11 @@ def read_catalog(cur, *, query: str = "", cursor: int = 0, limit: int = 30) -> d
             )
         )"""
         params = [like] * 7
+        from article_search_aliases import confirmed_search_targets
+        targets=confirmed_search_targets(q)
+        if targets:
+            where=where.rstrip()[:-1]+' OR f.main_article_number IN ('+','.join(['%s']*len(targets))+'))'
+            params.extend(v['main_article_number'] for v in targets)
     cur.execute("SELECT COUNT(*) AS total FROM product_family f" + where, tuple(params))
     total = int(cur.fetchone()["total"])
     cursor_where = (" AND " if where else " WHERE ") + "f.family_id>%s"
@@ -82,3 +87,4 @@ def inventory_catalog(query: str = "", cursor: int = 0, limit: int = 30) -> dict
             return read_catalog(cur, query=query, cursor=cursor, limit=limit)
         finally:
             cur.close()
+

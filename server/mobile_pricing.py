@@ -396,7 +396,8 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                 if q and int(members[0]['family_id']) not in alias_families and not any(q.lower() in ' '.join(str(r.get(k) or '') for k in ('ean_upc','selling_description','article_number','family_description','main_article_number')).lower() for r in members):
                     continue
                 selected.append((key, members))
-            selected.sort(key=lambda g: (-sum(float(r.get('pos_qty_7d') or 0) for r in g[1]), -int(any(r.get('quick_check_status') == 'READY' for r in g[1])), g[0]))
+            from article_search_aliases import search_alias_priority
+            selected.sort(key=lambda g: (min(search_alias_priority(q,r.get('selling_description')) for r in g[1]), -sum(float(r.get('pos_qty_7d') or 0) for r in g[1]), -int(any(r.get('quick_check_status') == 'READY' for r in g[1])), g[0]))
             total = len(selected)
             page = selected[cursor:cursor+limit]
             rows = [r for _, members in page for r in members]

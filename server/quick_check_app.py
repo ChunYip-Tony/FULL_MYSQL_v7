@@ -621,6 +621,9 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                 ),
             )
         rows = cur.fetchall()
+        if numeric:
+            from article_search_aliases import search_alias_priority
+            rows.sort(key=lambda r: search_alias_priority(q,r.get('selling_description')))
         for row in rows:
             _annotate_stock_state(row)
             if numeric:
