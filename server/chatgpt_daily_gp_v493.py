@@ -48,6 +48,10 @@ def _fetch_latest_daily_sales_per_upc(
 
         sales = _d(row.get("latest_daily_sales_dollars"))
         qty = _d(row.get("latest_daily_pos_qty"))
+        verified_quantity_basis = str(row.get("latest_daily_quantity_basis") or "").upper()
+        row["latest_daily_pos_reported_qty"] = qty
+        row["latest_daily_pos_reported_avg_price"] = sales / qty if qty else None
+        row["latest_daily_quantity_basis"] = verified_quantity_basis or ("POS_REPORTED_QUANTITY_PRECISION_UNVERIFIED" if str(row.get("selling_uom") or "").upper()=="LB" else "POS_SELLING_UNIT")
 
         # This call intentionally happens for every selling UPC. Do not cache the
         # returned cost by family_id because _family_cost_as_of() has already
@@ -64,7 +68,7 @@ def _fetch_latest_daily_sales_per_upc(
         # This export reads POS reported counts, not catch-weight measurements.
         # A cost in LB cannot make a scan count into sold LB. Preserve sales and
         # price-list facts, but withhold count-derived GP until weight is verified.
-        quantity_basis = str(row.get("latest_daily_quantity_basis") or "").upper()
+        quantity_basis = verified_quantity_basis
         weight_verified = quantity_basis in {"POS_WEIGHT", "POS_QTY_WEIGHT"}
         if str(row.get("selling_uom") or "").strip().upper() == "LB" and not weight_verified:
             row["latest_daily_cost_status"] = "POS_WEIGHT_UNVERIFIED"

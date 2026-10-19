@@ -1,0 +1,74 @@
+"""Reconcile canonical POS revenue with family 251-minus-252; never allocate LB to UPCs."""
+from collections import defaultdict
+from decimal import Decimal
+
+HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis']
+
+def d(v):
+    return Decimal(str(v or 0))
+
+def family_result(sales, movement, cost):
+    if movement.get('status') != 'READY':
+        return {'status':'MOVEMENT_UNVERIFIED','cogs':None,'gp':None,'gp_pct':None}
+    if cost.get('status') != 'RESOLVED':
+        return {'status':'COST_UNIT_UNVERIFIED','cogs':None,'gp':None,'gp_pct':None}
+    qty=movement.get('quantity')
+    if qty is None or d(qty)<0 or (d(sales)!=0 and d(qty)==0) or (d(sales)==0 and d(qty)!=0):
+        return {'status':'SALES_MOVEMENT_REVIEW','cogs':None,'gp':None,'gp_pct':None}
+    cogs=d(qty)*d(cost['cost_per_selling_unit']);gp=d(sales)-cogs
+    return {'status':'RESOLVED_FAMILY_MVT','cogs':cogs,'gp':gp,'gp_pct':gp/d(sales) if d(sales) else None}
+
+def build_family_daily(cur, rows, daily, batch_id):
+    from data_coverage import source_data_days
+    from chatgpt_sheet_bridge import _family_cost_as_of
+    from webapp_v2_runtime import _ordering_family_movement_metrics
+    day=daily.get('business_date');matrix=[HEADERS]
+    if not day:
+        return matrix,{'status':'NO_POS_DAY','gp':None,'cogs':None,'unresolved_sales':None}
+    days=[x for x in source_data_days(cur,'movement',limit=90,up_to=day) if x['date']==day]
+    # Canonical file + date, never latest MVT date substituted for the POS date.
+    raw=[]
+    if days:
+        clauses=' OR '.join('(file_id=%s AND posting_date=%s)' for _ in days)
+        args=tuple(v for x in days for v in (x['file_id'],x['date']))
+        cur.execute('SELECT family_id,base_uom_code,SUM(net_sold_quantity) AS q FROM family_movement_observation WHERE ('+clauses+') GROUP BY family_id,base_uom_code',args)
+        raw=cur.fetchall()
+    movements=defaultdict(list)
+    for r in raw:
+        movements[int(r['family_id'])].append(r)
+    grouped=defaultdict(list)
+    for r in rows:
+        if r.get('family_id') is not None:
+            grouped[int(r['family_id'])].append(r)
+    total_gp=Decimal(0);total_cogs=Decimal(0);resolved_sales=Decimal(0);unresolved_sales=abs(d(daily.get('unmapped_sales')));failures=0
+    for fid,members in sorted(grouped.items()):
+        sales=sum((d(r.get('latest_daily_sales_dollars')) for r in members),Decimal(0))
+        obs=movements.get(fid,[])
+        if not sales and not any(d(r.get('q')) for r in obs):
+            continue
+        units={str(r.get('base_uom_code') or '').upper().strip() for r in obs}
+        movement={'status':'UNAVAILABLE','quantity':None,'uom':None}
+        if len(units)==1 and '' not in units:
+            movement={'status':'READY','quantity':sum((d(r['q']) for r in obs),Decimal(0)),'uom':next(iter(units))}
+        elif not obs and days:
+            # Retain the existing canonical raw-history recovery for active families.
+            movement=_ordering_family_movement_metrics(cur,fid,days)
+        first=members[0];unit=movement.get('uom')
+        selling=[r for r in members if d(r.get('latest_daily_sales_dollars'))]
+        reported=sum((d(r.get('latest_daily_pos_reported_qty',r.get('latest_daily_pos_qty'))) for r in selling),Decimal(0))
+        same_unit=bool(selling) and all(str(r.get('selling_uom') or '').upper()==str(unit or '').upper() for r in selling)
+        comparison='DIFFERENT_SELLING_UNITS'
+        if same_unit and movement.get('quantity') is not None:
+            comparison='CONSISTENT_WITH_ROUNDING' if abs(reported-d(movement['quantity']))<=Decimal('.5')*len(selling)+Decimal('.01') else 'QUANTITY_MISMATCH_REVIEW'
+        synthetic={**first,'selling_uom':unit,'base_uom':unit,'base_qty_per_selling_unit':1,'current_cost_per_selling_unit':None,'cost_source':None}
+        cost=_family_cost_as_of(cur,synthetic,day) if unit else {'status':'NO_MOVEMENT_UNIT'}
+        result=family_result(sales,movement,cost)
+        if result['status']=='RESOLVED_FAMILY_MVT':
+            total_gp+=result['gp'];total_cogs+=result['cogs'];resolved_sales+=sales
+        else:
+            failures+=1;unresolved_sales+=abs(sales)
+        matrix.append(['Seafood',day,fid,first.get('main_article_number'),first.get('family_description'),sales,movement.get('quantity'),unit,cost.get('cost_per_selling_unit'),cost.get('source'),cost.get('date'),result['cogs'],result['gp'],result['gp_pct'],result['status'],len({r.get('ean_upc') for r in members}),'FAMILY_251_MINUS_252_NO_UPC_ALLOCATION',batch_id,reported,comparison,'POS_SALES_DIV_REPORTED_QTY_IS_NOT_VERIFIED_PRICE_PER_LB'])
+    # Do not claim complete if a POS family was absent, a movement-only family is
+    # unresolved, or department revenue does not equal the reconstructed scope.
+    complete=bool(days) and failures==0 and unresolved_sales==0 and abs(resolved_sales-d(daily.get('sales_dollars')))<=Decimal('.01')
+    return matrix,{'status':'COMPLETE_FAMILY_MVT' if complete else 'PARTIAL_FAMILY_MVT','gp':total_gp if complete else None,'cogs':total_cogs if complete else None,'verified_family_gp_subtotal':total_gp,'unresolved_sales':unresolved_sales,'family_count':len(matrix)-1}

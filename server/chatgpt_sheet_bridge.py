@@ -19,6 +19,7 @@ API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets"
 
 MYSQL_TABS = {
     "source": "MYSQL_SOURCE_STATUS",
+    "family_daily": "MYSQL_FAMILY_DAILY_GP",
     "lookup": "MYSQL_LOOKUP_INDEX",
     "quick": "MYSQL_QUICK_CHECK_CURRENT",
     "family": "MYSQL_FAMILY_CURRENT",
@@ -502,6 +503,9 @@ LATEST_DAILY_COLUMNS = [
     "latest_daily_cost_status",
     "latest_daily_source_file",
     "latest_daily_coverage_kind",
+    "latest_daily_pos_reported_qty",
+    "latest_daily_pos_reported_avg_price",
+    "latest_daily_quantity_basis",
 ]
 
 
@@ -1260,6 +1264,11 @@ def _source_status(
         ("Latest_Daily_Seafood_GP_Dollars",latest_daily.get("gp_dollars")),
         ("Latest_Daily_Seafood_GP_Pct",latest_daily.get("gp_pct")),
         ("Latest_Daily_GP_Status",latest_daily.get("gp_status")),
+        ("Family_MVT_GP_Status",latest_daily.get("family_mvt_gp",{}).get("status")),
+        ("Family_MVT_Family_Count",latest_daily.get("family_mvt_gp",{}).get("family_count")),
+        ("Family_MVT_Department_GP",latest_daily.get("family_mvt_gp",{}).get("gp")),
+        ("Family_MVT_Verified_GP_Subtotal",latest_daily.get("family_mvt_gp",{}).get("verified_family_gp_subtotal")),
+        ("Family_MVT_Unresolved_Sales",latest_daily.get("family_mvt_gp",{}).get("unresolved_sales")),
         ("Latest_Daily_Cost_Unresolved_Sales",latest_daily.get("cost_unresolved_sales")),
         ("Latest_Daily_Unmapped_Sales",latest_daily.get("unmapped_sales")),
         ("Latest_Daily_Sales_Row_Count",latest_daily.get("sales_row_count")),
@@ -1314,8 +1323,17 @@ def _validate_readback_once(
         spreadsheet_id,
         f"'{MYSQL_TABS['analysis']}'!A{analysis_row_count + 1}:B{analysis_row_count + 1}",
     )
+    family_daily_head = read(session, spreadsheet_id, f"'{MYSQL_TABS["family_daily"]}'!A1:R2")
     source_map = {str(r[0]): r[1] if len(r) > 1 else "" for r in source[1:] if r}
+    family_count = int(source_map.get("Family_MVT_Family_Count") or 0)
+    family_tail = read(session, spreadsheet_id, f"'{MYSQL_TABS["family_daily"]}'!A{family_count+1}:R{family_count+1}") if family_count else []
     failures: list[str] = []
+    if family_count and (not family_tail or len(family_tail[0])<18 or str(family_tail[0][17]) != str(batch_id)):
+        failures.append("FAMILY_DAILY_LAST_ROW_MISMATCH")
+    if not family_daily_head or family_daily_head[0][:3] != ["department", "date", "family_id"]:
+        failures.append("FAMILY_DAILY_HEADER_MISMATCH")
+    if len(family_daily_head)>1 and str(family_daily_head[1][17]) != str(batch_id):
+        failures.append("FAMILY_DAILY_BATCH_MISMATCH")
     if str(source_map.get("MySQL_Batch_ID")) != str(batch_id):
         failures.append("BATCH_ID_MISMATCH")
     if str(source_map.get("Serving_Rows_Total")) != str(row_count):
@@ -1402,6 +1420,9 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 freshness = _canonical_freshness(cur, batch_id)
                 latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
                 recent_3d = _fetch_recent_3d_sales(cur, batch_id, rows)
+                from family_daily_gp import build_family_daily
+                family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
+                latest_daily["family_mvt_gp"] = family_daily_summary
             finally:
                 cur.close()
 
@@ -1461,6 +1482,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 latest_daily=latest_daily,
                 recent_3d=recent_3d,
             ),
+            MYSQL_TABS["family_daily"]:family_daily_matrix,
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
             MYSQL_TABS["family"]:family_matrix,
@@ -1610,3 +1632,4 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             except Exception:
                 pass
         return {"status":"FAILED","batch_id":batch_id,"error":error}
+
