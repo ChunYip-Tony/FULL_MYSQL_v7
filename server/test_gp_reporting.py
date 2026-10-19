@@ -17,4 +17,13 @@ class ReportingTests(unittest.TestCase):
   r={'family_id':1050,'quick_check_status':'HISTORICAL_ONLY','latest_daily_sales_dollars':'11.74','ean_upc':'24570200000'}
   self.assertEqual(len(fn([r])),2)
   self.assertEqual(len(fn([dict(r,latest_daily_sales_dollars=0)])),1)
+ def test_mussel_shared_receipt_cost_preserves_uom(self):
+  from unittest.mock import Mock
+  from datetime import date
+  fn=function('chatgpt_sheet_bridge.py','_family_cost_as_of',{'Any':object,'Decimal':Decimal,'date':date,'_norm_uom':lambda x:str(x).upper() if x else None})
+  cur=Mock();cur.fetchone.side_effect=[{'family_id':354},{'cost_per_base_uom':'4.79166667','base_uom':'LB','source_type':'MOVEMENT_RECEIPT_VALUATION','business_date':date(2026,10,13)}]
+  r=fn(cur,{'family_id':583,'main_article_number':'3400136','selling_uom':'LB','base_uom':'LB','base_qty_per_selling_unit':1},date(2026,10,18))
+  self.assertEqual(r['cost_per_selling_unit'],Decimal('4.79166667'))
+  self.assertEqual(cur.execute.call_args.args[1],(354,date(2026,10,18)))
+  self.assertIn('SHARED_1348021',r['source'])
 if __name__=='__main__':unittest.main()

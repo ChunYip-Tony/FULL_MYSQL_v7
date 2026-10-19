@@ -532,6 +532,17 @@ def _family_cost_as_of(
     if family_id is None:
         return {"status": "NO_FAMILY"}
 
+    # Tony confirmed 2026-10-19: loose 240/245 article 3400136 and frozen
+    # pack article 1348021 share receipt cost per LB. Cost authority only;
+    # inventory, POS quantities and family movement remain separate.
+    shared_cost_article = None
+    if str(row.get("main_article_number") or "") == "3400136" or str(row.get("ean_upc") or "") in {"24013600000","24513600000"}:
+        cur.execute("SELECT family_id FROM product_family WHERE main_article_number=%s",("1348021",))
+        shared = cur.fetchone()
+        if shared:
+            family_id = shared["family_id"]
+            shared_cost_article = "1348021"
+
     cur.execute(
         """SELECT co.cost_per_base_uom,co.cost_amount,co.business_date,co.source_type,
                   bu.uom_code AS base_uom,cu.uom_code AS cost_uom
@@ -598,13 +609,13 @@ def _family_cost_as_of(
         else:
             return {
                 "status": "FACTOR_MISSING",
-                "source": cost.get("source_type"),
+                "source": (str(cost.get("source_type"))+"_SHARED_1348021_TONY_CONFIRMED" if shared_cost_article else cost.get("source_type")),
                 "date": cost.get("business_date"),
             }
         return {
             "status": "RESOLVED",
             "cost_per_selling_unit": cost_per_base * factor,
-            "source": cost.get("source_type"),
+            "source": (str(cost.get("source_type"))+"_SHARED_1348021_TONY_CONFIRMED" if shared_cost_article else cost.get("source_type")),
             "date": cost.get("business_date"),
         }
 
@@ -612,13 +623,13 @@ def _family_cost_as_of(
         return {
             "status": "RESOLVED",
             "cost_per_selling_unit": cost_per_base,
-            "source": cost.get("source_type"),
+            "source": (str(cost.get("source_type"))+"_SHARED_1348021_TONY_CONFIRMED" if shared_cost_article else cost.get("source_type")),
             "date": cost.get("business_date"),
         }
 
     return {
         "status": "UOM_MISMATCH",
-        "source": cost.get("source_type"),
+        "source": (str(cost.get("source_type"))+"_SHARED_1348021_TONY_CONFIRMED" if shared_cost_article else cost.get("source_type")),
         "date": cost.get("business_date"),
     }
 
