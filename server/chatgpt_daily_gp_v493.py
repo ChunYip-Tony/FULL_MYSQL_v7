@@ -68,6 +68,16 @@ def _fetch_latest_daily_sales_per_upc(
         row["latest_daily_cost_source"] = cost.get("source")
         row["latest_daily_cost_date"] = cost.get("date")
 
+        if sales != 0 and qty == 0:
+            row["latest_daily_cost_status"] = "POS_SALES_WITH_ZERO_QUANTITY"
+            row["latest_daily_pos_qty"] = None
+            row["latest_daily_avg_sold_price"] = None
+            row["latest_daily_cogs"] = None
+            row["latest_daily_gp_dollars"] = None
+            row["latest_daily_gp_pct"] = None
+            unresolved_sales += abs(sales)
+            continue
+
         # This export reads POS reported counts, not catch-weight measurements.
         # A cost in LB cannot make a scan count into sold LB. Preserve sales and
         # price-list facts, but withhold count-derived GP until weight is verified.

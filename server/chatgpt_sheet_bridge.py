@@ -1160,12 +1160,12 @@ def _build_family(rows: list[dict[str, Any]]) -> list[list[Any]]:
             r for r in rs
             if str(r.get("quick_check_status") or "").upper() == "READY"
         ]
-        # Families with no READY UPC are excluded from analytical family input.
-        # Their held rows remain visible in MYSQL_QA_HOLD.
-        if not ready_rs:
+        # Keep all families with actual daily POS sales in department reconciliation.
+        # UPC readiness never determines whether department revenue exists.
+        if not ready_rs and not any(Decimal(str(r.get('latest_daily_sales_dollars') or 0)) != 0 for r in rs):
             continue
         representative = max(
-            ready_rs,
+            ready_rs or rs,
             key=lambda r: (float(r.get("pos_qty_7d") or 0), 1 if r.get("current_price") is not None else 0),
         )
         active = statuses.get("READY", 0) + statuses.get("QA_HOLD", 0)
@@ -1280,6 +1280,17 @@ def _source_status(
         ("Publisher","FULL_MYSQL_CHATGPT_SHEET_BRIDGE"),("Active_ChatGPT_Source",_active_source()),
         ("Analysis_Cutover_Status","READY_ONLY_SAFE_PARTIAL"),
     ]
+    family_summary=latest_daily.get("family_mvt_gp",{})
+    fields.extend([
+        ("Department_GP_Best_Estimate",family_summary.get("estimated_department_gp")),
+        ("Department_GP_Pct_Best_Estimate",family_summary.get("estimated_department_gp_pct")),
+        ("Department_GP_Estimate_Status",family_summary.get("estimate_status")),
+        ("Department_GP_Estimate_Assumptions",json.dumps(family_summary.get("estimate_details",[]),default=str)),
+        ("Family_GP_Blocking_Family_Count",len(family_summary.get("blockers",[]))),
+        ("Family_GP_Blockers",json.dumps(family_summary.get("blockers",[]),default=str)),
+        ("Family_GP_Resolved_Sales",family_summary.get("resolved_sales")),
+        ("Family_GP_Sales_Reconciliation_Gap",family_summary.get("sales_reconciliation_gap")),
+    ])
     return [["Field","Value"]] + [[k,v] for k,v in fields]
 
 

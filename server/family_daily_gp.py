@@ -50,7 +50,7 @@ def build_family_daily(cur, rows, daily, batch_id):
     for r in rows:
         if r.get('family_id') is not None:
             grouped[int(r['family_id'])].append(r)
-    total_gp=Decimal(0);total_cogs=Decimal(0);resolved_sales=Decimal(0);unresolved_sales=abs(d(daily.get('unmapped_sales')));failures=0;pos_fallbacks=0
+    total_gp=Decimal(0);total_cogs=Decimal(0);resolved_sales=Decimal(0);unresolved_sales=abs(d(daily.get('unmapped_sales')));failures=0;pos_fallbacks=0;blockers=[]
     for fid,members in sorted(grouped.items()):
         sales=sum((d(r.get('latest_daily_sales_dollars')) for r in members),Decimal(0))
         obs=movements.get(fid,[])
@@ -86,8 +86,27 @@ def build_family_daily(cur, rows, daily, batch_id):
             total_gp+=result['gp'];total_cogs+=result['cogs'];resolved_sales+=sales
         else:
             failures+=1;unresolved_sales+=abs(sales)
+            blockers.append({'family_id':fid,'main_article':first.get('main_article_number'),'name':first.get('family_description'),'sales':str(sales),'movement_qty':str(movement.get('quantity')),'movement_uom':unit,'reason':result['status']})
         matrix.append(['Seafood',day,fid,first.get('main_article_number'),first.get('family_description'),sales,movement.get('quantity'),unit,cost.get('cost_per_selling_unit'),cost.get('source'),cost.get('date'),result['cogs'],result['gp'],result['gp_pct'],result['status'],len({r.get('ean_upc') for r in members}),'FAMILY_251_MINUS_252_NO_UPC_ALLOCATION',batch_id,reported,comparison,'POS_SALES_DIV_REPORTED_QTY_IS_NOT_VERIFIED_PRICE_PER_LB',sales/d(movement['quantity']) if movement.get('status')=='READY' and d(movement.get('quantity'))>0 else None,gp_qty,gp_unit,gp_basis])
     # Do not claim complete if a POS family was absent, a movement-only family is
     # unresolved, or department revenue does not equal the reconstructed scope.
     complete=bool(days) and failures==0 and unresolved_sales==0 and abs(resolved_sales-d(daily.get('sales_dollars')))<=Decimal('.01')
-    return matrix,{'status':('COMPLETE_WITH_CONFIRMED_POS' if pos_fallbacks else 'COMPLETE_FAMILY_MVT') if complete else 'PARTIAL_FAMILY_MVT','gp':total_gp if complete else None,'cogs':total_cogs if complete else None,'verified_family_gp_subtotal':total_gp,'unresolved_sales':unresolved_sales,'family_count':len(matrix)-1}
+    estimated_gp=total_gp
+    estimates=[]
+    for item in blockers:
+        sales=d(item['sales']);fid=item['family_id'];members=grouped[fid]
+        rec=next(r for r in matrix[1:] if r[2]==fid)
+        qty=rec[6];cost=rec[8]
+        if qty is not None and d(qty)!=0 and cost is not None:
+            adjustment=sales-d(qty)*d(cost);basis='NET_FAMILY_MOVEMENT_COST_WITH_POS_MISMATCH'
+        else:
+            adjustment=sales*(total_gp/resolved_sales) if resolved_sales else Decimal(0)
+            basis='RESOLVED_DEPARTMENT_MARGIN_FALLBACK' if sales else 'NO_RELIABLE_COST_ADJUSTMENT_AVAILABLE'
+        estimated_gp+=adjustment
+        estimates.append({**item,'estimated_gp':str(adjustment),'estimate_basis':basis})
+    missing_sales=d(daily.get('sales_dollars'))-resolved_sales-sum((d(x['sales']) for x in blockers),Decimal(0))
+    if missing_sales:
+        adjustment=missing_sales*(total_gp/resolved_sales) if resolved_sales else Decimal(0)
+        estimated_gp+=adjustment
+        estimates.append({'sales':str(missing_sales),'estimated_gp':str(adjustment),'reason':'POS_SALES_OUTSIDE_FAMILY_SCOPE','estimate_basis':'RESOLVED_DEPARTMENT_MARGIN_FALLBACK'})
+    return matrix,{'estimated_department_gp':estimated_gp,'estimated_department_gp_pct':estimated_gp/d(daily.get('sales_dollars')) if d(daily.get('sales_dollars')) else None,'estimate_details':estimates,'estimate_status':'ESTIMATED' if not complete else 'COMPLETE','status':('COMPLETE_WITH_CONFIRMED_POS' if pos_fallbacks else 'COMPLETE_FAMILY_MVT') if complete else 'PARTIAL_FAMILY_MVT','gp':total_gp if complete else None,'cogs':total_cogs if complete else None,'verified_family_gp_subtotal':total_gp,'unresolved_sales':unresolved_sales,'family_count':len(matrix)-1,'blockers':blockers,'resolved_sales':resolved_sales,'sales_reconciliation_gap':d(daily.get('sales_dollars'))-resolved_sales}

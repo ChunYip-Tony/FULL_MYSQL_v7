@@ -2179,7 +2179,7 @@ def _active_selling_evidence_for_unmapped(
     if ean in inactive:
         scope = 'HISTORICAL_ONLY'
         basis = 'USER_CONFIRMED_NOT_CURRENTLY_SOLD'
-    elif recent_qty > 0:
+    elif recent_qty > 0 or any(Decimal(str(x.get('sales') or 0)) > 0 for x in daily.values()):
         scope = 'ACTIVE_SELLING'
         basis = 'POS_LATEST_28_VALID_DATA_DAYS'
     else:
@@ -2436,7 +2436,7 @@ def _mapped_current_activity_scope(
     """
     if inactive:
         return 'HISTORICAL_ONLY', 'USER_CONFIRMED_NOT_CURRENTLY_SOLD'
-    if Decimal(str(m28['qty'] or 0)) > 0:
+    if Decimal(str(m28['qty'] or 0)) > 0 or Decimal(str(m28.get('sales') or 0)) > 0:
         return 'ACTIVE_SELLING', 'POS_LATEST_28_VALID_DATA_DAYS'
 
     return 'HISTORICAL_ONLY', 'NO_POS_SALES_LATEST_28_VALID_DATA_DAYS'
@@ -3903,6 +3903,7 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
 
