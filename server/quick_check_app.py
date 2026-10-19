@@ -511,6 +511,9 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         if numeric:
+            from article_search_aliases import article_alias_families
+            aliases = article_alias_families(cur, q)
+            alias_clause = " OR family_id IN (" + ",".join(["%s"]*len(aliases)) + ")" if aliases else ""
             cur.execute(
                 """
                 SELECT ean_upc,article_number,family_id,main_article_number,
@@ -546,7 +549,9 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                    OR article_number LIKE %s
                    OR main_article_number LIKE %s
                    OR ean_upc LIKE %s
-                ORDER BY CASE WHEN sales_days_7d > 0 AND pos_qty_7d >= 0
+                """ + alias_clause + """
+                ORDER BY relevance_score DESC,
+                         CASE WHEN sales_days_7d > 0 AND pos_qty_7d >= 0
                            AND NULLIF(TRIM(selling_uom),'') IS NOT NULL
                            THEN pos_qty_7d / sales_days_7d ELSE NULL END DESC,
                          relevance_score DESC,
@@ -561,7 +566,7 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
                 """,
                 (
                     q, nk, q, q, prefix, prefix, like,
-                    q, nk, q, q, prefix, prefix, like, limit,
+                    q, nk, q, q, prefix, prefix, like, *aliases.keys(), limit,
                 ),
             )
         else:
@@ -618,6 +623,8 @@ def search_quick_check(query: str, limit: int = 20) -> dict[str, Any]:
         rows = cur.fetchall()
         for row in rows:
             _annotate_stock_state(row)
+            if numeric:
+                row["matched_article_numbers"] = aliases.get(int(row.get("family_id") or 0), [])
         cur.close()
 
     return {"query": q, "count": len(rows), "results": rows}
@@ -4479,5 +4486,6 @@ def pending_dumping_discrepancies() -> list[dict[str, Any]]:
         conn.commit()
         cur.close()
         return rows
+
 
 

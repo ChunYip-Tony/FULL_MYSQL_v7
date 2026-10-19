@@ -379,6 +379,8 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             for fid, cat in (overrides or {}).items():
                 if int(fid) in categories:
                     categories[int(fid)]['category'] = cat
+            from article_search_aliases import article_alias_families
+            alias_families = article_alias_families(cur,q) if q.strip().isdigit() else {}
             groups = OrderedDict()
             for r in all_rows:
                 groups.setdefault(group_key(r), []).append(r)
@@ -391,7 +393,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                     continue
                 if family and not any(family in {str(r.get('family_id')), str(r.get('main_article_number'))} for r in members):
                     continue
-                if q and not any(q.lower() in ' '.join(str(r.get(k) or '') for k in ('ean_upc','selling_description','article_number','family_description','main_article_number')).lower() for r in members):
+                if q and int(members[0]['family_id']) not in alias_families and not any(q.lower() in ' '.join(str(r.get(k) or '') for k in ('ean_upc','selling_description','article_number','family_description','main_article_number')).lower() for r in members):
                     continue
                 selected.append((key, members))
             selected.sort(key=lambda g: (-sum(float(r.get('pos_qty_7d') or 0) for r in g[1]), -int(any(r.get('quick_check_status') == 'READY' for r in g[1])), g[0]))
@@ -525,6 +527,7 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         frame = traceback.extract_tb(exc.__traceback__)[-1]
         # Bounded code location only: never expose SQL, credentials or row data.
         raise HTTPException(500, 'Pricing evidence unavailable: %s in %s:%s' % (type(exc).__name__, frame.name, frame.lineno)) from exc
+
 
 
 
