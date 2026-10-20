@@ -31,6 +31,13 @@ CONFIRMED_SEARCH_ALIASES = {
     '2015950': {'main_article_number':'1341139','name':'SEA BASS STEAK'},
 }
 
+# Alternate UPC spellings confirmed by Tony share a searchable product profile.
+from family_daily_gp import POS_LB_CONFIRMATIONS
+for _profile in POS_LB_CONFIRMATIONS.get('pack_profiles',[]):
+    if _profile.get('article_number'):
+        for _alias in _profile['aliases']:
+            CONFIRMED_SEARCH_ALIASES[_alias]={'main_article_number':_profile['article_number'],'name':_profile.get('name','')}
+
 def confirmed_search_targets(query):
     q=str(query or '').strip()
     return [v for k,v in CONFIRMED_SEARCH_ALIASES.items() if q==k or (len(q)>=4 and k.startswith(q))]

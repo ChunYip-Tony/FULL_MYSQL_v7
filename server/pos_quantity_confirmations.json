@@ -266,7 +266,8 @@
       "base_uom": "LB",
       "base_qty_per_selling_unit": "2.2",
       "confirmed_by": "Tony",
-      "confirmed_at": "2026-10-19"
+      "confirmed_at": "2026-10-19",
+      "name": "FISH BALL WITH EGG YOLK FLAVOR"
     },
     {
       "canonical_upc": "695892380546",
@@ -277,7 +278,23 @@
       "base_uom": "LB",
       "base_qty_per_selling_unit": "2.2",
       "confirmed_by": "Tony",
-      "confirmed_at": "2026-10-19"
+      "confirmed_at": "2026-10-19",
+      "article_number": "3467110",
+      "name": "SURIMI TOFU"
+    },
+    {
+      "canonical_upc": "6958923805513",
+      "aliases": [
+        "6958923805513",
+        "695892380551"
+      ],
+      "selling_uom": "PACK",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "2.2",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19",
+      "article_number": "3467060",
+      "name": "TOFU PACKET WITH EGG YOLK FLAVOR"
     }
   ]
 }

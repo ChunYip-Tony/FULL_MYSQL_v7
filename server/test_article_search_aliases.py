@@ -35,4 +35,10 @@ class ConfirmedSellingArticleTests(unittest.TestCase):
  def test_unknown_article_has_no_curated_mapping(self):
   from article_search_aliases import confirmed_search_targets
   self.assertEqual(confirmed_search_targets('2015951'),[])
+class PackAliasTests(unittest.TestCase):
+ def test_confirmed_short_and_long_upcs_find_same_family(self):
+  for alias in ['695892380548','6958923805483','695892380551','6958923805513']:
+   main='3467080' if '548' in alias else '3467060'
+   cur=Mock();cur.fetchall.side_effect=[[],[{'family_id':327,'main_article_number':main}]]
+   self.assertIn(alias,article_alias_families(cur,alias)[327])
 if __name__=='__main__':unittest.main()
