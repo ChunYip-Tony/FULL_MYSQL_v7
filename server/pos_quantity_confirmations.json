@@ -246,7 +246,6 @@
   "exceptions": [
     "4298",
     "4841",
-    "4883",
     "695892380546",
     "695892380548",
     "6958923805513",
@@ -322,6 +321,19 @@
       "confirmed_at": "2026-10-19",
       "article_number": "1341648",
       "name": "SCALLOP 10/20"
+    },
+    {
+      "canonical_upc": "4883",
+      "aliases": [
+        "4883"
+      ],
+      "article_number": "3400883",
+      "name": "COLD WATER SHRIMP (COOKED)",
+      "selling_uom": "PACK",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "2.2",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19"
     }
   ]
 }
