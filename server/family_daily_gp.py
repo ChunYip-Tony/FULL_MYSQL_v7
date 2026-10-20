@@ -1,6 +1,11 @@
 """Reconcile canonical POS revenue with family 251-minus-252; never allocate LB to UPCs."""
 from collections import defaultdict
 from decimal import Decimal
+import json
+from pathlib import Path
+
+POS_LB_CONFIRMATIONS=json.loads(Path(__file__).with_name("pos_quantity_confirmations.json").read_text())
+CONFIRMED_POS_LB_UPCS=frozenset(POS_LB_CONFIRMATIONS["confirmed_upcs"])
 
 HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis','family_avg_sold_price_per_movement_unit','gp_quantity','gp_quantity_uom','gp_quantity_basis']
 
@@ -11,13 +16,15 @@ def confirmed_pos_lb(row, day):
     # Tony confirmed this exact UPC's observed POS quantity as LB on 2026-10-19.
     # Do not extend the decision to sibling UPCs or earlier business dates.
     upc=str(row.get('ean_upc') or '')
-    historical_tilapia=upc in {'24053300000','24953300000'}
+    historical_tilapia=upc in CONFIRMED_POS_LB_UPCS or upc in {'24053300000','24953300000'}
     if not historical_tilapia and (upc != '24929400000' or str(day)[:10] < '2026-10-18'):
         return None
     if str(row.get('selling_uom') or '').upper() != 'LB':
         return None
     value=row.get('latest_daily_pos_reported_qty',row.get('latest_daily_pos_qty'))
-    return d(value) if value not in (None,'') and d(value)>=0 else None
+    if value in (None,'') or d(value)<0 or (d(value)==0 and d(row.get('latest_daily_sales_dollars'))!=0):
+        return None
+    return d(value)
 
 def family_result(sales, movement, cost):
     if movement.get('status') != 'READY':

@@ -40,11 +40,20 @@ class FamilyGPTests(unittest.TestCase):
   from family_daily_gp import confirmed_pos_lb
   row={'ean_upc':'24929400000','selling_uom':'LB','latest_daily_pos_reported_qty':2}
   self.assertEqual(confirmed_pos_lb(row,'2026-10-18'),2)
-  self.assertIsNone(confirmed_pos_lb(row,'2026-10-17'))
-  self.assertIsNone(confirmed_pos_lb(dict(row,ean_upc='24029400000'),'2026-10-18'))
+  self.assertEqual(confirmed_pos_lb(row,'2026-10-17'),2)
+  self.assertIsNone(confirmed_pos_lb(dict(row,ean_upc='99999999999'),'2026-10-18'))
  def test_tilapia_confirmation_covers_retained_history_only_exact_upcs(self):
   from family_daily_gp import confirmed_pos_lb
   for upc in ['24053300000','24953300000']:
    self.assertEqual(confirmed_pos_lb({'ean_upc':upc,'selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'),66)
-  self.assertIsNone(confirmed_pos_lb({'ean_upc':'24053500000','selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'))
+  self.assertIsNone(confirmed_pos_lb({'ean_upc':'4883','selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'))
+ def test_bulk_confirmation_excludes_all_ten_exceptions(self):
+  from family_daily_gp import CONFIRMED_POS_LB_UPCS,POS_LB_CONFIRMATIONS,confirmed_pos_lb
+  self.assertEqual(len(CONFIRMED_POS_LB_UPCS),234)
+  for upc in POS_LB_CONFIRMATIONS['exceptions']:
+   self.assertNotIn(upc,CONFIRMED_POS_LB_UPCS)
+   self.assertIsNone(confirmed_pos_lb({'ean_upc':upc,'selling_uom':'LB','latest_daily_pos_reported_qty':2},'2026-09-01'))
+ def test_zero_quantity_positive_sales_not_confirmed(self):
+  from family_daily_gp import confirmed_pos_lb
+  self.assertIsNone(confirmed_pos_lb({'ean_upc':'24053300000','selling_uom':'LB','latest_daily_pos_reported_qty':0,'latest_daily_sales_dollars':10},'2026-10-18'))
 if __name__=='__main__':unittest.main()

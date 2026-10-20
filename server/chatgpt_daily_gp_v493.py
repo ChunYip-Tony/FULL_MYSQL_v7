@@ -49,9 +49,11 @@ def _fetch_latest_daily_sales_per_upc(
         sales = _d(row.get("latest_daily_sales_dollars"))
         qty = _d(row.get("latest_daily_pos_qty"))
         verified_quantity_basis = str(row.get("latest_daily_quantity_basis") or "").upper()
-        from family_daily_gp import confirmed_pos_lb
+        from family_daily_gp import confirmed_pos_lb, CONFIRMED_POS_LB_UPCS
+        if str(row.get("ean_upc") or "") in CONFIRMED_POS_LB_UPCS and not row.get("selling_uom"):
+            row["selling_uom"]="LB"
         if confirmed_pos_lb(row,business_date) is not None:
-            verified_quantity_basis = "USER_CONFIRMED_POS_LB_251_252_UNMATCHED"
+            verified_quantity_basis = "USER_CONFIRMED_POS_LB"
         row["latest_daily_pos_reported_qty"] = qty
         row["latest_daily_pos_reported_avg_price"] = sales / qty if qty else None
         row["latest_daily_quantity_basis"] = verified_quantity_basis or ("POS_REPORTED_QUANTITY_PRECISION_UNVERIFIED" if str(row.get("selling_uom") or "").upper()=="LB" else "POS_SELLING_UNIT")
@@ -82,7 +84,7 @@ def _fetch_latest_daily_sales_per_upc(
         # A cost in LB cannot make a scan count into sold LB. Preserve sales and
         # price-list facts, but withhold count-derived GP until weight is verified.
         quantity_basis = verified_quantity_basis
-        weight_verified = quantity_basis in {"POS_WEIGHT", "POS_QTY_WEIGHT", "USER_CONFIRMED_POS_LB_251_252_UNMATCHED"}
+        weight_verified = quantity_basis in {"POS_WEIGHT", "POS_QTY_WEIGHT", "USER_CONFIRMED_POS_LB", "USER_CONFIRMED_POS_LB_251_252_UNMATCHED"}
         if str(row.get("selling_uom") or "").strip().upper() == "LB" and not weight_verified:
             row["latest_daily_cost_status"] = "POS_WEIGHT_UNVERIFIED"
             row["latest_daily_pos_qty"] = None

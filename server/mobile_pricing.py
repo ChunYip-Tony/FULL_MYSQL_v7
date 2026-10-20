@@ -494,7 +494,12 @@ def guard_weight_counts(items):
                     normalized_gp=day['sales']-qty*member['cost']['value'] if qty is not None and member.get('cost') else None,
                     valid=False, reason='POS_WEIGHT_ESTIMATED' if qty is not None else 'POS_WEIGHT_MISSING',
                     quantityBasis='POS_SALES_DIVIDED_BY_STABLE_HISTORICAL_TICKET', quantityEstimated=True)
-            if member.get('current') and member['current'].get('source') == 'CANONICAL_POS':
+            from family_daily_gp import CONFIRMED_POS_LB_UPCS
+            confirmed_member=str(member.get('upc')) in CONFIRMED_POS_LB_UPCS or str(member.get('upc')) in {'24053300000','24953300000'}
+            if confirmed_member:
+                member['quantityStatus']='USER_CONFIRMED_POS_LB'
+                member['quantityBasis']='POS_QTY_WEIGHT'
+            if not confirmed_member and member.get('current') and member['current'].get('source') == 'CANONICAL_POS':
                 member['current'] = next(iter(reversed(history)), None)
     return items
 
