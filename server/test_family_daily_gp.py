@@ -47,9 +47,11 @@ class FamilyGPTests(unittest.TestCase):
   for upc in ['24053300000','24953300000']:
    self.assertEqual(confirmed_pos_lb({'ean_upc':upc,'selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'),66)
   self.assertIsNone(confirmed_pos_lb({'ean_upc':'4883','selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'))
- def test_bulk_confirmation_excludes_all_ten_exceptions(self):
+ def test_confirmed_lb_registry_excludes_pack_profiles(self):
   from family_daily_gp import CONFIRMED_POS_LB_UPCS,POS_LB_CONFIRMATIONS,confirmed_pos_lb
-  self.assertEqual(len(CONFIRMED_POS_LB_UPCS),234)
+  self.assertEqual(len(CONFIRMED_POS_LB_UPCS),237)
+  for upc in ['4298','4917','4918']:
+   self.assertEqual(confirmed_pos_lb({'ean_upc':upc,'selling_uom':'LB','latest_daily_pos_reported_qty':2},'2026-09-01'),2)
   for upc in POS_LB_CONFIRMATIONS['exceptions']:
    self.assertNotIn(upc,CONFIRMED_POS_LB_UPCS)
    self.assertIsNone(confirmed_pos_lb({'ean_upc':upc,'selling_uom':'LB','latest_daily_pos_reported_qty':2},'2026-09-01'))
