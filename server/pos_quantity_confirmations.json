@@ -245,7 +245,6 @@
   ],
   "exceptions": [
     "4298",
-    "4841",
     "695892380546",
     "695892380548",
     "6958923805513",
@@ -329,6 +328,19 @@
       ],
       "article_number": "3400883",
       "name": "COLD WATER SHRIMP (COOKED)",
+      "selling_uom": "PACK",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "2.2",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19"
+    },
+    {
+      "canonical_upc": "4841",
+      "aliases": [
+        "4841"
+      ],
+      "article_number": "3400841",
+      "name": "30/40 H/O BLUE DIAMOND WHITE SHRIMP",
       "selling_uom": "PACK",
       "base_uom": "LB",
       "base_qty_per_selling_unit": "2.2",
