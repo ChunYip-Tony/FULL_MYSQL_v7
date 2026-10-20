@@ -565,3 +565,37 @@ def pricing_history_batch(upcs: str):
     from family_daily_gp import POS_QUANTITY_POLICY_REVISION
     result['quantityPolicyRevision']=POS_QUANTITY_POLICY_REVISION
     return jsonable_encoder(result)
+
+@router.get('/v1/app/mobile-pricing/article-movement')
+def pricing_article_movement(upcs: str, business_date: str):
+    """Canonical exact-article evidence; never allocates article/family totals to UPC."""
+    requested=sorted(set(upcs.split(',')))
+    if not requested or len(requested)>24 or any(not u.isdigit() or len(u)>18 for u in requested):
+        raise HTTPException(422,'Supply 1-24 exact numeric UPCs')
+    try:
+        date.fromisoformat(business_date)
+    except ValueError:
+        raise HTTPException(422,'Supply YYYY-MM-DD')
+    from db import db_conn
+    from data_coverage import source_data_days
+    from business_clock import completed_through_date
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True)
+        try:
+            days=source_data_days(cur,'movement',limit=365,up_to=completed_through_date())
+            canonical=next((d for d in days if str(d['date'])[:10]==business_date),None)
+            if not canonical:
+                raise HTTPException(404,'No canonical completed movement file for date')
+            ph=','.join(['%s']*len(requested))
+            cur.execute('SELECT ean_upc,article_id,article_number,main_article_number,family_id,selling_description,selling_uom FROM quick_check_current WHERE ean_upc IN ('+ph+')',tuple(requested))
+            members=cur.fetchall();families=sorted({int(r['family_id']) for r in members if r.get('family_id') is not None})
+            if not families:
+                return {'businessDate':business_date,'canonical':canonical,'members':[],'movementRows':[]}
+            fp=','.join(['%s']*len(families))
+            cur.execute('SELECT ean_upc,article_id,article_number,family_id,selling_description FROM quick_check_current WHERE family_id IN ('+fp+')',tuple(families))
+            siblings=cur.fetchall()
+            cur.execute("SELECT file_id,raw_id,source_row_number,article_number,article_id,family_id,description,movement_type,posting_date,entry_quantity,entry_uom_code,base_quantity,base_uom_code,amount_local_currency,sales_value FROM movement_history WHERE file_id=%s AND posting_date=%s AND family_id IN ("+fp+") AND movement_type IN ('251','252') ORDER BY article_number,raw_id LIMIT 2000",(canonical['file_id'],business_date,*families))
+            movements=cur.fetchall()
+            return jsonable_encoder({'businessDate':business_date,'canonical':canonical,'members':members,'familyMembers':siblings,'movementRows':movements,'quantityPolicy':'POS_ONLY; movement retained as independent exact-article reconciliation evidence; shared articles must not be allocated to UPC'})
+        finally:
+            cur.close()
