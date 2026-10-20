@@ -17,8 +17,8 @@ router = APIRouter()
 PRIORITY = {'REG': 1, 'TPR': 2, 'SALE': 3, 'IN STORE': 4, 'IN_STORE': 4}
 COST_ORDER = (
     {'MOVEMENT_RECEIPT_VALUATION'},
-    {'ON_HAND_EXPLICIT_COST_FALLBACK'},
     {'FROZEN_INVENTORY_OFFICIAL_COST', 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'},
+    {'ON_HAND_EXPLICIT_COST_FALLBACK'},
 )
 
 def num(value):
@@ -554,4 +554,5 @@ def pricing_history_batch(upcs: str):
     result=build_page(limit=24,history_days=90,requested_upcs=requested)
     result['requestedUpcs']=sorted(requested)
     result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
+    result['historyRepairVersion']=2
     return jsonable_encoder(result)
