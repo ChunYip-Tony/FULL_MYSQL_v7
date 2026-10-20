@@ -2,10 +2,12 @@
 from collections import defaultdict
 from decimal import Decimal
 import json
+import hashlib
 from pathlib import Path
 
 POS_LB_CONFIRMATIONS=json.loads(Path(__file__).with_name("pos_quantity_confirmations.json").read_text())
 CONFIRMED_POS_LB_UPCS=frozenset(POS_LB_CONFIRMATIONS["confirmed_upcs"])
+POS_QUANTITY_POLICY_REVISION=hashlib.sha256(json.dumps(POS_LB_CONFIRMATIONS,sort_keys=True).encode()).hexdigest()
 
 HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis','family_avg_sold_price_per_movement_unit','gp_quantity','gp_quantity_uom','gp_quantity_basis']
 
@@ -14,10 +16,29 @@ def apply_confirmed_selling_profile(row):
         return row
     for profile in POS_LB_CONFIRMATIONS.get('pack_profiles',[]):
         if str(row.get('ean_upc') or '') in profile['aliases']:
-            return {**row,'selling_uom':profile['selling_uom'],'base_uom':profile['base_uom'],
+            result={**row,'selling_uom':profile['selling_uom'],'base_uom':profile['base_uom'],
                 'base_qty_per_selling_unit':d(profile['base_qty_per_selling_unit']),
                 'canonical_upc':profile['canonical_upc'],'upc_aliases':profile['aliases'],
                 'selling_unit_confirmation':'TONY_CONFIRMED_PACK_2026_10_19'}
+            base_cost=row.get('current_cost_per_base_uom')
+            if base_cost not in (None,''):
+                cost=d(base_cost)*d(profile['base_qty_per_selling_unit'])
+            elif str(row.get('selling_uom') or '').upper()=='LB' and row.get('current_cost_per_selling_unit') not in (None,''):
+                cost=d(row['current_cost_per_selling_unit'])*d(profile['base_qty_per_selling_unit'])
+            else:
+                cost=None
+            if cost is not None:
+                result['current_cost_per_selling_unit']=cost
+                price=d(row.get('current_price'))
+                result['gp_pct_current']=(price-cost)/price if price else None
+                if row.get('sales_dollars_7d') not in (None,'') and row.get('pos_qty_7d') not in (None,''):
+                    result['gp_dollars_7d']=d(row['sales_dollars_7d'])-d(row['pos_qty_7d'])*cost
+                    days=d(row.get('sales_days_7d'))
+                    result['gp_per_day_7d']=result['gp_dollars_7d']/days if days else None
+            velocity=d(row.get('upc_velocity_7d'))
+            if velocity and row.get('current_oh') not in (None,'') and str(row.get('current_oh_uom') or '').upper()=='LB':
+                result['dos']=d(row['current_oh'])/(velocity*d(profile['base_qty_per_selling_unit']))
+            return result
     return row
 
 def d(v):

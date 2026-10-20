@@ -562,4 +562,6 @@ def pricing_history_batch(upcs: str):
     result['requestedUpcs']=sorted(requested)
     result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
     result['historyRepairVersion']=4
+    from family_daily_gp import POS_QUANTITY_POLICY_REVISION
+    result['quantityPolicyRevision']=POS_QUANTITY_POLICY_REVISION
     return jsonable_encoder(result)

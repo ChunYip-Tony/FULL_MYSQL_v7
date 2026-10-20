@@ -64,4 +64,9 @@ class FamilyGPTests(unittest.TestCase):
    self.assertEqual(r['canonical_upc'],'6958923805483')
    family=apply_confirmed_selling_profile({'ean_upc':upc,'selling_uom':'LB','base_qty_per_selling_unit':1,'cost_scope':'FAMILY_MOVEMENT_UNIT'})
    self.assertEqual(family['selling_uom'],'LB');self.assertEqual(family['base_qty_per_selling_unit'],1)
+ def test_confirmed_pack_cost_and_current_gp_are_per_pack(self):
+  from family_daily_gp import apply_confirmed_selling_profile
+  r=apply_confirmed_selling_profile({'ean_upc':'695892380546','selling_uom':'LB','current_cost_per_base_uom':'4','current_cost_per_selling_unit':'4','current_price':'12','current_oh':22,'current_oh_uom':'LB','upc_velocity_7d':1})
+  self.assertEqual(r['selling_uom'],'PACK');self.assertEqual(r['current_cost_per_selling_unit'],Decimal('8.8'));self.assertEqual(r['dos'],Decimal('10'))
+  self.assertEqual(apply_confirmed_selling_profile(r)['current_cost_per_selling_unit'],Decimal('8.8'))
 if __name__=='__main__':unittest.main()

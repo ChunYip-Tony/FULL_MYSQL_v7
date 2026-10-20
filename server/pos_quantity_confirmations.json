@@ -267,6 +267,17 @@
       "base_qty_per_selling_unit": "2.2",
       "confirmed_by": "Tony",
       "confirmed_at": "2026-10-19"
+    },
+    {
+      "canonical_upc": "695892380546",
+      "aliases": [
+        "695892380546"
+      ],
+      "selling_uom": "PACK",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "2.2",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19"
     }
   ]
 }

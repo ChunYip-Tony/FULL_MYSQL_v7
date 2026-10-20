@@ -468,6 +468,8 @@ def _stock_state(quantity: Any) -> dict[str, Any]:
 
 def _annotate_stock_state(row: dict[str, Any] | None, quantity_key: str = "current_oh") -> None:
     if row is not None:
+        from family_daily_gp import apply_confirmed_selling_profile
+        row.update(apply_confirmed_selling_profile(row))
         row.update(_stock_state(row.get(quantity_key)))
 
 

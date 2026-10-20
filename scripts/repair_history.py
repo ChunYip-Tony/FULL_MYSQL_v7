@@ -1,20 +1,23 @@
 """Rebuild retained Google analysis from exact-UPC backend history snapshots.
 Raw source observations are never altered. Run against a local snapshot directory.
 """
-import json, pathlib, urllib.request, urllib.parse, concurrent.futures, time, os
+import json, pathlib, urllib.request, urllib.parse, concurrent.futures, time, os, hashlib
 ROOT=pathlib.Path(os.environ.get('FISHFINDER_HISTORY_REPAIR_DIR','/tmp/history-repair')); ROOT.mkdir(exist_ok=True)
 API='https://seal-app-tkkkd.ondigitalocean.app'
 def read(n):return json.loads((ROOT/(n+'.json')).read_text())
 def objects(matrix):return [dict(zip(matrix[0],r)) for r in matrix[1:]]
 def fetch(batch):
+ policy=json.loads((pathlib.Path(__file__).resolve().parents[1]/'server'/'pos_quantity_confirmations.json').read_text())
+ expected_policy=hashlib.sha256(json.dumps(policy,sort_keys=True).encode()).hexdigest()
  path=ROOT/('batch-'+batch[0]+'.json')
  if path.exists():
   cached=json.loads(path.read_text())
-  if cached.get('historyRepairVersion')==4:return cached
+  if cached.get('historyRepairVersion')==4 and cached.get('quantityPolicyRevision')==expected_policy:return cached
  url=API+'/v1/app/mobile-pricing/history-batch?'+urllib.parse.urlencode({'upcs':','.join(batch)})
  for attempt in range(3):
   try:
    with urllib.request.urlopen(url,timeout=90) as response: data=json.load(response)
+   if data.get('quantityPolicyRevision')!=expected_policy:raise ValueError('Quantity confirmation revision not ready')
    if data.get('historyRepairVersion')!=4:raise ValueError('History repair deployment not ready')
    if data.get('through')!='2026-10-18':raise ValueError('Unexpected source cutoff '+str(data.get('through')))
    path.write_text(json.dumps(data));print('Fetched',batch[0],len(batch),flush=True);return data
