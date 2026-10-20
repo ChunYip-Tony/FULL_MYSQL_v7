@@ -150,7 +150,7 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
             result['typeSales'].append({'type':pt,'qty':q,'sales':s,'gp':s-q*cost['value'] if cost else None})
     if observation:
         qty, sales = num(observation.get('sold_quantity')), num(observation.get('sales_amount'))
-        result.update(qty=qty, sales=sales)
+        result.update(qty=qty, sales=sales, posReportedQty=qty, posReportedSales=sales)
         if 'TOTAL' in types:
             # The Single Total POS has actual Qty/Weight but no price-type split.
             # Keep the sales/GP reference without inventing REG/TPR exposure.
@@ -364,7 +364,7 @@ def category_index(cur, rows, today):
     _category_cache = (time.monotonic(), result)
     return result
 
-def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90):
+def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90, requested_upcs=None):
     from db import db_conn
     from business_clock import business_today, completed_through_date
     from data_coverage import source_data_days
@@ -374,7 +374,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
         cur = conn.cursor(dictionary=True)
         try:
             cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
-            all_rows = [r for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None]
+            all_rows = [r for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
             categories = {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()}
             for fid, cat in (overrides or {}).items():
                 if int(fid) in categories:
@@ -462,10 +462,10 @@ def guard_weight_counts(items):
                 if confirmed is not None and day.get('sales') is not None:
                     cost=day.get('cost');current_cost=member.get('cost')
                     day.update(qty=confirmed,quantityBasis='POS_QTY_WEIGHT',quantityEstimated=False,
-                        quantityConfirmation='TONY_CONFIRMED_POS_LB_2026_10_19',quantityReconciliation='251_252_UNMATCHED',
+                        quantityConfirmation='TONY_CONFIRMED_POS_LB_2026_10_19',quantityReconciliation='COMPARE_AT_FAMILY_LEVEL_NO_UPC_ALLOCATION',
                         gp=num(day['sales'])-confirmed*num(cost['value']) if cost else None,
                         normalized_gp=num(day['sales'])-confirmed*num(current_cost['value']) if current_cost else None,
-                        valid=bool(cost and day.get('type') in PRIORITY),reason=None if cost else 'COST_OR_UNIT_UNVERIFIED')
+                        valid=bool(cost and day.get('type') in PRIORITY and day.get('reason') in (None,'COST_OR_UNIT_UNVERIFIED') and not (confirmed==0 and num(day.get('sales'))!=0)),reason=day.get('reason') if day.get('reason') not in (None,'COST_OR_UNIT_UNVERIFIED') else (None if cost else 'COST_OR_UNIT_UNVERIFIED'))
                     for value in day.get('typeSales',[]):
                         value['gp']=num(value['sales'])-num(value['qty'])*num(cost['value']) if cost and num(value.get('qty')) is not None else None
                     continue
@@ -544,3 +544,14 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
 
 
 
+
+
+@router.get('/v1/app/mobile-pricing/history-batch')
+def pricing_history_batch(upcs: str):
+    requested=set(upcs.split(','))
+    if not requested or len(requested)>24 or any(not x.isdigit() or len(x)>18 for x in requested):
+        raise HTTPException(422,'Supply 1-24 exact numeric UPCs')
+    result=build_page(limit=24,history_days=90,requested_upcs=requested)
+    result['requestedUpcs']=sorted(requested)
+    result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
+    return jsonable_encoder(result)

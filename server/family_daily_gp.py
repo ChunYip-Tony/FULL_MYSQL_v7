@@ -10,7 +10,9 @@ def d(v):
 def confirmed_pos_lb(row, day):
     # Tony confirmed this exact UPC's observed POS quantity as LB on 2026-10-19.
     # Do not extend the decision to sibling UPCs or earlier business dates.
-    if str(row.get('ean_upc') or '') != '24929400000' or str(day)[:10] < '2026-10-18':
+    upc=str(row.get('ean_upc') or '')
+    historical_tilapia=upc in {'24053300000','24953300000'}
+    if not historical_tilapia and (upc != '24929400000' or str(day)[:10] < '2026-10-18'):
         return None
     if str(row.get('selling_uom') or '').upper() != 'LB':
         return None

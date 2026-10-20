@@ -42,4 +42,9 @@ class FamilyGPTests(unittest.TestCase):
   self.assertEqual(confirmed_pos_lb(row,'2026-10-18'),2)
   self.assertIsNone(confirmed_pos_lb(row,'2026-10-17'))
   self.assertIsNone(confirmed_pos_lb(dict(row,ean_upc='24029400000'),'2026-10-18'))
+ def test_tilapia_confirmation_covers_retained_history_only_exact_upcs(self):
+  from family_daily_gp import confirmed_pos_lb
+  for upc in ['24053300000','24953300000']:
+   self.assertEqual(confirmed_pos_lb({'ean_upc':upc,'selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'),66)
+  self.assertIsNone(confirmed_pos_lb({'ean_upc':'24053500000','selling_uom':'LB','latest_daily_pos_reported_qty':66},'2026-09-01'))
 if __name__=='__main__':unittest.main()
