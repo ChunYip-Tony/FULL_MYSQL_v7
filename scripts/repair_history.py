@@ -38,7 +38,9 @@ def supported_quantity(m,d):
 def rebuild():
  from datetime import date,timedelta
  from collections import Counter
- confirmed_registry=set(json.loads((pathlib.Path(__file__).resolve().parents[1]/'server'/'pos_quantity_confirmations.json').read_text())['confirmed_upcs'])|{'24053300000','24953300000'}
+ policy=json.loads((pathlib.Path(__file__).resolve().parents[1]/'server'/'pos_quantity_confirmations.json').read_text())
+ confirmed_registry=set(policy['confirmed_upcs'])|{'24053300000','24953300000'}
+ pack_registry={alias:profile for profile in policy.get('pack_profiles',[]) for alias in profile['aliases']}
  snapshots=read('snapshots');members={};source_days={r['date']:r for r in read('source-days')['dates']};through='2026-10-18';revision='MYSQL_BATCH_64;BULK_POS_LB_CONFIRMED_2026_10_19'
  for page in snapshots:
   for group in page['items']:
@@ -154,7 +156,7 @@ def rebuild():
   ref=current.get(upc,{});old=refrows.get(upc,{})
   refrows[upc]=dict(zip(refh,['Seafood',upc,m.get('name'),m['family'],ref.get('product_class',old.get('category')),m.get('uom'),(m.get('current') or {}).get('price'),(m.get('current') or {}).get('type'),(m.get('cost') or {}).get('value'),(m.get('cost') or {}).get('source'),ref.get('company_price_a',old.get('company_a')),ref.get('company_price_b',old.get('company_b')),ref.get('company_price_c',old.get('company_c')),revision,through]))
   es=byupc.get(upc,[]);ds=[daily[(upc,d['date'])] for d in m['days'] if (upc,d['date']) in daily];issues=sorted({d.get('reason') for d in ds if d.get('reason')})
-  covrows[upc]=dict(zip(covh,['Seafood',upc,m.get('name'),m['family'],'SOURCE_REFRESHED',len(m.get('priceHistory',[])),len(es),sum(d.get('sales') is not None for d in ds),'POS_CONFIRMED_LB' if upc in confirmed_registry else 'SOURCE_DEPENDENT','COMPARABLE_EPISODES_AVAILABLE' if any(e.get('previous_gp_day') is not None for e in es) else 'PARTIAL_OR_NO_COMPARABLE_BASELINE','; '.join(issues),revision,through]))
+  covrows[upc]=dict(zip(covh,['Seafood',upc,m.get('name'),m['family'],'SOURCE_REFRESHED',len(m.get('priceHistory',[])),len(es),sum(d.get('sales') is not None for d in ds),'POS_CONFIRMED_LB' if upc in confirmed_registry else ('USER_CONFIRMED_'+pack_registry[upc]['selling_uom']+'_'+str(pack_registry[upc]['base_qty_per_selling_unit'])+'_LB') if upc in pack_registry else 'SOURCE_DEPENDENT','COMPARABLE_EPISODES_AVAILABLE' if any(e.get('previous_gp_day') is not None for e in es) else 'PARTIAL_OR_NO_COMPARABLE_BASELINE','; '.join(issues),revision,through]))
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  for name,values in output.items():(ROOT/(name+'-rebuilt.json')).write_text(json.dumps(values,allow_nan=False))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}

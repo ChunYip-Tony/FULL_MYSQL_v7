@@ -295,6 +295,33 @@
       "confirmed_at": "2026-10-19",
       "article_number": "3467060",
       "name": "TOFU PACKET WITH EGG YOLK FLAVOR"
+    },
+    {
+      "canonical_upc": "810093898268",
+      "aliases": [
+        "810093898268"
+      ],
+      "selling_uom": "PACK",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "1",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19",
+      "article_number": "3480664",
+      "name": "ALL NATURE CLAM 31/40"
+    },
+    {
+      "canonical_upc": "8231806002",
+      "aliases": [
+        "823180600",
+        "8231806002"
+      ],
+      "selling_uom": "EA",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "1",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19",
+      "article_number": "1341648",
+      "name": "SCALLOP 10/20"
     }
   ]
 }

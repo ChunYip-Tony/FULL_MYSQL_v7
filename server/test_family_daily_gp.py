@@ -69,4 +69,10 @@ class FamilyGPTests(unittest.TestCase):
   r=apply_confirmed_selling_profile({'ean_upc':'695892380546','selling_uom':'LB','current_cost_per_base_uom':'4','current_cost_per_selling_unit':'4','current_price':'12','current_oh':22,'current_oh_uom':'LB','upc_velocity_7d':1})
   self.assertEqual(r['selling_uom'],'PACK');self.assertEqual(r['current_cost_per_selling_unit'],Decimal('8.8'));self.assertEqual(r['dos'],Decimal('10'))
   self.assertEqual(apply_confirmed_selling_profile(r)['current_cost_per_selling_unit'],Decimal('8.8'))
+ def test_scallop_ea_aliases_are_one_lb_each(self):
+  from family_daily_gp import apply_confirmed_selling_profile
+  for upc in ['823180600','8231806002']:
+   r=apply_confirmed_selling_profile({'ean_upc':upc,'selling_uom':'EA','current_cost_per_base_uom':'15.833333'})
+   self.assertEqual(r['selling_uom'],'EA');self.assertEqual(r['base_qty_per_selling_unit'],Decimal('1'));self.assertEqual(r['current_cost_per_selling_unit'],Decimal('15.833333'))
+   self.assertEqual(r['canonical_upc'],'8231806002')
 if __name__=='__main__':unittest.main()

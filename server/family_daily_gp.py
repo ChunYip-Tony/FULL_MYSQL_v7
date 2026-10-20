@@ -19,7 +19,7 @@ def apply_confirmed_selling_profile(row):
             result={**row,'selling_uom':profile['selling_uom'],'base_uom':profile['base_uom'],
                 'base_qty_per_selling_unit':d(profile['base_qty_per_selling_unit']),
                 'canonical_upc':profile['canonical_upc'],'upc_aliases':profile['aliases'],
-                'selling_unit_confirmation':'TONY_CONFIRMED_PACK_2026_10_19'}
+                'selling_unit_confirmation':'TONY_CONFIRMED_'+profile['selling_uom']+'_2026_10_19'}
             base_cost=row.get('current_cost_per_base_uom')
             if base_cost not in (None,''):
                 cost=d(base_cost)*d(profile['base_qty_per_selling_unit'])
