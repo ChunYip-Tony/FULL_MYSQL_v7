@@ -10,12 +10,12 @@ def fetch(batch):
  path=ROOT/('batch-'+batch[0]+'.json')
  if path.exists():
   cached=json.loads(path.read_text())
-  if cached.get('historyRepairVersion')==3:return cached
+  if cached.get('historyRepairVersion')==4:return cached
  url=API+'/v1/app/mobile-pricing/history-batch?'+urllib.parse.urlencode({'upcs':','.join(batch)})
  for attempt in range(3):
   try:
    with urllib.request.urlopen(url,timeout=90) as response: data=json.load(response)
-   if data.get('historyRepairVersion')!=3:raise ValueError('History repair deployment not ready')
+   if data.get('historyRepairVersion')!=4:raise ValueError('History repair deployment not ready')
    if data.get('through')!='2026-10-18':raise ValueError('Unexpected source cutoff '+str(data.get('through')))
    path.write_text(json.dumps(data));print('Fetched',batch[0],len(batch),flush=True);return data
   except Exception:

@@ -9,6 +9,17 @@ CONFIRMED_POS_LB_UPCS=frozenset(POS_LB_CONFIRMATIONS["confirmed_upcs"])
 
 HEADERS = ['department','date','family_id','main_article_number','family_name','pos_sales','movement_qty','movement_uom','cost_per_movement_unit','cost_source','cost_date','family_cogs','family_gp','family_gp_pct','status','upc_count','quantity_basis','batch_id','pos_reported_qty','pos_qty_comparison','pos_price_basis','family_avg_sold_price_per_movement_unit','gp_quantity','gp_quantity_uom','gp_quantity_basis']
 
+def apply_confirmed_selling_profile(row):
+    if row.get('cost_scope')=='FAMILY_MOVEMENT_UNIT':
+        return row
+    for profile in POS_LB_CONFIRMATIONS.get('pack_profiles',[]):
+        if str(row.get('ean_upc') or '') in profile['aliases']:
+            return {**row,'selling_uom':profile['selling_uom'],'base_uom':profile['base_uom'],
+                'base_qty_per_selling_unit':d(profile['base_qty_per_selling_unit']),
+                'canonical_upc':profile['canonical_upc'],'upc_aliases':profile['aliases'],
+                'selling_unit_confirmation':'TONY_CONFIRMED_PACK_2026_10_19'}
+    return row
+
 def d(v):
     return Decimal(str(v or 0))
 
@@ -79,7 +90,7 @@ def build_family_daily(cur, rows, daily, batch_id):
         comparison='DIFFERENT_SELLING_UNITS'
         if same_unit and movement.get('quantity') is not None:
             comparison='CONSISTENT_WITH_ROUNDING' if abs(reported-d(movement['quantity']))<=Decimal('.5')*len(selling)+Decimal('.01') else 'QUANTITY_MISMATCH_REVIEW'
-        synthetic={**first,'selling_uom':unit,'base_uom':unit,'base_qty_per_selling_unit':1,'current_cost_per_selling_unit':None,'cost_source':None}
+        synthetic={**first,'cost_scope':'FAMILY_MOVEMENT_UNIT','selling_uom':unit,'base_uom':unit,'base_qty_per_selling_unit':1,'current_cost_per_selling_unit':None,'cost_source':None}
         cost=_family_cost_as_of(cur,synthetic,day) if unit else {'status':'NO_MOVEMENT_UNIT'}
         result=family_result(sales,movement,cost)
         gp_qty=movement.get('quantity');gp_unit=unit;gp_basis='FAMILY_251_MINUS_252'

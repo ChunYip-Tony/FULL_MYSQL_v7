@@ -374,7 +374,8 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
         cur = conn.cursor(dictionary=True)
         try:
             cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
-            all_rows = [r for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
+            from family_daily_gp import apply_confirmed_selling_profile
+            all_rows = [apply_confirmed_selling_profile(r) for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
             categories = {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()}
             for fid, cat in (overrides or {}).items():
                 if int(fid) in categories:
@@ -428,6 +429,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                         'article': str(row.get('article_number') or ''), 'uom': selling_unit(row) or None,
                         'quantityBasis': 'POS_ITEM_COUNT' if selling_unit(row) == 'LB' else 'POS_SELLING_UNIT',
                         'status': row.get('quick_check_status'), 'blocking_reason': row.get('blocking_reason'),
+                        'canonicalUpc':row.get('canonical_upc',str(row['ean_upc'])),'upcAliases':row.get('upc_aliases',[]),
                         'current': current, 'priceHistory': history, 'cost': cost,
                         'effectiveCost': cost or effective_cost_as_of(observations,today), 'days': series})
                 first = members[0]
@@ -559,5 +561,5 @@ def pricing_history_batch(upcs: str):
     result=build_page(limit=24,history_days=90,requested_upcs=requested)
     result['requestedUpcs']=sorted(requested)
     result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
-    result['historyRepairVersion']=3
+    result['historyRepairVersion']=4
     return jsonable_encoder(result)

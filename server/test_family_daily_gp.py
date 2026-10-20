@@ -56,4 +56,12 @@ class FamilyGPTests(unittest.TestCase):
  def test_zero_quantity_positive_sales_not_confirmed(self):
   from family_daily_gp import confirmed_pos_lb
   self.assertIsNone(confirmed_pos_lb({'ean_upc':'24053300000','selling_uom':'LB','latest_daily_pos_reported_qty':0,'latest_daily_sales_dollars':10},'2026-10-18'))
+ def test_egg_yolk_aliases_are_pack_without_changing_family_lb_cost(self):
+  from family_daily_gp import apply_confirmed_selling_profile
+  for upc in ['695892380548','6958923805483']:
+   r=apply_confirmed_selling_profile({'ean_upc':upc,'selling_uom':'LB'})
+   self.assertEqual(r['selling_uom'],'PACK');self.assertEqual(r['base_qty_per_selling_unit'],Decimal('2.2'))
+   self.assertEqual(r['canonical_upc'],'6958923805483')
+   family=apply_confirmed_selling_profile({'ean_upc':upc,'selling_uom':'LB','base_qty_per_selling_unit':1,'cost_scope':'FAMILY_MOVEMENT_UNIT'})
+   self.assertEqual(family['selling_uom'],'LB');self.assertEqual(family['base_qty_per_selling_unit'],1)
 if __name__=='__main__':unittest.main()

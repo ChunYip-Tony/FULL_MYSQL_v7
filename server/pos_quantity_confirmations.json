@@ -253,5 +253,20 @@
     "810093898268",
     "823180600"
   ],
-  "note": "No family movement allocation to UPC. Cost conversions remain independent."
+  "note": "No family movement allocation to UPC. Cost conversions remain independent.",
+  "pack_profiles": [
+    {
+      "canonical_upc": "6958923805483",
+      "aliases": [
+        "695892380548",
+        "6958923805483"
+      ],
+      "article_number": "3467080",
+      "selling_uom": "PACK",
+      "base_uom": "LB",
+      "base_qty_per_selling_unit": "2.2",
+      "confirmed_by": "Tony",
+      "confirmed_at": "2026-10-19"
+    }
+  ]
 }

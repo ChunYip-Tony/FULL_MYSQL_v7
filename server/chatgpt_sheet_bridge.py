@@ -528,6 +528,8 @@ def _family_cost_as_of(
       3) OH explicit-cost fallback
       4) already-resolved user-confirmed fallback when it predates the day
     """
+    from family_daily_gp import apply_confirmed_selling_profile
+    row=apply_confirmed_selling_profile(row)
     family_id = row.get("family_id")
     if family_id is None:
         return {"status": "NO_FAMILY"}
@@ -1015,7 +1017,8 @@ def _fetch_recent_3d_sales(
 
 def _fetch_quick_rows(cur) -> list[dict[str, Any]]:
     cur.execute("SELECT " + ",".join(QC_COLUMNS) + " FROM quick_check_current ORDER BY ean_upc")
-    rows = list(cur.fetchall())
+    from family_daily_gp import apply_confirmed_selling_profile
+    rows = [apply_confirmed_selling_profile(r) for r in cur.fetchall()]
     for row in rows:
         negative_stock, stock_status = _stock_state(row.get("current_oh"))
         row["negative_stock"] = negative_stock
