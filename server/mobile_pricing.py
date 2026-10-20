@@ -559,5 +559,5 @@ def pricing_history_batch(upcs: str):
     result=build_page(limit=24,history_days=90,requested_upcs=requested)
     result['requestedUpcs']=sorted(requested)
     result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
-    result['historyRepairVersion']=2
+    result['historyRepairVersion']=3
     return jsonable_encoder(result)

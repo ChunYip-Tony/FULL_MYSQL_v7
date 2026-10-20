@@ -10,12 +10,12 @@ def fetch(batch):
  path=ROOT/('batch-'+batch[0]+'.json')
  if path.exists():
   cached=json.loads(path.read_text())
-  if cached.get('historyRepairVersion')==2:return cached
+  if cached.get('historyRepairVersion')==3:return cached
  url=API+'/v1/app/mobile-pricing/history-batch?'+urllib.parse.urlencode({'upcs':','.join(batch)})
  for attempt in range(3):
   try:
    with urllib.request.urlopen(url,timeout=90) as response: data=json.load(response)
-   if data.get('historyRepairVersion')!=2:raise ValueError('History repair deployment not ready')
+   if data.get('historyRepairVersion')!=3:raise ValueError('History repair deployment not ready')
    if data.get('through')!='2026-10-18':raise ValueError('Unexpected source cutoff '+str(data.get('through')))
    path.write_text(json.dumps(data));print('Fetched',batch[0],len(batch),flush=True);return data
   except Exception:
@@ -35,7 +35,8 @@ def supported_quantity(m,d):
 def rebuild():
  from datetime import date,timedelta
  from collections import Counter
- snapshots=read('snapshots');members={};source_days={r['date']:r for r in read('source-days')['dates']};through='2026-10-18';revision='MYSQL_BATCH_64;HISTORY_REPAIR_POS_CONFIRMED_2026_10_19'
+ confirmed_registry=set(json.loads((pathlib.Path(__file__).resolve().parents[1]/'server'/'pos_quantity_confirmations.json').read_text())['confirmed_upcs'])|{'24053300000','24953300000'}
+ snapshots=read('snapshots');members={};source_days={r['date']:r for r in read('source-days')['dates']};through='2026-10-18';revision='MYSQL_BATCH_64;BULK_POS_LB_CONFIRMED_2026_10_19'
  for page in snapshots:
   for group in page['items']:
    for member in group['members']:
@@ -150,7 +151,7 @@ def rebuild():
   ref=current.get(upc,{});old=refrows.get(upc,{})
   refrows[upc]=dict(zip(refh,['Seafood',upc,m.get('name'),m['family'],ref.get('product_class',old.get('category')),m.get('uom'),(m.get('current') or {}).get('price'),(m.get('current') or {}).get('type'),(m.get('cost') or {}).get('value'),(m.get('cost') or {}).get('source'),ref.get('company_price_a',old.get('company_a')),ref.get('company_price_b',old.get('company_b')),ref.get('company_price_c',old.get('company_c')),revision,through]))
   es=byupc.get(upc,[]);ds=[daily[(upc,d['date'])] for d in m['days'] if (upc,d['date']) in daily];issues=sorted({d.get('reason') for d in ds if d.get('reason')})
-  covrows[upc]=dict(zip(covh,['Seafood',upc,m.get('name'),m['family'],'SOURCE_REFRESHED',len(m.get('priceHistory',[])),len(es),sum(d.get('sales') is not None for d in ds),'POS_CONFIRMED_LB' if upc in {'24053300000','24953300000'} else 'SOURCE_DEPENDENT','COMPARABLE_EPISODES_AVAILABLE' if any(e.get('previous_gp_day') is not None for e in es) else 'PARTIAL_OR_NO_COMPARABLE_BASELINE','; '.join(issues),revision,through]))
+  covrows[upc]=dict(zip(covh,['Seafood',upc,m.get('name'),m['family'],'SOURCE_REFRESHED',len(m.get('priceHistory',[])),len(es),sum(d.get('sales') is not None for d in ds),'POS_CONFIRMED_LB' if upc in confirmed_registry else 'SOURCE_DEPENDENT','COMPARABLE_EPISODES_AVAILABLE' if any(e.get('previous_gp_day') is not None for e in es) else 'PARTIAL_OR_NO_COMPARABLE_BASELINE','; '.join(issues),revision,through]))
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  for name,values in output.items():(ROOT/(name+'-rebuilt.json')).write_text(json.dumps(values,allow_nan=False))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
