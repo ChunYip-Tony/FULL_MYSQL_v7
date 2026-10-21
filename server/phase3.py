@@ -3042,7 +3042,15 @@ def _routine_upload_quick_check_scope(cur, batch_id, products, completed_days):
     previous = cur.fetchall()
     if not previous or not completed_days:
         return None
-    oldest = min(completed_days)
+    # source_data_days returns records, not scalar dates. Comparing records
+    # crashes routine OH/POS/MVT rebuilds when more than one day is present.
+    completed_dates = [
+        _date(row.get('date') if isinstance(row, dict) else row)
+        for row in completed_days
+    ]
+    if any(day is None for day in completed_dates):
+        return None  # Invalid coverage: use the full authoritative rebuild.
+    oldest = min(completed_dates)
     cur.execute("""SELECT DISTINCT upc_id,ean_upc FROM sales_period_observation
                    WHERE period_end_date >= %s OR batch_id=%s""", (oldest, batch_id))
     sales = cur.fetchall()
@@ -4052,6 +4060,7 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
 
