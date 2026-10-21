@@ -1,1 +1,1 @@
-VERSION='7.0.526-routine-snapshot-publish-fix'
+VERSION='7.0.527-routine-publish-recovery-fix'

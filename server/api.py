@@ -2446,7 +2446,7 @@ def web_upload_republish_chatgpt_analysis(batch_id:int,request:Request):
             serving=cur.fetchone() or {}
             if (
                 int(serving.get('c') or 0)<=0
-                or int(serving.get('min_batch') or 0)!=bid
+                # Older historical rows retain their source batch provenance.
                 or int(serving.get('max_batch') or 0)!=bid
             ):
                 raise HTTPException(
@@ -5603,4 +5603,5 @@ def repair_single_total_pos(batch_id:int,request:Request):
 # One Fish Finder browser surface; keep every ingestion/API endpoint intact.
 from fishfinder_consolidation import install_fish_finder_entrypoints
 install_fish_finder_entrypoints(app, healthz)
+
 
