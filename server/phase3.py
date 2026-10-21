@@ -409,7 +409,7 @@ def _find_pos_upc_id(
             AND (baf.valid_to IS NULL OR baf.valid_to>CURRENT_TIMESTAMP(6))
            WHERE su.record_status='ACTIVE'
              AND su.ean_upc LIKE '249%'
-           ORDER BY pf.family_id,su.upc_id"""
+           ORDER BY su.upc_id"""
     )
     matches={
         int(row["upc_id"])
@@ -3061,7 +3061,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
             AND mur.retirement_status='CONFIRMED'
            WHERE su.record_status='ACTIVE'
              AND mur.retirement_id IS NULL
-           ORDER BY su.upc_id"""
+           ORDER BY pf.family_id,su.upc_id"""
     )
     products = cur.fetchall()
     inactive_selling = confirmed_inactive_upcs(cur)
