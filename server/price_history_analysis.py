@@ -155,6 +155,43 @@ HEADERS = {
  'ANALYSIS_COVERAGE': 'department upc name family history_status price_event_count episode_count supported_days quantity_status gp_status blocking_reason source_revision data_through'.split(),
 }
 
+_HISTORY_DATE_COLUMNS = frozenset({
+ 'date', 'cost_date', 'data_through', 'change_date',
+ 'first_full', 'last_full', 'end_before',
+})
+
+def _history_date_value(value, column):
+ """Canonical calendar dates across Sheets serials and Apps Script Date JSON."""
+ if column not in _HISTORY_DATE_COLUMNS or value in (None, ''):
+  return value
+ from datetime import date, datetime, timedelta
+ if isinstance(value, datetime):
+  return value.date().isoformat()
+ if isinstance(value, date):
+  return value.isoformat()
+ if isinstance(value, (int, float)) and not isinstance(value, bool):
+  if 1 <= value <= 2958465 and float(value).is_integer():
+   try:return (date(1899, 12, 30) + timedelta(days=int(value))).isoformat()
+   except (OverflowError, ValueError):return value
+ if isinstance(value, str):
+  try:
+   if len(value) == 10:return date.fromisoformat(value).isoformat()
+   if len(value) > 10 and value[10] in ('T', ' '):
+    return datetime.fromisoformat(value.replace('Z', '+00:00')).date().isoformat()
+  except ValueError:pass
+ return value
+
+def _history_compare_value(value, column=None):
+ value = _history_date_value(value, column)
+ if value is None or value == '':return ''
+ if isinstance(value, bool):return str(value).lower()
+ if isinstance(value, (float, int)):
+  from decimal import Decimal
+  # Plain decimal spelling keeps numeric UPCs ending in zero comparable to text.
+  return format(Decimal(str(value)).normalize(), 'f')
+ return str(value)
+
+
 def read_retained_tables(reader, row_limit=200000):
  """Read bounded pages; fail rather than truncate or erase retained history."""
  result = {}
@@ -168,6 +205,8 @@ def read_retained_tables(reader, row_limit=200000):
   while start <= row_limit:
    count = min(800, row_limit-start+1)
    page = reader(title, start, start+count-1, len(columns))
+   page = [[_history_date_value(v, columns[i]) if i < len(columns) else v
+            for i,v in enumerate(row)] for row in page]
    # Apps Script returns padded empty rows; Sheets API trims them.
    while page and not any(v not in ('', None) for v in page[-1]):page.pop()
    rows.extend(page)
@@ -213,13 +252,6 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
 
 def verify_history_tables(expected, reader):
  """Compare all written values, including interior rows, at bounded cost."""
- def value(v):
-  if v is None or v == '':return ''
-  if isinstance(v,bool):return str(v).lower()
-  if isinstance(v,(float,int)):
-   from decimal import Decimal
-   return str(Decimal(str(v)).normalize())
-  return str(v)
  for title,matrix in expected.items():
   width=len(matrix[0])
   for start in range(0,len(matrix),800):
@@ -227,10 +259,11 @@ def verify_history_tables(expected, reader):
    actual=reader(title,start+1,start+len(chunk),width)
    actual += [[] for _ in range(len(chunk)-len(actual))]
    for offset,(want,got) in enumerate(zip(chunk,actual)):
-    want=[value(v) for v in want]+['']*(width-len(want))
-    got=[value(v) for v in got]+['']*(width-len(got))
+    want=[_history_compare_value(v,matrix[0][i]) for i,v in enumerate(want)]+['']*(width-len(want))
+    got=[_history_compare_value(v,matrix[0][i]) for i,v in enumerate(got)]+['']*(width-len(got))
     if want != got:
-     raise ValueError(f'History readback mismatch: {title} row {start+offset+1}')
+     different = [matrix[0][i] for i,(a,b) in enumerate(zip(want,got)) if a != b]
+     raise ValueError(f'History readback mismatch: {title} row {start+offset+1}; columns: {different}')
  return {'pass':True,'tables':{t:len(v)-1 for t,v in expected.items()},'contract':HISTORY_CONTRACT}
 
 
@@ -242,8 +275,7 @@ def preserve_unchanged_lineage(output, previous):
        'ANALYSIS_ITEM_REFERENCE':('upc',),'ANALYSIS_COVERAGE':('upc',)}
  def canonical(v):
   if v in (None,''):return ''
-  if isinstance(v,bool):return str(v).lower()
-  return str(v)
+  return _history_compare_value(v)
  for title,matrix in output.items():
   h=matrix[0];old=previous.get(title,[h]);identity=keys[title]
   oldrows={tuple(canonical(r.get(k)) for k in identity):r for r in objects(old)}
