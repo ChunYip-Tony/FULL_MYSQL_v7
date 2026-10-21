@@ -14,7 +14,7 @@
  * spreadsheet and only the approved MYSQL_* / BRIDGE_STATUS tabs.
  */
 
-const FULLMYSQL_BRIDGE_VERSION = '1.0.0';
+const FULLMYSQL_BRIDGE_VERSION = '1.1.0-upload-history';
 
 const ALLOWED_TABS = new Set([
   'MYSQL_SOURCE_STATUS',
@@ -26,6 +26,18 @@ const ALLOWED_TABS = new Set([
   'MYSQL_NEGATIVE_STOCK',
   'MYSQL_COST_BACKFILL',
   'BRIDGE_STATUS',
+  'ANALYSIS_STATUS',
+  'ANALYSIS_PRICE_EPISODES',
+  'ANALYSIS_PRICE_TRACKING',
+  'ANALYSIS_UPC_DAILY',
+  'ANALYSIS_ITEM_REFERENCE',
+  'ANALYSIS_PRICE_EVENTS',
+  'ANALYSIS_COST_HISTORY',
+  'ANALYSIS_COVERAGE',
+  'ANALYSIS_SOURCES',
+  'ANALYSIS_DEPT_DAILY',
+  'ANALYSIS_FAMILY_REFERENCE',
+  'ANALYSIS_RULES',
 ]);
 
 function _json_(obj) {
@@ -182,7 +194,13 @@ function _handleReadRange_(ss, payload) {
   if (!sheet) {
     return { ok: true, action: 'read_range', a1: payload.a1, values: [] };
   }
-  const values = sheet.getRange(parsed.range).getValues();
+  const match = parsed.range.match(/^([A-Z]+)(\d+):([A-Z]+)(\d+)$/i);
+  const column = text => text.toUpperCase().split('').reduce((n,c) => n*26+c.charCodeAt(0)-64,0);
+  const firstRow=Number(match[2]),lastRow=Math.min(Number(match[4]),sheet.getLastRow());
+  const firstCol=column(match[1]),lastCol=Math.min(column(match[3]),sheet.getMaxColumns());
+  if(firstRow>lastRow||firstCol>lastCol)return {ok:true,action:'read_range',a1:payload.a1,values:[]};
+  if((lastRow-firstRow+1)*(lastCol-firstCol+1)>50000)throw new Error('READ_TOO_LARGE');
+  const values = sheet.getRange(firstRow,firstCol,lastRow-firstRow+1,lastCol-firstCol+1).getValues();
   return { ok: true, action: 'read_range', a1: payload.a1, values: values };
 }
 
@@ -220,3 +238,4 @@ function doPost(e) {
     });
   }
 }
+

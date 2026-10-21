@@ -13,6 +13,7 @@ from db import db_conn
 from quick_check_app import negative_stock_queue
 from cost_backfill_queue import cost_backfill_queue
 from data_coverage import coverage_summary, source_data_days
+from price_history_analysis import HISTORY_CONTRACT
 
 SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
 API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets"
@@ -1443,6 +1444,12 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 from family_daily_gp import build_family_daily
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
                 latest_daily["family_mvt_gp"] = family_daily_summary
+                from business_clock import completed_through_date
+                history_days = source_data_days(cur, "sales_by_price_type", limit=3650,
+                    up_to=completed_through_date())
+                if any(int(r.get("publish_batch_id") or 0) != int(batch_id) for r in rows):
+                    return {"status":"SUPERSEDED","batch_id":batch_id,
+                            "reason":"A newer serving snapshot is ready; publish its revision."}
             finally:
                 cur.close()
 
@@ -1563,6 +1570,34 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 "readback":readback,
             }
 
+        from upload_history_publish import publish_upload_history
+        def history_reader(title, start, end, width):
+            a1=f"'{title}'!A{start}:{_col_letters(width)}{end}"
+            return (_apps_script_read_values(spreadsheet_id,a1) if transport == "APPS_SCRIPT"
+                    else _read_values(session,spreadsheet_id,a1))
+        def history_writer(title,matrix,previous=None):
+            if previous is not None:
+                _write_changed_history(session,spreadsheet_id,title,matrix,previous,transport)
+            elif transport == "APPS_SCRIPT":
+                _apps_script_write_matrix(spreadsheet_id,title,matrix)
+            else:
+                _ensure_tabs(session,spreadsheet_id,[title])
+                _write_matrix(session,spreadsheet_id,title,matrix,chunk_rows=1500)
+        history = publish_upload_history(rows=rows,source_days=history_days,batch_id=batch_id,
+            through=freshness["pos_data_through"],reader=history_reader,writer=history_writer)
+        # A concurrent upload cannot certify an older export as current.
+        with db_conn() as conn:
+            cur=conn.cursor(dictionary=True,buffered=True)
+            try:
+                cur.execute("SELECT MIN(publish_batch_id) AS lo, MAX(publish_batch_id) AS hi FROM quick_check_current")
+                current=cur.fetchone() or {}
+                if int(current.get("lo") or 0)!=int(batch_id) or int(current.get("hi") or 0)!=int(batch_id):
+                    raise RuntimeError("Serving snapshot changed during Google publication; retry newest batch")
+            finally:cur.close()
+        readback["history"]=history["readback"]
+        readback["history_source_revision"]=history["revision"]
+        readback["history_data_through"]=history["through"]
+
         bridge_matrix = _bridge_status(
             batch_id=batch_id,
             row_count=len(rows),
@@ -1601,6 +1636,8 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
 
         return {
             "status":"PASS",
+            "history_contract":HISTORY_CONTRACT,
+            "history":history,
             "batch_id":batch_id,
             "spreadsheet_id":spreadsheet_id,
             "row_count":len(rows),
@@ -1655,3 +1692,24 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 pass
         return {"status":"FAILED","batch_id":batch_id,"error":error}
 
+
+
+
+def _write_changed_history(session, spreadsheet_id, title, matrix, previous, transport):
+    """Rewrite only differing bounded chunks; never clear retained history first."""
+    width=len(matrix[0]);end_col=_col_letters(width)
+    size=max(1,min(1500,40000//width))
+    for start in range(0,max(len(matrix),len(previous)),size):
+        target=matrix[start:start+size]
+        prior=previous[start:start+size]
+        normalize=lambda rows:[[_wire(v) for v in r]+[""]*(width-len(r)) for r in rows]
+        if normalize(target)==normalize(prior):continue
+        target=normalize(target)+[[""]*width for _ in range(max(0,len(prior)-len(target)))]
+        if not target:continue
+        if transport=="APPS_SCRIPT":
+            _apps_script_post({"action":"write_tab_chunk","spreadsheet_id":spreadsheet_id,
+                "tab":title,"start_row":start+1,"clear":False,"values":target},timeout=120)
+        else:
+            rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
+            _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
+                {"range":rng,"majorDimension":"ROWS","values":target})

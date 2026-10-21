@@ -364,7 +364,7 @@ def category_index(cur, rows, today):
     _category_cache = (time.monotonic(), result)
     return result
 
-def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90, requested_upcs=None):
+def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90, requested_upcs=None, history_only=False):
     from db import db_conn
     from business_clock import business_today, completed_through_date
     from data_coverage import source_data_days
@@ -376,7 +376,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
             from family_daily_gp import apply_confirmed_selling_profile
             all_rows = [apply_confirmed_selling_profile(r) for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
-            categories = {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()}
+            categories = ({int(r['family_id']):{'category':'UNKNOWN'} for r in all_rows} if history_only else {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()})
             for fid, cat in (overrides or {}).items():
                 if int(fid) in categories:
                     categories[int(fid)]['category'] = cat
@@ -408,10 +408,10 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             costs = _performance_range_cost_rows(cur, rows, today)
             snapshots = price_snapshots(cur, rows)
             movement_days = sorted(source_data_days(cur, 'movement', limit=7, up_to=completed_through_date()), key=lambda d:d['date'])
-            receipt_context = _family_receipt_events_bulk(cur, {int(r['family_id']) for r in rows}, data_day_limit=90)
+            receipt_context = {} if history_only else _family_receipt_events_bulk(cur, {int(r['family_id']) for r in rows}, data_day_limit=90)
             movements = {}
             for fid in {int(r['family_id']) for r in rows}:
-                metrics = _ordering_family_movement_metrics(cur, fid, movement_days)
+                metrics = {} if history_only else _ordering_family_movement_metrics(cur, fid, movement_days)
                 movements[fid] = {**metrics, 'through': movement_days[-1]['date'] if movement_days else None}
             items = []
             for key, members in page:
@@ -599,3 +599,4 @@ def pricing_article_movement(upcs: str, business_date: str):
             return jsonable_encoder({'businessDate':business_date,'canonical':canonical,'members':members,'familyMembers':siblings,'movementRows':movements,'quantityPolicy':'POS_ONLY; movement retained as independent exact-article reconciliation evidence; shared articles must not be allocated to UPC'})
         finally:
             cur.close()
+

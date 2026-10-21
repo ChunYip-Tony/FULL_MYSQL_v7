@@ -9,6 +9,7 @@ from phase3 import process_phase3, audit_phase3
 from phase3_runtime import connection_diagnostics, clear_terminal_phase3_owner
 from v7_ingest import API_PIPELINE, API_VERSION
 from chatgpt_sheet_bridge import publish_chatgpt_snapshot, bridge_enabled, enqueue_chatgpt_publish
+from price_history_analysis import HISTORY_CONTRACT
 
 POLL=int(os.environ.get('FULLMYSQL_WORKER_POLL_SECONDS','5'))
 HEARTBEAT_SECONDS=max(10,int(os.environ.get('FULLMYSQL_WORKER_HEARTBEAT_SECONDS','15')))
@@ -1040,6 +1041,7 @@ def _startup_bridge_already_verified(cur, batch_id:int) -> bool:
         """SELECT processing_status,completed_at,
                   JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.publish_result.status')) AS publish_status,
                   JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.publish_result.readback.pass')) AS readback_pass,
+                  JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.publish_result.history_contract')) AS history_contract,
                   (SELECT MAX(published_at) FROM quick_check_current
                    WHERE publish_batch_id=%s) AS snapshot_updated_at
            FROM pipeline_run
@@ -1052,6 +1054,7 @@ def _startup_bridge_already_verified(cur, batch_id:int) -> bool:
     return bool(
         row.get('processing_status')=='COMPLETED'
         and row.get('publish_status')=='PASS'
+        and row.get('history_contract')==HISTORY_CONTRACT
         and str(row.get('readback_pass')).lower()=='true'
         and row.get('completed_at') is not None
         and row.get('snapshot_updated_at') is not None
@@ -1160,4 +1163,5 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+
 
