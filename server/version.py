@@ -1,1 +1,1 @@
-VERSION='7.0.523-queued-qa-confirmations'
+VERSION='7.0.524-routine-family-refresh'
