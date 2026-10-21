@@ -19,10 +19,20 @@ class WireTests(unittest.TestCase):
         self.assertNotEqual(compare(12345), compare("0012345"))
 
     def test_company_decimal_strings_compare_exactly(self):
+        from decimal import Decimal
         for column in ['company_a', 'company_b', 'company_c']:
             self.assertEqual(compare('6.590000', column), compare(6.59, column))
             self.assertNotEqual(compare('6.590000', column), compare(6.60, column))
+            self.assertEqual(compare(Decimal('6.590000'), column), compare(6.59, column))
+            self.assertNotEqual(compare(Decimal('6.590000'), column), compare(6.60, column))
         self.assertNotEqual(compare('0012345', 'upc'), compare(12345, 'upc'))
+
+    def test_database_decimal_objects_round_trip_through_writer(self):
+        from decimal import Decimal
+        h = ['upc', 'company_a', 'company_b', 'company_c', 'current_cost']
+        want = {'ANALYSIS_PRICE_TRACKING': [h, ['24545000000', Decimal('6.590000'), Decimal('6.590000'), Decimal('6.590000'), Decimal('6.400000')]]}
+        got = [h, [24545000000, 6.59, 6.59, 6.59, 6.4]]
+        self.assertTrue(verify(want, lambda *args: [r[:] for r in got])['pass'])
 
     def test_large_readback_uses_bounded_larger_pages(self):
         header = ["column" + str(i) for i in range(26)]

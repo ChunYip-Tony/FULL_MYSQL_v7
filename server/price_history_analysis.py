@@ -185,14 +185,13 @@ def _history_compare_value(value, column=None):
  value = _history_date_value(value, column)
  if value is None or value == '':return ''
  if isinstance(value, bool):return str(value).lower()
- if column in {'company_a', 'company_b', 'company_c'} and isinstance(value, str):
-  from decimal import Decimal, InvalidOperation
+ from decimal import Decimal, InvalidOperation
+ if column in {'company_a', 'company_b', 'company_c'} and isinstance(value, (str, Decimal)):
   try:
    price = Decimal(value)
    if price.is_finite():return format(price.normalize(), 'f')
   except InvalidOperation:pass
- if isinstance(value, (float, int)):
-  from decimal import Decimal
+ if isinstance(value, (float, int, Decimal)):
   # Plain decimal spelling keeps numeric UPCs ending in zero comparable to text.
   return format(Decimal(str(value)).normalize(), 'f')
  return str(value)
