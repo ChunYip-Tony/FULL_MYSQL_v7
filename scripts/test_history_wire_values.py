@@ -18,6 +18,12 @@ class WireTests(unittest.TestCase):
         self.assertEqual(compare(24056900000), compare("24056900000"))
         self.assertNotEqual(compare(12345), compare("0012345"))
 
+    def test_company_decimal_strings_compare_exactly(self):
+        for column in ['company_a', 'company_b', 'company_c']:
+            self.assertEqual(compare('6.590000', column), compare(6.59, column))
+            self.assertNotEqual(compare('6.590000', column), compare(6.60, column))
+        self.assertNotEqual(compare('0012345', 'upc'), compare(12345, 'upc'))
+
     def test_large_readback_uses_bounded_larger_pages(self):
         header = ["column" + str(i) for i in range(26)]
         matrix = [header] + [[i] * 26 for i in range(1900)]
@@ -68,3 +74,4 @@ class WireTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
