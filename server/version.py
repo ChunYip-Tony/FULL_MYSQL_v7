@@ -1,1 +1,1 @@
-VERSION='7.0.524-routine-family-refresh'
+VERSION='7.0.525-routine-date-record-fix'
