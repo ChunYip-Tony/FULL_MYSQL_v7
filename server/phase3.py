@@ -3071,7 +3071,7 @@ def _routine_pos_quick_check_scope(cur, batch_id, products, completed_days):
     return [p for p in products if int(p['family_id']) in families]
 
 
-def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
+def rebuild_quick_check(cur, batch_id: int, progress=None, *, routine_pos=False) -> dict[str, Any]:
     cur = _QuickCheckReadCache(cur)
     calendar_today = business_today()
     completed_through = completed_through_date()
@@ -3108,7 +3108,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
     )
     products = cur.fetchall()
     all_product_count = len(products)
-    scoped = _routine_pos_quick_check_scope(cur, batch_id, products, pos_days_30)
+    scoped = _routine_pos_quick_check_scope(cur, batch_id, products, pos_days_30) if routine_pos else None
     rebuild_mode = 'FULL_REBUILD'
     if scoped is None:
         cur.execute('DELETE FROM quick_check_current')
@@ -3854,7 +3854,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             # previously published Quick Check remains intact.
             cur.execute('SAVEPOINT before_quick_check_publish')
             report('PHASE3_QUICK_CHECK_REBUILD')
-            qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress)
+            qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress, routine_pos=True)
             apply_pending_confirmations(cur, batch_id)
             apply_inactive_current_scope(cur)
             cur.execute("""SELECT SUM(quick_check_status='READY') AS ready,
