@@ -3027,8 +3027,8 @@ class _QuickCheckReadCache:
         return self._cursor.executemany(sql, args)
 
 
-def _routine_pos_quick_check_scope(cur, batch_id, products, completed_days):
-    """Preserve cold historical rows for POS-only uploads; retain full fallback.
+def _routine_upload_quick_check_scope(cur, batch_id, products, completed_days):
+    """Preserve cold historical rows for routine uploads; retain full fallback.
 
     All products sharing a changed/rolling/previously operational family refresh
     through the SAME authoritative calculator. Previous operational rows are
@@ -3036,9 +3036,9 @@ def _routine_pos_quick_check_scope(cur, batch_id, products, completed_days):
     """
     cur.execute('SELECT DISTINCT source_type FROM ingest_file WHERE batch_id=%s', (batch_id,))
     kinds = {r['source_type'] for r in cur.fetchall()}
-    if kinds != {'sales_by_price_type'}:
+    if not kinds or not kinds <= {'sales_by_price_type', 'movement', 'on_hand'}:
         return None
-    cur.execute('SELECT upc_id,ean_upc,article_id,family_id,selling_uom,base_uom,base_qty_per_selling_unit,quick_check_status FROM quick_check_current')
+    cur.execute('SELECT upc_id,ean_upc,article_id,family_id,selling_uom,base_uom,base_qty_per_selling_unit,current_oh,quick_check_status FROM quick_check_current')
     previous = cur.fetchall()
     if not previous or not completed_days:
         return None
@@ -3051,11 +3051,16 @@ def _routine_pos_quick_check_scope(cur, batch_id, products, completed_days):
     sold_eans = {str(r['ean_upc']).strip() for r in sales if r.get('ean_upc')}
     prior = {int(r['upc_id']): r for r in previous}
     families = set()
+    if kinds & {'movement', 'on_hand'}:
+        for table in ('family_movement_observation', 'receiving_observation', 'inventory_observation'):
+            cur.execute(f'SELECT DISTINCT family_id FROM {table} WHERE batch_id=%s AND family_id IS NOT NULL', (batch_id,))
+            families.update(int(r['family_id']) for r in cur.fetchall())
     identity_fields = ('article_id', 'family_id', 'selling_uom', 'base_uom', 'base_qty_per_selling_unit')
     for product in products:
         uid = int(product['upc_id'])
         old = prior.get(uid)
         if (old is None or old.get('quick_check_status') != 'HISTORICAL_ONLY'
+                or old.get('current_oh') is not None
                 or uid in sold_ids or str(product['ean_upc']).strip() in sold_eans
                 or any(old.get(key) != product.get(key) for key in identity_fields)):
             families.add(int(product['family_id']))
@@ -3071,7 +3076,7 @@ def _routine_pos_quick_check_scope(cur, batch_id, products, completed_days):
     return [p for p in products if int(p['family_id']) in families]
 
 
-def rebuild_quick_check(cur, batch_id: int, progress=None, *, routine_pos=False) -> dict[str, Any]:
+def rebuild_quick_check(cur, batch_id: int, progress=None, *, routine_upload=False) -> dict[str, Any]:
     cur = _QuickCheckReadCache(cur)
     calendar_today = business_today()
     completed_through = completed_through_date()
@@ -3108,13 +3113,13 @@ def rebuild_quick_check(cur, batch_id: int, progress=None, *, routine_pos=False)
     )
     products = cur.fetchall()
     all_product_count = len(products)
-    scoped = _routine_pos_quick_check_scope(cur, batch_id, products, pos_days_30) if routine_pos else None
+    scoped = _routine_upload_quick_check_scope(cur, batch_id, products, pos_days_30) if routine_upload else None
     rebuild_mode = 'FULL_REBUILD'
     if scoped is None:
         cur.execute('DELETE FROM quick_check_current')
     else:
         products = scoped
-        rebuild_mode = 'POS_AFFECTED_AND_ROLLING_FAMILIES'
+        rebuild_mode = 'AFFECTED_AND_ROLLING_FAMILIES'
     inactive_selling = confirmed_inactive_upcs(cur)
     active_rows = active_ready = active_hold = historical_rows = 0
     live_issue_counts: dict[str, int] = defaultdict(int)
@@ -3854,7 +3859,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
             # previously published Quick Check remains intact.
             cur.execute('SAVEPOINT before_quick_check_publish')
             report('PHASE3_QUICK_CHECK_REBUILD')
-            qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress, routine_pos=True)
+            qc_attempt = rebuild_quick_check(cur, batch_id, progress=progress, routine_upload=True)
             apply_pending_confirmations(cur, batch_id)
             apply_inactive_current_scope(cur)
             cur.execute("""SELECT SUM(quick_check_status='READY') AS ready,
