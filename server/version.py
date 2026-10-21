@@ -1,1 +1,1 @@
-VERSION='7.0.525-routine-date-record-fix'
+VERSION='7.0.526-routine-snapshot-publish-fix'

@@ -1461,7 +1461,10 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 from business_clock import completed_through_date
                 history_days = source_data_days(cur, "sales_by_price_type", limit=3650,
                     up_to=completed_through_date())
-                if any(int(r.get("publish_batch_id") or 0) != int(batch_id) for r in rows):
+                # Routine rebuilds retain unchanged historical rows from older batches.
+                # Only the newest serving revision determines whether this export
+                # is stale; older preserved rows must not block publication.
+                if rows and max(int(r.get("publish_batch_id") or 0) for r in rows) != int(batch_id):
                     return {"status":"SUPERSEDED","batch_id":batch_id,
                             "reason":"A newer serving snapshot is ready; publish its revision."}
             finally:
@@ -1605,7 +1608,9 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             try:
                 cur.execute("SELECT MIN(publish_batch_id) AS lo, MAX(publish_batch_id) AS hi FROM quick_check_current")
                 current=cur.fetchone() or {}
-                if int(current.get("lo") or 0)!=int(batch_id) or int(current.get("hi") or 0)!=int(batch_id):
+                # Older preserved rows are expected. A changed newest revision
+                # still invalidates this export before certification.
+                if int(current.get("hi") or 0)!=int(batch_id):
                     raise RuntimeError("Serving snapshot changed during Google publication; retry newest batch")
             finally:cur.close()
         readback["history"]=history["readback"]
@@ -1727,3 +1732,4 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+

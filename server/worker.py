@@ -1084,8 +1084,7 @@ def _recover_chatgpt_bridge_on_startup() -> None:
                 )
                 serving=cur.fetchone() or {}
                 if (int(serving.get('c') or 0)>0
-                    and int(serving.get('min_batch') or 0)>0
-                    and serving.get('min_batch')==serving.get('max_batch')
+                    and int(serving.get('max_batch') or 0)>0
                     and _startup_bridge_already_verified(cur,int(serving['max_batch']))):
                     print('ChatGPT bridge startup recovery skipped: current snapshot already verified',
                           serving['max_batch'],flush=True)
@@ -1096,9 +1095,9 @@ def _recover_chatgpt_bridge_on_startup() -> None:
             return
         min_batch=int(serving.get('min_batch') or 0)
         max_batch=int(serving.get('max_batch') or 0)
-        if min_batch <= 0 or min_batch != max_batch:
+        if max_batch <= 0:
             print(
-                'ChatGPT bridge startup recovery skipped: serving snapshot spans batches',
+                'ChatGPT bridge startup recovery skipped: no serving revision',
                 serving,
                 flush=True,
             )
@@ -1163,5 +1162,6 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+
 
 
