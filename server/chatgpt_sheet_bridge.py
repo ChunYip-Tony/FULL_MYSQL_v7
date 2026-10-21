@@ -208,6 +208,10 @@ def _apps_script_secret() -> str:
     return secret
 
 
+class _AppsScriptPermanentError(RuntimeError):
+    """Bridge configuration or validation failures require a change before retrying."""
+
+
 def _apps_script_post(payload: dict[str, Any], *, timeout: int = 90) -> dict[str, Any]:
     import requests
     import time as _time
@@ -233,8 +237,18 @@ def _apps_script_post(payload: dict[str, Any], *, timeout: int = 90) -> dict[str
                     f"Apps Script bridge returned non-JSON: {resp.text[:500]}"
                 ) from exc
             if not isinstance(data, dict) or not data.get("ok"):
+                error = str(data.get("error") or "") if isinstance(data, dict) else ""
+                permanent_codes = {
+                    "TAB_NOT_ALLOWED", "UNAUTHORIZED", "SPREADSHEET_ID_MISMATCH",
+                }
+                if error.split(":", 1)[0].strip() in permanent_codes:
+                    raise _AppsScriptPermanentError(
+                        f"Apps Script bridge rejected request: {error}"
+                    )
                 raise RuntimeError(f"Apps Script bridge rejected request: {data}")
             return data
+        except _AppsScriptPermanentError:
+            raise
         except Exception as exc:
             last_error = exc
             if attempt >= 4:

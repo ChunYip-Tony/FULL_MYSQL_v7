@@ -2945,7 +2945,90 @@ def _days_of_supply(
         return (iq / factor) / velocity7
     return None
 
+class _QuickCheckReadCache:
+    """Bounded, transaction-local memoization of immutable rebuild inputs.
+
+    Only explicitly allowed source/dimension tables are cached. QA and serving
+    reads always reach MySQL. A source write invalidates the cache; no cache is
+    retained between rebuilds or shared with API requests.
+    """
+    _tables = frozenset({
+        'ingest_file', 'article_cost_observation', 'dim_uom', 'product_family',
+        'receiving_observation', 'family_movement_observation',
+        'sales_period_observation', 'pos_daily_derived_observation',
+    })
+
+    def __init__(self, cursor, max_entries=4096):
+        self._cursor = cursor
+        self._cache = {}
+        self._max_entries = max_entries
+        self._rows = None
+        self._offset = 0
+        self.hits = 0
+        self.misses = 0
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
+    def execute(self, sql, args=None):
+        self._rows = None
+        self._offset = 0
+        normalized = ' '.join(sql.split()).lower()
+        tables = set(re.findall(r'\b(?:from|join)\s+`?([a-z_][a-z0-9_]*)', normalized))
+        eligible = (normalized.startswith('select ') and tables
+                    and tables <= self._tables
+                    and not re.search(r'\b(for update|lock in share mode|into outfile)\b', normalized)
+                    and not re.search(r'\b(now|current_timestamp|rand|uuid)\s*\(', normalized))
+        if not normalized.startswith('select '):
+            # Serving/QA writes do not change cached source observations.
+            if any(re.search(r'\b' + re.escape(t) + r'\b', normalized) for t in self._tables):
+                self._cache.clear()
+        key = None
+        if eligible:
+            key = (sql, tuple(args or ()))
+            try:
+                hash(key)
+            except TypeError:
+                key = None
+        if key is not None and key in self._cache:
+            self.hits += 1
+            self._rows = self._cache[key]
+            return len(self._rows)
+        result = self._cursor.execute(sql, args)
+        if key is not None:
+            rows = self._cursor.fetchall()
+            self._rows = rows
+            self.misses += 1
+            if len(rows) <= 64:
+                if len(self._cache) >= self._max_entries:
+                    self._cache.pop(next(iter(self._cache)))
+                self._cache[key] = rows
+        return result
+
+    def fetchone(self):
+        if self._rows is None:
+            return self._cursor.fetchone()
+        if self._offset >= len(self._rows):
+            return None
+        row = self._rows[self._offset]
+        self._offset += 1
+        return dict(row)
+
+    def fetchall(self):
+        if self._rows is None:
+            return self._cursor.fetchall()
+        rows = [dict(row) for row in self._rows[self._offset:]]
+        self._offset = len(self._rows)
+        return rows
+
+    def executemany(self, sql, args):
+        self._rows = None
+        self._cache.clear()
+        return self._cursor.executemany(sql, args)
+
+
 def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
+    cur = _QuickCheckReadCache(cur)
     calendar_today = business_today()
     completed_through = completed_through_date()
 
@@ -2978,7 +3061,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None) -> dict[str, Any]:
             AND mur.retirement_status='CONFIRMED'
            WHERE su.record_status='ACTIVE'
              AND mur.retirement_id IS NULL
-           ORDER BY su.upc_id"""
+           ORDER BY pf.family_id,su.upc_id"""
     )
     products = cur.fetchall()
     inactive_selling = confirmed_inactive_upcs(cur)
