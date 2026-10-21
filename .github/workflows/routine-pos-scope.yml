@@ -1,0 +1,23 @@
+name: Seafood POS scope
+on:
+  pull_request:
+    paths:
+      - 'server/phase3.py'
+      - 'scripts/test_routine_pos_scope.py'
+      - '.github/workflows/routine-pos-scope.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/phase3.py'
+      - 'scripts/test_routine_pos_scope.py'
+jobs:
+  scope-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m py_compile server/phase3.py
+      - run: python scripts/test_routine_pos_scope.py
+      - run: python scripts/test_quick_check_read_cache.py
