@@ -203,7 +203,7 @@ def read_retained_tables(reader, row_limit=200000):
   rows = [columns]
   start = 2
   while start <= row_limit:
-   count = min(800, row_limit-start+1)
+   count = min(max(1,min(1500,40000//len(columns))), row_limit-start+1)
    page = reader(title, start, start+count-1, len(columns))
    page = [[_history_date_value(v, columns[i]) if i < len(columns) else v
             for i,v in enumerate(row)] for row in page]
@@ -254,8 +254,9 @@ def verify_history_tables(expected, reader):
  """Compare all written values, including interior rows, at bounded cost."""
  for title,matrix in expected.items():
   width=len(matrix[0])
-  for start in range(0,len(matrix),800):
-   chunk=matrix[start:start+800]
+  size=max(1,min(1500,40000//width))
+  for start in range(0,len(matrix),size):
+   chunk=matrix[start:start+size]
    actual=reader(title,start+1,start+len(chunk),width)
    actual += [[] for _ in range(len(chunk)-len(actual))]
    for offset,(want,got) in enumerate(zip(chunk,actual)):
