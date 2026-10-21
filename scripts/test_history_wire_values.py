@@ -18,6 +18,17 @@ class WireTests(unittest.TestCase):
         self.assertEqual(compare(24056900000), compare("24056900000"))
         self.assertNotEqual(compare(12345), compare("0012345"))
 
+    def test_large_readback_uses_bounded_larger_pages(self):
+        header = ["column" + str(i) for i in range(26)]
+        matrix = [header] + [[i] * 26 for i in range(1900)]
+        calls = []
+        def reader(title, start, end, width):
+            calls.append((start, end, width))
+            return [row[:] for row in matrix[start-1:end]]
+        self.assertTrue(verify({"daily": matrix}, reader)["pass"])
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all((end-start+1)*width <= 40000 for start,end,width in calls))
+
     def test_live_shape_dates_and_ids_verify(self):
         header = ["upc", "date", "cost_date", "current_cost", "valid", "data_through"]
         expected = {"ANALYSIS_UPC_DAILY": [header, ["1077738333", "2026-08-27", "2026-09-25", 13.285714, False, "2026-10-18"]]}
