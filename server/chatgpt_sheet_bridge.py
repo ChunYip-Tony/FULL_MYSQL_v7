@@ -1480,6 +1480,9 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 freshness = _canonical_freshness(cur, batch_id)
                 latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
                 recent_3d = _fetch_recent_3d_sales(cur, batch_id, rows)
+                from inventory_gp_adjustments import build_adjustment_export
+                adjustment_matrix, adjustment_coverage = build_adjustment_export(
+                    cur, rows, batch_id, freshness["pos_data_through"])
                 from family_daily_gp import build_family_daily
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
                 latest_daily["family_mvt_gp"] = family_daily_summary
@@ -1554,6 +1557,8 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 latest_daily=latest_daily,
                 recent_3d=recent_3d,
             ),
+            "GP_INVENTORY_ADJUSTMENTS":adjustment_matrix,
+            "GP_ADJUSTMENT_COVERAGE":adjustment_coverage,
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
             MYSQL_TABS["family"]:family_matrix,
@@ -1627,6 +1632,11 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 _write_matrix(session,spreadsheet_id,title,matrix,chunk_rows=1500)
         history = publish_upload_history(rows=rows,source_days=history_days,batch_id=batch_id,
             through=freshness["pos_data_through"],reader=history_reader,writer=history_writer)
+        # An empty/stale adjustment ledger cannot be certified as synced.
+        adjustment_reader = (lambda a1: _apps_script_read_values(spreadsheet_id,a1)) if transport == "APPS_SCRIPT" else (lambda a1: _read_values(session,spreadsheet_id,a1))
+        from inventory_gp_adjustments import verify_readback
+        adjustment_readback = verify_readback(adjustment_reader,adjustment_matrix,adjustment_coverage)
+        readback["inventory_adjustments"] = adjustment_readback
         # A concurrent upload cannot certify an older export as current.
         with db_conn() as conn:
             cur=conn.cursor(dictionary=True,buffered=True)
@@ -1757,5 +1767,6 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
