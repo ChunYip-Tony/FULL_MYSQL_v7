@@ -160,7 +160,8 @@ def publish_supported_adjustments(reader, writer, ledger_rows, coverage):
     header = list(existing[0])
     base_width = len(header)
     source_id = header.index('source_id') if 'source_id' in header else None
-    kept = [r[:base_width] for r in existing[1:] if r and not (
+    kept = [r[:base_width] for r in existing[1:] if any(
+        value is not None and str(value).strip() for value in r[:base_width]) and not (
         source_id is not None and len(r)>source_id and str(r[source_id]).startswith('INVENTORY_GP:'))]
     records = [header+['record_kind']+['gp_'+h for h in HEADERS]]
     records.extend([(r+['']*base_width)[:base_width]+['SOURCE']+['']*len(HEADERS) for r in kept])
@@ -169,6 +170,8 @@ def publish_supported_adjustments(reader, writer, ledger_rows, coverage):
                   'filename':row[14], 'source_type':'INVENTORY_GP_ADJUSTMENT',
                   'status':row[11], 'source_revision':row[10]}
         records.append([fields.get(h,'') for h in header]+['INVENTORY_GP_ADJUSTMENT']+row)
+    if len(records) > 5000:
+        raise RuntimeError('Inventory GP source export exceeds verified 5000-row analysis range')
     writer('ANALYSIS_SOURCES',records)
     observed = reader('ANALYSIS_SOURCES',1,len(records),len(records[0]))
     def normalized(rows):
@@ -183,7 +186,8 @@ def publish_supported_adjustments(reader, writer, ledger_rows, coverage):
     if values(observed)!=values(expected):
         raise RuntimeError('Inventory adjustment source readback mismatch')
     status=reader('ANALYSIS_STATUS',1,100,2)
-    status=[r for r in status if r and not str(r[0]).startswith('Inventory GP ')]
+    status=[r for r in status if r and str(r[0]).strip()
+            and not str(r[0]).startswith('Inventory GP ')]
     status.extend([['Inventory GP contract','INVENTORY_GP_V1'],
                    ['Inventory GP coverage',coverage[1][4]],
                    ['Inventory GP start',coverage[1][1]],['Inventory GP end',coverage[1][2]],

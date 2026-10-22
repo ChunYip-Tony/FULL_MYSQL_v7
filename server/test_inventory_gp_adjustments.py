@@ -67,7 +67,10 @@ class SupportedBridgeTests(unittest.TestCase):
         ledger_rows,coverage=fixture.run_rows([fixture.row(),fixture.row(2,'552','9')])
         tables={'ANALYSIS_SOURCES':[['department','source_id','filename','source_type','start_date','end_date','status','uploaded_at','source_revision','data_through'],['Seafood','9','mvt.xls','movement','','','READY','','test','']], 'ANALYSIS_STATUS':[['Field','Value'],['Write verification','VERIFIED']]}
         def reader(title,start,end,width):
-            return [r[:width] for r in tables[title][start-1:end]]
+            result = [r[:width] for r in tables[title][start-1:end]]
+            # Apps Script pads a bounded range with blank cells. These must
+            # not become thousands of synthetic SOURCE records on each retry.
+            return result + [[''] * width for _ in range(end-start+1-len(result))]
         def writer(title,rows):
             self.assertIn(title,('ANALYSIS_SOURCES','ANALYSIS_STATUS'))
             tables[title]=rows
