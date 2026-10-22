@@ -2473,8 +2473,8 @@ def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
         family_id=shared['family_id']
     # Authority order:
     # 1) valid 101/107 receipt valuation (109 is physical GR quantity/date, not cost)
-    # 2) supported OH-report cost: explicit unit cost or Total Value / Unrestricted Qty
-    # 3) Live/Fresh/Frozen official report cost
+    # 2) Live/Fresh/Frozen official report cost
+    # 3) supported OH-report cost: explicit unit cost or Total Value / Unrestricted Qty
     # 4) user-confirmed fallback
     cur.execute(
         """SELECT co.cost_per_base_uom,co.cost_amount,co.business_date,co.source_type,
@@ -2507,13 +2507,16 @@ def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
             return {'cost_per_base':supplemental['cost_value'],'date':supplemental['business_date'],
                 'source':supplemental['source_type'],'base_uom':supplemental['cost_uom']}
 
-    # OH cost precedes the Live/Fresh/Frozen report fallback.
+    # Official Live/Fresh/Frozen report cost precedes the OH fallback.
     cur.execute(
         """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s
-             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
+             AND co.source_type IN (
+                 'FROZEN_INVENTORY_OFFICIAL_COST',
+                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
+             )
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
@@ -2528,15 +2531,13 @@ def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
             'base_uom': r['cost_uom'],
         }
 
+    # Latest supported OH cost is used only when receipt/report cost is unavailable.
     cur.execute(
         """SELECT co.cost_amount,co.business_date,co.source_type,cu.uom_code AS cost_uom
            FROM article_cost_observation co
            LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
            WHERE co.family_id=%s
-             AND co.source_type IN (
-                 'FROZEN_INVENTORY_OFFICIAL_COST',
-                 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
-             )
+             AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
@@ -4069,6 +4070,7 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
 
