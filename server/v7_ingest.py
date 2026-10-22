@@ -448,8 +448,12 @@ def session_status(session_id: str) -> dict[str,Any]:
         cur.execute(
             """SELECT COUNT(*) AS c,
                       MIN(publish_batch_id) AS min_batch,
-                      MAX(publish_batch_id) AS max_batch
-               FROM quick_check_current"""
+                      MAX(publish_batch_id) AS max_batch,
+                      SUM(CASE WHEN (publish_batch_id IS NULL OR publish_batch_id<>%s)
+                               AND (quick_check_status IS NULL OR quick_check_status<>'HISTORICAL_ONLY')
+                               THEN 1 ELSE 0 END) AS operational_mismatch_rows
+               FROM quick_check_current""",
+            (bid,),
         )
         serving_owner=cur.fetchone() or {}
         cur.close()
@@ -481,8 +485,8 @@ def session_status(session_id: str) -> dict[str,Any]:
     latest_stage_name=str((latest_phase3_run or {}).get('stage_name') or '').upper()
     current_serving_bound=(
         int(serving_owner.get('c') or 0)>0
-        and int(serving_owner.get('min_batch') or 0)==bid
         and int(serving_owner.get('max_batch') or 0)==bid
+        and int(serving_owner.get('operational_mismatch_rows') or 0)==0
     )
 
     # A PHASE3_RERUN can coexist with the previous committed Phase 3 result.
@@ -813,3 +817,4 @@ def abort_batch(session_id: str, device_id: str, is_admin: bool=False) -> dict[s
         except Exception:
             conn.rollback(); raise
         finally: cur.close()
+

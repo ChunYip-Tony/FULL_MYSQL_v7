@@ -1,1 +1,1 @@
-VERSION='7.0.528-qa-rebuild-routine-snapshot-fix'
+VERSION='7.0.529-qa-rebuild-status-parity'
