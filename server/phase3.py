@@ -2463,7 +2463,7 @@ def _product_class(article_desc: str | None, family_desc: str | None, category: 
     return None
 
 
-def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
+def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
     # Tony-confirmed shared receipt authority for loose/packed green mussels.
     cur.execute("""SELECT shared.family_id FROM product_family own
         JOIN product_family shared ON shared.main_article_number='1348021'
@@ -2497,6 +2497,15 @@ def _latest_cost(cur, family_id: int) -> dict[str, Any] | None:
             'source': r['source_type'],
             'base_uom': r['base_uom'] or r['cost_uom'],
         }
+
+    # Supplemental cost is exact selling-article booked valuation, not family sales.
+    if row and row.get('article_number'):
+        from business_clock import completed_through_date
+        from supplementary_movement_cost import latest_movement_cost
+        supplemental=latest_movement_cost(cur,row,completed_through_date())
+        if supplemental:
+            return {'cost_per_base':supplemental['cost_value'],'date':supplemental['business_date'],
+                'source':supplemental['source_type'],'base_uom':supplemental['cost_uom']}
 
     # OH cost precedes the Live/Fresh/Frozen report fallback.
     cur.execute(
@@ -3183,7 +3192,7 @@ def rebuild_quick_check(cur, batch_id: int, progress=None, *, routine_upload=Fal
         m28 = _sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])
         m30 = _sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])
         price = _current_price(cur, upc_id, p['ean_upc'])
-        cost = _latest_cost(cur, family_id)
+        cost = _latest_cost(cur, family_id, p)
         cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'109\')', (family_id,))
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
         factor = Decimal(str(p['base_qty_per_selling_unit'])) if p['base_qty_per_selling_unit'] is not None else None
@@ -3473,7 +3482,7 @@ def refresh_quick_check_subset(cur, batch_id: int, *, family_ids: Iterable[int] 
         m28 = _sales_metrics(cur, upc_id, pos_days_28, p['ean_upc'])
         m30 = _sales_metrics(cur, upc_id, pos_days_30, p['ean_upc'])
         price = _current_price(cur, upc_id, p['ean_upc'])
-        cost = _latest_cost(cur, family_id)
+        cost = _latest_cost(cur, family_id, p)
         cur.execute('SELECT MAX(posting_date) AS d FROM receiving_observation WHERE family_id=%s AND movement_type IN (\'101\',\'109\')', (family_id,))
         rr = cur.fetchone(); last_receipt = rr['d'] if rr else None
         factor = Decimal(str(p['base_qty_per_selling_unit'])) if p['base_qty_per_selling_unit'] is not None else None

@@ -589,6 +589,13 @@ def _family_cost_as_of(
         (family_id, business_date),
     )
     cost = cur.fetchone()
+    if not cost or cost.get('source_type') != 'MOVEMENT_RECEIPT_VALUATION':
+        from supplementary_movement_cost import latest_movement_cost
+        supplemental=latest_movement_cost(cur,row,business_date)
+        if supplemental:
+            cost={'cost_per_base_uom':supplemental['cost_value'],'cost_amount':supplemental['cost_value'],
+                'business_date':supplemental['business_date'],'source_type':supplemental['source_type'],
+                'base_uom':supplemental['cost_uom'],'cost_uom':supplemental['cost_uom']}
     if not cost:
         current_cost = row.get("current_cost_per_selling_unit")
         current_cost_date = row.get("cost_date")

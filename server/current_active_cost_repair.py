@@ -357,9 +357,17 @@ def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str
     return rows, len(days), latest.isoformat() if latest else None
 
 
-def _best_cost(cur, family_id: int) -> dict[str, Any] | None:
+def _best_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
     # Authoritative current-cost order:
     # 1) Valid receipt valuation from 101/107. 109 is physical GR quantity/date.
+    if row and row.get('article_number'):
+        from business_clock import completed_through_date
+        from supplementary_movement_cost import latest_movement_cost
+        supplemental=latest_movement_cost(cur,row,completed_through_date())
+        if supplemental:
+            return {'source':supplemental['source_type'],'date':supplemental['business_date'],
+                'uom':supplemental['cost_uom'],'amount':supplemental['cost_value']}
+
     # 2) Live/Fresh/Frozen official report cost.
     # 3) Explicit supported cost from the On-Hand report (fallback).
     # 4) Explicit user-confirmed Family/Main-Article fallback.
@@ -1072,7 +1080,7 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
     initial_missing = []
     target_families = set()
     for p in active:
-        if _best_cost(cur, int(p["family_id"])) is None:
+        if _best_cost(cur, int(p["family_id"]), p) is None:
             initial_missing.append(p)
             target_families.add(int(p["family_id"]))
 
@@ -1119,7 +1127,7 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
     remaining_families = set()
     for p in initial_missing:
         family_id = int(p["family_id"])
-        cost = _best_cost(cur, family_id)
+        cost = _best_cost(cur, family_id, p)
         item = {
             "upc": str(p["ean_upc"]),
             "description": p.get("selling_description"),

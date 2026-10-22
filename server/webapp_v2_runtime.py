@@ -2044,50 +2044,8 @@ def _historical_cost_per_selling_as_of(
         Decimal(str(row["base_qty_per_selling_unit"]))
         if row.get("base_qty_per_selling_unit") is not None else None
     )
-    source_groups=[
-        ("MOVEMENT_RECEIPT_VALUATION",),
-        ("ON_HAND_EXPLICIT_COST_FALLBACK",),
-        ("FROZEN_INVENTORY_OFFICIAL_COST","LIVE_FRESH_SUGGESTION_OFFICIAL_COST"),
-        ("USER_CONFIRMED_FAMILY_COST",),
-    ]
-    for sources in source_groups:
-        ph=",".join(["%s"]*len(sources))
-        cur.execute(
-            f"""SELECT COALESCE(co.cost_per_base_uom,co.cost_amount) AS cost_value,
-                       co.business_date,co.source_type,
-                       COALESCE(bu.uom_code,cu.uom_code) AS cost_uom
-                FROM article_cost_observation co
-                LEFT JOIN dim_uom bu ON bu.uom_id=co.base_uom_id
-                LEFT JOIN dim_uom cu ON cu.uom_id=co.cost_uom_id
-                WHERE co.family_id=%s
-                  AND co.business_date<=%s
-                  AND co.source_type IN ({ph})
-                  AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
-                  AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
-                ORDER BY co.business_date DESC,co.cost_observation_id DESC
-                LIMIT 1""",
-            (int(family_id),day,*sources),
-        )
-        x=cur.fetchone()
-        if not x:
-            continue
-        cost=_d(x.get("cost_value"))
-        cuom=str(x.get("cost_uom") or "").strip().upper()
-        if selling and cuom==selling:
-            sell_cost=cost
-        elif base and cuom==base and factor is not None and factor>0:
-            sell_cost=cost*factor
-        elif base and selling and base==selling and cuom==base:
-            sell_cost=cost
-        else:
-            continue
-        return {
-            "cost_per_selling_unit":sell_cost,
-            "cost_date":x.get("business_date"),
-            "cost_source":x.get("source_type"),
-            "cost_uom":selling or cuom or None,
-        }
-    return None
+    observations=_performance_range_cost_rows(cur,[row],day)
+    return _performance_cost_for_day(row,observations,day)
 
 
 def _historical_gp_trend(
@@ -6005,6 +5963,16 @@ def _performance_range_cost_rows(
     if shared_id is not None:
         for target in shared_targets:
             out[target]=[dict(x,shared_cost_article="1348021",cost_authority_confirmation="TONY_2026_10_19") for x in out.get(shared_id,[])]
+    from supplementary_movement_cost import movement_cost_rows
+    supplemental = movement_cost_rows(cur,rows,end_date)
+    for row in rows:
+        if row.get('family_id') is not None:
+            fid=int(row['family_id'])
+            for observation in supplemental.get(str(row.get('article_number') or ''),[]):
+                if observation not in out.setdefault(fid,[]):
+                    out[fid].append(observation)
+    for values in out.values():
+        values.sort(key=lambda x:(x['business_date'],x.get('cost_observation_id') or 0),reverse=True)
     return out
 
 
@@ -6024,11 +5992,13 @@ def _performance_cost_for_day(
     )
     precedence=(
         {"MOVEMENT_RECEIPT_VALUATION"},
+        {"SELLING_MVT_251_252"},
         {"FROZEN_INVENTORY_OFFICIAL_COST","LIVE_FRESH_SUGGESTION_OFFICIAL_COST"},
         {"ON_HAND_EXPLICIT_COST_FALLBACK"},
         {"USER_CONFIRMED_FAMILY_COST"},
     )
-    obs=observations.get(int(fid),[])
+    from supplementary_movement_cost import eligible
+    obs=[o for o in observations.get(int(fid),[]) if eligible(row,o)]
     for group in precedence:
         for x in obs:
             if x.get("source_type") not in group:

@@ -17,6 +17,7 @@ router = APIRouter()
 PRIORITY = {'REG': 1, 'TPR': 2, 'SALE': 3, 'IN STORE': 4, 'IN_STORE': 4}
 COST_ORDER = (
     {'MOVEMENT_RECEIPT_VALUATION'},
+    {'SELLING_MVT_251_252'},
     {'FROZEN_INVENTORY_OFFICIAL_COST', 'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'},
     {'ON_HAND_EXPLICIT_COST_FALLBACK'},
 )
@@ -52,6 +53,8 @@ def effective_cost_as_of(observations, day):
     return None
 
 def cost_for_day(row, observations, day):
+    from supplementary_movement_cost import eligible
+    observations = [o for o in observations if eligible(row,o)]
     selling = selling_unit(row)
     base = str(row.get('base_uom') or '').strip().upper()
     base = 'PACK' if base == 'PAC' else base
@@ -418,7 +421,8 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
                 records = []
                 for row in members:
                     uid, fid = int(row['upc_id']), int(row['family_id'])
-                    observations = costs.get(fid, [])
+                    from supplementary_movement_cost import eligible
+                    observations = [o for o in costs.get(fid, []) if eligible(row,o)]
                     cost = cost_for_day(row, observations, today)
                     history = snapshots.get(uid, [])
                     series = [day_evidence(row, d['date'], daily.get(uid, {}).get(d['date']), history, observations, cost) for d in days]
@@ -441,7 +445,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             return {'contract': 'MOBILE_PRICING_V1', 'today': today, 'through': through,
                 'checkedAt': datetime.now(timezone.utc).isoformat(), 'days': [d['date'] for d in days],
                 'items': guard_weight_counts(items), 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
-                'scope': 'ALL_QUICK_CHECK_UPCS', 'costOrder': 'RECEIPT_OH_REPORT'}
+                'scope': 'ALL_QUICK_CHECK_UPCS', 'costOrder': 'FAMILY_RECEIPT_251_OH_V1'}
         finally:
             cur.close()
 
