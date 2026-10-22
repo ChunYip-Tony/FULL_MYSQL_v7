@@ -12,7 +12,7 @@ from business_clock import completed_through_date
 from coverage_backfill import canonical_pos_qty_by_upc
 from manual_overrides import confirmed_family_cost, confirmed_receipt_entry_cost_basis
 
-VERSION = "7.0.175-current-active-cost-authority-order"
+VERSION = "7.0.530-stocked-item-cost-coverage"
 
 RECEIPT_MOVEMENTS = {"101", "107", "109"}
 OFFICIAL_COST_SOURCE_TYPES = {
@@ -289,6 +289,27 @@ def _source_type_supported(cur, value: str) -> bool:
     return value in vals
 
 
+def _stocked_cost_upc_ids(cur, batch_id: int) -> set[int]:
+    """Stocked operational items need costs even when recent POS is zero.
+
+    Use confirmed article identity from this upload, plus the committed current
+    operational snapshot. Never turn family movement into UPC sold quantity.
+    """
+    cur.execute(
+        """SELECT DISTINCT bau.upc_id
+           FROM inventory_observation io
+           JOIN bridge_article_upc bau ON bau.article_id=io.article_id
+            AND bau.mapping_status='CONFIRMED' AND bau.is_primary=TRUE
+            AND (bau.valid_to IS NULL OR bau.valid_to>CURRENT_TIMESTAMP(6))
+           WHERE io.batch_id=%s AND io.on_hand_quantity>0
+           UNION
+           SELECT upc_id FROM quick_check_current
+           WHERE quick_check_status IN ('READY','QA_HOLD') AND current_oh>0""",
+        (batch_id,),
+    )
+    return {int(row['upc_id']) for row in cur.fetchall() if row.get('upc_id') is not None}
+
+
 def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str | None]:
     completed_through = completed_through_date()
     days = source_data_days(
@@ -299,10 +320,11 @@ def _active_products(cur, batch_id: int) -> tuple[list[dict[str, Any]], int, str
         up_to=completed_through,
     )
     qty_by_upc = canonical_pos_qty_by_upc(cur, days)
-    active_ids = sorted(
-        upc_id for upc_id, qty in qty_by_upc.items()
+    sold_ids = {
+        int(upc_id) for upc_id, qty in qty_by_upc.items()
         if Decimal(str(qty or 0)) > 0
-    )
+    }
+    active_ids = sorted(sold_ids | _stocked_cost_upc_ids(cur, batch_id))
     latest = max((x["date"] for x in days), default=None)
     if not active_ids:
         return [], len(days), latest.isoformat() if latest else None
@@ -1058,7 +1080,7 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
     result: dict[str, Any] = {
         "version": VERSION,
         "scope": {
-            "activity_rule": "POS_POSITIVE_LATEST_UP_TO_28_VALID_COMPLETED_DATA_DAYS",
+            "activity_rule": "POS_POSITIVE_LATEST_UP_TO_28_VALID_COMPLETED_DATA_DAYS_OR_STOCKED_OPERATIONAL",
             "valid_pos_day_count": valid_day_count,
             "latest_valid_pos_date": latest_valid_date,
             "historical_upcs_touched": 0,
@@ -1120,3 +1142,4 @@ def repair_current_active_cost(cur, batch_id: int) -> dict[str, Any]:
     result["remaining_missing_cost_upcs"] = len(result["remaining"])
     result["remaining_missing_cost_families"] = len(remaining_families)
     return result
+

@@ -1,1 +1,1 @@
-VERSION='7.0.529-qa-rebuild-status-parity'
+VERSION='7.0.530-stocked-item-cost-coverage'
