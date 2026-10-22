@@ -146,3 +146,54 @@ def verify_readback(reader, rows, coverage):
         raise RuntimeError('Inventory GP movement coverage readback mismatch')
     return {'pass':True,'rows':len(rows)-1,'coverage':coverage[1][4],
             'revision':coverage[1][5],'contract':'INVENTORY_GP_V1'}
+
+
+def publish_supported_adjustments(reader, writer, ledger_rows, coverage):
+    """Attach typed adjustment records to the existing approved source table.
+
+    Dedicated GP tabs can project these columns without changing Apps Script's
+    permitted table set. Source records and adjustment records have distinct kinds.
+    """
+    existing = reader('ANALYSIS_SOURCES',1,5000,10)
+    if not existing:
+        raise RuntimeError('Analysis source table is missing')
+    header = list(existing[0])
+    base_width = len(header)
+    source_id = header.index('source_id') if 'source_id' in header else None
+    kept = [r[:base_width] for r in existing[1:] if r and not (
+        source_id is not None and len(r)>source_id and str(r[source_id]).startswith('INVENTORY_GP:'))]
+    records = [header+['record_kind']+['gp_'+h for h in HEADERS]]
+    records.extend([(r+['']*base_width)[:base_width]+['SOURCE']+['']*len(HEADERS) for r in kept])
+    for row in ledger_rows[1:]:
+        fields = {'department':row[0], 'source_id':'INVENTORY_GP:'+row[14]+':'+row[9],
+                  'filename':row[14], 'source_type':'INVENTORY_GP_ADJUSTMENT',
+                  'status':row[11], 'source_revision':row[10]}
+        records.append([fields.get(h,'') for h in header]+['INVENTORY_GP_ADJUSTMENT']+row)
+    writer('ANALYSIS_SOURCES',records)
+    observed = reader('ANALYSIS_SOURCES',1,len(records),len(records[0]))
+    def normalized(rows):
+        return [[str(float(v)) if isinstance(v,Decimal) else str(v) if v is not None else '' for v in row]+['']*(len(records[0])-len(row)) for row in rows]
+    # Compare with wire conversion used by the publisher, preserving line identity.
+    expected = [[float(v) if isinstance(v,Decimal) else '' if v is None else v for v in row] for row in records]
+    def values(rows):
+        result=[]
+        for row in rows:
+            result.append([str(amount(v).normalize()) if amount(v) is not None else str(v or '') for v in row]+['']*(len(records[0])-len(row)))
+        return result
+    if values(observed)!=values(expected):
+        raise RuntimeError('Inventory adjustment source readback mismatch')
+    status=reader('ANALYSIS_STATUS',1,100,2)
+    status=[r for r in status if r and not str(r[0]).startswith('Inventory GP ')]
+    status.extend([['Inventory GP contract','INVENTORY_GP_V1'],
+                   ['Inventory GP coverage',coverage[1][4]],
+                   ['Inventory GP start',coverage[1][1]],['Inventory GP end',coverage[1][2]],
+                   ['Inventory GP revision',coverage[1][5]],['Inventory GP unresolved',coverage[1][6]],
+                   ['Inventory GP lines',len(ledger_rows)-1],['Inventory GP note',coverage[1][7]]])
+    writer('ANALYSIS_STATUS',status)
+    reread=reader('ANALYSIS_STATUS',1,len(status),2)
+    observed_status={r[0]:r[1] for r in reread if len(r)>1}
+    if observed_status.get('Inventory GP revision')!=coverage[1][5]:
+        raise RuntimeError('Inventory adjustment coverage readback mismatch')
+    return {'pass':True,'rows':len(ledger_rows)-1,'coverage':coverage[1][4],
+            'revision':coverage[1][5],'contract':'INVENTORY_GP_V1',
+            'table':'ANALYSIS_SOURCES','record_kind':'INVENTORY_GP_ADJUSTMENT'}

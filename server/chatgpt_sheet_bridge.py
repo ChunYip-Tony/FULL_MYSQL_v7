@@ -1557,8 +1557,6 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 latest_daily=latest_daily,
                 recent_3d=recent_3d,
             ),
-            "GP_INVENTORY_ADJUSTMENTS":adjustment_matrix,
-            "GP_ADJUSTMENT_COVERAGE":adjustment_coverage,
             MYSQL_TABS["lookup"]:_build_lookup(rows),
             MYSQL_TABS["quick"]:_build_quick(rows),
             MYSQL_TABS["family"]:family_matrix,
@@ -1632,11 +1630,10 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 _write_matrix(session,spreadsheet_id,title,matrix,chunk_rows=1500)
         history = publish_upload_history(rows=rows,source_days=history_days,batch_id=batch_id,
             through=freshness["pos_data_through"],reader=history_reader,writer=history_writer)
-        # An empty/stale adjustment ledger cannot be certified as synced.
-        adjustment_reader = (lambda a1: _apps_script_read_values(spreadsheet_id,a1)) if transport == "APPS_SCRIPT" else (lambda a1: _read_values(session,spreadsheet_id,a1))
-        from inventory_gp_adjustments import verify_readback
-        adjustment_readback = verify_readback(adjustment_reader,adjustment_matrix,adjustment_coverage)
-        readback["inventory_adjustments"] = adjustment_readback
+        # Use bridge-approved tables: no Apps Script permissions/deployment change.
+        from inventory_gp_adjustments import publish_supported_adjustments
+        readback["inventory_adjustments"] = publish_supported_adjustments(
+            history_reader,history_writer,adjustment_matrix,adjustment_coverage)
         # A concurrent upload cannot certify an older export as current.
         with db_conn() as conn:
             cur=conn.cursor(dictionary=True,buffered=True)

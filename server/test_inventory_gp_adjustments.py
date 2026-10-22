@@ -60,4 +60,21 @@ class ReadbackTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'ledger'):
             verify_readback(lambda a1:rows[:1],rows,cov)
 
+class SupportedBridgeTests(unittest.TestCase):
+    def test_supported_tables_and_repeat_export_do_not_duplicate(self):
+        from inventory_gp_adjustments import publish_supported_adjustments
+        fixture=AdjustmentTests();fixture.setUp()
+        ledger_rows,coverage=fixture.run_rows([fixture.row(),fixture.row(2,'552','9')])
+        tables={'ANALYSIS_SOURCES':[['department','source_id','filename','source_type','start_date','end_date','status','uploaded_at','source_revision','data_through'],['Seafood','9','mvt.xls','movement','','','READY','','test','']], 'ANALYSIS_STATUS':[['Field','Value'],['Write verification','VERIFIED']]}
+        def reader(title,start,end,width):
+            return [r[:width] for r in tables[title][start-1:end]]
+        def writer(title,rows):
+            self.assertIn(title,('ANALYSIS_SOURCES','ANALYSIS_STATUS'))
+            tables[title]=rows
+        for _ in range(2):
+            result=publish_supported_adjustments(reader,writer,ledger_rows,coverage)
+            self.assertTrue(result['pass'])
+        rows=tables['ANALYSIS_SOURCES'];self.assertEqual(len(rows),4)
+        self.assertEqual(sum(r[-9] for r in rows[2:]),0)
+
 if __name__=='__main__': unittest.main()
