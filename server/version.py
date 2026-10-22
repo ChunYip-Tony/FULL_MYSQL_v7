@@ -1,2 +1,2 @@
-VERSION='7.0.533-bounded-google-history'
+VERSION='7.0.534-bounded-google-readback'
 

@@ -1616,10 +1616,13 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             }
 
         from upload_history_publish import publish_upload_history
-        def history_reader(title, start, end, width):
+        def history_transport_reader(title, start, end, width):
             a1=f"'{title}'!A{start}:{_col_letters(width)}{end}"
             return (_apps_script_read_values(spreadsheet_id,a1) if transport == "APPS_SCRIPT"
                     else _read_values(session,spreadsheet_id,a1))
+        def history_reader(title, start, end, width):
+            from price_history_analysis import bounded_history_read
+            return bounded_history_read(history_transport_reader,title,start,end,width)
         def history_writer(title,matrix,previous=None):
             if previous is not None:
                 _write_changed_history(session,spreadsheet_id,title,matrix,previous,transport)
@@ -1764,6 +1767,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
 

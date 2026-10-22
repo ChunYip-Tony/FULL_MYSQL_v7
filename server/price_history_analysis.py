@@ -151,6 +151,18 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
 HISTORY_CONTRACT = 'UPLOAD_HISTORY_V2_OBSERVED_WINDOWS'
 
+def bounded_history_read(reader, title, start, end, width):
+ """Keep bridge read responses small without dropping requested rows."""
+ size=max(1,min(500,10000//max(1,width)))
+ rows=[]
+ for first in range(start,end+1,size):
+  last=min(end,first+size-1)
+  page=reader(title,first,last,width)
+  rows.extend(page)
+  if len(page)<last-first+1:
+   break
+ return rows
+
 # Fixed schemas make new deployments independent of a manual starter workbook.
 HEADERS = {
  'ANALYSIS_UPC_DAILY': 'department upc name family date price type sales qty uom pos_reported_count quantity_basis quantity_estimated valid reason current_cost cost_uom cost_source cost_date normalized_gp historical_gp zero_sale pos_file pos_batch source_revision data_through'.split(),

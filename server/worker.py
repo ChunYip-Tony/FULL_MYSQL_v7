@@ -299,6 +299,7 @@ def _phase3_result_publishable(cur,batch_id:int) -> bool:
 
 
 def _recover_stale_started(cur) -> int:
+    version_key=lambda value: tuple(int(p) for p in str(value).split('-',1)[0].split('.') if p.isdigit())
     # Version is a lease boundary. A newer worker must never steal a run that
     # still has a fresh heartbeat from an older deployment. Once that heartbeat
     # expires, the old run is terminally superseded and a new current-version
@@ -321,6 +322,10 @@ def _recover_stale_started(cur) -> int:
         except Exception:
             detail={}
         previous_version=str(row.get('code_version') or '')
+        # During rolling deployment an old container can still poll the queue.
+        # It must never recover work owned by the newer release backwards.
+        if version_key(previous_version) > version_key(API_VERSION):
+            continue
         version_mismatch=bool(previous_version and previous_version!=API_VERSION)
         age=_heartbeat_age_seconds(detail,row.get('started_at'))
         stale_after=VERSION_MISMATCH_GRACE_SECONDS if version_mismatch else STALE_STARTED_SECONDS
@@ -479,6 +484,7 @@ def _recover_stale_started(cur) -> int:
 
 
 def _supersede_incompatible_queued(cur) -> int:
+    version_key=lambda value: tuple(int(p) for p in str(value).split('-',1)[0].split('.') if p.isdigit())
     # QUEUED work is safe to supersede immediately because no worker owns it.
     cur.execute(
         """SELECT pipeline_run_id,batch_id,stage_name,code_version,detail_json
@@ -491,6 +497,8 @@ def _supersede_incompatible_queued(cur) -> int:
     )
     superseded=0
     for row in cur.fetchall():
+        if version_key(row.get('code_version') or '') > version_key(API_VERSION):
+            continue
         run_id=int(row['pipeline_run_id'])
         bid=int(row['batch_id'])
         stage_name=str(row['stage_name'])
@@ -1162,6 +1170,7 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+
 
 
 

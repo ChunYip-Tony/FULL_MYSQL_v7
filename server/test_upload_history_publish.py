@@ -6,6 +6,16 @@ from price_history_analysis import HEADERS, rebuild_retained_analysis, build_upl
 from upload_history_publish import publish_upload_history
 
 class HistoryPublishTests(unittest.TestCase):
+ def test_bridge_readback_pages_preserve_every_row_and_tail(self):
+  from price_history_analysis import bounded_history_read
+  calls=[]
+  def reader(title,start,end,width):
+   self.assertLessEqual((end-start+1)*width,10000)
+   calls.append((start,end))
+   return [[n] for n in range(start,min(end,1203)+1)]
+  rows=bounded_history_read(reader,'ANALYSIS_UPC_DAILY',1,1500,26)
+  self.assertEqual(rows,[[n] for n in range(1,1204)])
+  self.assertEqual(calls,[(1,384),(385,768),(769,1152),(1153,1500)])
  def test_all_histories_are_loaded_in_bounded_lazy_pages(self):
   tables,_=self.fixture();calls=[]
   rows=[{'ean_upc':str(i),'quick_check_status':'READY'} for i in range(61)]
