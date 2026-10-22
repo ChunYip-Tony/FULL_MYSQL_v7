@@ -6,6 +6,21 @@ from price_history_analysis import HEADERS, rebuild_retained_analysis, build_upl
 from upload_history_publish import publish_upload_history
 
 class HistoryPublishTests(unittest.TestCase):
+ def test_all_histories_are_loaded_in_bounded_lazy_pages(self):
+  tables,_=self.fixture();calls=[]
+  rows=[{'ean_upc':str(i),'quick_check_status':'READY'} for i in range(61)]
+  def loader(ids):
+   calls.append(ids)
+   return {'through':'2026-10-19','items':[]}
+  def rebuild(t,pages,*args):
+   self.assertFalse(isinstance(pages,list))
+   self.assertEqual(calls,[])
+   self.assertEqual(len(list(pages)),3)
+   return {},{'missing_upcs':[]}
+  with patch('business_clock.completed_through_date',return_value=date(2026,10,19)),patch('price_history_analysis.rebuild_retained_analysis',side_effect=rebuild):
+   build_upload_history(rows,tables,[],71,'2026-10-19',loader)
+  self.assertEqual([len(p) for p in calls],[25,25,11])
+  self.assertEqual(set(sum(calls,[])),{str(i) for i in range(61)})
  def fixture(self):
   tables={k:[v[:]] for k,v in HEADERS.items()}
   member={'upc':'24053300000','name':'Tilapia','uom':'LB','cost':{'value':1.75,'uom':'LB','source':'MOVEMENT_RECEIPT_VALUATION','date':'2026-10-13'},'current':{'price':3.99,'type':'REG'},'priceHistory':[{'date':'2026-10-16','file_id':159,'price':3.99,'type':'REG'}], 'days':[{'date':d,'sales':s,'qty':q,'price':3.99,'type':'REG','quantityBasis':'POS_QTY_WEIGHT','valid':True} for d,s,q in [('2026-10-17',39.9,10),('2026-10-18',0,0),('2026-10-19',79.8,20)]]}
@@ -53,3 +68,4 @@ class HistoryPublishTests(unittest.TestCase):
   self.assertEqual(book['ANALYSIS_STATUS'][5][1],'FAILED')
 
 if __name__=='__main__':unittest.main()
+

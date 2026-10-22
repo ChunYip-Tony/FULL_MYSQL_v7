@@ -79,7 +79,7 @@ def requeue_interrupted_pipeline_runs(reason: str) -> int:
                    SET processing_status='QUEUED', completed_at=NULL, error_count=0,
                        detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
                    WHERE pipeline_name=%s
-                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
                      AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
                 (payload, API_PIPELINE),
             )
@@ -152,4 +152,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 

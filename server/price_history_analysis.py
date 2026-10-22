@@ -245,15 +245,18 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
  for title in ('ANALYSIS_PRICE_TRACKING','ANALYSIS_COVERAGE'):
   ids.update(str(r['upc']) for r in objects(tables[title]))
  ids = sorted(ids)
- snapshots = []
- for start in range(0,len(ids),500):
-  page = loader(ids[start:start+500])
-  if str(page.get('through'))[:10] != through:
-   raise ValueError('History source changed during publication; retry latest revision')
-  snapshots.append(page)
+ # The API and publisher share one small container. Loading 500 histories at
+ # once also creates a full jsonable_encoder copy of the page. Bound that peak
+ # and yield pages instead of retaining a second collection of all snapshots.
+ def snapshots():
+  for start in range(0,len(ids),25):
+   page = loader(ids[start:start+25])
+   if str(page.get('through'))[:10] != through:
+    raise ValueError('History source changed during publication; retry latest revision')
+   yield page
  policy=json.loads(Path(__file__).with_name('pos_quantity_confirmations.json').read_text())
  revision=f'MYSQL_BATCH_{int(batch_id)};{HISTORY_CONTRACT}'
- output,audit=rebuild_retained_analysis(tables,snapshots,source_days,rows,through,revision,policy)
+ output,audit=rebuild_retained_analysis(tables,snapshots(),source_days,rows,through,revision,policy)
  active_ids={str(r['ean_upc']) for r in rows if r.get('quick_check_status')=='READY'}
  missing_active=active_ids.intersection(audit['missing_upcs'])
  if missing_active:
@@ -298,4 +301,5 @@ def preserve_unchanged_lineage(output, previous):
     for k in ('source_revision','data_through'):
      if k in h:values[h.index(k)]=prior.get(k)
  return output
+
 
