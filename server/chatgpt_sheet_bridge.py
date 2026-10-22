@@ -70,7 +70,7 @@ def enqueue_chatgpt_publish(
         cur=conn.cursor(dictionary=True, buffered=True)
         try:
             cur.execute(
-                """SELECT pipeline_run_id,processing_status,code_version
+                """SELECT pipeline_run_id,processing_status,code_version,detail_json
                    FROM pipeline_run
                    WHERE batch_id=%s
                      AND pipeline_name=%s
@@ -82,7 +82,25 @@ def enqueue_chatgpt_publish(
                 (bid,pipeline_name,code_version),
             )
             active=cur.fetchone()
+            # A running publisher already captured its source snapshot. A later
+            # same-batch rebuild must get a durable follow-up job. An existing
+            # QUEUED job can absorb it because it has not loaded any rows yet.
+            active_source_run_id = None
             if active:
+                try:
+                    active_detail = active.get("detail_json") or {}
+                    if not isinstance(active_detail, dict):
+                        active_detail = json.loads(active_detail)
+                    active_source_run_id = active_detail.get("source_pipeline_run_id")
+                except (TypeError, ValueError):
+                    pass
+            needs_followup = bool(
+                active
+                and str(active.get("processing_status") or "").upper() in {"STARTED", "PAUSE_REQUESTED"}
+                and source_pipeline_run_id is not None
+                and str(active_source_run_id) != str(source_pipeline_run_id)
+            )
+            if active and not needs_followup:
                 conn.commit()
                 return {
                     "status":"ALREADY_QUEUED" if str(active.get("processing_status") or "").upper()=="QUEUED" else "ALREADY_ACTIVE",
@@ -1739,4 +1757,5 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
