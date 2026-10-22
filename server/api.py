@@ -2134,8 +2134,8 @@ def web_upload_resume_phase3(batch_id:int,request:Request):
 def web_upload_rebuild_phase3(batch_id:int,request:Request):
     """Re-run Phase 3 against the current serving batch without re-ingesting RAW.
 
-    This is intentionally limited to the batch that currently owns the entire
-    quick_check_current serving snapshot. The previous committed snapshot stays
+    This is limited to the latest serving batch. Older HISTORICAL_ONLY rows
+    retained by routine uploads may coexist with its current operational rows. The previous committed snapshot stays
     live until the rebuild transaction commits successfully.
     """
     _browser_upload_guard(request)
@@ -2213,19 +2213,24 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
                     },
                 )
 
-            # Rebuild may mutate the serving snapshot, so only the batch that
-            # currently owns ALL Quick Check rows is eligible.
+            # A routine upload retains cold HISTORICAL_ONLY rows from older
+            # batches. Require the latest revision and ownership of every
+            # operational row; never let an older batch overwrite newer data.
             cur.execute(
                 """SELECT COUNT(*) AS c,
                           MIN(publish_batch_id) AS min_batch,
-                          MAX(publish_batch_id) AS max_batch
-                   FROM quick_check_current"""
+                          MAX(publish_batch_id) AS max_batch,
+                          SUM(CASE WHEN (publish_batch_id IS NULL OR publish_batch_id<>%s)
+                                   AND (quick_check_status IS NULL OR quick_check_status<>'HISTORICAL_ONLY')
+                                   THEN 1 ELSE 0 END) AS operational_mismatch_rows
+                   FROM quick_check_current""",
+                (bid,),
             )
             serving=cur.fetchone() or {}
             if (
                 int(serving.get('c') or 0)<=0
-                or int(serving.get('min_batch') or 0)!=bid
                 or int(serving.get('max_batch') or 0)!=bid
+                or int(serving.get('operational_mismatch_rows') or 0)>0
             ):
                 raise HTTPException(
                     409,
@@ -2234,6 +2239,7 @@ def web_upload_rebuild_phase3(batch_id:int,request:Request):
                         'reason':'BATCH_IS_NOT_CURRENT_SERVING_SNAPSHOT',
                         'serving_min_batch':serving.get('min_batch'),
                         'serving_max_batch':serving.get('max_batch'),
+                        'operational_mismatch_rows':serving.get('operational_mismatch_rows'),
                     },
                 )
 
@@ -5603,5 +5609,6 @@ def repair_single_total_pos(batch_id:int,request:Request):
 # One Fish Finder browser surface; keep every ingestion/API endpoint intact.
 from fishfinder_consolidation import install_fish_finder_entrypoints
 install_fish_finder_entrypoints(app, healthz)
+
 
 
