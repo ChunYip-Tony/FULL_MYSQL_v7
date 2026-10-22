@@ -66,14 +66,19 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    if rows and end < date.fromisoformat(min(rows)):
     # Keep archived episodes intact outside the bounded source history.
     continue
-   expected=max(0,(end-first).days+1);exposed=[];weekday=Counter();qmissing=0
+   expected=max(0,(end-first).days+1);exposed=[];weekday=Counter();qmissing=0;price_supported=0
    for n in range(expected):
     day=first+timedelta(days=n);d=rows.get(day.isoformat())
     if not d or d.get('sales') is None:continue
-    # Observed selling-unit average can differ from the ticket because POS is rounded.
+    # Window observations and price attribution are independent. TOTAL types,
+    # mixed prices and rounded pounds must not silently erase positive sales
+    # while leaving zero-sales days in the denominator. Retain the observed
+    # performance, but do not certify it as a clean price experiment.
     tolerance=max(.02,float(e['price'])*.02) if d.get('quantity_basis')=='POS_QTY_WEIGHT' else .02
-    if d.get('type')!=e['type'] or d.get('price') is None or abs(d['price']-float(e['price']))>tolerance:continue
-    if d.get('reason') in {'MIXED_PRICE_DAY','QUANTITY_OR_RETURN_REVIEW','PRICE_TYPE_UNVERIFIED'}:continue
+    price_ok=(d.get('type')==e['type'] and d.get('price') is not None
+              and abs(d['price']-float(e['price']))<=tolerance
+              and d.get('reason') not in {'MIXED_PRICE_DAY','QUANTITY_OR_RETURN_REVIEW','PRICE_TYPE_UNVERIFIED'})
+    if price_ok:price_supported+=1
     exposed.append(d);weekday[day.strftime('%a')]+=1
     if d.get('qty') is None:qmissing+=1
    n=len(exposed);positive=sum(d['sales']>0 for d in exposed);sales=sum(d['sales'] for d in exposed);quantity=sum(d['qty'] for d in exposed) if n and qmissing==0 else None
@@ -81,11 +86,13 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    reasons=[]
    if not expected:reasons.append('NO_FULL_COMPLETED_POST_CHANGE_DAY')
    if n<expected:reasons.append('PARTIAL_PRICE_EXPOSURE_OR_SOURCE_COVERAGE')
+   if price_supported<n:reasons.append(f'PRICE_ATTRIBUTION_UNVERIFIED:{n-price_supported}/{n}')
    if qmissing:reasons.append('POS_WEIGHT_OR_QUANTITY_UNVERIFIED')
    if cc is None:reasons.append('SELLING_UNIT_COST_UNRESOLVED')
-   ok=bool(expected and n==expected and qmissing==0 and cc is not None)
+   ok=bool(expected and n==expected and price_supported==n and qmissing==0 and cc is not None)
    e.update(name=m.get('name') or e.get('name'),family=m['family'],first_full=first.isoformat() if expected else '',last_full=end.isoformat() if expected else '',end_before=next_e['change_date'] if next_e else '',superseded_by_file=next_e.get('change_file','') if next_e else '',episode_status='Superseded' if next_e else 'Current',applied_days=expected,supported_days=n,support_pct=n/expected if expected else None,positive_days=positive,popularity=positive/n if n else None,sales=sales if n else None,sales_day=sales/n if n else None,qty=quantity,qty_day=quantity/n if quantity is not None else None,uom=m.get('uom'),cost=cc,cost_source=(m.get('cost') or {}).get('source'),cost_date=(m.get('cost') or {}).get('date'),gp_day=gpday,performance_ok=ok,weekday_mix=', '.join(f'{k}:{v}' for k,v in sorted(weekday.items())),availability='UNKNOWN; stockouts not verified',confidence='SUPPORTED_POS_CONFIRMED_UNIT' if ok else 'PARTIAL_OR_UNVERIFIED',action='Review' if not next_e and expected>=7 else ('Continue' if not next_e else ''),next_price=e['price'] if not next_e else '',next_type=e['type'] if not next_e else '',rationale='; '.join(reasons) or 'Completed canonical POS dates; current-cost-normalized GP',source=API+'/v1/app/mobile-pricing/history-batch',source_revision=revision,data_through=through)
    e['_qualified_dates']=[d['date'] for d in exposed]
+   e['rationale']+='; Metrics are observed POS performance in the recorded price window; price-attributed days '+str(price_supported)+'/'+str(n)
    for key in ['preceding_comparable_id','previous_gp_day','previous_qty_day','gp_day_change','qty_day_change','weekday_adjusted_gp_day_change']:e[key]=None
    for reason in reasons:gaps[reason]+=1
    # REG and historical TPR are one regular-price comparison class. SALE is separate.
@@ -142,7 +149,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V1'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V2_OBSERVED_WINDOWS'
 
 # Fixed schemas make new deployments independent of a manual starter workbook.
 HEADERS = {
@@ -291,3 +298,4 @@ def preserve_unchanged_lineage(output, previous):
     for k in ('source_revision','data_through'):
      if k in h:values[h.index(k)]=prior.get(k)
  return output
+
