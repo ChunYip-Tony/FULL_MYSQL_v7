@@ -3,6 +3,20 @@ import json
 from datetime import datetime, timezone
 
 
+def owned_legacy_handoff(row, code_version, worker, worker_instance):
+    """Recover only this live owner's job requeued by an older supervisor."""
+    detail=row.get('detail_json') or {}
+    if isinstance(detail,str):
+        try:detail=json.loads(detail)
+        except ValueError:return False
+    version_key=lambda v:tuple(int(p) for p in str(v).split('-',1)[0].split('.') if p.isdigit())
+    old=detail.get('requeued_by_code_version')
+    return bool(row.get('processing_status')=='QUEUED' and row.get('code_version')==code_version
+        and detail.get('worker')==worker and detail.get('worker_instance')==worker_instance
+        and detail.get('recovery_reason')=='SERVICE_DEPLOYMENT_SHUTDOWN' and old
+        and version_key(old)<version_key(code_version))
+
+
 def publish_recovery_decision(latest, snapshot_updated_at, code_version, history_contract, now=None):
     now=now or datetime.now(timezone.utc)
     if not latest:
@@ -43,3 +57,4 @@ def publish_recovery_decision(latest, snapshot_updated_at, code_version, history
     age=(now-(completed or now)).total_seconds()
     if age<delay:return {'queue':False,'reason':'RETRY_WAIT','retry_after_seconds':int(delay-age)}
     return {'queue':True,'reason':'TRANSIENT_PUBLICATION_RETRY'}
+

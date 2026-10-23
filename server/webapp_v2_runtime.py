@@ -6108,7 +6108,8 @@ def performance_range(
         from pos_evidence import verified_pos_quantity
         rows=[apply_confirmed_selling_profile(r) for r in cur.fetchall()]
         daily=_batch_daily_sales_by_price_type(cur,rows,selected)
-        cost_obs=_performance_range_cost_rows(cur,rows,resolved_end) if include_gp else {}
+        active_rows=[r for r in rows if any(_d(d.get("sales_amount"))!=0 or _d(d.get("sold_quantity"))!=0 for d in daily.get(int(r["upc_id"]),{}).values())]
+        cost_obs=_performance_range_cost_rows(cur,active_rows,resolved_end) if include_gp else {}
 
         items=[]
         total_sales=Decimal("0")

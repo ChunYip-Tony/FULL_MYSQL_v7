@@ -293,8 +293,8 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
         "gp_dollars": gp if gp_complete else None,
         "gp_complete": gp_complete,
         "gp_partial_dollars": gp if any(x.get("gp_dollars") is not None for x in chosen) else None,
-        "gp_known_cost_item_count": sum(x.get("gp_dollars") is not None for x in chosen),
-        "gp_missing_cost_item_count": sum(x.get("gp_dollars") is None for x in chosen),
+        "gp_verified_item_count": sum(x.get("gp_dollars") is not None for x in chosen),
+        "gp_unverified_item_count": sum(x.get("gp_dollars") is None for x in chosen),
         "top_items": [{**{key: value for key, value in row.items() if key != 'sold_supported_day_count'},
                        'positive_sales_day_count': row.get('sold_supported_day_count')} for row in chosen[:20]],
     }
@@ -671,6 +671,7 @@ def _price_tool(args: dict[str, Any]) -> dict[str, Any]:
         "upc_details": upc_details,
         "requested_item_decisions": _item_price_decisions(candidates, suggestions, review) if query else [],
         "price_suggestions": suggestions[:20],
+        "price_reference_basis":"Configured/current Price List references and proposed review prices are NOT achieved selling prices. Achieved price comes only from verified POS revenue/quantity.",
         "price_decision_note": "Use final_tpr_decision and final_tpr_price_suggestion when returned by the shared mobile/desktop policy. SALE_LOCKED means no local price action. Blocked candidate_price is not an actionable recommendation. A 7-day sales aggregate is not proof of a completed current-price observation cycle; require explicit observation_supported_days/cycle fields or state that status is unconfirmed.",
     }
 

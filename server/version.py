@@ -1,1 +1,1 @@
-VERSION='7.0.540-verified-growth-and-full-readback'
+VERSION='7.0.541-owner-scoped-publisher-recovery'

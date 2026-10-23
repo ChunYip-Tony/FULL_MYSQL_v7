@@ -110,6 +110,19 @@ def _touch_run(run_id:int, *, stage:str|None=None, progress_payload:dict|None=No
                 (json.dumps(payload,ensure_ascii=False),run_id,API_VERSION),
             )
             updated=int(cur.rowcount or 0)
+            if updated != 1:
+                # Older deployed supervisors requeued every worker globally.
+                # Repair that legacy handoff only when this exact live owner
+                # still holds the job; never reclaim a different owner's run.
+                from publish_recovery import owned_legacy_handoff
+                cur.execute('SELECT processing_status,code_version,detail_json FROM pipeline_run WHERE pipeline_run_id=%s FOR UPDATE',(run_id,))
+                previous=cur.fetchone() or {}
+                if owned_legacy_handoff(previous,API_VERSION,WORKER,WORKER_INSTANCE):
+                    cur.execute("""UPDATE pipeline_run SET processing_status='STARTED',
+                        detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
+                        WHERE pipeline_run_id=%s AND code_version=%s AND processing_status='QUEUED'""",
+                        (json.dumps({**payload,'legacy_handoff_repaired':True},ensure_ascii=False),run_id,API_VERSION))
+                    updated=int(cur.rowcount or 0)
             conn.commit()
             if updated != 1:
                 raise RuntimeError(f'HEARTBEAT_RUN_NOT_ACTIVE:{run_id}')
@@ -1214,6 +1227,7 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+
 
 
 

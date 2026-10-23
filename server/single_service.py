@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -60,8 +61,11 @@ def stop_process(proc: subprocess.Popen | None, name: str, timeout: int = 10) ->
         proc.wait(timeout=5)
 
 
-def requeue_interrupted_pipeline_runs(reason: str) -> int:
+def requeue_interrupted_pipeline_runs(reason: str, worker_pid: int | None = None) -> int:
     """Persist a deployment-safe handoff after the worker process has stopped."""
+    if worker_pid is None:
+        return 0
+    owner = f"{socket.gethostname()}:{worker_pid}"
     payload = json.dumps(
         {
             "auto_recovery": True,
@@ -80,8 +84,10 @@ def requeue_interrupted_pipeline_runs(reason: str) -> int:
                        detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
                    WHERE pipeline_name=%s
                      AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
-                     AND processing_status IN ('STARTED','PAUSE_REQUESTED')""",
-                (payload, API_PIPELINE),
+                     AND processing_status IN ('STARTED','PAUSE_REQUESTED')
+                     AND code_version=%s
+                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.worker'))=%s""",
+                (payload, API_PIPELINE, API_VERSION, owner),
             )
             count = int(cur.rowcount or 0)
             conn.commit()
@@ -133,7 +139,7 @@ def main() -> int:
             worker_rc = worker.poll()
             if worker_rc is not None:
                 log(f"worker exited with code {worker_rc}; requeueing interrupted work before restart")
-                requeue_interrupted_pipeline_runs("WORKER_PROCESS_EXIT")
+                requeue_interrupted_pipeline_runs("WORKER_PROCESS_EXIT", worker.pid)
                 log(f"restarting worker in {RESTART_DELAY}s")
                 deadline = time.time() + RESTART_DELAY
                 while time.time() < deadline and not stopping:
@@ -145,12 +151,13 @@ def main() -> int:
             time.sleep(1)
     finally:
         stop_process(worker, "worker")
-        requeue_interrupted_pipeline_runs("SERVICE_DEPLOYMENT_SHUTDOWN" if stopping else "SERVICE_PROCESS_EXIT")
+        requeue_interrupted_pipeline_runs("SERVICE_DEPLOYMENT_SHUTDOWN" if stopping else "SERVICE_PROCESS_EXIT", worker.pid)
         stop_process(api, "api")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 

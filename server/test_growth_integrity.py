@@ -13,6 +13,25 @@ def extract(filename,names,env):
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[]),filename,'exec'),env)
 
 class GrowthIntegrity(unittest.TestCase):
+    def test_shutdown_handoff_is_scoped_to_stopped_worker(self):
+        import json,socket
+        from datetime import datetime,timezone
+        cur=MagicMock();cur.rowcount=1;conn=MagicMock();conn.cursor.return_value=cur;ctx=MagicMock();ctx.__enter__.return_value=conn
+        env={'json':json,'socket':socket,'datetime':datetime,'timezone':timezone,'API_VERSION':'7.0.541','API_PIPELINE':'p','db_conn':lambda:ctx,'log':lambda *a:None}
+        extract('single_service.py',{'requeue_interrupted_pipeline_runs'},env)
+        self.assertEqual(env['requeue_interrupted_pipeline_runs']('SERVICE_DEPLOYMENT_SHUTDOWN'),0)
+        self.assertEqual(env['requeue_interrupted_pipeline_runs']('SERVICE_DEPLOYMENT_SHUTDOWN',3),1)
+        sql,params=cur.execute.call_args.args
+        self.assertIn('code_version=%s',sql);self.assertIn("$.worker",sql)
+        self.assertEqual(params[-2:],('7.0.541',socket.gethostname()+':3'))
+        from publish_recovery import owned_legacy_handoff
+        row={'processing_status':'QUEUED','code_version':'7.0.541','detail_json':{'worker':'new:3','worker_instance':'new-owner','recovery_reason':'SERVICE_DEPLOYMENT_SHUTDOWN','requeued_by_code_version':'7.0.540'}}
+        self.assertTrue(owned_legacy_handoff(row,'7.0.541','new:3','new-owner'))
+        self.assertFalse(owned_legacy_handoff(row,'7.0.541','other:3','new-owner'))
+        self.assertFalse(owned_legacy_handoff(row,'7.0.541','new:3','other-owner'))
+        row['detail_json']['requeued_by_code_version']='7.0.542'
+        self.assertFalse(owned_legacy_handoff(row,'7.0.541','new:3','new-owner'))
+
     def test_quantity_authority_and_held_source(self):
         row={'ean_upc':'000123','selling_uom':'LB'}
         obs={'sold_quantity':2,'sales_amount':30,'price_types':{'REG':{}}}

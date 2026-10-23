@@ -14,7 +14,7 @@ def compare_performance(args, sales_reader):
         if prior_start > prior_end or current_start > current_end or prior_end >= current_start:
             raise ValueError('Comparison periods must be ordered and non-overlapping.')
     else:
-        scope = sales_reader({'item_query': query, 'supported_days': 2*n})
+        scope = sales_reader({'item_query': query, 'supported_days': 2*n, '_quantity_only':True})
         if scope.get('needs_details') or scope.get('data_available') is False:
             return scope
         days = sorted({str(d)[:10] for d in scope.get('supported_dates') or []})
