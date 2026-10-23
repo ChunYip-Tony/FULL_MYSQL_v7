@@ -83,6 +83,7 @@ def build_movement_export(cur, quick_rows, batch_id, through, *, start=None, end
         record.update(department=scope, source_filename=filename, source_line_id=f'{key[0]}:{key[1]}',
                       mapping_status='FAMILY_REFERENCE_ONLY_NO_UPC_ALLOCATION' if row.get('family_article_number') else 'ARTICLE_MAPPING_UNRESOLVED',
                       amount_basis='SIGNED_POSTED_COST_NOT_SALES_REVENUE', quantity_basis='RAW_POSTING_NOT_PHYSICAL_DELIVERY_COUNT',
+                      usage='RAW_POSTING_DETAIL; INVENTORY_GP_ADJUSTMENT_IS_A_DERIVED_VIEW_OF_THE_SAME_POSTINGS; DO_NOT_ADD_BOTH',
                       source_revision=f'MYSQL_BATCH_{batch_id};CANONICAL_MOVEMENT_LINES_V1')
         result.append(record)
         counts[str(row['movement_type'])] += 1

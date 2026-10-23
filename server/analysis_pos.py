@@ -58,6 +58,7 @@ def build_pos_export(cur, quick_rows, batch_id):
                 'verified_quantity':qty,'selling_uom':master.get('selling_uom') if master else None,
                 'quantity_basis':basis,'realized_average_price':sales/qty if sales is not None and qty is not None and qty>0 else None,
                 'price_basis':'POS_REALIZED_AVERAGE_NOT_ONE_APPLIED_PRICE','sales_basis':'POS_ONLY',
+                'usage':'DETAIL_OF_ANALYSIS_UPC_DAILY; DO_NOT_ADD_DETAIL_TO_DAILY_TOTALS',
                 'coverage_kind':source.get('coverage_kind'),'source_revision':f'MYSQL_BATCH_{batch_id};CANONICAL_TYPED_POS_V1'})
     result.sort(key=lambda r:(r['date'],r['source_file_id'],r['source_line_id']))
     return {'rows':result,'dates':sorted({str(d['date'])[:10] for d in days}),'contract':'CANONICAL_TYPED_POS_V1'}

@@ -6,6 +6,19 @@ from price_history_analysis import HEADERS, rebuild_retained_analysis, build_upl
 from upload_history_publish import publish_upload_history
 
 class HistoryPublishTests(unittest.TestCase):
+ def test_item_reference_requires_verified_pos_price_and_windows_are_references(self):
+  t,p=self.fixture()
+  current=[{'ean_upc':'24053300000','current_price':4.25,'current_price_source':'CANONICAL_POS_REALIZED_AVERAGE'}]
+  out,_=rebuild_retained_analysis(t,p,[],current,'2026-10-19','r',{'confirmed_upcs':['24053300000']})
+  ref=dict(zip(out['ANALYSIS_ITEM_REFERENCE'][0],out['ANALYSIS_ITEM_REFERENCE'][1]))
+  self.assertEqual(ref['price'],4.25);self.assertEqual(ref['price_type'],'POS_REALIZED_AVERAGE')
+  episode=dict(zip(out['ANALYSIS_PRICE_EPISODES'][0],out['ANALYSIS_PRICE_EPISODES'][1]))
+  self.assertEqual(episode['price'],3.99);self.assertIn('PRICE_LIST_REFERENCE_WINDOW',episode['rationale'])
+  self.assertIsNone(episode['next_price'])
+  out,_=self.build(out,p)
+  ref=dict(zip(out['ANALYSIS_ITEM_REFERENCE'][0],out['ANALYSIS_ITEM_REFERENCE'][1]))
+  self.assertIsNone(ref['price']);self.assertEqual(ref['price_type'],'POS_PRICE_UNVERIFIED')
+
  def test_bridge_readback_pages_preserve_every_row_and_tail(self):
   from price_history_analysis import bounded_history_read
   calls=[]

@@ -244,7 +244,10 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    ok=bool(expected and n==expected and price_supported==n and qmissing==0 and cc is not None)
    e.update(name=m.get('name') or e.get('name'),family=m['family'],first_full=first.isoformat() if expected else '',last_full=end.isoformat() if expected else '',end_before=next_e['change_date'] if next_e else '',superseded_by_file=next_e.get('change_file','') if next_e else '',episode_status='Superseded' if next_e else 'Current',applied_days=expected,supported_days=n,support_pct=n/expected if expected else None,positive_days=positive,popularity=positive/n if n else None,sales=sales if n else None,sales_day=sales/n if n else None,qty=quantity,qty_day=quantity/n if quantity is not None else None,uom=m.get('uom'),cost=cc,cost_source=(m.get('cost') or {}).get('source'),cost_date=(m.get('cost') or {}).get('date'),gp_day=gpday,performance_ok=ok,weekday_mix=', '.join(f'{k}:{v}' for k,v in sorted(weekday.items())),availability='UNKNOWN; stockouts not verified',confidence='SUPPORTED_POS_CONFIRMED_UNIT' if ok else 'PARTIAL_OR_UNVERIFIED',action='Review' if not next_e and expected>=7 else ('Continue' if not next_e else ''),next_price=e['price'] if not next_e else '',next_type=e['type'] if not next_e else '',rationale='; '.join(reasons) or 'Completed canonical POS dates; current-cost-normalized GP',source=API+'/v1/app/mobile-pricing/history-batch',source_revision=revision,data_through=through)
    e['_qualified_dates']=[d['date'] for d in exposed]
-   e['rationale']+='; Metrics are observed POS performance in the recorded price window; price-attributed days '+str(price_supported)+'/'+str(n)
+   e['rationale']+='; PRICE_LIST_REFERENCE_WINDOW; achieved selling prices come only from ANALYSIS_UPC_DAILY POS revenue / verified quantity. Metrics are observed POS performance in the recorded reference window; price-attributed days '+str(price_supported)+'/'+str(n)
+   # A retained list price describes the historical reference window, not an
+   # approved future selling price or a measured POS average.
+   e['next_price']=None;e['next_type']=None
    e['_previous']=None
    for key in ['preceding_comparable_id','previous_gp_day','previous_qty_day','gp_day_change','qty_day_change','weekday_adjusted_gp_day_change']:e[key]=None
    for reason in reasons:gaps[reason]+=1
@@ -328,17 +331,26 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
   if upc not in members:
    if retained.get('history_status')!='HISTORY_EVIDENCE_REQUIRED':
     retained.update(history_status='SOURCE_NOT_RETURNED',gp_status='UNVERIFIED',blocking_reason='UPC_HISTORY_SOURCE_NOT_RETURNED',source_revision=revision,data_through=through)
+ # The main bridge already gates these values against eligible dated POS and
+ # verified selling units. Never fall back to a price-list ticket in a generic
+ # item price field, including retained profiles not returned this refresh.
+ for upc,item in refrows.items():
+  ref=current.get(upc,{})
+  verified_pos=ref.get('current_price_source')=='CANONICAL_POS_REALIZED_AVERAGE'
+  item['price']=ref.get('current_price') if verified_pos else None
+  item['price_type']='POS_REALIZED_AVERAGE' if item['price'] is not None else 'POS_PRICE_UNVERIFIED'
+  item.update(source_revision=revision,data_through=through)
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
  audit['coverage_identifier_repairs']=coverage_identifier_repairs
- audit['verification']={'contract':'ITEM_PERFORMANCE_VERIFICATION_V1','items':len(covrows),
+ audit['verification']={'contract':'ITEM_PERFORMANCE_VERIFICATION_V2','items':len(covrows),
   **{k:sum(bool(v[k]) for v in verification.values()) for k in ('fully_verified','current_verified','historical_gp_verified','historical_price_verified','uploaded_sales_verified','uploaded_gp_verified','uploaded_price_verified','uploaded_fully_verified')},
   'unresolved_items':len(covrows)-sum(v['fully_verified'] for v in verification.values())}
  return output,audit
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V6_POS_AUTHORITY_AND_TYPED_SOURCES'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V7_EXPLICIT_POS_PRICE_AUTHORITY'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
@@ -473,20 +485,26 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
 
 
 def verify_history_tables(expected, reader):
- """Compare all written values, including interior rows, at bounded cost."""
+ """Compare every cell; retry a bounded chunk after transient bridge reads."""
  for title,matrix in expected.items():
-  width=len(matrix[0])
-  size=max(1,min(1500,40000//width))
+  width=len(matrix[0]);size=max(1,min(1500,40000//width))
+  normalize=lambda row:[_history_compare_value(v,matrix[0][i]) for i,v in enumerate(row)]+['']*(width-len(row))
   for start in range(0,len(matrix),size):
    chunk=matrix[start:start+size]
-   actual=reader(title,start+1,start+len(chunk),width)
-   actual += [[] for _ in range(len(chunk)-len(actual))]
-   for offset,(want,got) in enumerate(zip(chunk,actual)):
-    want=[_history_compare_value(v,matrix[0][i]) for i,v in enumerate(want)]+['']*(width-len(want))
-    got=[_history_compare_value(v,matrix[0][i]) for i,v in enumerate(got)]+['']*(width-len(got))
-    if want != got:
-     different = [matrix[0][i] for i,(a,b) in enumerate(zip(want,got)) if a != b]
-     raise ValueError(f'History readback mismatch: {title} row {start+offset+1}; columns: {different}')
+   for attempt in range(3):
+    actual=reader(title,start+1,start+len(chunk),width)
+    actual += [[] for _ in range(len(chunk)-len(actual))]
+    mismatch=None
+    for offset,(want,got) in enumerate(zip(chunk,actual)):
+     wanted,observed=normalize(want),normalize(got)
+     if wanted!=observed:
+      different=[matrix[0][i] for i,(a,b) in enumerate(zip(wanted,observed)) if a!=b]
+      mismatch=(offset,different,wanted,observed);break
+    if mismatch is None:break
+   else:
+    offset,different,wanted,observed=mismatch
+    sample={k:{'expected':wanted[i][:120],'actual':observed[i][:120]} for i,k in enumerate(matrix[0]) if k in different[:3]}
+    raise ValueError(f'History readback mismatch: {title} row {start+offset+1}; columns: {different}; sample: {sample}')
  return {'pass':True,'tables':{t:len(v)-1 for t,v in expected.items()},'contract':HISTORY_CONTRACT}
 
 

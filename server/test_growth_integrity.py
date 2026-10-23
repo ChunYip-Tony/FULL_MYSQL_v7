@@ -29,6 +29,7 @@ class GrowthIntegrity(unittest.TestCase):
         self.assertEqual(sum(r['sales_amount'] for r in result['rows']),20)
         self.assertEqual(result['rows'][1]['department'],'UNASSIGNED_DEPARTMENT')
         self.assertEqual(result['rows'][1]['source_department_codes'],['300','400'])
+        self.assertIn('DO_NOT_ADD_DETAIL_TO_DAILY_TOTALS',result['rows'][0]['usage'])
 
     def test_production_publisher_wrapper_forwards_progress_and_keeps_quantity_guard(self):
         import types

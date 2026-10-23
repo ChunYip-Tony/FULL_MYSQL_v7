@@ -11,6 +11,18 @@ def load_function(filename,name,env):
  return env[name]
 
 class BridgeIntegrationTests(unittest.TestCase):
+ def test_history_short_read_retries_without_weakening_cell_comparison(self):
+  from price_history_analysis import verify_history_tables
+  from unittest.mock import Mock
+  expected=[['upc','sales'],['000611338042',10.25]]
+  reader=Mock(side_effect=[[],expected])
+  self.assertTrue(verify_history_tables({'ANALYSIS_UPC_DAILY':expected},reader)['pass'])
+  self.assertEqual(reader.call_count,2)
+  reader=Mock(return_value=[['upc','sales'],['611338042',10.25]])
+  with self.assertRaisesRegex(ValueError,'expected.*000611338042.*actual.*611338042'):
+   verify_history_tables({'ANALYSIS_UPC_DAILY':expected},reader)
+  self.assertEqual(reader.call_count,3)
+
  def test_history_readback_uses_the_same_numeric_rounding_as_the_writer(self):
   from decimal import Decimal
   from datetime import date,datetime

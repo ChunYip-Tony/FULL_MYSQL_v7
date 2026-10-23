@@ -29,7 +29,11 @@ def publish_upload_history(*, rows, source_days, batch_id, through, reader, writ
   ['Uploaded-scope fully verified',audit.get('verification',{}).get('uploaded_fully_verified',0)],
   ['Item verification',json.dumps(audit.get('verification',{}),sort_keys=True)],
   ['Fully verified items',audit.get('verification',{}).get('fully_verified',0)],
-  ['Items requiring evidence',audit.get('verification',{}).get('unresolved_items',0)]]
+  ['Items requiring evidence',audit.get('verification',{}).get('unresolved_items',0)],
+  ['Sales and achieved selling price authority','POS_ONLY; average price requires verified POS selling quantity'],
+  ['Price episode and event values','PRICE_LIST_REFERENCE_WINDOWS; not evidence of achieved selling price or causal price lift'],
+  ['Inventory evidence authority','MVT signed quantities and posted costs; no MVT sales revenue; family movement never allocated to UPCs'],
+  ['Aggregation rule','POS source detail and daily totals are alternative grains of the same sales. Inventory GP adjustments are derived from MVT detail. Never add both views.']]
  writer('ANALYSIS_STATUS',status)
  try:
   for title,matrix in output.items():writer(title,matrix,previous=old[title])

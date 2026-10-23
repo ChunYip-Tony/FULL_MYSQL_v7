@@ -1,1 +1,1 @@
-VERSION='7.0.546-bulk-pos-evidence-read'
+VERSION='7.0.547-explicit-pos-price-authority'
