@@ -148,7 +148,7 @@ def verify_readback(reader, rows, coverage):
             'revision':coverage[1][5],'contract':'INVENTORY_GP_V1'}
 
 
-def publish_supported_adjustments(reader, writer, ledger_rows, coverage, movement_export=None):
+def publish_supported_adjustments(reader, writer, ledger_rows, coverage, movement_export=None, pos_export=None):
     """One full-width source ledger publishes adjustments and all MVT types together."""
     from analysis_movement import publish_source_records
     import json
@@ -169,6 +169,14 @@ def publish_supported_adjustments(reader, writer, ledger_rows, coverage, movemen
                 'status':row['mapping_status'], 'source_revision':row['source_revision'],
                 'record_kind':'MOVEMENT_LINE',
                 'movement_json':json.dumps(row,default=lambda v:float(v) if isinstance(v,Decimal) else str(v),sort_keys=True,separators=(',',':'))})
+    if pos_export is not None:
+        owned.add('POS_SALES_LINE')
+        for row in pos_export['rows']:
+            additions.append({'department':row['department'],'source_id':'POS:'+row['source_line_id'],
+                'filename':row['source_filename'],'source_type':'POS_SALES_LINE','record_kind':'POS_SALES_LINE',
+                'start_date':row['date'],'end_date':row['date'],'status':row['mapping_status'],
+                'source_revision':row['source_revision'],
+                'pos_json':json.dumps(row,default=lambda v:float(v) if isinstance(v,Decimal) else str(v),sort_keys=True,separators=(',',':'))})
     source_readback = publish_source_records(reader, writer, additions, owned)
     status=reader('ANALYSIS_STATUS',1,100,2)
     status=[r for r in status if r and str(r[0]).strip()
@@ -181,6 +189,9 @@ def publish_supported_adjustments(reader, writer, ledger_rows, coverage, movemen
     if movement_export is not None:
         status = [r for r in status if not str(r[0]).startswith('Movement ledger ')]
         status.extend([['Movement ledger contract',movement_export['contract']],['Movement ledger rows',len(movement_export['rows'])],['Movement ledger readback','VERIFIED'],['Movement ledger dates',json.dumps(movement_export['dates'])],['Movement ledger types',json.dumps(movement_export['counts'],sort_keys=True)],['Movement ledger amount basis','POSTED_COST_NOT_REVENUE']])
+    if pos_export is not None:
+        status=[r for r in status if not str(r[0]).startswith('Typed POS ')]
+        status.extend([['Typed POS contract',pos_export['contract']],['Typed POS rows',len(pos_export['rows'])],['Typed POS readback','VERIFIED'],['Typed POS amount basis','POS_REVENUE_ONLY']])
     writer('ANALYSIS_STATUS',status)
     reread=reader('ANALYSIS_STATUS',1,len(status),2)
     observed_status={r[0]:r[1] for r in reread if len(r)>1}
@@ -191,5 +202,6 @@ def publish_supported_adjustments(reader, writer, ledger_rows, coverage, movemen
             'table':'ANALYSIS_SOURCES','record_kind':'INVENTORY_GP_ADJUSTMENT',
             'movement_lines':len(movement_export['rows']) if movement_export is not None else None,
             'movement_contract':movement_export['contract'] if movement_export is not None else None,
+            'pos_lines':len(pos_export['rows']) if pos_export is not None else None,
             'source_readback':source_readback}
 

@@ -208,12 +208,10 @@ def _canonical_sales_days(
     up_to: date | None = None,
 ) -> list[dict[str, Any]]:
     cutoff=min(up_to,completed_through_date()) if up_to is not None else completed_through_date()
-    return source_data_days(
-        cur,
-        "sales_by_price_type",
-        limit=limit,
-        up_to=cutoff,
-    )
+    from pos_evidence import eligible_sales_days, source_holds
+    days = source_data_days(cur, "sales_by_price_type",
+        limit=limit+len(source_holds()) if limit is not None else None, up_to=cutoff)
+    return eligible_sales_days(days, limit)
 
 
 def _daily_sales_by_price_type(
@@ -6081,7 +6079,7 @@ def performance_range(
     limit=max(1,min(int(limit or 1000),2000))
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True)
-        all_days=_canonical_sales_days(cur,limit=365,up_to=end_date)
+        all_days=_canonical_sales_days(cur,limit=3650,up_to=end_date)
         try:
             resolved_start, resolved_end, selected = _select_performance_range_days(
                 all_days, start_date, end_date, allow_partial_range=allow_partial_range,
@@ -6106,7 +6104,9 @@ def performance_range(
             cur.execute("SELECT * FROM quick_check_current WHERE "+" AND ".join(clauses),tuple(args))
         else:
             cur.execute("SELECT * FROM quick_check_current")
-        rows=cur.fetchall()
+        from family_daily_gp import apply_confirmed_selling_profile
+        from pos_evidence import verified_pos_quantity
+        rows=[apply_confirmed_selling_profile(r) for r in cur.fetchall()]
         daily=_batch_daily_sales_by_price_type(cur,rows,selected)
         cost_obs=_performance_range_cost_rows(cur,rows,resolved_end) if include_gp else {}
 
@@ -6126,6 +6126,8 @@ def performance_range(
             qty=Decimal("0")
             gp=Decimal("0")
             missing_cost_days=[]
+            quantity_review_days=[]
+            has_observation=False
             sold_days=0
             price_types=set()
 
@@ -6133,20 +6135,25 @@ def performance_range(
                 day=entry["date"]
                 obs=by_day.get(day,{})
                 day_sales=_d(obs.get("sales_amount"))
-                day_qty=_d(obs.get("sold_quantity"))
+                day_qty,quantity_basis=verified_pos_quantity(row,obs,day)
+                has_observation = has_observation or day_sales != 0 or _d(obs.get("sold_quantity")) != 0
                 sales+=day_sales
-                qty+=day_qty
+                if day_qty is None:
+                    quantity_review_days.append(day)
+                else:
+                    qty+=day_qty
                 price_types.update(str(k).upper() for k in (obs.get("price_types") or {}).keys())
-                if day_qty<=0:
+                if day_sales>0:
+                    sold_days+=1
+                if day_qty is None or day_qty==0:
                     continue
-                sold_days+=1
                 cost=_performance_cost_for_day(row,cost_obs,day) if include_gp else None
                 if cost is None:
                     missing_cost_days.append(day)
                     continue
                 gp+=day_sales-(day_qty*_d(cost.get("cost_per_selling_unit")))
 
-            if qty<=0:
+            if not has_observation:
                 continue
 
             sold_item_count+=1
@@ -6156,7 +6163,8 @@ def performance_range(
             elif status=="QA_HOLD":
                 qa_hold_count+=1
 
-            gp_complete=not missing_cost_days
+            gp_complete=include_gp and not missing_cost_days and not quantity_review_days
+            quantity_complete=not quantity_review_days
             gp_value=gp if gp_complete else None
             gp_pct=(gp/sales if gp_complete and sales>0 else None)
             gp_per_day=(gp/Decimal(n_days) if gp_complete and n_days else None)
@@ -6176,9 +6184,13 @@ def performance_range(
                 "selling_uom":row.get("selling_uom"),
                 "qty_uom":_safe_qty_uom(row.get("ean_upc"),row.get("selling_uom")),
                 "sales_amount":sales,
-                "sold_quantity":qty,
-                "velocity":qty/Decimal(n_days),
-                "avg_sold_price":sales/qty if qty else None,
+                "sold_quantity":qty if quantity_complete else None,
+                "velocity":qty/Decimal(n_days) if quantity_complete else None,
+                "avg_sold_price":sales/qty if quantity_complete and qty>0 else None,
+                "quantity_complete":quantity_complete,
+                "quantity_review_days":quantity_review_days,
+                "sales_basis":"POS_ONLY",
+                "achieved_price_basis":"POS_REALIZED_AVERAGE_NOT_ONE_APPLIED_PRICE",
                 "gp_dollars":gp_value,
                 "gp_pct":gp_pct,
                 "gp_per_supported_day":gp_per_day,
@@ -6198,8 +6210,15 @@ def performance_range(
         )
         cur.close()
 
+    quantity_totals={}
+    for item in items:
+        unit=str(item.get("qty_uom") or item.get("selling_uom") or "UNVERIFIED")
+        if item["sold_quantity"] is None:
+            quantity_totals[unit]=None
+        elif quantity_totals.get(unit, Decimal(0)) is not None:
+            quantity_totals[unit]=quantity_totals.get(unit,Decimal(0))+item["sold_quantity"]
     return {
-        "contract_version":"WEBAPP_V2_PERFORMANCE_RANGE_V1",
+        "contract_version":"WEBAPP_V2_PERFORMANCE_RANGE_V2_POS_AUTHORITY",
         "start_date":resolved_start,
         "end_date":resolved_end,
         "requested_start_date":start_date,
@@ -6210,10 +6229,13 @@ def performance_range(
         ),
         "supported_day_count":len(selected),
         "supported_dates":[x["date"] for x in selected],
+        "source_revision":max((int(r.get("publish_batch_id") or 0) for r in rows),default=0),
+        "source_manifest":[{"date":x["date"],"file_id":x.get("file_id"),"coverage_kind":x.get("coverage_kind")} for x in selected],
         "supported_day_contract":"COMPLETED_CANONICAL_DATA_DAYS_ONLY",
         "missing_calendar_dates_are_zero":False,
         "summary":{
             "sales_dollars":total_sales,
+            "sold_quantity_by_uom":quantity_totals,
             "gp_dollars":total_gp if total_gp_complete else None,
             "gp_dollars_complete":total_gp_complete,
             "sold_item_count":sold_item_count,
@@ -6222,6 +6244,8 @@ def performance_range(
         },
         "items":items[:limit],
         "item_limit":limit,
+        "total_item_count":len(items),
+        "items_truncated":len(items)>limit,
         "gp_basis":"HISTORICAL_APPLICABLE_COST_AS_OF_EACH_SUPPORTED_SELLING_DAY",
         "gp_missing_cost_rule":"ITEM_GP_WITHHELD_IF_ANY_SOLD_SUPPORTED_DAY_HAS_NO_RESOLVABLE_COST",
     }

@@ -15,13 +15,24 @@ def summarize_movements(export, start=None, end=None, family=None):
     if not dates or not selected:
         return {'data_available':False,'reason':'NO_MATCHING_CANONICAL_MOVEMENT_EVIDENCE',
                 'supported_dates':dates,'missing_dates_are_zero':False}
-    totals = defaultdict(lambda: {'quantity':Decimal(0),'posted_cost':Decimal(0),'rows':0,'missing_values':0})
+    totals = defaultdict(lambda: {'quantity':Decimal(0),'posted_cost':Decimal(0),'rows':0,'missing_values':0,'quantity_missing_rows':0,'posted_cost_missing_rows':0})
     for row in selected:
         value=totals[(str(row['movement_type']),row.get('base_uom_code') or 'UNVERIFIED_UNIT')]
         value['rows']+=1
         for source,target in [('base_quantity','quantity'),('amount_local_currency','posted_cost')]:
-            if row.get(source) is None:value['missing_values']+=1
-            else:value[target]+=Decimal(str(row[source]))
+            try:
+                number=Decimal(str(row.get(source)))
+                valid=number.is_finite() and (target!='quantity' or bool(row.get('base_uom_code')))
+            except Exception:
+                valid=False
+            if not valid:
+                value['missing_values']+=1
+                value[target+'_missing_rows']+=1
+            else:value[target]+=number
+    for value in totals.values():
+        for key in ('quantity','posted_cost'):
+            value['known_partial_'+key]=value[key]
+            if value[key+'_missing_rows']:value[key]=None
     result=[{'movement_type':t,'unit':u,**values} for (t,u),values in sorted(totals.items())]
     return {'data_available':True,'family_article':family,'grain':'FAMILY_OR_DEPARTMENT; NEVER_ALLOCATED_TO_UPCS',
             'supported_dates':dates,'supported_day_count':len(dates),'row_count':len(selected),'by_movement_and_unit':result,
@@ -92,6 +103,7 @@ def publish_source_records(reader, writer, additions, owned_kinds):
             page.pop()
         previous.extend(page)
         for row in page:
+            if not any(v not in ('',None) for v in row):continue
             r = dict(zip(header, row))
             kind = r.get('record_kind') or ('INVENTORY_GP_ADJUSTMENT' if str(r.get('source_id') or '').startswith('INVENTORY_GP:') else 'SOURCE')
             if kind not in owned_kinds:

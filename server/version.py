@@ -1,1 +1,1 @@
-VERSION='7.0.539-evidence-advisor-and-complete-movement'
+VERSION='7.0.540-verified-growth-and-full-readback'

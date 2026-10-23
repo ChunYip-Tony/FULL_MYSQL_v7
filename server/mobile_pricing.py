@@ -143,7 +143,8 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
     cost = cost_for_day(row, costs, day)
     result = {'date': day, 'qty': None, 'sales': None, 'price': None, 'type': None,
         'gp': None, 'normalized_gp': None, 'valid': False, 'reason': None,
-        'cost': cost, 'zero_sale': False}
+        'cost': cost, 'zero_sale': False, 'priceBasis': 'UNVERIFIED',
+        'referencePrice': configured['price'] if configured else None}
     types = observation.get('price_types') or {} if observation else {}
     # Retain actual per-type POS for reference even when a day has mixed prices.
     result['typeSales'] = []
@@ -158,7 +159,7 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
             # The Single Total POS has actual Qty/Weight but no price-type split.
             # Keep the sales/GP reference without inventing REG/TPR exposure.
             result.update(type='TOTAL', quantityBasis='POS_QTY_WEIGHT',
-                quantityEstimated=False, price=sales / qty if qty and sales is not None else None,
+                quantityEstimated=False, priceBasis='POS_REALIZED_AVERAGE', price=sales / qty if qty and sales is not None else None,
                 gp=sales-qty*cost['value'] if qty is not None and sales is not None and cost else None,
                 normalized_gp=sales-qty*current_cost['value'] if qty is not None and sales is not None and current_cost else None)
         if qty is None or sales is None or qty < 0 or sales < 0 or (qty == 0 and sales != 0):
@@ -175,16 +176,14 @@ def day_evidence(row, day, observation, snapshots, costs, current_cost):
                 result['reason'] = 'PRICE_TYPE_UNVERIFIED'
                 return result
             # A daily actual average is a reference, not a fabricated ticket price.
-            if configured and configured['type'] == pt and abs(configured['price'] - price) <= Decimal('.02'):
-                price = configured['price']
-            result.update(price=price.quantize(Decimal('.01')), type=pt)
+            result.update(price=price, type=pt, priceBasis='POS_REALIZED_AVERAGE')
         elif stable_exposure:
-            result.update(price=configured['price'], type=configured['type'], zero_sale=True)
+            result.update(price=configured['price'], type=configured['type'], zero_sale=True, priceBasis='PRICE_LIST_EXPOSURE_REFERENCE')
         else:
             result['reason'] = 'PRICE_EXPOSURE_UNVERIFIED'
             return result
     elif stable_exposure:
-        result.update(qty=Decimal(0), sales=Decimal(0), price=configured['price'], type=configured['type'], zero_sale=True)
+        result.update(qty=Decimal(0), sales=Decimal(0), price=configured['price'], type=configured['type'], zero_sale=True, priceBasis='PRICE_LIST_EXPOSURE_REFERENCE')
     else:
         result['reason'] = 'PRICE_EXPOSURE_UNVERIFIED'
         return result
@@ -506,7 +505,8 @@ def guard_weight_counts(items):
                     gp=day['sales']-qty*cost['value'] if qty is not None and cost else None,
                     normalized_gp=day['sales']-qty*member['cost']['value'] if qty is not None and member.get('cost') else None,
                     valid=False, reason='POS_WEIGHT_ESTIMATED' if qty is not None else 'POS_WEIGHT_MISSING',
-                    quantityBasis='POS_SALES_DIVIDED_BY_STABLE_HISTORICAL_TICKET', quantityEstimated=True)
+                    quantityBasis='POS_SALES_DIVIDED_BY_STABLE_HISTORICAL_TICKET', quantityEstimated=True,
+                    priceBasis='PRICE_LIST_EXPOSURE_REFERENCE')
             from family_daily_gp import CONFIRMED_POS_LB_UPCS
             confirmed_member=str(member.get('upc')) in CONFIRMED_POS_LB_UPCS or str(member.get('upc')) in {'24053300000','24953300000'}
             if confirmed_member:

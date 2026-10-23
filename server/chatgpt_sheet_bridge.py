@@ -70,6 +70,9 @@ def enqueue_chatgpt_publish(
     with db_conn() as conn:
         cur=conn.cursor(dictionary=True, buffered=True)
         try:
+            # Serialize startup/manual/reconciler enqueue decisions per batch.
+            cur.execute("SELECT batch_id FROM ingest_batch WHERE batch_id=%s FOR UPDATE",(bid,))
+            if not cur.fetchone():raise ValueError("Publish batch not found")
             cur.execute(
                 """SELECT pipeline_run_id,processing_status,code_version,detail_json
                    FROM pipeline_run
@@ -166,7 +169,7 @@ def chatgpt_publish_status(batch_id: int, *, pipeline_name: str) -> dict[str, An
                    WHERE batch_id=%s
                      AND pipeline_name=%s
                      AND stage_name='CHATGPT_SHEET_PUBLISH'
-                   ORDER BY pipeline_run_id DESC
+                   ORDER BY CASE WHEN processing_status IN ('STARTED','PAUSE_REQUESTED') THEN 0 WHEN processing_status='QUEUED' THEN 1 ELSE 2 END,pipeline_run_id DESC
                    LIMIT 1""",
                 (bid,pipeline_name),
             )
@@ -1392,6 +1395,7 @@ def _validate_readback_once(
     *,
     analysis_row_count: int,
     reader=None,
+    expected_matrices=None,
 ) -> dict[str, Any]:
     read = reader or _read_values
     source = read(session, spreadsheet_id, f"'{MYSQL_TABS['source']}'!A1:B40")
@@ -1431,7 +1435,15 @@ def _validate_readback_once(
         or str(analysis_tail[0][0]) != str(expected_analysis_last_row)
     ):
         failures.append("ANALYSIS_LAST_ROW_MISMATCH")
+    if expected_matrices:
+        from price_history_analysis import verify_history_tables
+        try:
+            verify_history_tables({t:[[_wire(v) for v in r] for r in m] for t,m in expected_matrices.items()}, lambda title,start,end,width:
+                read(session,spreadsheet_id,f"'{title}'!A{start}:{_col_letters(width)}{end}"))
+        except ValueError as exc:
+            failures.append(str(exc))
     return {
+        "full_cell_readback":bool(expected_matrices) and not failures,
         "pass":not failures,
         "failures":failures,
         "source_status":source_map,
@@ -1448,6 +1460,7 @@ def _validate_readback(
     *,
     analysis_row_count: int,
     reader=None,
+    expected_matrices=None,
     attempts: int = 3,
     retry_delay_seconds: float = 1.0,
 ) -> dict[str, Any]:
@@ -1462,6 +1475,7 @@ def _validate_readback(
             row_count,
             analysis_row_count=analysis_row_count,
             reader=reader,
+            expected_matrices=expected_matrices,
         )
         last["attempts"] = attempt
         if last.get("pass"):
@@ -1502,6 +1516,8 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                     cur, rows, batch_id, freshness["pos_data_through"])
                 from analysis_movement import build_movement_export
                 movement_export = build_movement_export(cur, rows, batch_id, freshness["pos_data_through"])
+                from analysis_pos import build_pos_export
+                pos_export = build_pos_export(cur, rows, batch_id)
                 from family_daily_gp import build_family_daily
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
                 latest_daily["family_mvt_gp"] = family_daily_summary
@@ -1597,6 +1613,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 batch_id,
                 len(rows),
                 analysis_row_count=analysis_row_count,
+                expected_matrices=matrices,
                 reader=lambda _session, sid, a1: _apps_script_read_values(sid, a1),
             )
         else:
@@ -1610,6 +1627,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 batch_id,
                 len(rows),
                 analysis_row_count=analysis_row_count,
+                expected_matrices=matrices,
             )
 
         if not readback["pass"]:
@@ -1655,7 +1673,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
         # Use bridge-approved tables: no Apps Script permissions/deployment change.
         from inventory_gp_adjustments import publish_supported_adjustments
         readback["inventory_adjustments"] = publish_supported_adjustments(
-            history_reader,history_writer,adjustment_matrix,adjustment_coverage,movement_export)
+            history_reader,history_writer,adjustment_matrix,adjustment_coverage,movement_export,pos_export)
         # A concurrent upload cannot certify an older export as current.
         with db_conn() as conn:
             cur=conn.cursor(dictionary=True,buffered=True)

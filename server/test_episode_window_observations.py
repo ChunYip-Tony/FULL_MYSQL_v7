@@ -37,7 +37,7 @@ class EpisodeWindowObservationTests(unittest.TestCase):
         self.assertAlmostEqual(e['gp_day'], 7.7835)
         self.assertEqual(e['popularity'], .5)
         self.assertFalse(e['performance_ok'])
-        self.assertIn('PRICE_ATTRIBUTION_UNVERIFIED:2/4', e['rationale'])
+        self.assertIn('PRICE_ATTRIBUTION_UNVERIFIED:4/4', e['rationale'])
         tracking = objects(out['ANALYSIS_PRICE_TRACKING'])[0]
         self.assertEqual(tracking['sales_day'], e['sales_day'])
         self.assertEqual(tracking['gp_day'], e['gp_day'])
@@ -59,10 +59,11 @@ class EpisodeWindowObservationTests(unittest.TestCase):
         self.assertIsNone(e['qty'])
         self.assertIsNone(e['gp_day'])
 
-    def test_clean_price_days_still_qualify_and_rebuild_is_idempotent(self):
+    def test_zero_sale_ticket_is_not_achieved_price_and_rebuild_is_idempotent(self):
         days = [self.day('2026-10-17', 79.9, 10), self.day('2026-10-18', 0, 0)]
         out, e = self.build(days, '2026-10-18')
-        self.assertTrue(e['performance_ok'])
+        self.assertFalse(e['performance_ok'])
+        self.assertIsNone(objects(out['ANALYSIS_UPC_DAILY'])[-1]['price'])
         again, _ = self.build(days, '2026-10-18', copy.deepcopy(out))
         self.assertEqual(out, again)
 

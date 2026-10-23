@@ -1,0 +1,79 @@
+import unittest, ast
+from pathlib import Path
+from decimal import Decimal as D
+from datetime import date
+from typing import Any
+from unittest.mock import MagicMock
+from pos_evidence import verified_pos_quantity, eligible_sales_days
+from analysis_movement import summarize_movements
+from performance_advice import growth_opportunities, compare_performance
+
+def extract(filename,names,env):
+    tree=ast.parse(Path(__file__).with_name(filename).read_text())
+    exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[]),filename,'exec'),env)
+
+class GrowthIntegrity(unittest.TestCase):
+    def test_quantity_authority_and_held_source(self):
+        row={'ean_upc':'000123','selling_uom':'LB'}
+        obs={'sold_quantity':2,'sales_amount':30,'price_types':{'REG':{}}}
+        self.assertIsNone(verified_pos_quantity(row,obs,'2026-10-19')[0])
+        self.assertEqual(verified_pos_quantity(row,{**obs,'sold_quantity':D('3.5'),'price_types':{'TOTAL':{}}},'2026-10-19')[0],D('3.5'))
+        self.assertEqual(verified_pos_quantity({**row,'ean_upc':'24053300000'},obs,'2026-10-19')[0],2)
+        days=[{'file_id':179,'date':date(2026,10,20)},{'file_id':178,'date':date(2026,10,19)}]
+        self.assertEqual(eligible_sales_days(days,1),[days[1]])
+        self.assertEqual(len(eligible_sales_days([{**days[0],'file_id':180}])),1)
+
+    def performance(self,qty,sales,unit='EA',types=None):
+        row={'upc_id':1,'ean_upc':'000123','selling_uom':unit,'publish_batch_id':73}
+        day=date(2026,10,19);cur=MagicMock();cur.fetchall.return_value=[row]
+        conn=MagicMock();conn.cursor.return_value=cur;ctx=MagicMock();ctx.__enter__.return_value=conn
+        env={'date':date,'Any':Any,'Decimal':D,'db_conn':lambda:ctx,'_d':lambda v:D(str(v or 0)),
+             '_canonical_sales_days':lambda *a,**k:[{'date':day,'file_id':178}],
+             '_select_performance_range_days':lambda *a,**k:(day,day,[{'date':day,'file_id':178}]),
+             '_batch_daily_sales_by_price_type':lambda *a:{1:{day:{'sales_amount':sales,'sold_quantity':qty,'price_types':types or {'REG':{}}}}},
+             '_performance_range_cost_rows':lambda *a:{},'_performance_cost_for_day':lambda *a:{'cost_per_selling_unit':8},
+             '_safe_qty_uom':lambda upc,u:u}
+        extract('webapp_v2_runtime.py',{'performance_range'},env)
+        return env['performance_range']()
+
+    def test_revenue_survives_zero_missing_and_return_quantities(self):
+        for qty,sales in [(0,100),(None,100),(-1,-10)]:
+            result=self.performance(qty,sales)
+            self.assertEqual(result['summary']['sales_dollars'],sales)
+            self.assertIsNone(result['summary']['gp_dollars'])
+            self.assertIsNone(result['items'][0]['sold_quantity'])
+
+    def test_weight_count_never_claims_gp_or_price(self):
+        result=self.performance(2,30,'LB')
+        self.assertEqual(result['summary']['sales_dollars'],30)
+        for key in ('sold_quantity','avg_sold_price','gp_dollars'):self.assertIsNone(result['items'][0][key])
+        result=self.performance(D('3.5'),30,'LB',{'TOTAL':{}})
+        self.assertEqual(result['items'][0]['gp_dollars'],2)
+
+    def test_partial_movement_cost_is_not_total(self):
+        row={'posting_date':'2026-10-19','department':'Seafood','movement_type':'551','base_quantity':-1,'base_uom_code':'LB','amount_local_currency':-10,'source_filename':'a'}
+        result=summarize_movements({'dates':['2026-10-19'],'rows':[row,{**row,'amount_local_currency':None}]})['by_movement_and_unit'][0]
+        self.assertIsNone(result['posted_cost']);self.assertEqual(result['known_partial_posted_cost'],-10)
+        self.assertEqual(result['posted_cost_missing_rows'],1);self.assertEqual(result['quantity'],-2)
+
+    def test_current_interior_corruption_fails_readback(self):
+        env={'Any':Any,'MYSQL_TABS':{'source':'source','lookup':'lookup','analysis':'analysis','family':'family'},'_col_letters':lambda n:'B','_wire':lambda v:v}
+        extract('chatgpt_sheet_bridge.py',{'_validate_readback_once'},env)
+        matrix=[['ean_upc','sales'],['000123',10],['000456',20],['000789',30]]
+        def read(session,sid,a1):
+            if a1=="'current'!A1:B4":return [matrix[0],matrix[1],[456,20],matrix[3]]
+            return []
+        result=env['_validate_readback_once'](None,'s',73,3,analysis_row_count=3,reader=read,expected_matrices={'current':matrix})
+        self.assertFalse(result['pass']);self.assertTrue(any('row 3' in x and 'ean_upc' in x for x in result['failures']))
+
+    def test_unknown_quantities_compare_as_null_and_actions_do_not_forecast(self):
+        def reader(args):
+            return {'data_available':True,'supported_dates':['2026-10-18','2026-10-19'],'supported_day_count':1,
+              'sales_dollars':30,'gp_dollars':None,'sold_quantity_by_uom':{'LB':None},
+              '_comparison_rows':[{'upc':'000123','name':'Fish','sales_amount':30,'sold_quantity':None,'gp_dollars':None}]}
+        comparison=compare_performance({'supported_days':1},reader)
+        self.assertIsNone(comparison['quantity_per_supported_day_by_uom']['LB']['change'])
+        result=growth_opportunities({'supported_days':1},reader)
+        self.assertIsNone(result['forecast_or_uplift']);self.assertEqual(result['actions'][0]['action'],'RESOLVE_HIGH_REVENUE_EVIDENCE_GAPS')
+
+if __name__=='__main__':unittest.main()

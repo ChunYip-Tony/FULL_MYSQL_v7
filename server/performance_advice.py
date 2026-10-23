@@ -32,6 +32,8 @@ def compare_performance(args, sales_reader):
             return {'data_available': False, 'reason': 'NO_SUPPORTED_DAYS', 'start': start, 'end': end}
         periods.append(value)
     prior, current = periods
+    if prior.get("source_revision") != current.get("source_revision"):
+        return {"data_available":False,"reason":"SOURCE_CHANGED_DURING_COMPARISON","advice":"Retry against one current revision."}
     def decimal(v):
         return Decimal(str(v)) if v is not None else None
     def per_day(period, key):
@@ -43,9 +45,9 @@ def compare_performance(args, sales_reader):
     metrics = {key: change(per_day(prior, key), per_day(current, key)) for key in ('sales_dollars', 'gp_dollars')}
     units = set(prior.get('sold_quantity_by_uom', {})) | set(current.get('sold_quantity_by_uom', {}))
     quantity = {u: change(decimal(prior.get('sold_quantity_by_uom', {}).get(u))/Decimal(str(prior['supported_day_count']))
-                         if u in prior.get('sold_quantity_by_uom', {}) else None,
+                         if prior.get('sold_quantity_by_uom', {}).get(u) is not None else None,
                          decimal(current.get('sold_quantity_by_uom', {}).get(u))/Decimal(str(current['supported_day_count']))
-                         if u in current.get('sold_quantity_by_uom', {}) else None) for u in sorted(units)}
+                         if current.get('sold_quantity_by_uom', {}).get(u) is not None else None) for u in sorted(units)}
     before = {str(r.get('upc')): r for r in prior.get('_comparison_rows') or []}
     after = {str(r.get('upc')): r for r in current.get('_comparison_rows') or []}
     drivers = []
@@ -60,6 +62,55 @@ def compare_performance(args, sales_reader):
     return {'data_available': True, 'item_query': query, 'prior': evidence(prior), 'current': evidence(current),
             'per_supported_day': metrics, 'quantity_per_supported_day_by_uom': quantity,
             'largest_matched_upc_changes': drivers[:10], 'matched_upc_count': len(drivers),
+            'driver_coverage_complete':not(prior.get('items_truncated') or current.get('items_truncated')),
             'unmatched_upcs': {'prior_only': len(before.keys()-after.keys()), 'current_only': len(after.keys()-before.keys())},
             'source': 'CANONICAL_POS; COST_FROM_VERIFIED_COST_EVIDENCE',
-            'interpretation': 'Observed association, not proof of price/promotion causality. Missing dates and absent UPCs are not zero. Compare weekdays, price types, stock availability and units before advice. GP excludes unverified losses and must not be called final adjusted profit.'}
+            'interpretation': 'Observed association, not proof of price/promotion causality. Missing dates and absent UPCs are not zero. Compare weekdays, price types, stock availability and units before advice. GP is before all inventory adjustments, dumping and shrinkage and must not be called final adjusted profit.'}
+
+
+def growth_opportunities(args, sales_reader):
+    """A ranked work queue based on facts; proposed gains are never manufactured."""
+    current=sales_reader({'item_query':args.get('item_query'),
+        'supported_days':args.get('supported_days') or 7,'_comparison':True})
+    if current.get('data_available') is False or current.get('needs_details'):
+        return current
+    rows=current.get('_comparison_rows') or []
+    days=current.get('supported_day_count') or 0
+    if not days:return {'data_available':False,'reason':'NO_SUPPORTED_POS_DAYS'}
+    known=[r for r in rows if r.get('gp_dollars') is not None and r.get('sold_quantity') is not None]
+    unknown=[r for r in rows if r.get('gp_dollars') is None or r.get('sold_quantity') is None]
+    actions=[]
+    for r in sorted(known,key=lambda r:Decimal(str(r['gp_dollars'])))[:3]:
+        if Decimal(str(r['gp_dollars']))>=0:continue
+        actions.append({'priority':1,'action':'REVIEW_NEGATIVE_HISTORICAL_GP','upc':r['upc'],'name':r['name'],
+            'sales':r['sales_amount'],'historical_gp_per_supported_day':Decimal(str(r['gp_dollars']))/days,
+            'evidence_confidence':'VERIFIED_POS_QUANTITY_AND_HISTORICAL_COST',
+            'next_step':'Check cost lineage, returns and price-type mix; use price-review gates before changing price.',
+            'success_metric':'Improve comparable GP/day without increasing booked waste or hiding lost revenue.'})
+    for r in sorted(known,key=lambda r:Decimal(str(r['gp_dollars'])),reverse=True)[:3]:
+        if Decimal(str(r['gp_dollars']))<=0:continue
+        actions.append({'priority':2,'action':'PROTECT_PROFITABLE_AVAILABILITY','upc':r['upc'],'name':r['name'],
+            'sales':r['sales_amount'],'historical_gp_per_supported_day':Decimal(str(r['gp_dollars']))/days,
+            'evidence_confidence':'VERIFIED_HISTORICAL_GP; STOCK_CHECK_REQUIRED',
+            'next_step':'Check current family stock, usable condition and inbound receipts before proposing replenishment or display changes.',
+            'success_metric':'Maintain or improve GP/day and same-unit sell-through; monitor disposal cost.'})
+    if unknown:
+        actions.append({'priority':3,'action':'RESOLVE_HIGH_REVENUE_EVIDENCE_GAPS',
+            'items':[{'upc':r['upc'],'name':r['name'],'sales':r['sales_amount']} for r in sorted(unknown,key=lambda r:Decimal(str(r['sales_amount'])),reverse=True)[:3]],
+            'evidence_confidence':'REVENUE_ONLY; GP_OR_QUANTITY_UNVERIFIED',
+            'next_step':'Resolve POS weight, unit or historical-cost evidence before margin or price recommendations.',
+            'success_metric':'Verified quantity and cost coverage; revenue remains included.'})
+    comparison=compare_performance({'item_query':args.get('item_query'),'supported_days':args.get('supported_days') or 7},sales_reader)
+    declines=[r for r in comparison.get('largest_matched_upc_changes',[]) if r['sales_per_day']['change']<0]
+    for r in declines[:3]:
+        actions.append({'priority':4,'action':'TEST_SALES_RECOVERY','upc':r['upc'],'name':r['name'],
+            'sales_per_day':r['sales_per_day'],'evidence_confidence':'OBSERVED_DECLINE; CAUSE_UNPROVEN',
+            'next_step':'Check availability, weekday mix and promotion changes; if appropriate test one display or assortment change for seven comparable supported days.',
+            'success_metric':'GP/day first, with POS sales/day, verified quantity/day and booked waste as guardrails.'})
+    return {'data_available':True,'supported_dates':current.get('supported_dates'),
+        'source':'CANONICAL_POS_AND_HISTORICAL_COST','sales_dollars':current.get('sales_dollars'),
+        'historical_gp_dollars':current.get('gp_dollars'),'actions':sorted(actions,key=lambda r:r['priority']),
+        'comparison':comparison,'forecast_or_uplift':None,
+        'coverage_note':'Rankings cover returned items only.' if current.get('items_truncated') else 'All returned POS items considered.',
+        'profit_basis':'Historical selling GP before dumping, shrinkage and other inventory adjustments. No family-to-UPC loss allocation.',
+        'experiment_rule':'Change one controllable factor; compare equivalent supported dates and price types. Before/after is observational, not proven causal lift.'}

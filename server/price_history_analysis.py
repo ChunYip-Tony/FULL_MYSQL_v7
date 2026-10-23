@@ -80,7 +80,9 @@ def verify_member_performance(member, current, source_days, through, policy):
   elif cost_ok(d.get('cost'),day) and number(d.get('gp')) and abs(float(d['gp'])-(float(d['sales'])-float(d['qty'])*float(d['cost']['value'])))<.011:
    verified_gp_days+=1
   else:problems['historical_cost'].append(day)
-  if not (d.get('type') in {'REG','TPR','SALE','IN STORE','IN_STORE'} and number(d.get('price'))
+  if not (qty_ok and float(d.get('qty') or 0)>0 and float(d.get('sales') or 0)>0
+      and d.get('priceBasis') != 'PRICE_LIST_EXPOSURE_REFERENCE'
+      and d.get('type') in {'REG','TPR','SALE','IN STORE','IN_STORE','TOTAL'} and number(d.get('price'))
       and float(d['price'])>0 and d.get('reason') not in {'MIXED_PRICE_DAY','PRICE_TYPE_UNVERIFIED','PRICE_EXPOSURE_UNVERIFIED'}):
    problems['price_attribution'].append(day)
  latest=rows.get(through,{})
@@ -180,7 +182,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    held=any(str(source.get('file_id',source.get('source_file_id','')))==str(h.get('file_id')) and (not h.get('date') or h['date']==d['date']) for h in policy.get('source_quality_holds',[]))
    if held:reason='SOURCE_QUALITY_HOLD:USER_REPORTED_WRONG_POS_FILE'
    old=daily.get((upc,d['date']),{})
-   daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],d.get('price'),d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood and not held),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,d.get('zero_sale',False),source_days.get(d['date'],{}).get('file_id',source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file',''))),old.get('pos_batch',''),revision,through]))
+   daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],rawsales/qty if qgood and qty>0 and rawsales is not None and rawsales>0 else None,d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood and not held),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,d.get('zero_sale',False),source_days.get(d['date'],{}).get('file_id',source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file',''))),old.get('pos_batch',''),revision,through]))
  oldepisodes=read('ANALYSIS_PRICE_EPISODES');eh=oldepisodes[0];episodes=objects(oldepisodes);keys={r['episode_id'] for r in episodes}
  priority={'REG':1,'TPR':2,'SALE':3,'IN STORE':4,'IN_STORE':4}
  for upc,m in members.items():
@@ -336,7 +338,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V5_UPLOADED_SCOPE'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V6_POS_AUTHORITY_AND_TYPED_SOURCES'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
@@ -368,7 +370,7 @@ _HISTORY_DATE_COLUMNS = frozenset({
 
 def _history_date_value(value, column):
  """Canonical calendar dates across Sheets serials and Apps Script Date JSON."""
- if column not in _HISTORY_DATE_COLUMNS or value in (None, ''):
+ if (column not in _HISTORY_DATE_COLUMNS and not str(column or '').endswith(('_date','_asof_date'))) or value in (None, ''):
   return value
  from datetime import date, datetime, timedelta
  if isinstance(value, datetime):
@@ -439,7 +441,7 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
  if loader is None:
   from mobile_pricing import build_page
   from fastapi.encoders import jsonable_encoder
-  loader = lambda ids: jsonable_encoder(build_page(limit=len(ids),history_days=90,requested_upcs=set(ids),history_only=True))
+  loader = lambda ids: jsonable_encoder(build_page(limit=len(ids),history_days=max(90,len(source_days)),requested_upcs=set(ids),history_only=True))
  ids = {str(r['ean_upc']) for r in rows if r.get('ean_upc') and (r.get('quick_check_status') in ('READY','QA_HOLD') or any(float(r.get(k) or 0)!=0 for k in ('sales_dollars_7d','sales_dollars_30d','pos_qty_7d','pos_qty_30d')))}
  ids.update(str(r['upc']) for r in objects(tables['ANALYSIS_UPC_DAILY']) if r.get('upc') and r.get('sales') not in (None,''))
  for title in ('ANALYSIS_PRICE_TRACKING','ANALYSIS_COVERAGE'):
