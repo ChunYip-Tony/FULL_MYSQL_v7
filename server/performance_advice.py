@@ -55,8 +55,8 @@ def compare_performance(args, sales_reader):
         a, b = before[upc], after[upc]
         old = decimal(a.get('sales_amount'))/Decimal(str(prior['supported_day_count']))
         new = decimal(b.get('sales_amount'))/Decimal(str(current['supported_day_count']))
-        drivers.append({'upc': upc, 'name': b.get('name'), 'sales_per_day': change(old, new)})
-    drivers.sort(key=lambda r: abs(r['sales_per_day']['change']), reverse=True)
+        drivers.append({'upc': upc, 'name': b.get('name'), 'pos_revenue_usd_per_supported_day': change(old, new)})
+    drivers.sort(key=lambda r: abs(r['pos_revenue_usd_per_supported_day']['change']), reverse=True)
     def evidence(p):
         return {k: v for k, v in p.items() if k not in {'_comparison_rows', 'top_items'}}
     return {'data_available': True, 'item_query': query, 'prior': evidence(prior), 'current': evidence(current),
@@ -65,6 +65,7 @@ def compare_performance(args, sales_reader):
             'driver_coverage_complete':not(prior.get('items_truncated') or current.get('items_truncated')),
             'unmatched_upcs': {'prior_only': len(before.keys()-after.keys()), 'current_only': len(after.keys()-before.keys())},
             'source': 'CANONICAL_POS; COST_FROM_VERIFIED_COST_EVIDENCE',
+            'metric_units': {'sales_dollars':'USD/day','gp_dollars':'USD/day','pos_revenue_usd_per_supported_day':'USD/day','quantity_per_supported_day_by_uom':'Only this field contains physical units/day; preserve its explicit UOM.'},
             'interpretation': 'Observed association, not proof of price/promotion causality. Missing dates and absent UPCs are not zero. Compare weekdays, price types, stock availability and units before advice. GP is before all inventory adjustments, dumping and shrinkage and must not be called final adjusted profit.'}
 
 
@@ -101,13 +102,16 @@ def growth_opportunities(args, sales_reader):
             'next_step':'Resolve POS weight, unit or historical-cost evidence before margin or price recommendations.',
             'success_metric':'Verified quantity and cost coverage; revenue remains included.'})
     comparison=compare_performance({'item_query':args.get('item_query'),'supported_days':args.get('supported_days') or 7},sales_reader)
-    declines=[r for r in comparison.get('largest_matched_upc_changes',[]) if r['sales_per_day']['change']<0]
+    declines=[r for r in comparison.get('largest_matched_upc_changes',[]) if r['pos_revenue_usd_per_supported_day']['change']<0]
     for r in declines[:3]:
         actions.append({'priority':4,'action':'TEST_SALES_RECOVERY','upc':r['upc'],'name':r['name'],
-            'sales_per_day':r['sales_per_day'],'evidence_confidence':'OBSERVED_DECLINE; CAUSE_UNPROVEN',
+            'pos_revenue_usd_per_supported_day':r['pos_revenue_usd_per_supported_day'],'evidence_confidence':'OBSERVED_DECLINE; CAUSE_UNPROVEN',
             'next_step':'Check availability, weekday mix and promotion changes; if appropriate test one display or assortment change for seven comparable supported days.',
             'success_metric':'GP/day first, with POS sales/day, verified quantity/day and booked waste as guardrails.'})
     return {'data_available':True,'supported_dates':current.get('supported_dates'),
+        'start_date':current.get('start_date'),'end_date':current.get('end_date'),'supported_day_count':days,
+        'currency':'USD','metric_units':{'sales':'USD','sales_dollars':'USD','historical_gp_per_supported_day':'USD/day','pos_revenue_usd_per_supported_day':'USD/day'},
+        'unit_rule':'Revenue fields are currency, never LB, EA or PACK. A stock UOM cannot change the dimension of a sales-dollar metric.',
         'source':'CANONICAL_POS_AND_HISTORICAL_COST','sales_dollars':current.get('sales_dollars'),
         'historical_gp_dollars':current.get('gp_dollars'),'actions':sorted(actions,key=lambda r:r['priority']),
         'comparison':comparison,'forecast_or_uplift':None,

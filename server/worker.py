@@ -898,7 +898,8 @@ def process_bridge_job(run_id:int,batch_id:int) -> None:
     try:
         _assert_run_claim_valid(run_id)
         _touch_run(run_id,stage='CHATGPT_SHEET_PUBLISH_ASYNC')
-        result=publish_chatgpt_snapshot(batch_id)
+        result=publish_chatgpt_snapshot(batch_id,progress=lambda stage,elapsed:
+            _touch_run(run_id,stage='GOOGLE_'+stage,progress_payload={'progress_elapsed_seconds':elapsed}))
         detail['publish_result']=result
         if str(result.get('status') or '').upper() in {'PASS','DISABLED'}:
             finish(run_id,'COMPLETED',detail,0)

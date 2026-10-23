@@ -289,6 +289,8 @@ def _sales_tool(args: dict[str, Any]) -> dict[str, Any]:
         "item_query": item_query,
         "matched_item_count": len(chosen),
         "sales_dollars": sales,
+        "currency": "USD",
+        "gp_basis": "HISTORICAL_COST_SELLING_GP_BEFORE_INVENTORY_ADJUSTMENTS",
         "sold_quantity_by_uom": qty_by_uom,
         "gp_dollars": gp if gp_complete else None,
         "gp_complete": gp_complete,
@@ -887,7 +889,8 @@ def _movement_analysis_tool(args):
         try:
             cur.execute('SELECT DISTINCT main_article_number,publish_batch_id FROM quick_check_current')
             quick=list(cur.fetchall());batch=max((int(r.get('publish_batch_id') or 0) for r in quick),default=0)
-            export=build_movement_export(cur,quick,batch,completed_through_date())
+            export=build_movement_export(cur,quick,batch,completed_through_date(),
+                start=start,end=end,family=family,limit_days=None if start else 28)
         finally:cur.close()
     return summarize_movements(export,start.isoformat() if start else None,end.isoformat() if end else None,family)
 
@@ -904,7 +907,7 @@ def _analysis_question(question, history=None):
 
 TOOLS = [
     {'type':'function','name':'get_growth_opportunities',
-     'description':'Prioritize evidence-backed ways to grow sales and historical gross profit: protect profitable sellers, review negative GP and test sales recovery. Returns dated evidence, required checks, confidence and measurement plan. Does not forecast gains, authorize price changes or treat estimated GP as final profit.',
+     'description':'Prioritize evidence-backed ways to grow sales and historical gross profit. Unless the user specifies a period, supported_days must be null (defaults to 7). Revenue and GP fields are USD, never LB/EA. Returns dated actions and required checks. Does not forecast gains or authorize price changes.',
      'parameters':{'type':'object','properties':{'item_query':{'type':['string','null']},'supported_days':{'type':['integer','null'],'minimum':1,'maximum':90}},'required':['item_query','supported_days'],'additionalProperties':False},'strict':True},
     {'type':'function','name':'get_movement_analysis',
      'description':'Read all canonical MVT types, signed costs, movement quantities and reversals by family or department. Use for dumping/shrinkage/receipt-cost/booked movement analysis and POS cross-reference. Never sales amount or selling price. Null dates use latest 28 supported MVT dates; explicit dates are preserved. Do not allocate family measures to UPCs or double count 107/109.',
@@ -1069,6 +1072,8 @@ ANALYSIS AND ADVICE:
 - Help the manager decide what to do, not only repeat rows. For difficult analysis use enough detail to answer: finding, supporting evidence with dates, prioritized action, and uncertainty. A short action table can include why, confidence and what to measure next. Do not impose the simple-answer 60-word limit on analysis, explanations or advice.
 - For more sales, more GP, growth, opportunity or what-to-do questions, call get_growth_opportunities. Show at most three prioritized actions with item/family, evidence dates, why, confidence, next step and success metric. Then use inventory, movement or price-review tools to validate the proposed action. Profitable sales growth, sell-through and lower verified waste matter together; volume or revenue growth alone is not success.
 - For trends or why performance changed, call compare_performance_periods. Preserve explicit requested periods. Without dates compare the latest 7 supported POS days with the preceding 7 and state those actual dates. Compare sales/day, same-unit quantity/day and historical-cost GP/day; explain unequal day coverage and weekday mix.
+- For get_growth_opportunities use supported_days=null unless the user requests a different window. Revenue and GP are dollars: always label pos_revenue_usd_per_supported_day as $/day, never lb/day or units/day. A product's stock UOM cannot relabel a revenue metric. Use only explicit quantity fields for physical volume. Preserve the supplied historical versus current-cost GP basis.
+- Before stating that booked waste is available, unavailable, low or high, call get_movement_analysis for the relevant family and dated window. Stock-flow evidence alone does not establish disposal or shrinkage. If that tool fails, say the waste check could not be completed.
 - For dumping, shrinkage, movement valuation or all-MVT questions call get_movement_analysis. It returns all observed types and signed reversals by unit. Cross-reference POS sales via sales/comparison tools; never treat Amount LC as sales or allocate family movement to an individual UPC.
 - Diagnose observed facts separately from hypotheses. Price, promotion, availability, receipt cost, waste and mix can be plausible drivers; do not call them proven without matched evidence. A realized average price can change because the sales mix changed.
 - For a suggested experiment, state the baseline supported dates, proposed change, duration (normally seven comparable supported selling days), primary metric GP/day, and guardrails for revenue, same-unit quantity and booked waste. Do not claim causal lift from a simple before/after; flag weekday, availability, promotion and cost changes. No invented gains or exact optimal prices.

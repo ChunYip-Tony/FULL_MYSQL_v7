@@ -1,1 +1,1 @@
-VERSION='7.0.543-exact-google-date-transport'
+VERSION='7.0.544-literal-text-and-currency-safe-advice'

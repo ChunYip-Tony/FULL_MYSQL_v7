@@ -41,22 +41,28 @@ def summarize_movements(export, start=None, end=None, family=None):
             'interpretation':'Amount LC is posted cost, never sales revenue or selling price. Preserve signed reversals. Net 251/252 issue quantity is negative of signed postings. Dump cost is negative of net 551/552 valuation. Inventory count loss/gain is negative of net 701/702 valuation. Do not sum different units or count 107 and 109 as two receipts; use get_stock_flow for physical receipt totals. Observed postings alone do not prove complete loss coverage or final adjusted GP.'}
 
 
-def build_movement_export(cur, quick_rows, batch_id, through):
+def build_movement_export(cur, quick_rows, batch_id, through, *, start=None, end=None, family=None, limit_days=None):
     from data_coverage import source_data_days
     from business_clock import completed_through_date
     days = source_data_days(cur, 'movement', limit=3650, up_to=completed_through_date(), include_batch_id=batch_id)
+    days = [d for d in days if (not start or d['date']>=start) and (not end or d['date']<=end)]
+    if limit_days is not None:days=days[:max(1,int(limit_days))]
     if not days:
         return {'rows': [], 'dates': [], 'counts': {}, 'contract': 'CANONICAL_MOVEMENT_LINES_V1'}
     clauses, params = [], []
     for day in days:
         clauses.append('(m.file_id=%s AND m.posting_date=%s)')
         params.extend([int(day['file_id']), day['date']])
+    where='('+ ' OR '.join(clauses)+')'
+    if family:
+        where+=' AND pf.main_article_number=%s'
+        params.append(str(family))
     cur.execute('''SELECT m.file_id,m.raw_id,m.source_row_number,m.posting_date,m.article_number,
         pf.main_article_number AS family_article_number,m.description,m.movement_type,
         m.entry_quantity,m.entry_uom_code,m.base_quantity,m.base_uom_code,m.amount_local_currency,
         m.article_document,m.purchase_order,m.vendor_code,m.cost_center
         FROM movement_history m LEFT JOIN product_family pf ON pf.family_id=m.family_id
-        WHERE ''' + ' OR '.join(clauses) + ' ORDER BY m.posting_date,m.file_id,m.raw_id', tuple(params))
+        WHERE ''' + where + ' ORDER BY m.posting_date,m.file_id,m.raw_id', tuple(params))
     families = {str(r.get('main_article_number')) for r in quick_rows if r.get('main_article_number')}
     files = {(int(d['file_id']), str(d['date'])[:10]): d for d in days}
     result, seen, counts = [], set(), defaultdict(int)

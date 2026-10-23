@@ -27,6 +27,8 @@ class EvidenceTests(unittest.TestCase):
         self.assertEqual(result['per_supported_day']['sales_dollars']['change'],25)
         self.assertIsNone(result['per_supported_day']['gp_dollars']['change'])
         self.assertEqual(result['largest_matched_upc_changes'][0]['upc'],'000123')
+        self.assertEqual(result['largest_matched_upc_changes'][0]['pos_revenue_usd_per_supported_day']['change'],25)
+        self.assertEqual(result['metric_units']['pos_revenue_usd_per_supported_day'],'USD/day')
         self.assertEqual(result['quantity_per_supported_day_by_uom']['LB']['change'],Decimal('2.5'))
 
     def test_insufficient_days_and_overlapping_periods_fail_closed(self):

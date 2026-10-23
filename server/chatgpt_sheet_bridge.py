@@ -195,6 +195,8 @@ def chatgpt_publish_status(batch_id: int, *, pipeline_name: str) -> dict[str, An
         "failure_error":(detail.get("publish_result") or {}).get("error") or detail.get("error") or detail.get("recovery_reason"),
         "worker":detail.get("worker"),
         "heartbeat_at":detail.get("heartbeat_at"),
+        "publisher_stage":detail.get("phase3_stage") or detail.get("bridge_stage"),
+        "publisher_elapsed_seconds":detail.get("progress_elapsed_seconds"),
         "async_nonblocking":True,
     }
 
@@ -365,19 +367,10 @@ def _apps_script_wire(value: Any) -> Any:
     Readback still compares the original unmodified identifier exactly.
     """
     value = _wire(value)
-    # Existing DATE-formatted cells otherwise turn a calendar date into a
-    # timezone-shifted Apps Script Date. Preserve ISO dates/timestamps as text,
-    # just like UPC identifiers, without changing their actual value.
-    if isinstance(value, str) and len(value) >= 10 and value[4:5] == '-' and value[7:8] == '-':
-        try:
-            datetime.fromisoformat(value.replace('Z', '+00:00'))
-            return "'" + value
-        except ValueError:
-            pass
-    if isinstance(value, str) and (value.startswith("'") or
-            (len(value) > 1 and value.startswith('0') and value.isdigit())):
-        return "'" + value
-    return value
+    # Every string is literal source text. Comma-separated UPC lists can be
+    # interpreted as enormous numbers; dates can be timezone-shifted, and names
+    # beginning '=' can become formulas. Numeric Python values stay numeric.
+    return "'" + value if isinstance(value, str) and value else value
 
 
 def _col_letters(n: int) -> str:
@@ -1540,14 +1533,18 @@ def _validate_readback(
     return last
 
 
-def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
+def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
     if not bridge_enabled():
         return {"status":"DISABLED","batch_id":batch_id,
                 "reason":"FULLMYSQL_CHATGPT_SHEET_ENABLED is not enabled."}
     spreadsheet_id: str | None = None
     transport: str | None = None
     publish_row_count = 0
+    started = time.monotonic()
+    def stage(name):
+        if progress:progress(name, round(time.monotonic()-started, 1))
     try:
+        stage('PREPARING_CURRENT')
         spreadsheet_id = _sheet_id()
         transport = _bridge_transport()
 
@@ -1566,14 +1563,17 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 freshness = _canonical_freshness(cur, batch_id)
                 latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
                 recent_3d = _fetch_recent_3d_sales(cur, batch_id, rows)
+                stage('PREPARING_MOVEMENT_EVIDENCE')
                 from inventory_gp_adjustments import build_adjustment_export
                 adjustment_matrix, adjustment_coverage = build_adjustment_export(
                     cur, rows, batch_id, freshness["pos_data_through"])
                 from analysis_movement import build_movement_export
                 movement_export = build_movement_export(cur, rows, batch_id, freshness["pos_data_through"])
                 from analysis_pos import build_pos_export
+                stage('PREPARING_TYPED_POS')
                 pos_export = build_pos_export(cur, rows, batch_id)
                 from family_daily_gp import build_family_daily
+                stage('PREPARING_FAMILY_GP')
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
                 latest_daily["family_mvt_gp"] = family_daily_summary
                 from business_clock import completed_through_date
@@ -1610,6 +1610,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
 
         negative_queue = negative_stock_queue(limit=500)
         cost_backfill = cost_backfill_queue(lookback_days=90)
+        stage('WRITING_CURRENT')
 
         # Fail closed for readers while a new snapshot is being replaced.
         publishing_matrix = _bridge_status(
@@ -1662,7 +1663,9 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
         if transport == "APPS_SCRIPT":
             publisher_identity = "GOOGLE_APPS_SCRIPT_WEB_APP"
             for title, matrix in matrices.items():
+                stage('WRITING_'+title)
                 _apps_script_write_matrix(spreadsheet_id, title, matrix)
+            stage('VERIFYING_CURRENT')
             readback = _validate_readback(
                 None,
                 spreadsheet_id,
@@ -1677,6 +1680,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             _ensure_tabs(session, spreadsheet_id, list(matrices) + [MYSQL_TABS["bridge"]])
             for title, matrix in matrices.items():
                 _write_matrix(session, spreadsheet_id, title, matrix)
+            stage('VERIFYING_CURRENT')
             readback = _validate_readback(
                 session,
                 spreadsheet_id,
@@ -1709,6 +1713,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             }
 
         from upload_history_publish import publish_upload_history
+        stage('PUBLISHING_HISTORY')
         def history_transport_reader(title, start, end, width):
             a1=f"'{title}'!A{start}:{_col_letters(width)}{end}"
             return (_apps_script_read_values(spreadsheet_id,a1) if transport == "APPS_SCRIPT"
@@ -1728,8 +1733,10 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
             through=freshness["pos_data_through"],reader=history_reader,writer=history_writer)
         # Use bridge-approved tables: no Apps Script permissions/deployment change.
         from inventory_gp_adjustments import publish_supported_adjustments
+        stage('PUBLISHING_MOVEMENT_AND_POS_LEDGER')
         readback["inventory_adjustments"] = publish_supported_adjustments(
             history_reader,history_writer,adjustment_matrix,adjustment_coverage,movement_export,pos_export)
+        stage('VERIFYING_FINAL_REVISION')
         # A concurrent upload cannot certify an older export as current.
         with db_conn() as conn:
             cur=conn.cursor(dictionary=True,buffered=True)

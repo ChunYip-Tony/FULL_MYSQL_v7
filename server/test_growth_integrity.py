@@ -13,6 +13,19 @@ def extract(filename,names,env):
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[]),filename,'exec'),env)
 
 class GrowthIntegrity(unittest.TestCase):
+    def test_movement_advice_filters_dates_and_family_before_loading_rows(self):
+        import sys,types
+        from unittest.mock import patch
+        from analysis_movement import build_movement_export
+        days=[{'date':date(2026,10,d),'file_id':d,'original_filename':'sf-mvt.xls'} for d in (20,19,18)]
+        cur=MagicMock();cur.fetchall.return_value=[]
+        with patch.dict(sys.modules,{'data_coverage':types.SimpleNamespace(source_data_days=lambda *a,**k:days)}):
+            result=build_movement_export(cur,[],73,None,start=date(2026,10,19),end=date(2026,10,20),family='1340001')
+        sql,params=cur.execute.call_args.args
+        self.assertIn(') AND pf.main_article_number=%s',sql)
+        self.assertEqual(params,(20,date(2026,10,20),19,date(2026,10,19),'1340001'))
+        self.assertEqual(result['dates'],['2026-10-19','2026-10-20'])
+
     def test_google_date_transport_and_numeric_precision_preserve_values(self):
         from datetime import datetime
         env={'Any':Any,'Decimal':D,'date':date,'datetime':datetime}
@@ -21,7 +34,10 @@ class GrowthIntegrity(unittest.TestCase):
         self.assertEqual(wire(date(2026,10,20)),"'2026-10-20")
         self.assertEqual(wire('2026-10-23T06:30:45.146593Z'),"'2026-10-23T06:30:45.146593Z")
         self.assertEqual(wire('000611338042'),"'000611338042")
-        self.assertEqual(wire('2026-99-99'),'2026-99-99')
+        self.assertEqual(wire('2026-99-99'),"'2026-99-99")
+        self.assertEqual(wire('24043900000,4029551780'),"'24043900000,4029551780")
+        self.assertEqual(wire('=SOURCE_NAME'),"'=SOURCE_NAME")
+        self.assertEqual(wire(3316.98),3316.98)
         from price_history_analysis import verify_history_tables
         expected={'current':[['Field','Value'],['POS_Data_Through','2026-10-20'],['GP',D('1110.2380970783202')]]}
         actual=[['Field','Value'],['POS_Data_Through','2026-10-20'],['GP',1110.23809707832]]
