@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from business_clock import completed_through_date
 from yipman_app_ready_builders import app_ready_builders
 from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS, SNAPSHOT_SECTIONS, SnapshotBuild, build_app_ready_snapshot
+from yipman_app_ready_recovery import start_app_ready_recovery, stop_app_ready_recovery, recovery_status
 
 _COORDINATOR_LOCK = threading.Lock()
 _WORKER_RUNNING = False
@@ -77,6 +78,7 @@ def request_app_ready_rebuild(*, source_batch_id=None) -> bool:
                     _PENDING_SOURCE = None
         except Exception:
             _finish_failed_worker(current)
+            _LOG.exception("App Ready rebuild failed for source %s", current)
 
     try:
         threading.Thread(target=worker, name="yipman-app-ready-rebuild", daemon=True).start()
@@ -122,6 +124,9 @@ def install_app_ready_api(app) -> None:
                 app.state.yipman_app_ready_durable_hydrated = hydrated
                 if not hydrated:
                     request_app_ready_rebuild(source_batch_id="STARTUP")
+                # Hydration proves completeness, not freshness. Recover missed
+                # Phase 3 publications without holding startup or page reads.
+                start_app_ready_recovery()
             except Exception:
                 _LOG.exception("App Ready background startup failed")
             finally:
@@ -130,6 +135,10 @@ def install_app_ready_api(app) -> None:
         threading.Thread(
             target=load_then_rebuild, name="app-ready-startup", daemon=True,
         ).start()
+
+    @app.on_event("shutdown")
+    def _stop_app_ready_recovery():
+        stop_app_ready_recovery()
 
     @app.get("/api/yipman/app-ready/status")
     def yipman_app_ready_status():
@@ -143,6 +152,7 @@ def install_app_ready_api(app) -> None:
         out["startup_loading"] = bool(getattr(app.state, "yipman_app_ready_startup_loading", False))
         from yipman_app_ready_readers import pointer_refresh_status
         out.update(pointer_refresh_status())
+        out["source_recovery"] = recovery_status()
         return out
 
     @app.get("/api/yipman/app-ready/snapshot")
@@ -165,4 +175,5 @@ def install_app_ready_api(app) -> None:
 
     app.state.yipman_app_ready_api_installed = True
     app.state.request_yipman_app_ready_rebuild = request_app_ready_rebuild
+
 

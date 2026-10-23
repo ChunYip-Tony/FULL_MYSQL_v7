@@ -12,14 +12,24 @@ class StartupLivenessTests(unittest.TestCase):
     def setUp(self):
         self.hydrate = subject.hydrate_durable_app_ready
         self.rebuild = subject.request_app_ready_rebuild
+        self.recovery = subject.start_app_ready_recovery
+        self.stop_recovery = subject.stop_app_ready_recovery
         self.release = threading.Event()
         self.finished = threading.Event()
+        self.recovery_calls = []
+        def start_recovery():
+            self.recovery_calls.append("recovery")
+            self.finished.set()
+        subject.start_app_ready_recovery = start_recovery
+        subject.stop_app_ready_recovery = lambda: None
 
     def tearDown(self):
         self.release.set()
         self.finished.wait(3)
         subject.hydrate_durable_app_ready = self.hydrate
         subject.request_app_ready_rebuild = self.rebuild
+        subject.start_app_ready_recovery = self.recovery
+        subject.stop_app_ready_recovery = self.stop_recovery
 
     def test_blocked_snapshot_read_allows_health_and_preserves_order(self):
         entered = threading.Event()
@@ -70,6 +80,7 @@ class StartupLivenessTests(unittest.TestCase):
                     break
                 await asyncio.sleep(.01)
             self.assertEqual(calls, ["hydrated"])
+            self.assertEqual(self.recovery_calls, ["recovery"])
             self.assertTrue(app.state.yipman_app_ready_durable_hydrated)
             self.assertFalse(app.state.yipman_app_ready_startup_loading)
             await lifespan.__aexit__(None, None, None)
@@ -80,7 +91,6 @@ class StartupLivenessTests(unittest.TestCase):
         calls = []
         def rebuild(**kwargs):
             calls.append(kwargs["source_batch_id"])
-            self.finished.set()
         subject.request_app_ready_rebuild = rebuild
         app = FastAPI()
         subject.install_app_ready_api(app)
@@ -90,8 +100,10 @@ class StartupLivenessTests(unittest.TestCase):
         asyncio.run(start())
         self.assertTrue(self.finished.wait(1))
         self.assertEqual(calls, ["STARTUP"])
+        self.assertEqual(self.recovery_calls, ["recovery"])
         self.assertFalse(app.state.yipman_app_ready_durable_hydrated)
 
 
 if __name__ == "__main__":
     unittest.main()
+
