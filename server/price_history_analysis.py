@@ -401,8 +401,10 @@ def _history_compare_value(value, column=None):
   except InvalidOperation:pass
  if isinstance(value, (float, int, Decimal)):
   # Plain decimal spelling keeps numeric UPCs ending in zero comparable to text.
-  numeric = Decimal(str(value))
-  if not isinstance(value, int):numeric = Decimal(format(numeric, '.15g'))
+  # Match the writer's rounding on the ORIGINAL numeric type. Converting a
+  # binary float to Decimal first can change half-way rounding (33.57 / 7),
+  # causing a false mismatch against the exact value sent to Google.
+  numeric = Decimal(str(value)) if isinstance(value, int) else Decimal(format(value, '.15g'))
   return format(numeric.normalize(), 'f')
  return str(value)
 

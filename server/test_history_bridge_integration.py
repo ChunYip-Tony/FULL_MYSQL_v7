@@ -11,6 +11,19 @@ def load_function(filename,name,env):
  return env[name]
 
 class BridgeIntegrationTests(unittest.TestCase):
+ def test_history_readback_uses_the_same_numeric_rounding_as_the_writer(self):
+  from decimal import Decimal
+  from datetime import date,datetime
+  from price_history_analysis import verify_history_tables
+  wire=load_function('chatgpt_sheet_bridge.py','_wire',{'Any':object,'Decimal':Decimal,'date':date,'datetime':datetime})
+  expected=[['upc','price','sales'],['000611338042',33.57/7,Decimal('33.57')]]
+  actual=[[wire(v) for v in row] for row in expected]
+  self.assertEqual(actual[1][1],4.79571428571429)
+  verify_history_tables({'ANALYSIS_UPC_DAILY':expected},lambda *a:actual)
+  actual[1][1]=4.79571428571428
+  with self.assertRaisesRegex(ValueError,'price'):
+   verify_history_tables({'ANALYSIS_UPC_DAILY':expected},lambda *a:actual)
+
  def test_old_current_only_pass_does_not_skip_history_recovery(self):
   class Cursor:
    def execute(self,*args):pass

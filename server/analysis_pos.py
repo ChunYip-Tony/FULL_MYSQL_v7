@@ -10,6 +10,15 @@ def build_pos_export(cur, quick_rows, batch_id):
     by_id={int(r['upc_id']):apply_confirmed_selling_profile(r) for r in quick_rows if r.get('upc_id')}
     by_upc={str(r['ean_upc']):apply_confirmed_selling_profile(r) for r in quick_rows if r.get('ean_upc')}
     result=[];seen=set()
+    direct_files=sorted({int(d['file_id']) for d in days if d.get('coverage_kind')!='DERIVED_PERIOD_RESIDUAL'})
+    departments={}
+    if direct_files:
+        # One bounded lookup avoids a correlated subquery for every POS row.
+        # Keep conflicting observations explicit instead of choosing LIMIT 1.
+        cur.execute("SELECT file_id,sheet_id,source_row_number,department_code FROM upc_department_observation WHERE source_type='POS' AND file_id IN ("+','.join(['%s']*len(direct_files))+')',tuple(direct_files))
+        for row in cur.fetchall():
+            code=str(row.get('department_code') or '')
+            if code:departments.setdefault((int(row['file_id']),row.get('sheet_id'),row.get('source_row_number')),set()).add(code)
     for derived in (False,True):
         scope=[d for d in days if (d.get('coverage_kind')=='DERIVED_PERIOD_RESIDUAL')==derived]
         if not scope:continue
@@ -20,15 +29,14 @@ def build_pos_export(cur, quick_rows, batch_id):
             cur.execute('SELECT * FROM pos_daily_backfill_observation WHERE '+where,params)
         else:
             where=' OR '.join('(s.file_id=%s AND s.period_start_date=%s AND s.period_end_date=%s)' for _ in scope)
-            cur.execute('''SELECT s.*,(SELECT d.department_code FROM upc_department_observation d
-                WHERE d.file_id=s.file_id AND d.sheet_id=s.sheet_id AND d.source_row_number=s.source_row_number
-                AND d.source_type='POS' LIMIT 1) AS department_code
-                FROM sales_period_observation s WHERE s.temporal_grain='SINGLE_DATE' AND ('''+where+')',params)
+            cur.execute("SELECT s.* FROM sales_period_observation s WHERE s.temporal_grain='SINGLE_DATE' AND ("+where+')',params)
         for raw in cur.fetchall():
             file_id=int(raw.get('source_file_id') if derived else raw['file_id'])
             day=str(raw.get('business_date') if derived else raw['period_end_date'])[:10]
             master=by_id.get(int(raw.get('upc_id') or 0)) or by_upc.get(str(raw.get('ean_upc') or ''))
-            dep=str(raw.get('department_code') or '')
+            codes=departments.get((file_id,raw.get('sheet_id'),raw.get('source_row_number')),set()) if not derived else {str(raw.get('department_code') or '')}-{''}
+            ambiguous=len(codes)>1
+            dep=next(iter(codes)) if len(codes)==1 else ''
             if dep and dep!='400':continue
             if derived and not master:continue  # unresolved derived scope cannot certify Seafood
             source=sources[(file_id,day)]
@@ -43,7 +51,8 @@ def build_pos_export(cur, quick_rows, batch_id):
                 'date':day,'upc':str(master.get('ean_upc')) if master else str(raw.get('ean_upc') or ''),
                 'raw_upc':str(raw.get('ean_upc') or ''),'name':raw.get('description'),
                 'family':master.get('main_article_number') if master else None,
-                'department':'Seafood' if dep=='400' or master else 'UNASSIGNED_DEPARTMENT',
+                'department':'Seafood' if not ambiguous and (dep=='400' or master) else 'UNASSIGNED_DEPARTMENT',
+                'source_department_codes':sorted(codes),
                 'mapping_status':'RESOLVED' if master else 'ITEM_IDENTITY_UNRESOLVED',
                 'price_type':kind,'sales_amount':sales,'reported_quantity':raw.get('sold_quantity'),
                 'verified_quantity':qty,'selling_uom':master.get('selling_uom') if master else None,

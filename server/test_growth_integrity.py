@@ -13,6 +13,23 @@ def extract(filename,names,env):
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[]),filename,'exec'),env)
 
 class GrowthIntegrity(unittest.TestCase):
+    def test_typed_pos_bulk_department_lookup_retains_financial_rows(self):
+        import sys,types
+        from unittest.mock import patch
+        from analysis_pos import build_pos_export
+        day=date(2026,10,19);cur=MagicMock()
+        scopes=[{'file_id':178,'sheet_id':1,'source_row_number':r,'department_code':dep} for r,dep in [(1,'400'),(2,'300'),(3,'300'),(3,'400')]]
+        raw=[{'file_id':178,'raw_id':r,'sheet_id':1,'source_row_number':r,'period_end_date':day,'ean_upc':'000'+str(r),'price_type':'REG','sales_amount':D('10'),'sold_quantity':1} for r in (1,2,3)]
+        cur.fetchall.side_effect=[scopes,raw]
+        with patch.dict(sys.modules,{'data_coverage':types.SimpleNamespace(source_data_days=lambda *a,**k:[{'date':day,'file_id':178,'original_filename':'all-sales.xlsx'}])}):
+            result=build_pos_export(cur,[],73)
+        self.assertEqual(cur.execute.call_count,2)
+        self.assertNotIn('(SELECT',cur.execute.call_args.args[0])
+        self.assertEqual([r['upc'] for r in result['rows']],['0001','0003'])
+        self.assertEqual(sum(r['sales_amount'] for r in result['rows']),20)
+        self.assertEqual(result['rows'][1]['department'],'UNASSIGNED_DEPARTMENT')
+        self.assertEqual(result['rows'][1]['source_department_codes'],['300','400'])
+
     def test_production_publisher_wrapper_forwards_progress_and_keeps_quantity_guard(self):
         import types
         row={'latest_daily_pos_qty':None,'latest_daily_pos_reported_qty':2,'latest_daily_quantity_basis':'UNVERIFIED','latest_daily_gp_dollars':None}
