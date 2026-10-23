@@ -353,5 +353,14 @@
       "confirmed_by": "Tony",
       "confirmed_at": "2026-10-19"
     }
+  ],
+  "source_quality_holds": [
+    {
+      "file_id": 179,
+      "date": "2026-10-20",
+      "filename": "sf-sales-102026.xlsx",
+      "reason": "USER_REPORTED_WRONG_POS_FILE_2026_10_22",
+      "resolution": "Upload the correct POS for the same date; hold applies only while canonical file_id remains 179."
+    }
   ]
 }

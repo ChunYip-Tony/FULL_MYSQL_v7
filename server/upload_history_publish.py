@@ -22,7 +22,11 @@ def publish_upload_history(*, rows, source_days, batch_id, through, reader, writ
   ['Partial observed comparisons',audit['before_after_comparisons']-audit['fully_supported_comparisons']],
   ['Refresh contract',HISTORY_CONTRACT],['Source batch',batch_id],
   ['Comparison basis','Current-cost normalized; supported POS dates only; no family allocation'],
-  ['Coverage gaps',json.dumps(audit['gaps'],sort_keys=True)]]
+  ['Coverage gaps',json.dumps(audit['gaps'],sort_keys=True)],
+  ['Item verification contract','ITEM_PERFORMANCE_VERIFICATION_V1'],
+  ['Item verification',json.dumps(audit.get('verification',{}),sort_keys=True)],
+  ['Fully verified items',audit.get('verification',{}).get('fully_verified',0)],
+  ['Items requiring evidence',audit.get('verification',{}).get('unresolved_items',0)]]
  writer('ANALYSIS_STATUS',status)
  try:
   for title,matrix in output.items():writer(title,matrix,previous=old[title])
@@ -40,3 +44,4 @@ def publish_upload_history(*, rows, source_days, batch_id, through, reader, writ
   try:writer('ANALYSIS_STATUS',status)
   except Exception:pass
   raise
+

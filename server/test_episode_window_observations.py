@@ -104,6 +104,76 @@ class EpisodeWindowObservationTests(unittest.TestCase):
         self.assertEqual(out,again)
 
 
+
+class ItemVerificationTests(unittest.TestCase):
+    def fixture(self):
+        from datetime import date,timedelta
+        rows=[];sources={};start=date(2026,8,27);end=date(2026,10,20)
+        for n in range((end-start).days+1):
+            day=(start+timedelta(days=n)).isoformat()
+            cost={'value':2,'uom':'LB','source':'MOVEMENT_RECEIPT_VALUATION','date':'2026-08-27'}
+            rows.append({'date':day,'sales':50,'qty':10,'price':5,'type':'REG','quantityBasis':'POS_QTY_WEIGHT',
+                         'cost':cost,'gp':30,'normalized_gp':30})
+            sources[day]={'file_id':179 if day=='2026-10-20' else n+1}
+        member={'name':'Verified fish','family':'123','upc':'24000000000','uom':'LB','cost':cost,
+                'current':{'price':5,'type':'REG','date':'2026-10-20'},'days':rows}
+        current={'current_cost_per_selling_unit':2,'current_price':5,'current_price_type':'REG'}
+        return member,current,sources
+
+    def verify(self,member,current,sources,policy=None):
+        from price_history_analysis import verify_member_performance
+        return verify_member_performance(member,current,sources,'2026-10-20',policy or {})
+
+    def test_fully_verified_requires_all_independent_gates(self):
+        args=self.fixture();v=self.verify(*args)
+        self.assertTrue(v['fully_verified']);self.assertTrue(v['current_verified'])
+        args[1]['current_cost_per_selling_unit']=.01
+        self.assertFalse(self.verify(*args)['current_verified'])
+
+    def test_untyped_pos_keeps_verified_gp_but_price_history_is_partial(self):
+        m,c,s=self.fixture();m['days'][0].update(type='TOTAL',reason='PRICE_TYPE_UNVERIFIED')
+        v=self.verify(m,c,s)
+        self.assertTrue(v['historical_gp_verified']);self.assertFalse(v['historical_price_verified'])
+        self.assertFalse(v['fully_verified'])
+
+    def test_missing_dates_and_wrong_gp_cannot_pass(self):
+        m,c,s=self.fixture();s.pop('2026-09-04');m['days'][2]['gp']=999
+        v=self.verify(m,c,s)
+        self.assertFalse(v['historical_gp_verified'])
+        self.assertIn('2026-09-04',v['missing_source_dates'])
+        self.assertIn('2026-08-29',v['unresolved_dates']['historical_cost'])
+
+    def test_reported_wrong_file_hold_clears_only_for_a_replacement(self):
+        m,c,s=self.fixture();policy={'source_quality_holds':[{'file_id':179,'date':'2026-10-20'}]}
+        v=self.verify(m,c,s,policy)
+        self.assertFalse(v['fully_verified']);self.assertFalse(v['current_checks']['source'])
+        s['2026-10-20']={'file_id':200}
+        self.assertTrue(self.verify(m,c,s,policy)['fully_verified'])
+
+    def test_family_movement_never_verifies_missing_upc_quantity(self):
+        m,c,s=self.fixture();m['days'][0].update(qty=None,quantityBasis='FAMILY_MOVEMENT')
+        c['family_movement_7d']=10000
+        v=self.verify(m,c,s)
+        self.assertFalse(v['historical_gp_verified'])
+        self.assertIn('2026-08-27',v['unresolved_dates']['quantity'])
+
+
+
+    def test_master_profiles_are_accounted_for_even_without_loaded_history(self):
+        from price_history_analysis import HEADERS,rebuild_retained_analysis,objects
+        tables={k:[v[:]] for k,v in HEADERS.items()}
+        out,audit=rebuild_retained_analysis(tables,[],[],[{'ean_upc':'123','main_article_number':'99','selling_description':'Inactive fish'}],
+            '2026-10-20','TEST',{'confirmed_upcs':[]})
+        self.assertEqual(audit['verification']['items'],1)
+        self.assertEqual(audit['verification']['fully_verified'],0)
+        self.assertEqual(objects(out['ANALYSIS_COVERAGE'])[0]['history_status'],'HISTORY_EVIDENCE_REQUIRED')
+
+    def test_current_cannot_pass_when_latest_completed_day_is_missing(self):
+        m,c,s=self.fixture()
+        v=self.verify(m,c,s,{'expected_completed_date':'2026-10-21'})
+        self.assertFalse(v['current_verified']);self.assertEqual(v['expected_current_date'],'2026-10-21')
+
+
 if __name__ == '__main__':
     unittest.main()
 

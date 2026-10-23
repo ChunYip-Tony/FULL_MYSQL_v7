@@ -1,1 +1,1 @@
-VERSION='7.0.536-pcs-cost-and-pos-tracking'
+VERSION='7.0.537-item-performance-verification'

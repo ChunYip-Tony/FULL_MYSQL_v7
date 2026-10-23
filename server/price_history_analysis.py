@@ -43,6 +43,78 @@ def episode_observed_windows(items, rows):
   e['_first']=observed if observed else raw+timedelta(days=1)
   e['change_date']=observed.isoformat() if observed else e['_configured_date']
 
+
+def verify_member_performance(member, current, source_days, through, policy):
+ """Independent evidence gates, not a synonym for a successful refresh."""
+ from datetime import date,timedelta
+ import math
+ norm=lambda unit:'PACK' if str(unit or '').upper()=='PAC' else str(unit or '').upper()
+ def number(value):
+  try:return value is not None and math.isfinite(float(value))
+  except (TypeError,ValueError):return False
+ def cost_ok(cost,day):
+  return bool(cost and number(cost.get('value')) and float(cost['value'])>0
+      and norm(cost.get('uom'))==norm(member.get('uom'))
+      and cost.get('source') and str(cost.get('date') or '')[:10] <= day)
+ def source_ok(day):
+  source=source_days.get(day,{})
+  return not any(str(source.get('file_id',source.get('source_file_id','')))==str(h.get('file_id'))
+      and (not h.get('date') or day==h['date']) for h in policy.get('source_quality_holds',[]))
+ start='2026-08-27';end=date.fromisoformat(through)
+ dates=[(date.fromisoformat(start)+timedelta(days=n)).isoformat()
+        for n in range(max(0,(end-date.fromisoformat(start)).days+1))]
+ rows={str(d['date'])[:10]:d for d in member.get('days',[]) if start<=str(d['date'])[:10]<=through}
+ calendar_missing=[day for day in dates if day not in source_days]
+ missing=[day for day in dates if day not in rows or rows[day].get('sales') is None]
+ problems={'source_quality':[], 'quantity':[], 'historical_cost':[], 'price_attribution':[]}
+ revenue_days=0;verified_gp_days=0
+ for day,d in sorted(rows.items()):
+  if d.get('sales') is None:continue
+  revenue_days+=1
+  if not source_ok(day):problems['source_quality'].append(day)
+  qty_ok=number(d.get('qty')) and float(d['qty'])>=0 and supported_quantity(member,d)
+  if not qty_ok or float(d.get('sales') or 0)<0 or (float(d.get('sales') or 0)>0 and not d.get('qty')):
+   problems['quantity'].append(day)
+  elif not d.get('sales'):
+   verified_gp_days+=1
+  elif cost_ok(d.get('cost'),day) and number(d.get('gp')) and abs(float(d['gp'])-(float(d['sales'])-float(d['qty'])*float(d['cost']['value'])))<.011:
+   verified_gp_days+=1
+  else:problems['historical_cost'].append(day)
+  if not (d.get('type') in {'REG','TPR','SALE','IN STORE','IN_STORE'} and number(d.get('price'))
+      and float(d['price'])>0 and d.get('reason') not in {'MIXED_PRICE_DAY','PRICE_TYPE_UNVERIFIED','PRICE_EXPOSURE_UNVERIFIED'}):
+   problems['price_attribution'].append(day)
+ latest=rows.get(through,{})
+ current_cost=member.get('cost') or {};ticket=member.get('current') or {}
+ identity=bool(member.get('name') and member['name']!='Item identity not verified' and member.get('family') and member.get('uom'))
+ current_checks={
+  'identity':identity,
+  'source':through in source_days and source_ok(through) and through==policy.get('expected_completed_date',through),
+  'sales':number(latest.get('sales')) and float(latest['sales'])>=0,
+  'quantity':number(latest.get('qty')) and supported_quantity(member,latest)
+      and float(latest['qty'])>=0 and not (latest.get('sales') and not latest.get('qty')),
+  'cost':cost_ok(current_cost,(end+timedelta(days=1)).isoformat()),
+  'price':number(ticket.get('price')) and float(ticket['price'])>0
+      and ticket.get('type') in {'REG','TPR','SALE','IN STORE','IN_STORE'},
+ }
+ if current:
+  current_checks['published_cost_matches']=number(current.get('current_cost_per_selling_unit')) and number(current_cost.get('value')) and abs(float(current['current_cost_per_selling_unit'])-float(current_cost['value']))<.00001
+  current_checks['published_price_matches']=number(current.get('current_price')) and number(ticket.get('price')) and abs(float(current['current_price'])-float(ticket['price']))<.00001 and current.get('current_price_type')==ticket.get('type')
+ current_checks['gp_calculation']=bool(current_checks['sales'] and current_checks['quantity'] and current_checks['cost']
+   and number(latest.get('normalized_gp')) and abs(float(latest['normalized_gp'])-(float(latest['sales'])-float(latest['qty'])*float(current_cost['value'])))<.011)
+ current_verified=all(current_checks.values())
+ economics_verified=identity and not missing and not calendar_missing and not any(problems[k] for k in ('source_quality','quantity','historical_cost'))
+ prices_verified=not missing and not calendar_missing and not problems['price_attribution'] and not problems['source_quality']
+ return {'contract':'ITEM_PERFORMANCE_VERIFICATION_V1','period_start':start,'through':through,
+    'expected_current_date':policy.get('expected_completed_date',through),
+    'current_verified':current_verified,'current_checks':current_checks,
+    'historical_gp_verified':economics_verified,'historical_price_verified':prices_verified,
+    'fully_verified':current_verified and economics_verified and prices_verified,
+    'observed_days':revenue_days,'verified_historical_gp_days':verified_gp_days,
+    'missing_source_dates':calendar_missing,'missing_item_dates':missing,
+    'unresolved_dates':problems,
+    'quantity_rule':'UPC_POS_ONLY; FAMILY_MOVEMENT_NEVER_ALLOCATED',
+    'historical_gp_basis':'AS_OF_COST; CURRENT_COST_COMPARISON_SEPARATE'}
+
 def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, through, revision, policy):
  def read(name):return tables[name]
  from datetime import date,timedelta
@@ -67,8 +139,11 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    historical=rawsales-qty*cost['value'] if qgood and rawsales is not None and cost.get('value') is not None else None
    reason=d.get('reason')
    if not qgood and rawsales is not None:reason='POS_WEIGHT_UNVERIFIED' if m.get('uom')=='LB' else 'QUANTITY_OR_RETURN_REVIEW'
+   source=source_days.get(d['date'],{})
+   held=any(str(source.get('file_id',source.get('source_file_id','')))==str(h.get('file_id')) and (not h.get('date') or h['date']==d['date']) for h in policy.get('source_quality_holds',[]))
+   if held:reason='SOURCE_QUALITY_HOLD:USER_REPORTED_WRONG_POS_FILE'
    old=daily.get((upc,d['date']),{})
-   daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],d.get('price'),d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,d.get('zero_sale',False),source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file','')),old.get('pos_batch',''),revision,through]))
+   daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],d.get('price'),d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood and not held),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,d.get('zero_sale',False),source_days.get(d['date'],{}).get('file_id',source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file',''))),old.get('pos_batch',''),revision,through]))
  oldepisodes=read('ANALYSIS_PRICE_EPISODES');eh=oldepisodes[0];episodes=objects(oldepisodes);keys={r['episode_id'] for r in episodes}
  priority={'REG':1,'TPR':2,'SALE':3,'IN STORE':4,'IN_STORE':4}
  for upc,m in members.items():
@@ -112,6 +187,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
     price_ok=(d.get('type')==e['type'] and d.get('price') is not None
               and abs(d['price']-float(e['price']))<=tolerance
               and d.get('reason') not in {'MIXED_PRICE_DAY','QUANTITY_OR_RETURN_REVIEW','PRICE_TYPE_UNVERIFIED'})
+    if str(d.get('reason') or '').startswith('SOURCE_QUALITY_HOLD'):price_ok=False
     if price_ok:price_supported+=1
     exposed.append(d);weekday[day.strftime('%a')]+=1
     if d.get('qty') is None:qmissing+=1
@@ -123,6 +199,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    if not expected:reasons.append('NO_FULL_COMPLETED_POST_CHANGE_DAY')
    if n<expected:reasons.append('PARTIAL_PRICE_EXPOSURE_OR_SOURCE_COVERAGE')
    if price_supported<n:reasons.append(f'PRICE_ATTRIBUTION_UNVERIFIED:{n-price_supported}/{n}')
+   if any(str(d.get('reason') or '').startswith('SOURCE_QUALITY_HOLD') for d in exposed):reasons.append('SOURCE_QUALITY_HOLD:REPLACE_REPORTED_WRONG_POS_FILE')
    if qmissing:reasons.append('POS_WEIGHT_OR_QUANTITY_UNVERIFIED')
    if cc is None:reasons.append('SELLING_UNIT_COST_UNRESOLVED')
    ok=bool(expected and n==expected and price_supported==n and qmissing==0 and cc is not None)
@@ -174,6 +251,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
  ch=read('ANALYSIS_COST_HISTORY');costh=ch[0];costs=objects(ch);costkeys={(str(x['upc']),str(x['date']),str(x['cost']),str(x['uom']),str(x['source'])) for x in costs}
  refs=read('ANALYSIS_ITEM_REFERENCE');refh=refs[0];refrows={str(x['upc']):x for x in objects(refs)}
  cov=read('ANALYSIS_COVERAGE');covh=cov[0];covrows={str(x['upc']):x for x in objects(cov)}
+ verification={}
  for upc,m in members.items():
   for event in m.get('priceHistory',[]):
    eid=f"{upc}|{event['date']}|{event.get('file_id',0)}|{event['type']}|{event['price']}"
@@ -188,14 +266,38 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
   ref=current.get(upc,{});old=refrows.get(upc,{})
   refrows[upc]=dict(zip(refh,['Seafood',upc,m.get('name'),m['family'],ref.get('product_class',old.get('category')),m.get('uom'),(m.get('current') or {}).get('price'),(m.get('current') or {}).get('type'),(m.get('cost') or {}).get('value'),(m.get('cost') or {}).get('source'),ref.get('company_price_a',old.get('company_a')),ref.get('company_price_b',old.get('company_b')),ref.get('company_price_c',old.get('company_c')),revision,through]))
   es=byupc.get(upc,[]);ds=[daily[(upc,d['date'])] for d in m['days'] if (upc,d['date']) in daily];issues=sorted({d.get('reason') for d in ds if d.get('reason')})
-  covrows[upc]=dict(zip(covh,['Seafood',upc,m.get('name'),m['family'],'SOURCE_REFRESHED',len(m.get('priceHistory',[])),len(es),sum(d.get('sales') is not None for d in ds),'POS_CONFIRMED_LB' if upc in confirmed_registry else ('USER_CONFIRMED_'+pack_registry[upc]['selling_uom']+'_'+str(pack_registry[upc]['base_qty_per_selling_unit'])+'_LB') if upc in pack_registry else 'SOURCE_DEPENDENT','COMPARABLE_EPISODES_AVAILABLE' if any(e.get('previous_gp_day') is not None for e in es) else 'PARTIAL_OR_NO_COMPARABLE_BASELINE','; '.join(issues),revision,through]))
+  import json
+  verified=verify_member_performance(m,ref,source_days,through,policy);verification[upc]=verified
+  covrows[upc]=dict(zip(covh,['Seafood',upc,m.get('name'),m['family'],
+   'FULLY_VERIFIED' if verified['fully_verified'] else 'PARTIAL_REQUIRES_EVIDENCE',
+   len(m.get('priceHistory',[])),len(es),verified['observed_days'],
+   'VERIFIED_POS_ONLY' if not verified['unresolved_dates']['quantity'] else 'UNRESOLVED_POS_QUANTITY',
+   'CURRENT_'+('VERIFIED' if verified['current_verified'] else 'PARTIAL')+';HISTORICAL_GP_'+('VERIFIED' if verified['historical_gp_verified'] else 'PARTIAL')+';PRICE_HISTORY_'+('VERIFIED' if verified['historical_price_verified'] else 'PARTIAL'),
+   json.dumps(verified,sort_keys=True,separators=(',',':')),revision,through]))
+ # Account for the complete master, including inactive profiles without a
+ # retained performance history. No-activity summaries are not proof of a
+ # complete historical zero, so these rows explicitly require history evidence.
+ for upc,ref in current.items():
+  if upc not in covrows:
+   covrows[upc]={'department':'Seafood','upc':upc,'name':ref.get('selling_description'),
+    'family':ref.get('main_article_number'),'history_status':'HISTORY_EVIDENCE_REQUIRED',
+    'quantity_status':'UNVERIFIED','gp_status':'UNVERIFIED',
+    'blocking_reason':'MASTER_PROFILE_NOT_YET_BACKED_BY_RETAINED_DAILY_PERFORMANCE; no activity summary is not a verified historical zero',
+    'source_revision':revision,'data_through':through}
+ for upc,retained in covrows.items():
+  if upc not in members:
+   if retained.get('history_status')!='HISTORY_EVIDENCE_REQUIRED':
+    retained.update(history_status='SOURCE_NOT_RETURNED',gp_status='UNVERIFIED',blocking_reason='UPC_HISTORY_SOURCE_NOT_RETURNED',source_revision=revision,data_through=through)
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
+ audit['verification']={'contract':'ITEM_PERFORMANCE_VERIFICATION_V1','items':len(covrows),
+  **{k:sum(bool(v[k]) for v in verification.values()) for k in ('fully_verified','current_verified','historical_gp_verified','historical_price_verified')},
+  'unresolved_items':len(covrows)-sum(v['fully_verified'] for v in verification.values())}
  return output,audit
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V3_POS_OBSERVED_START'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V4_ITEM_VERIFICATION'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
@@ -299,9 +401,9 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
   from mobile_pricing import build_page
   from fastapi.encoders import jsonable_encoder
   loader = lambda ids: jsonable_encoder(build_page(limit=len(ids),history_days=90,requested_upcs=set(ids),history_only=True))
- ids = {str(r['ean_upc']) for r in rows if r.get('ean_upc') and r.get('quick_check_status') in ('READY','QA_HOLD')}
+ ids = {str(r['ean_upc']) for r in rows if r.get('ean_upc') and (r.get('quick_check_status') in ('READY','QA_HOLD') or any(float(r.get(k) or 0)!=0 for k in ('sales_dollars_7d','sales_dollars_30d','pos_qty_7d','pos_qty_30d')))}
  for title in ('ANALYSIS_PRICE_TRACKING','ANALYSIS_COVERAGE'):
-  ids.update(str(r['upc']) for r in objects(tables[title]))
+  ids.update(str(r['upc']) for r in objects(tables[title]) if r.get('history_status')!='HISTORY_EVIDENCE_REQUIRED')
  ids = sorted(ids)
  # The API and publisher share one small container. Loading 500 histories at
  # once also creates a full jsonable_encoder copy of the page. Bound that peak
@@ -313,6 +415,7 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
     raise ValueError('History source changed during publication; retry latest revision')
    yield page
  policy=json.loads(Path(__file__).with_name('pos_quantity_confirmations.json').read_text())
+ policy['expected_completed_date']=completed_through_date().isoformat()
  revision=f'MYSQL_BATCH_{int(batch_id)};{HISTORY_CONTRACT}'
  output,audit=rebuild_retained_analysis(tables,snapshots(),source_days,rows,through,revision,policy)
  active_ids={str(r['ean_upc']) for r in rows if r.get('quick_check_status')=='READY'}
