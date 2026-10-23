@@ -13,6 +13,27 @@ def extract(filename,names,env):
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[]),filename,'exec'),env)
 
 class GrowthIntegrity(unittest.TestCase):
+    def test_production_publisher_wrapper_forwards_progress_and_keeps_quantity_guard(self):
+        import types
+        row={'latest_daily_pos_qty':None,'latest_daily_pos_reported_qty':2,'latest_daily_quantity_basis':'UNVERIFIED','latest_daily_gp_dollars':None}
+        original=MagicMock(return_value={'sales_dollars':D('30'),'gp_dollars':None})
+        bridge=types.SimpleNamespace(publish_chatgpt_snapshot=MagicMock(return_value={'status':'PASS'}))
+        env={'Any':Any,'_bridge':bridge,'_ORIGINAL_FETCH_LATEST_DAILY':original,'apply_chatgpt_daily_gp_v493':lambda:None}
+        extract('chatgpt_daily_gp_v493.py',{'publish_chatgpt_snapshot_v493','_fetch_latest_daily_sales_per_upc'},env)
+        callback=MagicMock();env['publish_chatgpt_snapshot_v493'](73,progress=callback)
+        bridge.publish_chatgpt_snapshot.assert_called_once_with(73,progress=callback)
+        result=env['_fetch_latest_daily_sales_per_upc'](None,73,[row]);original.assert_called_once()
+        self.assertIsNone(row['latest_daily_pos_qty']);self.assertEqual(row['latest_daily_pos_reported_qty'],2)
+        self.assertIsNone(result['gp_dollars'])
+
+    def test_persistent_readback_mismatch_waits_for_repair(self):
+        from publish_recovery import publish_recovery_decision
+        from datetime import datetime,timezone,timedelta
+        latest={'processing_status':'FAILED','code_version':'v1','completed_at':datetime.now(timezone.utc)-timedelta(hours=2),
+            'detail_json':{'publish_result':{'status':'FAILED_READBACK','readback':{'failures':['UPC mismatch']}}}}
+        self.assertEqual(publish_recovery_decision(latest,None,'v1','x')['reason'],'REPAIR_REQUIRED')
+        self.assertTrue(publish_recovery_decision(latest,None,'v2','x')['queue'])
+
     def test_movement_advice_filters_dates_and_family_before_loading_rows(self):
         import sys,types
         from unittest.mock import patch

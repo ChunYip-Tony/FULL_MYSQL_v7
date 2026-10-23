@@ -898,7 +898,7 @@ def _fetch_latest_daily_sales(
             unresolved_sales+=abs(sales)
             continue
         qty=verified
-        family_key = (row.get("family_id"),row.get("selling_uom"),row.get("base_qty_per_selling_unit"),row.get("article_number"))
+        family_key = (str(row.get("ean_upc") or row.get("upc_id")),row.get("family_id"),row.get("selling_uom"),row.get("base_qty_per_selling_unit"),row.get("article_number"))
         cost = cost_cache.get(family_key)
         if cost is None:
             cost = _family_cost_as_of(cur, row, target_date)

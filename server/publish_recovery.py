@@ -50,6 +50,8 @@ def publish_recovery_decision(latest, snapshot_updated_at, code_version, history
     if status=='COMPLETED':return {'queue':True,'reason':'SOURCE_OR_VERIFICATION_CHANGED'}
     if latest.get('code_version')!=code_version:return {'queue':True,'reason':'NEW_RECOVERY_CODE'}
     error=str(result.get('error') or detail.get('error') or '')
+    if result.get('status') in {'FAILED_READBACK','FAILED_BRIDGE_READBACK'}:
+        return {'queue':False,'reason':'REPAIR_REQUIRED','error':'; '.join(readback.get('failures') or [result['status']])}
     if any(code in error for code in ('TAB_NOT_ALLOWED','UNAUTHORIZED','SPREADSHEET_ID_MISMATCH','readback mismatch','source omitted active UPC')):
         return {'queue':False,'reason':'REPAIR_REQUIRED','error':error}
     count=max(1,int(latest.get('retry_count') or 1))

@@ -26,108 +26,15 @@ def _d(value: Any) -> Decimal:
     return Decimal(str(value))
 
 
-def _fetch_latest_daily_sales_per_upc(
-    cur,
-    batch_id: int,
-    rows: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Recompute completed-day COGS/GP with cost converted independently per UPC."""
+def _fetch_latest_daily_sales_per_upc(cur, batch_id: int, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compatibility entrypoint; canonical bridge owns quantity and UPC cost gates.
+
+    Recalculating here used to overwrite quantity evidence and execute every cost
+    query twice. The canonical resolver now keys costs by exact UPC and preserves
+    unknown quantities, signed sales and POS-only achieved prices.
+    """
     result = _ORIGINAL_FETCH_LATEST_DAILY(cur, batch_id, rows)
-    business_date = result.get("business_date")
-    if business_date is None:
-        result["daily_gp_cost_resolver"] = "PER_UPC_V493"
-        return result
-
-    total_cogs = Decimal("0")
-    total_gp = Decimal("0")
-    unresolved_sales = abs(_d(result.get("unmapped_sales")))
-
-    for row in rows:
-        if str(row.get("latest_daily_cost_status") or "").upper() == "ZERO_SALES":
-            continue
-
-        sales = _d(row.get("latest_daily_sales_dollars"))
-        qty = _d(row.get("latest_daily_pos_qty"))
-        verified_quantity_basis = str(row.get("latest_daily_quantity_basis") or "").upper()
-        from family_daily_gp import confirmed_pos_lb, CONFIRMED_POS_LB_UPCS
-        if str(row.get("ean_upc") or "") in CONFIRMED_POS_LB_UPCS and not row.get("selling_uom"):
-            row["selling_uom"]="LB"
-        if confirmed_pos_lb(row,business_date) is not None:
-            verified_quantity_basis = "USER_CONFIRMED_POS_LB"
-        row["latest_daily_pos_reported_qty"] = qty
-        row["latest_daily_pos_reported_avg_price"] = sales / qty if qty else None
-        row["latest_daily_quantity_basis"] = verified_quantity_basis or ("POS_REPORTED_QUANTITY_PRECISION_UNVERIFIED" if str(row.get("selling_uom") or "").upper()=="LB" else "POS_SELLING_UNIT")
-
-        # This call intentionally happens for every selling UPC. Do not cache the
-        # returned cost by family_id because _family_cost_as_of() has already
-        # applied this row's base_qty_per_selling_unit / selling_uom conversion.
-        cost = _bridge._family_cost_as_of(cur, row, business_date)
-        status = str(cost.get("status") or "")
-        cost_per_selling_unit = cost.get("cost_per_selling_unit")
-
-        row["latest_daily_cost_status"] = status
-        row["latest_daily_cost_per_selling_unit"] = cost_per_selling_unit
-        row["latest_daily_cost_source"] = cost.get("source")
-        row["latest_daily_cost_date"] = cost.get("date")
-
-        if sales != 0 and qty == 0:
-            row["latest_daily_cost_status"] = "POS_SALES_WITH_ZERO_QUANTITY"
-            row["latest_daily_pos_qty"] = None
-            row["latest_daily_avg_sold_price"] = None
-            row["latest_daily_cogs"] = None
-            row["latest_daily_gp_dollars"] = None
-            row["latest_daily_gp_pct"] = None
-            unresolved_sales += abs(sales)
-            continue
-
-        # This export reads POS reported counts, not catch-weight measurements.
-        # A cost in LB cannot make a scan count into sold LB. Preserve sales and
-        # price-list facts, but withhold count-derived GP until weight is verified.
-        quantity_basis = verified_quantity_basis
-        weight_verified = quantity_basis in {"POS_WEIGHT", "POS_QTY_WEIGHT", "USER_CONFIRMED_POS_LB", "USER_CONFIRMED_POS_LB_251_252_UNMATCHED"}
-        if str(row.get("selling_uom") or "").strip().upper() == "LB" and not weight_verified:
-            row["latest_daily_cost_status"] = "POS_WEIGHT_UNVERIFIED"
-            row["latest_daily_pos_qty"] = None
-            row["latest_daily_avg_sold_price"] = None
-            row["latest_daily_cogs"] = None
-            row["latest_daily_gp_dollars"] = None
-            row["latest_daily_gp_pct"] = None
-            unresolved_sales += abs(sales)
-            continue
-
-        if status == "RESOLVED" and qty != 0:
-            cogs = qty * Decimal(str(cost_per_selling_unit))
-            gp = sales - cogs
-            row["latest_daily_cogs"] = cogs
-            row["latest_daily_gp_dollars"] = gp
-            row["latest_daily_gp_pct"] = (gp / sales) if sales != 0 else None
-            total_cogs += cogs
-            total_gp += gp
-        elif status == "RESOLVED":
-            row["latest_daily_cogs"] = Decimal("0")
-            row["latest_daily_gp_dollars"] = sales
-            row["latest_daily_gp_pct"] = Decimal("1") if sales != 0 else None
-            total_gp += sales
-        else:
-            row["latest_daily_cogs"] = None
-            row["latest_daily_gp_dollars"] = None
-            row["latest_daily_gp_pct"] = None
-            unresolved_sales += abs(sales)
-
-    gp_complete = unresolved_sales <= Decimal("0.0001")
-    total_sales = _d(result.get("sales_dollars"))
-    result.update(
-        {
-            "cogs": total_cogs if gp_complete else None,
-            "gp_dollars": total_gp if gp_complete else None,
-            "gp_pct": (total_gp / total_sales)
-            if gp_complete and total_sales != 0
-            else None,
-            "gp_status": "COMPLETE" if gp_complete else "PARTIAL_COST_OR_MAPPING",
-            "cost_unresolved_sales": unresolved_sales,
-            "daily_gp_cost_resolver": "PER_UPC_V493",
-        }
-    )
+    result["daily_gp_cost_resolver"] = "PER_UPC_V545_POS_AUTHORITY_GUARD"
     return result
 
 
@@ -135,7 +42,7 @@ def _source_status_v493(*args, **kwargs):
     matrix = _ORIGINAL_SOURCE_STATUS(*args, **kwargs)
     # Explicit readback evidence that the Google snapshot was generated by the
     # corrected per-UPC daily cost resolver.
-    matrix.append(["Daily_GP_Cost_Resolver", "PER_UPC_V493_POS_WEIGHT_GUARD"])
+    matrix.append(["Daily_GP_Cost_Resolver", "PER_UPC_V545_POS_AUTHORITY_GUARD"])
     return matrix
 
 
@@ -147,8 +54,9 @@ def apply_chatgpt_daily_gp_v493() -> None:
     _bridge._v493_daily_gp_patch_applied = True
 
 
-def publish_chatgpt_snapshot_v493(batch_id: int) -> dict[str, Any]:
+def publish_chatgpt_snapshot_v493(batch_id: int, **kwargs) -> dict[str, Any]:
     """Production publisher entrypoint with the corrected resolver guaranteed."""
     apply_chatgpt_daily_gp_v493()
-    return _bridge.publish_chatgpt_snapshot(batch_id)
+    return _bridge.publish_chatgpt_snapshot(batch_id, **kwargs)
+
 
