@@ -401,7 +401,9 @@ def _history_compare_value(value, column=None):
   except InvalidOperation:pass
  if isinstance(value, (float, int, Decimal)):
   # Plain decimal spelling keeps numeric UPCs ending in zero comparable to text.
-  return format(Decimal(str(value)).normalize(), 'f')
+  numeric = Decimal(str(value))
+  if not isinstance(value, int):numeric = Decimal(format(numeric, '.15g'))
+  return format(numeric.normalize(), 'f')
  return str(value)
 
 

@@ -340,14 +340,18 @@ def _wire(value: Any) -> Any:
     if value is None:
         return ""
     if isinstance(value, Decimal):
-        return float(value)
+        # Sheets stores 15 significant decimal digits. Use the same finite
+        # transport value for writes and full-cell expected readback.
+        return float(format(value, '.15g'))
     if isinstance(value, datetime):
         return value.isoformat(sep=" ")
     if isinstance(value, date):
         return value.isoformat()
     if isinstance(value, bool):
         return value
-    if isinstance(value, (int, float, str)):
+    if isinstance(value, float):
+        return float(format(value, '.15g'))
+    if isinstance(value, (int, str)):
         return value
     return str(value)
 
@@ -361,6 +365,15 @@ def _apps_script_wire(value: Any) -> Any:
     Readback still compares the original unmodified identifier exactly.
     """
     value = _wire(value)
+    # Existing DATE-formatted cells otherwise turn a calendar date into a
+    # timezone-shifted Apps Script Date. Preserve ISO dates/timestamps as text,
+    # just like UPC identifiers, without changing their actual value.
+    if isinstance(value, str) and len(value) >= 10 and value[4:5] == '-' and value[7:8] == '-':
+        try:
+            datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return "'" + value
+        except ValueError:
+            pass
     if isinstance(value, str) and (value.startswith("'") or
             (len(value) > 1 and value.startswith('0') and value.isdigit())):
         return "'" + value

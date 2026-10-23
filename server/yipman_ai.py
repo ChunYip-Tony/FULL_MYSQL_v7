@@ -541,7 +541,7 @@ def _item_price_decisions(candidates: list[dict[str, Any]], suggestions: list[di
                     'analysis_is_stale_or_refreshing': stale,
                     'observation_supported_days': row.get('observation_supported_days'),
                     'observation_cycle_complete': row.get('observation_cycle_complete'),
-                    'reason': row.get('final_tpr_decision_reason') or row.get('review_blocker') or 'No actionable exact-UPC price was returned. A sweet-spot reference is not a recommendation.'})
+                    'reason': ('Current price action blocked: source evidence is stale or refreshing. Any dated candidate is review-only.' if stale else row.get('final_tpr_decision_reason') or row.get('review_blocker') or 'No actionable exact-UPC price was returned. A sweet-spot reference is not a recommendation.')})
     return out
 
 
@@ -576,7 +576,7 @@ def _price_policy_answer(result: dict[str, Any], question: str, history: list[di
         lead, action = 'No new price can be recommended now.', 'No current price action'
     if decision.get('policy_decision') == 'SALE_LOCKED':
         action = 'Company SALE is locked'
-    lines = [lead, '', '| Item | Current price | Decision |', '| --- | ---: | --- |',
+    lines = [lead, '', '| Item | Price-list reference | Decision |', '| --- | ---: | --- |',
              f'| {name} · {identity} | {current} | {action} |']
     candidate = decision.get('supported_price_for_dated_review')
     if candidate is not None:

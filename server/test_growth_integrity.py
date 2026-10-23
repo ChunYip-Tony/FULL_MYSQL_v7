@@ -13,6 +13,22 @@ def extract(filename,names,env):
     exec(compile(ast.Module(body=[n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[]),filename,'exec'),env)
 
 class GrowthIntegrity(unittest.TestCase):
+    def test_google_date_transport_and_numeric_precision_preserve_values(self):
+        from datetime import datetime
+        env={'Any':Any,'Decimal':D,'date':date,'datetime':datetime}
+        extract('chatgpt_sheet_bridge.py',{'_wire','_apps_script_wire'},env)
+        wire=env['_apps_script_wire']
+        self.assertEqual(wire(date(2026,10,20)),"'2026-10-20")
+        self.assertEqual(wire('2026-10-23T06:30:45.146593Z'),"'2026-10-23T06:30:45.146593Z")
+        self.assertEqual(wire('000611338042'),"'000611338042")
+        self.assertEqual(wire('2026-99-99'),'2026-99-99')
+        from price_history_analysis import verify_history_tables
+        expected={'current':[['Field','Value'],['POS_Data_Through','2026-10-20'],['GP',D('1110.2380970783202')]]}
+        actual=[['Field','Value'],['POS_Data_Through','2026-10-20'],['GP',1110.23809707832]]
+        self.assertTrue(verify_history_tables(expected,lambda *a:actual)['pass'])
+        actual[2][1]=1110.24
+        with self.assertRaises(ValueError):verify_history_tables(expected,lambda *a:actual)
+
     def test_shutdown_handoff_is_scoped_to_stopped_worker(self):
         import json,socket
         from datetime import datetime,timezone
