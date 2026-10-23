@@ -903,9 +903,53 @@ def process_bridge_job(run_id:int,batch_id:int) -> None:
         heartbeat.join(timeout=2)
 
 
+def _reconcile_ready_publication() -> dict:
+    from publish_recovery import publish_recovery_decision
+    if not bridge_enabled():return {'reason':'DISABLED'}
+    with db_conn() as conn:
+        cur=conn.cursor(dictionary=True,buffered=True)
+        locked=False
+        try:
+            cur.execute("SELECT GET_LOCK('fullmysql_bridge_reconcile',0) AS ok")
+            locked=int((cur.fetchone() or {}).get('ok') or 0)==1
+            if not locked:return {'reason':'RECOVERY_ALREADY_RUNNING'}
+            cur.execute("SELECT MAX(publish_batch_id) AS batch_id,MAX(published_at) AS updated_at FROM quick_check_current")
+            serving=cur.fetchone() or {};bid=serving.get('batch_id')
+            if not bid:return {'reason':'NO_SERVING_SOURCE'}
+            cur.execute("SELECT processing_status FROM ingest_batch WHERE batch_id=%s",(bid,))
+            batch=cur.fetchone() or {}
+            if batch.get('processing_status') not in {'QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS'}:
+                return {'reason':'SOURCE_NOT_READY'}
+            cur.execute("""SELECT processing_status,completed_at,code_version,run_number,detail_json
+                FROM pipeline_run WHERE batch_id=%s AND pipeline_name=%s
+                AND stage_name='CHATGPT_SHEET_PUBLISH' ORDER BY pipeline_run_id DESC LIMIT 1""",(bid,API_PIPELINE))
+            latest=cur.fetchone()
+            if latest and latest.get('processing_status')=='FAILED':
+                cur.execute("""SELECT COUNT(*) AS c FROM pipeline_run WHERE batch_id=%s AND pipeline_name=%s
+                    AND stage_name='CHATGPT_SHEET_PUBLISH' AND code_version=%s AND processing_status='FAILED'
+                    AND pipeline_run_id>COALESCE((SELECT MAX(pipeline_run_id) FROM pipeline_run WHERE batch_id=%s
+                        AND pipeline_name=%s AND stage_name='CHATGPT_SHEET_PUBLISH' AND processing_status='COMPLETED'),0)""",
+                    (bid,API_PIPELINE,API_VERSION,bid,API_PIPELINE))
+                latest['retry_count']=int((cur.fetchone() or {}).get('c') or 1)
+            decision=publish_recovery_decision(latest,serving.get('updated_at'),API_VERSION,HISTORY_CONTRACT)
+            if decision['queue']:
+                return enqueue_chatgpt_publish(int(bid),pipeline_name=API_PIPELINE,code_version=API_VERSION,
+                    requested_by='CONTINUOUS_READY_RECONCILER',reason=decision['reason'])
+            return decision
+        finally:
+            if locked:
+                try:cur.execute("SELECT RELEASE_LOCK('fullmysql_bridge_reconcile')");cur.fetchone()
+                except Exception:pass
+            cur.close()
+
+
 def _bridge_worker_loop(stop_event:threading.Event) -> None:
+    next_reconcile=0.0
     while not stop_event.is_set():
         try:
+            if time.monotonic()>=next_reconcile:
+                next_reconcile=time.monotonic()+30
+                _reconcile_ready_publication()
             job=claim_bridge_job()
         except Exception as exc:
             print('Bridge worker claim error:',repr(exc),flush=True)
@@ -1170,6 +1214,7 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+
 
 
 

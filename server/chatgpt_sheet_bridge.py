@@ -188,7 +188,7 @@ def chatgpt_publish_status(batch_id: int, *, pipeline_name: str) -> dict[str, An
         "completed_at":row.get("completed_at"),
         "error_count":int(row.get("error_count") or 0),
         "publish_result":detail.get("publish_result"),
-        "failure_error":detail.get("error"),
+        "failure_error":(detail.get("publish_result") or {}).get("error") or detail.get("error") or detail.get("recovery_reason"),
         "worker":detail.get("worker"),
         "heartbeat_at":detail.get("heartbeat_at"),
         "async_nonblocking":True,
@@ -1767,6 +1767,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
 
