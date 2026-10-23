@@ -1,5 +1,6 @@
 import ast
 import json
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
 import unittest
@@ -40,9 +41,10 @@ class PublisherProcessRecoveryTests(unittest.TestCase):
                   and n.name == 'requeue_interrupted_pipeline_runs')
         scope = dict(json=json, datetime=datetime, timezone=timezone,
                      db_conn=Connection, API_VERSION='test', API_PIPELINE='pipeline',
-                     log=lambda message: None)
+                     log=lambda message: None, socket=socket)
         exec(compile(ast.Module(body=[fn], type_ignores=[]), 'single_service.py', 'exec'), scope)
-        self.assertEqual(scope[fn.name]('WORKER_PROCESS_EXIT'), 1)
+        self.assertEqual(scope[fn.name]('WORKER_PROCESS_EXIT', worker_pid=4321), 1)
+        self.assertEqual(cur.params[-1], f'{socket.gethostname()}:4321')
         self.assertIn("'CHATGPT_SHEET_PUBLISH'", cur.sql)
         self.assertIn("processing_status IN ('STARTED','PAUSE_REQUESTED')", cur.sql)
         self.assertIn("SET processing_status='QUEUED'", cur.sql)

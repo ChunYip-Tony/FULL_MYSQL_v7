@@ -75,31 +75,38 @@ def requeue_interrupted_pipeline_runs(reason: str, worker_pid: int | None = None
         },
         ensure_ascii=False,
     )
-    with db_conn() as conn:
-        cur = conn.cursor()
-        try:
-            cur.execute(
-                """UPDATE pipeline_run
-                   SET processing_status='QUEUED', completed_at=NULL, error_count=0,
-                       detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
-                   WHERE pipeline_name=%s
-                     AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
-                     AND processing_status IN ('STARTED','PAUSE_REQUESTED')
-                     AND code_version=%s
-                     AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.worker'))=%s""",
-                (payload, API_PIPELINE, API_VERSION, owner),
-            )
-            count = int(cur.rowcount or 0)
-            conn.commit()
-            if count:
-                log(f"requeued {count} interrupted pipeline run(s) for automatic recovery")
-            return count
-        except Exception as exc:
-            conn.rollback()
-            log(f"failed to requeue interrupted pipeline run(s): {exc!r}")
-            return 0
-        finally:
-            cur.close()
+    try:
+        with db_conn() as conn:
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    """UPDATE pipeline_run
+                       SET processing_status='QUEUED', completed_at=NULL, error_count=0,
+                           detail_json=JSON_MERGE_PATCH(COALESCE(detail_json,JSON_OBJECT()),%s)
+                       WHERE pipeline_name=%s
+                         AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
+                         AND processing_status IN ('STARTED','PAUSE_REQUESTED')
+                         AND code_version=%s
+                         AND JSON_UNQUOTE(JSON_EXTRACT(detail_json,'$.worker'))=%s""",
+                    (payload, API_PIPELINE, API_VERSION, owner),
+                )
+                count = int(cur.rowcount or 0)
+                conn.commit()
+                if count:
+                    log(f"requeued {count} interrupted pipeline run(s) for automatic recovery")
+                return count
+            except Exception as exc:
+                conn.rollback()
+                log(f"failed to requeue interrupted pipeline run(s): {exc!r}")
+                return 0
+            finally:
+                cur.close()
+    except Exception as exc:
+        # Connection acquisition, cursor setup and cleanup can fail outside
+        # the transaction handler. Recovery bookkeeping must never prevent
+        # the supervisor from restarting a stopped worker or stopping the API.
+        log(f"requeue unavailable ({type(exc).__name__}); worker recovery continues")
+        return 0
 
 
 def main() -> int:

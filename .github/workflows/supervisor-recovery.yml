@@ -1,0 +1,30 @@
+name: Supervisor recovery
+on:
+  push:
+    paths:
+      - 'server/single_service.py'
+      - 'server/test_supervisor_db_outage.py'
+      - 'server/test_publisher_process_recovery.py'
+      - '.github/workflows/supervisor-recovery.yml'
+  pull_request:
+    paths:
+      - 'server/single_service.py'
+      - 'server/test_supervisor_db_outage.py'
+      - 'server/test_publisher_process_recovery.py'
+      - '.github/workflows/supervisor-recovery.yml'
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test worker recovery during database outage
+        working-directory: server
+        run: python -m unittest test_supervisor_db_outage test_publisher_process_recovery -v
+      - name: Check supervisor syntax
+        working-directory: server
+        run: python -m py_compile single_service.py
