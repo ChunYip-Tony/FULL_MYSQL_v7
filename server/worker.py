@@ -927,6 +927,14 @@ def _reconcile_ready_publication() -> dict:
             cur.execute("SELECT GET_LOCK('fullmysql_bridge_reconcile',0) AS ok")
             locked=int((cur.fetchone() or {}).get('ok') or 0)==1
             if not locked:return {'reason':'RECOVERY_ALREADY_RUNNING'}
+            # Never spend time publishing an older serving snapshot while a
+            # new canonical upload/rebuild is waiting for this same database.
+            cur.execute("""SELECT EXISTS(SELECT 1 FROM ingest_batch WHERE processing_status='API_UPLOADING')
+                OR EXISTS(SELECT 1 FROM pipeline_run WHERE pipeline_name=%s
+                    AND stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                    AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED')) AS source_pending""",(API_PIPELINE,))
+            if (cur.fetchone() or {}).get('source_pending'):
+                return {'reason':'SOURCE_NOT_READY'}
             cur.execute("SELECT MAX(publish_batch_id) AS batch_id,MAX(published_at) AS updated_at FROM quick_check_current")
             serving=cur.fetchone() or {};bid=serving.get('batch_id')
             if not bid:return {'reason':'NO_SERVING_SOURCE'}

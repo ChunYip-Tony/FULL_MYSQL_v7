@@ -1,1 +1,1 @@
-VERSION='7.0.548-responsive-upload-recovery'
+VERSION='7.0.549-bounded-history-publication'

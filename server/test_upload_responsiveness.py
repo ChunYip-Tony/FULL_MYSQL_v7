@@ -8,6 +8,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from contextlib import contextmanager
 
 
 def functions(path, names, scope):
@@ -85,12 +86,51 @@ class UploadResponsivenessTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StartupRecoveryTests(unittest.TestCase):
+    def test_default_startup_does_not_build_duplicate_analytical_caches(self):
+        scope={'os':SimpleNamespace(environ={})}
+        functions('api.py',{'_warm_mobile_home_summary_cache'},scope)
+        self.assertIsNone(scope['_warm_mobile_home_summary_cache']())
+
     def test_restart_uses_same_reconciliation_policy(self):
         calls=[]
         scope=dict(json=json,_reconcile_ready_publication=lambda:calls.append('reconcile') or {'queue':False,'reason':'WAITING_FOR_DATA'})
         functions('worker.py',{'_recover_chatgpt_bridge_on_startup'},scope)
         scope['_recover_chatgpt_bridge_on_startup']()
         self.assertEqual(calls,['reconcile'])
+
+    def test_new_source_takes_priority_over_old_snapshot_export(self):
+        calls=[]
+        class Cursor:
+            def execute(self,sql,params=None):self.sql=sql;calls.append(sql)
+            def fetchone(self):
+                if 'GET_LOCK' in self.sql:return {'ok':1}
+                if 'source_pending' in self.sql:return {'source_pending':1}
+                return {}
+            def close(self):pass
+        @contextmanager
+        def connect():yield SimpleNamespace(cursor=lambda **kwargs:Cursor())
+        scope=dict(bridge_enabled=lambda:True,db_conn=connect,API_PIPELINE='test')
+        functions('worker.py',{'_reconcile_ready_publication'},scope)
+        self.assertEqual(scope['_reconcile_ready_publication'](),{'reason':'SOURCE_NOT_READY'})
+        self.assertFalse(any('MAX(publish_batch_id)' in sql for sql in calls))
+
+
+class PublicationPreflightTests(unittest.TestCase):
+    def test_source_hold_skips_expensive_exports_and_external_writes(self):
+        class Cursor:
+            def close(self):pass
+        @contextmanager
+        def connect():yield SimpleNamespace(cursor=lambda **kwargs:Cursor())
+        def forbidden(*args):raise AssertionError('source hold must return before analytical export')
+        scope=dict(time=time,bridge_enabled=lambda:True,_sheet_id=lambda:'sheet',
+            _bridge_transport=lambda:'APPS_SCRIPT',db_conn=connect,
+            _fetch_batch_state=lambda *a:({'processing_status':'QUICK_CHECK_READY_WITH_HOLDS'},{'blocking_issue_count':0}),
+            _fetch_quick_rows=lambda c:[{'quick_check_status':'QA_HOLD'}]*384,
+            _canonical_freshness=forbidden)
+        functions('chatgpt_sheet_bridge.py',{'publish_chatgpt_snapshot'},scope)
+        result=scope['publish_chatgpt_snapshot'](75)
+        self.assertEqual(result['status'],'BLOCKED')
+        self.assertEqual(result['hold_row_count'],384)
 
 
 if __name__=='__main__':unittest.main()

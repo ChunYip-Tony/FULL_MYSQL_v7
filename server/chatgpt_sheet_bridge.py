@@ -1560,6 +1560,25 @@ def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
                     return {"status":"BLOCKED","batch_id":batch_id,
                             "reason":"Phase 3 blocking_issue_count is non-zero."}
                 rows = _fetch_quick_rows(cur)
+                if not rows:
+                    return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
+
+                publish_row_count = len(rows)
+                ready_rows = [
+                    row for row in rows
+                    if str(row.get("quick_check_status") or "").upper() == "READY"
+                ]
+                hold_rows = [
+                    row for row in rows
+                    if str(row.get("quick_check_status") or "").upper() == "QA_HOLD"
+                ]
+                if not ready_rows:
+                    return {
+                        "status":"BLOCKED",
+                        "batch_id":batch_id,
+                        "reason":"No READY Quick Check rows are available for safe analytical publish.",
+                        "hold_row_count":len(hold_rows),
+                    }
                 freshness = _canonical_freshness(cur, batch_id)
                 latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
                 recent_3d = _fetch_recent_3d_sales(cur, batch_id, rows)
@@ -1587,26 +1606,6 @@ def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
                             "reason":"A newer serving snapshot is ready; publish its revision."}
             finally:
                 cur.close()
-
-        if not rows:
-            return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
-
-        publish_row_count = len(rows)
-        ready_rows = [
-            row for row in rows
-            if str(row.get("quick_check_status") or "").upper() == "READY"
-        ]
-        hold_rows = [
-            row for row in rows
-            if str(row.get("quick_check_status") or "").upper() == "QA_HOLD"
-        ]
-        if not ready_rows:
-            return {
-                "status":"BLOCKED",
-                "batch_id":batch_id,
-                "reason":"No READY Quick Check rows are available for safe analytical publish.",
-                "hold_row_count":len(hold_rows),
-            }
 
         negative_queue = negative_stock_queue(limit=500)
         cost_backfill = cost_backfill_queue(lookback_days=90)
@@ -1867,6 +1866,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
 

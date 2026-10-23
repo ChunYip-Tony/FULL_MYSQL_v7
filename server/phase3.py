@@ -683,11 +683,35 @@ def _process_sales(cur, batch_id: int, f: dict[str, Any], *, article_manual_inde
     return inserted
 
 
+def _pos_history_replay_watermark(cur, batch_id):
+    """Reuse only committed history processed by the same POS resolver contract."""
+    cur.execute("SELECT DISTINCT source_type FROM ingest_file WHERE batch_id=%s",(batch_id,))
+    kinds={row['source_type'] for row in cur.fetchall()}
+    if 'article_manual' in kinds:
+        return None
+    # v547/v548 are the exact legacy implementations of this resolver. Later
+    # successful runs persist the explicit contract instead of relying on a
+    # runtime version. Bump the contract when POS extraction semantics change.
+    cur.execute("""SELECT pr.started_at
+        FROM pipeline_run pr JOIN phase3_batch_result p3 ON p3.batch_id=pr.batch_id
+        WHERE pr.pipeline_name='FULLMYSQL_SECURE_API'
+          AND pr.stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+          AND pr.processing_status='COMPLETED'
+          AND p3.result_status IN ('QUICK_CHECK_READY','QUICK_CHECK_READY_WITH_HOLDS')
+          AND pr.batch_id<>%s AND pr.started_at IS NOT NULL
+          AND (JSON_UNQUOTE(JSON_EXTRACT(p3.detail_json,'$.pos_raw_resolver_contract'))='POS_UPC_V547'
+               OR pr.code_version LIKE '7.0.547-%%' OR pr.code_version LIKE '7.0.548-%%')
+        ORDER BY pr.started_at DESC LIMIT 1""",(batch_id,))
+    row=cur.fetchone() or {}
+    return row.get('started_at')
+
+
 def _backfill_recent_pos_history(
     cur,
     *,
     exclude_batch_id: int | None = None,
     lookback_days: int = 45,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Reprocess recent immutable POS RAW with the current department/UPC resolver.
 
@@ -708,6 +732,14 @@ def _backfill_recent_pos_history(
         exclude_sql=' AND batch_id<>%s'
         args.append(int(exclude_batch_id))
 
+    watermark=None if force or exclude_batch_id is None else _pos_history_replay_watermark(cur,exclude_batch_id)
+    replay_sql=''
+    if watermark is not None:
+        # Include boundary timestamps conservatively. Old files already passed
+        # the same parser in a completed transaction; late uploads still replay.
+        replay_sql=' AND (upload_timestamp IS NULL OR upload_timestamp>=%s)'
+        args.append(watermark)
+
     cur.execute(
         f"""SELECT batch_id,file_id,original_filename,source_type,
                    coverage_start_date,coverage_end_date,
@@ -718,7 +750,7 @@ def _backfill_recent_pos_history(
               AND processing_status='INGESTED'
               AND duplicate_of_file_id IS NULL
               AND COALESCE(header_period_end_date,coverage_end_date)>=%s
-              {exclude_sql}
+              {exclude_sql} {replay_sql}
             ORDER BY file_id""",
         tuple(args),
     )
@@ -737,6 +769,8 @@ def _backfill_recent_pos_history(
 
     return {
         'lookback_days': days,
+        'replay_watermark': watermark,
+        'resolver_contract': 'POS_UPC_V547',
         'cutoff_date': cutoff,
         'files_reprocessed': len(files),
         'source_batches_reprocessed': sorted(source_batches),
@@ -3997,7 +4031,7 @@ def process_phase3(batch_id: int, progress=None) -> dict[str, Any]:
                     blocking_issue_count=VALUES(blocking_issue_count),result_status=VALUES(result_status),detail_json=VALUES(detail_json),
                     updated_at=CURRENT_TIMESTAMP(6)""",
                 (batch_id, counts['sales'], counts['price'], counts['movement'], counts['inventory'], counts['company'],
-                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_family_costs_final': family_cost_result_final, 'manual_family_subarticles_final': family_subarticle_result_final, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
+                 qc['rows'], qc['ready'], qc['hold'], blocking, status, json.dumps({'pos_raw_resolver_contract': 'POS_UPC_V547', 'historical_pos_backfill': historical_pos_backfill, 'history_counts': counts, 'late_identity_resolution': late_identity, 'manual_overrides_pre_repair': override_result_pre, 'manual_retirements_pre_repair': retirement_result_pre, 'manual_cost_conversions': cost_conversion_result, 'manual_family_costs': family_cost_result, 'manual_family_subarticles': family_subarticle_result, 'manual_family_costs_final': family_cost_result_final, 'manual_family_subarticles_final': family_subarticle_result_final, 'manual_overrides': override_result, 'manual_retirements': retirement_result, 'retired_recomputed_issues': retired_recomputed_issues, 'unmapped_activity_scope': unmapped_activity,
                   'current_active_unmapped_sales_guard': current_active_unmapped_guard,
                   'active_product_master_repair': active_master_repair,
                   'article_manual_multitab_repair': multitab_manual_repair,
@@ -4075,6 +4109,7 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
 

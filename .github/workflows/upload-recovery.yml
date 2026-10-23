@@ -4,6 +4,9 @@ on:
     paths:
       - 'server/api.py'
       - 'server/worker.py'
+      - 'server/phase3.py'
+      - 'server/chatgpt_sheet_bridge.py'
+      - 'server/test_pos_history_replay.py'
       - 'server/publish_recovery.py'
       - 'server/test_upload_responsiveness.py'
       - 'server/test_publish_recovery.py'
@@ -12,6 +15,9 @@ on:
     paths:
       - 'server/api.py'
       - 'server/worker.py'
+      - 'server/phase3.py'
+      - 'server/chatgpt_sheet_bridge.py'
+      - 'server/test_pos_history_replay.py'
       - 'server/publish_recovery.py'
       - 'server/test_upload_responsiveness.py'
       - 'server/test_publish_recovery.py'
@@ -28,7 +34,12 @@ jobs:
           python-version: '3.13'
       - name: Test upload responsiveness and recovery
         working-directory: server
-        run: python -m unittest test_upload_responsiveness test_publish_recovery test_supervisor_db_outage test_publisher_process_recovery -v
+        run: python -m unittest test_pos_history_replay test_upload_responsiveness test_publish_recovery test_supervisor_db_outage test_publisher_process_recovery -v
       - name: Check changed runtime syntax
         working-directory: server
-        run: python -m py_compile api.py worker.py publish_recovery.py version.py
+        run: python -m py_compile api.py worker.py phase3.py chatgpt_sheet_bridge.py publish_recovery.py version.py
+      - name: Check rolling rebuild scope
+        working-directory: server
+        run: |
+          python ../scripts/test_routine_pos_scope.py
+          python ../scripts/test_routine_scope_dates.py

@@ -6,7 +6,7 @@ import unittest
 
 source = Path(__file__).resolve().parents[1] / 'server' / 'phase3.py'
 node = next(n for n in ast.parse(source.read_text()).body if isinstance(n, ast.FunctionDef) and n.name == '_routine_upload_quick_check_scope')
-ns = {}
+ns = {'_date': lambda value: value if isinstance(value,date) else date.fromisoformat(str(value))}
 exec(compile(ast.Module(body=[node], type_ignores=[]), str(source), 'exec'), ns)
 select = ns[node.name]
 
@@ -76,7 +76,7 @@ class Tests(unittest.TestCase):
         text = ast.get_source_segment(source.read_text(), rebuild)
         self.assertIn('products = scoped', text)
         self.assertIn('_sales_metrics(cur, upc_id, pos_days_7', text)
-        self.assertIn('_latest_cost(cur, family_id)', text)
+        self.assertIn('_latest_cost(cur, family_id, p)', text)
         self.assertIn('SAVEPOINT before_quick_check_publish', source.read_text())
         self.assertIn('ROLLBACK TO SAVEPOINT before_quick_check_publish', source.read_text())
 

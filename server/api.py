@@ -83,6 +83,11 @@ app.include_router(mobile_pricing_router)
 
 @app.on_event("startup")
 def _warm_mobile_home_summary_cache():
+    # App Ready already hydrates a complete durable generation and rebuilds it
+    # after ingest. Separate eager analytical caches duplicate that work on a
+    # small shared API/worker host. Keep them lazy unless explicitly enabled.
+    if os.environ.get('FULLMYSQL_WARM_ANALYTICAL_CACHES','0')!='1':
+        return
     from pipeline_priority import wait_for_pipeline_idle
     def after_pipeline(target):
         wait_for_pipeline_idle()
