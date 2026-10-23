@@ -1,1 +1,1 @@
-VERSION='7.0.541-owner-scoped-publisher-recovery'
+VERSION='7.0.542-current-google-evidence-gates'
