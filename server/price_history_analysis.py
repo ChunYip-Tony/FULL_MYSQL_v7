@@ -115,6 +115,30 @@ def verify_member_performance(member, current, source_days, through, policy):
     'quantity_rule':'UPC_POS_ONLY; FAMILY_MOVEMENT_NEVER_ALLOCATED',
     'historical_gp_basis':'AS_OF_COST; CURRENT_COST_COMPARISON_SEPARATE'}
 
+
+def reconcile_coverage_identifiers(coverage, current):
+ """Repair only proven leading-zero loss in this derived Google table.
+
+ Exact canonical UPCs always win. An orphan can be restored only when the
+ digits without leading zeroes identify one master UPC in the same family.
+ Raw POS/history identities are never rewritten or merged here.
+ """
+ by_digits={}
+ for upc,row in current.items():
+  if upc.isdigit():by_digits.setdefault(upc.lstrip('0') or '0',[]).append(upc)
+ repaired=0
+ for upc,row in list(coverage.items()):
+  if upc in current or not upc.isdigit():continue
+  matches=by_digits.get(upc.lstrip('0') or '0',[])
+  if len(matches)!=1:continue
+  canonical=matches[0];master=current[canonical]
+  if str(row.get('family') or '')!=str(master.get('main_article_number') or ''):continue
+  restored={**row,'upc':canonical}
+  coverage.pop(upc)
+  coverage.setdefault(canonical,restored)
+  repaired+=1
+ return repaired
+
 def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, through, revision, policy):
  def read(name):return tables[name]
  from datetime import date,timedelta
@@ -251,6 +275,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
  ch=read('ANALYSIS_COST_HISTORY');costh=ch[0];costs=objects(ch);costkeys={(str(x['upc']),str(x['date']),str(x['cost']),str(x['uom']),str(x['source'])) for x in costs}
  refs=read('ANALYSIS_ITEM_REFERENCE');refh=refs[0];refrows={str(x['upc']):x for x in objects(refs)}
  cov=read('ANALYSIS_COVERAGE');covh=cov[0];covrows={str(x['upc']):x for x in objects(cov)}
+ coverage_identifier_repairs=reconcile_coverage_identifiers(covrows,current)
  verification={}
  for upc,m in members.items():
   for event in m.get('priceHistory',[]):
@@ -290,6 +315,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
     retained.update(history_status='SOURCE_NOT_RETURNED',gp_status='UNVERIFIED',blocking_reason='UPC_HISTORY_SOURCE_NOT_RETURNED',source_revision=revision,data_through=through)
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
+ audit['coverage_identifier_repairs']=coverage_identifier_repairs
  audit['verification']={'contract':'ITEM_PERFORMANCE_VERIFICATION_V1','items':len(covrows),
   **{k:sum(bool(v[k]) for v in verification.values()) for k in ('fully_verified','current_verified','historical_gp_verified','historical_price_verified')},
   'unresolved_items':len(covrows)-sum(v['fully_verified'] for v in verification.values())}

@@ -141,6 +141,12 @@ def classify_source(filename: str) -> tuple[str, float]:
     if re.search(r"(^|[^a-z0-9])oh([^a-z0-9]|$)", n):
         return "on_hand", 0.95
 
+    # Historical RAL reports also use singular sf-sale-090526.xls.
+    # Keep this date-stamped POS alias narrow so sale price lists are not
+    # accidentally classified as transaction reports.
+    if re.search(r"^(?:sf|all|m|p)[-_ ]sale[-_ ]\d{6}(?:\D|$)", n):
+        return "sales_by_price_type", 0.95
+
     return "unclassified", 0.0
 
 
@@ -682,3 +688,4 @@ def release_batch(batch_id: int) -> dict[str, Any]:
         conn.commit()
         cur.close()
     return {"batch_id": batch_id, "released": bool(changed), "audit": audit}
+

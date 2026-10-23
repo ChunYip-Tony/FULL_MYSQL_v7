@@ -304,7 +304,7 @@ def _apps_script_write_matrix(
     for start in range(0, len(matrix), safe_chunk_rows):
         chunk = matrix[start : start + safe_chunk_rows]
         normalized = [
-            [_wire(v) for v in row] + [""] * (width - len(row))
+            [_apps_script_wire(v) for v in row] + [""] * (width - len(row))
             for row in chunk
         ]
         _apps_script_post(
@@ -347,6 +347,21 @@ def _wire(value: Any) -> Any:
     if isinstance(value, (int, float, str)):
         return value
     return str(value)
+
+
+def _apps_script_wire(value: Any) -> Any:
+    """Protect text identifiers from SpreadsheetApp.setValues coercion.
+
+    The Sheets RAW API already preserves strings. Apps Script's setValues
+    interprets numeric-looking strings using the cell format, so UPCs with
+    leading zeroes need Sheets' literal-text prefix on that transport only.
+    Readback still compares the original unmodified identifier exactly.
+    """
+    value = _wire(value)
+    if isinstance(value, str) and (value.startswith("'") or
+            (len(value) > 1 and value.startswith('0') and value.isdigit())):
+        return "'" + value
+    return value
 
 
 def _col_letters(n: int) -> str:
@@ -1764,7 +1779,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
         if not target:continue
         if transport=="APPS_SCRIPT":
             _apps_script_post({"action":"write_tab_chunk","spreadsheet_id":spreadsheet_id,
-                "tab":title,"start_row":start+1,"clear":False,"values":target},timeout=120)
+                "tab":title,"start_row":start+1,"clear":False,"values":[[_apps_script_wire(v) for v in row] for row in target]},timeout=120)
         else:
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
