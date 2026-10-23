@@ -1,1 +1,1 @@
-VERSION='7.0.549-bounded-history-publication'
+VERSION='7.0.550-preserve-movement-source-range'

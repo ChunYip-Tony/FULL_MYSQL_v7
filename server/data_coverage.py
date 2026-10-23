@@ -102,7 +102,23 @@ def _movement_snapshot_completeness(row: dict[str, Any], business_date: date) ->
         coverage_end_date=_as_date(row.get('coverage_end_date')),
         business_date=business_date,
     )
-    return reason if ok else None
+    if ok:
+        return reason
+    # Earlier shared-upload converters retained only the final filename date.
+    # The durable batch label retains the original source name. Restore only
+    # its exact closed range when BOTH ends match parsed posting-date coverage.
+    label=str(row.get('source_batch_label') or '')
+    prefix='Shared upload · '
+    if label.startswith(prefix):
+        ok,reason=movement_closed_range_filename_evidence(
+            original_filename=label[len(prefix):],
+            coverage_start_date=_as_date(row.get('coverage_start_date')),
+            coverage_end_date=_as_date(row.get('coverage_end_date')),
+            business_date=business_date,
+        )
+        if ok:
+            return 'COMPLETE_SHARED_SOURCE_MVT_RANGE_FILENAME_CONTRACT'
+    return None
 
 
 def _movement_daily_snapshot_complete(row: dict[str, Any], business_date: date) -> bool:
@@ -186,9 +202,10 @@ def source_data_days(cur, source_type: str, *, limit: int | None = None,
                    f.coverage_type,f.coverage_start_date,f.coverage_end_date,
                    f.header_period_start_date,f.header_period_end_date,
                    f.report_generated_at,f.filename_date_candidate,f.filename_time_candidate,
-                   f.upload_timestamp,p.batch_id AS phase3_batch_id
+                   f.upload_timestamp,p.batch_id AS phase3_batch_id,ib.batch_label AS source_batch_label
             FROM ingest_file f
             LEFT JOIN phase3_batch_result p ON p.batch_id=f.batch_id
+            LEFT JOIN ingest_batch ib ON ib.batch_id=f.batch_id
             WHERE f.source_type=%s
               AND f.processing_status='INGESTED'
               AND f.error_count=0
@@ -648,3 +665,4 @@ def data_health_14_day_board(*, days: int = 14) -> dict[str, Any]:
             }
         finally:
             cur.close()
+

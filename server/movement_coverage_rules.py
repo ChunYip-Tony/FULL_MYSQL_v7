@@ -11,7 +11,7 @@ _DAILY_MVT_STEM = re.compile(
 )
 
 _RANGE_MVT_STEM = re.compile(
-    r"^(?:sf[-_ ]*)?mvt[-_ ]*(\d{6}|\d{8})[-_ ]+(\d{6}|\d{8})(?:[-_ ]*full)?$",
+    r"^(?:(?:sf|all)[-_ ]*)?mvt[-_ ]*(\d{6}|\d{8})[-_ ]+(\d{6}|\d{8})(?:[-_ ]*full)?$",
     re.IGNORECASE,
 )
 
@@ -108,3 +108,4 @@ def movement_daily_close_filename_evidence(
         else "COMPLETE_DATE_ONLY_MVT_FILENAME_CONTRACT"
     )
     return True, reason
+
