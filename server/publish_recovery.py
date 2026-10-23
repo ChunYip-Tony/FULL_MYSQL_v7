@@ -2,8 +2,6 @@
 import json
 from datetime import datetime, timezone
 
-STALE_PUBLISH_SECONDS = 15 * 60
-
 
 def _utc_stamp(value):
     if not value:
@@ -33,7 +31,7 @@ def owned_legacy_handoff(row, code_version, worker, worker_instance):
         and version_key(old)<version_key(code_version))
 
 
-def publish_recovery_decision(latest, snapshot_updated_at, code_version, history_contract, now=None):
+def publish_recovery_decision(latest, snapshot_updated_at, code_version, history_contract, now=None, stale_after_seconds=180):
     now=now or datetime.now(timezone.utc)
     if not latest:
         return {'queue':True,'reason':'MISSING_PUBLICATION'}
@@ -50,7 +48,7 @@ def publish_recovery_decision(latest, snapshot_updated_at, code_version, history
             _utc_stamp(latest.get('started_at')),
             _utc_stamp(latest.get('created_at'))
         ) if stamp is not None), None)
-        if heartbeat is not None and (now - heartbeat).total_seconds() > STALE_PUBLISH_SECONDS:
+        if heartbeat is not None and (now - heartbeat).total_seconds() > stale_after_seconds:
             return {'queue': False, 'reason': 'STALE_PUBLICATION_RECLAIM_REQUIRED',
                     'stale_seconds': int((now - heartbeat).total_seconds()),
                     'status': status}
