@@ -120,6 +120,10 @@ def install_app_ready_api(app) -> None:
 
         def load_then_rebuild():
             try:
+                # Loading a full cached generation competes with the publisher
+                # for the same container memory, even without a new rebuild.
+                from pipeline_priority import wait_for_pipeline_idle
+                wait_for_pipeline_idle()
                 hydrated = hydrate_durable_app_ready()
                 app.state.yipman_app_ready_durable_hydrated = hydrated
                 if not hydrated:
@@ -175,5 +179,6 @@ def install_app_ready_api(app) -> None:
 
     app.state.yipman_app_ready_api_installed = True
     app.state.request_yipman_app_ready_rebuild = request_app_ready_rebuild
+
 
 

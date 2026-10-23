@@ -1,1 +1,1 @@
-VERSION='7.0.551-publication-before-dashboard-refresh'
+VERSION='7.0.552-publisher-memory-priority'

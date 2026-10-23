@@ -38,6 +38,10 @@ def refresh_hot_cache_if_stale(*, force: bool = False) -> bool:
             if not durable_id or (local is not None and local.build_id == durable_id):
                 _POINTER_LAST_ERROR = None
                 return False
+            from pipeline_priority import pipeline_pending
+            if pipeline_pending():
+                _POINTER_LAST_ERROR = 'WAITING_FOR_INGEST_OR_GOOGLE_PUBLICATION'
+                return False
             snap = load_active_snapshot(SnapshotBuild)
             if snap is None or snap.build_id != durable_id:
                 return False
@@ -186,3 +190,4 @@ def decision_intelligence_snapshot(*, family: str | None = None, upc: str | None
             if payload is not None:
                 return _mark(payload, basis="PRECOMPUTED_APP_READY_DECISION_INTELLIGENCE")
     return None
+

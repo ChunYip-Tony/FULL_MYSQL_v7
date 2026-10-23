@@ -7,6 +7,9 @@ on:
       - 'server/phase3.py'
       - 'server/data_coverage.py'
       - 'server/pipeline_priority.py'
+      - 'server/yipman_app_ready_api.py'
+      - 'server/yipman_app_ready_readers.py'
+      - 'server/test_app_ready_memory_priority.py'
       - 'server/test_pipeline_priority.py'
       - 'server/movement_coverage_rules.py'
       - 'server/test_shared_movement_range.py'
@@ -23,6 +26,9 @@ on:
       - 'server/phase3.py'
       - 'server/data_coverage.py'
       - 'server/pipeline_priority.py'
+      - 'server/yipman_app_ready_api.py'
+      - 'server/yipman_app_ready_readers.py'
+      - 'server/test_app_ready_memory_priority.py'
       - 'server/test_pipeline_priority.py'
       - 'server/movement_coverage_rules.py'
       - 'server/test_shared_movement_range.py'
@@ -44,7 +50,7 @@ jobs:
           python-version: '3.13'
       - name: Test upload responsiveness and recovery
         working-directory: server
-        run: python -m unittest test_pipeline_priority test_shared_movement_range test_pos_history_replay test_upload_responsiveness test_publish_recovery test_supervisor_db_outage test_publisher_process_recovery -v
+        run: python -m unittest test_app_ready_memory_priority test_pipeline_priority test_shared_movement_range test_pos_history_replay test_upload_responsiveness test_publish_recovery test_supervisor_db_outage test_publisher_process_recovery -v
       - name: Check changed runtime syntax
         working-directory: server
         run: python -m py_compile api.py worker.py phase3.py chatgpt_sheet_bridge.py publish_recovery.py version.py

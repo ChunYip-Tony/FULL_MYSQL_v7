@@ -3,6 +3,7 @@ import asyncio
 import threading
 import time
 import unittest
+from unittest.mock import patch
 
 from fastapi import FastAPI
 import yipman_app_ready_api as subject
@@ -10,6 +11,8 @@ import yipman_app_ready_api as subject
 
 class StartupLivenessTests(unittest.TestCase):
     def setUp(self):
+        self.priority_waiter=patch("pipeline_priority.wait_for_pipeline_idle",return_value=None)
+        self.priority_waiter.start()
         self.hydrate = subject.hydrate_durable_app_ready
         self.rebuild = subject.request_app_ready_rebuild
         self.recovery = subject.start_app_ready_recovery
@@ -24,6 +27,7 @@ class StartupLivenessTests(unittest.TestCase):
         subject.stop_app_ready_recovery = lambda: None
 
     def tearDown(self):
+        self.priority_waiter.stop()
         self.release.set()
         self.finished.wait(3)
         subject.hydrate_durable_app_ready = self.hydrate
