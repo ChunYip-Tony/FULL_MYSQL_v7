@@ -1,1 +1,1 @@
-VERSION='7.0.550-preserve-movement-source-range'
+VERSION='7.0.551-publication-before-dashboard-refresh'

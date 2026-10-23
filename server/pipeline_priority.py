@@ -1,4 +1,4 @@
-"""Keep optional snapshot warmups behind unfinished canonical processing."""
+"""Keep optional snapshot warmups behind unfinished ingest and Google publication."""
 import time
 from db import db_conn
 
@@ -10,7 +10,7 @@ def pipeline_pending():
             cur.execute("""SELECT EXISTS(SELECT 1 FROM ingest_batch
                             WHERE processing_status='PHASE2C_READY')
                         OR EXISTS(SELECT 1 FROM pipeline_run
-                            WHERE stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN')
+                            WHERE stage_name IN ('POST_RAW_PIPELINE','PHASE3_RERUN','CHATGPT_SHEET_PUBLISH')
                               AND processing_status IN ('QUEUED','STARTED','PAUSE_REQUESTED'))""")
             return bool(cur.fetchone()[0])
         finally:
@@ -26,3 +26,4 @@ def wait_for_pipeline_idle():
         except Exception:
             pass
         time.sleep(30)
+
