@@ -104,7 +104,20 @@ def verify_member_performance(member, current, source_days, through, policy):
  current_verified=all(current_checks.values())
  economics_verified=identity and not missing and not calendar_missing and not any(problems[k] for k in ('source_quality','quantity','historical_cost'))
  prices_verified=not missing and not calendar_missing and not problems['price_attribution'] and not problems['source_quality']
- return {'contract':'ITEM_PERFORMANCE_VERIFICATION_V1','period_start':start,'through':through,
+ eligible=[day for day in sorted(source_days) if start<=day<=through and source_ok(day)]
+ eligible_set=set(eligible)
+ uploaded_missing=[day for day in eligible if day not in rows or rows[day].get('sales') is None]
+ uploaded_sales=bool(eligible) and not uploaded_missing
+ uploaded_gp=identity and uploaded_sales and not any(eligible_set.intersection(problems[k]) for k in ('quantity','historical_cost'))
+ uploaded_prices=uploaded_sales and not eligible_set.intersection(problems['price_attribution'])
+ return {'contract':'ITEM_PERFORMANCE_VERIFICATION_V2','period_start':start,'through':through,
+    'uploaded_scope_start':eligible[0] if eligible else None,'uploaded_scope_through':eligible[-1] if eligible else None,
+    'eligible_uploaded_dates':eligible,'held_uploaded_dates':[day for day in sorted(source_days) if not source_ok(day)],
+    'uploaded_sales_verified':uploaded_sales,'uploaded_gp_verified':bool(uploaded_gp),
+    'uploaded_price_verified':bool(uploaded_prices),'uploaded_fully_verified':bool(uploaded_gp and uploaded_prices),
+    'uploaded_missing_item_dates':uploaded_missing,
+    'calendar_current':through==policy.get('expected_completed_date',through),
+    'sales_authority':'POS_ONLY','achieved_price_authority':'POS_ONLY; REALIZED_AVERAGE_IS_NOT_ONE_APPLIED_PRICE',
     'expected_current_date':policy.get('expected_completed_date',through),
     'current_verified':current_verified,'current_checks':current_checks,
     'historical_gp_verified':economics_verified,'historical_price_verified':prices_verified,
@@ -317,17 +330,17 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
  audit['coverage_identifier_repairs']=coverage_identifier_repairs
  audit['verification']={'contract':'ITEM_PERFORMANCE_VERIFICATION_V1','items':len(covrows),
-  **{k:sum(bool(v[k]) for v in verification.values()) for k in ('fully_verified','current_verified','historical_gp_verified','historical_price_verified')},
+  **{k:sum(bool(v[k]) for v in verification.values()) for k in ('fully_verified','current_verified','historical_gp_verified','historical_price_verified','uploaded_sales_verified','uploaded_gp_verified','uploaded_price_verified','uploaded_fully_verified')},
   'unresolved_items':len(covrows)-sum(v['fully_verified'] for v in verification.values())}
  return output,audit
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V4_ITEM_VERIFICATION'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V5_UPLOADED_SCOPE'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
- size=max(1,min(500,10000//max(1,width)))
+ size=max(1,min(1000,20000//max(1,width)))
  rows=[]
  for first in range(start,end+1,size):
   last=min(end,first+size-1)
@@ -428,6 +441,7 @@ def build_upload_history(rows, tables, source_days, batch_id, through, loader=No
   from fastapi.encoders import jsonable_encoder
   loader = lambda ids: jsonable_encoder(build_page(limit=len(ids),history_days=90,requested_upcs=set(ids),history_only=True))
  ids = {str(r['ean_upc']) for r in rows if r.get('ean_upc') and (r.get('quick_check_status') in ('READY','QA_HOLD') or any(float(r.get(k) or 0)!=0 for k in ('sales_dollars_7d','sales_dollars_30d','pos_qty_7d','pos_qty_30d')))}
+ ids.update(str(r['upc']) for r in objects(tables['ANALYSIS_UPC_DAILY']) if r.get('upc') and r.get('sales') not in (None,''))
  for title in ('ANALYSIS_PRICE_TRACKING','ANALYSIS_COVERAGE'):
   ids.update(str(r['upc']) for r in objects(tables[title]) if r.get('history_status')!='HISTORY_EVIDENCE_REQUIRED')
  ids = sorted(ids)

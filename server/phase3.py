@@ -900,7 +900,7 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
         ) or 'K'
         base_uom_col = _pick_exact(hmap, ['BUn', 'Base UOM', 'Base Unit']) or 'L'
         amount_col = _pick_exact(hmap, ['Amount LC', 'Amount in LC', 'Local Currency Amount']) or 'M'
-        sales_value_col = _pick_exact(hmap, ['Sales Val.', 'Sales Value']) or 'N'
+        # MVT is cost/movement evidence. Selling price and revenue are POS-only.
         vendor_col = _pick_exact(hmap, ['Vendor', 'Vendor Code']) or 'S'
         reference_col = _pick_exact(hmap, ['Reference']) or 'Q'
         article_doc_col = _pick_exact(hmap, ['Art. Doc.', 'Article Document', 'Material Document', 'Mat. Doc.'])
@@ -947,7 +947,7 @@ def _process_movement(cur, batch_id: int, f: dict[str, Any]) -> int:
             base_qty = _num(p.get(base_qty_col))
             base_uom = (_text(p.get(base_uom_col)) or '').upper() or None
             amount = _num(p.get(amount_col))
-            sales_value = _num(p.get(sales_value_col))
+            sales_value = None  # Raw originals retained; never ingest MVT selling revenue.
             # Preserve the generic SAP document for non-receipt lineage.
             # For receipt movements, only a 5014... value is accepted as the
             # GR/material-document number. Search explicit Art./Material Doc,

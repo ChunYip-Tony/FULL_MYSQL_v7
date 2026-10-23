@@ -1,1 +1,1 @@
-VERSION='7.0.538-lossless-upc-publication'
+VERSION='7.0.539-evidence-advisor-and-complete-movement'

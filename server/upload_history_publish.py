@@ -23,7 +23,10 @@ def publish_upload_history(*, rows, source_days, batch_id, through, reader, writ
   ['Refresh contract',HISTORY_CONTRACT],['Source batch',batch_id],
   ['Comparison basis','Current-cost normalized; supported POS dates only; no family allocation'],
   ['Coverage gaps',json.dumps(audit['gaps'],sort_keys=True)],
-  ['Item verification contract','ITEM_PERFORMANCE_VERIFICATION_V1'],
+  ['Item verification contract','ITEM_PERFORMANCE_VERIFICATION_V2'],
+  ['Uploaded-scope verified sales',audit.get('verification',{}).get('uploaded_sales_verified',0)],
+  ['Uploaded-scope verified GP',audit.get('verification',{}).get('uploaded_gp_verified',0)],
+  ['Uploaded-scope fully verified',audit.get('verification',{}).get('uploaded_fully_verified',0)],
   ['Item verification',json.dumps(audit.get('verification',{}),sort_keys=True)],
   ['Fully verified items',audit.get('verification',{}).get('fully_verified',0)],
   ['Items requiring evidence',audit.get('verification',{}).get('unresolved_items',0)]]

@@ -376,7 +376,14 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
     with db_conn() as conn:
         cur = conn.cursor(dictionary=True)
         try:
-            cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
+            if requested_upcs is None:
+                cur.execute('SELECT * FROM quick_check_current ORDER BY family_id,ean_upc,upc_id')
+            else:
+                requested = sorted({str(upc) for upc in requested_upcs})
+                placeholders = ','.join(['%s'] * len(requested))
+                cur.execute('SELECT * FROM quick_check_current WHERE ' +
+                            ('ean_upc IN (' + placeholders + ')' if requested else '1=0') +
+                            ' ORDER BY family_id,ean_upc,upc_id', tuple(requested))
             from family_daily_gp import apply_confirmed_selling_profile
             all_rows = [apply_confirmed_selling_profile(r) for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
             categories = ({int(r['family_id']):{'category':'UNKNOWN'} for r in all_rows} if history_only else {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()})
@@ -603,4 +610,5 @@ def pricing_article_movement(upcs: str, business_date: str):
             return jsonable_encoder({'businessDate':business_date,'canonical':canonical,'members':members,'familyMembers':siblings,'movementRows':movements,'quantityPolicy':'POS_ONLY; movement retained as independent exact-article reconciliation evidence; shared articles must not be allocated to UPC'})
         finally:
             cur.close()
+
 

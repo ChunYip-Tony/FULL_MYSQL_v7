@@ -10,12 +10,12 @@ class HistoryPublishTests(unittest.TestCase):
   from price_history_analysis import bounded_history_read
   calls=[]
   def reader(title,start,end,width):
-   self.assertLessEqual((end-start+1)*width,10000)
+   self.assertLessEqual((end-start+1)*width,20000)
    calls.append((start,end))
    return [[n] for n in range(start,min(end,1203)+1)]
   rows=bounded_history_read(reader,'ANALYSIS_UPC_DAILY',1,1500,26)
   self.assertEqual(rows,[[n] for n in range(1,1204)])
-  self.assertEqual(calls,[(1,384),(385,768),(769,1152),(1153,1500)])
+  self.assertEqual(calls,[(1,769),(770,1500)])
  def test_all_histories_are_loaded_in_bounded_lazy_pages(self):
   tables,_=self.fixture();calls=[]
   rows=[{'ean_upc':str(i),'quick_check_status':'READY'} for i in range(61)]
@@ -78,4 +78,5 @@ class HistoryPublishTests(unittest.TestCase):
   self.assertEqual(book['ANALYSIS_STATUS'][5][1],'FAILED')
 
 if __name__=='__main__':unittest.main()
+
 

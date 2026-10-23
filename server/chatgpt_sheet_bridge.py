@@ -1500,6 +1500,8 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
                 from inventory_gp_adjustments import build_adjustment_export
                 adjustment_matrix, adjustment_coverage = build_adjustment_export(
                     cur, rows, batch_id, freshness["pos_data_through"])
+                from analysis_movement import build_movement_export
+                movement_export = build_movement_export(cur, rows, batch_id, freshness["pos_data_through"])
                 from family_daily_gp import build_family_daily
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
                 latest_daily["family_mvt_gp"] = family_daily_summary
@@ -1653,7 +1655,7 @@ def publish_chatgpt_snapshot(batch_id: int) -> dict[str, Any]:
         # Use bridge-approved tables: no Apps Script permissions/deployment change.
         from inventory_gp_adjustments import publish_supported_adjustments
         readback["inventory_adjustments"] = publish_supported_adjustments(
-            history_reader,history_writer,adjustment_matrix,adjustment_coverage)
+            history_reader,history_writer,adjustment_matrix,adjustment_coverage,movement_export)
         # A concurrent upload cannot certify an older export as current.
         with db_conn() as conn:
             cur=conn.cursor(dictionary=True,buffered=True)
