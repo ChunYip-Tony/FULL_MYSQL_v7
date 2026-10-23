@@ -27,5 +27,21 @@ class PublicationRecoveryTests(unittest.TestCase):
   row={**self.row,'processing_status':'FAILED','detail_json':{'publish_result':{'error':'History readback mismatch'}}}
   self.assertEqual(self.decide(row)['reason'],'REPAIR_REQUIRED')
   row['code_version']='7.0.534';self.assertTrue(self.decide(row)['queue'])
+ def blocked(self):
+  return {**self.row,'processing_status':'FAILED','completed_at':self.now-timedelta(minutes=1),'detail_json':{'publish_result':{'status':'BLOCKED','reason':'No READY Quick Check rows'}}}
+ def test_source_hold_does_not_retry_unchanged_snapshot(self):
+  row=self.blocked();row['completed_at']=self.now-timedelta(hours=2)
+  self.snapshot=row['completed_at']-timedelta(minutes=1)
+  result=self.decide(row);self.assertFalse(result['queue']);self.assertEqual(result['reason'],'WAITING_FOR_DATA')
+ def test_rebuilt_source_after_hold_retries(self):
+  row=self.blocked();self.snapshot=self.now
+  self.assertEqual(self.decide(row)['reason'],'SOURCE_CHANGED_AFTER_BLOCK')
+ def test_new_runtime_can_recheck_source_hold(self):
+  row=self.blocked();row['code_version']='7.0.534'
+  self.assertTrue(self.decide(row)['queue'])
+ def test_source_hold_without_timestamp_cannot_spin(self):
+  row=self.blocked();row['completed_at']=None
+  self.assertEqual(self.decide(row)['reason'],'WAITING_FOR_DATA')
 
 if __name__=='__main__':unittest.main()
+

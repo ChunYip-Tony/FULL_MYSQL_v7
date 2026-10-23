@@ -1,0 +1,34 @@
+name: Upload responsiveness and recovery
+on:
+  push:
+    paths:
+      - 'server/api.py'
+      - 'server/worker.py'
+      - 'server/publish_recovery.py'
+      - 'server/test_upload_responsiveness.py'
+      - 'server/test_publish_recovery.py'
+      - '.github/workflows/upload-recovery.yml'
+  pull_request:
+    paths:
+      - 'server/api.py'
+      - 'server/worker.py'
+      - 'server/publish_recovery.py'
+      - 'server/test_upload_responsiveness.py'
+      - 'server/test_publish_recovery.py'
+      - '.github/workflows/upload-recovery.yml'
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Test upload responsiveness and recovery
+        working-directory: server
+        run: python -m unittest test_upload_responsiveness test_publish_recovery test_supervisor_db_outage test_publisher_process_recovery -v
+      - name: Check changed runtime syntax
+        working-directory: server
+        run: python -m py_compile api.py worker.py publish_recovery.py version.py

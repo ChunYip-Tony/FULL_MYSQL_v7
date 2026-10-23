@@ -1136,54 +1136,12 @@ def _recover_chatgpt_bridge_on_startup() -> None:
     restart converge a stale PUBLISHING bridge state to PASS or a terminal
     FAILED state instead of leaving readers blocked indefinitely.
     """
-    if not bridge_enabled():
-        return
+    # Use the same decision and DB lock as continuous recovery. A process
+    # restart must not bypass deterministic source holds or retry cooldowns.
     try:
-        with db_conn() as conn:
-            cur=conn.cursor(dictionary=True)
-            try:
-                cur.execute(
-                    """SELECT COUNT(*) AS c,
-                              MIN(publish_batch_id) AS min_batch,
-                              MAX(publish_batch_id) AS max_batch
-                       FROM quick_check_current"""
-                )
-                serving=cur.fetchone() or {}
-                if (int(serving.get('c') or 0)>0
-                    and int(serving.get('max_batch') or 0)>0
-                    and _startup_bridge_already_verified(cur,int(serving['max_batch']))):
-                    print('ChatGPT bridge startup recovery skipped: current snapshot already verified',
-                          serving['max_batch'],flush=True)
-                    return
-            finally:
-                cur.close()
-        if int(serving.get('c') or 0) <= 0:
-            return
-        min_batch=int(serving.get('min_batch') or 0)
-        max_batch=int(serving.get('max_batch') or 0)
-        if max_batch <= 0:
-            print(
-                'ChatGPT bridge startup recovery skipped: no serving revision',
-                serving,
-                flush=True,
-            )
-            return
-        result=enqueue_chatgpt_publish(
-            max_batch,
-            pipeline_name=API_PIPELINE,
-            code_version=API_VERSION,
-            requested_by='WORKER_STARTUP_RECOVERY',
-            source_pipeline_run_id=None,
-            reason='STARTUP_BRIDGE_RECOVERY',
-        )
-        print(
-            'ChatGPT bridge startup recovery queued:',
-            json.dumps(result,ensure_ascii=False,default=str),
-            flush=True,
-        )
+        result=_reconcile_ready_publication()
+        print('ChatGPT bridge startup recovery:',json.dumps(result,ensure_ascii=False,default=str),flush=True)
     except Exception as exc:
-        # Recovery must never prevent the worker from starting. The publisher
-        # itself writes a terminal FAILED bridge status when possible.
         print('ChatGPT bridge startup recovery error:',repr(exc),flush=True)
 
 
@@ -1228,6 +1186,7 @@ def main():
         _write_runtime_health('STOPPED')
 
 if __name__=='__main__': main()
+
 
 
 

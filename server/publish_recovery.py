@@ -49,6 +49,12 @@ def publish_recovery_decision(latest, snapshot_updated_at, code_version, history
     # A committed same-batch rebuild invalidates the old export immediately.
     if status=='COMPLETED':return {'queue':True,'reason':'SOURCE_OR_VERIFICATION_CHANGED'}
     if latest.get('code_version')!=code_version:return {'queue':True,'reason':'NEW_RECOVERY_CODE'}
+    # Missing source evidence is deterministic. Retry only after the serving
+    # snapshot changes (or new recovery code), not once per minute forever.
+    if result.get('status')=='BLOCKED':
+        if snapshot is not None and completed is not None and snapshot>completed:
+            return {'queue':True,'reason':'SOURCE_CHANGED_AFTER_BLOCK'}
+        return {'queue':False,'reason':'WAITING_FOR_DATA','error':result.get('reason') or 'Source checks must pass before publication.'}
     error=str(result.get('error') or detail.get('error') or '')
     if result.get('status') in {'FAILED_READBACK','FAILED_BRIDGE_READBACK'}:
         return {'queue':False,'reason':'REPAIR_REQUIRED','error':'; '.join(readback.get('failures') or [result['status']])}
@@ -59,4 +65,5 @@ def publish_recovery_decision(latest, snapshot_updated_at, code_version, history
     age=(now-(completed or now)).total_seconds()
     if age<delay:return {'queue':False,'reason':'RETRY_WAIT','retry_after_seconds':int(delay-age)}
     return {'queue':True,'reason':'TRANSIENT_PUBLICATION_RETRY'}
+
 

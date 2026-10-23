@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Annotated, Any
 from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from config import get_settings
 from db import db_conn, test_database
@@ -86,21 +87,17 @@ def _warm_mobile_home_summary_cache():
     def after_pipeline(target):
         wait_for_pipeline_idle()
         target()
-    threading.Thread(
-        target=lambda: after_pipeline(warm_backoffice_home_summary),
-        name="home-summary-warmup",
-        daemon=True,
-    ).start()
-    threading.Thread(
-        target=lambda: after_pipeline(lambda: backoffice_cached_pricing_review(category="ALL",limit=1000)),
-        name="pricing-review-warmup",
-        daemon=True,
-    ).start()
-    threading.Thread(
-        target=lambda: after_pipeline(lambda: backoffice_cached_current_tpr_review(category="ALL",limit=1000)),
-        name="current-tpr-review-warmup",
-        daemon=True,
-    ).start()
+    def warm_sequentially():
+        for target in (
+            warm_backoffice_home_summary,
+            lambda: backoffice_cached_pricing_review(category="ALL",limit=1000),
+            lambda: backoffice_cached_current_tpr_review(category="ALL",limit=1000),
+        ):
+            try:
+                after_pipeline(target)
+            except Exception as exc:
+                print(f"Optional cache warmup failed: {type(exc).__name__}",flush=True)
+    threading.Thread(target=warm_sequentially,name="analytical-cache-warmup",daemon=True).start()
 
 def j(v):
     if isinstance(v,(date,datetime)): return v.isoformat()
@@ -913,6 +910,13 @@ async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(..
     filename=file.filename or 'upload.bin'
     if not _web_upload_filename_ok(filename):
         raise HTTPException(415,'Supported raw files: XLSX, XLS, XLSM, CSV, TXT, TSV')
+    data=await file.read()
+    # Workbook parsing and MySQL calls are blocking. Keep the event loop free
+    # for health probes and status requests throughout a slow/retried upload.
+    return await run_in_threadpool(_web_upload_file_sync,session_id,filename,data)
+
+
+def _web_upload_file_sync(session_id:str,filename:str,data:bytes):
     try:
         existing=session_status(session_id)
     except KeyError as exc:
@@ -920,7 +924,6 @@ async def web_upload_file(session_id:str,request:Request,file:UploadFile=File(..
     if len(existing.get('files') or [])>=WEB_UPLOAD_MAX_FILES:
         raise HTTPException(413,f'Batch file limit is {WEB_UPLOAD_MAX_FILES}')
     s=get_settings()
-    data=await file.read()
     if not data:
         raise HTTPException(400,'Empty file is not allowed')
     if len(data)>s.upload_limit_mb*1024*1024:
@@ -2735,7 +2738,7 @@ def create_batch(body:BatchCreate,authorization: Annotated[str|None,Header()]=No
 async def upload_file(session_id:str, file:UploadFile=File(...), authorization: Annotated[str|None,Header()]=None):
     device=device_from_auth(authorization); s=get_settings(); data=await file.read()
     if len(data)>s.upload_limit_mb*1024*1024: raise HTTPException(413,f'File exceeds {s.upload_limit_mb} MB limit')
-    try: return add_file(session_id,device,file.filename or 'upload.bin',data)
+    try: return await run_in_threadpool(add_file,session_id,device,file.filename or 'upload.bin',data)
     except KeyError as exc: raise HTTPException(404,str(exc))
     except PermissionError as exc: raise HTTPException(403,str(exc))
     except Exception as exc: raise HTTPException(400,str(exc))
@@ -5609,6 +5612,7 @@ def repair_single_total_pos(batch_id:int,request:Request):
 # One Fish Finder browser surface; keep every ingestion/API endpoint intact.
 from fishfinder_consolidation import install_fish_finder_entrypoints
 install_fish_finder_entrypoints(app, healthz)
+
 
 
 
