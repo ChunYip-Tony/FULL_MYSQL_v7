@@ -1,4 +1,5 @@
 from __future__ import annotations
+from supplementary_movement_cost import REJECTED_RECEIPT_SQL
 
 from collections import Counter
 import json
@@ -1878,6 +1879,7 @@ def family_info(family_key: str) -> dict[str,Any]:
                      AND co.business_date=%s
                      AND co.source_type='MOVEMENT_RECEIPT_VALUATION'
                      AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             """ + REJECTED_RECEIPT_SQL + """
                      AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
                    ORDER BY co.cost_observation_id DESC
                    LIMIT 1""",
@@ -5953,6 +5955,7 @@ def _performance_range_cost_rows(
               AND co.business_date<=%s
               AND co.source_type IN ({sph})
               AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             """ + REJECTED_RECEIPT_SQL + """
               AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
             ORDER BY co.family_id,co.business_date DESC,co.cost_observation_id DESC""",
         (*family_ids,end_date,*sources),
@@ -7386,5 +7389,6 @@ def ordering_analysis(
     )
     result["source_upc"]=row.get("ean_upc")
     return result
+
 
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from supplementary_movement_cost import REJECTED_RECEIPT_SQL
 
 import json
 import os
@@ -587,6 +588,7 @@ def _family_cost_as_of(
            WHERE co.family_id=%s
              AND co.business_date<=%s
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             """ + REJECTED_RECEIPT_SQL + """
              AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
              AND co.source_type IN (
                  'MOVEMENT_RECEIPT_VALUATION',
@@ -1767,6 +1769,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
 

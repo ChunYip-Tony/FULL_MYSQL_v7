@@ -1,4 +1,5 @@
 from __future__ import annotations
+from supplementary_movement_cost import REJECTED_RECEIPT_SQL
 
 import json
 import math
@@ -2485,6 +2486,7 @@ def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
            WHERE co.family_id=%s AND co.source_type='MOVEMENT_RECEIPT_VALUATION'
              AND co.movement_type IN ('101','107')
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             """ + REJECTED_RECEIPT_SQL + """
              AND COALESCE(co.cost_per_base_uom,co.cost_amount)>0
            ORDER BY co.business_date DESC, co.cost_observation_id DESC LIMIT 1""",
         (family_id,),
@@ -2518,6 +2520,7 @@ def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
                  'LIVE_FRESH_SUGGESTION_OFFICIAL_COST'
              )
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             """ + REJECTED_RECEIPT_SQL + """
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
         (family_id,),
@@ -2539,6 +2542,7 @@ def _latest_cost(cur, family_id: int, row=None) -> dict[str, Any] | None:
            WHERE co.family_id=%s
              AND co.source_type='ON_HAND_EXPLICIT_COST_FALLBACK'
              AND co.cost_status NOT IN ('REJECTED','SUPERSEDED')
+             """ + REJECTED_RECEIPT_SQL + """
              AND co.cost_amount>0
            ORDER BY co.business_date DESC,co.cost_observation_id DESC LIMIT 1""",
         (family_id,),
@@ -2898,8 +2902,9 @@ def _historical_sweet_spot(
         price = (r['s'] / r['q']).quantize(Decimal('0.01'))
         cur.execute(
             """SELECT COALESCE(cost_per_base_uom,cost_amount) AS c
-               FROM article_cost_observation
+               FROM article_cost_observation co
                WHERE family_id=%s AND business_date<=%s AND cost_status NOT IN ('REJECTED','SUPERSEDED')
+                 """ + REJECTED_RECEIPT_SQL + """
                  AND COALESCE(cost_per_base_uom,cost_amount)>0
                ORDER BY CASE
                           WHEN source_type='MOVEMENT_RECEIPT_VALUATION' THEN 1
@@ -4070,6 +4075,7 @@ def audit_phase3(batch_id: int) -> dict[str, Any]:
         'serving_issues': serving_issues,
         'all_open_issues': issues,
     }
+
 
 
 

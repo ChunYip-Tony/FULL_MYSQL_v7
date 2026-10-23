@@ -9,7 +9,7 @@ def evidence_module():
     source = Path(__file__).with_name('mobile_pricing.py').read_text()
     tree = ast.parse(source)
     # Isolate the pure evidence functions; these checks need no DB or server.
-    names = {'num', 'cost_for_day', 'day_evidence', 'PRIORITY', 'COST_ORDER'}
+    names = {'selling_unit', 'num', 'cost_for_day', 'day_evidence', 'PRIORITY', 'COST_ORDER'}
     nodes = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names
              or isinstance(n, ast.Assign) and any(isinstance(t, ast.Name) and t.id in names for t in n.targets)]
     env = {'Decimal': Decimal}
@@ -67,3 +67,4 @@ class PriceExposureTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

@@ -12,7 +12,7 @@ class EffectiveCostTests(unittest.TestCase):
   self.obs=[{'source_type':s,'cost_value':Decimal(v),'cost_uom':'LB','business_date':date(2026,10,d)} for s,v,d in [('MOVEMENT_RECEIPT_VALUATION','4',1),('MOVEMENT_RECEIPT_VALUATION','5',2),('ON_HAND_EXPLICIT_COST_FALLBACK','6',10),('FROZEN_INVENTORY_OFFICIAL_COST','7',11)]]
  def test_receipt_oh_report_priority_and_latest_within_source(self):
   f=ns['cost_for_day'];self.assertEqual(f(self.row,self.obs,self.today)['value'],5)
-  self.assertEqual(f(self.row,self.obs[2:],self.today)['value'],6)
+  self.assertEqual(f(self.row,self.obs[2:],self.today)['value'],7)
   self.assertEqual(f(self.row,self.obs[3:],self.today)['value'],7)
  def test_historical_cost_does_not_use_future_observations(self):
   self.assertEqual(ns['cost_for_day'](self.row,self.obs,date(2026,10,1))['value'],4)
@@ -34,4 +34,16 @@ class EffectiveCostTests(unittest.TestCase):
   self.assertEqual(m['seven']['days'],7);self.assertEqual(m['seven']['uom'],'PAC');self.assertEqual(m['seven']['receipt']['quantity'],0)
   other['seven']['basis']='NO_CANONICAL_MVT_DAYS';restore_completed_zero_window(other,True)
   self.assertEqual(other['seven']['days'],0)
+
+ def test_rejected_lobster_receipt_uses_previous_valid_cost_and_new_receipt_wins(self):
+  row={'ean_upc':'24056900000','main_article_number':'1361120','selling_uom':'LB','base_uom':'LB'}
+  def receipt(day,cost):return {'source_type':'MOVEMENT_RECEIPT_VALUATION','cost_value':Decimal(cost),'cost_uom':'LB','business_date':date(2026,10,day)}
+  observations=[receipt(19,'9'),receipt(20,'.01')]
+  self.assertEqual(ns['cost_for_day'](row,observations,date(2026,10,20))['value'],9)
+  self.assertEqual(ns['cost_for_day'](row,observations+[receipt(21,'10')],date(2026,10,21))['value'],10)
+  self.assertEqual(ns['cost_for_day']({'selling_uom':'LB','base_uom':'LB','main_article_number':'OTHER'},observations,date(2026,10,20))['value'],Decimal('.01'))
+  self.assertEqual(ns['cost_for_day'](row,[receipt(19,'.01')],date(2026,10,20))['value'],Decimal('.01'))
+  self.assertIsNone(ns['cost_for_day'](row,[receipt(20,'.01')],date(2026,10,20)))
+
 if __name__=='__main__':unittest.main()
+

@@ -10,6 +10,39 @@ def objects(matrix):
 def supported_quantity(member, day):
  return member.get('uom') != 'LB' or day.get('quantityBasis') == 'POS_QTY_WEIGHT'
 
+
+def price_day_matches(day, episode):
+ # Match a known ticket; never manufacture a new ticket from rounded POS pounds.
+ if not day or day.get('qty') is None or day.get('qty') <= 0 or day.get('sales') is None:
+  return False
+ if day.get('reason') in {'MIXED_PRICE_DAY','QUANTITY_OR_RETURN_REVIEW','PRICE_TYPE_UNVERIFIED'}:
+  return False
+ price=day.get('price')
+ tolerance=max(.02,float(episode['price'])*.02) if day.get('quantity_basis')=='POS_QTY_WEIGHT' else .02
+ return day.get('type')==episode.get('type') and price is not None and abs(float(price)-float(episode['price']))<=tolerance
+
+
+def episode_observed_windows(items, rows):
+ from datetime import date,timedelta
+ # The immutable event ID retains the uploaded list date across repeated rebuilds.
+ for e in items:
+  raw=str(e.get('episode_id','')).rsplit(':',1)[-1]
+  try:date.fromisoformat(raw)
+  except ValueError:raw=e['change_date']
+  e['_configured_date']=raw
+ items.sort(key=lambda e:(e['_configured_date'],int(e.get('change_file') or 0)))
+ for i,e in enumerate(items):
+  raw=date.fromisoformat(e['_configured_date']);observed=None
+  lower=date.fromisoformat(items[i-1]['_configured_date']) if i else date(2026,8,27)
+  # Backdate only a consecutive run of positive, same-ticket, same-type POS.
+  # Missing/mixed/untyped dates stop the run; zero sales cannot establish a change.
+  day=raw
+  while day>=lower and price_day_matches(rows.get(day.isoformat()),e):
+   observed=day;day-=timedelta(days=1)
+  e['_observed_start']=observed.isoformat() if observed else None
+  e['_first']=observed if observed else raw+timedelta(days=1)
+  e['change_date']=observed.isoformat() if observed else e['_configured_date']
+
 def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, through, revision, policy):
  def read(name):return tables[name]
  from datetime import date,timedelta
@@ -54,15 +87,16 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
  for e in episodes:byupc.setdefault(str(e['upc']),[]).append(e)
  gaps=Counter();comparisons=0
  for upc,items in byupc.items():
-  items.sort(key=lambda e:(str(e['change_date']),int(e.get('change_file') or 0)))
   m=members.get(upc)
   if not m:
    gaps['UPC_HISTORY_SOURCE_NOT_RETURNED']+=1;continue
   cc=(m.get('cost') or {}).get('value');rows={d['date']:daily[(upc,d['date'])] for d in m['days'] if (upc,d['date']) in daily}
+  episode_observed_windows(items,rows)
   for idx,e in enumerate(items):
    next_e=items[idx+1] if idx+1<len(items) else None
-   first=date.fromisoformat(e['change_date'])+timedelta(days=1)
-   end=min(date.fromisoformat(through),date.fromisoformat(next_e['change_date'])-timedelta(days=1)) if next_e else date.fromisoformat(through)
+   first=e['_first']
+   next_boundary=next_e['_first'] if next_e and next_e['_observed_start'] else date.fromisoformat(next_e['_configured_date']) if next_e else None
+   end=min(date.fromisoformat(through),next_boundary-timedelta(days=1)) if next_boundary else date.fromisoformat(through)
    if rows and end < date.fromisoformat(min(rows)):
     # Keep archived episodes intact outside the bounded source history.
     continue
@@ -84,6 +118,8 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    n=len(exposed);positive=sum(d['sales']>0 for d in exposed);sales=sum(d['sales'] for d in exposed);quantity=sum(d['qty'] for d in exposed) if n and qmissing==0 else None
    gpday=(sales-quantity*cc)/n if quantity is not None and cc is not None else None
    reasons=[]
+   if e['_observed_start']:
+    reasons.append('POS_OBSERVED_START:'+e['_observed_start']+'; PRICE_LIST_UPLOAD_DATE:'+e['_configured_date'])
    if not expected:reasons.append('NO_FULL_COMPLETED_POST_CHANGE_DAY')
    if n<expected:reasons.append('PARTIAL_PRICE_EXPOSURE_OR_SOURCE_COVERAGE')
    if price_supported<n:reasons.append(f'PRICE_ATTRIBUTION_UNVERIFIED:{n-price_supported}/{n}')
@@ -93,6 +129,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    e.update(name=m.get('name') or e.get('name'),family=m['family'],first_full=first.isoformat() if expected else '',last_full=end.isoformat() if expected else '',end_before=next_e['change_date'] if next_e else '',superseded_by_file=next_e.get('change_file','') if next_e else '',episode_status='Superseded' if next_e else 'Current',applied_days=expected,supported_days=n,support_pct=n/expected if expected else None,positive_days=positive,popularity=positive/n if n else None,sales=sales if n else None,sales_day=sales/n if n else None,qty=quantity,qty_day=quantity/n if quantity is not None else None,uom=m.get('uom'),cost=cc,cost_source=(m.get('cost') or {}).get('source'),cost_date=(m.get('cost') or {}).get('date'),gp_day=gpday,performance_ok=ok,weekday_mix=', '.join(f'{k}:{v}' for k,v in sorted(weekday.items())),availability='UNKNOWN; stockouts not verified',confidence='SUPPORTED_POS_CONFIRMED_UNIT' if ok else 'PARTIAL_OR_UNVERIFIED',action='Review' if not next_e and expected>=7 else ('Continue' if not next_e else ''),next_price=e['price'] if not next_e else '',next_type=e['type'] if not next_e else '',rationale='; '.join(reasons) or 'Completed canonical POS dates; current-cost-normalized GP',source=API+'/v1/app/mobile-pricing/history-batch',source_revision=revision,data_through=through)
    e['_qualified_dates']=[d['date'] for d in exposed]
    e['rationale']+='; Metrics are observed POS performance in the recorded price window; price-attributed days '+str(price_supported)+'/'+str(n)
+   e['_previous']=None
    for key in ['preceding_comparable_id','previous_gp_day','previous_qty_day','gp_day_change','qty_day_change','weekday_adjusted_gp_day_change']:e[key]=None
    for reason in reasons:gaps[reason]+=1
    # REG and historical TPR are one regular-price comparison class. SALE is separate.
@@ -102,6 +139,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
     if not(prev.get('performance_ok') and ok):
      e['confidence']='PARTIAL_OBSERVED_COMPARISON'
      e['rationale']+='; comparison uses supported dates only; prior coverage '+str(prev.get('supported_days'))+'/'+str(prev.get('applied_days'))
+    e['_previous']=prev
     e.update(preceding_comparable_id=prev['episode_id'],previous_gp_day=prev['gp_day'],previous_qty_day=prev['qty_day'],gp_day_change=gpday-prev['gp_day'],qty_day_change=e['qty_day']-prev['qty_day']);comparisons+=1
     prior_dates=[rows[day] for day in prev.get('_qualified_dates',[]) if rows[day].get('normalized_gp') is not None]
     prev_weekday={}
@@ -119,7 +157,15 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    t.update(history_refresh_verified=False,status='Unverified',reason='UPC_HISTORY_SOURCE_NOT_RETURNED');continue
   e=items[-1];t.update(sale_lock=e.get('type')=='SALE',name=e['name'],family=e['family'],previous_price=e.get('old_price'),previous_type=e.get('old_type'),price=e['price'],type=e['type'],change_date=e['change_date'],change_file=e.get('change_file'),first_full=e.get('first_full'),last_full=e.get('last_full'),days=e.get('supported_days'),progress_pct=min(1,e.get('supported_days',0)/7),status='Ready for Review' if e.get('performance_ok') and e.get('supported_days',0)>=7 else 'Under Observation' if e.get('performance_ok') else 'Unverified',reason=e['rationale'],history_processed=True,history_refresh_verified=True,source=e['source'],source_revision=revision,data_through=through)
   for k in ['sales_day','qty_day','uom','gp_day','previous_gp_day','previous_qty_day','gp_day_change','qty_day_change','popularity','cost','cost_source','cost_date']:t[k]=e.get(k)
+  baseline=e.get('_previous')
+  if baseline:
+   t.update(previous_price=baseline['price'],previous_type=baseline['type'])
+   if t['status']=='Ready for Review' and not baseline.get('performance_ok'):
+    t['status']='Review — partial baseline'
   ref=current.get(upc,{})
+  if (ref.get('pos_qty_7d') not in (None,'') and float(ref['pos_qty_7d'])==0
+      and ref.get('family_movement_7d') not in (None,'') and float(ref['family_movement_7d'])==0):
+   t.update(status='QA HOLD',reason=t['reason']+'; NO_POS_OR_FAMILY_MOVEMENT_7D: verify stock/display/mapping before price action')
   for k in ['a','b','c']:t['company_'+k]=ref.get('company_price_'+k,t.get('company_'+k))
  def matrix(header,rows):return [header]+[[r.get(k) for k in header] for r in rows]
  output={'ANALYSIS_UPC_DAILY':matrix(dh,[daily[k] for k in sorted(daily)]),'ANALYSIS_PRICE_EPISODES':matrix(eh,episodes),'ANALYSIS_PRICE_TRACKING':matrix(th,tracks)}
@@ -149,7 +195,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V2_OBSERVED_WINDOWS'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V3_POS_OBSERVED_START'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
@@ -313,5 +359,6 @@ def preserve_unchanged_lineage(output, previous):
     for k in ('source_revision','data_through'):
      if k in h:values[h.index(k)]=prior.get(k)
  return output
+
 
 

@@ -67,5 +67,43 @@ class EpisodeWindowObservationTests(unittest.TestCase):
         self.assertEqual(out, again)
 
 
+    def test_pos_transition_precedes_list_upload_without_overlap_or_double_count(self):
+        from price_history_analysis import episode_observed_windows
+        rows={d['date']:{'date':d['date'],'qty':d['qty'],'sales':d['sales'],
+              'price':d['price'],'type':d['type'],'quantity_basis':'POS_QTY_WEIGHT'}
+              for d in [self.day('2026-10-14',49.9,10,4.99),
+                        self.day('2026-10-15',40.6,10,4.06),
+                        self.day('2026-10-16',40.2,10,4.02) ]}
+        items=[{'episode_id':'24053300000:100:2026-10-02','change_date':'2026-10-02','price':4.99,'type':'REG'},
+               {'episode_id':'24053300000:159:2026-10-16','change_date':'2026-10-16','price':3.99,'type':'REG'}]
+        episode_observed_windows(items,rows)
+        self.assertEqual(items[1]['change_date'],'2026-10-15')
+        self.assertEqual(items[1]['_first'].isoformat(),'2026-10-15')
+        self.assertEqual(items[1]['_configured_date'],'2026-10-16')
+        episode_observed_windows(items,rows)
+        self.assertEqual(items[1]['change_date'],'2026-10-15')
+        self.assertEqual(items[1]['_configured_date'],'2026-10-16')
+
+    def test_untyped_or_mixed_pos_never_backdates_a_price(self):
+        from price_history_analysis import episode_observed_windows
+        for kind,reason in [('TOTAL','PRICE_TYPE_UNVERIFIED'),('REG','MIXED_PRICE_DAY')]:
+            items=[{'episode_id':'x:159:2026-10-16','change_date':'2026-10-16','price':3.99,'type':'REG'}]
+            rows={'2026-10-16':{'qty':10,'sales':39.9,'price':3.99,'type':kind,'reason':reason}}
+            episode_observed_windows(items,rows)
+            self.assertEqual(items[0]['change_date'],'2026-10-16')
+            self.assertEqual(items[0]['_first'].isoformat(),'2026-10-17')
+
+    def test_corrected_window_is_idempotent_and_retains_every_observation(self):
+        days=[self.day('2026-10-15',79.9,10),self.day('2026-10-16',79.9,10),
+              self.day('2026-10-17',79.9,10)]
+        out,e=self.build(days,'2026-10-17')
+        self.assertEqual(e['change_date'],'2026-10-15')
+        self.assertEqual(e['supported_days'],3)
+        self.assertAlmostEqual(e['sales'],239.7)
+        again,_=self.build(days,'2026-10-17',copy.deepcopy(out))
+        self.assertEqual(out,again)
+
+
 if __name__ == '__main__':
     unittest.main()
+

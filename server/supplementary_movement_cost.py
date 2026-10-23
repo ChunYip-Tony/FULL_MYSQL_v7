@@ -7,8 +7,34 @@ from decimal import Decimal
 SOURCE = 'SELLING_MVT_251_252'
 COST_POLICY = 'FAMILY_RECEIPT_251_OH_V1'
 
+# Tony rejected only the 2026-10-20 lobster receipt at $0.01/LB.
+# Preserve the raw receipt; every reader falls back to the previous valid cost.
+# A newer valid receipt remains authoritative. Other penny costs are unaffected.
+REJECTED_RECEIPT_SQL = """AND NOT (
+    co.source_type='MOVEMENT_RECEIPT_VALUATION'
+    AND co.business_date='2026-10-20'
+    AND COALESCE(co.cost_per_base_uom,co.cost_amount)=0.01
+    AND co.family_id IN (
+        SELECT family_id FROM product_family WHERE main_article_number='1361120'
+    )
+)"""
+
+
+def rejected_receipt(row, observation):
+    lobster = str(row.get('main_article_number') or row.get('family') or '') == '1361120'
+    lobster = lobster or str(row.get('ean_upc') or row.get('upc') or '') in {
+        '24056900000', '24956900000'
+    }
+    value = observation.get('cost_value', observation.get('value'))
+    return (lobster and observation.get('source_type', observation.get('source')) == 'MOVEMENT_RECEIPT_VALUATION'
+            and str(observation.get('business_date', observation.get('date')))[:10] == '2026-10-20'
+            and value is not None and Decimal(str(value)) == Decimal('.01'))
+
+
 
 def eligible(row, observation):
+    if rejected_receipt(row, observation):
+        return False
     article = observation.get('selling_article_number')
     return not article or str(article) == str(row.get('article_number') or '')
 
@@ -66,3 +92,4 @@ def movement_cost_rows(cur, rows, end_date):
 
 def latest_movement_cost(cur, row, day):
     return next(iter(movement_cost_rows(cur,[row],day).get(str(row.get('article_number') or ''),[])),None)
+
