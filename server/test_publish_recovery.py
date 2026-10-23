@@ -19,6 +19,21 @@ class PublicationRecoveryTests(unittest.TestCase):
  def test_running_or_queued_job_is_not_duplicated(self):
   for state in ('STARTED','QUEUED','PAUSE_REQUESTED'):
    self.assertFalse(self.decide({**self.row,'processing_status':state})['queue'])
+ def test_stale_started_job_is_flagged_for_atomic_reclaim_not_duplicated(self):
+  row={**self.row,'processing_status':'STARTED',
+       'started_at':self.now-timedelta(minutes=25)}
+  decision=self.decide(row)
+  self.assertFalse(decision['queue'])
+  self.assertEqual(decision['reason'],'STALE_PUBLICATION_RECLAIM_REQUIRED')
+  self.assertGreaterEqual(decision['stale_seconds'],1500)
+ def test_fresh_heartbeat_prevents_false_stale_alarm(self):
+  row={**self.row,'processing_status':'STARTED',
+       'started_at':self.now-timedelta(hours=3),
+       'detail_json':{'heartbeat_at':self.now-timedelta(minutes=1)}}
+  self.assertEqual(self.decide(row)['reason'],'ACTIVE_PUBLICATION')
+ def test_missing_heartbeat_keeps_legacy_job_protected(self):
+  row={**self.row,'processing_status':'QUEUED'}
+  self.assertEqual(self.decide(row)['reason'],'ACTIVE_PUBLICATION')
  def test_transient_failure_retries_after_cooldown_without_lifetime_limit(self):
   row={**self.row,'processing_status':'FAILED','retry_count':200,'completed_at':self.now-timedelta(hours=2),'detail_json':{'error':'HTTP 503'}}
   self.assertTrue(self.decide(row)['queue'])
