@@ -13,6 +13,8 @@ def supported_quantity(member, day):
 
 def price_day_matches(day, episode):
  # Match a known ticket; never manufacture a new ticket from rounded POS pounds.
+ if str((day or {}).get('reason') or '').startswith('SOURCE_QUALITY_HOLD'):
+  return False
  if not day or day.get('qty') is None or day.get('qty') <= 0 or day.get('sales') is None:
   return False
  if day.get('reason') in {'MIXED_PRICE_DAY','QUANTITY_OR_RETURN_REVIEW','PRICE_TYPE_UNVERIFIED'}:
@@ -180,7 +182,12 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    if not qgood and rawsales is not None:reason='POS_WEIGHT_UNVERIFIED' if m.get('uom')=='LB' else 'QUANTITY_OR_RETURN_REVIEW'
    source=source_days.get(d['date'],{})
    held=any(str(source.get('file_id',source.get('source_file_id','')))==str(h.get('file_id')) and (not h.get('date') or h['date']==d['date']) for h in policy.get('source_quality_holds',[]))
-   if held:reason='SOURCE_QUALITY_HOLD:USER_REPORTED_WRONG_POS_FILE'
+   if held:
+    reason='SOURCE_QUALITY_HOLD:USER_REPORTED_WRONG_POS_FILE'
+    # Raw evidence remains in MySQL. Derived totals must not consume a
+    # rejected source as valid sales or silently count its date as zero.
+    rawsales=qty=norm=historical=None
+    qgood=False
    old=daily.get((upc,d['date']),{})
    daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],rawsales/qty if qgood and qty>0 and rawsales is not None and rawsales>0 else None,d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood and not held),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,d.get('zero_sale',False),source_days.get(d['date'],{}).get('file_id',source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file',''))),old.get('pos_batch',''),revision,through]))
  oldepisodes=read('ANALYSIS_PRICE_EPISODES');eh=oldepisodes[0];episodes=objects(oldepisodes);keys={r['episode_id'] for r in episodes}
@@ -214,9 +221,11 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    if rows and end < date.fromisoformat(min(rows)):
     # Keep archived episodes intact outside the bounded source history.
     continue
-   expected=max(0,(end-first).days+1);exposed=[];weekday=Counter();qmissing=0;price_supported=0
+   expected=max(0,(end-first).days+1);exposed=[];weekday=Counter();qmissing=0;price_supported=0;held_days=[]
    for n in range(expected):
     day=first+timedelta(days=n);d=rows.get(day.isoformat())
+    if d and str(d.get('reason') or '').startswith('SOURCE_QUALITY_HOLD'):
+     held_days.append(day.isoformat());continue
     if not d or d.get('sales') is None:continue
     # Window observations and price attribution are independent. TOTAL types,
     # mixed prices and rounded pounds must not silently erase positive sales
@@ -238,7 +247,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
    if not expected:reasons.append('NO_FULL_COMPLETED_POST_CHANGE_DAY')
    if n<expected:reasons.append('PARTIAL_PRICE_EXPOSURE_OR_SOURCE_COVERAGE')
    if price_supported<n:reasons.append(f'PRICE_ATTRIBUTION_UNVERIFIED:{n-price_supported}/{n}')
-   if any(str(d.get('reason') or '').startswith('SOURCE_QUALITY_HOLD') for d in exposed):reasons.append('SOURCE_QUALITY_HOLD:REPLACE_REPORTED_WRONG_POS_FILE')
+   if held_days:reasons.append('SOURCE_QUALITY_HOLD:REPLACE_REPORTED_WRONG_POS_FILE; excluded dates '+','.join(held_days))
    if qmissing:reasons.append('POS_WEIGHT_OR_QUANTITY_UNVERIFIED')
    if cc is None:reasons.append('SELLING_UNIT_COST_UNRESOLVED')
    ok=bool(expected and n==expected and price_supported==n and qmissing==0 and cc is not None)
@@ -263,7 +272,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
     prior_dates=[rows[day] for day in prev.get('_qualified_dates',[]) if rows[day].get('normalized_gp') is not None]
     prev_weekday={}
     for d in prior_dates:prev_weekday.setdefault(date.fromisoformat(d['date']).weekday(),[]).append(d['normalized_gp'])
-    if all(date.fromisoformat(d['date']).weekday() in prev_weekday for d in exposed):
+    if exposed and all(date.fromisoformat(d['date']).weekday() in prev_weekday for d in exposed):
      expected_before=sum(sum(prev_weekday[date.fromisoformat(d['date']).weekday()])/len(prev_weekday[date.fromisoformat(d['date']).weekday()]) for d in exposed)/len(exposed)
      e['weekday_adjusted_gp_day_change']=gpday-expected_before
  tracking=read('ANALYSIS_PRICE_TRACKING');th=tracking[0];tracks=objects(tracking)
@@ -343,6 +352,16 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
  audit['coverage_identifier_repairs']=coverage_identifier_repairs
+ # A successful Sheets write is distinct from source eligibility. Consumers
+ # must match each uploaded file to this canonical date/file manifest.
+ canonical=[{'date':day,'file_id':r.get('file_id',r.get('source_file_id'))}
+            for day,r in sorted(source_days.items())]
+ held=[r for r in canonical if any(str(r['file_id'])==str(h.get('file_id'))
+       and (not h.get('date') or h['date']==r['date'])
+       for h in policy.get('source_quality_holds',[]))]
+ audit['source_quality']={'contract':'POS_SOURCE_ELIGIBILITY_V1',
+     'canonical_days':canonical,'held_sources':held,
+     'status':'HELD_SOURCE_REQUIRES_REPLACEMENT' if held else 'ELIGIBLE'}
  audit['verification']={'contract':'ITEM_PERFORMANCE_VERIFICATION_V2','items':len(covrows),
   **{k:sum(bool(v[k]) for v in verification.values()) for k in ('fully_verified','current_verified','historical_gp_verified','historical_price_verified','uploaded_sales_verified','uploaded_gp_verified','uploaded_price_verified','uploaded_fully_verified')},
   'unresolved_items':len(covrows)-sum(v['fully_verified'] for v in verification.values())}
@@ -350,7 +369,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V7_EXPLICIT_POS_PRICE_AUTHORITY'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V8_SOURCE_ELIGIBILITY'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
@@ -526,6 +545,7 @@ def preserve_unchanged_lineage(output, previous):
     for k in ('source_revision','data_through'):
      if k in h:values[h.index(k)]=prior.get(k)
  return output
+
 
 
 
