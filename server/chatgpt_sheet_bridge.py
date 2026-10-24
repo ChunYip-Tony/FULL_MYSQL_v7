@@ -1591,7 +1591,7 @@ def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
                 stage('PREPARING_TYPED_POS')
                 pos_export = build_pos_export(cur, rows, batch_id)
                 from mobile_pricing import price_snapshots
-                current_price_snapshots = price_snapshots(cur, rows)
+                current_price_snapshots = price_snapshots(cur, rows, latest_only=True)
                 from family_daily_gp import build_family_daily
                 stage('PREPARING_FAMILY_GP')
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)

@@ -20,11 +20,13 @@ REQUIRED_PHASE3_TABLES = {
 }
 
 @contextmanager
-def db_conn() -> Iterator[Any]:
+def db_conn(*, read_timeout: int | None = None, connection_timeout: int = 20) -> Iterator[Any]:
     import mysql.connector
     s = get_settings(); d = s.db_parts(); ca = s.ca_path()
     kwargs = dict(host=d['host'], port=d['port'], user=d['user'], password=d['password'], database=d['database'],
-                  autocommit=False, connection_timeout=20, charset='utf8mb4', use_unicode=True)
+                  autocommit=False, connection_timeout=connection_timeout, charset='utf8mb4', use_unicode=True)
+    if read_timeout is not None:
+        kwargs['read_timeout'] = read_timeout
     if ca:
         kwargs.update(ssl_ca=str(ca), ssl_verify_cert=True, ssl_verify_identity=True)
     conn = mysql.connector.connect(**kwargs)
@@ -42,3 +44,4 @@ def test_database() -> dict[str, Any]:
     return {'database':database,'version':version,'user':user,'phase1_schema_ready':not m1,'phase2a_schema_ready':not m2,
             'phase2c_schema_ready':not m2c,'phase3_schema_ready':not m3,'missing_phase1_tables':m1,
             'missing_phase2a_tables':m2,'missing_phase2c_tables':m2c,'missing_phase3_tables':m3}
+

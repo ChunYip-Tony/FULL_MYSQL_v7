@@ -19,6 +19,9 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
       - name: Compile all Python
         run: python -m compileall -q .
+      - name: Validate current prices and bounded history reads
+        run: |
+          python -m unittest test_current_price_export test_pricing_history_reliability test_episode_window_observations test_history_bridge_integration test_growth_integrity test_read_reliability -v
       - name: Import API
         env:
           FULLMYSQL_WORK_TOKEN: smoke-token
@@ -2114,3 +2117,4 @@ jobs:
           echo
           curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240533&lightweight=true"
           echo
+

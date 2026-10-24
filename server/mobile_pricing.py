@@ -12,6 +12,7 @@ import time
 from read_singleflight import ReadSingleFlight, ReadBusy
 from fastapi import APIRouter, HTTPException
 from fastapi.encoders import jsonable_encoder
+from mysql.connector.errors import ReadTimeoutError
 
 router = APIRouter()
 PRIORITY = {'REG': 1, 'TPR': 2, 'SALE': 3, 'IN STORE': 4, 'IN_STORE': 4}
@@ -83,7 +84,7 @@ def group_key(row):
         return 'pair:%s:%s' % (row['family_id'], digits[3:6])
     return 'upc:%s' % row['upc_id']
 
-def price_snapshots(cur, rows):
+def price_snapshots(cur, rows, *, latest_only=False):
     """Upload day is the authority; source_since_date never backdates a test."""
     from phase3 import _price_list_upload_business_date
     ids = [int(r['upc_id']) for r in rows]
@@ -94,15 +95,28 @@ def price_snapshots(cur, rows):
     cur.execute("""SELECT file_id,upload_timestamp,original_filename FROM ingest_file
         WHERE source_type='price_list' AND processing_status='INGESTED'
         AND error_count=0 AND duplicate_of_file_id IS NULL AND upload_timestamp IS NOT NULL
-        ORDER BY upload_timestamp DESC,file_id DESC LIMIT 120""")
+        ORDER BY upload_timestamp DESC,file_id DESC""" + ('' if latest_only else ' LIMIT 120'))
     files = {int(f['file_id']): f for f in cur.fetchall()}
     if not files:
         return {}
     placeholders = lambda xs: ','.join(['%s'] * len(xs))
-    cur.execute(f"""SELECT file_id,upc_id,ean_upc,configured_price,price_type
-        FROM price_list_observation WHERE file_id IN ({placeholders(files)})
-        AND (upc_id IN ({placeholders(ids)}) OR ean_upc IN ({placeholders(eans) or 'NULL'}))
-        AND configured_price>0""", (*files, *ids, *eans))
+    scope = f"""p.file_id IN ({placeholders(files)})
+        AND (p.upc_id IN ({placeholders(ids)}) OR p.ean_upc IN ({placeholders(eans) or 'NULL'}))
+        AND p.configured_price>0"""
+    if latest_only:
+        # Current exports need one snapshot per identity, not every historical
+        # ticket for the full master. Rank before fetching to bound Python memory.
+        query = f"""SELECT file_id,upc_id,ean_upc,configured_price,price_type FROM (
+            SELECT p.file_id,p.upc_id,p.ean_upc,p.configured_price,p.price_type,
+                DENSE_RANK() OVER (PARTITION BY p.upc_id,p.ean_upc
+                    ORDER BY f.upload_timestamp DESC,p.file_id DESC) AS snapshot_rank
+            FROM price_list_observation p JOIN ingest_file f ON f.file_id=p.file_id
+            WHERE {scope} AND UPPER(p.price_type) IN ('REG','TPR','SALE','IN STORE','IN_STORE')
+        ) ranked WHERE snapshot_rank=1"""
+    else:
+        query = f"""SELECT p.file_id,p.upc_id,p.ean_upc,p.configured_price,p.price_type
+            FROM price_list_observation p WHERE {scope}"""
+    cur.execute(query, (*files, *ids, *eans))
     aliases = {}
     for row in rows:
         key = str(row.get('ean_upc') or '').lstrip('0')
@@ -374,7 +388,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
     from data_coverage import source_data_days
     from webapp_v2_runtime import _batch_daily_sales_by_price_type, _performance_range_cost_rows, _ordering_family_movement_metrics, _family_receipt_events_bulk
     today = business_today()
-    with db_conn() as conn:
+    with db_conn(read_timeout=15, connection_timeout=5) as conn:
         cur = conn.cursor(dictionary=True)
         try:
             if requested_upcs is None:
@@ -418,7 +432,9 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             daily = _batch_daily_sales_by_price_type(cur, rows, days)
             costs = _performance_range_cost_rows(cur, rows, today)
             snapshots = price_snapshots(cur, rows)
-            movement_days = sorted(source_data_days(cur, 'movement', limit=7, up_to=completed_through_date()), key=lambda d:d['date'])
+            movement_days = ([] if history_only else sorted(
+                source_data_days(cur, 'movement', limit=7, up_to=completed_through_date()),
+                key=lambda d:d['date']))
             receipt_context = {} if history_only else _family_receipt_events_bulk(cur, {int(r['family_id']) for r in rows}, data_day_limit=90)
             movements = {}
             for fid in {int(r['family_id']) for r in rows}:
@@ -555,6 +571,9 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
         return _reads.run(key, produce)
     except ReadBusy as exc:
         raise HTTPException(503, str(exc), headers={'Retry-After': '5'}) from exc
+    except ReadTimeoutError as exc:
+        raise HTTPException(503, 'Pricing evidence read timed out; retry shortly.',
+                            headers={'Retry-After': '5'}) from exc
     except Exception as exc:
         import traceback
         frame = traceback.extract_tb(exc.__traceback__)[-1]
@@ -571,13 +590,29 @@ def pricing_history_batch(upcs: str):
     requested=set(upcs.split(','))
     if not requested or len(requested)>24 or any(not x.isdigit() or len(x)>18 for x in requested):
         raise HTTPException(422,'Supply 1-24 exact numeric UPCs')
-    result=build_page(limit=24,history_days=90,requested_upcs=requested)
-    result['requestedUpcs']=sorted(requested)
-    result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
-    result['historyRepairVersion']=4
-    from family_daily_gp import POS_QUANTITY_POLICY_REVISION
-    result['quantityPolicyRevision']=POS_QUANTITY_POLICY_REVISION
-    return jsonable_encoder(result)
+    # Share the pricing read budget: history repair must not launch unbounded
+    # full receipt/category/movement reads alongside interactive requests.
+    key=('history',tuple(sorted(requested)))
+    def produce():
+        result=build_page(limit=24,history_days=90,requested_upcs=requested,history_only=True)
+        result['requestedUpcs']=sorted(requested)
+        result['purpose']='RETAINED_HISTORY_REPAIR_POS_ONLY'
+        result['historyRepairVersion']=5
+        from family_daily_gp import POS_QUANTITY_POLICY_REVISION
+        result['quantityPolicyRevision']=POS_QUANTITY_POLICY_REVISION
+        return jsonable_encoder(result)
+    try:
+        return _reads.run(key,produce)
+    except ReadBusy as exc:
+        raise HTTPException(503,str(exc),headers={'Retry-After':'5'}) from exc
+    except ReadTimeoutError as exc:
+        raise HTTPException(503,'Pricing evidence read timed out; retry shortly.',
+                            headers={'Retry-After':'5'}) from exc
+    except Exception as exc:
+        import traceback
+        frame=traceback.extract_tb(exc.__traceback__)[-1]
+        raise HTTPException(500,'Pricing evidence unavailable: %s in %s:%s' %
+                            (type(exc).__name__,frame.name,frame.lineno)) from exc
 
 @router.get('/v1/app/mobile-pricing/article-movement')
 def pricing_article_movement(upcs: str, business_date: str):
