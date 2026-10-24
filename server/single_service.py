@@ -128,8 +128,16 @@ def main() -> int:
         while not stopping:
             api_rc = api.poll()
             if api_rc is not None:
-                log(f"API exited with code {api_rc}; container will restart")
-                return api_rc or 1
+                log(f"API exited with code {api_rc}; restarting API only, worker continues")
+                # An OOM-killed API must not terminate a healthy importer or
+                # publisher. Back off crash loops while keeping worker ownership.
+                deadline = time.monotonic() + RESTART_DELAY
+                while time.monotonic() < deadline and not stopping:
+                    time.sleep(0.25)
+                if stopping:
+                    break
+                api = start_api()
+                watchdog.reset(time.monotonic())
 
             if watchdog.due(time.monotonic()):
                 healthy = api_responds(os.environ.get("PORT", "8080"))
@@ -151,7 +159,8 @@ def main() -> int:
                 deadline = time.time() + RESTART_DELAY
                 while time.time() < deadline and not stopping:
                     if api.poll() is not None:
-                        return api.returncode or 1
+                        # The next supervisor pass restarts the API in place.
+                        break
                     time.sleep(0.25)
                 if not stopping:
                     worker = start_worker()
@@ -165,6 +174,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 

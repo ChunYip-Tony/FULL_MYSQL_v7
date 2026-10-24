@@ -33,17 +33,19 @@ class SupervisorDatabaseOutageTests(unittest.TestCase):
     def test_stopped_worker_restarts_during_database_outage(self):
         def unavailable(): raise ConnectionError('database unavailable')
         scope,_=self.scope(unavailable)
-        starts=[];stops=[]
-        api=SimpleNamespace(poll=lambda:None if len(starts)<2 else 1,pid=10,returncode=1)
+        starts=[];stops=[];handlers={}
+        api=SimpleNamespace(poll=lambda:None,pid=10,returncode=1)
         def start_worker():
             worker=SimpleNamespace(poll=lambda:1,pid=100+len(starts))
             starts.append(worker);return worker
+        def sleep(seconds):
+            if len(starts)>=2:handlers[15](15,None)
         scope.update(start_api=lambda:api,start_worker=start_worker,
             stop_process=lambda process,name:stops.append(name),RESTART_DELAY=0,
             APIWatchdog=lambda now:SimpleNamespace(due=lambda now:False),
-            time=SimpleNamespace(monotonic=lambda:0,time=lambda:0,sleep=lambda seconds:None),
-            signal=SimpleNamespace(SIGTERM=15,SIGINT=2,signal=lambda *args:None))
-        self.assertEqual(scope['main'](),1)
+            time=SimpleNamespace(monotonic=lambda:0,time=lambda:0,sleep=sleep),
+            signal=SimpleNamespace(SIGTERM=15,SIGINT=2,signal=lambda sig,fn:handlers.update({sig:fn})))
+        self.assertEqual(scope['main'](),0)
         self.assertEqual(len(starts),2)
         self.assertEqual(stops,['worker','api'])
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 """Durable shared persistence for complete App Ready generations."""
 import json
+import os
 from dataclasses import fields, is_dataclass
 from typing import Any
 from db import db_conn
@@ -29,7 +30,8 @@ def _insert_generation(cur,snapshot,payload):
     cur.execute("""INSERT INTO yipman_app_ready_generation (build_id,source_batch_id,data_through,completed_at,build_ms,snapshot_json) VALUES (%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE source_batch_id=VALUES(source_batch_id),data_through=VALUES(data_through),completed_at=VALUES(completed_at),build_ms=VALUES(build_ms),snapshot_json=VALUES(snapshot_json)""",(snapshot.build_id,snapshot.source_batch_id,snapshot.data_through,snapshot.completed_at,int(round(snapshot.build_ms or 0)),payload))
 
 def persist_complete_snapshot(snapshot)->None:
-    payload=snapshot_json(snapshot)
+    from snapshot_graph import dumps
+    payload=dumps(snapshot)
     with db_conn() as conn:
         ensure_schema(conn);cur=conn.cursor()
         try:
@@ -40,7 +42,8 @@ def persist_complete_snapshot(snapshot)->None:
 
 def persist_complete_snapshot_if_active(snapshot,expected_active_build_id:str)->bool:
     """Activate snapshot only if ACTIVE still equals the generation it was derived from."""
-    payload=snapshot_json(snapshot)
+    from snapshot_graph import dumps
+    payload=dumps(snapshot)
     with db_conn() as conn:
         ensure_schema(conn);cur=conn.cursor(dictionary=True)
         try:
@@ -64,9 +67,22 @@ def active_build_id()->str|None:
     return str(row['build_id']) if row and row.get('build_id') else None
 
 def load_active_snapshot(snapshot_cls):
+    from snapshot_graph import loads
     with db_conn() as conn:
         ensure_schema(conn);conn.commit();cur=conn.cursor(dictionary=True)
-        try: cur.execute("SELECT g.snapshot_json FROM yipman_app_ready_pointer p JOIN yipman_app_ready_generation g ON g.build_id=p.build_id WHERE p.pointer_name='ACTIVE' LIMIT 1");row=cur.fetchone()
+        try:
+            # Inspect the size without transferring the LONGTEXT. Legacy JSON
+            # expands aliases and can exhaust the entire API container on load.
+            cur.execute("SELECT g.build_id,OCTET_LENGTH(g.snapshot_json) AS payload_bytes FROM yipman_app_ready_pointer p JOIN yipman_app_ready_generation g ON g.build_id=p.build_id WHERE p.pointer_name='ACTIVE' LIMIT 1")
+            meta=cur.fetchone()
+            if not meta:return None
+            limit=max(1,int(os.environ.get('FULLMYSQL_SNAPSHOT_LOAD_MAX_MB','16')))*1048576
+            if int(meta.get('payload_bytes') or 0)>limit:
+                raise RuntimeError('APP_READY_SNAPSHOT_EXCEEDS_SAFE_LOAD_LIMIT')
+            # Pin the generation inspected above even if ACTIVE changes.
+            cur.execute("SELECT snapshot_json FROM yipman_app_ready_generation WHERE build_id=%s LIMIT 1",(meta['build_id'],))
+            row=cur.fetchone()
         finally: cur.close()
     if not row:return None
-    return snapshot_cls(**json.loads(row['snapshot_json']))
+    return snapshot_cls(**loads(row['snapshot_json']))
+

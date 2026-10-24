@@ -1,1 +1,1 @@
-VERSION='7.0.552-publisher-memory-priority'
+VERSION='7.0.553-api-recovery-compact-snapshots'
