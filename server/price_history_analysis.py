@@ -340,14 +340,17 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
   if upc not in members:
    if retained.get('history_status')!='HISTORY_EVIDENCE_REQUIRED':
     retained.update(history_status='SOURCE_NOT_RETURNED',gp_status='UNVERIFIED',blocking_reason='UPC_HISTORY_SOURCE_NOT_RETURNED',source_revision=revision,data_through=through)
- # The main bridge already gates these values against eligible dated POS and
- # verified selling units. Never fall back to a price-list ticket in a generic
- # item price field, including retained profiles not returned this refresh.
+ # Publish the independently resolved current price, retaining its source/date.
+ # Historical realized prices and episode attribution remain POS-only.
+ for column in ('price_source','price_asof_date','price_file_id','price_filename','price_basis'):
+  if column not in refh:refh.append(column)
  for upc,item in refrows.items():
   ref=current.get(upc,{})
-  verified_pos=ref.get('current_price_source')=='CANONICAL_POS_REALIZED_AVERAGE'
-  item['price']=ref.get('current_price') if verified_pos else None
-  item['price_type']='POS_REALIZED_AVERAGE' if item['price'] is not None else 'POS_PRICE_UNVERIFIED'
+  verified=ref.get('current_price_source') in {'PRICE_LIST','CANONICAL_POS_REALIZED_AVERAGE'}
+  item['price']=ref.get('current_price') if verified else None
+  item['price_type']=ref.get('current_price_type') if verified else 'CURRENT_PRICE_UNVERIFIED'
+  for column in ('source','asof_date','file_id','filename','basis'):
+   item['price_'+column]=ref.get('current_price_'+column) if verified else None
   item.update(source_revision=revision,data_through=through)
  output.update(ANALYSIS_PRICE_EVENTS=matrix(ph,events),ANALYSIS_COST_HISTORY=matrix(costh,costs),ANALYSIS_ITEM_REFERENCE=matrix(refh,list(refrows.values())),ANALYSIS_COVERAGE=matrix(covh,list(covrows.values())))
  audit={'through':through,'revision':revision,'upcs_refreshed':len(members),'retained_tracking_upcs':len(tracks),'episode_rows':len(episodes),'daily_rows':len(daily),'supported_episodes':sum(bool(e.get('performance_ok')) for e in episodes),'before_after_comparisons':comparisons,'fully_supported_comparisons':sum(bool(e.get('preceding_comparable_id') and e.get('performance_ok') and next((p.get('performance_ok') for p in episodes if p['episode_id']==e.get('preceding_comparable_id')),False)) for e in episodes),'gaps':dict(gaps),'missing_upcs':[str(t['upc']) for t in tracks if str(t['upc']) not in members]}
@@ -369,7 +372,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
 
 
 API = 'https://seal-app-tkkkd.ondigitalocean.app'
-HISTORY_CONTRACT = 'UPLOAD_HISTORY_V8_SOURCE_ELIGIBILITY'
+HISTORY_CONTRACT = 'UPLOAD_HISTORY_V9_CURRENT_PRICE_AUTHORITY'
 
 def bounded_history_read(reader, title, start, end, width):
  """Keep bridge read responses small without dropping requested rows."""
@@ -545,6 +548,7 @@ def preserve_unchanged_lineage(output, previous):
     for k in ('source_revision','data_through'):
      if k in h:values[h.index(k)]=prior.get(k)
  return output
+
 
 
 
