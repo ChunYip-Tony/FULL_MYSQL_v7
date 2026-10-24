@@ -189,7 +189,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
     rawsales=qty=norm=historical=None
     qgood=False
    old=daily.get((upc,d['date']),{})
-   daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],rawsales/qty if qgood and qty>0 and rawsales is not None and rawsales>0 else None,d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood and not held),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,d.get('zero_sale',False),source_days.get(d['date'],{}).get('file_id',source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file',''))),old.get('pos_batch',''),revision,through]))
+   daily[(upc,d['date'])]=dict(zip(dh,['Seafood',upc,m.get('name'),m['family'],d['date'],rawsales/qty if qgood and qty>0 and rawsales is not None and rawsales>0 else None,d.get('type'),rawsales,qty,m.get('uom'),rawqty,basis,d.get('quantityEstimated',False),bool(d.get('valid') and qgood and not held),reason,cc.get('value'),cc.get('uom'),cc.get('source'),cc.get('date'),norm,historical,False if held else d.get('zero_sale',False),source_days.get(d['date'],{}).get('file_id',source_days.get(d['date'],{}).get('source_file_id',old.get('pos_file',''))),source.get('batch_id',old.get('pos_batch','')),revision,through]))
  oldepisodes=read('ANALYSIS_PRICE_EPISODES');eh=oldepisodes[0];episodes=objects(oldepisodes);keys={r['episode_id'] for r in episodes}
  priority={'REG':1,'TPR':2,'SALE':3,'IN STORE':4,'IN_STORE':4}
  for upc,m in members.items():
