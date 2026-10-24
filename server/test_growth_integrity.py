@@ -103,20 +103,20 @@ class GrowthIntegrity(unittest.TestCase):
         row['detail_json']['requeued_by_code_version']='7.0.542'
         self.assertFalse(owned_legacy_handoff(row,'7.0.541','new:3','new-owner'))
 
-    def test_google_current_holds_do_not_leak_legacy_sales_or_ticket_prices(self):
+    def test_google_current_holds_gate_sales_without_overwriting_current_price(self):
         env={};extract('chatgpt_sheet_bridge.py',{'_protect_current_export'},env)
         row={'ean_upc':'000123','selling_uom':'LB','current_price':99,
              'latest_daily_avg_sold_price':None,'sales_dollars_7d':123,'pos_qty_7d':9,
              'latest_daily_business_date':date(2026,10,19),'company_price_a':8}
         held=env['_protect_current_export']([row],[{'date':date(2026,10,20),'file_id':179}])
         self.assertEqual(len(held),1);self.assertIsNone(row['sales_dollars_7d'])
-        self.assertIsNone(row['pos_qty_7d']);self.assertIsNone(row['current_price'])
+        self.assertIsNone(row['pos_qty_7d']);self.assertEqual(row['current_price'],99)
         self.assertEqual(row['company_price_a'],8)
         good={'ean_upc':'24053300000','selling_uom':'LB','current_price':99,
               'latest_daily_avg_sold_price':D('3.987'),'latest_daily_business_date':date(2026,10,19)}
         env['_protect_current_export']([good],[{'date':date(2026,10,20),'file_id':180}])
-        self.assertEqual(good['current_price'],D('3.987'))
-        self.assertEqual(good['current_price_source'],'CANONICAL_POS_REALIZED_AVERAGE')
+        self.assertEqual(good['current_price'],99)
+        self.assertEqual(good['latest_daily_avg_sold_price'],D('3.987'))
 
     def test_quantity_authority_and_held_source(self):
         row={'ean_upc':'000123','selling_uom':'LB'}
@@ -182,3 +182,4 @@ class GrowthIntegrity(unittest.TestCase):
         self.assertIsNone(result['forecast_or_uplift']);self.assertEqual(result['actions'][0]['action'],'RESOLVE_HIGH_REVENUE_EVIDENCE_GAPS')
 
 if __name__=='__main__':unittest.main()
+

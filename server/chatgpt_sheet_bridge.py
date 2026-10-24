@@ -1112,13 +1112,8 @@ def _protect_current_export(rows, source_days):
             q=confirmed_pos_lb({**row,'latest_daily_pos_reported_qty':1},row.get('latest_daily_business_date'))
             if q is None:
                 for key in ['pos_qty_7d','pos_qty_30d','pos_qty_3d','upc_velocity_7d','upc_velocity_30d','upc_velocity_3d','gp_dollars_7d','gp_per_day_7d','dos']:row[key]=None
-        # Configured company references retain their own columns. The selling
-        # price field is an achieved POS average only, never a Price List value.
-        row['current_price']=row.get('latest_daily_avg_sold_price')
-        row['current_price_type']='POS_REALIZED_AVERAGE' if row['current_price'] is not None else None
-        row['current_price_source']='CANONICAL_POS_REALIZED_AVERAGE' if row['current_price'] is not None else 'POS_PRICE_UNVERIFIED'
-        row['current_price_asof_date']=row.get('latest_daily_business_date')
-        row['gp_pct_current']=None  # A historical achieved average is not a current-ticket margin.
+        # Current price is resolved independently from accepted lists and
+        # canonical sold events below; zero-sales days must not erase it.
     return held
 
 
@@ -1151,7 +1146,8 @@ def _build_lookup(rows: list[dict[str, Any]]) -> list[list[Any]]:
 
 
 def _build_quick(rows: list[dict[str, Any]]) -> list[list[Any]]:
-    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS + POS_3D_COLUMNS + LATEST_DAILY_COLUMNS
+    from current_price_export import PRICE_COLUMNS
+    export_columns = QC_COLUMNS + DERIVED_QC_COLUMNS + POS_3D_COLUMNS + LATEST_DAILY_COLUMNS + [c for c in PRICE_COLUMNS if c not in QC_COLUMNS]
     return [["Sheet_Row"] + export_columns] + [
         [sheet_row] + [row.get(col) for col in export_columns]
         for sheet_row, row in enumerate(rows, start=2)
@@ -1180,7 +1176,8 @@ def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
         row for row in rows
         if str(row.get("quick_check_status") or "").upper() == "READY"
     ]
-    out = [["Sheet_Row"] + ANALYSIS_COLUMNS + POS_3D_COLUMNS + LATEST_DAILY_COLUMNS + ["Analysis_Source"]]
+    from current_price_export import PRICE_COLUMNS
+    out = [["Sheet_Row"] + ANALYSIS_COLUMNS + POS_3D_COLUMNS + LATEST_DAILY_COLUMNS + ["Analysis_Source"] + PRICE_COLUMNS + ["oh_date"]]
     for sheet_row, row in enumerate(ready, start=2):
         out.append(
             [sheet_row]
@@ -1188,6 +1185,8 @@ def _build_analysis(rows: list[dict[str, Any]]) -> list[list[Any]]:
             + [row.get(col) for col in POS_3D_COLUMNS]
             + [row.get(col) for col in LATEST_DAILY_COLUMNS]
             + ["FULL_MYSQL_PHASE3_READY_ONLY"]
+            + [row.get(col) for col in PRICE_COLUMNS]
+            + [row.get("oh_date")]
         )
     return out
 
@@ -1401,7 +1400,7 @@ def _source_status(
         ("Publisher","FULL_MYSQL_CHATGPT_SHEET_BRIDGE"),("Active_ChatGPT_Source",_active_source()),
         ("Analysis_Cutover_Status","READY_ONLY_SAFE_PARTIAL"),
     ]
-    fields.extend([("Sales_And_Achieved_Price_Authority","POS_ONLY"),("Current_Price_Basis","POS_REALIZED_AVERAGE_NOT_ONE_APPLIED_PRICE"),("Held_Source_Policy","Affected legacy rolling metrics withheld; use eligible dated POS history"),("Department_Quantity_Policy","Do not sum LB, EA or PACK")])
+    fields.extend([("Sales_And_Achieved_Price_Authority","POS_ONLY"),("Current_Price_Basis","NEWEST_ACCEPTED_PRICE_LIST_OR_COMPLETED_CANONICAL_POS_SOLD_DAY"),("Held_Source_Policy","Affected legacy rolling metrics withheld; use eligible dated POS history"),("Department_Quantity_Policy","Do not sum LB, EA or PACK")])
     family_summary=latest_daily.get("family_mvt_gp",{})
     fields.extend([
         ("Department_GP_Best_Estimate",family_summary.get("estimated_department_gp")),
@@ -1591,6 +1590,8 @@ def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
                 from analysis_pos import build_pos_export
                 stage('PREPARING_TYPED_POS')
                 pos_export = build_pos_export(cur, rows, batch_id)
+                from mobile_pricing import price_snapshots
+                current_price_snapshots = price_snapshots(cur, rows)
                 from family_daily_gp import build_family_daily
                 stage('PREPARING_FAMILY_GP')
                 family_daily_matrix, family_daily_summary = build_family_daily(cur, rows, latest_daily, batch_id)
@@ -1628,6 +1629,8 @@ def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
             _write_matrix(publishing_session, spreadsheet_id, MYSQL_TABS["bridge"], publishing_matrix)
 
         _protect_current_export(rows,history_days)
+        from current_price_export import apply_current_prices
+        apply_current_prices(rows, current_price_snapshots, pos_export["rows"], completed_through_date())
         analysis_matrix = _build_analysis(rows)
         family_matrix = _build_family(rows)
         daily_by_family = {str(r[2]): r for r in family_daily_matrix[1:]}
@@ -1866,6 +1869,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
 

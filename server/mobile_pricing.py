@@ -90,7 +90,7 @@ def price_snapshots(cur, rows):
     eans = [str(r['ean_upc']) for r in rows if r.get('ean_upc')]
     if not ids:
         return {}
-    cur.execute("""SELECT file_id,upload_timestamp FROM ingest_file
+    cur.execute("""SELECT file_id,upload_timestamp,original_filename FROM ingest_file
         WHERE source_type='price_list' AND processing_status='INGESTED'
         AND error_count=0 AND duplicate_of_file_id IS NULL AND upload_timestamp IS NOT NULL
         ORDER BY upload_timestamp DESC,file_id DESC LIMIT 120""")
@@ -122,7 +122,8 @@ def price_snapshots(cur, rows):
         if old is None or PRIORITY[pt] > PRIORITY[old['type']]:
             choices[key] = {'type': pt, 'price': num(p['configured_price']),
                 'date': _price_list_upload_business_date(files[key[1]]['upload_timestamp']),
-                'file_id': key[1], 'source': 'PRICE_LIST'}
+                'file_id': key[1], 'source': 'PRICE_LIST',
+                'filename': files[key[1]].get('original_filename')}
     out = {}
     for (uid, _), value in choices.items():
         out.setdefault(uid, []).append(value)
@@ -610,5 +611,6 @@ def pricing_article_movement(upcs: str, business_date: str):
             return jsonable_encoder({'businessDate':business_date,'canonical':canonical,'members':members,'familyMembers':siblings,'movementRows':movements,'quantityPolicy':'POS_ONLY; movement retained as independent exact-article reconciliation evidence; shared articles must not be allocated to UPC'})
         finally:
             cur.close()
+
 
 
