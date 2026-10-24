@@ -65,7 +65,8 @@ def reconcile_app_ready_source():
     from yipman_app_ready_snapshot import APP_READY_SNAPSHOTS
     checked = datetime.now(timezone.utc).isoformat()
     try:
-        if _coordinator_status()[0]:
+        running, queued_source = _coordinator_status()
+        if running:
             _STATUS = {"state": "REBUILD_RUNNING", "checked_at": checked}
             return
         if pipeline_pending():
@@ -73,12 +74,14 @@ def reconcile_app_ready_source():
             return
         refresh_hot_cache_if_stale()
         serving = _serving_publication()
-        due = publication_needs_rebuild(APP_READY_SNAPSHOTS.active(), serving)
+        due = queued_source is not None or publication_needs_rebuild(APP_READY_SNAPSHOTS.active(), serving)
         _STATUS = {"state": "REBUILD_REQUESTED" if due else "NO_REBUILD_DUE",
                    "checked_at": checked, "source_batch_id": serving.get("batch_id"),
                    "source_updated_at": str(serving.get("updated_at") or "")}
         if due:
-            request_app_ready_rebuild(source_batch_id=str(serving["batch_id"]))
+            accepted = request_app_ready_rebuild(source_batch_id=queued_source or str(serving["batch_id"]))
+            if accepted is False:
+                _STATUS['state'] = 'REBUILD_BACKOFF'
     except Exception as exc:
         _STATUS = {"state": "CHECK_FAILED", "checked_at": checked,
                    "error": f"{type(exc).__name__}: {exc}"}
@@ -112,3 +115,4 @@ def stop_app_ready_recovery():
     with _LOCK:
         if _STOP is not None:
             _STOP.set()
+

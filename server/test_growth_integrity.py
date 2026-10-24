@@ -88,10 +88,12 @@ class GrowthIntegrity(unittest.TestCase):
         import json,socket
         from datetime import datetime,timezone
         cur=MagicMock();cur.rowcount=1;conn=MagicMock();conn.cursor.return_value=cur;ctx=MagicMock();ctx.__enter__.return_value=conn
-        env={'json':json,'socket':socket,'datetime':datetime,'timezone':timezone,'API_VERSION':'7.0.541','API_PIPELINE':'p','db_conn':lambda:ctx,'log':lambda *a:None}
+        connect=MagicMock(return_value=ctx)
+        env={'json':json,'socket':socket,'datetime':datetime,'timezone':timezone,'API_VERSION':'7.0.541','API_PIPELINE':'p','db_conn':connect,'log':lambda *a:None}
         extract('single_service.py',{'requeue_interrupted_pipeline_runs'},env)
         self.assertEqual(env['requeue_interrupted_pipeline_runs']('SERVICE_DEPLOYMENT_SHUTDOWN'),0)
         self.assertEqual(env['requeue_interrupted_pipeline_runs']('SERVICE_DEPLOYMENT_SHUTDOWN',3),1)
+        connect.assert_called_once_with(connection_timeout=5,read_timeout=5)
         sql,params=cur.execute.call_args.args
         self.assertIn('code_version=%s',sql);self.assertIn("$.worker",sql)
         self.assertEqual(params[-2:],('7.0.541',socket.gethostname()+':3'))
@@ -182,4 +184,5 @@ class GrowthIntegrity(unittest.TestCase):
         self.assertIsNone(result['forecast_or_uplift']);self.assertEqual(result['actions'][0]['action'],'RESOLVE_HIGH_REVENUE_EVIDENCE_GAPS')
 
 if __name__=='__main__':unittest.main()
+
 

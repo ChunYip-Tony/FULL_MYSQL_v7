@@ -12,7 +12,8 @@ def test_all_price_filters_are_upc_direct_cards_and_progress_is_wired():
     assert "r=>upcOf(r)&&actionablePrice(r)" in html
     assert "/v1/yipman/current-tpr-review?category=ALL&limit=1000" in html
     assert "priceProgressHtml(r)" in html
-    assert "TEST PROGRESS" in html
+    assert "TEST ACTIVE" in html
     assert "GP$/DAY Δ" in html
     assert "VELOCITY Δ" in html
     assert "Backend lifecycle tracking" in html
+

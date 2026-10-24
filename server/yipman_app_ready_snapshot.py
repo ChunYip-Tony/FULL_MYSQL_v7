@@ -8,6 +8,10 @@ from threading import RLock
 from typing import Any, Callable
 import time
 import uuid
+import logging
+from background_analysis_budget import background_analysis
+
+_LOG = logging.getLogger(__name__)
 
 APP_READY_STAGES = ("PUBLISH", "PRECALCULATE", "PREANALYZE", "BUILD_SNAPSHOT", "APP_READY")
 SNAPSHOT_SECTIONS = (
@@ -71,8 +75,23 @@ class AppReadySnapshotStore:
                 raise RuntimeError("No App Ready build in progress")
             self._building.section_status[name] = "FAILED"
             self._building.error = error
+            # Failed candidates are never served. Release their large payloads
+            # immediately; retain only progress/error metadata and the active
+            # complete generation while recovery waits to retry.
+            self._building.sections.clear()
             if elapsed_ms is not None:
                 self._building.section_ms[name] = round(float(elapsed_ms), 1)
+
+    def fail_build(self, error: str) -> None:
+        with self._lock:
+            if self._building:
+                self._building.error = error
+                self._building.sections.clear()
+
+    def start_section(self, name: str) -> None:
+        with self._lock:
+            if self._building:
+                self._building.section_status[name] = 'BUILDING'
 
     def candidate_for_promotion(self) -> SnapshotBuild:
         """Finalize metadata but do not expose the generation to readers yet."""
@@ -122,11 +141,12 @@ class AppReadySnapshotStore:
             ready = sum(v == "READY" for v in current.section_status.values())
             active = self._active
             return {
-                "status": "APP_READY" if current is active else "BUILDING",
+                "status": "APP_READY" if current is active else "FAILED" if current.error else "BUILDING",
                 "stage": current.stage,
                 "app_ready": current is active,
                 "build_id": current.build_id,
                 "active_build_id": active.build_id if active else None,
+                "serving_app_ready": active is not None,
                 "active_data_through": active.data_through if active else None,
                 "source_batch_id": current.source_batch_id,
                 "data_through": current.data_through,
@@ -155,7 +175,14 @@ def build_app_ready_snapshot(builders: dict[str, Callable[[], Any]], *, source_b
             raise RuntimeError(f"App Ready builder not registered: {name}")
         started = time.perf_counter()
         try:
-            APP_READY_SNAPSHOTS.put_section(name, builder(), (time.perf_counter() - started) * 1000)
+            # Cache refreshers and snapshot work must share the same budget.
+            # Release between sections so queued cache work can make progress.
+            with background_analysis('app_ready:' + name):
+                APP_READY_SNAPSHOTS.start_section(name)
+                _LOG.warning('App Ready section starting: %s', name)
+                payload = builder()
+                APP_READY_SNAPSHOTS.put_section(name, payload, (time.perf_counter() - started) * 1000)
+                _LOG.warning('App Ready section complete: %s', name)
         except Exception as exc:
             APP_READY_SNAPSHOTS.fail_section(name, f"{type(exc).__name__}: {exc}", (time.perf_counter() - started) * 1000)
             raise
@@ -167,5 +194,11 @@ def build_app_ready_snapshot(builders: dict[str, Callable[[], Any]], *, source_b
     # expose it through this process's hot cache. A persistence failure leaves
     # the previous complete generation active everywhere.
     from yipman_app_ready_persistence import persist_complete_snapshot
-    persist_complete_snapshot(candidate)
+    try:
+        with background_analysis('app_ready:persist'):
+            persist_complete_snapshot(candidate)
+    except Exception as exc:
+        APP_READY_SNAPSHOTS.fail_build(f'{type(exc).__name__}: {exc}')
+        raise
     return APP_READY_SNAPSHOTS.activate(candidate.build_id)
+

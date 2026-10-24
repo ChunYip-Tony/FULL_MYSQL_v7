@@ -62,7 +62,8 @@ class CompactSnapshotTests(unittest.TestCase):
         conn = SimpleNamespace(cursor=lambda **kw:Cursor(), commit=lambda:None)
         @contextmanager
         def db(): yield conn
-        run = function('yipman_app_ready_persistence.py', 'load_active_snapshot', {'db_conn':db,'ensure_schema':lambda c:None,'os':os})
+        from yipman_app_ready_persistence import snapshot_size_limit
+        run = function('yipman_app_ready_persistence.py', 'load_active_snapshot', {'db_conn':db,'ensure_schema':lambda c:None,'os':os,'snapshot_size_limit':snapshot_size_limit})
         return run, queries
 
     def test_oversized_cache_rejected_before_blob_download(self):
@@ -101,3 +102,4 @@ class CompactSnapshotTests(unittest.TestCase):
 
 
 if __name__ == '__main__': unittest.main()
+

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 import logging
+import time
 
 _LOG = logging.getLogger(__name__)
 from fastapi import HTTPException
@@ -15,6 +16,14 @@ from yipman_app_ready_recovery import start_app_ready_recovery, stop_app_ready_r
 _COORDINATOR_LOCK = threading.Lock()
 _WORKER_RUNNING = False
 _PENDING_SOURCE: str | None = None
+_REBUILD_FAILURES = 0
+_RETRY_NOT_BEFORE = 0.0
+
+
+def rebuild_retry_status():
+    with _COORDINATOR_LOCK:
+        return {'rebuild_consecutive_failures': _REBUILD_FAILURES,
+                'rebuild_retry_after_seconds': max(0, round(_RETRY_NOT_BEFORE - time.monotonic()))}
 
 
 def _coordinator_status() -> tuple[bool, str | None]:
@@ -23,15 +32,17 @@ def _coordinator_status() -> tuple[bool, str | None]:
 
 
 def _finish_failed_worker(failed_source: str) -> None:
-    global _WORKER_RUNNING, _PENDING_SOURCE
+    global _WORKER_RUNNING, _PENDING_SOURCE, _REBUILD_FAILURES, _RETRY_NOT_BEFORE
     with _COORDINATOR_LOCK:
         _WORKER_RUNNING = False
         if _PENDING_SOURCE is None:
             _PENDING_SOURCE = failed_source
+        _REBUILD_FAILURES += 1
+        _RETRY_NOT_BEFORE = time.monotonic() + min(900, 60 * 2 ** min(_REBUILD_FAILURES - 1, 4))
 
 
 def rebuild_app_ready_snapshot(*, source_batch_id=None) -> None:
-    global _WORKER_RUNNING, _PENDING_SOURCE
+    global _WORKER_RUNNING, _PENDING_SOURCE, _REBUILD_FAILURES, _RETRY_NOT_BEFORE
     source = str(source_batch_id or "UNSPECIFIED")
     with _COORDINATOR_LOCK:
         if _WORKER_RUNNING:
@@ -42,6 +53,8 @@ def rebuild_app_ready_snapshot(*, source_batch_id=None) -> None:
         while True:
             build_app_ready_snapshot(app_ready_builders(), source_batch_id=source, data_through=completed_through_date().isoformat())
             with _COORDINATOR_LOCK:
+                _REBUILD_FAILURES = 0
+                _RETRY_NOT_BEFORE = 0.0
                 if _PENDING_SOURCE is None:
                     _WORKER_RUNNING = False
                     return
@@ -59,11 +72,14 @@ def request_app_ready_rebuild(*, source_batch_id=None) -> bool:
         if _WORKER_RUNNING:
             _PENDING_SOURCE = source
             return True
+        if time.monotonic() < _RETRY_NOT_BEFORE:
+            _PENDING_SOURCE = source
+            return False
         _PENDING_SOURCE = None
         _WORKER_RUNNING = True
 
     def worker() -> None:
-        global _WORKER_RUNNING, _PENDING_SOURCE
+        global _WORKER_RUNNING, _PENDING_SOURCE, _REBUILD_FAILURES, _RETRY_NOT_BEFORE
         current = source
         try:
             while True:
@@ -71,6 +87,8 @@ def request_app_ready_rebuild(*, source_batch_id=None) -> bool:
                 wait_for_pipeline_idle()
                 build_app_ready_snapshot(app_ready_builders(), source_batch_id=current, data_through=completed_through_date().isoformat())
                 with _COORDINATOR_LOCK:
+                    _REBUILD_FAILURES = 0
+                    _RETRY_NOT_BEFORE = 0.0
                     if _PENDING_SOURCE is None:
                         _WORKER_RUNNING = False
                         return
@@ -152,6 +170,7 @@ def install_app_ready_api(app) -> None:
         out["rebuild_worker_running"] = worker_running
         out["rebuild_queued"] = queued_source is not None
         out["queued_source"] = queued_source
+        out.update(rebuild_retry_status())
         out["durable_hydrated"] = bool(getattr(app.state, "yipman_app_ready_durable_hydrated", False))
         out["startup_loading"] = bool(getattr(app.state, "yipman_app_ready_startup_loading", False))
         from yipman_app_ready_readers import pointer_refresh_status
@@ -179,6 +198,7 @@ def install_app_ready_api(app) -> None:
 
     app.state.yipman_app_ready_api_installed = True
     app.state.request_yipman_app_ready_rebuild = request_app_ready_rebuild
+
 
 
 
