@@ -118,6 +118,41 @@ class CandidateTests(unittest.TestCase):
         self.assertLess(calls['progress_candidates'], calls['price_snapshots'])
         self.assertIn("group_key(r) in keys", ast.unparse(fn))
 
+    def test_missing_ticket_and_no_canonical_sales_cannot_be_active(self):
+        coverage = [{'date': date(2026, 10, 22), 'file_id': 80}]
+        cur = Cursor([(date(2026, 10, 23), [ticket(9, 'SALE')])])
+        with patch.object(module, 'positive_pos_dates', return_value={}) as presence:
+            result = module.progress_candidates(cur, ROWS, TODAY, date(2026, 10, 22), coverage)
+        self.assertEqual(result, {'REG': set(), 'TPR': set()})
+        presence.assert_called_once()
+
+    def test_pos_only_identity_and_newer_pos_still_get_full_evidence(self):
+        cur = Cursor([(date(2026, 10, 20), [ticket(9, 'SALE')])])
+        with patch.object(module, 'positive_pos_dates', return_value={1: date(2026, 10, 22), 2: date(2026, 10, 21)}):
+            result = module.progress_candidates(cur, ROWS, TODAY, date(2026, 10, 22), [])
+        self.assertEqual(result, {'REG': {1, 2}, 'TPR': {1, 2}})
+
+    def test_presence_reads_direct_and_derived_canonical_sources_and_aliases(self):
+        coverage = [{'date': date(2026, 10, 22), 'file_id': 80},
+                    {'date': date(2026, 10, 21), 'file_id': 81, 'coverage_kind': 'DERIVED_PERIOD_RESIDUAL'}]
+        class PresenceCursor:
+            queries = []
+            batch = []
+            def execute(self, sql, args):
+                self.queries.append((sql, args))
+                self.batch = ([{'upc_id': 1, 'ean_upc': 'wrong', 'last_date': date(2026, 10, 22)}]
+                              if 'sales_period_observation' in sql else
+                              [{'upc_id': 999, 'ean_upc': '0249-12300000', 'last_date': date(2026, 10, 21)}])
+            def fetchmany(self, size):
+                out, self.batch = self.batch, []
+                return out
+        cur = PresenceCursor()
+        result = module.positive_pos_dates(cur, [(r['upc_id'], r['ean_upc']) for r in ROWS], coverage)
+        self.assertEqual(result, {1: date(2026, 10, 22), 2: date(2026, 10, 21)})
+        self.assertIn("temporal_grain='SINGLE_DATE'", cur.queries[0][0])
+        self.assertEqual(cur.queries[0][1], (80, date(2026, 10, 22), date(2026, 10, 22)))
+        self.assertEqual(cur.queries[1][1], (81, date(2026, 10, 21)))
+
 
 if __name__ == '__main__':
     unittest.main()

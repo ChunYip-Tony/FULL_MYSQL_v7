@@ -6,13 +6,54 @@ Missing tickets or POS newer than the ticket stay eligible for a full check.
 from collections import OrderedDict
 from datetime import timedelta
 import threading
+import re
 
 _cache = OrderedDict()
 _lock = threading.Lock()
 _priority = {'REG': 1, 'TPR': 2, 'SALE': 3, 'IN STORE': 4, 'IN_STORE': 4}
 
 
-def progress_candidates(cur, rows, today, through):
+def positive_pos_dates(cur, identities, data_days):
+    """Presence only; no sale, price, cost or recommendation is inferred here."""
+    ids = {uid for uid, _ in identities}
+    aliases = {}
+    numeric = lambda value: re.sub(r'\D', '', str(value or '')).lstrip('0') or '0'
+    for uid, ean in identities:
+        aliases.setdefault(numeric(ean), set()).add(uid)
+    dates = {}
+    for derived in (False, True):
+        days = [d for d in data_days if (d.get('coverage_kind') == 'DERIVED_PERIOD_RESIDUAL') == derived]
+        if not days:
+            continue
+        table = 'pos_daily_backfill_observation' if derived else 'sales_period_observation'
+        date_column = 'business_date' if derived else 'period_end_date'
+        clauses, args = [], []
+        for day in days:
+            if derived:
+                clauses.append('(source_file_id=%s AND business_date=%s)')
+                args.extend((int(day['file_id']), day['date']))
+            else:
+                clauses.append('(file_id=%s AND period_start_date=%s AND period_end_date=%s)')
+                args.extend((int(day['file_id']), day['date'], day['date']))
+        grain = "AND temporal_grain='SINGLE_DATE'" if not derived else ''
+        cur.execute(f"""SELECT upc_id,ean_upc,MAX({date_column}) AS last_date
+            FROM {table} WHERE sold_quantity>0
+            {grain}
+            AND ({' OR '.join(clauses)}) GROUP BY upc_id,ean_upc""", tuple(args))
+        while True:
+            batch = cur.fetchmany(512)
+            if not batch:
+                break
+            for row in batch:
+                uid = row.get('upc_id')
+                found = {uid} if uid in ids else aliases.get(numeric(row.get('ean_upc')), set())
+                # Ambiguous aliases stay eligible; detailed evidence resolves them.
+                for uid in found:
+                    dates[uid] = max(dates.get(uid, row['last_date']), row['last_date'])
+    return dates
+
+
+def progress_candidates(cur, rows, today, through, data_days=None):
     from phase3 import _price_list_upload_business_date
     cur.execute("""SELECT file_id,upload_timestamp FROM ingest_file
         WHERE source_type='price_list' AND processing_status='INGESTED'
@@ -26,7 +67,8 @@ def progress_candidates(cur, rows, today, through):
     if not files or not ids:
         return {'REG': ids, 'TPR': ids}
     ordered_files = sorted(files, key=lambda fid: (files[fid], fid))
-    key = (identities, tuple((fid, files[fid]) for fid in ordered_files), today, through)
+    coverage = None if data_days is None else tuple((d['date'], d['file_id'], d.get('coverage_kind')) for d in data_days)
+    key = (identities, tuple((fid, files[fid]) for fid in ordered_files), today, through, coverage)
     with _lock:
         saved = _cache.get(key)
         if saved is not None:
@@ -78,11 +120,18 @@ def progress_candidates(cur, rows, today, through):
             if old is None or _priority[kind] > _priority[old['type']]:
                 upload[uid] = {'date': files[fid], 'price': float(observation['configured_price']), 'type': kind}
     flush()
+    uncertain = any(not s.get('current') or through is not None and s['current']['date'] < through
+                    for s in (states.get(uid, {}) for uid in ids))
+    pos_dates = positive_pos_dates(cur, identities, data_days) if uncertain and data_days is not None else None
     result = {'REG': set(), 'TPR': set()}
     for uid in ids:
         state = states.get(uid, {})
         current = state.get('current')
-        if current is None or through is not None and current['date'] < through:
+        last_pos = pos_dates.get(uid) if pos_dates is not None else through
+        if current is None and pos_dates is not None and last_pos is None:
+            # Neither a ticket nor a positive canonical POS day can supply current.
+            continue
+        if current is None or last_pos is not None and current['date'] < last_pos:
             # Full canonical POS evidence may establish a different current price.
             result['REG'].add(uid)
             result['TPR'].add(uid)
