@@ -1,2 +1,2 @@
-VERSION='7.0.555-current-price-read-recovery'
+VERSION='7.0.556-service-resilience'
 

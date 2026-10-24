@@ -40,3 +40,7 @@ install_family_catalog(app)
 # Final display branding runs after the official mobile renderer composition.
 from fishfinder_brand import install_fishfinder_brand
 install_fishfinder_brand(_api)
+
+# Keep health and AI status responsive when interactive requests arrive in bursts.
+from request_capacity import RequestCapacityMiddleware
+app.add_middleware(RequestCapacityMiddleware)

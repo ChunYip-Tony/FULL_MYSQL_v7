@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from health_watchdog import APIWatchdog, api_responds
+from supervisor_health import SupervisorHealth
 from db import db_conn
 from v7_ingest import API_PIPELINE, API_VERSION
 
@@ -76,9 +77,10 @@ def requeue_interrupted_pipeline_runs(reason: str, worker_pid: int | None = None
         ensure_ascii=False,
     )
     try:
-        with db_conn() as conn:
+        with db_conn(connection_timeout=5, read_timeout=5) as conn:
             cur = conn.cursor()
             try:
+                cur.execute('SET SESSION innodb_lock_wait_timeout=5')
                 cur.execute(
                     """UPDATE pipeline_run
                        SET processing_status='QUEUED', completed_at=NULL, error_count=0,
@@ -114,6 +116,7 @@ def main() -> int:
     worker = start_worker()
     stopping = False
     watchdog = APIWatchdog(time.monotonic())
+    diagnostics = SupervisorHealth()
 
     def shutdown(signum, _frame):
         nonlocal stopping
@@ -128,6 +131,7 @@ def main() -> int:
         while not stopping:
             api_rc = api.poll()
             if api_rc is not None:
+                diagnostics.event('api', 'PROCESS_EXIT', api_rc)
                 log(f"API exited with code {api_rc}; restarting API only, worker continues")
                 # An OOM-killed API must not terminate a healthy importer or
                 # publisher. Back off crash loops while keeping worker ownership.
@@ -142,17 +146,19 @@ def main() -> int:
             if watchdog.due(time.monotonic()):
                 healthy = api_responds(os.environ.get("PORT", "8080"))
                 if watchdog.observe(time.monotonic(), healthy):
-                    log("API health unresponsive after 4 checks; restarting API only, worker continues")
+                    diagnostics.event('api', 'LOCAL_HEALTH_TIMEOUT')
+                    log(f"API health unresponsive after {watchdog.threshold} checks; restarting API only, worker continues")
                     stop_process(api, "unresponsive api")
                     if stopping:
                         break
                     api = start_api()
                     watchdog.reset(time.monotonic())
                 elif not healthy:
-                    log(f"API health check failed ({watchdog.failures}/4)")
+                    log(f"API health check failed ({watchdog.failures}/{watchdog.threshold})")
 
             worker_rc = worker.poll()
             if worker_rc is not None:
+                diagnostics.event('worker', 'PROCESS_EXIT', worker_rc)
                 log(f"worker exited with code {worker_rc}; requeueing interrupted work before restart")
                 requeue_interrupted_pipeline_runs("WORKER_PROCESS_EXIT", worker.pid)
                 log(f"restarting worker in {RESTART_DELAY}s")
@@ -164,6 +170,7 @@ def main() -> int:
                     time.sleep(0.25)
                 if not stopping:
                     worker = start_worker()
+            diagnostics.heartbeat(api.pid, worker.pid, watchdog.failures)
             time.sleep(1)
     finally:
         stop_process(worker, "worker")
