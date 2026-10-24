@@ -79,16 +79,17 @@ class CompactSnapshotTests(unittest.TestCase):
     def test_api_exit_restarts_without_interrupting_worker(self):
         events, handlers = [], {}
         clock = [0]
-        processes = [SimpleNamespace(poll=lambda:-9), SimpleNamespace(poll=lambda:None)]
+        processes = [SimpleNamespace(poll=lambda:-9,pid=10), SimpleNamespace(poll=lambda:None,pid=11)]
         worker = SimpleNamespace(poll=lambda:None, pid=123)
         def start_api(): events.append('start_api'); return processes.pop(0)
         def sleep(seconds):
             clock[0] += seconds
             if seconds == 1 and events.count('start_api') == 2:
                 handlers[signal.SIGTERM](signal.SIGTERM,None)
-        watchdog = SimpleNamespace(due=lambda now:False,reset=lambda now:events.append('watchdog_reset'))
+        watchdog = SimpleNamespace(due=lambda now:False,failures=0,reset=lambda now:events.append('watchdog_reset'))
         scope = {'start_api':start_api,'start_worker':lambda:worker,
                  'APIWatchdog':lambda now:watchdog,'time':SimpleNamespace(monotonic=lambda:clock[0],sleep=sleep,time=lambda:clock[0]),
+                 'SupervisorHealth':lambda:SimpleNamespace(event=lambda *args:None,heartbeat=lambda *args:None),
                  'signal':SimpleNamespace(SIGTERM=signal.SIGTERM,SIGINT=signal.SIGINT,signal=lambda sig,fn:handlers.update({sig:fn})),
                  'RESTART_DELAY':1,'log':lambda msg:None,
                  'stop_process':lambda proc,name:events.append('stop_'+name),

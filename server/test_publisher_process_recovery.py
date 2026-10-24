@@ -27,11 +27,12 @@ class PublisherProcessRecoveryTests(unittest.TestCase):
     def test_stopped_worker_requeues_publisher_without_reimport(self):
         class Cursor:
             rowcount = 1
-            def execute(self, sql, params):
-                self.sql, self.params = sql, params
+            def execute(self, sql, params=None):
+                if params is not None: self.sql, self.params = sql, params
             def close(self): pass
         cur = Cursor()
         class Connection:
+            def __init__(self, **kwargs): pass
             def __enter__(self): return self
             def __exit__(self, *args): pass
             def cursor(self): return cur

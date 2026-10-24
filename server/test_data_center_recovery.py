@@ -9,22 +9,31 @@ from health_watchdog import APIWatchdog, api_responds
 class RecoveryTests(unittest.TestCase):
     def test_startup_grace_and_bounded_failure_threshold(self):
         watch = APIWatchdog(0)
-        self.assertFalse(watch.due(179))
-        self.assertTrue(watch.due(180))
-        for now in (180, 195, 210):
+        self.assertTrue(watch.due(0))
+        self.assertFalse(watch.observe(0, False))
+        self.assertFalse(watch.observe(179, False))
+        for now in (180, 190):
             self.assertFalse(watch.observe(now, False))
-            self.assertFalse(watch.due(now + 14))
-        self.assertTrue(watch.observe(225, False))
-        watch.reset(225)
-        self.assertFalse(watch.due(404))
+            self.assertFalse(watch.due(now + 9))
+        self.assertTrue(watch.observe(200, False))
+        watch.reset(200)
+        self.assertTrue(watch.due(200))
         self.assertEqual(watch.failures, 0)
+
+    def test_early_healthy_process_is_monitored_without_three_minute_blind_spot(self):
+        watch = APIWatchdog(0)
+        self.assertFalse(watch.observe(5, True))
+        for now in (15, 25):
+            self.assertTrue(watch.due(now))
+            self.assertFalse(watch.observe(now, False))
+        self.assertTrue(watch.observe(35, False))
 
     def test_one_success_clears_transient_failures(self):
         watch = APIWatchdog(0)
-        for now in (180, 195, 210):
+        for now in (180, 190):
             watch.observe(now, False)
-        self.assertFalse(watch.observe(225, True))
-        self.assertFalse(watch.observe(240, False))
+        self.assertFalse(watch.observe(200, True))
+        self.assertFalse(watch.observe(210, False))
         self.assertEqual(watch.failures, 1)
 
     def test_probe_timeout_failure_and_verified_success(self):

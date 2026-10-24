@@ -4417,7 +4417,14 @@ def yipman_header_freshness():
 
 @app.get('/v1/yipman/ai/status')
 def yipman_ai_status_endpoint():
-    return json.loads(json.dumps(yipman_ai_status(),default=j))
+    from request_capacity import capacity_status
+    status = json.loads(json.dumps(yipman_ai_status(),default=j))
+    capacity = capacity_status()
+    status['ready'] = bool(status.get('configured') and (
+        not capacity.get('enabled') or (
+            capacity['active'] < capacity['limit'] and
+            capacity['ai_active'] < capacity['ai_limit'])))
+    return status
 
 
 @app.post('/v1/yipman/ai/chat')
