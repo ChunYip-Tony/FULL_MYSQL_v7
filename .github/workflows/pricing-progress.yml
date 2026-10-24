@@ -1,0 +1,30 @@
+name: Pricing progress
+on:
+  push:
+    paths:
+      - 'server/mobile_pricing.py'
+      - 'server/pricing_progress_candidates.py'
+      - 'server/test_pricing_progress_candidates.py'
+      - '.github/workflows/pricing-progress.yml'
+  pull_request:
+    paths:
+      - 'server/mobile_pricing.py'
+      - 'server/pricing_progress_candidates.py'
+      - 'server/test_pricing_progress_candidates.py'
+      - '.github/workflows/pricing-progress.yml'
+permissions:
+  contents: read
+jobs:
+  progress:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify candidate completeness, episode dates and bounded reads
+        working-directory: server
+        run: python -m unittest test_pricing_progress_candidates test_pricing_family_scope -v
+      - name: Check pricing syntax
+        working-directory: server
+        run: python -m py_compile mobile_pricing.py pricing_progress_candidates.py
