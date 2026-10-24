@@ -412,9 +412,9 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             all_rows = [apply_confirmed_selling_profile(r) for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
             if progress:
                 from pricing_progress_candidates import progress_candidates
-                latest_days = source_data_days(cur, 'sales_by_price_type', limit=1, up_to=completed_through_date())
+                latest_days = source_data_days(cur, 'sales_by_price_type', limit=history_days, up_to=completed_through_date())
                 latest = max((d['date'] for d in latest_days), default=None)
-                candidates = progress_candidates(cur, all_rows, today, latest)[progress]
+                candidates = progress_candidates(cur, all_rows, today, latest, latest_days)[progress]
                 keys = {group_key(r) for r in all_rows if int(r['upc_id']) in candidates}
                 all_rows = [r for r in all_rows if group_key(r) in keys]
             categories = ({int(r['family_id']):{'category':'UNKNOWN'} for r in all_rows} if history_only else {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()})
