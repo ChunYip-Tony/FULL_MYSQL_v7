@@ -44,3 +44,8 @@ install_fishfinder_brand(_api)
 # Keep health and AI status responsive when interactive requests arrive in bursts.
 from request_capacity import RequestCapacityMiddleware
 app.add_middleware(RequestCapacityMiddleware)
+
+# Bounded-memory, consistent historical export for the Sites migration.
+from sites_migration_export import install_sites_migration_export
+install_sites_migration_export(app)
+
