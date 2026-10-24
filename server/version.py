@@ -1,2 +1,1 @@
-VERSION='7.0.556-service-resilience'
-
+VERSION='7.0.557-stock-flow-capacity'

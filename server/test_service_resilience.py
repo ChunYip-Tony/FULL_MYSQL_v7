@@ -42,6 +42,32 @@ class CapacityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(guard.state['active'],0)
         self.assertEqual((await call(guard,'/v1/normal'))[0]['status'],200)
 
+    async def test_stock_and_snapshot_routes_share_capacity_with_v1(self):
+        release = asyncio.Event()
+        entered = []
+        async def application(scope, receive, send):
+            entered.append(scope['path'])
+            if scope['path'] == '/app/yipman-v1-rc/api/stock-flow':
+                await release.wait()
+            await send({'type': 'http.response.start', 'status': 200, 'headers': []})
+        guard = RequestCapacityMiddleware(application, max_requests=1)
+        task = asyncio.create_task(call(guard, '/app/yipman-v1-rc/api/stock-flow'))
+        await asyncio.sleep(0)
+        try:
+            for path in ('/api/yipman/app-ready/stock_flow', '/v1/app/search',
+                         '/app/yipman-v1/api/stock-flow'):
+                rejected = await call(guard, path)
+                self.assertEqual(rejected[0]['status'], 503)
+                self.assertNotIn(path, entered)
+                self.assertFalse(json.loads(rejected[1]['body'])['detail']['request_started'])
+            for path in ('/healthz', '/v1/yipman/ai/status', '/app/yipman-v1/'):
+                self.assertEqual((await asyncio.wait_for(call(guard, path), .1))[0]['status'], 200)
+        finally:
+            release.set()
+            await task
+        self.assertEqual(guard.state['active'], 0)
+        self.assertEqual((await call(guard, '/api/yipman/app-ready/stock_flow'))[0]['status'], 200)
+
     async def test_ai_limit_leaves_capacity_for_item_lookups(self):
         release=asyncio.Event()
         async def application(scope,receive,send):
