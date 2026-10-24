@@ -398,7 +398,7 @@ def pricing_rows_query(family='', requested_upcs=None):
     return query + ' ORDER BY family_id,ean_upc,upc_id', params
 
 
-def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90, requested_upcs=None, history_only=False):
+def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12, overrides=None, history_days=90, requested_upcs=None, history_only=False, progress=""):
     from db import db_conn
     from business_clock import business_today, completed_through_date
     from data_coverage import source_data_days
@@ -410,6 +410,13 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             cur.execute(*pricing_rows_query(family, requested_upcs))
             from family_daily_gp import apply_confirmed_selling_profile
             all_rows = [apply_confirmed_selling_profile(r) for r in cur.fetchall() if r.get('family_id') is not None and r.get('upc_id') is not None and (requested_upcs is None or str(r.get('ean_upc')) in requested_upcs)]
+            if progress:
+                from pricing_progress_candidates import progress_candidates
+                latest_days = source_data_days(cur, 'sales_by_price_type', limit=1, up_to=completed_through_date())
+                latest = max((d['date'] for d in latest_days), default=None)
+                candidates = progress_candidates(cur, all_rows, today, latest)[progress]
+                keys = {group_key(r) for r in all_rows if int(r['upc_id']) in candidates}
+                all_rows = [r for r in all_rows if group_key(r) in keys]
             categories = ({int(r['family_id']):{'category':'UNKNOWN'} for r in all_rows} if history_only else {fid: dict(value) for fid, value in category_index(cur, all_rows, today).items()})
             for fid, cat in (overrides or {}).items():
                 if int(fid) in categories:
@@ -478,7 +485,7 @@ def build_page(category='ALL', prefix='ALL', q='', family='', cursor=0, limit=12
             return {'contract': 'MOBILE_PRICING_V1', 'today': today, 'through': through,
                 'checkedAt': datetime.now(timezone.utc).isoformat(), 'days': [d['date'] for d in days],
                 'items': guard_weight_counts(items), 'total': total, 'nextCursor': cursor+limit if cursor+limit < total else None,
-                'scope': 'ALL_QUICK_CHECK_UPCS', 'costOrder': 'FAMILY_RECEIPT_251_OH_V1'}
+                'scope': 'PRICE_PROGRESS_CANDIDATES' if progress else 'ALL_QUICK_CHECK_UPCS', 'progressMode': progress, 'costOrder': 'FAMILY_RECEIPT_251_OH_V1'}
         finally:
             cur.close()
 
@@ -548,9 +555,9 @@ _lock = threading.Lock()
 _reads = ReadSingleFlight(max_running=2, wait_seconds=20)
 
 @router.get('/v1/app/mobile-pricing')
-def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: str='', cursor: int=0, limit: int=12, overrides: str=''):
-    category, prefix, q = category.upper(), prefix.upper(), q.strip()[:80]
-    if category not in {'ALL','LIVE','FRESH','FROZEN','UNKNOWN'} or prefix not in {'ALL','240+249','245','247'} or cursor < 0 or (family and not family.isdigit()):
+def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: str='', cursor: int=0, limit: int=12, overrides: str='', progress: str=''):
+    category, prefix, q, progress = category.upper(), prefix.upper(), q.strip()[:80], progress.upper()
+    if category not in {'ALL','LIVE','FRESH','FROZEN','UNKNOWN'} or prefix not in {'ALL','240+249','245','247'} or progress not in {'', 'REG', 'TPR'} or cursor < 0 or (family and not family.isdigit()):
         raise HTTPException(422, 'Invalid pricing filter')
     try:
         custom = json.loads(overrides) if overrides else {}
@@ -559,7 +566,7 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
     except (ValueError, TypeError):
         raise HTTPException(422, 'Invalid category corrections')
     limit = max(1, min(limit, 24))
-    key = (category, prefix, q, family, cursor, limit, json.dumps(custom,sort_keys=True))
+    key = (category, prefix, q, family, cursor, limit, json.dumps(custom,sort_keys=True), progress)
     with _lock:
         cached = _cache.get(key)
         if cached and time.monotonic() - cached[0] < 120:
@@ -569,7 +576,7 @@ def mobile_pricing(category: str='ALL', prefix: str='ALL', q: str='', family: st
             cached = _cache.get(key)
             if cached and time.monotonic() - cached[0] < 120:
                 return cached[1]
-        result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit, custom))
+        result = jsonable_encoder(build_page(category, prefix, q, family, cursor, limit, custom, progress=progress))
         with _lock:
             _cache[key] = (time.monotonic(), result)
             _cache.move_to_end(key)
@@ -656,6 +663,7 @@ def pricing_article_movement(upcs: str, business_date: str):
             return jsonable_encoder({'businessDate':business_date,'canonical':canonical,'members':members,'familyMembers':siblings,'movementRows':movements,'quantityPolicy':'POS_ONLY; movement retained as independent exact-article reconciliation evidence; shared articles must not be allocated to UPC'})
         finally:
             cur.close()
+
 
 
 
