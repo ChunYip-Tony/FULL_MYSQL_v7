@@ -3085,9 +3085,10 @@ def _routine_upload_quick_check_scope(cur, batch_id, products, completed_days):
     """
     cur.execute('SELECT DISTINCT source_type FROM ingest_file WHERE batch_id=%s', (batch_id,))
     kinds = {r['source_type'] for r in cur.fetchall()}
-    if not kinds or not kinds <= {'sales_by_price_type', 'movement', 'on_hand'}:
+    price_only = kinds == {'price_list'}
+    if not kinds or (not price_only and not kinds <= {'sales_by_price_type', 'movement', 'on_hand'}):
         return None
-    cur.execute('SELECT upc_id,ean_upc,article_id,family_id,selling_uom,base_uom,base_qty_per_selling_unit,current_oh,quick_check_status FROM quick_check_current')
+    cur.execute('SELECT upc_id,ean_upc,selling_description,article_id,family_id,selling_uom,base_uom,base_qty_per_selling_unit,current_oh,quick_check_status,current_price,current_price_type FROM quick_check_current')
     previous = cur.fetchall()
     if not previous or not completed_days:
         return None
@@ -3108,18 +3109,53 @@ def _routine_upload_quick_check_scope(cur, batch_id, products, completed_days):
     sold_eans = {str(r['ean_upc']).strip() for r in sales if r.get('ean_upc')}
     prior = {int(r['upc_id']): r for r in previous}
     families = set()
+    price_targets = set()
+    price_matches = {}
+    if price_only:
+        cur.execute('''SELECT p.upc_id,p.ean_upc,p.configured_price,p.price_type,f.upload_timestamp
+                       FROM price_list_observation p JOIN ingest_file f ON f.file_id=p.file_id
+                       WHERE p.batch_id=%s AND p.configured_price>0
+                         AND f.processing_status='INGESTED' AND f.error_count=0
+                         AND f.duplicate_of_file_id IS NULL''', (batch_id,))
+        prices = cur.fetchall()
+        by_id, by_ean = defaultdict(list), defaultdict(list)
+        for price in prices:
+            if price.get('upc_id') is not None:
+                by_id[int(price['upc_id'])].append(price)
+            by_ean[str(price.get('ean_upc') or '')].append(price)
+        for product in products:
+            uid = int(product['upc_id'])
+            # Use the same raw-lineage spellings as the authoritative price
+            # reader. Ignoring active-alias exclusions here is conservative:
+            # it can refresh an extra family, never omit a possible change.
+            _, aliases = _upc_match_sql('p.ean_upc', product['ean_upc'])
+            matches = list(by_id.get(uid, ()))
+            for alias in set(str(a) for a in aliases):
+                if alias.endswith('%'):
+                    matches.extend(p for ean, rs in by_ean.items() if ean.startswith(alias[:-1]) for p in rs)
+                else:
+                    matches.extend(by_ean.get(alias, ()))
+                    matches.extend(by_ean.get(alias.lstrip('0'), ()))
+            price_matches[uid] = matches
+            old = prior.get(uid) or {}
+            if any(p['configured_price'] != old.get('current_price') or p['price_type'] != old.get('current_price_type') for p in matches):
+                price_targets.add(uid)
     if kinds & {'movement', 'on_hand'}:
         for table in ('family_movement_observation', 'receiving_observation', 'inventory_observation'):
             cur.execute(f'SELECT DISTINCT family_id FROM {table} WHERE batch_id=%s AND family_id IS NOT NULL', (batch_id,))
             families.update(int(r['family_id']) for r in cur.fetchall())
-    identity_fields = ('article_id', 'family_id', 'selling_uom', 'base_uom', 'base_qty_per_selling_unit')
+    identity_fields = ('article_id', 'family_id', 'selling_uom', 'base_uom', 'base_qty_per_selling_unit', 'selling_description')
     for product in products:
         uid = int(product['upc_id'])
         old = prior.get(uid)
+        identity_changed = old is not None and any(old.get(key) != product.get(key) for key in identity_fields)
         if (old is None or old.get('quick_check_status') != 'HISTORICAL_ONLY'
-                or old.get('current_oh') is not None
+                or (not price_only and old.get('current_oh') is not None)
                 or uid in sold_ids or str(product['ean_upc']).strip() in sold_eans
-                or any(old.get(key) != product.get(key) for key in identity_fields)):
+                or identity_changed):
+            if price_only and old is not None and not identity_changed:
+                price_targets.add(uid)
+                continue
             families.add(int(product['family_id']))
             if old and old.get('family_id') is not None:
                 families.add(int(old['family_id']))
@@ -3130,7 +3166,20 @@ def _routine_upload_quick_check_scope(cur, batch_id, products, completed_days):
             if old.get('family_id') is not None:
                 families.add(int(old['family_id']))
             cur.execute('DELETE FROM quick_check_current WHERE upc_id=%s', (old['upc_id'],))
-    return [p for p in products if int(p['family_id']) in families]
+    if price_only:
+        # Price-only input cannot change cold inventory/sales/cost evidence.
+        # Keep it intact, but stamp the accepted new price-list provenance.
+        updates = []
+        for product in products:
+            if int(product['family_id']) in families or int(product['upc_id']) in price_targets:
+                continue
+            matches = price_matches.get(int(product['upc_id']), ())
+            stamps = [p['upload_timestamp'] for p in matches if p.get('upload_timestamp') is not None]
+            if stamps:
+                updates.append((_price_list_upload_business_date(max(stamps)), batch_id, product['upc_id']))
+        if updates:
+            cur.executemany("UPDATE quick_check_current SET current_price_source='PRICE_LIST',current_price_asof_date=%s,publish_batch_id=%s,published_at=CURRENT_TIMESTAMP(6) WHERE upc_id=%s", updates)
+    return [p for p in products if int(p['family_id']) in families or int(p['upc_id']) in price_targets]
 
 
 def rebuild_quick_check(cur, batch_id: int, progress=None, *, routine_upload=False) -> dict[str, Any]:
