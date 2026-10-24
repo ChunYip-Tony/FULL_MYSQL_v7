@@ -24,7 +24,7 @@ class HeldReplacementTests(unittest.TestCase):
   self.assertAlmostEqual(episode['sales_day'],79.8)
   self.assertAlmostEqual(episode['gp_day'],44.8)
   self.assertFalse(episode['performance_ok'])
-  self.assertEqual(audit['source_quality']['held_sources'],[{'date':'2026-10-20','file_id':179}])
+  self.assertEqual(audit['source_quality']['held_sources'],[{'date':'2026-10-20','file_id':179,'batch_id':None,'original_filename':None}])
  def test_replacement_overwrites_key_and_clears_only_matching_hold(self):
   held,_=self.build();out,audit=self.build(held,200)
   self.assertEqual(len(out['ANALYSIS_UPC_DAILY']),3)

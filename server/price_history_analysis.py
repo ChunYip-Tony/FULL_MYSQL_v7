@@ -354,7 +354,7 @@ def rebuild_retained_analysis(tables, snapshots, source_days, current_rows, thro
  audit['coverage_identifier_repairs']=coverage_identifier_repairs
  # A successful Sheets write is distinct from source eligibility. Consumers
  # must match each uploaded file to this canonical date/file manifest.
- canonical=[{'date':day,'file_id':r.get('file_id',r.get('source_file_id'))}
+ canonical=[{'date':day,'file_id':r.get('file_id',r.get('source_file_id')),'batch_id':r.get('batch_id'),'original_filename':r.get('original_filename')}
             for day,r in sorted(source_days.items())]
  held=[r for r in canonical if any(str(r['file_id'])==str(h.get('file_id'))
        and (not h.get('date') or h['date']==r['date'])
