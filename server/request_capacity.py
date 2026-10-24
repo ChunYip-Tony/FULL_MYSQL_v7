@@ -30,7 +30,11 @@ class RequestCapacityMiddleware:
 
     async def __call__(self, scope, receive, send):
         path = scope.get('path', '')
-        if (scope['type'] != 'http' or not path.startswith('/v1/')
+        # Stock flow and App Ready use /app/.../api/ and /api/, not /v1/.
+        # Share one capacity budget across every business API namespace.
+        business_api = (path.startswith(('/v1/', '/api/'))
+                        or path.startswith('/app/') and '/api/' in path)
+        if (scope['type'] != 'http' or not business_api
                 or path == '/v1/yipman/ai/status'):
             return await self.app(scope, receive, send)
         state = self.state
