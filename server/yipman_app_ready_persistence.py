@@ -7,6 +7,21 @@ from dataclasses import fields, is_dataclass
 from typing import Any
 from db import db_conn
 
+
+def snapshot_size_limit():
+    return max(1, int(os.environ.get('FULLMYSQL_SNAPSHOT_LOAD_MAX_MB', '16'))) * 1048576
+
+
+def _persistable_payload(snapshot):
+    from snapshot_graph import dumps
+    payload = dumps(snapshot)
+    # A generation that readers refuse to hydrate must never replace ACTIVE.
+    # dumps escapes non-ASCII, so ASCII length is its UTF-8 byte length without
+    # allocating a second complete encoded copy.
+    if len(payload) > snapshot_size_limit():
+        raise RuntimeError('APP_READY_SNAPSHOT_EXCEEDS_SAFE_LOAD_LIMIT')
+    return payload
+
 def _json_default(value: Any):
     if is_dataclass(value) and not isinstance(value,type):
         return {field.name:getattr(value,field.name) for field in fields(value)}
@@ -30,8 +45,7 @@ def _insert_generation(cur,snapshot,payload):
     cur.execute("""INSERT INTO yipman_app_ready_generation (build_id,source_batch_id,data_through,completed_at,build_ms,snapshot_json) VALUES (%s,%s,%s,%s,%s,%s) ON DUPLICATE KEY UPDATE source_batch_id=VALUES(source_batch_id),data_through=VALUES(data_through),completed_at=VALUES(completed_at),build_ms=VALUES(build_ms),snapshot_json=VALUES(snapshot_json)""",(snapshot.build_id,snapshot.source_batch_id,snapshot.data_through,snapshot.completed_at,int(round(snapshot.build_ms or 0)),payload))
 
 def persist_complete_snapshot(snapshot)->None:
-    from snapshot_graph import dumps
-    payload=dumps(snapshot)
+    payload=_persistable_payload(snapshot)
     with db_conn() as conn:
         ensure_schema(conn);cur=conn.cursor()
         try:
@@ -42,8 +56,7 @@ def persist_complete_snapshot(snapshot)->None:
 
 def persist_complete_snapshot_if_active(snapshot,expected_active_build_id:str)->bool:
     """Activate snapshot only if ACTIVE still equals the generation it was derived from."""
-    from snapshot_graph import dumps
-    payload=dumps(snapshot)
+    payload=_persistable_payload(snapshot)
     with db_conn() as conn:
         ensure_schema(conn);cur=conn.cursor(dictionary=True)
         try:
@@ -76,7 +89,7 @@ def load_active_snapshot(snapshot_cls):
             cur.execute("SELECT g.build_id,OCTET_LENGTH(g.snapshot_json) AS payload_bytes FROM yipman_app_ready_pointer p JOIN yipman_app_ready_generation g ON g.build_id=p.build_id WHERE p.pointer_name='ACTIVE' LIMIT 1")
             meta=cur.fetchone()
             if not meta:return None
-            limit=max(1,int(os.environ.get('FULLMYSQL_SNAPSHOT_LOAD_MAX_MB','16')))*1048576
+            limit=snapshot_size_limit()
             if int(meta.get('payload_bytes') or 0)>limit:
                 raise RuntimeError('APP_READY_SNAPSHOT_EXCEEDS_SAFE_LOAD_LIMIT')
             # Pin the generation inspected above even if ACTIVE changes.
@@ -85,4 +98,5 @@ def load_active_snapshot(snapshot_cls):
         finally: cur.close()
     if not row:return None
     return snapshot_cls(**loads(row['snapshot_json']))
+
 

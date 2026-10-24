@@ -154,7 +154,10 @@ def main() -> int:
                     api = start_api()
                     watchdog.reset(time.monotonic())
                 elif not healthy:
-                    log(f"API health check failed ({watchdog.failures}/{watchdog.threshold})")
+                    if not watchdog.has_responded and not watchdog.failures:
+                        log("API is starting; waiting within startup grace")
+                    else:
+                        log(f"API health check failed ({watchdog.failures}/{watchdog.threshold})")
 
             worker_rc = worker.poll()
             if worker_rc is not None:
@@ -181,6 +184,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 

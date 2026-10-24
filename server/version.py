@@ -1,1 +1,2 @@
-VERSION='7.0.557-stock-flow-capacity'
+VERSION='7.0.558-snapshot-budget'
+

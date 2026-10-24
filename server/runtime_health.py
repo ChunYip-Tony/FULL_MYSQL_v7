@@ -8,7 +8,7 @@ _STARTED = time.monotonic()
 
 
 def runtime_health(root=Path('/sys/fs/cgroup')):
-    out = {'revision': 'bounded-pricing-reads-v1', 'pid': os.getpid(),
+    out = {'revision': 'snapshot-budget-v1', 'pid': os.getpid(),
            'uptime_seconds': round(time.monotonic() - _STARTED)}
     out['uptime_source'] = 'diagnostics_module'
     try:
@@ -52,6 +52,9 @@ def runtime_health(root=Path('/sys/fs/cgroup')):
                 pass
     from supervisor_health import read_supervisor_health
     from request_capacity import capacity_status
+    from background_analysis_budget import background_analysis_status
     out['supervisor'] = read_supervisor_health()
     out['request_capacity'] = capacity_status()
+    out['background_analysis'] = background_analysis_status()
     return out
+

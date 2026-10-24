@@ -7,8 +7,8 @@ names={'num','guard_weight_counts'}
 mod=ast.Module(body=[n for n in src.body if isinstance(n,ast.FunctionDef) and n.name in names],type_ignores=[])
 ns={'Decimal':Decimal};exec(compile(mod,'mobile_pricing.py','exec'),ns)
 class POSUnitTests(unittest.TestCase):
- def test_real_case(self):
-  member={'upc':'4298','uom':'LB','cost':{'value':Decimal('4.797476'),'uom':'LB'},'current':None,
+ def test_unconfirmed_item_counts_remain_labeled_estimates(self):
+  member={'upc':'99999999999','uom':'LB','cost':{'value':Decimal('4.797476'),'uom':'LB'},'current':None,
    'priceHistory':[{'date':'2026-10-03','type':'REG','price':Decimal('10.99')}],
    'days':[{'date':f'2026-10-{d:02d}','type':'REG','qty':1 if d in (5,7,10) else 0,
     'sales':Decimal({5:'16.38',7:'14.73',10:'15.72'}.get(d,'0')),'valid':True,
@@ -19,7 +19,7 @@ class POSUnitTests(unittest.TestCase):
     m['quantityBasis']='POS_ITEM_COUNT' if m['uom']=='LB' else 'POS_SELLING_UNIT'
   ns['guard_weight_counts'](page['items'])
   result=inventory_sales.summarize(page,{})
-  m=next(m for m in result['members'] if m['upc']=='4298')
+  m=next(m for m in result['members'] if m['upc']=='99999999999')
   s=m['types'][0]['seven']
   self.assertAlmostEqual(float(s['quantity']),46.83/10.99)
   self.assertAlmostEqual(float(s['average']),46.83/10.99/7)
@@ -38,3 +38,4 @@ class POSUnitTests(unittest.TestCase):
   m={'quantityBasis':'POS_SELLING_UNIT','uom':'EA','days':[{'qty':3,'gp':6}]}
   ns['guard_weight_counts']([{'members':[m]}]);self.assertEqual(m['days'][0]['qty'],3)
 if __name__=='__main__':unittest.main()
+

@@ -131,7 +131,7 @@ class ReadReliabilityTests(unittest.TestCase):
                 try:
                     result=await asyncio.wait_for(health(), .5)
                     self.assertTrue(result['ok'])
-                    self.assertEqual(result['runtime']['revision'],'bounded-pricing-reads-v1')
+                    self.assertEqual(result['runtime']['revision'],'snapshot-budget-v1')
                 finally: release.set()
                 task.result(3)
         asyncio.run(check())
@@ -150,3 +150,4 @@ class ReadReliabilityTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+

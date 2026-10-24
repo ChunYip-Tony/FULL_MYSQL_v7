@@ -1,0 +1,29 @@
+name: snapshot-resilience
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server
+    env:
+      FULLMYSQL_WORK_TOKEN: smoke-token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r requirements.txt pytest
+      - run: python -m compileall -q .
+      - name: Import actual production entry point
+        run: python -c "import production_bootstrap, api; print(api.VERSION, len(production_bootstrap.app.routes))"
+      - name: Run all regression modules in isolated interpreters
+        # Some calculation fixtures stub sys.modules at import time. Isolate
+        # modules so those stubs cannot replace another suite's dependencies.
+        run: |
+          for test in test_*.py; do
+            python -m pytest "$test" -q || exit 1
+          done

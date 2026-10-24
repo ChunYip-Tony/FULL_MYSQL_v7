@@ -3,13 +3,14 @@ import ast
 from datetime import datetime, timedelta
 from pathlib import Path
 import unittest
+from price_history_analysis import HISTORY_CONTRACT
 
 
 def load_guard():
     tree=ast.parse(Path(__file__).with_name('worker.py').read_text())
     node=next(x for x in tree.body if isinstance(x,ast.FunctionDef)
               and x.name=='_startup_bridge_already_verified')
-    scope={'API_PIPELINE':'FULLMYSQL_SECURE_API'}
+    scope={'API_PIPELINE':'FULLMYSQL_SECURE_API','HISTORY_CONTRACT':HISTORY_CONTRACT}
     exec(compile(ast.Module(body=[node],type_ignores=[]),'worker.py','exec'),scope)
     return scope[node.name]
 
@@ -30,6 +31,7 @@ class StartupPublishTest(unittest.TestCase):
         self.guard=load_guard()
         stamp=datetime(2026,10,10,2,44,31)
         self.verified={'processing_status':'COMPLETED','publish_status':'PASS',
+                       'history_contract':HISTORY_CONTRACT,
                        'readback_pass':'true','snapshot_updated_at':stamp,
                        'completed_at':stamp+timedelta(seconds=90)}
 
@@ -60,3 +62,4 @@ class StartupPublishTest(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
