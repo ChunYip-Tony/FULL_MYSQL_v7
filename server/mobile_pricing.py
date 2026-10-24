@@ -87,6 +87,7 @@ def price_snapshots(cur, rows):
     """Upload day is the authority; source_since_date never backdates a test."""
     from phase3 import _price_list_upload_business_date
     ids = [int(r['upc_id']) for r in rows]
+    id_set = set(ids)  # The Google publisher resolves the full master in one batch.
     eans = [str(r['ean_upc']) for r in rows if r.get('ean_upc')]
     if not ids:
         return {}
@@ -109,10 +110,10 @@ def price_snapshots(cur, rows):
     choices = {}
     for p in cur.fetchall():
         uid = p.get('upc_id')
-        if uid not in ids:
+        if uid not in id_set:
             found = aliases.get(str(p.get('ean_upc') or '').lstrip('0'), set())
             uid = next(iter(found)) if len(found) == 1 else None
-        if uid not in ids:
+        if uid not in id_set:
             continue
         key = (uid, int(p['file_id']))
         pt = str(p.get('price_type') or '').upper()
