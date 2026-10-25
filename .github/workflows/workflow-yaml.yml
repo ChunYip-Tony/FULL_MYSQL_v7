@@ -1,0 +1,36 @@
+name: Workflow YAML
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install YAML parser
+        run: python -m pip install PyYAML==6.0.3
+      - name: Parse every workflow
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          paths = sorted(Path('.github/workflows').glob('*.y*ml'))
+          for path in paths:
+              with path.open(encoding='utf-8') as source:
+                  yaml.safe_load(source)
+          print(f'Validated YAML syntax for {len(paths)} workflows')
+          PY

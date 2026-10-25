@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   observe:
-    if: startsWith(github.event.pull_request.title, 'diag: 249 POS source evidence')
+    if: >-
+      startsWith(github.event.pull_request.title, 'diag: 249 POS source evidence')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

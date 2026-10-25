@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   reconcile:
-    if: startsWith(github.event.head_commit.message, 'ops: reconcile 249 POS sales')
+    if: >-
+      startsWith(github.event.head_commit.message, 'ops: reconcile 249 POS sales')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
