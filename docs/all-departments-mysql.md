@@ -85,6 +85,18 @@ and test runs happen in GitHub; operational checks use the application endpoints
 Routine viewing, uploads, analysis and Google publication must not call the
 control-panel site or require a control-panel session.
 
+`digitalocean-preflight.yml` provides a manual, read-only API diagnostic using a
+repository secret named `DIGITALOCEAN_ACCESS_TOKEN`. It matches only the existing
+Seafood app URL (or validates an explicitly supplied app UUID), refuses redirects,
+and prints selected deployment/health-check metadata without environment values.
+Five local tests cover secret redaction, wrong-app rejection and safe failures.
+It does not change hosting, create a database or establish update permission.
+
+The existing smoke and snapshot workflows now run on pushes to `main` and on pull
+requests, avoiding duplicate branch-push plus PR runs. Concurrency cancels obsolete
+test runs for the same branch/PR. The test commands and production behavior are
+preserved; snapshot tests also install the HTTP client needed by the new API tests.
+
 The single-service Seafood supervisor currently runs Uvicorn and the importer
 in one container. GitHub source access does not change service size, component
 count, database privileges, secrets, health-check configuration or billing.

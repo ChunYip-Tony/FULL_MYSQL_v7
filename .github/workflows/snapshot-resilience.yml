@@ -1,7 +1,12 @@
 name: snapshot-resilience
 on:
   push:
+    branches: [main]
   pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest 'httpx>=0.28,<1'
       - run: python -m compileall -q .
       - name: Import actual production entry point
         run: python -c "import production_bootstrap, api; print(api.VERSION, len(production_bootstrap.app.routes))"
@@ -27,3 +32,4 @@ jobs:
           for test in test_*.py; do
             python -m pytest "$test" -q || exit 1
           done
+

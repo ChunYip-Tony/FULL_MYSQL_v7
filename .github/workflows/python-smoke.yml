@@ -2,7 +2,12 @@ name: python-smoke
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   smoke:
@@ -2117,4 +2122,5 @@ jobs:
           echo
           curl -fsS --max-time 90 "https://seal-app-tkkkd.ondigitalocean.app/v1/backoffice/inventory?category=ALL&limit=50&q=240533&lightweight=true"
           echo
+
 
