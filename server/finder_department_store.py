@@ -155,14 +155,16 @@ class MySQLStateStore:
                 cur.close()
 
 
-def create_app(store=None):
+def create_app(store=None, *, include_health=True):
     app = FastAPI(title="Finder department MySQL service", docs_url=None, redoc_url=None, openapi_url=None)
     repository = store or MySQLStateStore()
 
-    @app.get("/healthz")
     def health():
         # Liveness is independent of long imports and database availability.
         return {"status": "alive", "service": "finder-department-mysql"}
+
+    if include_health:
+        app.add_api_route("/healthz", health, methods=["GET"])
 
     @app.get("/v1/departments/{department}/state")
     def read_state(department: str, request: Request):
@@ -205,6 +207,18 @@ def create_app(store=None):
                         media_type="application/json", headers={"ETag": '"' + digest + '"', "Cache-Control": "no-store"})
 
     return app
+
+
+def install_department_store(parent, store=None):
+    """Opt-in server routes; visitor access does not reveal department secrets."""
+    if os.environ.get("FINDER_DEPARTMENT_STORE_ENABLED") != "1":
+        return False
+    if getattr(parent.state, "finder_department_store_installed", False):
+        return True
+    # Keep the existing Seafood liveness route and startup behavior intact.
+    parent.include_router(create_app(store, include_health=False).router)
+    parent.state.finder_department_store_installed = True
+    return True
 
 
 app = create_app()

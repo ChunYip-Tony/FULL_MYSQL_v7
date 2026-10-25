@@ -49,3 +49,7 @@ app.add_middleware(RequestCapacityMiddleware)
 from sites_migration_export import install_sites_migration_export
 install_sites_migration_export(app)
 
+# Disabled until schema, credentials, and complete source readback are verified.
+from finder_department_store import install_department_store
+install_department_store(app)
+

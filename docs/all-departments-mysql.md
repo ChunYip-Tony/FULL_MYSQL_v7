@@ -31,10 +31,14 @@ These views do not allocate family movement quantities to UPCs or invent units.
 `finder_mysql_client.mjs` is a server-only adapter for the two Sites. It verifies
 read checksums, uses exact storage ETags, preserves concurrency conflicts, rejects
 redirects for authenticated requests, and never reports a failed write as saved.
-Its initial import requires an explicit create-only condition. It is not wired
-into the live Sites in this change.
+Its initial import requires an explicit create-only condition. The existing Sites now include this server-only adapter behind the explicit
+`FINDER_STATE_BACKEND=mysql` switch; the default remains `r2` until verified cutover.
+`FINDER_WRITES_PAUSED=1` blocks state mutations during the migration window.
+`GET /api/storage-status` reports the active backend, pause flag, revision and
+collection counts without credentials. Failed MySQL operations never fall back
+to writing a separate R2 state.
 
-The 12 API contract tests use an in-memory fixture; the 7 JavaScript adapter
+The 14 API contract tests use an in-memory fixture; the 7 JavaScript adapter
 tests mock HTTP. They cover full-state preservation, separate credentials,
 conflicts, retry acknowledgements, corrupt/incomplete reads and failed writes.
 They are not evidence of production database or signed-in UI behavior.
@@ -56,7 +60,10 @@ the integration gate is passed only when its GitHub job actually succeeds.
    secrets (at least 40 characters) in the API runtime. Each Site receives only
    its own token as `FINDER_MYSQL_API_TOKEN` plus `FINDER_MYSQL_API_ORIGIN`.
    Neither token nor any database credential belongs in Git or browser code.
-4. Plan resource isolation from heavy Seafood ingestion. The standalone command is
+4. `production_bootstrap.py` can register the authenticated department routes
+   only when `FINDER_DEPARTMENT_STORE_ENABLED=1`. This preserves the existing
+   Seafood `/healthz` route and is disabled by default. No schema is applied by
+   application startup. Plan resource isolation from heavy Seafood ingestion. The standalone command is
    `uvicorn finder_department_store:app --host 0.0.0.0 --port $PORT` in the server
    directory. Provision any new component through an authenticated management
    API, not the blocked control-panel browser. This PR does not create it.
@@ -73,7 +80,7 @@ the integration gate is passed only when its GitHub job actually succeeds.
    require MySQL acknowledgement before reporting a save/upload or Google sync
    as complete. Recover retained uploads through durable, idempotent jobs.
 8. Test uploads, corrections, pricing, ordering, stock and Google readback on
-   signed-in desktop/mobile. Test DB/API outages and interrupted/lost replies.
+   public desktop/mobile pages. The owner explicitly requires no visitor sign-in. Test DB/API outages and interrupted/lost replies.
 9. Switch one department at a time only after comparison passes. The authority
    change must be explicit, with all later writes included in any rollback.
 
@@ -112,3 +119,16 @@ References: [GitHub source deployment](https://docs.digitalocean.com/products/ap
 and [App Platform API](https://docs.digitalocean.com/products/app-platform/reference/api/).
 
 No live database, Site authority or hosting configuration is changed by this PR.
+
+## Visitor access and current verification
+
+The owner requires public Base/Boat/Finder access for all three departments;
+visitor sign-in is not a migration gate. Server-to-server MySQL credentials
+remain secret and separate from visitor access. Source exports must be validated
+and saved privately; never commit department snapshots or source spreadsheets to
+this public repository.
+
+The smoke workflow was repaired to check current UI/data contracts: dynamic
+company A/B/C labels, compact receiving and stock controls, current AI ordering
+tools, and service-worker invalidation. It also initializes its missing UI source
+variable. These changes preserve production behavior and fix stale test assumptions.

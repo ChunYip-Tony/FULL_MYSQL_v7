@@ -20,7 +20,8 @@ class TestClient:
         return self.request("GET", path, **kwargs)
     def put(self, path, **kwargs):
         return self.request("PUT", path, **kwargs)
-from finder_department_store import create_app, validate_state
+from finder_department_store import create_app, validate_state, install_department_store
+from fastapi import FastAPI
 
 
 class MemoryStore:
@@ -74,6 +75,24 @@ class DepartmentStateAPI(unittest.TestCase):
     def test_liveness_does_not_touch_database(self):
         with patch.object(self.store, "get", side_effect=RuntimeError("offline")):
             self.assertEqual(self.client.get("/healthz").status_code, 200)
+
+    def test_production_install_is_disabled_without_explicit_flag(self):
+        parent = FastAPI()
+        with patch.dict("os.environ", {"FINDER_DEPARTMENT_STORE_ENABLED": "0"}):
+            self.assertFalse(install_department_store(parent, self.store))
+        self.assertEqual(TestClient(parent).get("/v1/departments/meat/state").status_code, 404)
+
+    def test_enabled_install_is_idempotent_and_preserves_existing_liveness(self):
+        parent = FastAPI()
+        parent.add_api_route("/healthz", lambda: {"service": "seafood"})
+        with patch.dict("os.environ", {"FINDER_DEPARTMENT_STORE_ENABLED": "1"}):
+            self.assertTrue(install_department_store(parent, self.store))
+            count = len(parent.routes)
+            self.assertTrue(install_department_store(parent, self.store))
+            self.assertEqual(len(parent.routes), count)
+        client = TestClient(parent)
+        self.assertEqual(client.get("/healthz").json(), {"service": "seafood"})
+        self.assertEqual(client.get("/v1/departments/meat/state").status_code, 401)
 
     def test_department_credentials_are_isolated(self):
         self.write(state())
