@@ -1,0 +1,11 @@
+# Build context: server/. Independent of Seafood API, ingestion and AI imports.
+FROM python:3.13-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+WORKDIR /app
+COPY requirements.finder.txt .
+RUN pip install --no-cache-dir -r requirements.finder.txt
+COPY config.py db.py request_capacity.py finder_department_store.py finder_department_service.py finder_department_readiness.py finder_department_start.py finder_department_schema_setup.py finder_department_schema.sql ./
+RUN python -m compileall -q .
+USER 10001
+EXPOSE 8080
+CMD ["python", "finder_department_start.py"]
