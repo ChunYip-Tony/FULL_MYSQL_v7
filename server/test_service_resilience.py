@@ -12,15 +12,60 @@ from runtime_health import runtime_health
 from supervisor_health import SupervisorHealth, read_supervisor_health
 
 
-async def call(app, path, receive=None):
+async def call(app, path, receive=None, method='GET'):
     messages=[]
     async def send(message): messages.append(message)
     async def empty(): return {'type':'http.request','body':b''}
-    await app({'type':'http','path':path}, receive or empty, send)
+    await app({'type':'http','path':path,'method':method}, receive or empty, send)
     return messages
 
 
 class CapacityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_read_flood_reserves_two_ai_slots_and_one_stock_save(self):
+        release = asyncio.Event(); entered = []
+        async def application(scope, receive, send):
+            entered.append(scope['path'])
+            if scope['path'] != '/healthz':
+                await release.wait()
+            await send({'type': 'http.response.start', 'status': 200, 'headers': []})
+        guard = RequestCapacityMiddleware(application, max_requests=8, max_ai=2)
+        tasks = [asyncio.create_task(call(guard, '/v1/slow/' + str(i))) for i in range(5)]
+        await asyncio.sleep(0)
+        async def unread(): self.fail('Rejected request body was consumed')
+        try:
+            self.assertEqual((await call(guard, '/v1/slow/overflow', unread))[0]['status'], 503)
+            tasks += [asyncio.create_task(call(guard, '/v1/yipman/ai/chat', method='POST')) for _ in range(2)]
+            tasks.append(asyncio.create_task(call(guard, '/v1/app/v2/pi/1366580/true-stock', method='POST')))
+            await asyncio.sleep(0)
+            self.assertEqual(guard.state['active'], 8)
+            self.assertEqual(guard.state['ai_active'], 2)
+            self.assertEqual(guard.state['write_active'], 1)
+            rejected = await call(guard, '/v1/app/v2/pi/1341297/true-stock', unread, method='POST')
+            self.assertFalse(json.loads(rejected[1]['body'])['detail']['request_started'])
+            self.assertEqual((await asyncio.wait_for(call(guard, '/healthz'), .1))[0]['status'], 200)
+        finally:
+            release.set(); await asyncio.gather(*tasks)
+        self.assertTrue(all(guard.state[k] == 0 for k in ('active', 'general_active', 'ai_active', 'write_active')))
+
+    async def test_department_bulk_payloads_share_one_slot_and_cannot_starve_seafood(self):
+        release = asyncio.Event()
+        async def application(scope, receive, send):
+            if scope['path'].startswith('/v1/departments/'):
+                await release.wait()
+            await send({'type': 'http.response.start', 'status': 200, 'headers': []})
+        guard = RequestCapacityMiddleware(application, max_requests=8, max_ai=2)
+        first = asyncio.create_task(call(guard, '/v1/departments/meat/state', method='PUT'))
+        await asyncio.sleep(0)
+        async def unread(): self.fail('Bulk body read before capacity admission')
+        try:
+            self.assertEqual((await call(guard, '/v1/departments/produce/state', unread, method='PUT'))[0]['status'], 503)
+            self.assertEqual((await call(guard, '/v1/app/search'))[0]['status'], 200)
+            self.assertEqual((await call(guard, '/v1/yipman/ai/chat', method='POST'))[0]['status'], 200)
+            self.assertEqual((await call(guard, '/v1/app/v2/pi/1366580/true-stock', method='POST'))[0]['status'], 200)
+        finally:
+            release.set(); await first
+        self.assertEqual(guard.state['department_active'], 0)
+
     async def test_flood_keeps_health_responsive_and_rejects_before_body_or_handler(self):
         release=asyncio.Event(); entered=[]
         async def application(scope,receive,send):
