@@ -18,6 +18,24 @@ def app():
 
 
 class HealthPolicyTests(unittest.TestCase):
+    def test_private_provider_error_is_encrypted_and_token_is_redacted(self):
+        import base64
+        from contextlib import redirect_stdout
+        from cryptography.hazmat.primitives import serialization, hashes
+        from cryptography.hazmat.primitives.asymmetric import rsa, padding
+        key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+        public = base64.b64encode(key.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)).decode()
+        output = io.StringIO()
+        with patch.dict('os.environ', {'FINDER_PUBLIC_KEY_DER_BASE64': public}), patch('digitalocean_health_policy.build_opener') as opener, redirect_stdout(output):
+            opener.return_value.open.side_effect = HTTPError('https://private',403,'PRIVATE',{},io.BytesIO(b'{"message":"private reason PRIVATE_TOKEN"}'))
+            with self.assertRaises(RuntimeError): request_json('PUT','PRIVATE_TOKEN')
+        self.assertNotIn('private reason',output.getvalue())
+        self.assertNotIn('PRIVATE_TOKEN',output.getvalue())
+        ciphertext=base64.b64decode(output.getvalue().strip().split('=',1)[1])
+        raw=key.decrypt(ciphertext,padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))
+        self.assertIn(b'private reason',raw)
+        self.assertNotIn(b'PRIVATE_TOKEN',raw)
+
     def test_denied_update_reports_only_method_status_and_scope_identifiers(self):
         body = b'{"message":"missing app:update and database:update PRIVATE_PASSWORD"}'
         with patch('digitalocean_health_policy.build_opener') as opener:
