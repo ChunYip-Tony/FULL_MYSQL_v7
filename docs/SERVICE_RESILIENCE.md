@@ -22,3 +22,33 @@ Supervisor evidence is stored atomically in `/tmp/fullmysql_supervisor_health.js
 ## Verification
 
 Run the supervisor, publisher, service-resilience, watchdog, compact-snapshot and read-reliability suites. A production smoke check must verify the new API and worker versions, healthy supervisor heartbeat, enabled capacity limits, a successful real AI answer, and healthy state afterward. Do not stress the live service to trigger its limits; overload/cancellation tests use local controlled requests.
+
+
+## Reserved interactive request capacity
+
+Runtime 7.0.560 keeps the existing total limit of eight active business requests.
+Five slots admit ordinary reads and bulk uploads, two are available for AI, and
+one is reserved for short interactive stock/QA/price saves. Health and AI status
+remain outside the business budget. A rejected request returns HTTP503 with
+`request_started=false` before the request body or handler is consumed. This
+reduces read-burst interference; it is not extra server capacity or a promise
+that a database/provider outage cannot interrupt a request.
+
+The opt-in Meat/Produce state endpoints additionally share a single active
+request slot because each state can be several megabytes. This bounds their
+contribution before JSON is read or parsed. The service remains disabled until
+its existing schema, secret, migration parity and authority gates are satisfied.
+Do not activate it merely because its admission controls pass.
+
+Twenty-four supervisor/recovery/capacity tests pass locally. The new concurrency
+cases saturate ordinary reads, verify two AI calls and one stock save can still
+enter, keep health responsive, reject the next mutation without reading its
+body, and check all counters return to zero. Another case holds a department
+state request and confirms Seafood lookup, AI and stock-save admission remain
+available. These are isolated admission tests, not production stress tests.
+
+DigitalOcean management access is a separate prerequisite for inspecting or
+changing component sizes, replication, worker placement, platform health checks
+or environment secrets. The repository's `DigitalOcean read-only preflight`
+workflow uses the existing app URL and the `DIGITALOCEAN_ACCESS_TOKEN` GitHub
+Actions secret. It neither creates a new app nor applies hosting changes.
