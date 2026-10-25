@@ -17,7 +17,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import StreamingResponse
 from db import db_conn
 
-AUTH_SHA256 = "99833b0153c7c0e098faa9f185bbb989066702746be02e81c64a482654a2f32b"
+AUTH_SHA256 = "ba12f002c079d33ed65db2260b03d5854615edd871a54b4333903f8668b2d970"
 EXPIRES_AT = "2026-10-27T00:00:00+00:00"
 TABLES = frozenset('''ingest_batch ingest_file ingest_sheet ingest_column ingest_error
 raw_movement raw_price_list raw_sales_by_price_type raw_on_hand raw_frozen_inventory
