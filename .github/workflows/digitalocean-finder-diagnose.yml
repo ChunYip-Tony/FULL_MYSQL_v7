@@ -1,0 +1,45 @@
+name: Finder read-only configuration diagnosis
+on:
+  pull_request:
+    paths:
+      - 'server/digitalocean_finder_diagnose.py'
+      - 'server/test_digitalocean_finder_diagnose.py'
+      - '.github/workflows/digitalocean-finder-diagnose.yml'
+  workflow_dispatch:
+    inputs:
+      public_key:
+        description: 'RSA-4096 PUBLIC key (base64 DER) for encrypted errors. Never enter a private key or token.'
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: finder-approved-hosting-${{ github.event_name }}
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'cryptography>=44,<47'
+      - working-directory: server
+        run: python -m unittest test_digitalocean_finder_diagnose -v
+  diagnose:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'cryptography>=44,<47'
+      - name: Validate proposed specs without changing the app
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          FINDER_PUBLIC_KEY_DER_BASE64: ${{ inputs.public_key }}
+        run: python server/digitalocean_finder_diagnose.py
