@@ -6,7 +6,8 @@ on:
 
 jobs:
   reconcile:
-    if: startsWith(github.event.head_commit.message, 'ops: reconcile 249 POS and SAP movement v287')
+    if: >-
+      startsWith(github.event.head_commit.message, 'ops: reconcile 249 POS and SAP movement v287')
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:

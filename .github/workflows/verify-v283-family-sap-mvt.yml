@@ -8,7 +8,8 @@ on:
 
 jobs:
   verify:
-    if: startsWith(github.event.head_commit.message, 'diag: v7.0.283 Family SAP movement verify')
+    if: >-
+      startsWith(github.event.head_commit.message, 'diag: v7.0.283 Family SAP movement verify')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
