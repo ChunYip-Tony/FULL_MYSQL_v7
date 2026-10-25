@@ -57,6 +57,19 @@ def request_json(method, token, payload=None):
             try:
                 raw_error = error.read(8192).decode('utf-8', errors='replace')
                 mentioned = sorted(set(re.findall(r'\b[a-z_]+:(?:read|update|create|delete|access_console)\b', raw_error)))
+                # A provider rejection without a named scope needs private
+                # diagnosis. Encrypt a bounded error excerpt to the owner's
+                # supplied public key; never print the response or credentials.
+                public_key = os.environ.get('FINDER_PUBLIC_KEY_DER_BASE64')
+                if public_key:
+                    import base64
+                    from cryptography.hazmat.primitives import serialization, hashes
+                    from cryptography.hazmat.primitives.asymmetric import rsa, padding
+                    key = serialization.load_der_public_key(base64.b64decode(public_key, validate=True))
+                    if isinstance(key, rsa.RSAPublicKey) and key.key_size >= 4096:
+                        excerpt = raw_error.replace(token, '[REDACTED]').encode()[:400]
+                        encrypted = key.encrypt(excerpt, padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None))
+                        print('FINDER_PROVIDER_DIAGNOSTIC_V1=' + base64.b64encode(encrypted).decode(), flush=True)
             except Exception:
                 pass
         detail = ('; provider-mentioned scopes: ' + ', '.join(mentioned)) if mentioned else ''
