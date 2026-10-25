@@ -14,7 +14,7 @@ on:
         required: true
         type: choice
         default: inspect
-        options: [inspect, resize, provision, finalize]
+        options: [inspect, resize, provision, provision-public-git, finalize]
       public_key:
         description: 'Provision only: RSA-4096 public key (base64 DER). Never enter a private key or token.'
         required: false
