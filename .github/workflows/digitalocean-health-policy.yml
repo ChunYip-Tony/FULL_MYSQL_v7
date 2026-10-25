@@ -1,0 +1,49 @@
+name: DigitalOcean HTTP health policy
+on:
+  pull_request:
+    paths:
+      - 'server/digitalocean_health_policy.py'
+      - 'server/test_digitalocean_health_policy.py'
+      - '.github/workflows/digitalocean-health-policy.yml'
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Apply the reviewed health probes to the existing Seafood app (no capacity change)'
+        required: true
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: digitalocean-health-policy-${{ github.event_name }}
+  cancel-in-progress: false
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - working-directory: server
+        run: python -m unittest test_digitalocean_preflight test_digitalocean_health_policy -v
+  manage:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Inspect or apply only the reviewed probe fields
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          APPLY_HEALTH_POLICY: ${{ inputs.apply }}
+        run: |
+          if [ "$APPLY_HEALTH_POLICY" = "true" ]; then
+            python server/digitalocean_health_policy.py --apply
+          else
+            python server/digitalocean_health_policy.py
+          fi
