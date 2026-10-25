@@ -18,6 +18,7 @@ DEPARTMENT_SERVICE = 'finder-department-mysql'
 SCHEMA_JOB = 'finder-schema-v1'
 SEAFOOD_SIZE = 'apps-s-1vcpu-1gb-fixed'
 DEPARTMENT_SIZE = 'apps-s-1vcpu-0.5gb'
+STAGE_COMMAND = 'python -m uvicorn finder_department_stage:app --host 0.0.0.0 --port 8080 --workers 1'
 SOURCE_KEYS = ('github', 'source_dir', 'dockerfile_path', 'build_command', 'environment_slug')
 DB_KEYS = ('FULLMYSQL_DATABASE_URL', 'FULLMYSQL_DB_CA_CERT', 'FULLMYSQL_DB_HOST', 'FULLMYSQL_DB_PORT',
            'FULLMYSQL_DB_USER', 'FULLMYSQL_DB_PASSWORD', 'FULLMYSQL_DB_NAME')
@@ -43,6 +44,49 @@ def validate_base(app):
     return s
 
 
+def configuration_metadata(app):
+    """Report environment structure without printing credentials or values."""
+    old = service(app)
+    groups = [('app', app['spec'].get('envs', [])), ('seafood', old.get('envs', []))]
+    return {'environment': [dict(origin=origin, key=item['key'], scope=item.get('scope'),
+                                type=item.get('type'),
+                                encrypted=str(item.get('value', '')).startswith('EV['),
+                                binding='${' in str(item.get('value', '')))
+                            for origin, items in groups for item in items if item['key'] in DB_KEYS],
+            'databases': [{k: db[k] for k in ('name', 'engine', 'production') if k in db}
+                          for db in app['spec'].get('databases', [])]}
+
+
+def stage_service(app):
+    """Isolate one approved service addition from schema jobs and new secrets."""
+    old = validate_base(app)
+    if old['instance_size_slug'] != SEAFOOD_SIZE:
+        raise RuntimeError('Complete and verify the Seafood resize first')
+    spec = copy.deepcopy(app['spec'])
+    if any(s['name'] == DEPARTMENT_SERVICE for s in spec['services']):
+        raise RuntimeError('Department service already exists; inspect before configuring it')
+    if any(j['name'] == SCHEMA_JOB for j in spec.get('jobs', [])):
+        raise RuntimeError('Schema job already exists; inspect its deployment before retrying')
+    source = {k: copy.deepcopy(old[k]) for k in SOURCE_KEYS if k in old and k != 'github'}
+    component = dict(source, name=DEPARTMENT_SERVICE, http_port=8080,
+                     git={'repo_clone_url': 'https://github.com/' + REPO + '.git', 'branch': 'main'},
+                     instance_size_slug=DEPARTMENT_SIZE, instance_count=1,
+                     run_command=STAGE_COMMAND, envs=[], **copy.deepcopy(POLICY))
+    prefix = '/v1/departments'
+    if spec.get('ingress') is not None:
+        rules = spec['ingress'].get('rules', [])
+        if any((r.get('match', {}).get('path', {}).get('prefix') or '').startswith(prefix) for r in rules):
+            raise RuntimeError('Department route already exists')
+        spec['ingress']['rules'] = [{'match': {'path': {'prefix': prefix}},
+                                   'component': {'name': DEPARTMENT_SERVICE, 'preserve_path_prefix': True}}] + rules
+    else:
+        if any(r.get('path', '').startswith(prefix) for s in spec['services'] for r in s.get('routes', [])):
+            raise RuntimeError('Department route already exists')
+        component['routes'] = [{'path': prefix, 'preserve_path_prefix': True}]
+    spec['services'].append(component)
+    return spec
+
+
 def new_department_credentials():
     return {department: secrets.token_urlsafe(48) for department in ('meat','produce')}
 
@@ -59,6 +103,8 @@ def encrypted_credentials(credentials, public_key_der_b64):
 
 
 def plan(app, action, credentials=None):
+    if action == 'stage-service':
+        return stage_service(app)
     old = validate_base(app)
     spec = copy.deepcopy(app['spec'])
     target = next(s for s in spec['services'] if s['name'] == SERVICE)
@@ -130,9 +176,11 @@ def deployed_matches(app, action):
         services = {s['name']:s for s in spec.get('services', [])}
         if services.get(SERVICE, {}).get('instance_size_slug') != SEAFOOD_SIZE:
             return False
-        if action in ('provision','provision-public-git','finalize'):
+        if action in ('provision','provision-public-git','finalize','stage-service'):
             target = services.get(DEPARTMENT_SERVICE, {})
             if target.get('instance_size_slug') != DEPARTMENT_SIZE or target.get('instance_count') != 1:
+                return False
+            if action == 'stage-service' and (target.get('run_command') != STAGE_COMMAND or target.get('envs')):
                 return False
             if action == 'finalize' and any(j['name'] == SCHEMA_JOB for j in spec.get('jobs', [])):
                 return False
@@ -143,6 +191,7 @@ def run(token, action, public_key='', client=request_json, pause=time.sleep, dea
     before = client('GET', token)
     validate_base(before)
     print(json.dumps({'inspection':public_summary(before),'action':action}), flush=True)
+    print(json.dumps({'configuration_metadata':configuration_metadata(before)}), flush=True)
     if action == 'inspect':
         return {'read_only':True, 'inspection':public_summary(before)}
     if before.get('pending_deployment'):
@@ -177,7 +226,7 @@ def run(token, action, public_key='', client=request_json, pause=time.sleep, dea
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('inspect','resize','provision','provision-public-git','finalize'))
+    parser.add_argument('action', choices=('inspect','resize','provision','provision-public-git','stage-service','finalize'))
     args = parser.parse_args()
     try:
         print(json.dumps(run(os.environ.get('DIGITALOCEAN_ACCESS_TOKEN',''), args.action,

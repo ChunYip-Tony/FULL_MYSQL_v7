@@ -4,6 +4,7 @@ import copy
 import io
 import json
 import unittest
+from unittest.mock import patch
 from contextlib import redirect_stdout
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
@@ -27,6 +28,73 @@ def fixture(resized=False):
 
 
 class RolloutTests(unittest.TestCase):
+    def test_stage_adds_only_one_bounded_service_and_no_job_or_credentials(self):
+        before = fixture(True)
+        before['spec']['jobs'] = [{'name': 'existing-unrelated-job'}]
+        original = copy.deepcopy(before)
+        proposed = plan(before, 'stage-service')
+        component = proposed['services'].pop()
+        self.assertEqual(proposed, before['spec'])
+        self.assertEqual(before, original)
+        self.assertEqual(component['instance_size_slug'], DEPARTMENT_SIZE)
+        self.assertEqual(component['instance_count'], 1)
+        self.assertEqual(component['envs'], [])
+        self.assertNotIn('github', component)
+        self.assertEqual(component['git']['repo_clone_url'], 'https://github.com/ChunYip-Tony/FULL_MYSQL_v7.git')
+        self.assertEqual(component['routes'], [{'path': '/v1/departments', 'preserve_path_prefix': True}])
+        self.assertIn('finder_department_stage:app', component['run_command'])
+
+    def test_stage_preserves_modern_ingress_and_refuses_route_or_capacity_conflicts(self):
+        before = fixture(True)
+        before['spec']['ingress'] = {'rules': [{'match': {'path': {'prefix': '/'}}, 'component': {'name': 'full-mysql-v7-server'}}]}
+        proposed = plan(before, 'stage-service')
+        self.assertEqual(proposed['ingress']['rules'][1:], before['spec']['ingress']['rules'])
+        self.assertEqual(proposed['ingress']['rules'][0]['component']['name'], DEPARTMENT_SERVICE)
+        self.assertNotIn('routes', proposed['services'][1])
+        for field in ('services', 'jobs'):
+            value = fixture(True)
+            value['spec'].setdefault(field, []).append({'name': DEPARTMENT_SERVICE if field == 'services' else SCHEMA_JOB})
+            with self.assertRaises(RuntimeError): plan(value, 'stage-service')
+        with self.assertRaises(RuntimeError): plan(fixture(), 'stage-service')
+        before['spec']['ingress']['rules'][0]['match']['path']['prefix'] = '/v1/departments'
+        with self.assertRaises(RuntimeError): plan(before, 'stage-service')
+
+    def test_stage_health_never_exposes_business_data_even_with_inherited_credentials(self):
+        from fastapi.testclient import TestClient
+        from finder_department_stage import app as stage_app
+        with patch.dict('os.environ', {'FINDER_STORE_TOKEN_MEAT': 'M'*64, 'FULLMYSQL_DATABASE_URL': 'must-not-connect'}):
+            with TestClient(stage_app) as client:
+                for path in ('/healthz', '/v1/departments/healthz'):
+                    self.assertEqual(client.get(path).status_code, 200)
+                    self.assertFalse(client.get(path).json()['migration_ready'])
+                for method in (client.get, client.put):
+                    self.assertEqual(method('/v1/departments/meat/state', headers={'Authorization': 'Bearer '+'M'*64}).status_code, 404)
+                self.assertEqual(client.get('/openapi.json').status_code, 404)
+
+    def test_stage_requires_active_component_not_just_desired_spec(self):
+        from digitalocean_finder_rollout import deployed_matches
+        before = fixture(True)
+        before['active_deployment'] = {'phase': 'ACTIVE', 'spec': copy.deepcopy(before['spec'])}
+        before['spec'] = plan(before, 'stage-service')
+        self.assertFalse(deployed_matches(before, 'stage-service'))
+        before['active_deployment']['spec'] = copy.deepcopy(before['spec'])
+        self.assertTrue(deployed_matches(before, 'stage-service'))
+        before['active_deployment']['spec']['services'][1]['run_command'] = 'wrong-app'
+        self.assertFalse(deployed_matches(before, 'stage-service'))
+
+    def test_configuration_metadata_never_contains_values(self):
+        from digitalocean_finder_rollout import configuration_metadata
+        before = fixture(True)
+        before['spec']['envs'][0]['value'] = 'EV[private-encrypted-credential]'
+        before['spec']['services'][0]['envs'] = [{'key': 'FULLMYSQL_DB_PASSWORD', 'value': '${db.PRIVATE_PASSWORD}', 'scope': 'RUN_TIME'}]
+        report = configuration_metadata(before)
+        encoded = json.dumps(report)
+        self.assertNotIn('private-encrypted', encoded)
+        self.assertNotIn('PRIVATE_PASSWORD', encoded)
+        self.assertNotIn('PRIVATE_CA', encoded)
+        self.assertTrue(any(row['encrypted'] for row in report['environment']))
+        self.assertTrue(any(row['binding'] for row in report['environment']))
+
     def test_public_git_provision_changes_only_new_component_source(self):
         before = fixture(True)
         standard = plan(before, 'provision', {'meat':'M'*64,'produce':'P'*64})

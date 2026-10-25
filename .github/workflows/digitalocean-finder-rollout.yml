@@ -5,6 +5,7 @@ on:
       - 'server/digitalocean_finder_rollout.py'
       - 'server/test_digitalocean_finder_rollout.py'
       - 'server/finder_department_service.py'
+      - 'server/finder_department_stage.py'
       - 'server/finder_department_schema_setup.py'
       - '.github/workflows/digitalocean-finder-rollout.yml'
   workflow_dispatch:
@@ -14,7 +15,7 @@ on:
         required: true
         type: choice
         default: inspect
-        options: [inspect, resize, provision, provision-public-git, finalize]
+        options: [inspect, resize, provision, provision-public-git, stage-service, finalize]
       public_key:
         description: 'Provision only: RSA-4096 public key (base64 DER). Never enter a private key or token.'
         required: false
