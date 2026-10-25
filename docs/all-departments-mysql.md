@@ -174,3 +174,23 @@ claiming SQL verification. No AI provider, model or credential is changed.
 Meat/Produce production readback still reports R2 with unchanged backup revision
 and counts. Full MySQL activation and unrestricted historical completeness are
 not established by these code changes.
+
+
+## Release candidate 7.0.559-evidence-research
+
+All seven disposable MySQL 8.4 integration tests passed on 732ebad, including
+the new 151-file posted-price history case. The next live smoke audit reached
+production and found a separate real regression: UPC 24073900000 was assigned
+to related SAP transfer output 2044864 instead of its established main selling
+article 1341297. The Google current-item row retains article/family 1341297.
+The fix preserves a regular 240 UPC's current main-article mapping when the
+same article has 251/252 evidence, before heuristic description matching; exact
+manual mappings and explicit manual gaps retain priority. Five focused mapping
+cases bring the local AI/mapping total to 67 passing tests. This changes read
+assignment only, not stored source history. Production must be checked again
+after the new runtime version is deployed. A predeployment CI run against the
+old runtime is not evidence that production has this fix.
+
+The software release can deploy the AI tools and mapping correction without
+activating the opt-in Meat/Produce state service. The separate schema, tokens,
+import parity and authority-switch gates remain required before MySQL cutover.

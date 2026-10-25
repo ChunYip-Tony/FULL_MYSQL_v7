@@ -2614,7 +2614,7 @@ def _quick_receiving_article_context(
     fph_all = ",".join(["%s"] * len(fids))
     cur.execute(
         f"""SELECT family_id,ean_upc,selling_description,pos_qty_7d,upc_velocity_7d,
-                   selling_uom,main_article_number
+                   selling_uom,main_article_number,article_number
             FROM quick_check_current
             WHERE family_id IN ({fph_all})
             ORDER BY family_id,ean_upc""",
@@ -3370,6 +3370,21 @@ def _quick_receiving_article_context(
         prefix = digits[:3]
         product_code = digits[3:6] if len(digits) >= 6 else ""
         sell_desc = _norm_desc(row.get("selling_description"))
+
+        # Preserve an established regular-UPC Main Article assignment when the
+        # same Main owns verified 251/252 evidence. A related SAP conversion
+        # output with a similar description is not authority to reassign it.
+        # Exact manual mappings and explicit manual gaps were handled above.
+        current_article = str(row.get("article_number") or "").strip()
+        main_article = str(row.get("main_article_number") or "").strip()
+        if prefix == "240" and current_article and current_article == main_article:
+            for candidate in articles:
+                if (str(candidate.get("article_number") or "") == current_article
+                    and candidate.get("lineage_basis") == "FAMILY_SOURCE_251_252"
+                    and candidate.get("movement_7d") is not None
+                    and _fallback_selling_article_compatible(
+                        prefix, current_article, str(candidate.get("article_description") or ""))):
+                    return current_article, "CURRENT_UPC_MAIN_ARTICLE_WITH_251_252"
         scored: list[tuple[float, str, dict[str, Any]]] = []
 
         for a in articles:
