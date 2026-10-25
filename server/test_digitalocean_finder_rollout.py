@@ -27,6 +27,32 @@ def fixture(resized=False):
 
 
 class RolloutTests(unittest.TestCase):
+    def test_public_git_provision_changes_only_new_component_source(self):
+        before = fixture(True)
+        standard = plan(before, 'provision', {'meat':'M'*64,'produce':'P'*64})
+        public = plan(before, 'provision-public-git', {'meat':'M'*64,'produce':'P'*64})
+        self.assertEqual(public['services'][0], before['spec']['services'][0])
+        self.assertEqual(public['envs'], before['spec']['envs'])
+        for component in [public['services'][1], public['jobs'][0]]:
+            self.assertNotIn('github', component)
+            self.assertEqual(component['git'], {'repo_clone_url':'https://github.com/ChunYip-Tony/FULL_MYSQL_v7.git','branch':'main'})
+            self.assertEqual(component['dockerfile_path'], 'server/Dockerfile')
+            self.assertEqual(component['source_dir'], 'server')
+        # Source selection must not change the guarded capacity or routing plan.
+        self.assertEqual(public['services'][1]['routes'], standard['services'][1]['routes'])
+        self.assertEqual(public['services'][1]['instance_size_slug'], DEPARTMENT_SIZE)
+        self.assertEqual(public['jobs'][0]['run_command'], standard['jobs'][0]['run_command'])
+
+    def test_public_git_action_cannot_report_success_without_new_service(self):
+        from digitalocean_finder_rollout import deployed_matches
+        value = fixture(True)
+        value['active_deployment'] = {'phase':'ACTIVE','spec':copy.deepcopy(value['spec'])}
+        self.assertFalse(deployed_matches(value, 'provision-public-git'))
+        value['spec'] = plan(value, 'provision-public-git', {'meat':'M'*64,'produce':'P'*64})
+        self.assertFalse(deployed_matches(value, 'provision-public-git'))
+        value['active_deployment']['spec'] = copy.deepcopy(value['spec'])
+        self.assertTrue(deployed_matches(value, 'provision-public-git'))
+
     def test_resize_changes_exactly_one_approved_size_field(self):
         before = fixture(); saved = copy.deepcopy(before)
         proposed = plan(before, 'resize')

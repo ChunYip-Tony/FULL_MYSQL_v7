@@ -12,7 +12,7 @@ import secrets
 import sys
 import time
 
-from digitalocean_health_policy import APP_ID, POLICY, SERVICE, request_json, service
+from digitalocean_health_policy import APP_ID, POLICY, REPO, SERVICE, request_json, service
 
 DEPARTMENT_SERVICE = 'finder-department-mysql'
 SCHEMA_JOB = 'finder-schema-v1'
@@ -75,7 +75,7 @@ def plan(app, action, credentials=None):
         if job:
             spec['jobs'] = [j for j in jobs if j['name'] != SCHEMA_JOB]
         return spec
-    if action != 'provision':
+    if action not in ('provision', 'provision-public-git'):
         raise RuntimeError('Unknown rollout action')
     if old['instance_size_slug'] != SEAFOOD_SIZE:
         raise RuntimeError('Complete and verify the Seafood resize first')
@@ -95,6 +95,12 @@ def plan(app, action, credentials=None):
     # Seafood work/admin routes. Do not copy the existing Seafood admin token.
     work_env = {'key':'FULLMYSQL_WORK_TOKEN','value':secrets.token_urlsafe(48),'type':'SECRET','scope':'RUN_TIME'}
     source = {k: copy.deepcopy(old[k]) for k in SOURCE_KEYS if k in old}
+    if action == 'provision-public-git':
+        # The owner made this repository public. New components can use the
+        # documented HTTPS Git source without adding a GitHub integration grant.
+        # Leave Seafood's source, automatic deployments, and runtime untouched.
+        source.pop('github', None)
+        source['git'] = {'repo_clone_url': 'https://github.com/' + REPO + '.git', 'branch': 'main'}
     component = dict(source, name=DEPARTMENT_SERVICE, http_port=8080, instance_size_slug=DEPARTMENT_SIZE,
                      instance_count=1, run_command='python -m uvicorn finder_department_service:app --host 0.0.0.0 --port 8080 --workers 1',
                      envs=db_env + [work_env] + [{'key':'FINDER_STORE_TOKEN_'+d.upper(),'value':v,'type':'SECRET','scope':'RUN_TIME'} for d,v in credentials.items()],
@@ -124,7 +130,7 @@ def deployed_matches(app, action):
         services = {s['name']:s for s in spec.get('services', [])}
         if services.get(SERVICE, {}).get('instance_size_slug') != SEAFOOD_SIZE:
             return False
-        if action in ('provision','finalize'):
+        if action in ('provision','provision-public-git','finalize'):
             target = services.get(DEPARTMENT_SERVICE, {})
             if target.get('instance_size_slug') != DEPARTMENT_SIZE or target.get('instance_count') != 1:
                 return False
@@ -141,7 +147,7 @@ def run(token, action, public_key='', client=request_json, pause=time.sleep, dea
         return {'read_only':True, 'inspection':public_summary(before)}
     if before.get('pending_deployment'):
         raise RuntimeError('A deployment is pending; wait before changing capacity')
-    credentials = new_department_credentials() if action == 'provision' else None
+    credentials = new_department_credentials() if action in ('provision','provision-public-git') else None
     ciphertext = encrypted_credentials(credentials, public_key) if credentials else None
     proposed = plan(before, action, credentials)
     if before['spec'] == proposed:
@@ -171,7 +177,7 @@ def run(token, action, public_key='', client=request_json, pause=time.sleep, dea
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=('inspect','resize','provision','finalize'))
+    parser.add_argument('action', choices=('inspect','resize','provision','provision-public-git','finalize'))
     args = parser.parse_args()
     try:
         print(json.dumps(run(os.environ.get('DIGITALOCEAN_ACCESS_TOKEN',''), args.action,
