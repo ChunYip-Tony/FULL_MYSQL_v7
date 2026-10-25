@@ -24,9 +24,10 @@ jobs:
       - name: Verify isolated startup and fail-closed readiness
         run: |
           docker run -d --name finder-department-ci --memory=256m --cpus=1 --read-only --tmpfs /tmp -p 127.0.0.1:18080:8080 finder-department-ci
-          trap 'docker rm -f finder-department-ci >/dev/null' EXIT
+          trap 'docker logs finder-department-ci; docker rm -f finder-department-ci >/dev/null' EXIT
           python - <<'PY'
           import json,time
+          from http.client import HTTPException
           from urllib.error import HTTPError,URLError
           from urllib.request import urlopen
           root='http://127.0.0.1:18080'
@@ -35,7 +36,7 @@ jobs:
                   with urlopen(root+'/healthz',timeout=2) as response:
                       assert json.load(response)['status']=='alive'
                   break
-              except (URLError,TimeoutError):
+              except (OSError,HTTPException):
                   time.sleep(0.5)
           else:
               raise AssertionError('Standalone service did not start')
