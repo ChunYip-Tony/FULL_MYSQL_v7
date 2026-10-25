@@ -4,6 +4,7 @@ on:
     paths:
       - 'server/finder_department_*'
       - 'server/finder_mysql_client.mjs'
+      - 'server/ai_catalog_research.py'
       - 'server/test_finder_*'
       - '.github/workflows/finder-department-store.yml'
   workflow_dispatch:

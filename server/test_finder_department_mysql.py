@@ -11,6 +11,7 @@ import threading
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
+from unittest.mock import patch
 
 import mysql.connector
 from fastapi import HTTPException
@@ -138,6 +139,32 @@ class MySQLIntegration(unittest.TestCase):
             self.store.put('meat', raw, validate_state(raw, 'meat'), previous)
         self.assertEqual(raised.exception.status_code, 422)
         self.assertEqual(self.store.get('meat')[1], previous)
+
+    def test_research_catalog_sql_pages_all_states_and_receiving_aliases(self):
+        from ai_catalog_research import research_item_catalog
+        with self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute('CREATE TEMPORARY TABLE quick_check_current (upc_id BIGINT PRIMARY KEY, ean_upc VARCHAR(30), article_number VARCHAR(30), main_article_number VARCHAR(30), family_id BIGINT, selling_description VARCHAR(100), family_description VARCHAR(100), selling_uom VARCHAR(10), quick_check_status VARCHAR(30))')
+            cur.execute('CREATE TEMPORARY TABLE article (article_id BIGINT, article_number VARCHAR(30), article_description VARCHAR(100))')
+            cur.execute('CREATE TEMPORARY TABLE bridge_article_family (article_id BIGINT, family_id BIGINT, mapping_status VARCHAR(30), valid_to DATETIME(6))')
+            cur.executemany('INSERT INTO quick_check_current VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                [(i, f'{i:012}', '1366580', '1366580', 1, 'OYSTER', 'SHELLFISH', None, 'HISTORICAL_ONLY' if i % 2 else 'QA_HOLD') for i in range(1, 62)])
+            cur.execute("INSERT INTO article VALUES (7,'9999999','Receiving alias')")
+            cur.execute("INSERT INTO bridge_article_family VALUES (7,1,'CONFIRMED',NULL)")
+            @contextmanager
+            def same_connection(**_timeouts):
+                yield conn
+            with patch('ai_catalog_research.db_conn', same_connection):
+                first = research_item_catalog({'query': 'oyster', 'cursor': None})
+                second = research_item_catalog({'query': 'oyster', 'cursor': first['next_cursor']})
+                self.assertEqual(first['returned_count'] + second['returned_count'], 61)
+                self.assertIsNone(second['next_cursor'])
+                self.assertEqual(len({r['upc_id'] for r in first['results'] + second['results']}), 61)
+                exact = research_item_catalog({'query': '000000000061', 'cursor': None})
+                self.assertEqual(exact['results'][0]['ean_upc'], '000000000061')
+                self.assertIsNone(exact['results'][0]['selling_uom'])
+                self.assertEqual(research_item_catalog({'query': '9999999', 'cursor': None})['returned_count'], 50)
+            cur.close()
 
 
 if __name__ == '__main__':

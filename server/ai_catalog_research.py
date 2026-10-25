@@ -11,7 +11,9 @@ def research_item_catalog(args):
     cursor = str(args.get('cursor') or '0')
     if len(query) > 100 or not cursor.isdigit() or len(cursor) > 18:
         raise ValueError('INVALID_CATALOG_QUERY_OR_CURSOR')
-    terms = query.split()[:10]
+    terms = query.split()
+    if len(terms) > 10:
+        raise ValueError('USE_AT_MOST_TEN_CATALOG_SEARCH_TERMS')
     filters, values = ['q.upc_id > %s'], [int(cursor)]
     for term in terms:
         # Bound text scans, parameterize every user value, and retain exact IDs.
@@ -26,7 +28,7 @@ def research_item_catalog(args):
     sql = """SELECT q.upc_id,q.ean_upc,q.article_number,q.main_article_number,
         q.selling_description,q.family_description,q.selling_uom,q.quick_check_status
         FROM quick_check_current q WHERE """ + ' AND '.join(filters) + ' ORDER BY q.upc_id LIMIT 51'
-    with db_conn() as conn:
+    with db_conn(read_timeout=10, connection_timeout=5) as conn:
         cur = conn.cursor(dictionary=True)
         cur.execute(sql, tuple(values))
         rows = cur.fetchall()
