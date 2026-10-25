@@ -5,6 +5,7 @@ import argparse
 import copy
 import json
 import os
+import re
 import sys
 import time
 from urllib.error import HTTPError, URLError
@@ -49,7 +50,17 @@ def request_json(method, token, payload=None):
                 raise RuntimeError('DigitalOcean did not return an app')
             return result['app']
     except HTTPError as error:
-        raise RuntimeError(f'DigitalOcean management returned HTTP {error.code}') from None
+        # Provider errors can mention the exact missing scope. Extract only scope
+        # identifiers; never log raw error bodies, spec values or credentials.
+        mentioned = []
+        if error.code == 403:
+            try:
+                raw_error = error.read(8192).decode('utf-8', errors='replace')
+                mentioned = sorted(set(re.findall(r'\b[a-z_]+:(?:read|update|create|delete|access_console)\b', raw_error)))
+            except Exception:
+                pass
+        detail = ('; provider-mentioned scopes: ' + ', '.join(mentioned)) if mentioned else ''
+        raise RuntimeError(f'DigitalOcean management {method} returned HTTP {error.code}' + detail) from None
     except (URLError, TimeoutError, ValueError):
         raise RuntimeError('DigitalOcean management response unavailable; inspect before retrying an update') from None
 
@@ -116,6 +127,8 @@ def run(token, apply=False, client=request_json, pause=time.sleep, deadline_seco
     service(fresh)
     if fresh.get('spec') != before['spec'] or fresh.get('pending_deployment'):
         raise RuntimeError('App configuration changed during inspection; re-plan the health policy')
+    print(json.dumps({'read_access_verified': True, 'before': metadata(before),
+                      'operation': 'PUT reviewed health probes only'}), flush=True)
     updated = client('PUT', token, {'spec': proposed})
     service(updated)
     output['applied'] = True

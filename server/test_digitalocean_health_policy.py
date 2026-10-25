@@ -1,8 +1,11 @@
 import copy
 import json
+import io
 import unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 
-from digitalocean_health_policy import APP_ID, EXISTING_APP_URL, POLICY, REPO, SERVICE, metadata, planned_spec, run
+from digitalocean_health_policy import APP_ID, EXISTING_APP_URL, POLICY, REPO, SERVICE, metadata, planned_spec, request_json, run
 
 
 def app():
@@ -15,6 +18,16 @@ def app():
 
 
 class HealthPolicyTests(unittest.TestCase):
+    def test_denied_update_reports_only_method_status_and_scope_identifiers(self):
+        body = b'{"message":"missing app:update and database:update PRIVATE_PASSWORD"}'
+        with patch('digitalocean_health_policy.build_opener') as opener:
+            opener.return_value.open.side_effect = HTTPError('https://private', 403, 'PRIVATE', {}, io.BytesIO(body))
+            with self.assertRaisesRegex(RuntimeError, 'PUT returned HTTP 403') as error:
+                request_json('PUT', 'PRIVATE_TOKEN', {'spec': {'secret': 'PRIVATE_SPEC'}})
+        self.assertIn('app:update', str(error.exception))
+        self.assertIn('database:update', str(error.exception))
+        self.assertNotIn('PRIVATE', str(error.exception))
+
     def test_only_probes_change_without_mutating_input_or_exposing_secrets(self):
         before = app()
         saved = copy.deepcopy(before)
