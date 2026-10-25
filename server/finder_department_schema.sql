@@ -31,9 +31,11 @@ SELECT h.department,h.generation,s.sha256,s.source_revision,s.record_counts,
 FROM finder_department_head h JOIN finder_department_state s
 ON s.department=h.department AND s.sha256=h.sha256;
 
+-- Cast at each JSON_TABLE boundary: MySQL view merging can otherwise lose the
+-- JSON expression type and reject a valid document with error 1210.
 CREATE OR REPLACE VIEW finder_upc_profiles AS
 SELECT d.department,d.source_revision,p.ordinal,p.upc,p.article,p.item_name,p.profile
-FROM finder_department_current d JOIN JSON_TABLE(d.document,'$.items[*]' COLUMNS (
+FROM finder_department_current d JOIN JSON_TABLE(CAST(d.document AS JSON),'$.items[*]' COLUMNS (
   ordinal FOR ORDINALITY,
   upc VARCHAR(64) PATH '$.upc' NULL ON EMPTY ERROR ON ERROR,
   article VARCHAR(64) PATH '$.article' NULL ON EMPTY ERROR ON ERROR,
@@ -44,7 +46,7 @@ FROM finder_department_current d JOIN JSON_TABLE(d.document,'$.items[*]' COLUMNS
 -- POS and family movements deliberately remain separate evidence collections.
 CREATE OR REPLACE VIEW finder_pos_records AS
 SELECT d.department,d.source_revision,p.ordinal,p.upc,p.source_date,p.record
-FROM finder_department_current d JOIN JSON_TABLE(d.document,'$.posEvents[*]' COLUMNS (
+FROM finder_department_current d JOIN JSON_TABLE(CAST(d.document AS JSON),'$.posEvents[*]' COLUMNS (
   ordinal FOR ORDINALITY,
   upc VARCHAR(64) PATH '$.upc' NULL ON EMPTY ERROR ON ERROR,
   source_date VARCHAR(32) PATH '$.date' NULL ON EMPTY ERROR ON ERROR,
@@ -53,7 +55,7 @@ FROM finder_department_current d JOIN JSON_TABLE(d.document,'$.posEvents[*]' COL
 
 CREATE OR REPLACE VIEW finder_family_movements AS
 SELECT d.department,d.source_revision,m.ordinal,m.article,m.source_date,m.record
-FROM finder_department_current d JOIN JSON_TABLE(d.document,'$.movements[*]' COLUMNS (
+FROM finder_department_current d JOIN JSON_TABLE(CAST(d.document AS JSON),'$.movements[*]' COLUMNS (
   ordinal FOR ORDINALITY,
   article VARCHAR(64) PATH '$.article' NULL ON EMPTY ERROR ON ERROR,
   source_date VARCHAR(32) PATH '$.date' NULL ON EMPTY ERROR ON ERROR,
