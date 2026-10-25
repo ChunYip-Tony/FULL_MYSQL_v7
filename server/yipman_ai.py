@@ -12,6 +12,7 @@ from typing import Any
 
 import requests
 from ai_catalog_research import research_item_catalog
+from ai_price_history import posted_price_history
 
 from business_clock import business_today, completed_through_date
 from quick_check_app import search_quick_check
@@ -41,7 +42,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 4096
 MAX_TOOL_ROUNDS = 5
-AI_REVISION = 'SEAFOOD_CONVERSATION_EVIDENCE_V28'
+AI_REVISION = 'SEAFOOD_CONVERSATION_EVIDENCE_V29'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -909,6 +910,12 @@ def _analysis_question(question, history=None):
 
 
 TOOLS = [
+    {'type': 'function', 'name': 'get_posted_price_history',
+     'description': 'Research uploaded posted-price history for an exact UPC, including older and unlinked source observations. Returns dated price-list rows with source files, price type and original price quantity; never POS selling averages. Null dates search all uploaded history. Continue next_cursor until null for all matching rows; report incomplete scans and unverified historical UOM/coverage. For realized POS performance use get_price_type_history separately.',
+     'parameters': {'type': 'object', 'properties': {
+         'upc': {'type': 'string'}, 'start_date': {'type': ['string', 'null']},
+         'end_date': {'type': ['string', 'null']}, 'cursor': {'type': ['string', 'null']}},
+         'required': ['upc', 'start_date', 'end_date', 'cursor'], 'additionalProperties': False}, 'strict': True},
     {"type": "function", "name": "research_item_catalog", "description": "Search or browse the complete published catalog, including READY, QA-held and historical-only items, by names, UPCs, family/selling/receiving articles. Empty query browses all. Follow next_cursor until null for all matches. This returns identities only; use dated evidence tools for sales, prices, costs and movements. Never call a partial page complete.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "cursor": {"type": ["string", "null"]}}, "required": ["query", "cursor"], "additionalProperties": False}, "strict": True},
 
     {'type':'function','name':'get_growth_opportunities',
@@ -928,7 +935,7 @@ TOOLS = [
      'parameters': {'type': 'object', 'properties': {'upc': {'type': 'string'}},
                     'required': ['upc'], 'additionalProperties': False}, 'strict': True},
     {'type': 'function', 'name': 'get_price_type_history',
-     'description': 'Compare historical REG versus SALE prices, daily velocity and GP dollars/day using separately verified REG, TPR and SALE records. Use this for price-type performance comparisons; optimizer candidate prices and TOTAL-only daily averages do not prove SALE history. Exact UPC required; use search_items if identity is unclear. GP is at current effective cost and samples count observed type days.',
+     'description': 'Compare REALIZED POS weighted average selling prices, daily velocity and GP dollars/day separately for REG, TPR and SALE. This is NOT posted-price history or a price-list timeline: use get_posted_price_history for those. Optimizer candidates and TOTAL-only averages do not prove SALE history. Exact UPC required. GP is recalculated at current effective cost, not historical booked profit; samples count observed POS type days.',
      'parameters': {'type': 'object', 'properties': {
          'upc': {'type': 'string'},
          'supported_days': {'type': ['integer', 'null'], 'minimum': 1, 'maximum': 365, 'description': 'Latest supported-day lookback; null defaults to 90.'}},
@@ -1047,6 +1054,7 @@ TOOLS = [
 ]
 
 _TOOL_HANDLERS = {
+    'get_posted_price_history': posted_price_history,
     "research_item_catalog": research_item_catalog,
     'compare_performance_periods': _comparison_tool,
     'get_movement_analysis': _movement_analysis_tool,
@@ -1135,6 +1143,7 @@ CRITICAL DATA RULES:
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
 - Sales amount and achieved selling price MUST come from POS. MVT Amount LC is posted cost/valuation, never revenue or selling price. An uploaded Price List is a separately dated reference, not evidence of a price actually paid. For achieved price use POS sales divided by verified POS selling quantity and label a realized average; do not claim it proves one fixed applied price.
 - 240 main and 249 service/cooked forms in the same product group must have equal current price; when 240 is promoted, 249 participates.
+- For posted price history, price-list changes, or a follow-up asking how its price changed, call get_posted_price_history with the resolved UPC and the user's date bounds. With no bounds use null dates, and continue its next_cursor while has_more. Separately use get_price_type_history only when realized POS performance is requested. Never label POS averages as posted prices, even if a prior assistant message did so. Correct that mistake explicitly. Completed paging only covers matching parsed accepted source records; historical coverage and UOM may remain unverified. Preserve original type, date, price quantity and source file, and do not infer missing days as zero or proof of stable prices.
 - For historical REG versus SALE price-performance questions, call get_price_type_history with the exact UPC. Keep TPR separate from SALE; never infer a type from a low price or optimizer candidate. TOTAL-only daily evidence cannot be relabeled SALE or TPR. The weekly-usage REG+TPR grouping applies only to usage estimation. Show each compared type’s weighted average selling price, quantity/day, daily gross profit and observed-day count. Label this GP as recalculated at current effective cost; it is not historical booked profit. An average selling price is not one fixed tested price. A compact four-column comparison table is allowed when these requested measures are needed.
 - For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days at that price before judging the next step. The latest 7-day sales window does not prove 7 observation days at the current price. Use explicit price-test evidence; otherwise say the observation start/count is unconfirmed. At exactly 7 completed test days the minimum is met, not still below 7. Active SALE locks are separate from REG observation.
 - Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates. A recent receipt or 4.4 days of stock alone does not prove old stock or overstock. State the returned risk flag and its evidence; if no item-specific flag or excess-stock threshold is available, say overstock is unconfirmed. Receipts below movement are not proof of over-receiving. A single available price type is not a comparative winner when SALE or REG evidence is missing.
@@ -1474,7 +1483,7 @@ def chat(
                     if cache_key not in request_cache:
                         request_cache[cache_key] = handler(arguments)
                     result = dict(request_cache[cache_key])
-                    if name in {'get_sales_performance','get_growth_opportunities','compare_performance_periods','get_stock_flow','get_item_cost','get_inventory','get_price_type_history','get_movement_analysis'}:
+                    if name in {'get_sales_performance','get_growth_opportunities','compare_performance_periods','get_stock_flow','get_item_cost','get_inventory','get_price_type_history','get_posted_price_history','get_movement_analysis'}:
                         source_evidence.append({'kind': name, 'query': arguments, 'source': result.get('source') or 'CANONICAL_STORE_RECORDS', 'start_date': result.get('start_date'), 'end_date': result.get('end_date'), 'supported_day_count': result.get('supported_day_count'), 'data_available': result.get('data_available', True)})
                     if name == 'get_price_review':
                         source_evidence.append({'kind': 'PRICE_POLICY', 'query': arguments.get('query'),

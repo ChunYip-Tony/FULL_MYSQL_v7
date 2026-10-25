@@ -5,6 +5,7 @@ on:
       - 'server/finder_department_*'
       - 'server/finder_mysql_client.mjs'
       - 'server/ai_catalog_research.py'
+      - 'server/ai_price_history.py'
       - 'server/test_finder_*'
       - '.github/workflows/finder-department-store.yml'
   workflow_dispatch:

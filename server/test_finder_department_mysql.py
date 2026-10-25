@@ -167,5 +167,41 @@ class MySQLIntegration(unittest.TestCase):
             cur.close()
 
 
+    def test_posted_price_sql_pages_old_unlinked_observations_and_excludes_failed_files(self):
+        from ai_price_history import posted_price_history
+        from datetime import datetime, timedelta
+        from decimal import Decimal
+        with self.connection() as conn:
+            cur = conn.cursor()
+            cur.execute('CREATE TEMPORARY TABLE ingest_file (file_id BIGINT PRIMARY KEY, upload_timestamp DATETIME(6), original_filename VARCHAR(100), source_type VARCHAR(30), processing_status VARCHAR(30), error_count INT, duplicate_of_file_id BIGINT)')
+            cur.execute('CREATE TEMPORARY TABLE price_list_observation (ean_upc VARCHAR(30), description VARCHAR(100), configured_price DECIMAL(12,2), price_quantity DECIMAL(12,3), price_type VARCHAR(30), source_since_date DATE, snapshot_at DATETIME(6), batch_id BIGINT, file_id BIGINT, sheet_id BIGINT, raw_id BIGINT, source_row_number BIGINT)')
+            anchor = datetime(2026, 10, 24, 1)
+            files = [(i, anchor-timedelta(days=i), f'price-{i}.xlsx', 'price_list', 'INGESTED', 0, None) for i in range(1, 152)]
+            files += [(200, anchor, 'failed.xlsx', 'price_list', 'INGESTED', 1, None), (201, anchor, 'duplicate.xlsx', 'price_list', 'INGESTED', 0, 1), (202, anchor, 'pending.xlsx', 'price_list', 'PENDING', 0, None)]
+            cur.executemany('INSERT INTO ingest_file VALUES (%s,%s,%s,%s,%s,%s,%s)', files)
+            cur.executemany('INSERT INTO price_list_observation VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)', [('0000123', 'OLD OYSTER', '14.99', None, 'TPR', None, row[1], 1, row[0], 1, row[0], 10) for row in files])
+            @contextmanager
+            def same_connection(**_timeouts):
+                yield conn
+            with patch('ai_price_history.db_conn', same_connection):
+                rows, cursor = [], None
+                while True:
+                    page = posted_price_history({'upc': '0000123', 'cursor': cursor})
+                    rows.extend(page['rows'])
+                    cursor = page['next_cursor']
+                    if not cursor:
+                        break
+                self.assertEqual(len(rows), 151)  # History beyond the old 120-file window.
+                self.assertEqual([r['file_id'] for r in rows], list(range(1, 152)))
+                self.assertEqual(rows[0]['configured_price'], Decimal('14.99'))
+                self.assertIsNone(rows[0]['historical_selling_unit'])
+                exact_day = posted_price_history({'upc': '0000123', 'start_date': '2026-10-22', 'end_date': '2026-10-22'})
+                self.assertEqual([r['file_id'] for r in exact_day['rows']], [1])
+                absent = posted_price_history({'upc': '0000999'})
+                self.assertFalse(absent['data_available'])
+                self.assertFalse(absent['historical_coverage_complete'])
+            cur.close()
+
+
 if __name__ == '__main__':
     unittest.main()

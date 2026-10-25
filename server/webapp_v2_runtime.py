@@ -453,7 +453,7 @@ def _summarize_price_types(trend: dict[str, Any], cost: Decimal | None) -> list[
 
 
 def price_type_history(upc: str, supported_days: int = 90) -> dict[str, Any]:
-    """Bounded current-cost comparison of canonical REG, TPR and SALE history."""
+    """Realized POS type performance, not posted-price or price-list history."""
     raw = str(upc or '').strip()
     if not raw.isdigit():
         raise ValueError('EXACT_UPC_REQUIRED')
@@ -472,12 +472,14 @@ def price_type_history(upc: str, supported_days: int = 90) -> dict[str, Any]:
         cost = Decimal(str(value)) if value is not None else None
         trend = _price_sales_trend(cur, int(row['upc_id']), count, qty_uom=unit)
         cur.close()
-    return {'upc': row.get('ean_upc'), 'name': row.get('selling_description'),
+    return {'source': 'CANONICAL_POS', 'evidence_kind': 'REALIZED_POS_PRICE_TYPE_PERFORMANCE',
+            'is_posted_price_history': False,
+            'upc': row.get('ean_upc'), 'name': row.get('selling_description'),
             'selling_unit': unit, 'cost_per_selling_unit': cost,
             'cost_date': row.get('cost_date'), 'cost_source': row.get('cost_source'),
             'requested_supported_days': count, 'supported_day_count': trend['supported_day_count'],
             'price_types': _summarize_price_types(trend, cost),
-            'comparison_note': 'REG, TPR and SALE are distinct. TOTAL/UNKNOWN has no verified type. Compare velocity and GP per observed type day; unequal and sparse samples are directional, not proof of causation. GP is recalculated at current effective cost, not historical booked profit. Missing source dates are excluded; absent types are unavailable, not zero.'}
+            'comparison_note': 'These are realized POS weighted averages, never posted price-list tickets. REG, TPR and SALE are distinct. TOTAL/UNKNOWN has no verified type. Compare velocity and GP per observed type day; unequal and sparse samples are directional, not proof of causation. GP is recalculated at current effective cost, not historical booked profit. Missing source dates are excluded; absent types are unavailable, not zero.'}
 
 
 def _promotion_type(start: date, end: date) -> str:

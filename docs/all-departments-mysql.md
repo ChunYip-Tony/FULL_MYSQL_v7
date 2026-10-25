@@ -152,3 +152,25 @@ On a7df643, MySQL candidate, snapshot resilience and supervisor CI passed.
 Python smoke passed all offline assertions and reached its live mapping audit,
 which failed because DigitalOcean returned HTTP504. This is retained as a
 production availability failure, not bypassed or reported as a passing check.
+
+
+## Posted price versus realized POS evidence
+
+Live Fish v255 testing verified the current oyster UPC price against the Google
+price-event source, then exposed a history-answer defect: the model described
+POS weighted average prices as posted prices. The candidate adds a separate
+`get_posted_price_history` read-only tool and labels POS type performance
+explicitly. The new tool pages accepted parsed price-list observations without
+the old 120-file history window, preserves exact UPC strings and file/row lineage,
+uses store-business-date boundaries, and distinguishes an exhausted scan from
+complete historical coverage. Unknown historical UOM stays unknown. It also
+works for source UPCs absent from the current published catalog.
+
+The 62 local AI tests pass. MySQL CI now also exercises 151 historical price
+files, multiple pages, reversed file/date order, excluded failed/duplicate/pending
+files, exact dates, and unlinked UPCs. This requires a passing new CI run before
+claiming SQL verification. No AI provider, model or credential is changed.
+
+Meat/Produce production readback still reports R2 with unchanged backup revision
+and counts. Full MySQL activation and unrestricted historical completeness are
+not established by these code changes.
