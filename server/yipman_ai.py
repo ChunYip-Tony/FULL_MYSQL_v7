@@ -11,6 +11,8 @@ from decimal import Decimal
 from typing import Any
 
 import requests
+from ai_catalog_research import research_item_catalog
+from ai_price_history import posted_price_history
 
 from business_clock import business_today, completed_through_date
 from quick_check_app import search_quick_check
@@ -40,7 +42,7 @@ DEFAULT_MODEL = os.environ.get("OPENAI_YIPMAN_MODEL", "gpt-6-luna").strip() or "
 MAX_HISTORY_MESSAGES = 10
 MAX_MESSAGE_CHARS = 4096
 MAX_TOOL_ROUNDS = 5
-AI_REVISION = 'SEAFOOD_PLAIN_ANSWERS_V27'
+AI_REVISION = 'SEAFOOD_CONVERSATION_EVIDENCE_V29'
 RATE_WINDOW_SECONDS = 60
 RATE_MAX_REQUESTS = 12
 
@@ -339,7 +341,9 @@ def _item_tool(args: dict[str, Any]) -> dict[str, Any]:
             "qty_28d": row.get("qty_28d"),
             "supported_days_28d": row.get("supported_days_28d"),
         })
-    return {"query": query, "count": len(compact), "results": compact}
+    return {"query": query, "count": len(compact), "results": compact,
+            "search_complete": False, "truncated": len(results) > len(compact),
+            "next_step": "Use research_item_catalog with cursor=null for a complete paginated catalog lookup; this fast selection is not a full history search."}
 
 
 def _inventory_result(info: dict[str, Any]) -> dict[str, Any]:
@@ -906,6 +910,14 @@ def _analysis_question(question, history=None):
 
 
 TOOLS = [
+    {'type': 'function', 'name': 'get_posted_price_history',
+     'description': 'Research uploaded posted-price history for an exact UPC, including older and unlinked source observations. Returns dated price-list rows with source files, price type and original price quantity; never POS selling averages. Null dates search all uploaded history. Continue next_cursor until null for all matching rows; report incomplete scans and unverified historical UOM/coverage. For realized POS performance use get_price_type_history separately.',
+     'parameters': {'type': 'object', 'properties': {
+         'upc': {'type': 'string'}, 'start_date': {'type': ['string', 'null']},
+         'end_date': {'type': ['string', 'null']}, 'cursor': {'type': ['string', 'null']}},
+         'required': ['upc', 'start_date', 'end_date', 'cursor'], 'additionalProperties': False}, 'strict': True},
+    {"type": "function", "name": "research_item_catalog", "description": "Search or browse the complete published catalog, including READY, QA-held and historical-only items, by names, UPCs, family/selling/receiving articles. Empty query browses all. Follow next_cursor until null for all matches. This returns identities only; use dated evidence tools for sales, prices, costs and movements. Never call a partial page complete.", "parameters": {"type": "object", "properties": {"query": {"type": "string"}, "cursor": {"type": ["string", "null"]}}, "required": ["query", "cursor"], "additionalProperties": False}, "strict": True},
+
     {'type':'function','name':'get_growth_opportunities',
      'description':'Prioritize evidence-backed ways to grow sales and historical gross profit. Unless the user specifies a period, supported_days must be null (defaults to 7). Revenue and GP fields are USD, never LB/EA. Returns dated actions and required checks. Does not forecast gains or authorize price changes.',
      'parameters':{'type':'object','properties':{'item_query':{'type':['string','null']},'supported_days':{'type':['integer','null'],'minimum':1,'maximum':90}},'required':['item_query','supported_days'],'additionalProperties':False},'strict':True},
@@ -923,7 +935,7 @@ TOOLS = [
      'parameters': {'type': 'object', 'properties': {'upc': {'type': 'string'}},
                     'required': ['upc'], 'additionalProperties': False}, 'strict': True},
     {'type': 'function', 'name': 'get_price_type_history',
-     'description': 'Compare historical REG versus SALE prices, daily velocity and GP dollars/day using separately verified REG, TPR and SALE records. Use this for price-type performance comparisons; optimizer candidate prices and TOTAL-only daily averages do not prove SALE history. Exact UPC required; use search_items if identity is unclear. GP is at current effective cost and samples count observed type days.',
+     'description': 'Compare REALIZED POS weighted average selling prices, daily velocity and GP dollars/day separately for REG, TPR and SALE. This is NOT posted-price history or a price-list timeline: use get_posted_price_history for those. Optimizer candidates and TOTAL-only averages do not prove SALE history. Exact UPC required. GP is recalculated at current effective cost, not historical booked profit; samples count observed POS type days.',
      'parameters': {'type': 'object', 'properties': {
          'upc': {'type': 'string'},
          'supported_days': {'type': ['integer', 'null'], 'minimum': 1, 'maximum': 365, 'description': 'Latest supported-day lookback; null defaults to 90.'}},
@@ -1042,6 +1054,8 @@ TOOLS = [
 ]
 
 _TOOL_HANDLERS = {
+    'get_posted_price_history': posted_price_history,
+    "research_item_catalog": research_item_catalog,
     'compare_performance_periods': _comparison_tool,
     'get_movement_analysis': _movement_analysis_tool,
     'get_growth_opportunities': lambda args: __import__('performance_advice').growth_opportunities(args,_sales_tool),
@@ -1069,7 +1083,7 @@ Business date: {today}. Latest normally completed business day: {completed}.
 Product roles: Fish Finder is the overall seafood system. Fish Base is its unified desktop website; Fish Boat is its mobile app. Both share Home, Inventory, Prices, AI and Settings navigation. Settings is the far-right menu and contains Data & Uploads (uploading, processing, QA, publication and stock records) and Current Rules. The former standalone Fish Base data center and Fish Watch name are retired; their functionality is now in the unified Fish Base website. FisherMan AI remains the read-only seafood assistant across Fish Finder.
 
 ANALYSIS AND ADVICE:
-- Help the manager decide what to do, not only repeat rows. For difficult analysis use enough detail to answer: finding, supporting evidence with dates, prioritized action, and uncertainty. A short action table can include why, confidence and what to measure next. Do not impose the simple-answer 60-word limit on analysis, explanations or advice.
+- Help the manager decide what to do, not only repeat rows. For difficult analysis use enough detail to answer: finding, supporting evidence with dates, prioritized action, and uncertainty. A short action table can include why, confidence and what to measure next. Match detail to the decision; explain reasoning when it helps the manager act.
 - For more sales, more GP, growth, opportunity or what-to-do questions, call get_growth_opportunities. Show at most three prioritized actions with item/family, evidence dates, why, confidence, next step and success metric. Then use inventory, movement or price-review tools to validate the proposed action. Profitable sales growth, sell-through and lower verified waste matter together; volume or revenue growth alone is not success.
 - For trends or why performance changed, call compare_performance_periods. Preserve explicit requested periods. Without dates compare the latest 7 supported POS days with the preceding 7 and state those actual dates. Compare sales/day, same-unit quantity/day and historical-cost GP/day; explain unequal day coverage and weekday mix.
 - For get_growth_opportunities use supported_days=null unless the user requests a different window. Revenue and GP are dollars: always label pos_revenue_usd_per_supported_day as $/day, never lb/day or units/day. A product's stock UOM cannot relabel a revenue metric. Use only explicit quantity fields for physical volume. Preserve the supplied historical versus current-cost GP basis.
@@ -1118,6 +1132,7 @@ CRITICAL DATA RULES:
 - Keep weekly usage estimates separate from delivery orders. For ordering, use the delivery-specific family net calculation and disclosed date assumptions above. Ask only for essential details that are still missing.
 - Distinguish GENERAL SEAFOOD KNOWLEDGE from STORE DATA. Answer species, cuts, cooking, product differences, handling and freezing questions directly from general knowledge without database tools. The tool requirements below apply to Store 1032's current or historical operational facts, not universal knowledge or general cooking quantities.
 - Never imply that general guidance describes this store's actual stock, costs, sales, supplier, inspection status or promotion. Use tools for those claims. For safety questions use conservative established guidance, distinguish quality from safety, and acknowledge uncertainty; never assure safety from smell or appearance alone.
+- For complete item discovery or an unsuccessful fast lookup, use research_item_catalog. It includes QA-held and historical-only catalog items. Continue next_cursor while has_more is true; if the request budget ends, explicitly label the search incomplete. Its result does not verify history or include unindexed raw source rows.
 - Resolve everyday names with search_items before declaring an item missing. Drop filler such as "the" and "in": "oyster in jar" -> "oyster jar". If no results, retry the core product word and inspect package qualifiers. Preserve fresh/frozen/live, jar/shell, size and pack distinctions. Prefer actively selling UPCs over historical aliases; never combine their POS quantities. Ask which item only if multiple plausible active items remain.
 - A proposed future promotion price is a scenario, not the current database price. Resolve the item and acknowledge the proposed price first. Ask for actual promotion dates and the intended decision if needed before expensive analysis. Never ask for a photo: this chat accepts text only.
 - If the user says try again after an unsupported sales date error, rerun the sales tool using the original item. For a general how-is-it-selling question use both dates null; do not repeat the old date failure as the answer. Preserve explicit user date limits.
@@ -1128,6 +1143,7 @@ CRITICAL DATA RULES:
 - Cost authority: latest receipt valuation first; then Live/Fresh/Frozen official report; then OH fallback.
 - Sales amount and achieved selling price MUST come from POS. MVT Amount LC is posted cost/valuation, never revenue or selling price. An uploaded Price List is a separately dated reference, not evidence of a price actually paid. For achieved price use POS sales divided by verified POS selling quantity and label a realized average; do not claim it proves one fixed applied price.
 - 240 main and 249 service/cooked forms in the same product group must have equal current price; when 240 is promoted, 249 participates.
+- For posted price history, price-list changes, or a follow-up asking how its price changed, call get_posted_price_history with the resolved UPC and the user's date bounds. With no bounds use null dates, and continue its next_cursor while has_more. Separately use get_price_type_history only when realized POS performance is requested. Never label POS averages as posted prices, even if a prior assistant message did so. Correct that mistake explicitly. Completed paging only covers matching parsed accepted source records; historical coverage and UOM may remain unverified. Preserve original type, date, price quantity and source file, and do not infer missing days as zero or proof of stable prices.
 - For historical REG versus SALE price-performance questions, call get_price_type_history with the exact UPC. Keep TPR separate from SALE; never infer a type from a low price or optimizer candidate. TOTAL-only daily evidence cannot be relabeled SALE or TPR. The weekly-usage REG+TPR grouping applies only to usage estimation. Show each compared type’s weighted average selling price, quantity/day, daily gross profit and observed-day count. Label this GP as recalculated at current effective cost; it is not historical booked profit. An average selling price is not one fixed tested price. A compact four-column comparison table is allowed when these requested measures are needed.
 - For price decisions, GP dollars per day is primary while protecting velocity. A new REG test needs at least 7 completed observation days at that price before judging the next step. The latest 7-day sales window does not prove 7 observation days at the current price. Use explicit price-test evidence; otherwise say the observation start/count is unconfirmed. At exactly 7 completed test days the minimum is met, not still below 7. Active SALE locks are separate from REG observation.
 - Fresh/Live and frozen freshness/DOH warnings should use the values returned by tools. Do not make up expiry dates. A recent receipt or 4.4 days of stock alone does not prove old stock or overstock. State the returned risk flag and its evidence; if no item-specific flag or excess-stock threshold is available, say overstock is unconfirmed. Receipts below movement are not proof of over-receiving. A single available price type is not a comparative winner when SALE or REG evidence is missing.
@@ -1137,7 +1153,8 @@ CRITICAL DATA RULES:
 ANSWER STYLE:
 - Lead with the answer or the action the user can take. For one-item ordering, start with the estimated order quantity and unit, then delivery coverage, usable stock deducted, and the one or two material checks. Never start with identity resolution, Family IDs or an explanation of your process. If the order is not supported, say what is missing and what the user can do next; still show a supported demand estimate if available.
 - General seafood knowledge: do not imply fresh, frozen, shucked or shell-on form alone proves quality or safety. Quality depends on handling and storage. Cooking time depends on fish size/thickness; safety depends on verified cooking temperature, not a fixed number of minutes. Mention raw-seafood risks when recommending raw consumption.
-- Stay on point and brief by default. Simple lookups use at most 60 words; an ordinary single-item recommendation normally uses 80-140 words. Use more detail only for a complex decision or when the user asks. Do not add unrelated rules, generic advice, repeated summaries or a full method description. Never shorten away a limitation that changes the decision.
+- Speak like a thoughtful colleague, using natural connected prose. Answer first, then explain the relevant evidence and practical implication. Match the depth to the question; do not force word counts, headings, templates or a checklist. Follow-ups should build on the prior answer, retaining the user's item, dates, proposed prices and corrections. Ask only for details that materially affect the answer. Do not add unrelated rules, generic advice or repeated summaries. Never shorten away a limitation that changes the decision.
+- Research current and historical evidence separately. Item lookup is identification, not a complete history search. A truncated or capped lookup does not establish absence. Preserve source dates, units, coverage and unresolved mappings; retrieve relevant history using the identified UPC/family and requested period. Explain what remains answerable when one evidence source is incomplete.
 - When a tool returns calculation_answer, preserve its verified dates, quantities, unit, included UPC pool and confidence. Translate its labels and notes into the requested reply language; never redo or change the arithmetic.
 - Show prices to 2 decimal places and ordinary cost checks to at most 4 decimals unless the user requests more precision.
 - For one item, use short sentences or up to three bullets; a table is optional. Use a compact table for multiple items or a comparison, normally no more than three columns. Do not force a simple answer into a table. Put quantities and units together. No HTML or code fences.
@@ -1466,7 +1483,7 @@ def chat(
                     if cache_key not in request_cache:
                         request_cache[cache_key] = handler(arguments)
                     result = dict(request_cache[cache_key])
-                    if name in {'get_sales_performance','get_growth_opportunities','compare_performance_periods','get_stock_flow','get_item_cost','get_inventory','get_price_type_history','get_movement_analysis'}:
+                    if name in {'get_sales_performance','get_growth_opportunities','compare_performance_periods','get_stock_flow','get_item_cost','get_inventory','get_price_type_history','get_posted_price_history','get_movement_analysis'}:
                         source_evidence.append({'kind': name, 'query': arguments, 'source': result.get('source') or 'CANONICAL_STORE_RECORDS', 'start_date': result.get('start_date'), 'end_date': result.get('end_date'), 'supported_day_count': result.get('supported_day_count'), 'data_available': result.get('data_available', True)})
                     if name == 'get_price_review':
                         source_evidence.append({'kind': 'PRICE_POLICY', 'query': arguments.get('query'),

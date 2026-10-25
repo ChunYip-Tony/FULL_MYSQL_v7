@@ -1,0 +1,24 @@
+name: DigitalOcean read-only preflight
+on:
+  workflow_dispatch:
+    inputs:
+      app_id:
+        description: 'Existing Seafood app UUID (optional; otherwise match its known live URL)'
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  inspect-existing-app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify sanitized, read-only API access
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+          DIGITALOCEAN_APP_ID: ${{ inputs.app_id }}
+        run: python server/digitalocean_preflight.py
