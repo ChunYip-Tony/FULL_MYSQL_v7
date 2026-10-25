@@ -90,6 +90,15 @@ class MySQLIntegration(unittest.TestCase):
         self.assertEqual(self.query('SELECT article,source_date FROM finder_family_movements'), [('1366580', '2026-10-22')])
         self.assertEqual(json.loads(self.query('SELECT document FROM finder_department_current')[0][0]), value)
 
+    def test_explicit_schema_job_preserves_existing_head_and_rolls_back_probe(self):
+        from finder_department_schema_setup import apply_and_verify
+        self.save(state('existing-before-schema-verification'))
+        before=self.store.get('meat')
+        result=apply_and_verify(self.connection)
+        self.assertTrue(result['write_readback_and_rollback_verified'])
+        self.assertEqual(self.store.get('meat'),before)
+        self.assertEqual(self.query('SELECT COUNT(*) FROM finder_department_state'),[(1,)])
+
     def test_two_simultaneous_writers_have_one_commit_and_one_conflict(self):
         initial, _ = self.save(state())
         barrier = threading.Barrier(2)
