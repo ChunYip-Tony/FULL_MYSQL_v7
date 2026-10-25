@@ -132,3 +132,23 @@ The smoke workflow was repaired to check current UI/data contracts: dynamic
 company A/B/C labels, compact receiving and stock controls, current AI ordering
 tools, and service-worker invalidation. It also initializes its missing UI source
 variable. These changes preserve production behavior and fix stale test assumptions.
+
+
+## Public access and AI research follow-up
+
+The owner requires no visitor sign-in for Bases, Boats or Finders. All three
+Sites now have public access. Meat v38 and Produce v96 publish the staged
+storage adapter; no MySQL authority flag has been activated.
+
+FisherMan adds a paginated research_item_catalog tool, including historical-only
+and QA-held catalog rows, name/UPC/family/receiving aliases, explicit has_more and
+next_cursor, and identity-only scope. Fast search now declares that it is not a
+complete catalog/history scan. Natural conversational instructions preserve
+all existing source, unit, stock and price-action rules. No model, provider key
+or paid plan is changed. Three catalog contract tests plus 56 existing AI tests
+pass locally; real production catalog queries still require deployment/readback.
+
+On a7df643, MySQL candidate, snapshot resilience and supervisor CI passed.
+Python smoke passed all offline assertions and reached its live mapping audit,
+which failed because DigitalOcean returned HTTP504. This is retained as a
+production availability failure, not bypassed or reported as a passing check.
