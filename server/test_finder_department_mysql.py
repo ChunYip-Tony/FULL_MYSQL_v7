@@ -68,6 +68,14 @@ class MySQLIntegration(unittest.TestCase):
         raw = json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode()
         return self.store.put(department, raw, validate_state(raw, department), expected)
 
+    def test_deployment_readiness_uses_real_schema_without_changing_saved_head(self):
+        from finder_department_readiness import database_ready
+        value = state('readiness-check')
+        self.save(value)
+        before = self.store.get('meat')
+        self.assertTrue(database_ready(self.connection))
+        self.assertEqual(self.store.get('meat'), before)
+
     def query(self, sql, args=()):
         with self.connection() as conn:
             cur = conn.cursor()
