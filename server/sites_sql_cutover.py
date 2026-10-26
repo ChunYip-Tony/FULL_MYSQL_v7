@@ -13,7 +13,7 @@ import re
 
 from fastapi import HTTPException
 from db import db_conn
-from migration_writer_audit import grant_evidence
+from migration_writer_audit import grant_evidence, grant_target
 from sites_cutover_gate import deployment_mode
 
 AUTH_SHA256 = '25501ff1d2758cbbe1d05c06a620ca59e5552f0067cd8a8664cf21c52712ef72'
@@ -121,8 +121,11 @@ def inspect_plan(cur,cutover_id,previous=None):
         has_write=bool(global_names&WRITE_PRIVILEGES or any(set(g['privileges'])&WRITE_PRIVILEGES for g in local_grants))
         if has_write and fp not in WRITERS:raise ValueError('An additional SQL writer must be classified')
         if fp not in WRITERS:continue
-        if row['account_locked']!='N' or local_grants or 'SYSTEM_USER' in global_names:
+        if row['account_locked']!='N' or 'SYSTEM_USER' in global_names:
             raise ValueError('Writer account shape differs from the reviewed global-grant plan')
+        objects=table_grants(raw,schema)
+        if any(g['scope']!='CURRENT_DATABASE_OBJECT' for g in local_grants) or objects and fp!=CURRENT_ACCOUNT:
+            raise ValueError('Unreviewed local writer scope')
         restrictions=[g for g in scoped if g['scope']=='CURRENT_DATABASE' and g['effect']=='RESTRICTION']
         if restrictions and previous is None:raise ValueError('A new plan cannot replace an existing database restriction')
         before=next((t['before'] for t in previous['targets'] if t['fingerprint']==fp),None) if previous else raw
@@ -173,17 +176,42 @@ def read_control(cur,cutover_id):
 def save_control(cur,record):
     cur.execute('INSERT INTO '+identifier(CONTROL_TABLE)+'(cutover_id,document) VALUES(%s,%s) ON DUPLICATE KEY UPDATE document=VALUES(document)',(record['plan']['cutoverId'],canonical(record)))
 
+def table_grants(raw,schema):
+    """Only the observed SELECT/INSERT/UPDATE/DELETE table grants are supported."""
+    found={}
+    for grant in raw:
+        evidence=grant_evidence([grant],schema)
+        if evidence['role_or_unparsed_grants_present']:raise ValueError('Unparsed table grant')
+        entry=evidence['scoped_grants'][0]
+        if entry['scope']!='CURRENT_DATABASE_OBJECT':continue
+        match=re.search(r'\sON\s+(.+?)\s+(?:TO|FROM)\s',grant,re.I)
+        database,table,global_scope,database_scope=grant_target(match.group(1))
+        names=set(entry['privileges'])
+        if database!=schema or global_scope or database_scope or not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]{0,63}',table) or table in found or entry['effect']!='GRANT' or entry['grant_option'] or not names.issubset({'SELECT','INSERT','UPDATE','DELETE'}):raise ValueError('Unsupported table-specific privilege')
+        found[table]=names
+    return found
+
+def changed_table_grants(original,current,schema,allow_partial):
+    before,after=table_grants(original,schema),table_grants(current,schema)
+    if set(after)-set(before):raise ValueError('An unreviewed table grant appeared')
+    for table,names in before.items():
+        actual=after.get(table,set());read=names-WRITE_PRIVILEGES
+        if not read.issubset(actual) or not actual.issubset(names) or not allow_partial and actual!=read:raise ValueError('Table privilege readback differs from the exact cutover plan')
+
 def restriction_shape(cur,plan,allow_partial=False):
     for target in plan['targets']:
         raw=grants(cur,target['user'],target['host']);summary=grant_evidence(raw,plan['schema'])
         if summary['role_or_unparsed_grants_present']:raise ValueError('Unparsed current writer grants')
         restrictions=[g for g in summary['scoped_grants'] if g['effect']=='RESTRICTION' and g['scope']=='CURRENT_DATABASE']
         denied={p for r in restrictions for p in r['privileges']}
-        retained=[]
+        changed_table_grants(target['before'],raw,plan['schema'],allow_partial)
+        retained=[];original=[]
         for grant in raw:
             parsed=grant_evidence([grant],plan['schema'])['scoped_grants']
-            if not any(g['scope']=='CURRENT_DATABASE' and g['effect']=='RESTRICTION' for g in parsed):retained.append(grant)
-        if retained!=target['before'] or not denied.issubset(set(target['privileges'])) or (not allow_partial and denied!=set(target['privileges'])):
+            if not any(g['scope']=='CURRENT_DATABASE_OBJECT' or g['scope']=='CURRENT_DATABASE' and g['effect']=='RESTRICTION' for g in parsed):retained.append(grant)
+        for grant in target['before']:
+            if not any(g['scope']=='CURRENT_DATABASE_OBJECT' for g in grant_evidence([grant],plan['schema'])['scoped_grants']):original.append(grant)
+        if retained!=original or not denied.issubset(set(target['privileges'])) or (not allow_partial and denied!=set(target['privileges'])):
             raise ValueError('Writer privilege readback differs from the exact cutover plan')
 
 def require_drained(cur,allowed):
@@ -215,14 +243,18 @@ def prepare(cur,plan,password,backup_hash):
     if rows(cur,'SELECT User FROM mysql.user WHERE User=%s AND Host=%s',(probe,'%')):raise ValueError('A prior probe needs review before retry')
     cur.execute('CREATE USER '+account(probe)+' IDENTIFIED BY %s ACCOUNT LOCK',(password,))
     try:
-        cur.execute('GRANT INSERT ON *.* TO '+account(probe));before=grants(cur,probe,'%')
+        cur.execute('GRANT INSERT ON *.* TO '+account(probe))
+        cur.execute('GRANT SELECT,INSERT ON '+identifier(schema)+'.'+identifier(CONTROL_TABLE)+' TO '+account(probe));before=grants(cur,probe,'%')
         with controller_connection(user,password) as conn:
             c=conn.cursor(dictionary=True,buffered=True)
             try:
+                c.execute('REVOKE INSERT ON '+identifier(schema)+'.'+identifier(CONTROL_TABLE)+' FROM '+account(probe))
                 c.execute('REVOKE INSERT ON '+identifier(schema)+'.* FROM '+account(probe))
+                changed_table_grants(before,grants(cur,probe,'%'),schema,False)
                 after=grant_evidence(grants(cur,probe,'%'),schema)
                 if not any(g['effect']=='RESTRICTION' and g['scope']=='CURRENT_DATABASE' and g['privileges']==['INSERT'] for g in after['scoped_grants']):raise ValueError('Partial revoke probe failed')
                 c.execute('GRANT INSERT ON '+identifier(schema)+'.* TO '+account(probe))
+                c.execute('GRANT INSERT ON '+identifier(schema)+'.'+identifier(CONTROL_TABLE)+' TO '+account(probe))
                 if grants(cur,probe,'%')!=before:raise ValueError('Exact grant restore probe failed')
             finally:c.close()
     finally:cur.execute('DROP USER '+account(probe))
@@ -241,6 +273,9 @@ def freeze(conn,cur,cutover_id,password):
             require_drained(cur,allowed)
             record['state']='FENCING';save_control(c,record)
             for target in plan['targets']:
+                for table,names in table_grants(grants(cur,target['user'],target['host']),plan['schema']).items():
+                    writes=names&WRITE_PRIVILEGES
+                    if writes:c.execute('REVOKE '+','.join(sorted(writes))+' ON '+identifier(plan['schema'])+'.'+identifier(table)+' FROM '+account(target['user'],target['host']))
                 current=grant_evidence(grants(cur,target['user'],target['host']),plan['schema'])
                 denied={p for g in current['scoped_grants'] if g['scope']=='CURRENT_DATABASE' and g['effect']=='RESTRICTION' for p in g['privileges']}
                 missing=set(target['privileges'])-denied
@@ -283,6 +318,9 @@ def rollback(cur,cutover_id,password):
         try:
             for target in plan['targets']:
                 c.execute('GRANT '+','.join(target['privileges'])+' ON '+identifier(plan['schema'])+'.* TO '+account(target['user'],target['host']))
+                for table,names in table_grants(target['before'],plan['schema']).items():
+                    writes=names&WRITE_PRIVILEGES
+                    if writes:c.execute('GRANT '+','.join(sorted(writes))+' ON '+identifier(plan['schema'])+'.'+identifier(table)+' TO '+account(target['user'],target['host']))
             for target in plan['targets']:
                 if grants(cur,target['user'],target['host'])!=target['before']:raise ValueError('Restored grants differ from the original manifest')
             record['state']='ROLLED_BACK';record['restoredAt']=datetime.now(timezone.utc).isoformat();save_control(c,record)
