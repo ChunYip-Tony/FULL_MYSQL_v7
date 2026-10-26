@@ -11,20 +11,22 @@ def grant_evidence(grants, schema):
     for raw in grants:
         # Never return raw grants: older servers may include authentication
         # clauses, account names or plugin-specific credential material.
-        match = re.match(r'^GRANT\s+(.+?)\s+ON\s+(.+?)\s+TO\s', str(raw), re.I)
+        match = re.match(r'^(GRANT|REVOKE)\s+(.+?)\s+ON\s+(.+?)\s+(?:TO|FROM)\s', str(raw), re.I)
         if not match:
             roles = True
             continue
-        privileges, target = match.groups()
-        grant_option = grant_option or bool(re.search(r'\sWITH\s+GRANT\s+OPTION\s*$', str(raw), re.I))
+        effect, privileges, target = match.groups()
+        option = effect.upper() == 'GRANT' and bool(re.search(r'\sWITH\s+GRANT\s+OPTION\s*$', str(raw), re.I))
+        grant_option = grant_option or option
         target = target.replace('`', '').strip()
-        scope = 'GLOBAL' if target == '*.*' else 'CURRENT_DATABASE' if target == schema + '.*' else 'OTHER_SCOPE'
+        scope = 'GLOBAL' if target == '*.*' else 'CURRENT_DATABASE' if target == schema + '.*' else 'CURRENT_DATABASE_OBJECT' if target.startswith(schema + '.') else 'OTHER_SCOPE'
         names = [name.strip().upper() for name in privileges.split(',')]
         if any(not re.fullmatch(r'[A-Z_ ]{1,80}', name) for name in names):
             roles = True
             continue
-        rows.append({'scope': scope, 'privileges': names})
-    return {'grants': rows, 'role_or_unparsed_grants_present': roles,
+        rows.append({'scope': scope, 'privileges': names, 'effect': 'GRANT' if effect.upper() == 'GRANT' else 'RESTRICTION', 'grant_option': option})
+    return {'grants': [{'scope': row['scope'], 'privileges': row['privileges']} for row in rows if row['effect'] == 'GRANT'],
+            'scoped_grants': rows, 'role_or_unparsed_grants_present': roles,
             'grant_option_observed': grant_option, 'effective_role_grants_expanded': False}
 
 
@@ -40,7 +42,7 @@ def classified_counts(cur, query, fields):
         return {'available': False, 'visibility': 'UNKNOWN'}
 
 
-def writer_inventory(connect):
+def writer_inventory(connect, seafood_tables=()):
     result = {'contract': 'SEAFOOD_WRITER_AUDIT_V1', 'checked_at': datetime.now(timezone.utc).isoformat(),
               'read_only': True, 'freeze_state': 'NOT_ESTABLISHED', 'external_writer_inventory_complete': False,
               'database_controls_changed': False}
@@ -70,8 +72,8 @@ def writer_inventory(connect):
                 result['privileges'] = {'available': True, **grant_evidence(grants, current['schema_name'])}
             except Exception:
                 result['privileges'] = {'available': False}
-            visible_all = any(row['scope'] == 'GLOBAL' and any(name in ('PROCESS', 'ALL PRIVILEGES') for name in row['privileges'])
-                              for row in result['privileges'].get('grants', []))
+            visible_all = any(row['effect'] == 'GRANT' and row['scope'] == 'GLOBAL' and any(name in ('PROCESS', 'ALL PRIVILEGES') for name in row['privileges'])
+                              for row in result['privileges'].get('scoped_grants', []))
             try:
                 # No SQL text, hostnames, credentials or session identifiers.
                 cur.execute('SELECT COMMAND,COUNT(*) AS connection_count FROM information_schema.PROCESSLIST WHERE DB=DATABASE() GROUP BY COMMAND')
@@ -139,6 +141,8 @@ def writer_inventory(connect):
                                              'counts': {str(row['STATUS']): int(row['event_count']) for row in cur.fetchall()}}
             except Exception:
                 result['database_events'] = {'available': False, 'visibility': 'UNKNOWN'}
+            from migration_writer_preflight import preflight_inventory
+            result['cutover_preflight'] = preflight_inventory(cur, current, seafood_tables, grant_evidence, classified_counts)
             return result
         finally:
             cur.close()
