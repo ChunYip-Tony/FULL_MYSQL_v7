@@ -47,10 +47,10 @@ class PreflightTests(unittest.TestCase):
         cur, result = self.run_audit()
         account = result['accounts']['accounts'][0]
         self.assertTrue(account['current_account'])
-        self.assertEqual(account['grants']['grants'][1]['effect'], 'RESTRICTION')
+        self.assertEqual(account['grants']['scoped_grants'][1]['effect'], 'RESTRICTION')
         self.assertEqual([r['scope'] for r in result['tables']['tables']], ['SEAFOOD_EXPORT','SHARED_DEPARTMENT_STORE','NOT_CLASSIFIED'])
         self.assertEqual(result['tables']['tables'][1]['rows'], 2)
-        self.assertTrue(result['sessions']['same_login_name_does_not_prove_account_host'])
+        self.assertTrue(result['sessions']['login_match_is_not_authenticated_identity'])
         self.assertFalse(result['effective_writer_inventory_complete'])
         self.assertFalse(result['database_controls_changed'])
         for secret in ['secret_user','secret_host','private_schema']:
