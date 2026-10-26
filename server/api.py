@@ -2441,14 +2441,9 @@ def web_upload_republish_chatgpt_analysis(batch_id:int,request:Request):
                         'blocking_issue_count':int(p3.get('blocking_issue_count') or 0),
                     },
                 )
-            if int(p3.get('quick_check_ready_rows') or 0)<=0:
-                raise HTTPException(
-                    409,
-                    detail={
-                        'status':'BLOCKED',
-                        'reason':'NO_READY_ROWS_FOR_ANALYSIS',
-                    },
-                )
+            # A header-only READY table is valid when inventory is held.
+            # Publish dated evidence and QA holds after full readback instead
+            # of freezing otherwise valid POS/price history behind stock gaps.
 
             # Do not relabel a newer serving snapshot as an older batch.
             cur.execute(
@@ -5624,6 +5619,7 @@ def repair_single_total_pos(batch_id:int,request:Request):
 # One Fish Finder browser surface; keep every ingestion/API endpoint intact.
 from fishfinder_consolidation import install_fish_finder_entrypoints
 install_fish_finder_entrypoints(app, healthz)
+
 
 
 
