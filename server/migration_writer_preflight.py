@@ -1,6 +1,7 @@
 """Bounded read-only cutover metadata. Never reads authentication material."""
 import hashlib
 import os
+import ipaddress
 
 
 def fingerprint(value):
@@ -9,6 +10,23 @@ def fingerprint(value):
 
 def identifier(value):
     return '`' + str(value).replace('`', '``') + '`'
+
+
+def account_metadata(user, host):
+    user, host = str(user), str(host)
+    kind = 'MYSQL_RESERVED_SYSTEM_NAME' if user in {'mysql.sys', 'mysql.session', 'mysql.infoschema'} else 'ROOT_ACCOUNT_NAME' if user == 'root' else 'OTHER_ACCOUNT_NAME'
+    if host == 'localhost':
+        reachability = 'LOCALHOST'
+    elif '%' in host or '_' in host:
+        reachability = 'HOST_PATTERN'
+    else:
+        try:
+            address = ipaddress.ip_address(host)
+            reachability = 'LOOPBACK_ADDRESS' if address.is_loopback else 'EXACT_IP_ADDRESS'
+        except ValueError:
+            reachability = 'HOSTNAME_OR_NETWORK_SPECIFICATION'
+    return {'identity_name_class': kind, 'connection_match_class': reachability,
+            'provider_ownership_verified': False, 'business_writer_classified': False}
 
 
 def preflight_inventory(cur, current, seafood_tables, grants, query):
@@ -24,7 +42,8 @@ def preflight_inventory(cur, current, seafood_tables, grants, query):
         for account in accounts[:100]:
             name = str(account['User']) + '@' + str(account['Host'])
             record = {'account_fingerprint': fingerprint(name), 'current_account': name == current['account'],
-                      'account_locked': account['account_locked'] == 'Y'}
+                      'account_locked': account['account_locked'] == 'Y',
+                      **account_metadata(account['User'], account['Host'])}
             try:
                 cur.execute('SHOW GRANTS FOR ' + identifier(account['User']) + '@' + identifier(account['Host']))
                 raw = [str(next(iter(row.values()))) for row in cur.fetchall()]
@@ -33,7 +52,9 @@ def preflight_inventory(cur, current, seafood_tables, grants, query):
                 record['grants'] = {'available': False, 'visibility': 'UNKNOWN'}
             output.append(record)
         result['accounts'] = {'available': True, 'truncated': len(accounts) > 100, 'accounts': output,
-                              'effective_roles_expanded': False}
+                              'effective_roles_expanded': False,
+                              'current_login_matches': [fingerprint(str(a['User']) + '@' + str(a['Host'])) for a in accounts[:100]
+                                                        if str(a['User']) == current['account'].rsplit('@', 1)[0]]}
     except Exception:
         result['accounts'] = {'available': False, 'visibility': 'UNKNOWN'}
     result['role_edges'] = query(cur, """
@@ -62,12 +83,15 @@ def preflight_inventory(cur, current, seafood_tables, grants, query):
                p.USER=SUBSTRING_INDEX(CURRENT_USER(),'@',1) AS same_login_name,
                CASE WHEN p.DB=DATABASE() THEN 'CURRENT_DATABASE'
                     WHEN p.DB IS NULL THEN 'NO_DEFAULT_DATABASE' ELSE 'OTHER_DATABASE' END AS schema_scope,
-               p.COMMAND AS command,p.TIME AS age_seconds,
+               p.COMMAND AS command,p.TIME AS command_duration_seconds,
+               CASE WHEN p.USER='event_scheduler' THEN 'MYSQL_EVENT_SCHEDULER_NAME'
+                    WHEN p.USER='system user' THEN 'MYSQL_SYSTEM_THREAD_NAME'
+                    ELSE 'OTHER_LOGIN_NAME' END AS login_name_class,
                t.TRX_STATE AS transaction_state,t.TRX_IS_READ_ONLY AS transaction_read_only,
                t.TRX_ROWS_MODIFIED AS rows_modified,t.TRX_ROWS_LOCKED AS rows_locked
         FROM information_schema.PROCESSLIST p LEFT JOIN information_schema.INNODB_TRX t ON t.TRX_MYSQL_THREAD_ID=p.ID
         ORDER BY p.ID LIMIT 101
-    """, ('session_fingerprint', 'audit_self', 'same_login_name', 'schema_scope', 'command', 'age_seconds',
+    """, ('session_fingerprint', 'audit_self', 'same_login_name', 'schema_scope', 'command', 'command_duration_seconds', 'login_name_class',
           'transaction_state', 'transaction_read_only', 'rows_modified', 'rows_locked'))
     result['sessions']['login_match_is_not_authenticated_identity'] = True
     try:
