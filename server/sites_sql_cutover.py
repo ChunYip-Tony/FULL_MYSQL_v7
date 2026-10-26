@@ -103,7 +103,12 @@ def inspect_plan(cur,cutover_id,previous=None):
         fp=fingerprint(str(row['User'])+'@'+str(row['Host']))
         raw=grants(cur,row['User'],row['Host']);evidence=grant_evidence(raw,schema)
         if row['User']==controller_user(cutover_id) and row['Host']=='%':
-            validate_controller_grants(evidence)
+            try:validate_controller_grants(evidence)
+            except ValueError:
+                # Grant targets contain identifiers only; authentication clauses
+                # were rejected by grants(). Never include accounts/passwords.
+                targets=[re.search(r'\sON\s+(.+?)\s+(?:TO|FROM)\s',g,re.I).group(1) for g in raw if re.search(r'\sON\s+(.+?)\s+(?:TO|FROM)\s',g,re.I)]
+                raise ValueError('Controller scope readback v3: '+canonical({'schema':schema,'targets':targets,'scopes':evidence['scoped_grants']})) from None
             continue
         inventory.append({'fingerprint':fp,'locked':row['account_locked'],'before':raw})
         if evidence['role_or_unparsed_grants_present']:raise ValueError('An account has unparsed grants')
@@ -293,7 +298,7 @@ def control_action(action,cutover_id,password=None,backup_hash=None):
             cur.execute('SELECT GET_LOCK(%s,0) AS locked',(lock_name,))
             if not cur.fetchone()['locked']:raise ValueError('Another cutover operation is running')
             if action=='plan':
-                plan=inspect_plan(cur,cutover_id);return {'plan':plan,'backupSha256':digest(plan),'readOnly':True}
+                plan=inspect_plan(cur,cutover_id);return {'plan':plan,'backupSha256':digest(plan),'readOnly':True,'controlVersion':'schema-scope-v3'}
             if action=='prepare':return prepare(cur,inspect_plan(cur,cutover_id),password,backup_hash)
             if action=='freeze':return freeze(conn,cur,cutover_id,password)
             if action=='verify':return verify(cur,cutover_id)
