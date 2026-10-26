@@ -1,4 +1,4 @@
 {
-  "mode": "NORMAL",
-  "cutover_id": null
+  "mode": "ISOLATED_MIGRATION_READS",
+  "cutover_id": "seafood-sites-20261026-replacement"
 }

@@ -24,12 +24,35 @@ jobs:
       - run: pip install -r requirements.txt pytest 'httpx>=0.28,<1'
       - run: python -m compileall -q .
       - name: Import actual production entry point
-        run: python -c "import production_bootstrap, api; print(api.VERSION, len(production_bootstrap.app.routes))"
+        run: |
+          python - <<'PY'
+          from sites_cutover_gate import deployment_mode
+          if deployment_mode()["mode"] == "NORMAL":
+              import production_bootstrap, api
+              print(api.VERSION, len(production_bootstrap.app.routes))
+          else:
+              import sites_migration_maintenance as maintenance
+              paths = {route.path for route in maintenance.app.routes}
+              assert paths <= {"/healthz", "/v1/migration/sites/snapshot", "/v1/migration/sites/writer-audit", "/v1/migration/sites/cutover"}
+              assert maintenance.health()["business_api_enabled"] is False
+              print("Isolated migration entry point", sorted(paths))
+          PY
       - name: Run all regression modules in isolated interpreters
         # Some calculation fixtures stub sys.modules at import time. Isolate
         # modules so those stubs cannot replace another suite's dependencies.
         run: |
-          for test in test_*.py; do
-            python -m pytest "$test" -q || exit 1
-          done
+          python - <<'PY'
+          from pathlib import Path
+          import json, subprocess, sys
+          # Operational regression fixtures exercise NORMAL behavior. The
+          # separate migration suite verifies the exact committed startup gate.
+          mode = Path("sites_cutover_mode.json")
+          original = mode.read_text()
+          try:
+              mode.write_text(json.dumps({"mode": "NORMAL", "cutover_id": None}))
+              for test in sorted(Path(".").glob("test_*.py")):
+                  subprocess.run([sys.executable, "-m", "pytest", str(test), "-q"], check=True)
+          finally:
+              mode.write_text(original)
+          PY
 
