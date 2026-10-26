@@ -125,6 +125,11 @@ class AuditBoundaryTests(unittest.TestCase):
         self.assertEqual(result['scoped_grants'][2]['scope'], 'CURRENT_DATABASE_OBJECT')
         self.assertFalse(result['scoped_grants'][2]['grant_option'])
 
+    def test_escaped_literal_schema_is_the_same_database(self):
+        result=audit.grant_evidence([r'GRANT SELECT, INSERT ON `full\_mysql`.* TO `u`@`h` WITH GRANT OPTION',r'REVOKE INSERT ON `full\_mysql`.* FROM `u`@`h`'],'full_mysql')
+        self.assertEqual([r['scope'] for r in result['scoped_grants']],['CURRENT_DATABASE','CURRENT_DATABASE'])
+        self.assertEqual(result['scoped_grants'][1]['effect'],'RESTRICTION')
+
 
 if __name__ == '__main__':
     unittest.main()
