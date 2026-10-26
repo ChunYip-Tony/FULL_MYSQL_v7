@@ -18,6 +18,7 @@ from sites_cutover_gate import deployment_mode
 
 AUTH_SHA256 = '25501ff1d2758cbbe1d05c06a620ca59e5552f0067cd8a8664cf21c52712ef72'
 EXPIRES_AT = '2026-10-27T00:00:00+00:00'
+VERIFY_EXPIRES_AT = '2026-10-27T03:00:00+00:00'
 SCHEMA_FINGERPRINT = '4f44bd4b1375fc76'
 CURRENT_ACCOUNT = '55f6368ffeffc6f0'
 WRITERS = frozenset({'55f6368ffeffc6f0','4392eae40074b71f','bd716f2b3ab40459','d571f78aad03ed5d'})
@@ -49,8 +50,11 @@ def identity(value):
 def controller_user(cutover_id):
     return 'sites_rb_' + hashlib.sha256(identity(cutover_id).encode()).hexdigest()[:16]
 
-def authorize(header):
-    if datetime.now(timezone.utc) >= datetime.fromisoformat(EXPIRES_AT):
+def authorize(header, *, action=None, now=None):
+    # Google may finish after the control window. Only the final read-only
+    # freeze proof remains available; no mutation or snapshot gains more time.
+    expires = VERIFY_EXPIRES_AT if action == 'verify' else EXPIRES_AT
+    if (now or datetime.now(timezone.utc)) >= datetime.fromisoformat(expires):
         raise HTTPException(410, 'Cutover control window ended')
     value = str(header or '')
     if not value.startswith('Bearer ') or len(value)>256 or not hmac.compare_digest(hashlib.sha256(value[7:].encode()).hexdigest(),AUTH_SHA256):

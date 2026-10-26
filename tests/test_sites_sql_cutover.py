@@ -1,4 +1,7 @@
 import importlib
+import asyncio
+from datetime import datetime, timezone
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -17,6 +20,46 @@ class Cursor:
     def fetchall(self):return [{'g':g} for g in self.grants]
 
 class SQLCutoverTests(unittest.TestCase):
+    def test_grace_window_allows_only_authenticated_read_only_verification(self):
+        secret='test-only-cutover-key'
+        before=datetime(2026,10,26,23,59,59,tzinfo=timezone.utc)
+        start=datetime(2026,10,27,0,0,0,tzinfo=timezone.utc)
+        end=datetime(2026,10,27,3,0,0,tzinfo=timezone.utc)
+        with patch.object(sql,'AUTH_SHA256',hashlib.sha256(secret.encode()).hexdigest()):
+            sql.authorize('Bearer '+secret,action='freeze',now=before)
+            sql.authorize('Bearer '+secret,action='verify',now=start)
+            for action in [None,'plan','prepare','freeze','commit','rollback','frozen-snapshot','VERIFY','unknown']:
+                with self.subTest(action=action),self.assertRaises(sql.HTTPException) as error:
+                    sql.authorize('Bearer '+secret,action=action,now=start)
+                self.assertEqual(error.exception.status_code,410)
+            for header in [None,'Bearer wrong','Basic '+secret]:
+                with self.assertRaises(sql.HTTPException) as error:sql.authorize(header,action='verify',now=start)
+                self.assertEqual(error.exception.status_code,401)
+            with self.assertRaises(sql.HTTPException) as error:sql.authorize('Bearer '+secret,action='verify',now=end)
+            self.assertEqual(error.exception.status_code,410)
+
+    def test_route_rechecks_action_before_any_database_call_during_grace(self):
+        from fastapi import FastAPI, Request
+        with patch.dict(sys.modules,{'db':fake}):
+            migration=importlib.import_module('sites_migration_export')
+        app=FastAPI();migration.install_sites_migration_export(app)
+        endpoint=next(route.endpoint for route in app.routes if route.path=='/v1/migration/sites/cutover')
+        secret='test-only-cutover-key';instant=datetime(2026,10,27,0,1,tzinfo=timezone.utc)
+        real_authorize=sql.authorize
+        def fixed(header,**kwargs):return real_authorize(header,now=instant,**kwargs)
+        def send(action):
+            payload=json.dumps({'action':action,'cutoverId':'seafood-sites-test'}).encode()
+            async def receive():return {'type':'http.request','body':payload,'more_body':False}
+            request=Request({'type':'http','method':'POST','path':'/v1/migration/sites/cutover','headers':[(b'authorization',('Bearer '+secret).encode())]},receive)
+            return asyncio.run(endpoint(request))
+        with patch.dict(sys.modules,{'sites_sql_cutover':sql}),patch.object(migration,'HTTPException',sql.HTTPException),patch.object(sql,'AUTH_SHA256',hashlib.sha256(secret.encode()).hexdigest()),patch.object(sql,'authorize',side_effect=fixed),patch.object(sql,'control_action',return_value={'state':'COMMITTED'}) as control:
+            for action in ['prepare','freeze','commit','rollback','frozen-snapshot','plan']:
+                with self.assertRaises(sql.HTTPException) as error:send(action)
+                self.assertEqual(error.exception.status_code,410)
+            control.assert_not_called()
+            self.assertEqual(send('verify').status_code,200)
+            control.assert_called_once_with('verify','seafood-sites-test',None,None)
+
     def test_grant_sanitizer_allows_privilege_names_but_rejects_auth_clauses(self):
         safe='GRANT AUTHENTICATION_POLICY_ADMIN, PASSWORDLESS_USER_ADMIN ON *.* TO `root`@`%`'
         self.assertEqual(sql.grants(Cursor([safe]),'root','%'),[safe])

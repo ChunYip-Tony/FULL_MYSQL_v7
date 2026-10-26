@@ -1087,7 +1087,37 @@ jobs:
           PY
 
 
+      - name: Verify live deployment boundary
+        id: live_boundary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json,os,urllib.request,urllib.error
+          from sites_cutover_gate import deployment_mode
+          expected=deployment_mode()
+          isolated=expected['mode']=='ISOLATED_MIGRATION_READS'
+          if isolated:
+              base='https://seal-app-tkkkd.ondigitalocean.app'
+              with urllib.request.urlopen(base+'/healthz',timeout=30) as response:
+                  health=json.load(response)
+              assert health.get('status')=='ok'
+              assert health.get('mode')=='ISOLATED_MIGRATION_READS'
+              assert health.get('deployment_gate')==expected
+              assert health.get('business_api_enabled') is False
+              assert health.get('worker_enabled') is False
+              try:
+                  urllib.request.urlopen(base+'/v1/backoffice/inventory?category=ALL&limit=1&lightweight=true',timeout=30)
+              except urllib.error.HTTPError as error:
+                  assert error.code==404, error.code
+              else:
+                  raise AssertionError('Legacy business API remains enabled')
+              print('live-isolated-startup-boundary=PASS')
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('legacy_business='+str(not isolated).lower()+'\n')
+          PY
+
       - name: Diagnose production 249527 POS evidence
+        if: steps.live_boundary.outputs.legacy_business == 'true'
         continue-on-error: true
         shell: bash
         run: |
@@ -1110,6 +1140,7 @@ jobs:
           echo
 
       - name: Diagnose current production upload state
+        if: steps.live_boundary.outputs.legacy_business == 'true'
         continue-on-error: true
         shell: bash
         run: |
@@ -2015,6 +2046,7 @@ jobs:
         run: python -c "import worker, phase3, active_28d_uom_repair, current_active_cost_repair, uom_evidence_diagnostic; print('imports-ok')"
 
       - name: Live global Selling Article mapping audit
+        if: steps.live_boundary.outputs.legacy_business == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -2118,6 +2150,7 @@ jobs:
           PY
 
       - name: Live Selling MVT production diagnostics
+        if: steps.live_boundary.outputs.legacy_business == 'true'
         shell: bash
         run: |
           set -euo pipefail
