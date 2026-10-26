@@ -431,7 +431,7 @@ def _history_compare_value(value, column=None):
  if column in {'company_a', 'company_b', 'company_c'} and isinstance(value, (str, Decimal)):
   try:
    price = Decimal(value)
-   if price.is_finite():return format(price.normalize(), 'f')
+   if price.is_finite():return '0' if price.is_zero() else format(price.normalize(), 'f')
   except InvalidOperation:pass
  if isinstance(value, (float, int, Decimal)):
   # Plain decimal spelling keeps numeric UPCs ending in zero comparable to text.
@@ -439,7 +439,10 @@ def _history_compare_value(value, column=None):
   # binary float to Decimal first can change half-way rounding (33.57 / 7),
   # causing a false mismatch against the exact value sent to Google.
   numeric = Decimal(str(value)) if isinstance(value, int) else Decimal(format(value, '.15g'))
-  return format(numeric.normalize(), 'f')
+  # Sheets does not preserve the IEEE/Decimal sign bit on numeric zero.
+  # This is exact numeric equality, not a tolerance: all nonzero numbers and
+  # literal text identifiers continue through their existing exact checks.
+  return '0' if numeric.is_zero() else format(numeric.normalize(), 'f')
  return str(value)
 
 
@@ -548,6 +551,7 @@ def preserve_unchanged_lineage(output, previous):
     for k in ('source_revision','data_through'):
      if k in h:values[h.index(k)]=prior.get(k)
  return output
+
 
 
 
