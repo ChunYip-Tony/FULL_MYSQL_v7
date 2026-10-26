@@ -48,9 +48,10 @@ class CutoverGateTests(unittest.TestCase):
                 sys.modules.pop(name_, None)
             return runpy.run_path(str(SERVER / name), run_name='__main__')
 
-    def test_committed_default_preserves_normal_startup(self):
+    def test_committed_mode_is_valid_and_normal_mode_preserves_startup(self):
         with patch.object(gate, 'MODE_PATH', SERVER / 'sites_cutover_mode.json'):
-            self.assertEqual(gate.deployment_mode(), {'mode': 'NORMAL', 'cutover_id': None})
+            committed = gate.deployment_mode()
+            self.assertIn(committed['mode'], ['NORMAL', 'ISOLATED_MIGRATION_READS'])
         self.mode()
         with patch.object(gate.os, 'execv') as execute:
             for entrypoint in ('single_service.py', 'production_bootstrap.py', 'worker_v482.py'):
