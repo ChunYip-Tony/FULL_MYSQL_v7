@@ -42,6 +42,24 @@ class SQLCutoverTests(unittest.TestCase):
                 sql.validate_controller_grants(grant_evidence(base+[scoped.replace('`full_mysql`.*',target)],'full_mysql'))
         for bad in [base,base+[scoped.replace(' WITH GRANT OPTION','')],base+[scoped,'GRANT INSERT ON *.* TO `control`@`%`']]:
             with self.assertRaises(ValueError):sql.validate_controller_grants(grant_evidence(bad,'full_mysql'))
+    def test_partial_revoke_alone_cannot_hide_table_write_permissions(self):
+        base=['GRANT SELECT, INSERT, UPDATE ON *.* TO `app`@`%`','GRANT SELECT ON "full_mysql"."read_only" TO `app`@`%`']
+        table='GRANT SELECT, INSERT, UPDATE ON "full_mysql"."ingest_file" TO `app`@`%`'
+        before=sorted(base+[table]);restriction='REVOKE INSERT, UPDATE ON "full_mysql".* FROM `app`@`%`'
+        plan={'schema':'full_mysql','targets':[{'user':'app','host':'%','before':before,'privileges':['INSERT','UPDATE']}]}
+        with self.assertRaisesRegex(ValueError,'Table privilege'):sql.restriction_shape(Cursor(sorted(before+[restriction])),plan)
+        frozen=sorted(base+[table.replace('SELECT, INSERT, UPDATE','SELECT'),restriction])
+        sql.restriction_shape(Cursor(frozen),plan)
+        sql.restriction_shape(Cursor(before),plan,allow_partial=True)
+        sql.restriction_shape(Cursor(sorted(base+[table.replace('SELECT, INSERT, UPDATE','SELECT, UPDATE'),restriction])),plan,allow_partial=True)
+        for bad in [sorted(frozen+['GRANT SELECT ON "full_mysql"."new_table" TO `app`@`%`']),sorted(base+[restriction]),[g.replace('SELECT ON "full_mysql"."read_only"','SELECT, DELETE ON "full_mysql"."read_only"') for g in frozen],sorted(frozen+['GRANT INSERT ON other.* TO `app`@`%`'])]:
+            with self.assertRaises(ValueError):sql.restriction_shape(Cursor(bad),plan,allow_partial=True)
+    def test_only_reviewed_table_dml_is_supported_and_write_only_grants_may_disappear(self):
+        original=['GRANT INSERT ON "full_mysql"."ingest_file" TO `app`@`%`']
+        sql.changed_table_grants(original,[],'full_mysql',False)
+        self.assertEqual(sql.table_grants(original,'full_mysql'),{'ingest_file':{'INSERT'}})
+        for grant in [original[0]+' WITH GRANT OPTION',original[0].replace('INSERT','ALTER'),original[0].replace('"ingest_file"','"*"'),original[0].replace('INSERT','INSERT (field)')]:
+            with self.assertRaises(ValueError):sql.table_grants([grant],'full_mysql')
     def test_gate_must_match_exact_frozen_deployment(self):
         for mode in [{'mode':'NORMAL','cutover_id':None},{'mode':'ISOLATED_MIGRATION_READS','cutover_id':'seafood-sites-other'}]:
             with patch.object(sql,'deployment_mode',return_value=mode),self.assertRaises(ValueError):sql.ensure_gate('seafood-sites-test')
