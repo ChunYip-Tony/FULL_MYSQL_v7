@@ -108,11 +108,15 @@ def install_sites_migration_export(app):
         from sites_sql_cutover import authorize as cutover_authorize, control_action, identity
         from fastapi.responses import JSONResponse
         from starlette.concurrency import run_in_threadpool
-        cutover_authorize(request.headers.get('authorization'))
+        authorization=request.headers.get('authorization')
+        # Authenticate before reading the bounded body. Recheck the exact
+        # parsed action so the grace window permits only read-only verification.
+        cutover_authorize(authorization,action='verify')
         if len(await request.body())>2048:raise HTTPException(413,'Cutover request too large')
         try:
             body=await request.json();action=body.get('action');cutover_id=identity(body.get('cutoverId'))
             if set(body)-{'action','cutoverId','rollbackPassword','backupSha256'}:raise ValueError('Unknown cutover parameters')
+            cutover_authorize(authorization,action=action)
             if action=='frozen-snapshot':
                 proof=await run_in_threadpool(control_action,'verify',cutover_id)
                 return StreamingResponse(gzip_stream(snapshot_lines(frozen_proof=proof,verify_freeze=lambda:control_action('verify',cutover_id))),media_type='application/gzip',headers={'Cache-Control':'no-store','X-Migration-Contract':'SEAFOOD_MYSQL_SNAPSHOT_V1'})
