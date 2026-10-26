@@ -25,7 +25,8 @@ def grant_evidence(grants, schema):
             roles = True
             continue
         rows.append({'scope': scope, 'privileges': names, 'effect': 'GRANT' if effect.upper() == 'GRANT' else 'RESTRICTION', 'grant_option': option})
-    return {'grants': rows, 'role_or_unparsed_grants_present': roles,
+    return {'grants': [{'scope': row['scope'], 'privileges': row['privileges']} for row in rows if row['effect'] == 'GRANT'],
+            'scoped_grants': rows, 'role_or_unparsed_grants_present': roles,
             'grant_option_observed': grant_option, 'effective_role_grants_expanded': False}
 
 
@@ -72,7 +73,7 @@ def writer_inventory(connect, seafood_tables=()):
             except Exception:
                 result['privileges'] = {'available': False}
             visible_all = any(row['effect'] == 'GRANT' and row['scope'] == 'GLOBAL' and any(name in ('PROCESS', 'ALL PRIVILEGES') for name in row['privileges'])
-                              for row in result['privileges'].get('grants', []))
+                              for row in result['privileges'].get('scoped_grants', []))
             try:
                 # No SQL text, hostnames, credentials or session identifiers.
                 cur.execute('SELECT COMMAND,COUNT(*) AS connection_count FROM information_schema.PROCESSLIST WHERE DB=DATABASE() GROUP BY COMMAND')
