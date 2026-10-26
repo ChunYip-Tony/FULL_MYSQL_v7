@@ -30,13 +30,18 @@ jobs:
            request=urllib.request.Request('https://api.github.com/repos/'+repo+'/statuses/'+sha,data=data,headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Content-Type':'application/json'})
            with urllib.request.urlopen(request,timeout=20) as r: r.read()
           status('pending','Reading existing Seafood Google configuration')
+          phase='console-access'
           try:
            request=urllib.request.Request('https://api.digitalocean.com/v2/apps/05680b68-0372-479c-b2b6-bae286537e31/components/full-mysql-v7-server/exec',headers={'Authorization':'Bearer '+os.environ['DIGITALOCEAN_ACCESS_TOKEN']})
-           with urllib.request.urlopen(request,timeout=30) as r: endpoint=json.load(r)['url']
+           with urllib.request.urlopen(request,timeout=30) as r: response=json.load(r)
+           print('Console response fields:',','.join(sorted(response)))
+           endpoint=response['url']
            if not endpoint.startswith('wss://'): raise ValueError('Invalid console endpoint')
+           phase='websocket-open'
            ws=websocket.create_connection(endpoint,timeout=25)
            code="import os,json,base64\npub=base64.b64decode(\"MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA3c/WRynlUIrAasMaKukjki8jJsnap98vcvkJ+rGsExlOtmg+GTKQAzDkvvROESNXJjyXPJAhpPCfhRIbMtZ1HV/0h+5U95wPnkszmE01f3cLaXYvKRRg8ZV3wraw46MARMijhSrErMKiN6INPgbW50Dje0jbefZx4/voIY3vTyewoNRe7jdakXuG2reyo9jhaxN1zGIFrfCjapfEZnOy5Vzctw/PwxTSAr2CHDrH+HWeO6IEvF7Xsjp2SMCtVsRb2eItDX6+G/iaoqsaJSbFxyI9XLukhH7mMGk39tiv6jhpFL4eCEjZVmuzUJmdheJHJfBHK9Mgabt0zXXPOPIAHDrSWDeq/OzLH61gaGohRoX8P3ICPVqM8cZgv4zPa1SKLxjQhggxDxQXfoVZUkFn6ZvoP4hu/sc0b0jBnt9VjK/J9evi9MPLuZKu399OiM2uGDF+3LgK1uoPM8I5lwf97LMPLVAghBnECeTgl02tBufAF+nt5okUvrA1espgxJV1Q9rQjPmHw30ogLzAeoiYqMVybgg4Rw6znYyzyyFn3inGOBKxrQnTHXvbhj1sHZoYZs+BxJ3NofCW5KlyoZT4rihE/W5mPPQjxAiJ+VnkXdXMaUJCHsiBgGEzUO+JJ1w82z4aUhdfN9MM+zMy1p7PEOaQ2v07ua7G91RSRRi/fKsCAwEAAQ==\")\nnames=['FULLMYSQL_APPS_SCRIPT_WEB_APP_URL','FULLMYSQL_APPS_SCRIPT_WEBHOOK_SECRET']\nvalues={k:os.environ.get(k,'') for k in names}\nif any(not v for v in values.values()): raise SystemExit('NATIVE_TRANSFER_MISSING_CONFIG')\npayload=json.dumps(values,separators=(',',':')).encode()\ntry:\n from cryptography.hazmat.primitives import serialization,hashes\n from cryptography.hazmat.primitives.asymmetric import padding\n key=serialization.load_der_public_key(pub)\n encrypt=lambda b:key.encrypt(b,padding.OAEP(mgf=padding.MGF1(hashes.SHA256()),algorithm=hashes.SHA256(),label=None))\n alg='RSA-OAEP-SHA256'\nexcept ImportError:\n import rsa\n key=rsa.PublicKey.load_pkcs1_openssl_der(pub)\n encrypt=lambda b:rsa.encrypt(b,key)\n alg='RSA-PKCS1-v1_5'\nencrypted={'algorithm':alg,'chunks':[base64.b64encode(encrypt(payload[n:n+190])).decode() for n in range(0,len(payload),190)]}\nprint('NATIVE_TRANSFER_V1:'+base64.b64encode(json.dumps(encrypted).encode()).decode(),flush=True)"
            command="python -c \"import base64;exec(base64.b64decode('"+base64.b64encode(code.encode()).decode()+"'))\"\n"
+           phase='runtime-encryption'
            ws.send(json.dumps({'op':'stdin','data':command}))
            buf=''; deadline=time.time()+100; envelope=None
            while time.time()<deadline:
@@ -49,12 +54,14 @@ jobs:
                if envelope.get('algorithm') not in ('RSA-OAEP-SHA256','RSA-PKCS1-v1_5') or not envelope.get('chunks'): raise ValueError()
                break
               except (ValueError,KeyError): pass
+            if 'NATIVE_TRANSFER_MISSING_CONFIG' in buf: raise ValueError('Missing config')
             if len(buf)>60000: raise ValueError('Unexpected console response')
            ws.close()
            if envelope is None: raise ValueError('No encrypted configuration returned')
            print('ENCRYPTED_TRANSFER:'+base64.b64encode(json.dumps(envelope).encode()).decode())
            status('success','Encrypted Seafood configuration transfer available')
-          except Exception:
+          except Exception as error:
+           print('Transfer diagnostic:',phase,type(error).__name__,getattr(error,'code',None))
            status('failure','Configuration transfer unavailable; no secrets printed')
            raise SystemExit('Configuration transfer failed; console URL and output withheld')
           PY
