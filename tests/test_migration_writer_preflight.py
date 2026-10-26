@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / 'server'))
 from migration_writer_audit import grant_evidence, classified_counts
-from migration_writer_preflight import preflight_inventory
+from migration_writer_preflight import preflight_inventory, account_metadata
 
 
 class Cursor:
@@ -47,6 +47,8 @@ class PreflightTests(unittest.TestCase):
         cur, result = self.run_audit()
         account = result['accounts']['accounts'][0]
         self.assertTrue(account['current_account'])
+        self.assertEqual(result['accounts']['current_login_matches'], [account['account_fingerprint']])
+        self.assertEqual(account['connection_match_class'], 'HOST_PATTERN')
         self.assertEqual(account['grants']['scoped_grants'][1]['effect'], 'RESTRICTION')
         self.assertEqual([r['scope'] for r in result['tables']['tables']], ['SEAFOOD_EXPORT','SHARED_DEPARTMENT_STORE','NOT_CLASSIFIED'])
         self.assertEqual(result['tables']['tables'][1]['rows'], 2)
@@ -61,6 +63,15 @@ class PreflightTests(unittest.TestCase):
         self.assertFalse(result['accounts']['available'])
         self.assertFalse(result['effective_writer_inventory_complete'])
         self.assertNotIn('private errors', json.dumps(result))
+
+    def test_account_classification_never_assumes_provider_ownership(self):
+        for host, expected in [('localhost', 'LOCALHOST'), ('127.0.0.1', 'LOOPBACK_ADDRESS'), ('::1', 'LOOPBACK_ADDRESS'), ('10.0.0.1', 'EXACT_IP_ADDRESS'), ('%', 'HOST_PATTERN')]:
+            result = account_metadata('root', host)
+            self.assertEqual(result['connection_match_class'], expected)
+            self.assertEqual(result['identity_name_class'], 'ROOT_ACCOUNT_NAME')
+            self.assertFalse(result['provider_ownership_verified'])
+            self.assertFalse(result['business_writer_classified'])
+        self.assertEqual(account_metadata('mysql.session', 'localhost')['identity_name_class'], 'MYSQL_RESERVED_SYSTEM_NAME')
 
 
 if __name__ == '__main__': unittest.main()
