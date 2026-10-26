@@ -7,6 +7,7 @@ The existing authenticated, expiring migration read endpoints are preserved.
 """
 from fastapi import FastAPI
 from sites_migration_export import install_sites_migration_export
+from sites_cutover_gate import deployment_mode
 
 app = FastAPI(title='Seafood migration maintenance', docs_url=None,
               redoc_url=None, openapi_url=None)
@@ -15,6 +16,7 @@ app = FastAPI(title='Seafood migration maintenance', docs_url=None,
 @app.get('/healthz')
 def health():
     return {'status': 'ok', 'mode': 'ISOLATED_MIGRATION_READS',
+            'deployment_gate': deployment_mode(),
             'business_api_enabled': False, 'worker_enabled': False,
             'database_controls_changed': False, 'freeze_established': False}
 

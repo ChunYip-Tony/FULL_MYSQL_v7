@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sites_cutover_gate import require_worker_enabled
+require_worker_enabled()
+
 import json
 from datetime import datetime, timezone
 
@@ -104,3 +107,4 @@ _worker._queue_orphaned_phase2c_ready = _queue_orphaned_phase2c_ready
 
 if __name__ == '__main__':
     _worker.main()
+

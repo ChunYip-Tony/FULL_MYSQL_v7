@@ -12,6 +12,9 @@ workers build the next snapshot before promotion; Mobile/Desktop readers keep
 using the previous complete snapshot until the replacement is APP_READY.
 """
 
+from sites_cutover_gate import launch_maintenance_if_requested
+launch_maintenance_if_requested()
+
 import api as _api
 from api_entry_v504 import app
 from qa_review_only_v501 import install_qa_review_only_v501
@@ -52,4 +55,5 @@ install_sites_migration_export(app)
 # Disabled until schema, credentials, and complete source readback are verified.
 from finder_department_store import install_department_store
 install_department_store(app)
+
 

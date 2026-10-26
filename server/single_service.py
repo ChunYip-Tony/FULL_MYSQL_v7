@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from sites_cutover_gate import launch_maintenance_if_requested
+launch_maintenance_if_requested()
+
 import json
 import os
 import signal
@@ -184,6 +187,7 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
 
 
 

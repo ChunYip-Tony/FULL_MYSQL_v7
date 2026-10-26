@@ -1,0 +1,15 @@
+name: migration-cutover
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  startup-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Verify actual entrypoints stop before business imports
+        run: python -m unittest discover -s tests -p test_sites_cutover_gate.py -v
