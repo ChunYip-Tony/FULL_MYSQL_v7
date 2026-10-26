@@ -28,6 +28,7 @@ class SQLCutoverTests(unittest.TestCase):
         cur=Cursor(before+['REVOKE INSERT, UPDATE ON `full_mysql`.* FROM `app`@`%`'])
         sql.restriction_shape(cur,plan)
         sql.restriction_shape(Cursor(before+[r'REVOKE INSERT, UPDATE ON `full\_mysql`.* FROM `app`@`%`']),plan)
+        sql.restriction_shape(Cursor(before+['REVOKE INSERT, UPDATE ON "full_mysql".* FROM `app`@`%`']),plan)
         for bad in [before, before+['REVOKE INSERT, UPDATE, SELECT ON `full_mysql`.* FROM `app`@`%`'],[before[0],'REVOKE INSERT, UPDATE ON `full_mysql`.* FROM `app`@`%`']]:
             with self.assertRaises(ValueError):sql.restriction_shape(Cursor(bad),plan)
         sql.restriction_shape(Cursor(before),plan,allow_partial=True)
@@ -35,6 +36,10 @@ class SQLCutoverTests(unittest.TestCase):
         base=['GRANT USAGE ON *.* TO `control`@`%`']
         scoped='GRANT '+', '.join(sorted(sql.WRITE_PRIVILEGES|{'SELECT'}))+' ON `full_mysql`.* TO `control`@`%` WITH GRANT OPTION'
         sql.validate_controller_grants(grant_evidence(base+[scoped],'full_mysql'))
+        sql.validate_controller_grants(grant_evidence(base+[scoped.replace('`full_mysql`','"full_mysql"')],'full_mysql'))
+        for target in ['"full_mysql.other".*', '"full_mysql"."*"', '"full_mysql""".*', '"other".*', 'full_mysql.*.extra']:
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                sql.validate_controller_grants(grant_evidence(base+[scoped.replace('`full_mysql`.*',target)],'full_mysql'))
         for bad in [base,base+[scoped.replace(' WITH GRANT OPTION','')],base+[scoped,'GRANT INSERT ON *.* TO `control`@`%`']]:
             with self.assertRaises(ValueError):sql.validate_controller_grants(grant_evidence(bad,'full_mysql'))
     def test_gate_must_match_exact_frozen_deployment(self):
