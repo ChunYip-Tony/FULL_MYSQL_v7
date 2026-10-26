@@ -26,6 +26,10 @@ class Cursor:
             self.result = [{'grant': 'GRANT SELECT, INSERT ON *.* TO `secret_user`@`secret_host` WITH GRANT OPTION'}, {'grant':'REVOKE INSERT ON `private_schema`.* FROM `secret_user`@`secret_host`'}]
         elif 'SELECT TABLE_NAME,TABLE_TYPE,ENGINE' in query:
             self.result = [{'TABLE_NAME':'ingest_file','TABLE_TYPE':'BASE TABLE','ENGINE':'InnoDB'}, {'TABLE_NAME':'finder_department_head','TABLE_TYPE':'BASE TABLE','ENGINE':'InnoDB'}, {'TABLE_NAME':'unclassified','TABLE_TYPE':'VIEW','ENGINE':None}]
+        elif 'GROUP BY department_code,analysis_status' in query:
+            self.result = [{'department_code':'400', 'analysis_status':'READY', 'row_count':3, 'first_source_batch':82, 'last_source_batch':82}]
+        elif 'FROM analysis_layer_status' in query:
+            self.result = [{'department_code':'300', 'layer_status':'PENDING_PIPELINE_ENABLEMENT', 'source_publish_batch_id':82, 'item_rows':0, 'ready_rows':0, 'hold_rows':0, 'historical_rows':0, 'family_rows':0}]
         elif 'COUNT(*) AS row_count' in query:
             self.result = [{'row_count':2}]
         elif 'information_schema.PROCESSLIST p' in query:
@@ -55,6 +59,8 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(result['sessions']['login_match_is_not_authenticated_identity'])
         self.assertFalse(result['effective_writer_inventory_complete'])
         self.assertFalse(result['database_controls_changed'])
+        self.assertEqual(result['department_analysis']['analysis_item_current']['groups'][0]['department_code'], '400')
+        self.assertEqual(result['department_analysis']['analysis_layer_status']['groups'][0]['layer_status'], 'PENDING_PIPELINE_ENABLEMENT')
         for secret in ['secret_user','secret_host','private_schema']:
             self.assertNotIn(secret, json.dumps(result))
 
