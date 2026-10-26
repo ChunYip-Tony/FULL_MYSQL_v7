@@ -57,7 +57,7 @@ def scalar(value):
 def line(value):
     return json.dumps(value,ensure_ascii=False,separators=(',',':'),allow_nan=False,default=scalar).encode()+b'\n'
 
-def snapshot_lines(connect=db_conn):
+def snapshot_lines(connect=db_conn, frozen_proof=None, verify_freeze=None):
     counts={};started=datetime.now(timezone.utc).isoformat()
     with connect(read_timeout=60,connection_timeout=10) as conn:
         conn.start_transaction(isolation_level='REPEATABLE READ',consistent_snapshot=True,readonly=True)
@@ -65,7 +65,8 @@ def snapshot_lines(connect=db_conn):
         try:
             cur.execute('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()')
             present={r['TABLE_NAME'] for r in cur.fetchall()} & TABLES
-            yield line({'kind':'begin','contract':'SEAFOOD_MYSQL_SNAPSHOT_V1','started_at':started,'tables':sorted(present),'missing_optional_tables':sorted(TABLES-present),'transaction':'REPEATABLE_READ_READ_ONLY'})
+            freeze_metadata={'freeze_proof':frozen_proof} if frozen_proof else {}
+            yield line({'kind':'begin','contract':'SEAFOOD_MYSQL_SNAPSHOT_V1','started_at':started,'tables':sorted(present),'missing_optional_tables':sorted(TABLES-present),'transaction':'REPEATABLE_READ_READ_ONLY',**freeze_metadata})
             for table in sorted(present):
                 cur.execute('SELECT COLUMN_NAME,DATA_TYPE,COLUMN_TYPE,IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION',(table,))
                 columns=cur.fetchall();names=[c['COLUMN_NAME'] for c in columns]
@@ -87,7 +88,11 @@ def snapshot_lines(connect=db_conn):
                 if count!=expected:raise RuntimeError('Snapshot count mismatch: '+table)
                 counts[table]=count
                 yield line({'kind':'table_complete','table':table,'rows':count,'sha256':digest.hexdigest()})
-            yield line({'kind':'complete','contract':'SEAFOOD_MYSQL_SNAPSHOT_V1','started_at':started,'completed_at':datetime.now(timezone.utc).isoformat(),'tables':len(counts),'rows':sum(counts.values()),'counts':counts})
+            if verify_freeze:
+                after=verify_freeze()
+                if any(after.get(k)!=frozen_proof.get(k) for k in ['cutoverId','backupSha256','frozenAt','businessWritesDenied','legacyConnectionsDrained']):raise RuntimeError('Freeze identity changed during export')
+                freeze_metadata={'freeze_proof':after}
+            yield line({'kind':'complete','contract':'SEAFOOD_MYSQL_SNAPSHOT_V1','started_at':started,'completed_at':datetime.now(timezone.utc).isoformat(),'tables':len(counts),'rows':sum(counts.values()),'counts':counts,**freeze_metadata})
         finally:
             cur.close();conn.rollback()
 
@@ -98,6 +103,25 @@ def gzip_stream(lines):
     yield compressor.flush(zlib.Z_FINISH)
 
 def install_sites_migration_export(app):
+    @app.post('/v1/migration/sites/cutover')
+    async def cutover(request:Request):
+        from sites_sql_cutover import authorize as cutover_authorize, control_action, identity
+        from fastapi.responses import JSONResponse
+        from starlette.concurrency import run_in_threadpool
+        cutover_authorize(request.headers.get('authorization'))
+        if len(await request.body())>2048:raise HTTPException(413,'Cutover request too large')
+        try:
+            body=await request.json();action=body.get('action');cutover_id=identity(body.get('cutoverId'))
+            if set(body)-{'action','cutoverId','rollbackPassword','backupSha256'}:raise ValueError('Unknown cutover parameters')
+            if action=='frozen-snapshot':
+                proof=await run_in_threadpool(control_action,'verify',cutover_id)
+                return StreamingResponse(gzip_stream(snapshot_lines(frozen_proof=proof,verify_freeze=lambda:control_action('verify',cutover_id))),media_type='application/gzip',headers={'Cache-Control':'no-store','X-Migration-Contract':'SEAFOOD_MYSQL_SNAPSHOT_V1'})
+            result=await run_in_threadpool(control_action,action,cutover_id,body.get('rollbackPassword'),body.get('backupSha256'))
+            return JSONResponse(result,headers={'Cache-Control':'no-store'})
+        except ValueError as error:raise HTTPException(409,str(error)) from None
+        except HTTPException:raise
+        except Exception as error:raise HTTPException(503,{'message':'Cutover operation did not complete; inspect retained state before retry','databaseErrorCode':getattr(error,'errno',None)}) from None
+
     @app.get('/v1/migration/sites/writer-audit')
     def audit_writers(request:Request):
         authorize(request.headers.get('authorization'))
