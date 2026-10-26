@@ -1476,7 +1476,14 @@ def _validate_readback_once(
     if not analysis_head or analysis_head[0][:2] != ["Sheet_Row","ean_upc"]:
         failures.append("ANALYSIS_HEADER_MISMATCH")
     expected_analysis_last_row = analysis_row_count + 1
-    if (
+    if analysis_row_count == 0:
+        # A fully held inventory snapshot still has dated POS/price evidence.
+        # Its READY-only table must be header-only, with no stale prior row.
+        if analysis_tail != [["Sheet_Row", "ean_upc"]]:
+            failures.append("ANALYSIS_EMPTY_HEADER_MISMATCH")
+        if any(any(v not in (None, "") for v in r) for r in analysis_head[1:]):
+            failures.append("ANALYSIS_UNEXPECTED_DATA_ROW")
+    elif (
         not analysis_tail
         or not analysis_tail[0]
         or str(analysis_tail[0][0]) != str(expected_analysis_last_row)
@@ -1563,21 +1570,13 @@ def publish_chatgpt_snapshot(batch_id: int, *, progress=None) -> dict[str, Any]:
                     return {"status":"BLOCKED","batch_id":batch_id,"reason":"quick_check_current is empty."}
 
                 publish_row_count = len(rows)
-                ready_rows = [
-                    row for row in rows
-                    if str(row.get("quick_check_status") or "").upper() == "READY"
-                ]
                 hold_rows = [
                     row for row in rows
                     if str(row.get("quick_check_status") or "").upper() == "QA_HOLD"
                 ]
-                if not ready_rows:
-                    return {
-                        "status":"BLOCKED",
-                        "batch_id":batch_id,
-                        "reason":"No READY Quick Check rows are available for safe analytical publish.",
-                        "hold_row_count":len(hold_rows),
-                    }
+                # Inventory holds must not freeze independently verified dated
+                # POS/price history. _build_analysis remains strictly READY-only;
+                # all holds and missing coverage remain visible in the QA export.
                 freshness = _canonical_freshness(cur, batch_id)
                 latest_daily = _fetch_latest_daily_sales(cur, batch_id, rows)
                 recent_3d = _fetch_recent_3d_sales(cur, batch_id, rows)
@@ -1869,6 +1868,7 @@ def _write_changed_history(session, spreadsheet_id, title, matrix, previous, tra
             rng=f"'{title}'!A{start+1}:{end_col}{start+len(target)}"
             _put_json(session,f"{API_ROOT}/{spreadsheet_id}/values/{quote(rng,safe='')}?valueInputOption=RAW",
                 {"range":rng,"majorDimension":"ROWS","values":target})
+
 
 
 
