@@ -11,6 +11,20 @@ def load_function(filename,name,env):
  return env[name]
 
 class BridgeIntegrationTests(unittest.TestCase):
+ def test_google_numeric_zero_sign_does_not_create_a_false_mismatch(self):
+  from decimal import Decimal
+  from price_history_analysis import verify_history_tables
+  for value in [-0.0,Decimal('-0'),Decimal('-0.000000')]:
+   expected=[['upc','price'],['000123',value]]
+   self.assertTrue(verify_history_tables({'prices':expected},lambda *a:[['upc','price'],['000123',0]])['pass'])
+  self.assertTrue(verify_history_tables({'prices':[['company_a'],['-0.00']]},lambda *a:[['company_a'],[0]])['pass'])
+
+ def test_signed_zero_fix_preserves_exact_nonzero_text_and_missingness(self):
+  from price_history_analysis import verify_history_tables
+  for column,expected,actual in [('price',-1e-14,0),('price',None,0),('price',False,0),('upc','000123','123'),('upc','-0','0')]:
+   with self.subTest(column=column,expected=expected):
+    with self.assertRaises(ValueError):verify_history_tables({'evidence':[[column],[expected]]},lambda *a:[[column],[actual]])
+
  def test_history_short_read_retries_without_weakening_cell_comparison(self):
   from price_history_analysis import verify_history_tables
   from unittest.mock import Mock
