@@ -7,6 +7,7 @@ import re
 def grant_evidence(grants, schema):
     rows = []
     roles = False
+    grant_option = False
     for raw in grants:
         # Never return raw grants: older servers may include authentication
         # clauses, account names or plugin-specific credential material.
@@ -15,6 +16,7 @@ def grant_evidence(grants, schema):
             roles = True
             continue
         privileges, target = match.groups()
+        grant_option = grant_option or bool(re.search(r'\sWITH\s+GRANT\s+OPTION\s*$', str(raw), re.I))
         target = target.replace('`', '').strip()
         scope = 'GLOBAL' if target == '*.*' else 'CURRENT_DATABASE' if target == schema + '.*' else 'OTHER_SCOPE'
         names = [name.strip().upper() for name in privileges.split(',')]
@@ -22,7 +24,20 @@ def grant_evidence(grants, schema):
             roles = True
             continue
         rows.append({'scope': scope, 'privileges': names})
-    return {'grants': rows, 'role_or_unparsed_grants_present': roles}
+    return {'grants': rows, 'role_or_unparsed_grants_present': roles,
+            'grant_option_observed': grant_option, 'effective_role_grants_expanded': False}
+
+
+def classified_counts(cur, query, fields):
+    """Return bounded aggregate metadata, never SQL text or account names."""
+    try:
+        cur.execute(query)
+        rows = cur.fetchall()
+        return {'available': True, 'visibility': 'ACCOUNT_PRIVILEGES',
+                'truncated': len(rows) > 100,
+                'groups': [{field: row[field] for field in fields} for row in rows[:100]]}
+    except Exception:
+        return {'available': False, 'visibility': 'UNKNOWN'}
 
 
 def writer_inventory(connect):
@@ -39,6 +54,17 @@ def writer_inventory(connect):
             result['account_fingerprint'] = hashlib.sha256(str(current['account']).encode()).hexdigest()[:16]
             result['schema_fingerprint'] = hashlib.sha256(str(current['schema_name']).encode()).hexdigest()[:16]
             try:
+                cur.execute('SELECT CURRENT_ROLE() AS active_roles, @@partial_revokes AS partial_revokes, @@read_only AS read_only, @@super_read_only AS super_read_only')
+                controls = cur.fetchone()
+                result['role_and_server_controls'] = {
+                    'available': True, 'active_roles_present': str(controls['active_roles']).strip().upper() != 'NONE',
+                    'active_roles_fingerprint': hashlib.sha256(str(controls['active_roles']).encode()).hexdigest()[:16],
+                    'partial_revokes': bool(controls['partial_revokes']),
+                    'server_read_only': bool(controls['read_only']), 'server_super_read_only': bool(controls['super_read_only']),
+                    'effective_role_grants_expanded': False}
+            except Exception:
+                result['role_and_server_controls'] = {'available': False}
+            try:
                 cur.execute('SHOW GRANTS FOR CURRENT_USER')
                 grants = [str(next(iter(row.values()))) for row in cur.fetchall()]
                 result['privileges'] = {'available': True, **grant_evidence(grants, current['schema_name'])}
@@ -53,6 +79,60 @@ def writer_inventory(connect):
                                          'counts': {str(row['COMMAND']): int(row['connection_count']) for row in cur.fetchall()}}
             except Exception:
                 result['connections'] = {'available': False, 'visibility': 'UNKNOWN'}
+            # A session with another/no default DB can still write this schema
+            # through qualified names. The earlier per-schema count is retained
+            # for compatibility, but must not be treated as a writer inventory.
+            result['all_visible_connections'] = classified_counts(cur, """
+                SELECT CASE WHEN DB=DATABASE() THEN 'CURRENT_DATABASE'
+                            WHEN DB IS NULL THEN 'NO_DEFAULT_DATABASE' ELSE 'OTHER_DATABASE' END AS schema_scope,
+                       COMMAND AS command,COUNT(*) AS connection_count
+                FROM information_schema.PROCESSLIST GROUP BY schema_scope,COMMAND LIMIT 101
+            """, ('schema_scope', 'command', 'connection_count'))
+            result['all_visible_connections']['qualified_cross_schema_writes_not_excluded'] = True
+            result['visible_transactions'] = classified_counts(cur, """
+                SELECT TRX_STATE AS state,TRX_IS_READ_ONLY AS read_only,COUNT(*) AS transaction_count
+                FROM information_schema.INNODB_TRX GROUP BY TRX_STATE,TRX_IS_READ_ONLY LIMIT 101
+            """, ('state', 'read_only', 'transaction_count'))
+            result['table_engines'] = classified_counts(cur, """
+                SELECT COALESCE(ENGINE,'NOT_A_BASE_TABLE') AS engine,COUNT(*) AS table_count
+                FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() GROUP BY ENGINE LIMIT 101
+            """, ('engine', 'table_count'))
+            result['foreign_key_boundary'] = classified_counts(cur, """
+                SELECT CASE WHEN TABLE_SCHEMA=DATABASE() AND REFERENCED_TABLE_SCHEMA=DATABASE() THEN 'WITHIN_DATABASE'
+                            WHEN TABLE_SCHEMA=DATABASE() THEN 'REFERENCES_OTHER_DATABASE' ELSE 'REFERENCED_BY_OTHER_DATABASE' END AS boundary,
+                       COUNT(*) AS foreign_key_column_count
+                FROM information_schema.KEY_COLUMN_USAGE WHERE REFERENCED_TABLE_SCHEMA IS NOT NULL
+                AND (TABLE_SCHEMA=DATABASE() OR REFERENCED_TABLE_SCHEMA=DATABASE()) GROUP BY boundary LIMIT 101
+            """, ('boundary', 'foreign_key_column_count'))
+            result['all_visible_events'] = classified_counts(cur, """
+                SELECT CASE WHEN EVENT_SCHEMA=DATABASE() THEN 'CURRENT_DATABASE' ELSE 'OTHER_DATABASE' END AS schema_scope,
+                       STATUS AS status,LEFT(SHA2(DEFINER,256),16) AS definer_fingerprint,COUNT(*) AS event_count
+                FROM information_schema.EVENTS GROUP BY schema_scope,STATUS,definer_fingerprint LIMIT 101
+            """, ('schema_scope', 'status', 'definer_fingerprint', 'event_count'))
+            result['all_visible_routines'] = classified_counts(cur, """
+                SELECT CASE WHEN ROUTINE_SCHEMA=DATABASE() THEN 'CURRENT_DATABASE' ELSE 'OTHER_DATABASE' END AS schema_scope,
+                       ROUTINE_TYPE AS routine_type,SECURITY_TYPE AS security_type,
+                       LEFT(SHA2(DEFINER,256),16) AS definer_fingerprint,COUNT(*) AS routine_count
+                FROM information_schema.ROUTINES GROUP BY schema_scope,ROUTINE_TYPE,SECURITY_TYPE,definer_fingerprint LIMIT 101
+            """, ('schema_scope', 'routine_type', 'security_type', 'definer_fingerprint', 'routine_count'))
+            result['all_visible_triggers'] = classified_counts(cur, """
+                SELECT CASE WHEN TRIGGER_SCHEMA=DATABASE() THEN 'CURRENT_DATABASE' ELSE 'OTHER_DATABASE' END AS schema_scope,
+                       EVENT_MANIPULATION AS event_type,ACTION_TIMING AS timing,
+                       LEFT(SHA2(DEFINER,256),16) AS definer_fingerprint,COUNT(*) AS trigger_count
+                FROM information_schema.TRIGGERS GROUP BY schema_scope,EVENT_MANIPULATION,ACTION_TIMING,definer_fingerprint LIMIT 101
+            """, ('schema_scope', 'event_type', 'timing', 'definer_fingerprint', 'trigger_count'))
+            result['uploaded_work'] = classified_counts(cur, """
+                SELECT processing_status AS status,COUNT(*) AS file_count
+                FROM ingest_file WHERE duplicate_of_file_id IS NULL GROUP BY processing_status LIMIT 101
+            """, ('status', 'file_count'))
+            result['pipeline_work'] = classified_counts(cur, """
+                SELECT stage_name,processing_status AS status,COUNT(*) AS run_count FROM pipeline_run
+                WHERE processing_status IN ('STARTED','PAUSE_REQUESTED','QUEUED','PENDING')
+                GROUP BY stage_name,processing_status LIMIT 101
+            """, ('stage_name', 'status', 'run_count'))
+            result['freeze_proof_missing'] = ['PERSISTENT_ADMISSION_AND_DRAIN', 'ALL_WRITER_IDENTITIES_AND_EFFECTIVE_ROLES',
+                                              'EXTERNAL_SQL_AND_DEFINER_PATHS', 'ISOLATED_PERSISTENT_DATABASE_FENCE',
+                                              'GOOGLE_WRITER_FENCE']
             try:
                 cur.execute('SELECT STATUS,COUNT(*) AS event_count FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE() GROUP BY STATUS')
                 result['database_events'] = {'available': True, 'visibility': 'ACCOUNT_PRIVILEGES',
@@ -63,3 +143,4 @@ def writer_inventory(connect):
         finally:
             cur.close()
             conn.rollback()
+
