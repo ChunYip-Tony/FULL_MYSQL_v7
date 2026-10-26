@@ -120,10 +120,10 @@ class AuditBoundaryTests(unittest.TestCase):
             'GRANT UPDATE ON `seafood`.`orders` TO `u`@`h`',
         ], 'seafood')
         self.assertFalse(result['role_or_unparsed_grants_present'])
-        self.assertEqual(result['grants'][0]['grant_option'], True)
-        self.assertEqual(result['grants'][1]['effect'], 'RESTRICTION')
-        self.assertEqual(result['grants'][2]['scope'], 'CURRENT_DATABASE_OBJECT')
-        self.assertFalse(result['grants'][2]['grant_option'])
+        self.assertEqual(result['scoped_grants'][0]['grant_option'], True)
+        self.assertEqual(result['scoped_grants'][1]['effect'], 'RESTRICTION')
+        self.assertEqual(result['scoped_grants'][2]['scope'], 'CURRENT_DATABASE_OBJECT')
+        self.assertFalse(result['scoped_grants'][2]['grant_option'])
 
 
 if __name__ == '__main__':
