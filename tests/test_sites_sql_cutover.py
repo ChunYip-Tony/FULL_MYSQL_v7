@@ -27,6 +27,7 @@ class SQLCutoverTests(unittest.TestCase):
         plan={'schema':'full_mysql','targets':[{'user':'app','host':'%','before':before,'privileges':['INSERT','UPDATE']}]}
         cur=Cursor(before+['REVOKE INSERT, UPDATE ON `full_mysql`.* FROM `app`@`%`'])
         sql.restriction_shape(cur,plan)
+        sql.restriction_shape(Cursor(before+[r'REVOKE INSERT, UPDATE ON `full\_mysql`.* FROM `app`@`%`']),plan)
         for bad in [before, before+['REVOKE INSERT, UPDATE, SELECT ON `full_mysql`.* FROM `app`@`%`'],[before[0],'REVOKE INSERT, UPDATE ON `full_mysql`.* FROM `app`@`%`']]:
             with self.assertRaises(ValueError):sql.restriction_shape(Cursor(bad),plan)
         sql.restriction_shape(Cursor(before),plan,allow_partial=True)

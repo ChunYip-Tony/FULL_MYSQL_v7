@@ -174,7 +174,10 @@ def restriction_shape(cur,plan,allow_partial=False):
         if summary['role_or_unparsed_grants_present']:raise ValueError('Unparsed current writer grants')
         restrictions=[g for g in summary['scoped_grants'] if g['effect']=='RESTRICTION' and g['scope']=='CURRENT_DATABASE']
         denied={p for r in restrictions for p in r['privileges']}
-        retained=[g for g in raw if not re.match(r'^REVOKE .+ ON '+re.escape(identifier(plan['schema']))+r'\.\* FROM ',g)]
+        retained=[]
+        for grant in raw:
+            parsed=grant_evidence([grant],plan['schema'])['scoped_grants']
+            if not any(g['scope']=='CURRENT_DATABASE' and g['effect']=='RESTRICTION' for g in parsed):retained.append(grant)
         if retained!=target['before'] or not denied.issubset(set(target['privileges'])) or (not allow_partial and denied!=set(target['privileges'])):
             raise ValueError('Writer privilege readback differs from the exact cutover plan')
 
