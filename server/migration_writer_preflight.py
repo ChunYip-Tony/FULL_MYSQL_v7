@@ -69,7 +69,7 @@ def preflight_inventory(cur, current, seafood_tables, grants, query):
         ORDER BY p.ID LIMIT 101
     """, ('session_fingerprint', 'audit_self', 'same_login_name', 'schema_scope', 'command', 'age_seconds',
           'transaction_state', 'transaction_read_only', 'rows_modified', 'rows_locked'))
-    result['sessions']['same_login_name_does_not_prove_account_host'] = True
+    result['sessions']['login_match_is_not_authenticated_identity'] = True
     try:
         cur.execute('SELECT TABLE_NAME,TABLE_TYPE,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() ORDER BY TABLE_NAME LIMIT 201')
         tables = cur.fetchall()
