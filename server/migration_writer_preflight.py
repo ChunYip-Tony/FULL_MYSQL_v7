@@ -110,6 +110,21 @@ def preflight_inventory(cur, current, seafood_tables, grants, query):
         result['tables'] = {'available': True, 'truncated': len(tables) > 200, 'tables': output}
     except Exception:
         result['tables'] = {'available': False, 'visibility': 'UNKNOWN'}
+    # These three derived tables support multiple departments. Report their
+    # actual populations, rather than assuming a Seafood-only deployment.
+    result['department_analysis'] = {}
+    for table in ('analysis_item_current', 'analysis_family_current'):
+        result['department_analysis'][table] = query(cur,
+            'SELECT department_code,analysis_status,COUNT(*) AS row_count,'
+            'MIN(source_publish_batch_id) AS first_source_batch,MAX(source_publish_batch_id) AS last_source_batch '
+            'FROM ' + identifier(table) + ' GROUP BY department_code,analysis_status LIMIT 101',
+            ('department_code', 'analysis_status', 'row_count', 'first_source_batch', 'last_source_batch'))
+    result['department_analysis']['analysis_layer_status'] = query(cur, """
+        SELECT department_code,layer_status,source_publish_batch_id,item_rows,
+               ready_rows,hold_rows,historical_rows,family_rows
+        FROM analysis_layer_status ORDER BY department_code LIMIT 101
+    """, ('department_code', 'layer_status', 'source_publish_batch_id', 'item_rows',
+          'ready_rows', 'hold_rows', 'historical_rows', 'family_rows'))
     result['views'] = query(cur, """
         SELECT v.TABLE_NAME AS name,
                CASE WHEN v.TABLE_SCHEMA=DATABASE() THEN 'CURRENT_DATABASE' ELSE 'OTHER_DATABASE' END AS schema_scope,
