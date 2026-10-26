@@ -116,7 +116,7 @@ class StartupRecoveryTests(unittest.TestCase):
 
 
 class PublicationPreflightTests(unittest.TestCase):
-    def test_source_hold_skips_expensive_exports_and_external_writes(self):
+    def test_global_source_blocker_skips_expensive_exports_and_external_writes(self):
         class Cursor:
             def close(self):pass
         @contextmanager
@@ -124,13 +124,14 @@ class PublicationPreflightTests(unittest.TestCase):
         def forbidden(*args):raise AssertionError('source hold must return before analytical export')
         scope=dict(time=time,bridge_enabled=lambda:True,_sheet_id=lambda:'sheet',
             _bridge_transport=lambda:'APPS_SCRIPT',db_conn=connect,
-            _fetch_batch_state=lambda *a:({'processing_status':'QUICK_CHECK_READY_WITH_HOLDS'},{'blocking_issue_count':0}),
-            _fetch_quick_rows=lambda c:[{'quick_check_status':'QA_HOLD'}]*384,
+            _fetch_batch_state=lambda *a:({'processing_status':'QUICK_CHECK_READY_WITH_HOLDS'},{'blocking_issue_count':1}),
+            _fetch_quick_rows=forbidden,
             _canonical_freshness=forbidden)
         functions('chatgpt_sheet_bridge.py',{'publish_chatgpt_snapshot'},scope)
         result=scope['publish_chatgpt_snapshot'](75)
         self.assertEqual(result['status'],'BLOCKED')
-        self.assertEqual(result['hold_row_count'],384)
+        self.assertEqual(result['reason'],'Phase 3 blocking_issue_count is non-zero.')
 
 
 if __name__=='__main__':unittest.main()
+
