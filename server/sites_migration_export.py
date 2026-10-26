@@ -103,7 +103,7 @@ def install_sites_migration_export(app):
         authorize(request.headers.get('authorization'))
         from migration_writer_audit import writer_inventory
         from fastapi.responses import JSONResponse
-        return JSONResponse(writer_inventory(db_conn), headers={'Cache-Control':'no-store'})
+        return JSONResponse(writer_inventory(db_conn, TABLES), headers={'Cache-Control':'no-store'})
 
     @app.get('/v1/migration/sites/snapshot')
     def export(request:Request):
@@ -111,3 +111,4 @@ def install_sites_migration_export(app):
         return StreamingResponse(gzip_stream(snapshot_lines()),media_type='application/gzip',headers={
             'Cache-Control':'no-store','Content-Disposition':'attachment; filename="seafood-mysql-snapshot.ndjson.gz"',
             'X-Migration-Contract':'SEAFOOD_MYSQL_SNAPSHOT_V1'})
+
