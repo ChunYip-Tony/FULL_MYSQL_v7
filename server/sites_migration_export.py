@@ -98,6 +98,13 @@ def gzip_stream(lines):
     yield compressor.flush(zlib.Z_FINISH)
 
 def install_sites_migration_export(app):
+    @app.get('/v1/migration/sites/writer-audit')
+    def audit_writers(request:Request):
+        authorize(request.headers.get('authorization'))
+        from migration_writer_audit import writer_inventory
+        from fastapi.responses import JSONResponse
+        return JSONResponse(writer_inventory(db_conn), headers={'Cache-Control':'no-store'})
+
     @app.get('/v1/migration/sites/snapshot')
     def export(request:Request):
         authorize(request.headers.get('authorization'))
