@@ -18,10 +18,20 @@ def grant_evidence(grants, schema):
         effect, privileges, target = match.groups()
         option = effect.upper() == 'GRANT' and bool(re.search(r'\sWITH\s+GRANT\s+OPTION\s*$', str(raw), re.I))
         grant_option = grant_option or option
-        # SHOW GRANTS may escape schema wildcard characters even when partial
-        # revokes interpret them literally. Normalize only those escapes.
-        target = target.replace('`', '').strip().replace('\\_', '_').replace('\\%', '%')
-        scope = 'GLOBAL' if target == '*.*' else 'CURRENT_DATABASE' if target == schema + '.*' else 'CURRENT_DATABASE_OBJECT' if target.startswith(schema + '.') else 'OTHER_SCOPE'
+        # SHOW GRANTS uses ANSI double quotes when ANSI_QUOTES is active.
+        # Parse complete identifiers so embedded quotes/dots cannot change scope.
+        token = r'(?:`(?:[^`]|``)+`|"(?:[^"]|"")+"|[^.`"\s]+)'
+        target_match = re.fullmatch('('+token+r')\s*\.\s*('+token+')', target.strip())
+        if not target_match:
+            roles = True
+            continue
+        def identifier(value):
+            if value[0] in ('`', '"'):
+                quote = value[0]
+                value = value[1:-1].replace(quote+quote, quote)
+            return value.replace('\\_', '_').replace('\\%', '%')
+        database, object_name = [identifier(value) for value in target_match.groups()]
+        scope = 'GLOBAL' if target_match.groups() == ('*', '*') else 'CURRENT_DATABASE' if database == schema and target_match.group(2) == '*' else 'CURRENT_DATABASE_OBJECT' if database == schema else 'OTHER_SCOPE'
         names = [name.strip().upper() for name in privileges.split(',')]
         if any(not re.fullmatch(r'[A-Z_ ]{1,80}', name) for name in names):
             roles = True
