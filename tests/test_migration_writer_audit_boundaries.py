@@ -2,6 +2,9 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import sys
+
+sys.path.insert(0, str(Path(__file__).parents[1] / 'server'))
 
 spec = importlib.util.spec_from_file_location('writer_audit_under_test', Path(__file__).parents[1] / 'server' / 'migration_writer_audit.py')
 audit = importlib.util.module_from_spec(spec)
@@ -109,6 +112,18 @@ class AuditBoundaryTests(unittest.TestCase):
         grants = audit.grant_evidence(['GRANT SELECT ON `secret`.* TO `user`@`host`'], 'secret')
         self.assertFalse(grants['grant_option_observed'])
         self.assertEqual(grants['grants'][0]['scope'], 'CURRENT_DATABASE')
+
+    def test_partial_revokes_and_object_grants_are_not_role_assignments(self):
+        result = audit.grant_evidence([
+            'GRANT SELECT, INSERT ON *.* TO `u`@`h` WITH GRANT OPTION',
+            'REVOKE INSERT ON `seafood`.* FROM `u`@`h`',
+            'GRANT UPDATE ON `seafood`.`orders` TO `u`@`h`',
+        ], 'seafood')
+        self.assertFalse(result['role_or_unparsed_grants_present'])
+        self.assertEqual(result['grants'][0]['grant_option'], True)
+        self.assertEqual(result['grants'][1]['effect'], 'RESTRICTION')
+        self.assertEqual(result['grants'][2]['scope'], 'CURRENT_DATABASE_OBJECT')
+        self.assertFalse(result['grants'][2]['grant_option'])
 
 
 if __name__ == '__main__':
