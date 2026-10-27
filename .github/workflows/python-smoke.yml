@@ -1600,6 +1600,12 @@ jobs:
           assert "bindStockButtons($('#yv2OrderRows'))" in ui
           assert 'Effective OH · tap to enter True Stock' in ui
 
+          # Mobile V2 must never summon the screen keyboard on page load,
+          # navigation, modal open, result selection, or clear actions.
+          assert '.focus(' not in ui
+          assert '.select(' not in ui
+          assert 'autofocus' not in ui.lower()
+
           print('mobile-v2-promotion-true-stock=PASS')
           PY
 
