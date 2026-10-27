@@ -953,7 +953,8 @@ def _reconcile_ready_publication() -> dict:
                         AND pipeline_name=%s AND stage_name='CHATGPT_SHEET_PUBLISH' AND processing_status='COMPLETED'),0)""",
                     (bid,API_PIPELINE,API_VERSION,bid,API_PIPELINE))
                 latest['retry_count']=int((cur.fetchone() or {}).get('c') or 1)
-            decision=publish_recovery_decision(latest,serving.get('updated_at'),API_VERSION,HISTORY_CONTRACT)
+            decision=publish_recovery_decision(latest,serving.get('updated_at'),API_VERSION,HISTORY_CONTRACT,
+                 stale_after_seconds=STALE_STARTED_SECONDS)
             if decision['queue']:
                 return enqueue_chatgpt_publish(int(bid),pipeline_name=API_PIPELINE,code_version=API_VERSION,
                     requested_by='CONTINUOUS_READY_RECONCILER',reason=decision['reason'])

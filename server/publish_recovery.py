@@ -3,6 +3,20 @@ import json
 from datetime import datetime, timezone
 
 
+def _utc_stamp(value):
+    if not value:
+        return None
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value.replace('Z', '+00:00'))
+        except ValueError:
+            return None
+    if not isinstance(value, datetime):
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+
 def owned_legacy_handoff(row, code_version, worker, worker_instance):
     """Recover only this live owner's job requeued by an older supervisor."""
     detail=row.get('detail_json') or {}
@@ -17,7 +31,7 @@ def owned_legacy_handoff(row, code_version, worker, worker_instance):
         and version_key(old)<version_key(code_version))
 
 
-def publish_recovery_decision(latest, snapshot_updated_at, code_version, history_contract, now=None):
+def publish_recovery_decision(latest, snapshot_updated_at, code_version, history_contract, now=None, stale_after_seconds=180):
     now=now or datetime.now(timezone.utc)
     if not latest:
         return {'queue':True,'reason':'MISSING_PUBLICATION'}
@@ -27,6 +41,17 @@ def publish_recovery_decision(latest, snapshot_updated_at, code_version, history
         except ValueError: detail={}
     status=str(latest.get('processing_status') or '').upper()
     if status in {'STARTED','QUEUED','PAUSE_REQUESTED'}:
+        # Report stale jobs but never enqueue a duplicate while a lease may exist.
+        heartbeat = next((stamp for stamp in (
+            _utc_stamp(detail.get('heartbeat_at')),
+            _utc_stamp(latest.get('heartbeat_at')),
+            _utc_stamp(latest.get('started_at')),
+            _utc_stamp(latest.get('created_at'))
+        ) if stamp is not None), None)
+        if heartbeat is not None and (now - heartbeat).total_seconds() > stale_after_seconds:
+            return {'queue': False, 'reason': 'STALE_PUBLICATION_RECLAIM_REQUIRED',
+                    'stale_seconds': int((now - heartbeat).total_seconds()),
+                    'status': status}
         return {'queue':False,'reason':'ACTIVE_PUBLICATION'}
     result=detail.get('publish_result') or {}
     readback=result.get('readback') or {}
